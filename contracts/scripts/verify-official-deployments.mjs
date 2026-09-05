@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import {
   OFFICIAL_DEPLOYMENTS_URL,
   REQUIRED_SOURCE_DEPENDENCIES,
-  fetchMainnetRuntimeHashes,
+  fetchMainnetRuntimeHashesWithFallback,
   verifyDependencyPins,
   verifyMainnetRuntimeHashes,
   verifyOfficialDeploymentSnapshot,
@@ -236,14 +236,15 @@ for (const network of networks) {
 }
 
 assert(mainnetSnapshot, "Mainnet dependency snapshot is missing");
-const rpcUrl =
-  process.env.ETHEREUM_MAINNET_RPC_URL ??
-  mainnetSnapshot.runtimeSnapshot?.rpc;
-assert(rpcUrl, "ETHEREUM_MAINNET_RPC_URL is required");
+const configuredRpcUrl = process.env.ETHEREUM_MAINNET_RPC_URL;
+const rpcUrls = configuredRpcUrl !== undefined
+  ? [configuredRpcUrl]
+  : [...new Set(["https://mainnet.gateway.tenderly.co", mainnetSnapshot.runtimeSnapshot?.rpc].filter(Boolean))];
+assert(rpcUrls.every(Boolean), "ETHEREUM_MAINNET_RPC_URL is required");
 
-const runtimeSnapshot = await fetchMainnetRuntimeHashes({
+const runtimeSnapshot = await fetchMainnetRuntimeHashesWithFallback({
   snapshot: mainnetSnapshot,
-  rpcUrl,
+  rpcUrls,
 });
 const runtimeVerification = verifyMainnetRuntimeHashes({
   snapshot: mainnetSnapshot,

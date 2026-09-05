@@ -9,6 +9,7 @@ import {
   READ_MODEL_CONTRACT_DOC_PATHS,
   ROBINHOOD_PHASE_B_BACKEND_EVIDENCE_PATHS,
   ROBINHOOD_V41_PHASE_B_BACKEND_EVIDENCE_PATHS,
+  ROBINHOOD_V41_CLI_COORDINATE_PATH,
 } from "./classify-verify-paths.mjs";
 
 const none = {
@@ -109,6 +110,43 @@ test("does not narrow unknown successor release files to the evidence lane", () 
   ]) {
     assert.deepEqual(classifyVerifyPaths([path]), classifyVerifyPaths([], { forceAll: true }));
   }
+});
+
+test("routes only the exact immutable V4.1 CLI coordinate through its Interface audit", () => {
+  assert.deepEqual(classifyVerifyPaths([ROBINHOOD_V41_CLI_COORDINATE_PATH]), {
+    ...none,
+    interface: true,
+  });
+  assert.deepEqual(classifyVerifyPaths([
+    ROBINHOOD_V41_CLI_COORDINATE_PATH,
+    "lib/custom-launch/v4-api-discovery.ts",
+    "tests/public-robinhood-v41-agent-docs.test.ts",
+  ]), { ...none, interface: true });
+  assert.deepEqual(classifyVerifyPaths([
+    ROBINHOOD_V41_CLI_COORDINATE_PATH,
+    "contracts/src/ChangedHook.sol",
+  ]), { ...none, interface: true, contracts: true });
+});
+
+test("keeps coordinate schemas, verifiers, unknown successors and mixed evidence on their full gates", () => {
+  for (const path of [
+    `${ROBINHOOD_V41_CLI_COORDINATE_PATH}.mjs`,
+    ROBINHOOD_V41_CLI_COORDINATE_PATH.replace(".json", ".schema.json"),
+    ROBINHOOD_V41_CLI_COORDINATE_PATH.replace("v4.1", "v4.2"),
+    "scripts/programmable-v41-api-activation.mjs",
+    "scripts/lib/programmable-launch-clean-room-runner.mjs",
+    "packages/launch/src/profile-v41.mjs",
+    ".github/workflows/verify.yml",
+  ]) {
+    assert.deepEqual(
+      classifyVerifyPaths([ROBINHOOD_V41_CLI_COORDINATE_PATH, path]),
+      classifyVerifyPaths([], { forceAll: true }),
+    );
+  }
+  assert.deepEqual(classifyVerifyPaths([
+    ROBINHOOD_V41_CLI_COORDINATE_PATH,
+    ...ROBINHOOD_V41_PHASE_B_BACKEND_EVIDENCE_PATHS,
+  ]), { ...none, interface: true, robinhood_v41_phase_b_evidence: true });
 });
 
 test("routes the versioned Custom V2 surface without legacy market lanes", () => {
@@ -348,7 +386,7 @@ test("keeps protected jobs fail closed and production pushes path scoped", () =>
   assert.doesNotMatch(workflow, /run: npm run verify\n/u);
   assert.match(
     workflow,
-    /name: Verify affected interface\n        if: needs\.scope\.outputs\.interface == 'true'/u,
+    /name: Require complete interface verification\n        env:\n          SCOPE_RESULT: \$\{\{ needs\.scope\.result \}\}/u,
   );
   assert.equal(workflow.match(/^    if: always\(\)$/gmu)?.length, 6);
   assert.equal(

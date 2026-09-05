@@ -171,6 +171,28 @@ describe("Explore index-reset operations source contract", () => {
     );
   });
 
+  it("requires Custom V2 to execute the shared smoke-test command", () => {
+    const path = "package.json";
+    const manifest = JSON.parse(source(path));
+    manifest.scripts["verify:custom-v2:ci"] = manifest.scripts["verify:custom-v2:ci"]
+      .replace("npm run verify:custom-v2:checks:ci", "npm run typecheck");
+
+    expect(failureIds(evaluate({ [path]: JSON.stringify(manifest) }))).toContain(
+      "ops-package-verify-binding",
+    );
+  });
+
+  it("requires the shared Custom V2 command to retain the reset smoke test", () => {
+    const path = "package.json";
+    const manifest = JSON.parse(source(path));
+    manifest.scripts["verify:custom-v2:checks:ci"] = manifest.scripts["verify:custom-v2:checks:ci"]
+      .replace("scripts/test/smoke-explore-index-reset-public-apis.test.mjs", "");
+
+    expect(failureIds(evaluate({ [path]: JSON.stringify(manifest) }))).toContain(
+      "ops-package-verify-binding",
+    );
+  });
+
   it("preserves exact-SHA Verify proof and stage-only deployment", () => {
     const path = ".github/workflows/deploy-production.yml";
     const changed = `${source(path)}\n# vercel promote\n`;

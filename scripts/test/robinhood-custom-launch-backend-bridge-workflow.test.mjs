@@ -354,7 +354,7 @@ test("Robinhood backend bridge producer is an exact seven-file, read-only hosted
   );
   assert.match(
     verifyWorkflow,
-    /Verify contract release bindings[\s\S]*npm run test:contract-release:ci/u,
+    /Verify contract release bindings, forks, and late migration[\s\S]*node scripts\/ci\/contracts-ci\.mjs release/u,
   );
   assert.match(finalizer, /async function verifyPortableGithubAttestation/u);
   assert.match(finalizer, /"--custom-trusted-root", trustedRootPath/u);

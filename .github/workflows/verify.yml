@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: verify-${{ github.ref }}
+  group: verify-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.verification_mode || 'change' }}
   cancel-in-progress: true
 
 jobs:
@@ -34,6 +34,7 @@ jobs:
       dependencies: ${{ steps.scope.outputs.dependencies }}
       indexer: ${{ steps.scope.outputs.indexer }}
       interface: ${{ steps.scope.outputs.interface }}
+      interface_guidance_only: ${{ steps.scope.outputs.interface_guidance_only }}
       read_model: ${{ steps.scope.outputs.read_model }}
       robinhood_phase_b_evidence: ${{ steps.scope.outputs.robinhood_phase_b_evidence }}
       robinhood_phase_b_evidence_exact: ${{ steps.scope.outputs.robinhood_phase_b_evidence_exact }}
@@ -83,6 +84,11 @@ jobs:
           # changing or narrowing any trusted-base legacy result.
           if ! grep -Eq '^custom_v2=(true|false)$' "$RUNNER_TEMP/verify-scope.txt"; then
             echo 'custom_v2=true' >> "$RUNNER_TEMP/verify-scope.txt"
+          fi
+          # A trusted base without the content-aware optimization always pays
+          # full Interface coverage, including the change introducing it.
+          if ! grep -Eq '^interface_guidance_only=(true|false)$' "$RUNNER_TEMP/verify-scope.txt"; then
+            echo 'interface_guidance_only=false' >> "$RUNNER_TEMP/verify-scope.txt"
           fi
           if ! grep -Eq '^robinhood_phase_b_evidence=(true|false)$' "$RUNNER_TEMP/verify-scope.txt"; then
             echo 'robinhood_phase_b_evidence=false' >> "$RUNNER_TEMP/verify-scope.txt"
@@ -190,7 +196,7 @@ jobs:
 
       - name: Install dependencies
         if: needs.scope.outputs.database == 'true'
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Run fresh-database SQL tests
         if: needs.scope.outputs.database == 'true'
@@ -204,10 +210,54 @@ jobs:
         if: needs.scope.result == 'success' && needs.scope.outputs.database != 'true'
         run: echo "No database paths changed."
 
-  interface:
-    name: Interface
+  interface-quality:
+    name: Interface quality and tests
     needs: scope
-    if: always()
+    if: needs.scope.outputs.interface == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies
+        if: needs.scope.outputs.interface == 'true' && needs.scope.outputs.dependencies == 'true'
+        run: |
+          node --test scripts/ci/run-production-dependency-audit.test.mjs
+          npm run audit:prod
+
+      - name: Verify interface quality and tests
+        if: needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true'
+        env:
+          PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run verify:interface:quality:ci
+
+      - name: Verify exact guide URL changes and their direct consumers
+        if: needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true'
+        env:
+          PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run verify:interface:guidance:ci
+
+  interface-browser-build:
+    # Browser fixtures and the production build share mutable local output.
+    # Keep them sequential in one checkout, isolated from lint and unit tests.
+    name: Interface browser and build
+    needs: scope
+    if: needs.scope.outputs.interface == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -216,43 +266,37 @@ jobs:
       contents: read
 
     steps:
-      - name: Require successful change classification
-        if: needs.scope.result != 'success'
-        run: exit 1
-
       - name: Check out repository
-        if: needs.scope.outputs.interface == 'true'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        if: needs.scope.outputs.interface == 'true'
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24.14.0
           cache: npm
 
       - name: Install dependencies
-        if: needs.scope.outputs.interface == 'true'
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Install pinned Chromium for wallet interaction tests
-        if: needs.scope.outputs.interface == 'true'
+        if: needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Audit production dependencies
-        if: needs.scope.outputs.interface == 'true' && needs.scope.outputs.dependencies == 'true'
-        run: |
-          node --test scripts/ci/run-production-dependency-audit.test.mjs
-          npm run audit:prod
-
-      - name: Verify affected interface
-        if: needs.scope.outputs.interface == 'true'
+      - name: Verify interface browser interactions and production build
+        if: needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true'
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: npm run verify:interface:ci
+        run: npm run verify:interface:browser-build:ci
+
+      - name: Build the complete production interface for guide URL changes
+        if: needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true'
+        env:
+          PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run build
 
       - name: Require complete Git history for the V4 release audit
         if: needs.scope.outputs.interface == 'true'
@@ -288,56 +332,319 @@ jobs:
         if: needs.scope.outputs.read_model == 'true'
         run: npm run perf:read-model:ops-gate
 
-      - name: Skip unaffected interface
-        if: needs.scope.result == 'success' && needs.scope.outputs.interface != 'true'
-        run: echo "No interface paths changed."
-
-  contracts:
-    name: Contracts
-    needs: scope
+  interface:
+    # Preserve the required check and production-proof result while both
+    # independent jobs verify the same source with their own locked install.
+    name: Interface
+    needs:
+      - scope
+      - interface-quality
+      - interface-browser-build
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
 
     steps:
       - name: Require successful change classification
         if: needs.scope.result != 'success'
         run: exit 1
 
+      - name: Require complete interface verification
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          INTERFACE_REQUIRED: ${{ needs.scope.outputs.interface }}
+          READ_MODEL_REQUIRED: ${{ needs.scope.outputs.read_model }}
+          GUIDANCE_ONLY: ${{ needs.scope.outputs.interface_guidance_only }}
+          FUNCTIONAL_SCOPES: ${{ needs.scope.outputs.contracts }},${{ needs.scope.outputs.custom_v2 }},${{ needs.scope.outputs.database }},${{ needs.scope.outputs.dependencies }},${{ needs.scope.outputs.indexer }},${{ needs.scope.outputs.read_model }}
+          QUALITY_RESULT: ${{ needs.interface-quality.result }}
+          BROWSER_BUILD_RESULT: ${{ needs.interface-browser-build.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SCOPE_RESULT" = success
+          case "$GUIDANCE_ONLY" in
+            true)
+              test "$INTERFACE_REQUIRED" = true
+              test "$FUNCTIONAL_SCOPES" = false,false,false,false,false,false
+              ;;
+            false) ;;
+            *) echo "Interface guidance scope is missing or invalid." >&2; exit 1 ;;
+          esac
+          if [ "$READ_MODEL_REQUIRED" = true ]; then
+            test "$INTERFACE_REQUIRED" = true
+          fi
+          case "$INTERFACE_REQUIRED" in
+            true) expected_result=success ;;
+            false) expected_result=skipped ;;
+            *) echo "Interface scope is missing or invalid." >&2; exit 1 ;;
+          esac
+          for result in "$QUALITY_RESULT" "$BROWSER_BUILD_RESULT"; do
+            test "$result" = "$expected_result" || {
+              echo "Interface lane did not complete as required: $result (expected $expected_result)" >&2
+              exit 1
+            }
+          done
+          if [ "$INTERFACE_REQUIRED" = false ]; then
+            echo "No interface paths changed."
+          fi
+
+  contracts-build:
+    name: Contracts build
+    needs: scope
+    if: needs.scope.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: v1.7.1
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify contract orchestration and complete test coverage
+        run: node --test scripts/ci/contracts-ci.test.mjs scripts/ci/verify-contracts-workflow.test.mjs
+
+      - name: Build the complete default contract profile once
+        run: node scripts/ci/contracts-ci.mjs build
+
+      - name: Bind the build to this source, run, attempt, and toolchain
+        run: node scripts/ci/contracts-ci.mjs receipt
+
+      - name: Preserve this run's complete compiler outputs
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: contracts-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            contracts/out
+            contracts/cache
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: false
+
+  contracts-tests-1:
+    name: Contracts tests (1/2)
+    needs: [scope, contracts-build]
+    if: needs.scope.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: v1.7.1
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Download only this run's contract build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.contracts-build.outputs.artifact-id }}
+          path: contracts
+          digest-mismatch: error
+
+      - name: Verify exact contract build source and toolchain
+        run: node scripts/ci/contracts-ci.mjs verify-receipt
+
+      - name: Verify the complete deterministic test partition
+        run: node scripts/ci/contracts-ci.mjs test 1
+
+  contracts-tests-2:
+    name: Contracts tests (2/2)
+    needs: [scope, contracts-build]
+    if: needs.scope.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: v1.7.1
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Download only this run's contract build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.contracts-build.outputs.artifact-id }}
+          path: contracts
+          digest-mismatch: error
+
+      - name: Verify exact contract build source and toolchain
+        run: node scripts/ci/contracts-ci.mjs verify-receipt
+
+      - name: Verify the complete deterministic test partition
+        run: node scripts/ci/contracts-ci.mjs test 2
+
+  contracts-release:
+    name: Contracts release and forks
+    needs: [scope, contracts-build]
+    if: needs.scope.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: v1.7.1
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Download only this run's contract build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.contracts-build.outputs.artifact-id }}
+          path: contracts
+          digest-mismatch: error
+
+      - name: Verify exact contract build source and toolchain
+        run: node scripts/ci/contracts-ci.mjs verify-receipt
+
+      - name: Verify contract release bindings, forks, and late migration
+        env:
+          LATE_MIGRATION_FORK_RPC_URL: https://eth-mainnet.public.blastapi.io
+        run: node scripts/ci/contracts-ci.mjs release
+
+  contracts-analysis:
+    name: Contracts static analysis
+    # Slither creates its own complete build-info for both profiles; it does
+    # not consume the default artifact and need not wait for that producer.
+    needs: [scope]
+    if: needs.scope.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: v1.7.1
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+
+      - name: Install exact Slither
+        run: pipx install slither-analyzer==0.11.5
+
+      - name: Run both unchanged Slither profiles in their isolated checkout
+        run: node scripts/ci/contracts-ci.mjs analysis
+
+  contracts:
+    name: Contracts
+    needs: [scope, contracts-build, contracts-tests-1, contracts-tests-2, contracts-release, contracts-analysis]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Require complete contract verification
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          CONTRACTS_REQUIRED: ${{ needs.scope.outputs.contracts }}
+          BUILD_RESULT: ${{ needs.contracts-build.result }}
+          TESTS_1_RESULT: ${{ needs.contracts-tests-1.result }}
+          TESTS_2_RESULT: ${{ needs.contracts-tests-2.result }}
+          RELEASE_RESULT: ${{ needs.contracts-release.result }}
+          ANALYSIS_RESULT: ${{ needs.contracts-analysis.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SCOPE_RESULT" = success
+          case "$CONTRACTS_REQUIRED" in
+            true) expected_result=success ;;
+            false) expected_result=skipped ;;
+            *) echo "Contracts scope is missing or invalid." >&2; exit 1 ;;
+          esac
+          for result in "$BUILD_RESULT" "$TESTS_1_RESULT" "$TESTS_2_RESULT" "$RELEASE_RESULT" "$ANALYSIS_RESULT"; do
+            test "$result" = "$expected_result" || {
+              echo "Contract lane did not complete: $result (expected $expected_result)" >&2
+              exit 1
+            }
+          done
+
+      - name: Require successful change classification
+        if: needs.scope.result != 'success'
+        run: exit 1
+
       - name: Check out repository
         if: >-
-          needs.scope.outputs.contracts == 'true' ||
           needs.scope.outputs.robinhood_phase_b_evidence == 'true' ||
           needs.scope.outputs.robinhood_v41_phase_b_evidence == 'true'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node.js
         if: >-
-          needs.scope.outputs.contracts == 'true' ||
           needs.scope.outputs.robinhood_phase_b_evidence == 'true' ||
           needs.scope.outputs.robinhood_v41_phase_b_evidence == 'true'
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24.14.0
           cache: npm
-
-      - name: Set up Python
-        if: needs.scope.outputs.contracts == 'true'
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.13"
-
-      - name: Set up Foundry
-        if: needs.scope.outputs.contracts == 'true'
-        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
-        with:
-          version: v1.7.1
-
-      - name: Install dependencies
-        if: needs.scope.outputs.contracts == 'true'
-        run: |
-          npm ci
-          pipx install slither-analyzer==0.11.5
 
       - name: Reject partial or mixed Robinhood Phase B backend evidence imports
         if: >-
@@ -420,25 +727,6 @@ jobs:
               release/robinhood-chain-4663/v4.1/backend-promotion-input.attestation.json \
             --repository-root "$GITHUB_WORKSPACE"
 
-      - name: Verify contracts
-        if: needs.scope.outputs.contracts == 'true'
-        env:
-          LATE_MIGRATION_FORK_RPC_URL: https://eth-mainnet.public.blastapi.io
-        run: npm run contracts:verify:ci
-
-      - name: Check official Uniswap deployments
-        if: needs.scope.outputs.contracts == 'true'
-        run: npm run contracts:official-deployments
-
-      # Release bindings need the complete build; Slither cleans and rebuilds a scoped profile.
-      - name: Verify contract release bindings
-        if: needs.scope.outputs.contracts == 'true'
-        run: npm run test:contract-release:ci
-
-      - name: Run Slither
-        if: needs.scope.outputs.contracts == 'true'
-        run: npm run contracts:slither
-
       - name: Skip unaffected contracts
         if: >-
           needs.scope.result == 'success' &&
@@ -472,7 +760,7 @@ jobs:
 
       - name: Install dependencies
         if: needs.scope.outputs.custom_v2 == 'true'
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Verify exact Website projection database operator
         if: needs.scope.outputs.custom_v2 == 'true'
@@ -485,8 +773,23 @@ jobs:
         if: needs.scope.outputs.custom_v2 == 'true'
         run: node --test scripts/test/custom-v2-read-model-contract-v2.test.mjs
 
+      # The Interface lane already runs the complete application Vitest set,
+      # lint, and production build. Only share within this exact workflow run;
+      # the protected aggregate and production proof require Interface success.
+      - name: Verify Custom V2 checks using this run's Interface coverage
+        if: needs.scope.outputs.custom_v2 == 'true' && needs.scope.outputs.interface == 'true' && needs.scope.outputs.interface_guidance_only != 'true'
+        run: npm run verify:custom-v2:checks:ci
+
+      - name: Verify Custom V2 operations when Interface does not select them
+        if: >-
+          needs.scope.outputs.custom_v2 == 'true' &&
+          needs.scope.outputs.interface == 'true' &&
+          needs.scope.outputs.interface_guidance_only != 'true' &&
+          needs.scope.outputs.read_model != 'true'
+        run: npm run perf:read-model:ops-gate
+
       - name: Verify exact Custom V2 surface
-        if: needs.scope.outputs.custom_v2 == 'true'
+        if: needs.scope.outputs.custom_v2 == 'true' && (needs.scope.outputs.interface != 'true' || needs.scope.outputs.interface_guidance_only == 'true')
         run: npm run verify:custom-v2:ci
 
       - name: Skip unaffected Custom V2

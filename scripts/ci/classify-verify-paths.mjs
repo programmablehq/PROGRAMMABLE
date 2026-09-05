@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const EMPTY_SCOPE = Object.freeze({
@@ -42,6 +43,73 @@ export const ROBINHOOD_V41_PHASE_B_BACKEND_EVIDENCE_PATHS = Object.freeze([
 const ROBINHOOD_V41_PHASE_B_BACKEND_EVIDENCE_PATH_SET = new Set(
   ROBINHOOD_V41_PHASE_B_BACKEND_EVIDENCE_PATHS,
 );
+
+export const ROBINHOOD_V41_CLI_COORDINATE_PATH =
+  "docs/operations/releases/custom-launch-v4.1/clean-room-release-coordinate.json";
+
+// This optimization proves the complete before/after bytes, not just a path
+// match. Anything outside the two existing URL literals remains a full check.
+export const INTERFACE_GUIDANCE_LITERAL_PATHS = Object.freeze([
+  "lib/custom-launch/v4-public-contract-discovery.ts",
+  "tests/public-robinhood-v41-agent-docs.test.ts",
+]);
+export const INTERFACE_GUIDANCE_MARKDOWN_PATHS = Object.freeze([
+  "public/developers/custom-launch-api-v1.md",
+  "docs/public/developers/custom-launch.md",
+]);
+const GUIDANCE_LINE_PATTERNS = [
+  /^    guideUrl: `\$\{SITE_ORIGIN\}(\/developers\/[A-Za-z0-9][A-Za-z0-9/_-]*\.md)`,\n/gmu,
+  /^      robinhoodGuide: "https:\/\/programmable\.market(\/developers\/[A-Za-z0-9][A-Za-z0-9/_-]*\.md)",\n/gmu,
+];
+
+function readGitChange(file, { baseSha, headSha }) {
+  const git = (args) => execFileSync("git", args, { maxBuffer: 4 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
+  const text = (buffer) => new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer);
+  const status = text(git(["diff", "--no-renames", "--name-status", "-z", baseSha, headSha, "--", file]));
+  if (status !== `M\0${file}\0`) throw new Error("Guidance paths must be modified existing files.");
+  return [baseSha, headSha].map((sha) => {
+    const entry = text(git(["ls-tree", "-z", sha, "--", file]));
+    if (!new RegExp(`^100644 blob [a-f0-9]{40}\\t${file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\x00$`, "u").test(entry)) {
+      throw new Error("Guidance paths must retain their regular-file mode.");
+    }
+    return text(git(["show", `${sha}:${file}`]));
+  });
+}
+
+export function isInterfaceGuidanceOnlyChange(paths, {
+  baseSha,
+  headSha,
+  scope = classifyVerifyPaths(paths),
+  readChange = readGitChange,
+} = {}) {
+  if (!/^[a-f0-9]{40}$/u.test(baseSha ?? "") || !/^[a-f0-9]{40}$/u.test(headSha ?? "")
+    || baseSha === headSha || scope.interface !== true
+    || Object.entries(scope).some(([key, value]) => key !== "interface" && value !== false)) return false;
+  const uniquePaths = [...new Set(paths)];
+  if (uniquePaths.length === 0 || uniquePaths.length !== paths.length
+    || !uniquePaths.some((file) => INTERFACE_GUIDANCE_LITERAL_PATHS.includes(file))) return false;
+  try {
+    for (const file of uniquePaths) {
+      const literalIndex = INTERFACE_GUIDANCE_LITERAL_PATHS.indexOf(file);
+      if (literalIndex === -1 && !INTERFACE_GUIDANCE_MARKDOWN_PATHS.includes(file)) return false;
+      const [before, after] = readChange(file, { baseSha, headSha });
+      if (typeof before !== "string" || typeof after !== "string" || before === after) return false;
+      if (literalIndex === -1) continue;
+      const pattern = GUIDANCE_LINE_PATTERNS[literalIndex];
+      const oldMatches = [...before.matchAll(pattern)];
+      const newMatches = [...after.matchAll(pattern)];
+      if (oldMatches.length !== 1 || newMatches.length !== 1) return false;
+      const withoutUrl = (content, match) => content.slice(0, match.index)
+        + match[0].replace(match[1], "/GUIDANCE_URL") + content.slice(match.index + match[0].length);
+      if (withoutUrl(before, oldMatches[0]) !== withoutUrl(after, newMatches[0])) return false;
+    }
+    return true;
+  } catch {
+    // Missing history, deleted/renamed files, invalid bytes, or unreadable Git
+    // objects never select reduced coverage.
+    return false;
+  }
+}
 
 const CUSTOM_V2_EXACT_PATHS = new Set([
   "config/custom-registry-v2.deployment.prelaunch.json",
@@ -147,6 +215,17 @@ export function classifyVerifyPaths(
     // stage binding, and unchanged ten-minute authorization window before merge.
     if (ROBINHOOD_PHASE_B_BACKEND_EVIDENCE_PATH_SET.has(path)
       || ROBINHOOD_V41_PHASE_B_BACKEND_EVIDENCE_PATH_SET.has(path)) continue;
+
+    // This exact JSON document selects an immutable CLI release; it does not
+    // change Solidity, database, indexer, or dependency inputs. The Interface
+    // lane builds its public discovery consumer and authenticates the complete
+    // V4.1 coordinate/activation closure, including producer and asset hashes.
+    // Schemas, sibling release records, verifier changes, and mixed code
+    // changes still select their own full gates below.
+    if (path === ROBINHOOD_V41_CLI_COORDINATE_PATH) {
+      scope.interface = true;
+      continue;
+    }
 
     // This closed generation-2 surface has its own production proof and
     // staged health contract. In particular, flipping the versioned Registry
@@ -281,5 +360,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
         .split("\n")
         .map((path) => path.trim())
         .filter(Boolean);
-  printGithubOutputs(classifyVerifyPaths(paths, { forceAll, customV2Release }));
+  const scope = classifyVerifyPaths(paths, { forceAll, customV2Release });
+  printGithubOutputs({ ...scope, interface_guidance_only: !forceAll && !customV2Release
+    && isInterfaceGuidanceOnlyChange(paths, { scope, baseSha: process.env.BASE_SHA, headSha: process.env.HEAD_SHA }) });
 }

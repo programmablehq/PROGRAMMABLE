@@ -228,6 +228,105 @@ test("rejects an RPC endpoint that is not Ethereum Mainnet", async () => {
   );
 });
 
+test("runtime fallback is restricted to infrastructure faults and never masks invalid chain or code", async () => {
+  const snapshot = await readFixture("ethereum-mainnet.json");
+  const calls = [];
+  const success = (_url, options) => {
+    const request = JSON.parse(options.body);
+    const result = request.method === "eth_chainId" ? "0x1"
+      : request.method === "eth_blockNumber" ? "0x123" : "0x6000";
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
+  };
+  for (const status of [408, 429, 500, 502, 503, 504]) {
+    calls.length = 0;
+    const result = await verifierImport.fetchMainnetRuntimeHashesWithFallback({ snapshot,
+      rpcUrls: ["https://first.invalid", "https://second.invalid"],
+      fetchImpl: async (url, options) => {
+        calls.push(url);
+        return url === "https://first.invalid" ? new Response("unavailable", { status }) : success(url, options);
+      } });
+    assert.equal(result.blockNumber, 0x123);
+    assert.equal(calls[0], "https://first.invalid");
+    assert.equal(calls.slice(1).every((url) => url === "https://second.invalid"), true);
+  }
+  for (const fault of [
+    () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0xaa36a7" })),
+    () => new Response(JSON.stringify({ error: { code: -32602, message: "Invalid params" } })),
+    () => new Response("invalid JSON"),
+    () => new Response("unauthorized", { status: 401 }),
+  ]) {
+    calls.length = 0;
+    await assert.rejects(() => verifierImport.fetchMainnetRuntimeHashesWithFallback({ snapshot,
+      rpcUrls: ["https://first.invalid", "https://second.invalid"],
+      fetchImpl: async (url) => { calls.push(url); return fault(); } }));
+    assert.deepEqual(calls, ["https://first.invalid"]);
+  }
+  calls.length = 0;
+  await assert.rejects(() => verifierImport.fetchMainnetRuntimeHashesWithFallback({ snapshot,
+    rpcUrls: ["https://explicit.invalid"],
+    fetchImpl: async (url) => { calls.push(url); return new Response("limit", { status: 429 }); } }));
+  assert.deepEqual(calls, ["https://explicit.invalid"]);
+});
+
+test("runtime fallback restarts chain/block/code reads together and preserves fail-closed bytecode validation", async () => {
+  const snapshot = await readFixture("ethereum-mainnet.json");
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    const request = JSON.parse(options.body);
+    calls.push({ url, method: request.method, params: request.params });
+    if (url === "https://first.invalid" && request.method === "eth_getCode") {
+      return new Response(JSON.stringify({ error: { code: -32005, message: "rate limit" } }));
+    }
+    const result = request.method === "eth_chainId" ? "0x1"
+      : request.method === "eth_blockNumber" ? (url === "https://first.invalid" ? "0x123" : "0x124") : "0x6000";
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
+  };
+  const result = await verifierImport.fetchMainnetRuntimeHashesWithFallback({ snapshot,
+    rpcUrls: ["https://first.invalid", "https://second.invalid"], fetchImpl });
+  assert.equal(result.blockNumber, 0x124);
+  const second = calls.filter((call) => call.url === "https://second.invalid");
+  assert.deepEqual(second.slice(0, 2).map((call) => call.method), ["eth_chainId", "eth_blockNumber"]);
+  assert.equal(second.filter((call) => call.method === "eth_getCode").length, 6);
+  assert.ok(second.slice(2).every((call) => call.params[1] === "0x124"));
+  assert.throws(() => verifierImport.verifyMainnetRuntimeHashes({ snapshot, runtimeCodeHashes: result.runtimeCodeHashes }));
+});
+
+test("known transient transport faults may restart the snapshot, but empty code and unknown faults stay fatal", async () => {
+  const snapshot = await readFixture("ethereum-mainnet.json");
+  for (const fault of [
+    new DOMException("Timed out", "TimeoutError"),
+    new TypeError("Fetch failed", { cause: { code: "ECONNRESET" } }),
+  ]) {
+    const calls = [];
+    const result = await verifierImport.fetchMainnetRuntimeHashesWithFallback({ snapshot,
+      rpcUrls: ["https://first.invalid", "https://second.invalid"],
+      fetchImpl: async (url, options) => {
+        calls.push(url);
+        if (url === "https://first.invalid") throw fault;
+        const request = JSON.parse(options.body);
+        const value = request.method === "eth_chainId" ? "0x1"
+          : request.method === "eth_blockNumber" ? "0x123" : "0x6000";
+        return new Response(JSON.stringify({ result: value }));
+      } });
+    assert.equal(result.blockNumber, 0x123);
+    assert.equal(calls.filter((url) => url === "https://second.invalid").length, 8);
+  }
+  for (const fault of [new Error("Unclassified failure"),
+    new TypeError("Fetch failed", { cause: { code: "CERT_HAS_EXPIRED" } }), null]) {
+    const calls = [];
+    await assert.rejects(() => verifierImport.fetchMainnetRuntimeHashesWithFallback({ snapshot,
+      rpcUrls: ["https://first.invalid", "https://second.invalid"],
+      fetchImpl: async (url, options) => {
+        calls.push(url);
+        if (fault) throw fault;
+        const request = JSON.parse(options.body);
+        return new Response(JSON.stringify({ result: request.method === "eth_chainId" ? "0x1"
+          : request.method === "eth_blockNumber" ? "0x123" : "0x" }));
+      } }));
+    assert.ok(calls.every((url) => url === "https://first.invalid"));
+  }
+});
+
 test("hashes all six contracts from one explicit Mainnet block", async () => {
   const snapshot = await readFixture("ethereum-mainnet.json");
   const codeByAddress = new Map([

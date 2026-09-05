@@ -19,6 +19,17 @@ export const VERIFY_WORKFLOW_NAME = "Verify";
 export const VERIFY_SCOPE_JOB_NAME = "Change scope";
 export const VERIFY_AGGREGATE_JOB_NAME = "Verify aggregate";
 export const VERIFY_PROOF_JOB_NAME = "Bind production Verify proof";
+export const VERIFY_INTERFACE_WORKER_JOB_NAMES = Object.freeze([
+  "Interface quality and tests",
+  "Interface browser and build",
+]);
+export const VERIFY_CONTRACT_WORKER_JOB_NAMES = Object.freeze([
+  "Contracts build",
+  "Contracts tests (1/2)",
+  "Contracts tests (2/2)",
+  "Contracts release and forks",
+  "Contracts static analysis",
+]);
 export const PRODUCTION_VERIFY_CHANGE_MODE = "change";
 export const PRODUCTION_VERIFY_CUSTOM_V2_RELEASE_MODE = "custom-v2-release";
 
@@ -463,6 +474,8 @@ function validateVerifyJobs(response, run) {
   const expectedNames = [
     VERIFY_SCOPE_JOB_NAME,
     ...REQUIRED_PRODUCTION_VERIFY_CHECKS.map(({ name }) => name),
+    ...VERIFY_INTERFACE_WORKER_JOB_NAMES,
+    ...VERIFY_CONTRACT_WORKER_JOB_NAMES,
     VERIFY_PROOF_JOB_NAME,
     VERIFY_AGGREGATE_JOB_NAME,
   ];
@@ -476,6 +489,10 @@ function validateVerifyJobs(response, run) {
   }
   const jobsByName = new Map();
   for (const job of response.jobs) {
+    const skippedWorker = isObject(job)
+      && (VERIFY_INTERFACE_WORKER_JOB_NAMES.includes(job.name)
+        || VERIFY_CONTRACT_WORKER_JOB_NAMES.includes(job.name))
+      && job.conclusion === "skipped";
     if (
       !isObject(job)
       || typeof job.name !== "string"
@@ -484,12 +501,22 @@ function validateVerifyJobs(response, run) {
       || job.run_attempt !== run.run_attempt
       || job.head_sha !== run.head_sha
       || job.status !== "completed"
-      || job.conclusion !== "success"
-      || !Number.isSafeInteger(job.runner_id)
-      || job.runner_id < 1
-      || job.runner_name !== `GitHub Actions ${job.runner_id}`
-      || job.runner_group_id !== 0
-      || job.runner_group_name !== "GitHub Actions"
+      || (!skippedWorker && job.conclusion !== "success")
+      || (!skippedWorker && (
+        !Number.isSafeInteger(job.runner_id)
+        || job.runner_id < 1
+        || job.runner_name !== `GitHub Actions ${job.runner_id}`
+        || job.runner_group_id !== 0
+        || job.runner_group_name !== "GitHub Actions"
+      ))
+      || (skippedWorker && (
+        job.runner_id !== null
+        || job.runner_name !== null
+        || job.runner_group_id !== null
+        || job.runner_group_name !== null
+        || !Array.isArray(job.steps)
+        || job.steps.length !== 0
+      ))
       || !Array.isArray(job.labels)
       || job.labels.length !== 1
       || job.labels[0] !== "ubuntu-latest"
@@ -505,6 +532,17 @@ function validateVerifyJobs(response, run) {
     || [...jobsByName.keys()].some((name) => !expectedNames.includes(name))
   ) {
     throw new Error("Production Verify job names do not match the closed inventory.");
+  }
+  // Each source-bound protected aggregate validates its scope and every worker.
+  // GitHub assigns no runner to unaffected workers. Only complete named groups
+  // may be skipped; all protected contexts, scope, and final gates must succeed.
+  for (const [group, names] of [
+    ["Interface", VERIFY_INTERFACE_WORKER_JOB_NAMES],
+    ["Contracts", VERIFY_CONTRACT_WORKER_JOB_NAMES],
+  ]) {
+    if (new Set(names.map((name) => jobsByName.get(name).conclusion)).size !== 1) {
+      throw new Error(`Production Verify ${group} worker results disagree.`);
+    }
   }
   return parseTimestamp(
     jobsByName.get(VERIFY_PROOF_JOB_NAME).completed_at,

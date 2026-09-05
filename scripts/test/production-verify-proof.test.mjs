@@ -12,6 +12,8 @@ import {
   REQUIRED_PRODUCTION_VERIFY_CHECKS,
   VERIFY_AGGREGATE_JOB_NAME,
   VERIFY_PROOF_JOB_NAME,
+  VERIFY_INTERFACE_WORKER_JOB_NAMES,
+  VERIFY_CONTRACT_WORKER_JOB_NAMES,
   VERIFY_SCOPE_JOB_NAME,
   VERIFY_WORKFLOW_PATH,
   buildProductionVerifyProofV1,
@@ -80,7 +82,11 @@ function validApiFixtures() {
       runner_group_name: "GitHub Actions",
       labels: ["ubuntu-latest"],
     },
-    ...REQUIRED_PRODUCTION_VERIFY_CHECKS.map(({ name }, index) => ({
+    ...[
+      ...REQUIRED_PRODUCTION_VERIFY_CHECKS.map(({ name }) => name),
+      ...VERIFY_INTERFACE_WORKER_JOB_NAMES,
+      ...VERIFY_CONTRACT_WORKER_JOB_NAMES,
+    ].map((name, index) => ({
       id: 90_000 + index,
       run_id: RUN_ID,
       run_attempt: RUN_ATTEMPT,
@@ -425,6 +431,125 @@ test("resolver accepts GitHub repository display-case drift with the exact ID", 
   run.head_repository.full_name = "programmablehq/PROGRAMMABLE";
   run.html_url = `${run.repository.html_url}/actions/runs/${RUN_ID}`;
   assert.equal((await resolveFixtures(fixtures)).runId, RUN_ID);
+});
+
+function skipInterfaceWorker(job) {
+  Object.assign(job, {
+    conclusion: "skipped",
+    runner_id: null,
+    runner_name: null,
+    runner_group_id: null,
+    runner_group_name: null,
+    steps: [],
+  });
+}
+
+test("resolver accepts only the two untouched Interface workers as a skipped pair", async () => {
+  const fixtures = validApiFixtures();
+  for (const job of fixtures.jobs.jobs) {
+    if (VERIFY_INTERFACE_WORKER_JOB_NAMES.includes(job.name)) skipInterfaceWorker(job);
+  }
+  assert.equal((await resolveFixtures(fixtures)).runId, RUN_ID);
+  const aggregate = fixtures.jobs.jobs.find(({ name }) => name === "Interface");
+  aggregate.conclusion = "skipped";
+  await assert.rejects(resolveFixtures(fixtures));
+});
+
+test("resolver rejects missing, mismatched, failed or assigned-but-skipped Interface workers", async () => {
+  for (const name of VERIFY_INTERFACE_WORKER_JOB_NAMES) {
+    for (const mutate of [
+      (job) => { job.conclusion = "failure"; },
+      (job) => { job.conclusion = "cancelled"; },
+      (job) => { job.status = "in_progress"; },
+      (job) => { job.head_sha = "a".repeat(40); },
+      (job) => { job.runner_name = "self-hosted"; },
+      (job) => { job.name = `${name} substitute`; },
+      skipInterfaceWorker,
+    ]) {
+      const fixtures = validApiFixtures();
+      mutate(fixtures.jobs.jobs.find((job) => job.name === name));
+      await assert.rejects(resolveFixtures(fixtures));
+    }
+  }
+  for (const mutate of [
+    (jobs) => { jobs[0].runner_id = 1; },
+    (jobs) => { jobs[0].runner_group_name = "Default"; },
+    (jobs) => { jobs[0].steps = [{ conclusion: "skipped" }]; },
+  ]) {
+    const fixtures = validApiFixtures();
+    const workers = fixtures.jobs.jobs.filter(({ name }) => VERIFY_INTERFACE_WORKER_JOB_NAMES.includes(name));
+    workers.forEach(skipInterfaceWorker);
+    mutate(workers);
+    await assert.rejects(resolveFixtures(fixtures));
+  }
+  const legacyInventory = validApiFixtures();
+  legacyInventory.jobs.jobs = legacyInventory.jobs.jobs.filter(
+    ({ name }) => !VERIFY_INTERFACE_WORKER_JOB_NAMES.includes(name),
+  );
+  legacyInventory.jobs.total_count = legacyInventory.jobs.jobs.length;
+  await assert.rejects(resolveFixtures(legacyInventory), /inventory/u);
+});
+
+test("resolver accepts complete untouched Contract workers only with successful protected aggregates", async () => {
+  for (const skipInterface of [false, true]) {
+    const fixtures = validApiFixtures();
+    for (const job of fixtures.jobs.jobs) {
+      if (VERIFY_CONTRACT_WORKER_JOB_NAMES.includes(job.name)
+        || (skipInterface && VERIFY_INTERFACE_WORKER_JOB_NAMES.includes(job.name))) {
+        skipInterfaceWorker(job);
+      }
+    }
+    assert.equal((await resolveFixtures(fixtures)).runId, RUN_ID);
+    fixtures.jobs.jobs.find(({ name }) => name === "Contracts").conclusion = "skipped";
+    await assert.rejects(resolveFixtures(fixtures));
+  }
+});
+
+test("resolver rejects incomplete, failed, substituted or partially skipped Contract workers", async () => {
+  assert.deepEqual(VERIFY_CONTRACT_WORKER_JOB_NAMES, [
+    "Contracts build",
+    "Contracts tests (1/2)",
+    "Contracts tests (2/2)",
+    "Contracts release and forks",
+    "Contracts static analysis",
+  ]);
+  for (const name of VERIFY_CONTRACT_WORKER_JOB_NAMES) {
+    for (const mutate of [
+      (job) => { job.conclusion = "failure"; },
+      (job) => { job.conclusion = "cancelled"; },
+      (job) => { job.status = "queued"; },
+      (job) => { job.head_sha = "a".repeat(40); },
+      (job) => { job.run_id += 1; },
+      (job) => { job.run_attempt += 1; },
+      (job) => { job.runner_name = "self-hosted"; },
+      (job) => { job.name = `${name} substitute`; },
+      skipInterfaceWorker,
+    ]) {
+      const fixtures = validApiFixtures();
+      mutate(fixtures.jobs.jobs.find((job) => job.name === name));
+      await assert.rejects(resolveFixtures(fixtures));
+    }
+  }
+  for (const mutate of [
+    (job) => { job.runner_id = 1; },
+    (job) => { job.runner_name = "GitHub Actions 1"; },
+    (job) => { job.runner_group_id = 0; },
+    (job) => { job.runner_group_name = "GitHub Actions"; },
+    (job) => { job.steps = [{ conclusion: "success" }]; },
+    (job) => { job.labels = ["self-hosted"]; },
+  ]) {
+    const fixtures = validApiFixtures();
+    const workers = fixtures.jobs.jobs.filter(({ name }) => VERIFY_CONTRACT_WORKER_JOB_NAMES.includes(name));
+    workers.forEach(skipInterfaceWorker);
+    mutate(workers[0]);
+    await assert.rejects(resolveFixtures(fixtures));
+  }
+  const oldInventory = validApiFixtures();
+  oldInventory.jobs.jobs = oldInventory.jobs.jobs.filter(
+    ({ name }) => !VERIFY_CONTRACT_WORKER_JOB_NAMES.includes(name),
+  );
+  oldInventory.jobs.total_count = oldInventory.jobs.jobs.length;
+  await assert.rejects(resolveFixtures(oldInventory), /inventory/u);
 });
 
 test("manual Custom V2 release proof binds dispatch intent and full-tree lane", async () => {

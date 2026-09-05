@@ -19,12 +19,15 @@ const chains = [
       "test/CustomRegistryV2SafePublicMigrationMainnetFork.t.sol",
     ],
     publicEndpoints: [
+      // The full mainnet suite passed here in both 2026-09-05 release runs;
+      // trying it first avoids their five failed public-provider attempts.
+      // Keep every fallback and the complete per-provider test sequence.
+      "https://mainnet.gateway.tenderly.co",
       "https://eth-mainnet.public.blastapi.io",
       "https://rpc.mevblocker.io",
       "https://rpc.flashbots.net",
       "https://eth.api.onfinality.io/public",
       "https://eth.merkle.io",
-      "https://mainnet.gateway.tenderly.co",
       "https://eth.drpc.org",
     ],
   },

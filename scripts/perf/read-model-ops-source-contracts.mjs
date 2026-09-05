@@ -674,7 +674,10 @@ export function evaluateReadModelOperationsSourceContracts(
       packageJson?.scripts?.["test:interface:ci"]?.includes(
         "scripts/test/smoke-explore-index-reset-public-apis.test.mjs",
       ) === true &&
-      packageJson?.scripts?.["verify:custom-v2:ci"]?.includes(
+      packageJson?.scripts?.["verify:custom-v2:ci"]?.split(" && ").includes(
+        "npm run verify:custom-v2:checks:ci",
+      ) === true &&
+      packageJson?.scripts?.["verify:custom-v2:checks:ci"]?.includes(
         "scripts/test/smoke-explore-index-reset-public-apis.test.mjs",
       ) === true,
     "canonical, interface and Custom V2 verification all consume the reset contract",
