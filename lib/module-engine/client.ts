@@ -21,8 +21,8 @@ export { materializeModuleEngineRuntime, predictModuleEngineAddress } from "./op
 export type ModuleEngineClient = ModuleNativeClient & Partial<Pick<PublicClient, "getLogs">>;
 export function createModuleEngineClient(): ModuleEngineClient {
   return createModuleNativeClient(fallback([
-    http(undefined, { timeout: 15_000, retryCount: 0 }),
     http("https://rpc-robinhood.blockmachine.io", { timeout: 15_000, retryCount: 0 }),
+    http(undefined, { timeout: 15_000, retryCount: 0 }),
   ], { rank: false, retryCount: 0 }));
 }
 export interface ModuleEngineOperation { operationId: Hex; actor: Address; recipient: Address; inputAsset: Address; inputAmount: bigint; outputAsset: Address; minimumOutput: bigint; deadline: bigint; nonce: bigint; data: Hex }
@@ -87,6 +87,7 @@ export interface ModuleEngineSourcePreparationV1<T extends PreparedModuleEngineT
 }
 type Binding = { client: ModuleEngineClient; release: ModuleEngineRelease; refresh: () => Promise<void>; receipt: (receipt: TransactionReceipt) => Promise<ModuleEngineReceiptResult>; state: "ready" | "pending" | "submitted"; hash?: Hex };
 const preparations = new WeakMap<PreparedModuleEngineTransaction, Binding>();
+const anyQuoteApprovalContexts = new WeakMap<ModuleEngineApprovalRequired, { client: ModuleEngineClient; block: BoundBlock; account: Address; launch: ModuleEngineLaunchRecord }>();
 function need(condition: unknown, message: string): asserts condition { if (!condition) throw new Error(`Module engine: ${message}`); }
 function same(actual: unknown, expected: unknown, label: string) { need(typeof actual === "string" && typeof expected === "string" && actual.toLowerCase() === expected.toLowerCase(), `${label} differs.`); }
 function equal(actual: unknown, expected: unknown, label: string) { need(nativeCanonicalJson(actual) === nativeCanonicalJson(expected), `${label} differs.`); }
@@ -405,16 +406,35 @@ export async function prepareModuleEngineApproval(input: { client: ModuleEngineC
   const release = freeze(bindActiveModuleEngineRelease(input.release));
   return bindPublicSourcePreparation(await prepareModuleEngineApprovalAt(input, await assertModuleEngineRelease({ client: input.client, release })), input.client, release);
 }
+/** Reuse the immediately preceding sell's exact verified checkpoint. The opaque object is
+ * consumed once; copied descriptors and foreign clients, releases or accounts grant no authority. */
+export async function prepareModuleEngineAnyQuoteApproval(input: { client: ModuleEngineClient; release: ModuleEngineRelease; account: Address; required: ModuleEngineApprovalRequired }): Promise<PreparedModuleEngineApproval> {
+  const release = freeze(bindActiveModuleEngineRelease(input.release)), account = moduleAddress(input.account, "account");
+  const context = anyQuoteApprovalContexts.get(input.required);
+  need(context && context.client === input.client, "Any Quote approval context is unavailable. Refresh the quote.");
+  same(account, context.account, "Approval context wallet"); equal(release, context.block.release, "Approval context release");
+  anyQuoteApprovalContexts.delete(input.required);
+  need(Math.abs(Date.now() / 1000 - Number(context.block.timestamp)) <= 120, "Approval context is stale. Refresh the quote.");
+  need(await input.client.getChainId() === 4663, "Approval context is on another chain."); await canonical(input.client, context.block);
+  const required = input.required, amount = required.currentAllowance > 0n && required.allowanceKind !== "permit2" ? 0n : required.amount;
+  const source = await prepareModuleEngineApprovalAt({ client: input.client, account, token: required.token, amount,
+    spender: required.spender, allowanceKind: required.allowanceKind, permit2Spender: required.permit2Spender, expiration: required.expiration }, context.block, context.launch);
+  need(Math.abs(Date.now() / 1000 - Number(context.block.timestamp)) <= 120, "Approval context is stale. Refresh the quote.");
+  return bindPublicSourcePreparation(source, input.client, release);
+}
 export async function prepareModuleEngineSourceApprovalV1(input: Omit<Parameters<typeof prepareModuleEngineApproval>[0], "release"> & { identity: ModuleEngineReleaseIdentity; blockNumber?: bigint }): Promise<ModuleEngineSourcePreparationV1<PreparedModuleEngineApproval>> {
   return prepareModuleEngineApprovalAt(input, await assertModuleEngineSourceIdentityV1(input));
 }
-async function prepareModuleEngineApprovalAt(input: Omit<Parameters<typeof prepareModuleEngineApproval>[0], "release">, block: BoundBlock): Promise<ModuleEngineSourcePreparationV1<PreparedModuleEngineApproval>> {
+async function prepareModuleEngineApprovalAt(input: Omit<Parameters<typeof prepareModuleEngineApproval>[0], "release">, block: BoundBlock, verifiedLaunch?: ModuleEngineLaunchRecord): Promise<ModuleEngineSourcePreparationV1<PreparedModuleEngineApproval>> {
   const account = moduleAddress(input.account, "account"), token = moduleAddress(input.token, "token"), amount = uint(input.amount, "approval amount"), release = block.release;
   const shared = isModuleEngineSharedQuoteRelease(release), allowanceKind = input.allowanceKind ?? "erc20";
   const spender = shared ? ANY_QUOTE_INFRASTRUCTURE.permit2 : release.contracts.host.address;
   if (input.spender) same(input.spender, spender, "Approval spender");
   need(shared || allowanceKind === "erc20", "Permit2 is only used by shared-quote routing.");
-  if (shared) { await boundLaunch(input.client, block, token); await code(input.client, spender, anyQuoteChainProfile.contracts.uniswap.permit2.runtimeCodeHash as Hex, block.blockNumber); }
+  if (shared) {
+    if (verifiedLaunch) same(verifiedLaunch.token, token, "Approval context token"); else await boundLaunch(input.client, block, token);
+    await code(input.client, spender, anyQuoteChainProfile.contracts.uniswap.permit2.runtimeCodeHash as Hex, block.blockNumber);
+  }
   const tokenCode = await input.client.getCode({ address: token, blockNumber: block.blockNumber }); need(tokenCode && tokenCode !== "0x", "Approval asset has no contract."); const tokenHash = keccak256(tokenCode);
   const balance = uint(await read(input.client, token, "balanceOf", [account], block.blockNumber), "balance"); need(amount === 0n || amount <= balance, "Approval exceeds the available input balance.");
   const expiresAt = deadline(block.timestamp), permit2Spender = shared ? release.contracts.universalRouter.address : undefined;
@@ -577,7 +597,11 @@ async function prepareModuleEngineAnyQuoteSwapAt(input: Omit<Parameters<typeof p
     if (permitted[0] < inputAmount || BigInt(permitted[1]) < expiresAt) return { kind: "approval-required", token: launch.token, spender, permit2Spender: release.contracts.universalRouter.address, amount: inputAmount, currentAllowance: permitted[0], allowanceKind: "permit2", expiration: current.timestamp + 300n, funding };
     return null;
   };
-  const required = await approval(block); if (required) return required;
+  const required = await approval(block);
+  if (required) {
+    anyQuoteApprovalContexts.set(required, { client: input.client, block, account, launch });
+    return freeze(required);
+  }
   await assertAnyQuoteRouteAccounting(input.client, block, compiled.balanceAccounting);
   const transaction = tx(account, compiled.transaction.to, compiled.transaction.data, BigInt(compiled.transaction.value), quote.buy ? "buy" : "sell", quote.buy ? "Buy with ETH through the pool quote asset" : "Sell to ETH through the pool quote asset");
   const simulation = await simulate(input.client, block, transaction, true), quoteDecimals = Number(await read(input.client, launch.quoteAsset, "decimals", [], block.blockNumber));

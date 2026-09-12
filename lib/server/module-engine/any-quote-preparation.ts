@@ -1,5 +1,5 @@
 import "server-only";
-import { createPublicClient, custom, encodeAbiParameters, decodeFunctionData, decodeFunctionResult, encodeFunctionData, erc20Abi, keccak256, parseAbi, toHex, type Address, type Hex } from "viem";
+import { createPublicClient, custom, encodeAbiParameters, decodeFunctionData, decodeFunctionResult, encodeErrorResult, encodeFunctionData, erc20Abi, keccak256, parseAbi, toFunctionSelector, toHex, type Address, type Hex } from "viem";
 import { robinhoodChain } from "@/lib/chains";
 import { moduleAddress } from "@/lib/module-mode/release";
 import { assertModuleEngineSourceIdentityV1, readModuleEngineSourceLaunchV1, readModuleEngineSourceTemplateV1, type ModuleEngineClient } from "@/lib/module-engine/client";
@@ -13,7 +13,7 @@ import { anyQuoteEvidenceHashV1, anyQuoteModulePoolKeyV1, anyQuoteSwapPathV1, bu
 import { assessAnyQuoteAssetV1, requoteAnyQuoteExternalRouteV1, type AnyQuoteReadinessOptionsV1 } from "@/lib/module-engine/any-quote/readiness.server";
 import { ANY_QUOTE_INFRASTRUCTURE, ANY_QUOTE_NATIVE_BUY_OPERATION_ID, ANY_QUOTE_NATIVE, AnyQuoteErrorV1,
   anyQuoteSameAddressV1, anyQuoteUintV1, type AnyQuoteCheckpointV1 } from "@/lib/module-engine/any-quote/types";
-import { agreedTradeRpcV1, productionTradeRpcsV1, successfulTradeFramesV1, tradeTraceV1, type TradeRpcV1 } from "../custom-launch/routed-trade-rpc-v1";
+import { agreedTradeRpcV1, productionTradeRpcsV1, TradeRpcExecutionRevertedV1, successfulTradeFramesV1, tradeTraceV1, type TradeRpcV1 } from "../custom-launch/routed-trade-rpc-v1";
 import { bindModuleEngineReleaseIdentity, bindModuleEngineTemplate, type ModuleEngineReleaseIdentity, type ModuleEngineTemplate } from "@/lib/module-engine/catalog";
 import { anyQuoteNativeFeeRouteAbi, anyQuoteNativeFeeRouteFromExternal, decodeAnyQuoteNativeFeeRoute, ANY_QUOTE_NATIVE_FEE_ROUTE_PARAMETERS } from "@/lib/module-engine/any-quote/native-fee-route";
 import { verifyAnyQuoteLaunchSettlementV1 } from "./any-quote-settlement";
@@ -61,8 +61,12 @@ async function quoteModule(pool: AnyQuoteTradeQuote["pool"], buy: boolean, amoun
   return BigInt(output);
 }
 const fullQuoterAbi = parseAbi(["function quoteExactInput((address exactCurrency,(address intermediateCurrency,uint24 fee,int24 tickSpacing,address hooks,bytes hookData)[] path,uint128 exactAmount) params) returns (uint256 amountOut,uint256 gasEstimate)"]);
+const nativeFeeQuoteErrors = parseAbi([
+  "error UnexpectedRevertBytes(bytes)", "error WrappedError(address,bytes4,bytes,bytes)",
+  "error NativeFeeAmountTooSmall()", "error HookCallFailed()",
+]);
 async function quoteCombinedNativeTrade(pool: AnyQuoteTradeQuote["pool"], buy: boolean, amountIn: bigint, route: AnyQuoteTradeQuote["externalRoute"], deps: AnyQuoteIdentityPreparationDependenciesV1) {
-  const rpc = agreedTradeRpcV1(rpcs(deps)), ref = { blockHash: route.checkpoint.hash, requireCanonical: true };
+  const rpc = agreedTradeRpcV1(rpcs(deps), { preserveExecutionReverts: true }), ref = { blockHash: route.checkpoint.hash, requireCanonical: true };
   const runtime = await rpc("eth_getCode", [ANY_QUOTE_INFRASTRUCTURE.v4Quoter, ref], value => String(value) as Hex);
   if (keccak256(runtime) !== ANY_QUOTE_INFRASTRUCTURE.v4QuoterCodeHash) throw new AnyQuoteErrorV1("QUOTER_RUNTIME_MISMATCH");
   const path = anyQuoteSwapPathV1(pool, buy ? "buy" : "sell", route);
@@ -70,6 +74,17 @@ async function quoteCombinedNativeTrade(pool: AnyQuoteTradeQuote["pool"], buy: b
   const result = await rpc("eth_call", [{ to: ANY_QUOTE_INFRASTRUCTURE.v4Quoter, data }, ref], value => {
     const [amount] = decodeFunctionResult({ abi: fullQuoterAbi, functionName: "quoteExactInput", data: String(value) as Hex });
     return anyQuoteUintV1(amount.toString(), (1n << 127n) - 1n).toString();
+  }).catch(error => {
+    if (error instanceof TradeRpcExecutionRevertedV1) {
+      // Match the pinned Quoter/Core envelope and this hook's own callback, never a nested upstream hook's error.
+      const hookError = encodeErrorResult({ abi: nativeFeeQuoteErrors, errorName: "WrappedError", args: [pool.sharedHook,
+        toFunctionSelector("afterSwap(address,(address,address,uint24,int24,address),(bool,int256,uint160),int256,bytes)"),
+        encodeErrorResult({ abi: nativeFeeQuoteErrors, errorName: "NativeFeeAmountTooSmall" }),
+        encodeErrorResult({ abi: nativeFeeQuoteErrors, errorName: "HookCallFailed" })] });
+      const expected = encodeErrorResult({ abi: nativeFeeQuoteErrors, errorName: "UnexpectedRevertBytes", args: [hookError] });
+      if (error.data === expected) throw new AnyQuoteErrorV1("NATIVE_FEE_AMOUNT_TOO_SMALL");
+    }
+    throw error;
   });
   return BigInt(result);
 }

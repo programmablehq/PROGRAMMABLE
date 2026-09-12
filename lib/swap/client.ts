@@ -144,9 +144,7 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     const client = createModuleEngineClient(), quote = await quoteModuleEngineAnyQuoteTrade({ client, release, template: route.template,
       account, token, buy: input.side === "buy", inputAmount: input.amountIn, recipient: account, slippageBps });
     const prepared = quote.kind === "approval-required"
-      ? await engine.prepareModuleEngineApproval({ client, release, account, token: quote.token,
-        amount: quote.currentAllowance > 0n && quote.allowanceKind !== "permit2" ? 0n : quote.amount,
-        spender: quote.spender, allowanceKind: quote.allowanceKind, permit2Spender: quote.permit2Spender, expiration: quote.expiration })
+      ? await engine.prepareModuleEngineAnyQuoteApproval({ client, release, account, required: quote })
       : quote.prepared;
     const engineState = await import("@/components/module-mode-wallet-state"), store = await import("@/lib/module-mode-operation-store");
     requireValue(store.moduleModeOperationSnapshot(account) === null, "A previous module transaction is awaiting confirmation. Open this coin’s controls to check it.");

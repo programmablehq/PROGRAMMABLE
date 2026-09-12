@@ -11,7 +11,7 @@ import { anyQuoteEvidenceHashV1, anyQuoteModulePoolKeyV1, anyQuotePoolIdV1, buil
 import { planAnyQuoteInitialPriceV1, encodeAnyQuoteConfigurationV1 } from "@/lib/module-engine/any-quote/price";
 import { anyQuoteLaunchIntent, anyQuoteMinimumOutput, anyQuotePoolFor, assertAnyQuoteConfiguration, assertAnyQuoteLaunchPreparation, predictAnyQuoteToken, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "@/lib/module-engine/any-quote/integration";
 import { compileModuleEngineLaunch, predictModuleEngineAddress } from "@/lib/module-engine/operation-plan";
-import { prepareModuleEngineAnyQuoteSwap, prepareModuleEngineApproval, prepareModuleEngineClaim, readModuleEngineLaunch, readModuleEngineAdministration, readModuleEngineFeeControls, prepareModuleEngineFeeChange, revalidateModuleEngineTransaction, releaseModuleEnginePreparation, verifyModuleEngineLaunchReceipt, verifyModuleEngineClaimReceipt } from "@/lib/module-engine/client";
+import { prepareModuleEngineAnyQuoteSwap, prepareModuleEngineAnyQuoteApproval, prepareModuleEngineApproval, prepareModuleEngineClaim, readModuleEngineLaunch, readModuleEngineAdministration, readModuleEngineFeeControls, prepareModuleEngineFeeChange, revalidateModuleEngineTransaction, releaseModuleEnginePreparation, verifyModuleEngineLaunchReceipt, verifyModuleEngineClaimReceipt } from "@/lib/module-engine/client";
 import { assertModuleEngineOperationAvailability, fetchModuleEngineAvailability } from "@/lib/module-engine/availability-client";
 import { ENGINE_CONTEXT, moduleEngineAnyQuoteHookAbi, moduleEngineAnyQuoteLedgerAbi, moduleEngineHostAbi, moduleEngineLaunchParameters, moduleEnginePlanParameters } from "@/lib/module-engine/abi";
 import { readAnyQuoteLaunchPreview, readAnyQuoteReadiness } from "@/lib/server/module-engine/any-quote";
@@ -399,6 +399,44 @@ describe("Any Quote financial integration", () => {
     f.allowance.expiration = Number(f.state.timestamp);
     await expect(revalidateModuleEngineTransaction(prepared, ACCOUNT)).rejects.toThrow("Sell allowance changed");
   });
+
+  it("reuses only the verified Any Quote approval checkpoint without repeating source and launch reads", async () => {
+    const f = tradeFixture(false); f.allowance.amount = 0n;
+    const required = await prepareModuleEngineAnyQuoteSwap({ ...f, account: ACCOUNT });
+    if (required.kind !== "approval-required") throw new Error("Expected finite approval");
+    const reads = () => vi.mocked(f.client.readContract).mock.calls.filter(([input]) => ["SOURCE_VERSION", "launchIdOf", "getLaunch"].includes(input.functionName)).length;
+    const before = reads(), logs = vi.mocked(f.client.getLogs!).mock.calls.length;
+    vi.mocked(f.client.call).mockResolvedValue({ data: "0x" });
+    const prepared = await prepareModuleEngineAnyQuoteApproval({ ...f, account: ACCOUNT, required });
+    expect(prepared).toMatchObject({ kind: "approve", allowanceKind: "permit2", amount: 1000n, blockNumber: 100n,
+      spender: ANY_QUOTE_INFRASTRUCTURE.permit2, permit2Spender: f.release.contracts.universalRouter.address });
+    expect(reads()).toBe(before); expect(vi.mocked(f.client.getLogs!).mock.calls).toHaveLength(logs);
+    expect(f.client.call).toHaveBeenCalledWith(expect.objectContaining({ to: ANY_QUOTE_INFRASTRUCTURE.permit2, blockNumber: 100n }));
+    expect(f.client.estimateGas).toHaveBeenCalledWith(expect.objectContaining({ to: ANY_QUOTE_INFRASTRUCTURE.permit2, blockNumber: 100n }));
+    await expect(prepareModuleEngineAnyQuoteApproval({ ...f, account: ACCOUNT, required })).rejects.toThrow("approval context");
+    const sourceReads = reads();
+    await expect(revalidateModuleEngineTransaction(prepared, ACCOUNT)).resolves.toEqual(prepared.transaction);
+    expect(reads()).toBeGreaterThan(sourceReads); // Wallet-boundary validation still reads the current release.
+  });
+
+  it.each(["copied", "account", "release", "client", "stale", "chain", "reorg"] as const)("rejects a %s Any Quote approval context", async mutation => {
+    const f = tradeFixture(false); f.allowance.amount = 0n;
+    const required = await prepareModuleEngineAnyQuoteSwap({ ...f, account: ACCOUNT });
+    if (required.kind !== "approval-required") throw new Error("Expected finite approval");
+    vi.mocked(f.client.call).mockClear();
+    const input = { client: f.client, release: f.release, account: ACCOUNT, required };
+    if (mutation === "copied") input.required = { ...required };
+    if (mutation === "account") input.account = addr(999);
+    if (mutation === "release") input.release = { ...f.release, lifecycleEvidenceDigest: hash(999) };
+    if (mutation === "client") input.client = { ...f.client };
+    if (mutation === "chain") vi.mocked(f.client.getChainId).mockResolvedValue(1);
+    if (mutation === "reorg") vi.mocked(f.client.getBlock).mockResolvedValue({ number: 100n, hash: hash(999), timestamp: f.state.timestamp } as never);
+    const clock = mutation === "stale" ? vi.spyOn(Date, "now").mockReturnValue(Number(f.state.timestamp + 121n) * 1000) : null;
+    try { await expect(prepareModuleEngineAnyQuoteApproval(input)).rejects.toThrow(); }
+    finally { clock?.mockRestore(); }
+    expect(f.client.call).not.toHaveBeenCalled();
+  });
+
   it("matches the final AnyQuote host token graffiti domain while preserving native token predictions", async () => {
     const f = sharedFixture(), compiled = await compileModuleEngineLaunch({ ...f.launchInput, configuration: {}, anyQuotePreparation: f.preview }, f.release, f.template.manifest, 36, BigInt(f.preview.validUntil));
     const expectedGraffiti = keccak256(encodeAbiParameters(parseAbiParameters("string,address,bytes32"), ["programmable.module-engine.any-quote-token.v1", ACCOUNT, f.intent.creatorSalt]));
