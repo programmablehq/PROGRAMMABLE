@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { encodeAbiParameters, encodeEventTopics, keccak256, parseAbi, parseAbiParameters, toHex as textHex, zeroAddress } from 'viem';
-import { parseOptions, patchImmutables, scanRange, validatePublished, boundLaunchBatch, resolveCreationTransactions } from './verify-launch-source.mjs';
+import { parseOptions, patchImmutables, scanRange, validatePublished, boundLaunchBatch, resolveCreationTransactions,
+  checkpointVerifiedRelease, ensureTargetResult, sourceRecordsStatus } from './verify-launch-source.mjs';
+import { checkpointEntry, CHECKPOINT_SCHEMA } from './launch-source-profiles.mjs';
 import { canonicalJson } from './core.mjs';
 
 const address = `0x${'12'.repeat(20)}`;
@@ -84,6 +89,46 @@ export function publishedFixture() {
     verifiedAt: '2026-09-07T00:00:00Z' };
   return { target, value };
 }
+test('a partial token readback retains its job and checkpoint while the bound engine is published', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'module-source-targets-'));
+  try {
+    const token = publishedFixture(), engine = publishedFixture();
+    engine.target = { ...engine.target, role: 'engine', address: `0x${'90'.repeat(20)}` };
+    engine.value.address = engine.target.address;
+    const tokenJob = '11111111-1111-4111-8111-111111111111', engineJob = '22222222-2222-4222-8222-222222222222';
+    const submitted = new Set(), before = [], context = { beforePublish: async target => { before.push(target.address); },
+      fetchPublic: async (url, init) => {
+        const isToken = String(url).includes(token.target.address), fixture = isToken ? token : engine;
+        if (init.method === 'POST') {
+          submitted.add(fixture.target.address);
+          assert.equal(JSON.parse(init.body).creationTransactionHash, fixture.target.transactionHash);
+          return Response.json({ verificationId: isToken ? tokenJob : engineJob }, { status: 202 });
+        }
+        if (!submitted.has(fixture.target.address)) return new Response(null, { status: 404 });
+        return Response.json(isToken ? { ...fixture.value, creationMatch: null,
+          deployment: { transactionHash: null, blockNumber: null, transactionIndex: null, deployer: null } } : fixture.value);
+      } };
+    const records = [];
+    for (const target of [token.target, engine.target]) records.push(await ensureTargetResult(target, true, context));
+    assert.deepEqual([...submitted], [token.target.address, engine.target.address]);
+    assert.deepEqual(before, [token.target.address, engine.target.address]);
+    assert.equal(records[0].status, 'failed'); assert.match(records[0].error, /Sourcify no-CBOR match is unavailable/);
+    assert.equal(records[0].verificationId, tokenJob);
+    assert.equal(records[1].address, engine.target.address); assert.equal(records[1].comparison, 'exact-complete-creation-and-runtime');
+    assert.equal(sourceRecordsStatus(records), 'failed');
+    const selectedRelease = { ...release, sourceVersion: 'module-native-v1' }, hash = `0x${'ab'.repeat(32)}`, checkedAt = '2026-09-13T00:00:00Z';
+    const previous = checkpointEntry(selectedRelease, 150n, hash, checkedAt);
+    const state = { schemaVersion: CHECKPOINT_SCHEMA, chainId: 4663, releases: { [release.releaseDigest]: previous } };
+    const file = path.join(directory, 'checkpoint.json'), initial = `${JSON.stringify(state)}\n`;
+    await writeFile(file, initial);
+    await checkpointVerifiedRelease(file, state, selectedRelease, 201n, hash, checkedAt, records);
+    assert.equal(await readFile(file, 'utf8'), initial); assert.deepEqual(state.releases[release.releaseDigest], previous);
+    await checkpointVerifiedRelease(file, state, selectedRelease, 201n, hash, checkedAt, [records[1]]);
+    assert.equal(JSON.parse(await readFile(file)).releases[release.releaseDigest].nextBlock, '201');
+    assert.equal(sourceRecordsStatus([{ status: 'not-published' }, records[1]]), 'source-publication-required');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('an omitted empty library default needs the exact pinned provider recompilation and never permits links', () => {
   const { target, value } = publishedFixture();
   value.compilation.compilerSettings = structuredClone(value.compilation.compilerSettings);

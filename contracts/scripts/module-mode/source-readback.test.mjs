@@ -159,6 +159,120 @@ test('Quote Planner CBOR opt-in requires its exact source profile, target and co
   }
 });
 
+// Synthetic bytes at the exact trailer offsets in the AQINIT20 provider record. This models a
+// future complete creation readback, not the current runtime-only publication or a deployment proof.
+function anyQuoteEthContext() {
+  const { expected, value } = quotePlannerContext(), role = 'engine';
+  const file = 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol', name = 'AnyQuoteLPModuleV1';
+  const target = { [file]: name }, trailer = 'a164736f6c634300081a000a';
+  const creationCode = `0x${'00'.repeat(15265)}${trailer}`, template = `0x${'00'.repeat(10845)}${trailer}`;
+  const args = `0x${'22'.repeat(32)}`, immutable = `0x${addr(10).slice(2).padStart(64, '0')}`;
+  const runtime = `${template.slice(0, 2 + 378 * 2)}${immutable.slice(2)}${template.slice(2 + 410 * 2)}`;
+  const settings = { optimizer: { enabled: true, runs: 1000 }, evmVersion: 'cancun', viaIR: true,
+    metadata: { bytecodeHash: 'none' }, libraries: {}, remappings: [] };
+  const metadata = { compiler: { version: '0.8.26+commit.8a97fa7a' }, settings: { ...structuredClone(settings), compilationTarget: target } };
+  const sources = { [file]: { content: '// synthetic ETH source-readback fixture, never deployed\n' } };
+  const refs = { 7208: [{ start: 378, length: 32 }] };
+  const artifact = { abi: [], compilationTarget: target, metadata: structuredClone(metadata),
+    bytecode: { object: creationCode, linkReferences: {} },
+    deployedBytecode: { object: template, linkReferences: {}, immutableReferences: structuredClone(refs) } };
+  expected.role = role; expected.sourceProfile = 'module-engine-any-quote-eth-v1';
+  delete expected.compilerAuxdataProfile;
+  expected.constructorArguments = args;
+  expected.plan = { sourceCommit: plan.sourceCommit, contracts: { [role]: { address: value.address, runtime, runtimeCodeHash: keccak256(runtime) } } };
+  expected.build = { artifacts: { [role]: artifact }, compilerMetadata: { [role]: structuredClone(metadata) },
+    standardInputs: { [role]: { language: 'Solidity', sources: structuredClone(sources), settings: structuredClone(settings) } } };
+  Object.assign(value, { compilation: { language: 'Solidity', compiler: 'solc', compilerVersion: '0.8.26+commit.8a97fa7a',
+    compilerSettings: structuredClone(settings), name, fullyQualifiedName: `${file}:${name}` },
+    stdJsonInput: structuredClone(expected.build.standardInputs.engine), sources, metadata: structuredClone(metadata),
+    creationBytecode: { recompiledBytecode: creationCode, onchainBytecode: `${creationCode}${args.slice(2)}`,
+      cborAuxdata: { 1: { value: `0x${trailer}`, offset: 15265 } }, linkReferences: {},
+      transformations: [{ type: 'insert', offset: 15277, reason: 'constructorArguments' }], transformationValues: { constructorArguments: args } },
+    runtimeBytecode: { recompiledBytecode: template, onchainBytecode: runtime,
+      cborAuxdata: { 1: { value: `0x${trailer}`, offset: 10845 } }, linkReferences: {}, immutableReferences: refs,
+      transformations: [{ id: '7208', type: 'replace', offset: 378, reason: 'immutable' }], transformationValues: { immutables: { 7208: immutable } } } });
+  return { expected, value };
+}
+
+test('ETH engine accepts only its exact terminal solc marker before constructor args and after immutable runtime', () => {
+  const { expected, value } = anyQuoteEthContext(), result = validateSourcifySource(expected, value);
+  assert.deepEqual(value.creationBytecode.cborAuxdata, { 1: { value: '0xa164736f6c634300081a000a', offset: 15265 } });
+  assert.deepEqual(value.runtimeBytecode.cborAuxdata, { 1: { value: '0xa164736f6c634300081a000a', offset: 10845 } });
+  assert.equal(result.providerClassification, 'NO_METADATA_HASH_PROVIDER_MATCH');
+  assert.equal(result.independentByteComparison, 'exact-complete-creation-and-runtime');
+  assert.equal(result.creationBytecodeHash, keccak256(value.creationBytecode.onchainBytecode));
+  assert.equal(result.runtimeCodeHash, keccak256(value.runtimeBytecode.onchainBytecode));
+  assert.equal(result.transformationPolicy, 'constructor-arguments-and-compiled-immutables-only');
+  value.creationMatch = null;
+  assert.throws(() => validateSourcifySource(expected, value), /Sourcify no-CBOR match is unavailable/);
+});
+
+test('ETH engine auxdata never masks byte, constructor, immutable, source or provider-evidence mutations', () => {
+  const mutations = [
+    v => { v.creationMatch = null; }, v => { v.runtimeMatch = null; }, v => { v.deployment.transactionHash = txHash.replace(/.$/, '0'); },
+    v => { v.creationBytecode.onchainBytecode += '00'; }, v => { v.creationBytecode.transformationValues.constructorArguments += '00'; },
+    v => { v.runtimeBytecode.transformationValues.immutables['7208'] = `0x${'ff'.repeat(32)}`; },
+    v => { v.runtimeBytecode.immutableReferences['7208'][0].start++; },
+    v => { v.sources[Object.keys(v.sources)[0]].content += 'changed'; }, v => { v.metadata.compiler.version = '0.8.27'; },
+    ...['creationBytecode', 'runtimeBytecode'].flatMap(kind => [
+      v => { v[kind].onchainBytecode = `0x01${v[kind].onchainBytecode.slice(4)}`; },
+      v => { v[kind].recompiledBytecode += '00'; }, v => { v[kind].cborAuxdata = {}; },
+      v => { v[kind].cborAuxdata[2] = structuredClone(v[kind].cborAuxdata[1]); },
+      v => { v[kind].cborAuxdata[1].offset++; }, v => { v[kind].cborAuxdata[1].extra = true; },
+      v => { v[kind].cborAuxdata[1].value = '0xa164736f6c634300081b000a'; },
+      v => { v[kind].transformations.push({ id: '1', type: 'replace', offset: v[kind].cborAuxdata[1].offset, reason: 'cborAuxdata' }); },
+      v => { v[kind].transformationValues.cborAuxdata = { 1: v[kind].cborAuxdata[1].value }; },
+      v => { v[kind].linkReferences = { unexpected: {} }; },
+    ]),
+  ];
+  for (const mutate of mutations) {
+    const { expected, value } = anyQuoteEthContext(); mutate(value);
+    assert.throws(() => validateSourcifySource(expected, value), undefined, mutate.toString());
+  }
+});
+
+test('ETH compiler trailer support requires the exact profile, engine target and compiler settings', () => {
+  const mutations = [
+    ...[undefined, 'module-native-v1', 'module-native-v2', 'module-engine-v1', 'module-engine-any-quote-v1'].map(profile => ({ expected }) => { expected.sourceProfile = profile; }),
+    ({ expected, value }) => {
+      expected.role = 'token';
+      for (const entries of [expected.plan.contracts, expected.build.artifacts, expected.build.standardInputs, expected.build.compilerMetadata]) {
+        entries.token = entries.engine; delete entries.engine;
+      }
+    },
+    ({ expected, value }) => {
+      const target = { 'src/Other.sol': 'Other' }; expected.build.artifacts.engine.compilationTarget = target;
+      for (const metadata of [expected.build.artifacts.engine.metadata, expected.build.compilerMetadata.engine, value.metadata]) metadata.settings.compilationTarget = target;
+      value.compilation.name = 'Other'; value.compilation.fullyQualifiedName = 'src/Other.sol:Other';
+    },
+    ...[
+      s => { s.metadata.bytecodeHash = 'ipfs'; }, s => { s.metadata.appendCBOR = false; }, s => { s.metadata.appendCBOR = true; },
+      s => { s.viaIR = false; }, s => { s.optimizer.runs++; }, s => { s.evmVersion = 'paris'; },
+    ].map(mutate => ({ expected, value }) => {
+      for (const settings of [expected.build.standardInputs.engine.settings, expected.build.artifacts.engine.metadata.settings,
+        expected.build.compilerMetadata.engine.settings, value.compilation.compilerSettings, value.stdJsonInput.settings, value.metadata.settings]) mutate(settings);
+    }),
+  ];
+  for (const mutate of mutations) {
+    const fixture = anyQuoteEthContext(); mutate(fixture);
+    assert.throws(() => validateSourcifySource(fixture.expected, fixture.value), undefined, mutate.toString());
+  }
+  for (const kind of ['creationBytecode', 'runtimeBytecode']) for (const embedded of [true, false]) {
+    const { expected, value } = anyQuoteEthContext(), code = value[kind];
+    const changed = embedded ? `${code.recompiledBytecode}00` : code.recompiledBytecode.replace('a164736f6c634300081a000a', 'a164736f6c634300081b000a');
+    expected.build.artifacts.engine[kind === 'creationBytecode' ? 'bytecode' : 'deployedBytecode'].object = changed;
+    code.recompiledBytecode = changed;
+    code.onchainBytecode = embedded ? `${code.onchainBytecode.slice(0, changed.length - 2)}00${code.onchainBytecode.slice(changed.length - 2)}`
+      : code.onchainBytecode.replace('a164736f6c634300081a000a', 'a164736f6c634300081b000a');
+    if (!embedded) code.cborAuxdata[1].value = '0xa164736f6c634300081b000a';
+    if (kind === 'creationBytecode' && embedded) code.transformations[0].offset++;
+    if (kind === 'runtimeBytecode') {
+      expected.plan.contracts.engine.runtime = code.onchainBytecode; expected.plan.contracts.engine.runtimeCodeHash = keccak256(code.onchainBytecode);
+    }
+    assert.throws(() => validateSourcifySource(expected, value), /compiler trailer/);
+  }
+});
+
 test('Native and Core readbacks keep the existing no-CBOR default and reject the Quote opt-in', () => {
   for (const sourceProfile of [undefined, 'module-native-v1', 'module-native-v2', 'module-engine-v1']) {
     const { expected, value } = context(); expected.sourceProfile = sourceProfile;

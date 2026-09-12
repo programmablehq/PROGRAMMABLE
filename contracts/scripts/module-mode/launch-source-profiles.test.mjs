@@ -9,7 +9,7 @@ import { launchSourceWire } from './launch-source-shared.mjs';
 import { sharedValidators } from './shared.mjs';
 import { alignPublishedImmutableIds, bindNativeTokenIdentity, checkpointEntry, checkpointState, CHECKPOINT_SCHEMA, engineLaunchIdentity,
   engineResourceCommitment, nativeForwarderSalt, NATIVE_IDENTITY_ABI, releaseInventory, sourceProfile } from './launch-source-profiles.mjs';
-import { bindPositionMint, creationEvidence, engineBuild, ensurePublished, parseOptions, releaseCode, run, validatePublished } from './verify-launch-source.mjs';
+import { bindPositionMint, creationEvidence, engineBuild, ensurePublished, parseOptions, readNativeFeeRouteHash, releaseCode, run, validatePublished } from './verify-launch-source.mjs';
 
 // All receipts, activation fields and review decisions below are isolated parser fixtures, never authority.
 const wire = await launchSourceWire(), nativeWire = await sharedValidators();
@@ -268,6 +268,43 @@ test('exact reviewed Engine source compiles locally and provider comparison reta
     await assert.rejects(ensurePublished({ ...target, creation: undefined }, true, { fetchPublic: async () => { writes++; throw new Error('must not call'); } }), /Bound source/);
     assert.equal(writes, 0);
   });
+
+test('ETH native-fee getter preserves the bytes32 route commitment through resource validation', async () => {
+  const history = JSON.parse(await readFile(new URL('../../../config/module-engine/historical-releases.json', import.meta.url)));
+  const release = wire.bindActiveModuleEngineRelease(history.releases.find(item => item.release.sourceVersion === 'module-engine-any-quote-eth-v1').release);
+  const token = a(500), quote = a(900), pins = release.contracts;
+  const hops = [{ key: { currency0: zeroAddress, currency1: quote, fee: 3000, tickSpacing: 60, hooks: zeroAddress }, zeroForOne: false, hookData: '0x' }];
+  const routeParameters = parseAbiParameters('((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) key,bool zeroForOne,bytes hookData)[] hops');
+  const nativeFeeRoute = wire.decodeAnyQuoteNativeFeeRoute(encodeAbiParameters(routeParameters, [hops]), { token, quoteAsset: quote, sharedHook: pins.sharedHook.address });
+  const configuration = encodeAbiParameters(parseAbiParameters('(bytes32 schemaId,address poolManager,bytes32 poolManagerCodeHash,address sharedHook,address quoteAsset,int24 initialTick,uint64 validUntil,bytes32 priceEvidenceHash)'),
+    [{ schemaId: keccak256(toHex('programmable.any-quote.configuration.v1')), poolManager: pins.poolManager.address, poolManagerCodeHash: pins.poolManager.runtimeCodeHash,
+      sharedHook: pins.sharedHook.address, quoteAsset: quote, initialTick: 200, validUntil: 1n, priceEvidenceHash: h(60) }]);
+  const poolId = keccak256(encodeAbiParameters(parseAbiParameters('address,address,uint24,int24,address'), [token, quote, 0, 200, pins.sharedHook.address]));
+  const state = { poolId, initialTick: 200, tickLower: 200, tickUpper: 887200, lockedLiquidity: 1000n, lockedTokenDust: 0n, quoteDecimals: 18 };
+  const resourcesHash = keccak256(encodeAbiParameters(parseAbiParameters('bytes32,int24,int24,uint128,uint256,uint8'), [poolId, 200, 887200, 1000n, 0n, 18]));
+  const identity = { anyQuoteRelease: release, nativeFeeRoute, launch: { token, quoteAsset: quote, resourcesHash },
+    parameters: { configuration, launchData: nativeFeeRoute.launchData }, manifest: { catalogDefinition: { interface: 'quote-shared-v1' } } };
+  const snapshot = { blockHash: h(61), requireCanonical: true }, abi = wire.anyQuoteNativeFeeRouteAbi;
+  // The real ABI begins with a uint256 getter. Its response type must not interpret this bytes32 result.
+  assert.equal(abi.find(item => item.type === 'function').name, 'NATIVE_FEE_MAX_LOSS_BPS');
+  state.nativeFeeRouteHash = await readNativeFeeRouteHash(abi, pins.sharedHook.address, poolId, snapshot, async calls => {
+    assert.equal(calls.length, 1); const call = calls[0];
+    assert.equal(call.method, 'eth_call'); assert.equal(call.params[0].to, pins.sharedHook.address); assert.deepEqual(call.params[1], snapshot);
+    assert.deepEqual(decodeFunctionData({ abi, data: call.params[0].data }), { functionName: 'nativeFeeRouteHash', args: [poolId] });
+    return [encodeFunctionResult({ abi, functionName: 'nativeFeeRouteHash', result: nativeFeeRoute.routeHash })];
+  });
+  assert.equal(engineResourceCommitment(identity, state), resourcesHash);
+  assert.equal(state.nativeFeeRouteHash, nativeFeeRoute.routeHash);
+  for (const change of [value => { delete value.nativeFeeRoute; }, value => { value.nativeFeeRoute.launchData = '0x'; },
+    value => { value.nativeFeeRoute.routeHash = h(62); }, value => { value.parameters.launchData += '00'; }]) {
+    const changed = structuredClone(identity); change(changed);
+    assert.throws(() => engineResourceCommitment(changed, state), /Native fee route resource binding differs/);
+  }
+  assert.throws(() => engineResourceCommitment(identity, { ...state, nativeFeeRouteHash: h(63) }), /Native fee route resource binding differs/);
+  assert.throws(() => engineResourceCommitment(identity, { ...state, nativeFeeRouteHash: undefined }), /Native fee route resource binding differs/);
+  assert.throws(() => engineResourceCommitment({ ...identity, launch: { ...identity.launch, resourcesHash: h(64) } }, state), /resources hash/);
+  assert.throws(() => engineResourceCommitment({ ...identity, anyQuoteRelease: undefined }, state), /Unsupported engine initialization resource data/);
+});
 
 test('actual creation evidence rejects receipt, sender transaction and canonical block substitutions', async () => {
   const receipt = { status: '0x1', transactionHash: h(10), blockHash: h(11), blockNumber: '0x64', transactionIndex: '0x2', logs: [] };

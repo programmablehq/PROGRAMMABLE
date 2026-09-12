@@ -287,7 +287,13 @@ async function discover(input: DiscoveryInput, ctx: Context, options: AnyQuoteRe
     return result.candidate;
   }
   const parsed = parseAnyQuoteExternalRouteV1(raw, { ...input, checkpoint: ctx.checkpoint, validUntil: ctx.now + ROUTE_LIFETIME });
-  requireAnyQuoteNativeUnlockRouteV1(parsed, anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? "buy" : "sell");
+  try { requireAnyQuoteNativeUnlockRouteV1(parsed, anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? "buy" : "sell"); }
+  catch (error) {
+    // A valid API path can exceed this compiler's coverage even when an independently
+    // executable native V4 path exists. Preserve malformed-data and provider failures.
+    if (!(error instanceof AnyQuoteErrorV1) || error.code !== "ROUTE_ISOLATION_UNAVAILABLE") throw error;
+    return discoverNativeV4(input, ctx, qualify);
+  }
   const spots = await Promise.all(parsed.hops.map(hop => inspectHop(hop, ctx)));
   const amountOut = await quoteHops(parsed.hops, input.amountIn, ctx);
   const route = { ...parsed, amountOut: amountOut.toString() };

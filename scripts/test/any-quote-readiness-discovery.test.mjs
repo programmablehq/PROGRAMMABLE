@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, keccak256, parseAbi, parseAbiParameters, toHex } from "viem";
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeErrorResult, encodeFunctionResult, keccak256, parseAbi, parseAbiParameters, toFunctionSelector, toHex } from "viem";
 
 const root = resolve(import.meta.dirname, "../..");
 // Deterministic RPC fixtures have their own pinned bytecode profile. Production code and its
@@ -18,7 +18,7 @@ for (const [index, name] of ["universalRouter", "poolManager", "stateView", "v4Q
 }
 const multicallAddress = "0xca11bde05977b3631167028862be2a173976ca11", multicallCode = "0x6006600055";
 fixtureCode.set(multicallAddress, multicallCode);
-const bundled = await build({ absWorkingDir: root, stdin: { contents: ["types", "route", "discovery.server", "readiness.server"].map(name => `export * from './lib/module-engine/any-quote/${name}'`).join("\n") + "; export { agreedTradeRpcV1, TradeRpcExecutionRevertedV1 } from './lib/server/custom-launch/routed-trade-rpc-v1'; export { quoteModule } from './lib/server/module-engine/any-quote-preparation'", resolveDir: root },
+const bundled = await build({ absWorkingDir: root, stdin: { contents: ["types", "route", "discovery.server", "readiness.server"].map(name => `export * from './lib/module-engine/any-quote/${name}'`).join("\n") + "; export { agreedTradeRpcV1, TradeRpcExecutionRevertedV1 } from './lib/server/custom-launch/routed-trade-rpc-v1'; export { quoteModule, quoteCombinedNativeTrade } from './lib/server/module-engine/any-quote-preparation'; export { anyQuoteJsonRequest } from './lib/server/module-engine/any-quote-http'", resolveDir: root },
   bundle: true, format: "cjs", platform: "node", packages: "external", write: false,
   plugins: [{ name: "fixture-environment", setup(b) {
     b.onResolve({ filter: /^server-only$/ }, () => ({ path: "empty", namespace: "empty" }));
@@ -26,8 +26,8 @@ const bundled = await build({ absWorkingDir: root, stdin: { contents: ["types", 
     b.onLoad({ filter: /chain-4663\.v1\.json$/ }, () => ({ contents: JSON.stringify(profile), loader: "json" }));
     b.onLoad({ filter: /lib\/chains\.ts$/ }, async args => ({ contents: (await readFile(args.path, "utf8")).replace(
       /"0xd5c15df687b16f2ff992fc8d767b4216323184a2bbc6ee2f9c398c318e770891"/, JSON.stringify(keccak256(multicallCode))), loader: "ts" }));
-    // Expose the unchanged private reader only to this test bundle; production exports remain closed.
-    b.onLoad({ filter: /any-quote-preparation\.ts$/ }, async args => ({ contents: `${await readFile(args.path, "utf8")}\nexport { quoteModule };`, loader: "ts" }));
+    // Expose the unchanged private readers only to this test bundle; production exports remain closed.
+    b.onLoad({ filter: /any-quote-preparation\.ts$/ }, async args => ({ contents: `${await readFile(args.path, "utf8")}\nexport { quoteModule, quoteCombinedNativeTrade };`, loader: "ts" }));
   } }],
 });
 const loaded = { exports: {} };
@@ -44,6 +44,7 @@ const readAbi = parseAbi([
   "function decimals() view returns (uint8)", "function totalSupply() view returns (uint256)", "function name() view returns (string)", "function symbol() view returns (string)",
   "function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)",
   "function getSlot0(bytes32) view returns (uint160,int24,uint24,uint24)", "function getLiquidity(bytes32) view returns (uint128)",
+  "function quoteExactInput((address exactCurrency,(address intermediateCurrency,uint24 fee,int24 tickSpacing,address hooks,bytes hookData)[] path,uint128 exactAmount) params) returns (uint256 amountOut,uint256 gasEstimate)",
   "function quoteExactInputSingle(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 exactAmount,bytes hookData) params) returns (uint256 amountOut,uint256 gasEstimate)",
 ]);
 
@@ -74,6 +75,86 @@ test("module quotes retain provider disagreement, positive uint128 and runtime c
   for (const amount of [0n, 1n << 128n]) await assert.rejects(a.quoteModule(modulePool, true, 1n, checkpoint, { options: { rpcs: rpcPair([amount, amount]) } }), error => error.code === "TRADE_ANALYSIS_PENDING");
   await assert.rejects(a.quoteModule(modulePool, true, 1n, checkpoint, { options: { rpcs: rpcPair([1n, 1n], "0x00") } }), /QUOTER_RUNTIME_MISMATCH/);
 });
+const nativeQuoteRevertAbi = parseAbi([
+  "error UnexpectedRevertBytes(bytes)", "error WrappedError(address,bytes4,bytes,bytes)",
+  "error NativeFeeAmountTooSmall()", "error HookCallFailed()",
+]);
+const nativeQuoteAfterSwap = toFunctionSelector("afterSwap(address,(address,address,uint24,int24,address),(bool,int256,uint160),int256,bytes)");
+function nativeQuoteRevert({ target = MID, callback = nativeQuoteAfterSwap,
+  reason = encodeErrorResult({ abi: nativeQuoteRevertAbi, errorName: "NativeFeeAmountTooSmall" }),
+  details = encodeErrorResult({ abi: nativeQuoteRevertAbi, errorName: "HookCallFailed" }) } = {}) {
+  const wrapped = encodeErrorResult({ abi: nativeQuoteRevertAbi, errorName: "WrappedError", args: [target, callback, reason, details] });
+  return encodeErrorResult({ abi: nativeQuoteRevertAbi, errorName: "UnexpectedRevertBytes", args: [wrapped] });
+}
+function combinedQuoteFixture(buy, outcomes) {
+  const key = pool().key, calls = [];
+  const modulePool = { token: OTHER, quoteAsset: Q, sharedHook: MID,
+    poolId: a.anyQuotePoolIdV1({ currency0: OTHER, currency1: Q, fee: 0, tickSpacing: 200, hooks: MID }) };
+  const route = { provider: "uniswap-v4-initialize", chainId: 4663,
+    tokenIn: buy ? a.ANY_QUOTE_WETH : Q, tokenOut: buy ? Q : a.ANY_QUOTE_WETH,
+    amountIn: "1", amountOut: "1", checkpoint, validUntil: String(NOW + 120n), evidenceHash: HASH,
+    hops: [{ protocol: "V4", tokenIn: buy ? ZERO : Q, tokenOut: buy ? Q : ZERO,
+      poolId: a.anyQuotePoolIdV1(key), key, hookData: "0x" }] };
+  const rpcs = outcomes.map((outcome, provider) => async (method, params) => {
+    calls.push({ provider, method });
+    assert.deepEqual(params[1], { blockHash: HASH, requireCanonical: true });
+    if (method === "eth_getCode") return fixtureCode.get(a.ANY_QUOTE_INFRASTRUCTURE.v4Quoter.toLowerCase());
+    assert.equal(method, "eth_call");
+    const request = decodeFunctionData({ abi: readAbi, data: params[0].data });
+    assert.equal(request.functionName, "quoteExactInput");
+    assert.equal(request.args[0].exactAmount, 1n);
+    assert.equal(request.args[0].path.length, 2);
+    if (outcome instanceof Error) throw outcome;
+    return encodeFunctionResult({ abi: readAbi, functionName: "quoteExactInput", result: [outcome, 100_000n] });
+  });
+  return { calls, read: () => a.quoteCombinedNativeTrade(modulePool, buy, 1n, route, { options: { rpcs } }) };
+}
+const nativeQuoteHttp = read => a.anyQuoteJsonRequest(new Request("https://programmable.market/api/module-mode/any-quote/trade-quote", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+}), read);
+
+test("combined native quotes expose matching fee dust as amount-specific inconclusive through HTTP", async () => {
+  for (const buy of [true, false]) {
+    const f = combinedQuoteFixture(buy, [0, 1].map(() => new a.TradeRpcExecutionRevertedV1(nativeQuoteRevert())));
+    await assert.rejects(f.read, error => error instanceof a.AnyQuoteErrorV1 && error.code === "NATIVE_FEE_AMOUNT_TOO_SMALL" && error.status === "inconclusive");
+    assert.equal(f.calls.filter(call => call.method === "eth_call").length, 2);
+    const response = await nativeQuoteHttp(f.read), body = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(body.code, "NATIVE_FEE_AMOUNT_TOO_SMALL");
+    assert.equal(body.status, "inconclusive");
+    assert.equal(body.retryable, true);
+    assert.equal(body.quoteAsset, null);
+  }
+});
+
+test("combined native quotes leave wrong-target and malformed matching reverts inconclusive", async () => {
+  for (const data of ["0x1234", nativeQuoteRevert({ target: Q }), nativeQuoteRevert({ callback: "0x00000000" }),
+    nativeQuoteRevert({ details: "0x" }), nativeQuoteRevert({ reason: "0x1234" }), `${nativeQuoteRevert()}00`,
+    nativeQuoteRevert({ reason: nativeQuoteRevert() })]) {
+    const f = combinedQuoteFixture(true, [0, 1].map(() => new a.TradeRpcExecutionRevertedV1(data)));
+    await assert.rejects(f.read, error => error instanceof a.TradeRpcExecutionRevertedV1 && error.data === data);
+    const response = await nativeQuoteHttp(f.read), body = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(body.code, "PROVIDER_OR_EXECUTION_INCONCLUSIVE");
+    assert.equal(body.status, "inconclusive");
+  }
+});
+
+test("combined native quotes require exact provider agreement before classifying fee dust", async () => {
+  const known = new a.TradeRpcExecutionRevertedV1(nativeQuoteRevert());
+  for (const [other, code] of [[1n, "TRADE_PROVIDER_DISAGREEMENT"],
+    [new a.TradeRpcExecutionRevertedV1(`${nativeQuoteRevert()}00`), "TRADE_PROVIDER_DISAGREEMENT"],
+    [new Error("provider unavailable"), "TRADE_ANALYSIS_PENDING"]]) {
+    const f = combinedQuoteFixture(false, [known, other]);
+    await assert.rejects(f.read, error => error.code === code);
+    const response = await nativeQuoteHttp(f.read), body = await response.json();
+    assert.equal(response.status, 503); assert.equal(body.status, "inconclusive");
+    assert.equal(body.code, "PROVIDER_OR_EXECUTION_INCONCLUSIVE");
+  }
+  const expected = (1n << 100n) + 7n;
+  for (const buy of [true, false]) assert.equal(await combinedQuoteFixture(buy, [expected, expected]).read(), expected);
+});
+
 function pool(x = ZERO, y = Q, { fee = 0, liquidity = 10n ** 24n, hook = ZERO, block = 10_000n } = {}) {
   const key = { currency0: BigInt(x) < BigInt(y) ? x : y, currency1: BigInt(x) < BigInt(y) ? y : x, fee, tickSpacing: 60, hooks: hook };
   return { key, poolId: a.anyQuotePoolIdV1(key), liquidity, block };
@@ -474,4 +555,53 @@ test("large or cyclic candidate sets stay bounded and cannot produce a signable 
     routes: [[a.anyQuoteV4CandidateHopV1(p, ZERO), a.anyQuoteV4CandidateHopV1(p, MID), a.anyQuoteV4CandidateHopV1(q, ZERO)]],
   }) });
   assert.equal(cycle.status, "inconclusive");
+});
+
+function classicCoverageResponse(input, coverage) {
+  const token = address => ({ chainId: 4663, address });
+  const v3 = (from, to) => ({ type: "v3-pool", address: OTHER, fee: "3000", tokenIn: token(from), tokenOut: token(to) });
+  const v4 = (from, to) => ({ type: "v4-pool", fee: "0", tickSpacing: "60", hooks: ZERO, tokenIn: token(from), tokenOut: token(to) });
+  const hops = coverage === "mixed" ? (input.tokenOut.toLowerCase() === Q.toLowerCase()
+    ? [v3(input.tokenIn, MID), v4(MID, input.tokenOut)] : [v4(input.tokenIn, MID), v3(MID, input.tokenOut)])
+    : coverage === "v3-only" ? [v3(input.tokenIn, input.tokenOut)] : [v4(input.tokenIn, input.tokenOut)];
+  return { routing: "CLASSIC", quote: { tradeType: "EXACT_INPUT", input: { token: input.tokenIn, amount: input.amountIn.toString() },
+    output: { token: input.tokenOut, amount: input.amountIn.toString() }, route: [hops] } };
+}
+
+test("API compiler coverage fallback independently qualifies available native V4 routes", async () => {
+  for (const coverage of ["mixed", "v3-only", "weth-endpoint"]) {
+    const p = pool(), f = fixture([p]), requests = [];
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, { ...f.options, discoverExternalRoute: async input => {
+      requests.push(input); return classicCoverageResponse(input, coverage);
+    } });
+    assert.equal(result.status, "compatible", JSON.stringify(result));
+    assert.equal(requests.length, 2, "Both buy and sell API paths receive a bounded fallback");
+    assert.equal(result.routes.buy.provider, "uniswap-v4-initialize");
+    assert.equal(result.routes.sell.provider, "uniswap-v4-initialize");
+    assert.deepEqual(result.checkpoint, checkpoint);
+    assert.equal(result.routes.buy.hops[0].tokenIn, ZERO);
+    assert.equal(result.routes.sell.hops[0].tokenOut, ZERO);
+    assert.ok(f.calls.some(call => call.method === "eth_getLogs"), "Discovers independent native pool records");
+    assert.notEqual(result.routes.buy.amountOut, requests[0].amountIn.toString(), "Uses verified execution output, not API output");
+    assert.equal(result.checks.externalQuotes, "same-block-bidirectional");
+  }
+});
+
+test("API compiler coverage fallback preserves provider, malformed-response and qualification errors", async () => {
+  for (const mode of ["provider", "invalid-amount"]) {
+    const f = fixture([pool()]);
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, { ...f.options, discoverExternalRoute: async input => {
+      if (mode === "provider") throw new a.AnyQuoteErrorV1("PROVIDER_UNAVAILABLE");
+      const raw = classicCoverageResponse(input, "mixed"); raw.quote.input.amount = (input.amountIn + 1n).toString(); return raw;
+    } });
+    assert.equal(result.status, "inconclusive");
+    assert.equal(result.code, mode === "provider" ? "PROVIDER_UNAVAILABLE" : "ROUTE_RESPONSE_INVALID");
+    assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0, "Does not hide an untrusted provider response");
+  }
+  const f = fixture([pool()], { override: ({ provider, method, params }) => provider === 1 && method === "eth_getCode"
+    && params[0].toLowerCase() === Q.toLowerCase() ? "0x600099" : undefined });
+  const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, { ...f.options,
+    discoverExternalRoute: async input => classicCoverageResponse(input, "mixed") });
+  assert.equal(result.status, "inconclusive");
+  assert.equal(result.retryable, true);
 });

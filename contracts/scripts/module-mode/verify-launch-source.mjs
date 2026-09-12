@@ -212,6 +212,13 @@ async function readCalls(calls, request = rpcBatch, block) {
   }));
   return values.map((value, i) => calls[i].abi ? decodeFunctionResult({ abi: calls[i].abi, data: value }) : value);
 }
+export async function readNativeFeeRouteHash(routeAbi, sharedHook, poolId, stateBlock, request) {
+  const abi = routeAbi.filter(item => item.type === 'function' && item.name === 'nativeFeeRouteHash');
+  const getter = { abi, method: 'eth_call', params: [{ to: sharedHook,
+    data: encodeFunctionData({ abi, functionName: 'nativeFeeRouteHash', args: [poolId] }) }, stateBlock] };
+  const [hash] = await readCalls([getter], request);
+  return hash;
+}
 export async function compile(input, binary) {
   const encoded = JSON.stringify(input);
   need(Buffer.byteLength(encoded) <= 16 * 1024 * 1024, 'Compiler input is too large');
@@ -463,9 +470,7 @@ async function bindEngineLaunch(entry, log, tokenBuild, context) {
     const state = Object.fromEntries(Object.keys(fields).map((name, i) => [name, values[i]]));
     if (identity.nativeFeeRoute) {
       const routeAbi = wire.anyQuoteNativeFeeRouteAbi, sharedHook = release.contracts.sharedHook.address;
-      const getter = { abi: routeAbi, method: 'eth_call', params: [{ to: sharedHook,
-        data: encodeFunctionData({ abi: routeAbi, functionName: 'nativeFeeRouteHash', args: [state.poolId] }) }, context.stateBlock] };
-      [state.nativeFeeRouteHash] = await readCalls([getter], request);
+      state.nativeFeeRouteHash = await readNativeFeeRouteHash(routeAbi, sharedHook, state.poolId, context.stateBlock, request);
       const bound = receiptEvent(receipt, routeAbi, sharedHook, 'NativeFeeRouteBound', state.poolId);
       const initialized = receiptEvent(receipt, parseAbi(['event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)']),
         release.contracts.poolManager.address, 'Initialize', state.poolId);
@@ -491,6 +496,21 @@ async function bindEngineLaunch(entry, log, tokenBuild, context) {
   return [token, engine];
 }
 
+export async function ensureTargetResult(target, publish, context) {
+  try { return await ensurePublished(target, publish, context); }
+  catch (error) { return { role: target.role, address: target.address, status: 'failed', error: error.message,
+    ...(error.verificationId ? { verificationId: error.verificationId } : {}) }; }
+}
+export function sourceRecordsStatus(records) {
+  return records.some(item => item.status === 'failed') ? 'failed'
+    : records.some(item => item.status === 'not-published') ? 'source-publication-required' : 'verified';
+}
+export async function checkpointVerifiedRelease(file, state, release, nextBlock, blockHash, checkedAt, records) {
+  if (sourceRecordsStatus(records) !== 'verified') return;
+  state.releases[release.releaseDigest] = checkpointEntry(release, nextBlock, blockHash, checkedAt);
+  await writeCheckpoint(file, state);
+}
+
 export async function ensurePublished(target, publish, { fetchPublic = fetch, binary = 'solc', beforePublish } = {}) {
   need(target.creation && same(target.creation.transactionHash, target.transactionHash) && target.runtime !== '0x'
     && same(target.creationCode, `0x${target.artifact.evm.bytecode.object}${target.constructorArguments.slice(2)}`), 'Bound source target required before publication');
@@ -514,14 +534,16 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
   const response = await fetchPublic(`${SOURCIFY_BASE}/v2/verify/4663/${target.address}`, { method: 'POST', headers: { 'content-type': 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(20000), body: JSON.stringify({ stdJsonInput: target.input, compilerVersion: SOURCIFY_COMPILER, contractIdentifier: `${target.file}:${target.name}`, creationTransactionHash: target.transactionHash }) });
   need(response.status === 202, `Source publication rejected (HTTP ${response.status})`);
   const job = await response.json(); need(typeof job.verificationId === 'string', 'Missing source verification job');
-  for (let attempt = 0; attempt < 8; attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    const result = await read(); if (result) return result;
-    need(/^[A-Za-z0-9-]{1,128}$/.test(job.verificationId), 'Invalid source verification job');
-    const { value } = await boundedPublicJson(`${SOURCIFY_BASE}/v2/verify/${job.verificationId}`, fetchPublic);
-    if (value.isJobCompleted) throw new Error(`${target.role}: source verification finished without a verified readback`);
-  }
-  throw new Error(`${target.role}: source verification is still pending; the checkpoint was not advanced`);
+  need(/^[A-Za-z0-9-]{1,128}$/.test(job.verificationId), 'Invalid source verification job');
+  try {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const result = await read(); if (result) return result;
+      const { value } = await boundedPublicJson(`${SOURCIFY_BASE}/v2/verify/${job.verificationId}`, fetchPublic);
+      if (value.isJobCompleted) throw new Error(`${target.role}: source verification finished without a verified readback`);
+    }
+    throw new Error(`${target.role}: source verification is still pending; the checkpoint was not advanced`);
+  } catch (error) { throw Object.assign(error, { verificationId: job.verificationId }); }
 }
 
 async function readInventory(root, wire) {
@@ -635,7 +657,7 @@ export async function run(options, dependencies = {}) {
             // Every target and resource in this launch is bound before the first permitted publication.
             if (options.publish && !preflight) { await sourcifyPreflight(context.fetchPublic); preflight = true; }
             for (const target of targets) {
-              const result = { ...await ensurePublished(target, options.publish, context), releaseDigest: release.releaseDigest,
+              const result = { ...await ensureTargetResult(target, options.publish, context), releaseDigest: release.releaseDigest,
                 sourceVersion: release.sourceVersion, launchTransactionHash: log.transactionHash,
                 ...(target.resources ? { resources: target.resources } : {}),
                 ...(target.requestDigest ? { requestDigest: target.requestDigest, manifestHash: target.manifestHash,
@@ -645,16 +667,14 @@ export async function run(options, dependencies = {}) {
           }
         }
       }
-      record.status = record.records.some(item => item.status === 'not-published') ? 'source-publication-required' : 'verified';
+      record.status = sourceRecordsStatus(record.records);
       if (range.from <= range.to) {
         const [end, snapshot] = await context.request([{ method: 'eth_getBlockByNumber', params: [toHex(range.to), false] },
           { method: 'eth_getBlockByNumber', params: [context.stateNumber, false] }]);
         need(end?.hash === record.scanEndHash && BigInt(end.number) === range.to, 'Scan end block changed after source readback');
         need(snapshot?.hash === head.hash && BigInt(snapshot.number) === BigInt(context.stateNumber), 'State snapshot changed after source readback');
-        if (options.stateFile && record.status === 'verified') {
-          state.releases[release.releaseDigest] = checkpointEntry(release, range.to + 1n, end.hash.toLowerCase(), report.checkedAt);
-          await writeCheckpoint(options.stateFile, state);
-        }
+        if (options.stateFile) await checkpointVerifiedRelease(options.stateFile, state, release, range.to + 1n,
+          end.hash.toLowerCase(), report.checkedAt, record.records);
       }
     } catch (error) { record.status = 'failed'; record.error = error.message; }
   }

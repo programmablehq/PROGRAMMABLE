@@ -86,6 +86,16 @@ function quotePlannerAuxdataProfile(plan, role, profile, artifact, input, metada
   need(bytes(artifact.deployedBytecode.object) === bytes(plan.contracts[role].runtime), 'Quote Planner complete runtime differs from its compiled template');
 }
 
+function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata) {
+  const target = { 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol': 'AnyQuoteLPModuleV1' };
+  equal(artifact.compilationTarget, target, 'ETH Engine compilation target differs');
+  const compilerSettings = { optimizer: { enabled: true, runs: 1000 }, evmVersion: 'cancun', viaIR: true,
+    metadata: { bytecodeHash: 'none' }, libraries: {}, remappings: [] };
+  equal(settings(input.settings), compilerSettings, 'ETH Engine compiler settings differ');
+  need(metadata?.compiler?.version === SOURCIFY_COMPILER, 'ETH Engine compiler metadata version differs');
+  equal(metadata.settings, { ...compilerSettings, compilationTarget: target }, 'ETH Engine compiler metadata settings differ');
+}
+
 function exactSolcVersionAuxdata(code, compiled, role, label) {
   const auxdata = code.cborAuxdata;
   need(auxdata && typeof auxdata === 'object' && !Array.isArray(auxdata), `${role}: ${label} compiler auxdata map required`);
@@ -97,12 +107,12 @@ function exactSolcVersionAuxdata(code, compiled, role, label) {
   const offset = (compiled.length - SOLC_VERSION_AUXDATA.length) / 2;
   need(offset >= 0 && Number.isSafeInteger(entry.offset) && entry.offset === offset
     && bytes(entry.value) === SOLC_VERSION_AUXDATA && compiled.slice(2 + offset * 2) === SOLC_VERSION_AUXDATA.slice(2)
-    && bytes(code.onchainBytecode).slice(2 + offset * 2) === SOLC_VERSION_AUXDATA.slice(2),
+    && bytes(code.onchainBytecode).slice(2 + offset * 2, compiled.length) === SOLC_VERSION_AUXDATA.slice(2),
   `${role}: ${label} compiler trailer must exactly match the terminal compiled and onchain bytes`);
 }
 
 /** Independent complete-byte comparison. Provider `match` is preserved as such, never relabelled `exact_match`. */
-export function validateSourcifySource({ plan, build, role, constructorArguments, creation, recompilation, compilerAuxdataProfile }, value) {
+export function validateSourcifySource({ plan, build, role, constructorArguments, creation, recompilation, compilerAuxdataProfile, sourceProfile }, value) {
   const artifact = build.artifacts[role], pin = plan.contracts[role], input = build.standardInputs[role];
   need(artifact && pin && input, 'Unknown Sourcify target');
   const [file, name] = Object.entries(artifact.compilationTarget)[0];
@@ -130,10 +140,14 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
     && bytes(r.recompiledBytecode) === compiledRuntime && bytes(r.onchainBytecode) === pin.runtime, `${role}: complete creation/runtime bytes differ`);
   if (compilerAuxdataProfile !== undefined) quotePlannerAuxdataProfile(plan, role, compilerAuxdataProfile, artifact, input,
     build.compilerMetadata?.[role] ?? artifact.metadata, constructorArguments);
+  const ethEngineAuxdata = sourceProfile === 'module-engine-any-quote-eth-v1' && role === 'engine';
+  if (ethEngineAuxdata) anyQuoteEthEngineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata);
+  const compilerTrailer = compilerAuxdataProfile !== undefined || ethEngineAuxdata;
   for (const [label, code] of [['creation', c], ['runtime', r]]) {
     // Auxdata describes compiler bytes; it never authorizes a transformation or an ignored range.
+    // The creation trailer ends at the compiled template boundary; appended arguments are bound above.
     // Native/Core/default profiles retain their original empty-CBOR requirement.
-    if (compilerAuxdataProfile !== undefined) exactSolcVersionAuxdata(code, label === 'creation' ? compiledCreation : compiledRuntime, role, label);
+    if (compilerTrailer) exactSolcVersionAuxdata(code, label === 'creation' ? compiledCreation : compiledRuntime, role, label);
     else empty(code.cborAuxdata, `${role}: unexpected ${label} CBOR transformation`);
     empty(code.linkReferences, `${role}: unexpected ${label} library link`);
   }
@@ -161,7 +175,7 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
   return { role, address: pin.address, runtimeCodeHash: pin.runtimeCodeHash, constructorArguments,
     sourcePaths: Object.keys(input.sources).sort(), sourceCommit: plan.sourceCommit, provider: 'sourcify-v2',
     providerMatch: value.match, creationMatch: value.creationMatch, runtimeMatch: value.runtimeMatch,
-    providerClassification: compilerAuxdataProfile === undefined ? 'NO_CBOR_PROVIDER_MATCH' : 'NO_METADATA_HASH_PROVIDER_MATCH', independentByteComparison: 'exact-complete-creation-and-runtime',
+    providerClassification: compilerTrailer ? 'NO_METADATA_HASH_PROVIDER_MATCH' : 'NO_CBOR_PROVIDER_MATCH', independentByteComparison: 'exact-complete-creation-and-runtime',
     transformationPolicy: 'constructor-arguments-and-compiled-immutables-only', creationTransactionHash: creation.transactionHash,
     creationBytecodeHash: keccak256(onchainCreation), recompiledRuntimeCodeHash: keccak256(compiledRuntime),
     matchId: value.matchId, verifiedAt: value.verifiedAt };

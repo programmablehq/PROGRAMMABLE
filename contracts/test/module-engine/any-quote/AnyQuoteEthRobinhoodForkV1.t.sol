@@ -14,6 +14,8 @@ import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
 import { PoolId, PoolIdLibrary } from "@uniswap/v4-core/src/types/PoolId.sol";
 import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
+import { PathKey } from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
+import { Actions } from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import { ClassicModuleLaunchPolicyV1 } from "../../../src/classic-modules/ClassicModuleLaunchPolicyV1.sol";
 import { ModuleNativeRegistryV1 } from "../../../src/module-mode/engine/ModuleNativeRegistryV1.sol";
 import { ModuleEngineTypesV1 as T } from "../../../src/module-engine/ModuleEngineTypesV1.sol";
@@ -32,6 +34,10 @@ import { AnyQuoteNativeFeeRouteV1 as R } from "../../../src/module-engine/any-qu
 
 interface AnyQuoteForkPermit2 {
     function approve(address token, address spender, uint160 amount, uint48 expiration) external;
+    function allowance(address owner, address token, address spender)
+        external
+        view
+        returns (uint160 amount, uint48 expiration, uint48 nonce);
 }
 
 interface AnyQuoteForkRouter {
@@ -46,6 +52,8 @@ contract AnyQuoteEthRobinhoodForkV1Test is Test {
     uint256 private constant SNAPSHOT_BLOCK = 60_166_703;
     uint256 private constant INITIAL_ETH = 0.0001 ether;
     address private constant ALICE = address(0xA11CE);
+    address private constant BOB = address(0xB0B);
+    address private constant CAROL = address(0xCA401);
     address private constant AUTHOR = A.PLATFORM_RECIPIENT;
     address private constant MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
     address private constant ROUTER = 0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99;
@@ -80,6 +88,24 @@ contract AnyQuoteEthRobinhoodForkV1Test is Test {
         uint128 amountOutMinimum;
         uint256 minHopPriceX36;
         bytes hookData;
+    }
+
+    // Universal Router v2.1.1 ABI, checked with @uniswap/v4-sdk 2.3.1 and URVersion.V2_1_1.
+    // The repository's older IV4Router struct does not include minHopPriceX36.
+    struct RouterExactOutput {
+        Currency currencyOut;
+        PathKey[] path;
+        uint256[] minHopPriceX36;
+        uint128 amountOut;
+        uint128 amountInMaximum;
+    }
+
+    struct ExactOutputProbe {
+        bool buy;
+        uint128 amountOut;
+        uint128 amountInMaximum;
+        address payer;
+        address recipient;
     }
     receive() external payable { }
 
@@ -159,6 +185,174 @@ contract AnyQuoteEthRobinhoodForkV1Test is Test {
         emit log_named_uint("sell ETH output", sellReceived);
         emit log_named_uint("creator native ETH fee", creatorEth);
         emit log_named_uint("platform native ETH fee", platformEth);
+    }
+
+    function test_forkCanonicalExactOutputBuySellOverlappingFeePoolAndNativeClaims() public {
+        Host.LaunchParameters memory parameters = _nativeParams(2);
+        vm.prank(ALICE);
+        Host.Launch memory launched = host.launch{ value: INITIAL_ETH }(parameters);
+        AnyQuoteEthLedgerV1 ledger = host.ledger();
+        uint128 tokenOut = uint128(IERC20(launched.token).balanceOf(ALICE) / 2);
+        assertGt(tokenOut, 0);
+        // Local fork ETH funding only. Carol's sell inventory is the preceding actual simulated buy output.
+        vm.deal(BOB, 1 ether);
+        assertEq(IERC20(launched.token).balanceOf(BOB), 0);
+        assertEq(IERC20(launched.token).balanceOf(CAROL), 0);
+        assertEq(IERC20(QUOTE).balanceOf(BOB), 0);
+        assertEq(IERC20(QUOTE).balanceOf(CAROL), 0);
+        assertEq(ledger.platformFeeBps(launched.launchId), 30);
+        A.PoolRegistration memory config = hook.poolConfig(host.poolIdOf(launched.launchId));
+        assertEq(config.buyCreatorFeeBps, 100);
+        assertEq(config.sellCreatorFeeBps, 200);
+        _assertNativeBacking(launched.launchId);
+        _assertNoRouteResidue(launched.token);
+
+        uint256 creatorBefore = ALICE.balance;
+        _routerExactOutput(launched, ExactOutputProbe(true, tokenOut, uint128(INITIAL_ETH), BOB, CAROL));
+        assertEq(IERC20(launched.token).balanceOf(BOB), 0, "buy output belongs to recipient");
+        _routerExactOutput(launched, ExactOutputProbe(false, uint128(INITIAL_ETH / 100), tokenOut, CAROL, BOB));
+        assertEq(ALICE.balance, creatorBefore, "fees remain native claims until explicitly claimed");
+        assertEq(ledger.claimableEth(BOB), 0, "sell proceeds are distinct from fee credits");
+        assertEq(ledger.claimableEth(CAROL), 0);
+        assertEq(IERC20(QUOTE).balanceOf(BOB), 0);
+        assertEq(IERC20(QUOTE).balanceOf(CAROL), 0);
+
+        uint256 creatorEth = ledger.claimableEth(ALICE);
+        uint256 platformEth = ledger.claimableEth(A.PLATFORM_RECIPIENT);
+        uint256 platformBefore = A.PLATFORM_RECIPIENT.balance;
+        vm.prank(ALICE);
+        assertEq(ledger.claimEthTo(ALICE), creatorEth);
+        assertEq(ledger.claimEthFor(A.PLATFORM_RECIPIENT), platformEth);
+        assertEq(ALICE.balance - creatorBefore, creatorEth);
+        assertEq(A.PLATFORM_RECIPIENT.balance - platformBefore, platformEth);
+        assertEq(ledger.totalReceived(), ledger.totalClaimed());
+        assertEq(manager.balanceOf(address(ledger), 0), 0);
+        _assertNativeBacking(launched.launchId);
+        _assertNoRouteResidue(launched.token);
+    }
+
+    function _routerExactOutput(Host.Launch memory launched, ExactOutputProbe memory p) private {
+        AnyQuoteEthLedgerV1 ledger = host.ledger();
+        uint256 beforeFees = ledger.totalReceived();
+        uint256 beforeInput = p.buy ? p.payer.balance : IERC20(launched.token).balanceOf(p.payer);
+        uint256 beforeOutput = p.buy ? IERC20(launched.token).balanceOf(p.recipient) : p.recipient.balance;
+        bytes[] memory inputs = _exactOutputInputs(launched, p);
+        vm.startPrank(p.payer);
+        if (!p.buy) {
+            assertGe(IERC20(launched.token).allowance(p.payer, PERMIT2), p.amountInMaximum);
+            AnyQuoteForkPermit2(PERMIT2)
+                .approve(launched.token, ROUTER, uint160(p.amountInMaximum), uint48(block.timestamp + 600));
+        }
+        vm.recordLogs();
+        uint256 beforeGas = gasleft();
+        AnyQuoteForkRouter(ROUTER).execute{ value: p.buy ? p.amountInMaximum : 0 }(
+            p.buy ? bytes(hex"1004") : bytes(hex"10"), inputs, block.timestamp + 600
+        );
+        uint256 gasUsed = beforeGas - gasleft();
+        vm.stopPrank();
+        _assertCanonicalSwapSenders(vm.getRecordedLogs(), host.poolIdOf(launched.launchId));
+        uint256 spent = beforeInput - (p.buy ? p.payer.balance : IERC20(launched.token).balanceOf(p.payer));
+        assertGt(spent, 0);
+        assertLt(spent, p.amountInMaximum, "bounded actual input; unused input stays with payer");
+        assertEq(
+            (p.buy ? IERC20(launched.token).balanceOf(p.recipient) : p.recipient.balance) - beforeOutput,
+            p.amountOut,
+            "exact output paid to explicit recipient"
+        );
+        if (!p.buy) {
+            (uint160 remaining,,) = AnyQuoteForkPermit2(PERMIT2).allowance(p.payer, launched.token, ROUTER);
+            assertEq(uint256(remaining), p.amountInMaximum - spent, "Permit2 spends actual input only");
+        }
+        assertGt(ledger.totalReceived(), beforeFees);
+        _assertNativeBacking(launched.launchId);
+        _assertNoRouteResidue(launched.token);
+        emit log_named_uint(
+            p.buy ? "canonical exact-output BUY actual ETH input" : "canonical exact-output SELL token input", spent
+        );
+        emit log_named_uint(
+            p.buy ? "composed BUY router-call gas (fork)" : "composed SELL router-call gas (fork)", gasUsed
+        );
+    }
+
+    function _exactOutputInputs(Host.Launch memory launched, ExactOutputProbe memory p)
+        private
+        view
+        returns (bytes[] memory inputs)
+    {
+        PoolKey memory primary = hook.poolKey(host.poolIdOf(launched.launchId));
+        PathKey[] memory path = new PathKey[](2);
+        // Exact-output path keys are in input-to-output pool order; the official router executes them backwards.
+        path[p.buy ? 0 : 1] =
+            PathKey(Currency.wrap(p.buy ? address(0) : QUOTE), market.fee, market.tickSpacing, market.hooks, "");
+        path[p.buy ? 1 : 0] =
+            PathKey(Currency.wrap(p.buy ? QUOTE : launched.token), primary.fee, primary.tickSpacing, primary.hooks, "");
+        bytes[] memory params = new bytes[](3);
+        params[0] = abi.encode(
+            RouterExactOutput(
+                Currency.wrap(p.buy ? launched.token : address(0)),
+                path,
+                new uint256[](0),
+                p.amountOut,
+                p.amountInMaximum
+            )
+        );
+        params[1] = abi.encode(p.buy ? address(0) : launched.token, uint256(p.amountInMaximum));
+        params[2] = abi.encode(p.buy ? launched.token : address(0), p.recipient, uint256(0));
+        inputs = new bytes[](p.buy ? 2 : 1);
+        inputs[0] = abi.encode(
+            abi.encodePacked(uint8(Actions.SWAP_EXACT_OUT), uint8(Actions.SETTLE_ALL), uint8(Actions.TAKE)), params
+        );
+        // Official Universal Router SWEEP refunds unused msg.value to the actual payer after V4_SWAP.
+        if (p.buy) inputs[1] = abi.encode(address(0), p.payer, uint256(0));
+    }
+
+    function _assertCanonicalSwapSenders(Vm.Log[] memory logs, bytes32 primaryId) private view {
+        bytes32 signature = keccak256("Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)");
+        uint256 primarySwaps;
+        uint256 marketSwaps;
+        uint256 feeSwaps;
+        for (uint256 i; i < logs.length; ++i) {
+            Vm.Log memory entry = logs[i];
+            if (entry.emitter != MANAGER || entry.topics.length != 3 || entry.topics[0] != signature) continue;
+            address sender = address(uint160(uint256(entry.topics[2])));
+            if (entry.topics[1] == primaryId && sender == ROUTER) ++primarySwaps;
+            if (entry.topics[1] == PoolId.unwrap(market.toId())) {
+                if (sender == ROUTER) ++marketSwaps;
+                if (sender == address(hook)) ++feeSwaps;
+            }
+        }
+        assertEq(primarySwaps, 1, "canonical router swaps the primary pool");
+        assertEq(marketSwaps, 1, "canonical router swaps the upstream quote/ETH pool");
+        assertEq(feeSwaps, 1, "native fee conversion overlaps that same upstream pool");
+    }
+
+    function _assertNativeBacking(bytes32 launchId) private view {
+        AnyQuoteEthLedgerV1 ledger = host.ledger();
+        (uint256 platform, uint256 creator, uint256 credited) = ledger.accounting(launchId);
+        assertGt(platform, 0);
+        assertGt(creator, 0);
+        assertEq(platform + creator, credited);
+        assertEq(credited, ledger.totalCredited());
+        assertEq(credited, ledger.totalReceived());
+        assertEq(platform, ledger.contributionByLaunch(launchId, A.PLATFORM_RECIPIENT));
+        assertEq(creator, ledger.contributionByLaunch(launchId, ALICE));
+        assertEq(creator, ledger.claimableEth(ALICE) + ledger.claimedBy(ALICE));
+        assertEq(platform, ledger.claimableEth(A.PLATFORM_RECIPIENT) + ledger.claimedBy(A.PLATFORM_RECIPIENT));
+        assertEq(manager.balanceOf(address(ledger), 0), ledger.totalReceived() - ledger.totalClaimed());
+        assertEq(manager.balanceOf(address(ledger), uint256(uint160(QUOTE))), 0);
+    }
+
+    function _assertNoRouteResidue(address token) private view {
+        address[4] memory actors = [ROUTER, address(host), address(hook), address(host.ledger())];
+        for (uint256 i; i < actors.length; ++i) {
+            assertEq(actors[i].balance, 0, "no retained route ETH");
+            assertEq(IERC20(QUOTE).balanceOf(actors[i]), 0, "no retained intermediate quote");
+            assertEq(IERC20(token).balanceOf(actors[i]), 0, "no retained traded token");
+            assertEq(manager.currencyDelta(actors[i], Currency.wrap(address(0))), 0);
+            assertEq(manager.currencyDelta(actors[i], Currency.wrap(QUOTE)), 0);
+            assertEq(manager.currencyDelta(actors[i], Currency.wrap(token)), 0);
+        }
+        assertFalse(manager.isUnlocked());
     }
 
     function _sell(address token, uint256 amount) private returns (uint256 received) {
