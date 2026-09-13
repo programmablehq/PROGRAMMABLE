@@ -22,6 +22,7 @@ test("build, release, and analysis retain all existing contract checks without a
     "node --test",
     "contracts/scripts/module-mode/operator.test.mjs",
     "contracts/scripts/module-mode/source-readback.test.mjs",
+    "contracts/scripts/module-mode/any-quote-position-manager.test.mjs",
     "contracts/scripts/module-mode/lifecycle-plan.test.mjs",
     "contracts/scripts/module-mode/operator-dispatch.test.mjs",
     "contracts/scripts/module-mode/publication-operator.test.mjs",

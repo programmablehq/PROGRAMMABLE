@@ -1,6 +1,6 @@
 {
   "name": "@programmable/classic-modules",
-  "version": "1.0.0-development.7",
+  "version": "1.0.0-development.8",
   "private": true,
   "description": "Open Module source submissions, authenticated contributor context and deterministic configuration",
   "type": "module",

@@ -40,8 +40,10 @@ const ALL_LOCAL_DEPENDENCIES = Object.freeze([
   "solady",
   "solmate",
   "uerc20-factory",
+  "universal-router",
   "v4-core",
   "v4-periphery",
+  "v4-periphery-v211",
 ]);
 
 function hash(value) {

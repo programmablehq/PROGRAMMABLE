@@ -216,8 +216,10 @@ const localDependencyDirectoryByName = Object.freeze({
   Solady: "solady",
   Solmate: "solmate",
   "Uniswap UERC20 Factory": "uerc20-factory",
+  "Uniswap Universal Router 2.1.1": "universal-router",
   "Uniswap v4 Core": "v4-core",
   "Uniswap v4 Periphery": "v4-periphery",
+  "Uniswap v4 Periphery for Universal Router 2.1.1": "v4-periphery-v211",
 });
 
 function localPinnedDependencies() {

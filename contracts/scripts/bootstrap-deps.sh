@@ -44,6 +44,10 @@ clone_at "v4-core" "https://github.com/Uniswap/v4-core.git" \
   "59d3ecf53afa9264a16bba0e38f4c5d2231f80bc"
 clone_at "v4-periphery" "https://github.com/Uniswap/v4-periphery.git" \
   "ad04c9f24a170accf5ea1b2836bbafd514537ca6"
+clone_at "v4-periphery-v211" "https://github.com/Uniswap/v4-periphery.git" \
+  "3231810e39b8c4d569b9d66907fa4ef8cd2cec22"
+clone_at "universal-router" "https://github.com/Uniswap/universal-router.git" \
+  "999d561c3ad58fb5cab91b602911f3c75591a9c7"
 clone_at "openzeppelin-contracts" "https://github.com/OpenZeppelin/openzeppelin-contracts.git" \
   "21c8312b022f495ebe3621d5daeed20552b43ff9"
 clone_at "forge-std" "https://github.com/foundry-rs/forge-std.git" \

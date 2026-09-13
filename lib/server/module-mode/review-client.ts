@@ -8,6 +8,9 @@ import { getAddress, isAddress } from "viem";
 import { isWebsiteAdminWallet } from "@/lib/admin-access";
 import configuredNativeReviewRelease from "@/config/module-mode/review-release.json";
 import configuredEngineReviewRelease from "@/config/module-engine/review-release.json";
+import configuredQuoteEngineReviewRelease from "@/config/module-engine/review-release.any-quote.json";
+import { MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 } from "@/lib/module-mode/review-engine-shared-quote";
+import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "@/lib/module-mode/review-engine-position-manager";
 import { computeModuleModeReleaseDigest, moduleHash, moduleRecord, MODULE_MODE_SOURCE_VERSION_V2 } from "@/lib/module-mode/release";
 import { isReviewId, parseReviewAttempt, parseReviewJob, parseReviewPlan, parseReviewSourceCorrection, reviewDigest, reviewRecord, parseReviewQueueItem, type ReviewDetail } from "@/lib/module-mode/review-contract";
 import { nativeCanonicalJson } from "@/lib/module-mode/native-catalog";
@@ -60,7 +63,7 @@ export function bindModuleModeReviewReleaseIdentity(value: unknown): ModuleModeH
 
 export function createModuleReviewClient(input: {
   authenticator: WalletPrincipalAuthenticatorV1; backendBaseUrl: string; websiteToken: string; bffAssertionKeyV2: string;
-  fetchBackend: typeof fetch; releaseIdentity?: unknown; engineReleaseIdentity?: unknown; now?: () => Date; nonce?: () => string;
+  fetchBackend: typeof fetch; releaseIdentity?: unknown; engineReleaseIdentity?: unknown; engineQuoteReleaseIdentity?: unknown; now?: () => Date; nonce?: () => string;
 }) {
   const base = new URL(input.backendBaseUrl);
   if ((base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))) || base.username || base.password || base.search || base.hash) throw new Error("Module review backend URL is invalid.");
@@ -134,10 +137,15 @@ export function createModuleReviewClient(input: {
         if (!detail.job.artifact) fail(409, "MODULE_REVIEW_BUILD_REQUIRED");
         if (detail.job.artifact.schemaVersion === "programmable.modules.engine-build.v1") {
           const raw = userInput(() => parsed(Buffer.from(text), 2 * 1024 * 1024));
-          if (input.engineReleaseIdentity === null || input.engineReleaseIdentity === undefined) fail(409, "MODULE_REVIEW_HOST_RELEASE_UNAVAILABLE");
+          // loadDetail has already bound this environment to the authenticated source, plan and build.
+          // Production supplies both closed identities. An omitted quote slot preserves explicit single-release callers.
+          const profile = detail.job.artifact.testEnvironment?.profile;
+          const quoteProfile = profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile || profile === MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1.profile;
+          const identity = quoteProfile && Object.hasOwn(input, "engineQuoteReleaseIdentity") ? input.engineQuoteReleaseIdentity : input.engineReleaseIdentity;
+          if (identity === null || identity === undefined) fail(409, "MODULE_REVIEW_HOST_RELEASE_UNAVAILABLE");
           // Bind the closed server identity before Engine publication or activation.
           // Validate it here so configuration failures stay local to Engine review.
-          const release = bindModuleEngineReleaseIdentity(input.engineReleaseIdentity);
+          const release = bindModuleEngineReleaseIdentity(identity);
           const manifest = userInput(() => reviewRecord(reviewRecord(raw).manifest));
           const expected = userInput(() => createReviewedModuleEngineManifest({ job: detail.job, descriptor: detail.source.descriptor,
             release, definition: manifest.catalogDefinition as ModuleEngineCatalogDefinition,
@@ -249,7 +257,7 @@ export function createModuleReviewClient(input: {
 let client: ReturnType<typeof createModuleReviewClient> | undefined;
 export async function moduleReviewRoute(request: Request, operation: Operation, id?: string) {
   try {
-    client ??= createModuleReviewClient({ authenticator: createPrivyWalletPrincipalAuthenticatorV1(), backendBaseUrl: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL ?? "", websiteToken: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN ?? "", bffAssertionKeyV2: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2 ?? "", fetchBackend: fetch, releaseIdentity: configuredNativeReviewRelease, engineReleaseIdentity: configuredEngineReviewRelease });
+    client ??= createModuleReviewClient({ authenticator: createPrivyWalletPrincipalAuthenticatorV1(), backendBaseUrl: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL ?? "", websiteToken: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN ?? "", bffAssertionKeyV2: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2 ?? "", fetchBackend: fetch, releaseIdentity: configuredNativeReviewRelease, engineReleaseIdentity: configuredEngineReviewRelease, engineQuoteReleaseIdentity: configuredQuoteEngineReviewRelease });
     return await client.handle(request, operation, id);
   } catch { return response(503, { error: { code: "MODULE_REVIEW_SERVICE_UNAVAILABLE" } }); }
 }

@@ -26,7 +26,7 @@ export interface AnyQuoteIdentityPreparationDependenciesV1 {
   options?: AnyQuoteReadinessOptionsV1;
 }
 export function anyQuotePreparationOptionsV1(deps: AnyQuoteIdentityPreparationDependenciesV1): AnyQuoteReadinessOptionsV1 {
-  return deps.options ?? { apiKey: process.env.UNISWAP_TRADING_API_KEY ?? process.env.UNISWAP_API_KEY };
+  return deps.options ?? { routeDiscovery: "pool-index" };
 }
 function rpcs(deps: AnyQuoteIdentityPreparationDependenciesV1): readonly [TradeRpcV1, TradeRpcV1] { return deps.options?.rpcs ?? productionTradeRpcsV1(); }
 export function anyQuotePreparationClientV1(deps: AnyQuoteIdentityPreparationDependenciesV1): ModuleEngineClient {

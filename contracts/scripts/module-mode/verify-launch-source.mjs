@@ -10,7 +10,9 @@ import {
   getCreate2Address, keccak256, parseAbi, parseAbiParameters, toHex, zeroAddress,
 } from 'viem';
 
-import { canonicalJson, need } from './core.mjs';
+import { canonicalJson, need, OFFICIAL } from './core.mjs';
+import { isAnyQuotePositionManagerEngine, verifyAnyQuotePositionManagerCustody,
+  ANY_QUOTE_POSITION_PERMIT2 } from './any-quote-position-manager.mjs';
 import { boundedPublicJson, exactJson, SOURCIFY_BASE, SOURCIFY_COMPILER, sourcifyPreflight, sourcifyNeedsRecompilation, validateSourcifySource } from './source-readback.mjs';
 import { recompileSourcifyInput } from './source-recompile.mjs';
 import { ETH_CANONICAL_SOURCE_CLASS, validateSourcifyCreationGap } from './source-creation-gap.mjs';
@@ -449,6 +451,35 @@ async function quoteResources(identity, release, log, receipt, creation, context
       dependencies: Object.fromEntries(addresses.map(name => [name, { address: config[name], runtimeCodeHash: keccak256(code[name]) }])) } };
 }
 
+export async function readAnyQuotePositionManagerCustody(identity, state, receipt, launchLog, request, block) {
+  const pm = OFFICIAL.positionManager.address, permit2 = ANY_QUOTE_POSITION_PERMIT2.address, id = state.positionTokenId;
+  const [runtime, permit2Runtime, manager, actualPermit2, owner, approved, [poolKey, positionInfo], liquidity, allowance] = await readCalls([
+    { method: 'eth_getCode', params: [pm, block] }, { method: 'eth_getCode', params: [permit2, block] },
+    call(pm, 'function poolManager() view returns (address)'), call(pm, 'function permit2() view returns (address)'),
+    call(pm, 'function ownerOf(uint256) view returns (address)', [id]),
+    call(pm, 'function getApproved(uint256) view returns (address)', [id]),
+    call(pm, 'function getPoolAndPositionInfo(uint256) view returns ((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks),uint256)', [id]),
+    call(pm, 'function getPositionLiquidity(uint256) view returns (uint128)', [id]),
+    call(permit2, 'function allowance(address,address,address) view returns (uint160,uint48,uint48)', [identity.launch.engine, identity.launch.token, pm]),
+  ], request, block);
+  const custody = verifyAnyQuotePositionManagerCustody(identity, state, {
+    runtime, permit2Runtime, poolManager: manager, permit2: actualPermit2, owner, approved, poolKey, positionInfo, liquidity, permit2Amount: allowance[0],
+  });
+  const nftLogs = receipt.logs.filter(item => same(item.address, pm) && same(item.topics?.[0], POSITION_TRANSFER_TOPIC)
+    && same(item.topics?.[3], toHex(id, { size: 32 })));
+  const mint = receiptEvent({ ...receipt, logs: nftLogs }, POSITION_TRANSFER_ABI, pm, 'Transfer');
+  need(same(mint.args.from, zeroAddress) && same(mint.args.to, identity.launch.engine) && mint.args.tokenId === id
+    && BigInt(mint.log.logIndex) < BigInt(launchLog.logIndex), 'Any Quote position NFT mint differs from launch');
+  const modified = receiptEvent(receipt, parseAbi([
+    'event ModifyLiquidity(bytes32 indexed id,address indexed sender,int24 tickLower,int24 tickUpper,int256 liquidityDelta,bytes32 salt)',
+  ]), manager, 'ModifyLiquidity', state.poolId);
+  need(same(modified.args.sender, pm) && modified.args.tickLower === state.tickLower && modified.args.tickUpper === state.tickUpper
+    && modified.args.liquidityDelta === state.lockedLiquidity && same(modified.args.salt, toHex(id, { size: 32 }))
+    && BigInt(mint.log.logIndex) < BigInt(modified.log.logIndex) && BigInt(modified.log.logIndex) < BigInt(launchLog.logIndex),
+  'Any Quote canonical position liquidity mint differs from launch');
+  return { ...custody, mintLogIndex: mint.log.logIndex, liquidityLogIndex: modified.log.logIndex };
+}
+
 async function bindEngineLaunch(entry, log, tokenBuild, context) {
   const { release } = entry, { wire, request } = context, host = release.contracts.host.address;
   need(same(log.address, host) && log.removed === false, 'Engine launch log is not canonical');
@@ -482,7 +513,9 @@ async function bindEngineLaunch(entry, log, tokenBuild, context) {
     manifestHash: publication.template.manifestHash, reviewDigest: publication.template.reviewDigest, artifactDigest: identity.manifest.source.artifactDigest };
   const token = { ...tokenBuild, address: a.token, runtime: tokenRuntime, constructorArguments: '0x', creationCode: `0x${tokenBuild.artifact.evm.bytecode.object}`, creation, transactionHash: log.transactionHash };
   if (identity.anyQuoteRelease) {
-    const fields = { poolId: 'bytes32', initialTick: 'int24', tickLower: 'int24', tickUpper: 'int24', lockedLiquidity: 'uint128', lockedTokenDust: 'uint256', quoteDecimals: 'uint8' };
+    const positions = isAnyQuotePositionManagerEngine(identity.manifest.source?.engine);
+    const fields = { poolId: 'bytes32', initialTick: 'int24', tickLower: 'int24', tickUpper: 'int24', lockedLiquidity: 'uint128', lockedTokenDust: 'uint256', quoteDecimals: 'uint8',
+      ...(positions ? { LP_CUSTODY_SCHEMA_ID: 'bytes32', positionManager: 'address', positionTokenId: 'uint256' } : {}) };
     const values = await readCalls(Object.entries(fields).map(([name, type]) => call(a.engine, `function ${name}() view returns (${type})`)), request, context.stateBlock);
     const state = Object.fromEntries(Object.keys(fields).map((name, i) => [name, values[i]]));
     if (identity.nativeFeeRoute) {
@@ -499,9 +532,11 @@ async function bindEngineLaunch(entry, log, tokenBuild, context) {
     const bindings = { sharedHook: release.contracts.sharedHook.address, poolManager: release.contracts.poolManager.address };
     const actual = await readCalls(Object.keys(bindings).map(name => call(a.engine, `function ${name}() view returns (address)`)), request, context.stateBlock);
     for (const [i, name] of Object.keys(bindings).entries()) need(same(actual[i], bindings[name]), `Any Quote engine ${name} differs`);
+    const positionCustody = positions ? await readAnyQuotePositionManagerCustody(identity, state, receipt, log, request, context.stateBlock) : undefined;
     engine.resources = { profile: 'quote-shared-v1', resourcesHash, poolId: state.poolId, sharedHook: bindings.sharedHook,
       tickLower: state.tickLower, tickUpper: state.tickUpper, lockedLiquidity: String(state.lockedLiquidity), lockedTokenDust: String(state.lockedTokenDust),
-      quoteDecimals: state.quoteDecimals, ...(identity.nativeFeeRoute ? { nativeFeeRouteHash: state.nativeFeeRouteHash } : {}), additionalSourceTargets: [] };
+      quoteDecimals: state.quoteDecimals, ...(identity.nativeFeeRoute ? { nativeFeeRouteHash: state.nativeFeeRouteHash } : {}),
+      ...(positionCustody ? { positionCustody } : {}), additionalSourceTargets: [] };
     if (canonicalSourceProfiles.has(release.sourceVersion)) {
       need(typeof context.beforePublish === 'function', 'Canonical source snapshot recheck unavailable');
       need(same(receipt.from, creation.transactionSender), 'Any Quote creation receipt/transaction sender differs');

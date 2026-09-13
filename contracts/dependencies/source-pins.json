@@ -32,6 +32,16 @@
       "commit": "ad04c9f24a170accf5ea1b2836bbafd514537ca6"
     },
     {
+      "name": "Uniswap v4 Periphery for Universal Router 2.1.1",
+      "repository": "https://github.com/Uniswap/v4-periphery.git",
+      "commit": "3231810e39b8c4d569b9d66907fa4ef8cd2cec22"
+    },
+    {
+      "name": "Uniswap Universal Router 2.1.1",
+      "repository": "https://github.com/Uniswap/universal-router.git",
+      "commit": "999d561c3ad58fb5cab91b602911f3c75591a9c7"
+    },
+    {
       "name": "OpenZeppelin Contracts",
       "repository": "https://github.com/OpenZeppelin/openzeppelin-contracts.git",
       "commit": "21c8312b022f495ebe3621d5daeed20552b43ff9"

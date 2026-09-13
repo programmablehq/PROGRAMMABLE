@@ -13,6 +13,7 @@ const creationHash = "0x445809d9f7a34e959de4a96dec1e1beddfb265755bf28c57c42744ad
 const reviewAsset = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512";
 const nativeReviewAsset = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9";
 const nativeHistory = "config/module-engine/historical-releases.json";
+const quoteReview = "config/module-engine/review-release.any-quote.json";
 const material = createHash("sha256").update("gitleaks negative control only").digest("hex");
 const catalog = "config/module-engine/catalog.json";
 const anyQuoteIndexFixtures = [
@@ -43,6 +44,7 @@ const hashPaths = [
   "config/module-engine/index-releases.json",
   nativeHistory,
   catalog,
+  quoteReview,
   "public/developers/modules/0x09c61111bdecf969b903653e8a9776d1ed103b9201fbd33526aaee9e1c8a07e2/manifest.json",
   "public/developers/modules/0x81185e910dec1032df4bd027f8139f524606f628c0a63dbae62c69bb86e470da/manifest.json",
   "public/developers/modules/0x616f4584f5ec576a88bac5b6d5ee1ae841713f02129ab71a9b47e7e900312b2f/manifest.json",
@@ -113,11 +115,13 @@ test("detects credentials beside the allowed creation hash inside the base64 sou
   }
 });
 
-test("detects a generic credential beside allowed fields on the same JSON line", (t) => {
-  const files = Object.fromEntries(hashPaths.map((path) => [path, {
-    ...publicFields(path), apiKey: material,
-  }]));
-  assertFiles(scan(t, files), hashPaths);
+test("detects a generic credential before or after allowed fields on the same JSON line", (t) => {
+  for (const before of [true, false]) {
+    const files = Object.fromEntries(hashPaths.map((path) => [path, before
+      ? { apiKey: material, ...publicFields(path) }
+      : { ...publicFields(path), apiKey: material }]));
+    assertFiles(scan(t, files), hashPaths);
+  }
 });
 
 test("keeps the exact public values detectable under neighbouring credential fields", (t) => {
@@ -140,11 +144,12 @@ test("keeps public values detectable in adjacent or unlisted paths", (t) => {
     "config/module-engine/robinhood-next.json": { tokenCreationCodeHash: creationHash },
     "config/module-engine/catalog-next.json": { token: reviewAsset },
     "config/module-engine/historical-releases-next.json": { token: nativeReviewAsset },
+    [quoteReview.replace(".json", "-next.json")]: { tokenCreationCodeHash: creationHash },
     [`fixtures/${nativeHistory}`]: { token: nativeReviewAsset },
     "public/developers/modules/unreviewed/manifest.json": { tokenCreationCodeHash: creationHash },
     [`public/developers/modules/0x${"1".repeat(64)}/manifest.json`]: { tokenCreationCodeHash: creationHash },
     [`${hashPaths[2]}.backup`]: { tokenCreationCodeHash: creationHash },
-    ...Object.fromEntries(pairTokenPublicPaths.flatMap((path) => [
+    ...Object.fromEntries([quoteReview, ...pairTokenPublicPaths].flatMap((path) => [
       [`${path}.backup`, { tokenCreationCodeHash: creationHash }],
       [`fixtures/${path}`, { tokenCreationCodeHash: creationHash }],
     ])),

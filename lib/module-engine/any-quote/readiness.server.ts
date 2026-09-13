@@ -6,10 +6,12 @@ import {
   AnyQuoteErrorV1, anyQuoteAddressV1, anyQuoteSameAddressV1, anyQuoteUintV1,
   type AnyQuoteAmmHopV1, type AnyQuoteExternalRouteV1,
   type AnyQuotePriceEvidenceV1, type AnyQuoteRationalV1, type AnyQuoteReadinessV1,
+  type AnyQuoteV4PoolCandidateV1,
 } from "./types";
 import { anyQuoteEvidenceHashV1, parseAnyQuoteExternalRouteV1, requireAnyQuoteNativeUnlockRouteV1, validateAnyQuoteExternalRouteV1 } from "./route";
 import { anyQuoteRationalV1, multiplyAnyQuoteRationalsV1, parseAnyQuoteDecimalV1 } from "./price";
 import { ANY_QUOTE_V4_MAX_POOL_CANDIDATES, anyQuoteV4CandidateHopV1, createAnyQuoteV4InitializeDiscoveryV1, parseAnyQuoteV4DiscoveryV1 } from "./discovery.server";
+import { enumerateAnyQuoteV4PathsV1 } from "./path-enumeration.server";
 
 const QUOTE_URL = "https://trade-api.gateway.uniswap.org/v1/quote";
 const ASSETS_URL = "https://api.robinhood.com/rhj/assets";
@@ -36,6 +38,9 @@ const min = (...v: bigint[]) => v.reduce((a, b) => a < b ? a : b);
 export type AnyQuoteReadinessOptionsV1 = {
   /** Server configuration only. Never put this key into an API response, URL, evidence or cache key. */
   apiKey?: string;
+  /** Keyless verified pool discovery is the default. Hosted discovery is an explicit
+   * selection; neither provider's failure selects the other automatically. */
+  routeDiscovery?: "uniswap-trading-api" | "pool-index";
   rpcs?: readonly [TradeRpcV1, TradeRpcV1];
   fetchImpl?: typeof fetch;
   now?: bigint;
@@ -198,7 +203,11 @@ function requireCandidateProviderIntegrity(outcomes: readonly PromiseSettledResu
   for (const result of outcomes) if (result.status === "rejected") {
     const code = result.reason && typeof result.reason === "object" && "code" in result.reason ? String(result.reason.code) : "";
     if (code === "TRADE_PROVIDER_DISAGREEMENT") throw new AnyQuoteErrorV1("TRADE_PROVIDER_DISAGREEMENT");
-    if (code === "RPC_RESPONSE_INVALID") throw result.reason;
+    // Only an independently agreed execution revert or measured non-executable
+    // pool can be discarded. An unavailable provider is not evidence about a pool.
+    if (result.reason instanceof TradeRpcExecutionRevertedV1) continue;
+    if (result.reason instanceof AnyQuoteErrorV1 && ["MARKET_LIQUIDITY_UNAVAILABLE", "ROUTE_HOOK_MISSING", "QUOTE_AMOUNT_OUTSIDE_ROUTER_RANGE"].includes(code)) continue;
+    throw result.reason;
   }
 }
 
@@ -242,8 +251,21 @@ async function chooseNativeCandidate(paths: readonly (readonly V4Hop[])[], input
 
 async function discoverNativeV4(input: DiscoveryInput, ctx: Context, qualify?: CandidateQualification) {
   const buy = anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH), quote = buy ? input.tokenOut : input.tokenIn;
+  const enumerate = async (candidates: readonly AnyQuoteV4PoolCandidateV1[], maxHops: 1 | 2) => {
+    const unique = [...new Map(candidates.map(pool => [pool.poolId.toLowerCase(), pool])).values()];
+    if (unique.length > 2 * ANY_QUOTE_V4_MAX_POOL_CANDIDATES) throw new AnyQuoteErrorV1("V4_DISCOVERY_CANDIDATE_LIMIT");
+    const outcomes = await boundedMap(unique, async pool => {
+      await inspectHop(anyQuoteV4CandidateHopV1(pool, pool.key.currency0), ctx);
+      const [sqrtPriceX96, tick] = await ctx.call(INFRA.stateView, "function getSlot0(bytes32) view returns (uint160,int24,uint24,uint24)", [pool.poolId]) as readonly [bigint, number, number, number];
+      const liquidity = await ctx.call(INFRA.stateView, "function getLiquidity(bytes32) view returns (uint128)", [pool.poolId]) as bigint;
+      return { ...pool, sqrtPriceX96, tick, liquidity };
+    });
+    requireCandidateProviderIntegrity(outcomes);
+    return enumerateAnyQuoteV4PathsV1({ pools: outcomes.flatMap(value => value.status === "fulfilled" ? [value.value] : []),
+      tokenIn: buy ? ANY_QUOTE_NATIVE : quote, tokenOut: buy ? quote : ANY_QUOTE_NATIVE, maxHops });
+  };
   const discovery = ctx.discovery(), nativePools = await discovery.nativePools(quote);
-  const direct = await chooseNativeCandidate(nativePools.map(pool => [anyQuoteV4CandidateHopV1(pool, buy ? ANY_QUOTE_NATIVE : quote)]), input, ctx, "uniswap-v4-initialize", qualify);
+  const direct = await chooseNativeCandidate(await enumerate(nativePools, 1), input, ctx, "uniswap-v4-initialize", qualify);
   if (direct.candidate) return direct.candidate;
   const adjacent = await discovery.adjacentPools(quote);
   const inspected = await boundedMap(adjacent, async pool => {
@@ -257,9 +279,7 @@ async function discoverNativeV4(input: DiscoveryInput, ctx: Context, qualify?: C
   const intermediates = [...new Set(live.map(value => value.intermediate))];
   if (intermediates.length > 8) throw new AnyQuoteErrorV1("V4_DISCOVERY_INTERMEDIATE_LIMIT");
   const native = new Map(await Promise.all(intermediates.map(async asset => [asset, await discovery.nativePools(asset)] as const)));
-  const paths = live.flatMap(({ pool, intermediate }) => (native.get(intermediate) ?? []).map(first => buy
-    ? [anyQuoteV4CandidateHopV1(first, ANY_QUOTE_NATIVE), anyQuoteV4CandidateHopV1(pool, intermediate)]
-    : [anyQuoteV4CandidateHopV1(pool, quote), anyQuoteV4CandidateHopV1(first, intermediate)]));
+  const paths = await enumerate([...live.map(value => value.pool), ...[...native.values()].flat()], 2);
   const routed = await chooseNativeCandidate(paths, input, ctx, "uniswap-v4-initialize", qualify);
   if (!routed.candidate) throw routed.qualificationError ?? direct.qualificationError
     ?? new AnyQuoteErrorV1(discovery.hasIncompleteCoverage() ? "V4_DISCOVERY_PROVIDER_UNAVAILABLE" : "NATIVE_V4_EXECUTABLE_ROUTE_UNAVAILABLE");
@@ -273,27 +293,28 @@ async function discover(input: DiscoveryInput, ctx: Context, options: AnyQuoteRe
       validUntil: (ctx.now + ROUTE_LIFETIME).toString(), evidenceHash: "0x" };
     return { route: { ...value, evidenceHash: anyQuoteEvidenceHashV1(value) }, spot: anyQuoteRationalV1(1n, 1n) };
   }
-  if (!options.discoverExternalRoute && (!options.apiKey || !/^[\x21-\x7e]{16,512}$/.test(options.apiKey))) return discoverNativeV4(input, ctx, qualify);
+  if (!options.discoverExternalRoute && (options.routeDiscovery ?? "pool-index") === "pool-index") return discoverNativeV4(input, ctx, qualify);
+  if (!options.discoverExternalRoute && (!options.apiKey || !/^[\x21-\x7e]{16,512}$/.test(options.apiKey))) {
+    throw new AnyQuoteErrorV1("UNISWAP_ROUTING_NOT_CONFIGURED");
+  }
   const raw = options.discoverExternalRoute ? await options.discoverExternalRoute(input) : await fetchJson(QUOTE_URL, options, {
     type: "EXACT_INPUT", amount: input.amountIn.toString(), tokenInChainId: 4663, tokenOutChainId: 4663,
-    tokenIn: input.tokenIn, tokenOut: input.tokenOut, swapper: PROBE_OWNER, recipient: PROBE_OWNER,
-    protocols: ["V2", "V3", "V4"], hooksOptions: "V4_HOOKS_INCLUSIVE", routingPreference: "BEST_PRICE", slippageTolerance: 1,
+    // The route envelope retains its historical WETH identifier, but the executable ETH
+    // boundary is native. Never rewrite a returned WETH hop to make it appear executable.
+    tokenIn: anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? ANY_QUOTE_NATIVE : input.tokenIn,
+    tokenOut: anyQuoteSameAddressV1(input.tokenOut, ANY_QUOTE_WETH) ? ANY_QUOTE_NATIVE : input.tokenOut,
+    swapper: PROBE_OWNER, recipient: PROBE_OWNER,
+    protocols: ["V4"], hooksOptions: "V4_HOOKS_INCLUSIVE", routingPreference: "BEST_PRICE", slippageTolerance: 1,
     permitAmount: "EXACT", generatePermitAsTransaction: false,
   });
-  if (raw && typeof raw === "object" && "schema" in raw) {
+  if (options.discoverExternalRoute && raw && typeof raw === "object" && "schema" in raw) {
     const discovered = parseAnyQuoteV4DiscoveryV1(raw);
     const result = await chooseNativeCandidate(discovered.routes, input, ctx, "uniswap-v4-discovery", qualify);
     if (!result.candidate) throw result.qualificationError ?? new AnyQuoteErrorV1("NATIVE_V4_EXECUTABLE_ROUTE_UNAVAILABLE");
     return result.candidate;
   }
   const parsed = parseAnyQuoteExternalRouteV1(raw, { ...input, checkpoint: ctx.checkpoint, validUntil: ctx.now + ROUTE_LIFETIME });
-  try { requireAnyQuoteNativeUnlockRouteV1(parsed, anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? "buy" : "sell"); }
-  catch (error) {
-    // A valid API path can exceed this compiler's coverage even when an independently
-    // executable native V4 path exists. Preserve malformed-data and provider failures.
-    if (!(error instanceof AnyQuoteErrorV1) || error.code !== "ROUTE_ISOLATION_UNAVAILABLE") throw error;
-    return discoverNativeV4(input, ctx, qualify);
-  }
+  requireAnyQuoteNativeUnlockRouteV1(parsed, anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? "buy" : "sell");
   const spots = await Promise.all(parsed.hops.map(hop => inspectHop(hop, ctx)));
   const amountOut = await quoteHops(parsed.hops, input.amountIn, ctx);
   const route = { ...parsed, amountOut: amountOut.toString() };

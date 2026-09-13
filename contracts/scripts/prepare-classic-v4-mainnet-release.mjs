@@ -95,12 +95,20 @@ const EXPECTED_LOCAL_PIN_IDENTITIES = Object.freeze({
     name: "Uniswap UERC20 Factory",
     repository: "https://github.com/Uniswap/uerc20-factory.git",
   }),
+  "universal-router": Object.freeze({
+    name: "Uniswap Universal Router 2.1.1",
+    repository: "https://github.com/Uniswap/universal-router.git",
+  }),
   "v4-core": Object.freeze({
     name: "Uniswap v4 Core",
     repository: "https://github.com/Uniswap/v4-core.git",
   }),
   "v4-periphery": Object.freeze({
     name: "Uniswap v4 Periphery",
+    repository: "https://github.com/Uniswap/v4-periphery.git",
+  }),
+  "v4-periphery-v211": Object.freeze({
+    name: "Uniswap v4 Periphery for Universal Router 2.1.1",
     repository: "https://github.com/Uniswap/v4-periphery.git",
   }),
 });
