@@ -30,7 +30,11 @@ The existing periphery dependency stays at `ad04c9f24a170accf5ea1b2836bbafd51453
 
 The new resource commitment includes custody schema, official PositionManager address, NFT ID, pool ID, tick range, locked liquidity, dust and quote decimals. The source verifier selects this adapter from the authenticated reviewed artifact, after complete compiler-input, runtime, constructor and launch binding. It independently checks canonical PositionManager and Permit2 code, NFT ownership, pool/ticks/liquidity, zero scoped allowance, and the NFT mint and core ModifyLiquidity events in the launch receipt. Existing engines retain their original resource commitment.
 
+Prepare the engine through the existing generic source-submission flow with source path `src/module-engine/any-quote/AnyQuotePositionManagerLPModuleV1.sol`, entrypoint `AnyQuotePositionManagerLPModuleV1`, a new package version and its complete hashed source closure. The existing foundation preparation builds the host infrastructure and retains its historical engine hint; it does not compile or choose this per-launch engine. Admission of the new reviewed revision can use the existing family without replacing a previous revision.
+
 Local tests and fork execution are not protected review approval, deployment, finality or public availability. Promotion requires a reviewed source artifact and revision, supported review/execution environment, source publication, lifecycle evidence and a functioning production API configuration. The previous LP position cannot be converted by changing these files.
+
+The protected worker must provide the pinned PositionManager, Permit2 and Universal Router code and state. Its implementation is maintained outside this repository; the shared-quote environment digest alone does not prove this support. If a new environment version is required, install it additively and retain the historical environment identity and evidence.
 
 Uniswap Labs hook-routing eligibility and GMGN's missing atomic-launch trade are separate integration questions. A PositionManager NFT or a successful fork test does not establish either outcome.
 
