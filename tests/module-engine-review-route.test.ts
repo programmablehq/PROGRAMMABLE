@@ -1,26 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { validateModuleSubmissionRequest } from "../packages/classic-modules/src/open-transport.mjs";
+import { validateModuleSubmissionRequest, type ModuleSubmissionRequest } from "../packages/classic-modules/src/open-transport.mjs";
 import frozen from "./fixtures/module-engine-review-build.json";
 import historicalNativeReleases from "../config/module-mode/historical-releases.json";
 import { fixture as engineClientFixture } from "./module-engine-fixture";
 import { moduleReviewAdminFixture } from "./fixtures/module-review-admin";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
-import { computeModuleEngineHostManifestHash, computeModuleEngineReleaseDigest, type ModuleEngineCatalogDefinition } from "../lib/module-engine/catalog";
+import { computeModuleEngineHostManifestHash, computeModuleEngineReleaseDigest, type ModuleEngineCatalogDefinition, type ModuleEngineReleaseIdentity } from "../lib/module-engine/catalog";
 import { createReviewedModuleEngineManifest } from "../lib/module-mode/review-engine-manifest";
 import type { ModuleEngineBuildArtifactV1, ModuleEngineBuildPlanV1 } from "../lib/module-mode/review-engine-types";
 import { MODULE_ENGINE_QUOTE_ENVIRONMENT_V1, MODULE_ENGINE_QUOTE_NVDA_ENVIRONMENT_V1 } from "../lib/module-mode/review-engine-types";
-import { parseEngineReviewArtifact, validateModuleEngineBuildPlanV1 } from "../lib/module-mode/review-engine-contract";
-import { moduleEngineStandardInputV1, verifyModuleEngineBuildArtifactV1 } from "../lib/server/module-mode/review-engine-source";
+import { MODULE_ENGINE_REVIEW_AREAS_V1, parseEngineReviewArtifact, validateModuleEngineBuildPlanV1 } from "../lib/module-mode/review-engine-contract";
+import { moduleEngineCompiledCasesV1, moduleEngineStandardInputV1, verifyModuleEngineBuildArtifactV1 } from "../lib/server/module-mode/review-engine-source";
+import { MODULE_ENGINE_SHARED_QUOTE_CONFIGURATION_ABI_V1, MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1, MODULE_ENGINE_SHARED_QUOTE_CHECKS_V1, MODULE_ENGINE_SHARED_QUOTE_REVIEW_AREAS_V1, MODULE_ENGINE_SHARED_QUOTE_POLICY_V1 } from "../lib/module-mode/review-engine-shared-quote";
+import { MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_CHECKS_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_AREAS_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_POLICY_V1 } from "../lib/module-mode/review-engine-shared-quote-eth";
+import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1, MODULE_ENGINE_POSITION_MANAGER_CHECKS_V1, MODULE_ENGINE_POSITION_MANAGER_REVIEW_AREAS_V1 } from "../lib/module-mode/review-engine-position-manager";
 import { parseReviewSubject, reviewDigest, type ReviewJob } from "../lib/module-mode/review-contract";
 import { computeModuleModeHostManifestHash, createModuleModeHostManifest, type ModuleModeHostReleaseIdentity } from "../lib/server/module-mode/catalog";
 import { computeModuleReviewDecisionDigestV1, type ModuleReviewDecisionCommandV1, type ModuleReviewDecisionRecordV1 } from "../lib/server/module-mode/review-decision-wire-v1";
 import { computeModuleModeReleaseDigest } from "../lib/module-mode/release";
 
-const installed = vi.hoisted(() => ({ engine: null as unknown, native: null as unknown, authenticate: vi.fn() }));
+const installed = vi.hoisted(() => ({ engine: null as unknown, quote: null as unknown, native: null as unknown, authenticate: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/config/module-engine/review-release.json", () => ({ get default() { return installed.engine; } }));
+vi.mock("@/config/module-engine/review-release.any-quote.json", () => ({ get default() { return installed.quote; } }));
 vi.mock("@/config/module-mode/review-release.json", () => ({ get default() { return installed.native; } }));
 vi.mock("@/lib/server/creator-article/wallet-principal.server", () => ({
   createPrivyWalletPrincipalAuthenticatorV1: () => ({ authenticate: installed.authenticate }),
@@ -39,6 +43,8 @@ const configuredNativeRelease = historicalNativeV1.release;
 const nativeV1Identity = Object.fromEntries(nativeIdentityKeys.map(key => [key, configuredNativeRelease[key as keyof typeof configuredNativeRelease]]));
 const nativeV2IdentityBytes = readFileSync(new URL("../config/module-mode/review-release.json", import.meta.url));
 const nativeV2Identity = JSON.parse(nativeV2IdentityBytes.toString()) as ModuleModeHostReleaseIdentity;
+const quoteIdentity = JSON.parse(readFileSync(new URL("../config/module-engine/review-release.any-quote.json", import.meta.url), "utf8")) as ModuleEngineReleaseIdentity;
+const ethIdentity = JSON.parse(readFileSync(new URL("../config/module-engine/review-release.json", import.meta.url), "utf8")) as ModuleEngineReleaseIdentity;
 
 describe("source-bound Quote dependency environment", () => {
   const environments = [MODULE_ENGINE_QUOTE_ENVIRONMENT_V1, MODULE_ENGINE_QUOTE_NVDA_ENVIRONMENT_V1];
@@ -132,7 +138,72 @@ function engineReviewFixture() {
   return { source, subject, artifact, job, release, manifest, manifestHash: computeModuleEngineHostManifestHash(manifest) };
 }
 
-function routeSetup(f: Pick<ReturnType<typeof engineReviewFixture>, "source" | "subject" | "job" | "artifact"> | ReturnType<typeof moduleReviewAdminFixture>) {
+/** Synthetic transport fixture around the existing compiler bytes, not PM execution or reviewer evidence. */
+function sharedReviewFixture(kind: "quote" | "pm" | "eth") {
+  const original = engineReviewFixture(), source = structuredClone(original.source) as ModuleSubmissionRequest;
+  const release = kind === "eth" ? ethIdentity : quoteIdentity;
+  const contracts = release.contracts, originalPlan = original.job.plan;
+  if (!("sharedHook" in contracts) || originalPlan?.schemaVersion !== "programmable.modules.engine-build-plan.v1") throw new Error("Shared engine fixture required");
+  const policy = kind === "eth" ? MODULE_ENGINE_SHARED_QUOTE_ETH_POLICY_V1 : MODULE_ENGINE_SHARED_QUOTE_POLICY_V1;
+  const configuration = { type: "record" as const, fields: {
+    schemaId: { type: "bytes" as const, maxLength: 32, binding: { mode: "fixed" as const, value: policy.configurationSchemaId } },
+    poolManager: { type: "address" as const, binding: { mode: "fixed" as const, value: contracts.poolManager.address } },
+    poolManagerCodeHash: { type: "bytes" as const, maxLength: 32, binding: { mode: "fixed" as const, value: contracts.poolManager.runtimeCodeHash } },
+    sharedHook: { type: "address" as const, binding: { mode: "fixed" as const, value: contracts.sharedHook.address } },
+    quoteAsset: { type: "address" as const, binding: { mode: "input" as const } },
+    initialTick: { type: "string" as const, maxLength: 8, binding: { mode: "input" as const } },
+    validUntil: { type: "uint" as const, bits: 64, min: "1", binding: { mode: "input" as const } },
+    priceEvidenceHash: { type: "bytes" as const, maxLength: 32, binding: { mode: "input" as const } },
+  }, required: MODULE_ENGINE_SHARED_QUOTE_CONFIGURATION_ABI_V1.map(a => a.path[0]) };
+  source.descriptor = { ...source.descriptor, configuration, requiresHost: [...source.descriptor.requiresHost, policy.hostRequirement] };
+  const checked = validateModuleSubmissionRequest(source);
+  if (!checked.ok) throw new Error("Invalid shared quote parser fixture");
+  const subject = { ...original.subject, requestDigest: checked.requestDigest };
+  const buy = "0x60dc1bbd39357f92329195e290e41f0b9e57cd0234659f6d1d26b7d76db85c7b" as const;
+  const sell = "0xb22e01d6ae912b2f234f0e8a0d041117ecabde62ed1f3225c0076768d14229f7" as const;
+  const plan = validateModuleEngineBuildPlanV1({ ...originalPlan, requestDigest: checked.requestDigest,
+    testEnvironment: kind === "eth" ? MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1 : kind === "pm" ? MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 : MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1,
+    configurationAbi: MODULE_ENGINE_SHARED_QUOTE_CONFIGURATION_ABI_V1, moneyRights: 3,
+    testEconomics: { platformBps: 30, buyCreatorBps: 100, sellCreatorBps: 200 },
+    operationPermissions: [{ operationId: buy, inputRoles: 2, outputRoles: 1, authorization: 0 }, { operationId: sell, inputRoles: 1, outputRoles: 2, authorization: 0 }],
+    cases: originalPlan.cases.map(c => c.expectedDeployment === "revert" ? c : { ...c,
+      parameters: { quoteAsset: c.quoteAsset, initialTick: "0", validUntil: "1800000100", priceEvidenceHash: `0x${"1".repeat(64)}` },
+      operations: [{ ...c.operations[0], id: "buy", operationId: buy, inputAsset: c.quoteAsset, outputAsset: c.token },
+        { ...c.operations[0], id: "sell", operationId: sell, inputAsset: c.token, outputAsset: c.quoteAsset }],
+    }),
+  }, subject);
+  const planDigest = reviewDigest("programmable.modules.engine-build-plan.v1", plan);
+  const cases = moduleEngineCompiledCasesV1(source, subject, plan, original.artifact.engine);
+  const checks = <K extends string>(keys: readonly K[]) => cases.map(c => ({ id: c.id,
+    ...Object.fromEntries(keys.map(key => [key, c.expectedDeployment === "success" ? true : null])) as Record<K, boolean | null> }));
+  const tests = { ...original.artifact.tests, requestDigest: checked.requestDigest, planDigest,
+    cases: cases.map((c, i) => ({ ...original.artifact.tests.cases[i], constructorHash: c.constructorHash, runtimeCodeHash: c.runtimeCodeHash,
+      operations: c.operations.map(o => ({ id: o.id, outcomeMatched: true, resultMatched: true, stateMatched: true, inputOutputBound: true, replayReverted: true, feesBacked: true })) })),
+    ...(kind === "eth" ? { sharedQuoteEthChecks: checks(MODULE_ENGINE_SHARED_QUOTE_ETH_CHECKS_V1) } : { sharedQuoteChecks: checks(MODULE_ENGINE_SHARED_QUOTE_CHECKS_V1) }),
+    ...(kind === "pm" ? { positionManagerChecks: checks(MODULE_ENGINE_POSITION_MANAGER_CHECKS_V1) } : {}),
+  };
+  const { artifactDigest: _digest, ...originalContents } = original.artifact; void _digest;
+  const contents = { ...originalContents, subject, packageId: checked.packageId, familyId: checked.familyId,
+    sourceManifestHash: reviewDigest("programmable.modules.source-manifest.v1", source.descriptor), planDigest,
+    configurationSchemaHash: reviewDigest("programmable.modules.configuration-schema.v1", configuration), configurationAbi: plan.configurationAbi,
+    testEnvironment: plan.testEnvironment, moneyRights: plan.moneyRights, testEconomics: plan.testEconomics, operationPermissions: plan.operationPermissions,
+    compiler: { ...original.artifact.compiler, completeInputHash: reviewDigest("programmable.modules.compiler-input.v1", moduleEngineStandardInputV1(source, subject, plan)) },
+    cases, tests, reviewRequired: [...MODULE_ENGINE_REVIEW_AREAS_V1,
+      ...(kind === "eth" ? MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_AREAS_V1 : MODULE_ENGINE_SHARED_QUOTE_REVIEW_AREAS_V1),
+      ...(kind === "pm" ? MODULE_ENGINE_POSITION_MANAGER_REVIEW_AREAS_V1 : [])],
+  };
+  const artifact = { ...contents, artifactDigest: reviewDigest("programmable.modules.engine-build.v1", contents) };
+  verifyModuleEngineBuildArtifactV1(artifact, subject, plan, source);
+  const job = { ...original.job, subject, plan, planDigest, artifact };
+  const manifest = createReviewedModuleEngineManifest({ job, descriptor: source.descriptor, release,
+    definition: { ...original.manifest.manifest.catalogDefinition, interface: "quote-shared-v1", schema: configuration, defaults: {}, configurationAbi: plan.configurationAbi },
+    revision: { ...original.manifest.manifest.revision, packageId: checked.packageId, familyId: checked.familyId, moneyRights: 3,
+      operationPermissions: [...plan.operationPermissions], initialOperationId: buy, eligibleFamilies: [] },
+  });
+  return { source, subject, artifact, job, release, manifest, manifestHash: computeModuleEngineHostManifestHash(manifest) };
+}
+
+function routeSetup(f: (Pick<ReturnType<typeof engineReviewFixture>, "subject" | "job" | "artifact"> & { source: unknown }) | ReturnType<typeof moduleReviewAdminFixture>) {
   const backend = vi.fn<typeof fetch>(async (url, init) => {
     const pathname = new URL(String(url)).pathname;
     if (pathname.endsWith("/source")) return Response.json(f.source);
@@ -156,17 +227,116 @@ function routeSetup(f: Pick<ReturnType<typeof engineReviewFixture>, "source" | "
     schemaVersion: "programmable.modules.review-command.v1", submissionId: f.subject.submissionId, requestDigest: f.subject.requestDigest, expectedReviewRevision: 2,
     outcome: "accept", reason: "Synthetic fixture; never publish.", artifactDigest: f.artifact.artifactDigest, hostManifestHash, acknowledgedReviewAreas: f.artifact.reviewRequired,
   } });
-  return { backend, manifest, accept };
+  return { backend, post, manifest, accept };
 }
 
 beforeEach(() => {
-  vi.resetModules(); installed.engine = null; installed.native = structuredClone(nativeV1Identity);
+  vi.resetModules(); installed.engine = null; installed.quote = null; installed.native = structuredClone(nativeV1Identity);
   installed.authenticate.mockReset().mockResolvedValue({ privyUserId: "did:privy:test-reviewer", privySessionId: "test-session", wallets: [reviewer] });
   vi.stubEnv("PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL", "https://review.example.invalid");
   vi.stubEnv("PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN", serviceToken);
   vi.stubEnv("PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2", `assert_${"b".repeat(48)}`);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+describe("additive pair-fee review identity at the actual admin BFF routes", () => {
+  it.each(["pm", "quote", "eth"] as const)("uses the closed server release for %s manifest and acceptance", async kind => {
+    installed.engine = ethIdentity; installed.quote = quoteIdentity;
+    const f = sharedReviewFixture(kind), route = routeSetup(f);
+    expect(f.release.releaseDigest).toBe(kind === "eth"
+      ? "0x99c3214509ebb348a3a7ee97f7eeaef325362a20da475241c2752a277fe93cc2"
+      : "0xac96d652e2043f34b3f736bad999ab673b17aa8750b5d62951e9ec928306273d");
+    const checked = await route.manifest(f.manifest);
+    expect(checked.status).toBe(200);
+    expect(await checked.json()).toMatchObject({ hostManifestHash: f.manifestHash, artifactDigest: f.artifact.artifactDigest, reviewRevision: 2 });
+    const accepted = await route.accept(f.manifest, f.manifestHash);
+    expect(accepted.status).toBe(201);
+    expect(await accepted.json()).toMatchObject({ decision: { reviewerWallet: reviewer, subject: f.subject, registryApproved: false, available: false,
+      command: { artifactDigest: f.artifact.artifactDigest, hostManifestHash: f.manifestHash } } });
+  });
+
+  it("accepts an independently authenticated PM decision without requiring a prior manifest-check request", async () => {
+    installed.engine = ethIdentity; installed.quote = quoteIdentity;
+    const f = sharedReviewFixture("pm"), route = routeSetup(f);
+    expect((await route.accept(f.manifest, f.manifestHash)).status).toBe(201);
+  });
+
+  it("keeps an explicitly absent quote slot closed even when the legacy slot contains ac96", async () => {
+    installed.engine = quoteIdentity;
+    const f = sharedReviewFixture("pm"), route = routeSetup(f);
+    for (const response of [await route.manifest(f.manifest), await route.accept(f.manifest, f.manifestHash)]) {
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: { code: "MODULE_REVIEW_HOST_RELEASE_UNAVAILABLE" } });
+    }
+    expect(route.backend.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it.each(["pm", "quote", "eth"] as const)("rejects a crossed release for %s before forwarding acceptance", async kind => {
+    installed.engine = quoteIdentity; installed.quote = ethIdentity;
+    const f = sharedReviewFixture(kind), route = routeSetup(f);
+    expect((await route.manifest(f.manifest)).status).toBe(400);
+    expect((await route.accept(f.manifest, f.manifestHash)).status).toBe(400);
+    expect(route.backend.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it.each(["pm", "eth"] as const)("keeps %s independent of invalid configuration in the other engine slot", async kind => {
+    installed.engine = kind === "eth" ? ethIdentity : { sourceVersion: "invalid" };
+    installed.quote = kind === "eth" ? { sourceVersion: "invalid" } : quoteIdentity;
+    const f = sharedReviewFixture(kind), route = routeSetup(f);
+    expect((await route.manifest(f.manifest)).status).toBe(200);
+    expect((await route.accept(f.manifest, f.manifestHash)).status).toBe(201);
+  });
+
+  it("rejects caller-selected identities and a rehashed alternate quote source", async () => {
+    installed.engine = ethIdentity; installed.quote = quoteIdentity;
+    const f = sharedReviewFixture("pm"), route = routeSetup(f), changed = structuredClone(f.manifest);
+    const release = { ...quoteIdentity, sourceCommit: "e".repeat(40) };
+    changed.manifest.release = { ...release, releaseDigest: computeModuleEngineReleaseDigest(release) };
+    expect((await route.manifest(changed)).status).toBe(400);
+    expect((await route.accept(changed, computeModuleEngineHostManifestHash(changed))).status).toBe(400);
+    expect((await route.manifest(f.manifest, { engineQuoteReleaseIdentity: quoteIdentity })).status).toBe(400);
+    expect(route.backend.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it.each(["unknown-profile", "borrowed-environment-digest", "changed-plan-profile", "missing-custody-evidence"])("rejects %s before profile dispatch can authorize a decision", async field => {
+    installed.engine = ethIdentity; installed.quote = quoteIdentity;
+    const f = sharedReviewFixture("pm"), route = routeSetup(f);
+    const record = f.artifact as unknown as Record<string, unknown>;
+    if (field === "unknown-profile") record.testEnvironment = { ...MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1, profile: "uninstalled.pm.v1" };
+    if (field === "borrowed-environment-digest") record.testEnvironment = { ...MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1, sourceDigest: MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.sourceDigest };
+    if (field === "changed-plan-profile") f.job.plan = { ...f.job.plan, testEnvironment: MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 };
+    if (field === "missing-custody-evidence") record.tests = { ...f.artifact.tests, positionManagerChecks: [] };
+    const { artifactDigest: _old, ...contents } = record; void _old;
+    record.artifactDigest = reviewDigest("programmable.modules.engine-build.v1", contents);
+    expect((await route.manifest(f.manifest)).status).toBe(503);
+    expect((await route.accept(f.manifest, f.manifestHash)).status).toBe(503);
+    expect(route.backend.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it.each(["review-revision", "artifact", "manifest-hash", "custody-acknowledgement"])("retains the %s acceptance binding for PM", async field => {
+    installed.engine = ethIdentity; installed.quote = quoteIdentity;
+    const f = sharedReviewFixture("pm"), route = routeSetup(f);
+    const response = await route.post("decision", { hostManifestJson: JSON.stringify(f.manifest), command: {
+      schemaVersion: "programmable.modules.review-command.v1", submissionId: f.subject.submissionId, requestDigest: f.subject.requestDigest,
+      expectedReviewRevision: field === "review-revision" ? 1 : 2, outcome: "accept", reason: "Synthetic fixture; never publish.",
+      artifactDigest: field === "artifact" ? `0x${"1".repeat(64)}` : f.artifact.artifactDigest,
+      hostManifestHash: field === "manifest-hash" ? `0x${"1".repeat(64)}` : f.manifestHash,
+      acknowledgedReviewAreas: field === "custody-acknowledgement" ? f.artifact.reviewRequired.filter(area => area !== "canonical-position-manager-custody-and-no-principal-exit") : f.artifact.reviewRequired,
+    } });
+    expect(response.status).toBe(field === "review-revision" ? 409 : 400);
+    expect(route.backend.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it("preserves the existing explicitly injected single-release caller", async () => {
+    const f = sharedReviewFixture("pm"), route = routeSetup(f);
+    const { createModuleReviewClient } = await import("../lib/server/module-mode/review-client");
+    const client = createModuleReviewClient({ authenticator: { authenticate: installed.authenticate }, backendBaseUrl: "https://review.example.invalid",
+      websiteToken: serviceToken, bffAssertionKeyV2: `assert_${"b".repeat(48)}`, fetchBackend: route.backend, engineReleaseIdentity: quoteIdentity });
+    const response = await client.handle(new Request(`https://programmable.market/api/admin/modules/${f.subject.submissionId}/manifest`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ walletAddress: reviewer, expectedReviewRevision: 2, hostManifestJson: JSON.stringify(f.manifest) }) }), "manifest", f.subject.submissionId);
+    expect(response.status).toBe(200);
+  });
+});
 
 describe("installed Engine review identity at the actual admin BFF routes", () => {
   it("uses the server identity for manifest checking and independently authenticated acceptance before catalogue activation", async () => {
