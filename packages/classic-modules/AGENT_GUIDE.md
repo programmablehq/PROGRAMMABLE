@@ -1,6 +1,6 @@
 # Build and submit a Module Mode contribution
 
-Start with the [contribution guide](https://programmable.market/developer-reference/module-mode), [API reference](https://programmable.market/developers/module-mode-api-v1.md) and [agent discovery](https://programmable.market/api/agent). Use the current CLI manifest from `workflows.moduleContribution` and verify the download hash before running it. CLI `1.0.0-development.7` supports the authenticated `module-context` command. Keep the API key in the agent's private `PROGRAMMABLE_API_KEY` environment variable; `PROGRAMMABLE_MODULES_API_KEY` remains a compatible alias.
+Start with the [contribution guide](https://programmable.market/developer-reference/module-mode), [API reference](https://programmable.market/developers/module-mode-api-v1.md) and [agent discovery](https://programmable.market/api/agent). Use the current CLI manifest from `workflows.moduleContribution` and verify the download hash before running it. CLI `1.0.0-development.8` supports the authenticated `module-context` command. Keep the API key in the agent's private `PROGRAMMABLE_API_KEY` environment variable; `PROGRAMMABLE_MODULES_API_KEY` remains a compatible alias.
 
 ## Check submission access
 

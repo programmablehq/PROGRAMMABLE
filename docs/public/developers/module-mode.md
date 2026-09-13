@@ -27,7 +27,7 @@ The agent uses `identity.author` in the source descriptor and defaults the rewar
 
 An API key authorizes its assigned requests. Module submission needs `modules:submit`; context and private progress reads need `modules:read`. It does not sign transactions or approve a module. Documentation and capability reads are public. The CLI also accepts the older `PROGRAMMABLE_MODULES_API_KEY` alias; configure only one value or keep both identical.
 
-The current standalone CLI is **1.0.0-development.7** and retains the existing source/API and configuration formats. The [API reference](https://programmable.market/developers/module-mode-api-v1.md#before-writing-source) provides the complete context contract, upfront inputs and copyable commands. For an agent starting from an idea, use the [contributor prompt](https://github.com/programmablehq/PROGRAMMABLE/blob/production/packages/classic-modules/AGENT_GUIDE.md#starting-prompt).
+The current standalone CLI is **1.0.0-development.8** and retains the existing source/API and configuration formats. The [API reference](https://programmable.market/developers/module-mode-api-v1.md#before-writing-source) provides the complete context contract, upfront inputs and copyable commands. For an agent starting from an idea, use the [contributor prompt](https://github.com/programmablehq/PROGRAMMABLE/blob/production/packages/classic-modules/AGENT_GUIDE.md#starting-prompt).
 
 ## Describe the actual runtime
 
