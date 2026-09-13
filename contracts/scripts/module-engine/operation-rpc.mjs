@@ -370,7 +370,8 @@ export function anyQuoteWalletStep(plan, stepIndex, envelope) {
     equal(anyQuotePreparation?.intent, priceIntent, 'Prepared launch price intent');
     // Metadata belongs to the exact compiler input, while these three values are
     // canonically retained only in the separately bound price/readiness intent.
-    need(releaseDigest === plan.identity.releaseDigest && (plan.identity.sourceVersion === 'module-engine-any-quote-eth-v1' ? BigInt(initialBuyWei) > 0n : initialBuyWei === '0') && Number.isInteger(slippageBps)
+    need(releaseDigest === plan.identity.releaseDigest && BigInt(uint(initialBuyWei, 'Initial ETH buy')) < 1n << 128n
+      && (plan.identity.sourceVersion !== 'module-engine-any-quote-eth-v1' || BigInt(initialBuyWei) > 0n) && Number.isInteger(slippageBps)
       && typeof description === 'string' && typeof imageUri === 'string' && socialLinks, 'Complete reviewed bootstrap intent required');
     need(anyQuotePreparation?.intent?.initialBuyWei === initialBuyWei && anyQuotePreparation.predictedToken === step.target, 'Prepared bootstrap launch differs');
   } else if (action === 'claim') {

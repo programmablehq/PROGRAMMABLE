@@ -107,8 +107,8 @@ function anyQuoteSteps(action, identity, owner, api, checked) {
     exactKeys(action.input, [...Object.keys(intent), 'description', 'imageUri', 'socialLinks'], 'Any Quote launch input');
     equal({ ...action.input, ...intent }, action.input, 'Canonical Any Quote launch intent');
     need(intent.releaseDigest === identity.releaseDigest && intent.templateId === templateId && intent.account === owner
-      && (nativeFees ? BigInt(intent.initialBuyWei) > 0n : intent.initialBuyWei === '0'),
-    nativeFees ? 'Reviewed native-fee launch requires a positive initial ETH buy' : 'Reviewed zero-buy bootstrap launch required; ETH purchase is a separate step');
+      && (!nativeFees || BigInt(intent.initialBuyWei) > 0n),
+    nativeFees ? 'Reviewed native-fee launch requires a positive initial ETH buy' : 'Reviewed Any Quote launch identity differs');
     need(typeof action.input.description === 'string' && typeof action.input.imageUri === 'string' && action.input.socialLinks && typeof action.input.socialLinks === 'object'
       && !Array.isArray(action.input.socialLinks), 'Complete launch metadata required');
     return [base('launch', api.predictAnyQuoteToken(intent, identity), intent.initialBuyWei, action.input, `Launch ${intent.symbol} with Any Quote`)];

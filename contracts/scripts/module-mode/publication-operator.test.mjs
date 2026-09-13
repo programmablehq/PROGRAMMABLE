@@ -1,6 +1,8 @@
 import '../module-engine/wallet-operator.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { decodeFunctionData, encodeFunctionResult, keccak256, parseAbi } from 'viem';
 import { hexQuantity } from './core.mjs';
 import { createPublicationPlan, assertPublicationPlan, bindPublicationModule, assertAuthenticatedOperationPlan, registryAbi, registryV2Abi } from './publication-plan.mjs';
@@ -8,6 +10,16 @@ import { publicationFixture } from './publication-test-fixtures.mjs';
 import { lifecycleV2RpcFixture } from './lifecycle-v2-test-fixtures.mjs';
 import { publicationWalletRequest, assertPublicationRequest, observePublicationOperation, preparePublicationRequest, revalidatePublicationRequest, observePublicationReceipt, preparePublicationRetry } from './publication-rpc.mjs';
 import { startPublicationOperator } from './publication-operator.mjs';
+
+test('publication CLI loads the installed SDKs before validating export inputs', () => {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../../../ops/module-mode-publication/operator.mjs', import.meta.url)), 'export'], {
+    cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8', timeout: 30_000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr.trim(), 'Missing publication options');
+});
 
 const ceilings = { maxGas: '2000000', maxFeePerGas: '1000', maxPriorityFeePerGas: '10', maxValue: '1000' };
 const h = n => `0x${n.toString(16).padStart(64, '0')}`;

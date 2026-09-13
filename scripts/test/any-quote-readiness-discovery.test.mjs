@@ -113,6 +113,34 @@ const nativeQuoteHttp = read => a.anyQuoteJsonRequest(new Request("https://progr
   method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
 }), read);
 
+test("quote-fee carry InvalidSwap stays retryable and inconclusive without declaring token incompatibility", async () => {
+  const modulePool = { token: OTHER, quoteAsset: Q, sharedHook: MID,
+    poolId: a.anyQuotePoolIdV1({ currency0: OTHER, currency1: Q, fee: 0, tickSpacing: 200, hooks: MID }) };
+  // AnyQuoteSharedHookV1.t.sol proves: a prior 333-unit buy leaves platform carry 9990,
+  // then a one-unit buy reverts in beforeSwap. Quoter wraps that Core error once more.
+  // InvalidSwap has other causes, so this envelope alone must not invent a dust diagnosis.
+  const data = nativeQuoteRevert({
+    callback: toFunctionSelector("beforeSwap(address,(address,address,uint24,int24,address),(bool,int256,uint160),bytes)"),
+    reason: toFunctionSelector("InvalidSwap()"),
+  });
+  const rpcs = [0, 1].map(() => async (method, params) => {
+    assert.deepEqual(params[1], { blockHash: HASH, requireCanonical: true });
+    if (method === "eth_getCode") return fixtureCode.get(a.ANY_QUOTE_INFRASTRUCTURE.v4Quoter.toLowerCase());
+    assert.equal(method, "eth_call");
+    const decoded = decodeFunctionData({ abi: readAbi, data: params[0].data });
+    assert.equal(decoded.functionName, "quoteExactInputSingle");
+    assert.equal(decoded.args[0].exactAmount, 1n);
+    throw new a.TradeRpcExecutionRevertedV1(data);
+  });
+  const response = await nativeQuoteHttp(() => a.quoteModule(modulePool, true, 1n, checkpoint, { options: { rpcs } }));
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.status, "inconclusive");
+  assert.equal(body.code, "PROVIDER_OR_EXECUTION_INCONCLUSIVE");
+  assert.equal(body.retryable, true);
+  assert.equal(body.quoteAsset, null);
+});
+
 test("combined native quotes expose matching fee dust as amount-specific inconclusive through HTTP", async () => {
   for (const buy of [true, false]) {
     const f = combinedQuoteFixture(buy, [0, 1].map(() => new a.TradeRpcExecutionRevertedV1(nativeQuoteRevert())));

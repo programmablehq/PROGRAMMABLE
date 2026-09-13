@@ -3,12 +3,12 @@ import { mkdtemp, chmod, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { REPOSITORY_ROOT } from '../module-mode/build.mjs';
-import { canonicalJson, digest, sha256 } from '../module-mode/core.mjs';
+import { address, canonicalJson, digest, exactKeys, need, sha256, uint } from '../module-mode/core.mjs';
 import { armJournal, armRetryJournal, journalEntry, recordTransaction, recordReceipt } from '../module-mode/journal.mjs';
 import assert from 'node:assert/strict';
-import { decodeFunctionData, decodeFunctionResult, encodeFunctionData, encodeFunctionResult, erc20Abi } from 'viem';
+import { decodeFunctionData, decodeFunctionResult, encodeFunctionData, encodeFunctionResult, erc20Abi, keccak256, toHex } from 'viem';
 import { engineWalletFixture, engineWorld, a, h } from './wallet-test-fixtures.mjs';
-import { createEnginePublicationOperatorPlan, assertEnginePublicationOperatorPlan, assertCurrentEngineReview, assertAnyQuotePublicationIdentity, ENGINE_LIFECYCLE_OPERATOR_SCHEMA } from './publication-plan.mjs';
+import { createEnginePublicationOperatorPlan, assertEnginePublicationOperatorPlan, assertCurrentEngineReview, assertAnyQuotePublicationIdentity, equal, ENGINE_LIFECYCLE_OPERATOR_SCHEMA } from './publication-plan.mjs';
 import { createEngineLifecycleOperatorPlan, assertEngineLifecycleOperatorPlan, bindAnyQuotePreactivationPacket } from './lifecycle-operator-plan.mjs';
 import { assertAuthenticatedOperationPlan } from '../module-mode/publication-plan.mjs';
 import { assertOperationPlan, startPublicationOperator } from '../module-mode/publication-operator.mjs';
@@ -16,6 +16,49 @@ import { preparePublicationRequest, revalidatePublicationRequest, preparePublica
   assertPublicationRequest, publicationWalletRequest } from '../module-mode/publication-rpc.mjs';
 import { anyQuoteWalletStep, anyQuoteRequestExpiry } from './operation-rpc.mjs';
 const ceilings = { maxGas: '2000000', maxFeePerGas: '1000', maxPriorityFeePerGas: '10', maxValue: '10000' };
+
+async function anyQuoteLaunchStepFixture(nativeFees = false) {
+  const f = await engineWalletFixture(), infrastructure = f.api.ANY_QUOTE_INFRASTRUCTURE;
+  const identity = { ...f.identity, sourceVersion: nativeFees ? 'module-engine-any-quote-eth-v1' : 'module-engine-any-quote-v1',
+    engineProfile: nativeFees ? 'robinhood-any-quote.shared-hook.native-eth.v1' : 'robinhood-any-quote.shared-hook.v1',
+    economicsPolicyId: keccak256(toHex(nativeFees ? 'programmable.any-quote.base-30.creator-0-1000.native-eth.v1' : 'programmable.any-quote.base-30.creator-0-1000.v1')),
+    contracts: { ...f.identity.contracts, poolManager: { address: infrastructure.poolManager.toLowerCase(), runtimeCodeHash: infrastructure.poolManagerCodeHash },
+      universalRouter: { address: infrastructure.universalRouter.toLowerCase(), runtimeCodeHash: infrastructure.universalRouterCodeHash },
+      sharedHook: { address: a(910), runtimeCodeHash: h(910) }, nativeRouteGuard: { address: a(911), runtimeCodeHash: h(911) } } };
+  identity.releaseDigest = f.api.computeModuleEngineReleaseDigest(identity);
+  assert.equal(f.api.isModuleEngineAnyQuoteEthRelease(identity), nativeFees);
+  // Exercise the actual pure step builder below the separately tested review/admission gate.
+  // This synthetic fixture is not a preactivation packet or signing authority.
+  const source = await readFile(path.join(REPOSITORY_ROOT, 'contracts/scripts/module-engine/lifecycle-operator-plan.mjs'), 'utf8');
+  const start = source.indexOf('function anyQuoteSteps('), end = source.indexOf('\nexport async function createEngineLifecycleOperatorPlan(');
+  assert.ok(start >= 0 && end > start);
+  const steps = runInNewContext(`${source.slice(start, end)}\nanyQuoteSteps`, { address, exactKeys, uint, need, equal });
+  const input = { releaseDigest: identity.releaseDigest, templateId: f.bundle.manifest.manifest.catalogDefinition.id, account: f.owner,
+    quoteAsset: f.quote.address, name: f.action.name, symbol: f.action.symbol, creatorSalt: f.action.creatorSalt, engineSalt: f.action.engineSalt,
+    buyCreatorFeeBps: 0, sellCreatorFeeBps: 1000, creatorWallets: [f.owner], creatorSharesBps: [10000], initialBuyWei: '100000000000000', slippageBps: 100,
+    description: f.action.description, imageUri: f.action.imageUri, socialLinks: f.action.socialLinks };
+  return { ...f, identity, input, steps: next => steps({ kind: 'launch', input: next }, identity, f.owner, f.api, f.bundle) };
+}
+test('Any Quote launch plans retain zero-buy recovery and positive atomic ETH buys for the pair-fee profile', async () => {
+  const f = await anyQuoteLaunchStepFixture();
+  for (const initialBuyWei of ['0', '100000000000000']) {
+    const input = { ...f.input, initialBuyWei }, steps = f.steps(input);
+    assert.equal(steps.length, 1); assert.equal(steps[0].kind, 'any-quote-launch');
+    assert.equal(steps[0].to, f.identity.contracts.host.address); assert.equal(steps[0].value, initialBuyWei);
+    assert.equal(steps[0].target, f.api.predictAnyQuoteToken(input, f.identity));
+    assert.equal(steps[0].intent, input); assert.equal(steps[0].data, null);
+  }
+});
+test('Any Quote launch plans retain canonical amounts, identity bindings and the ETH-profile positive-buy policy', async () => {
+  const f = await anyQuoteLaunchStepFixture();
+  for (const initialBuyWei of ['-1', '01', '1.0', (1n << 128n).toString()])
+    assert.throws(() => f.steps({ ...f.input, initialBuyWei }), /INVALID_AMOUNT/);
+  for (const change of [{ account: a(999) }, { releaseDigest: h(999) }, { templateId: 'different-template' }])
+    assert.throws(() => f.steps({ ...f.input, ...change }));
+  const eth = await anyQuoteLaunchStepFixture(true);
+  assert.equal(eth.steps(eth.input)[0].value, eth.input.initialBuyWei);
+  assert.throws(() => eth.steps({ ...eth.input, initialBuyWei: '0' }), /positive initial ETH buy/);
+});
 
 test('Any Quote publication binds the platform wallet to a new family without rewriting prior authorship', async () => {
   const f = await engineWalletFixture(), author = '0xd88539d3c4c460136a733a3fd60cf6bf269079da';
