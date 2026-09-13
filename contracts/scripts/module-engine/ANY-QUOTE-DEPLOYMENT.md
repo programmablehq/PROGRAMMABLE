@@ -102,7 +102,7 @@ Actions are closed and bind exact input amounts rather than unlimited approvals:
 
 | Action | Required action fields | Wallet result |
 | --- | --- | --- |
-| Bootstrap launch | `{kind:"launch",input}`; input is the full canonical launch intent plus description, imageUri and socialLinks, with `initialBuyWei:"0"` | Host launch using fresh price/readiness and mandatory actual-settlement simulation |
+| Launch or zero-buy recovery | `{kind:"launch",input}`; input is the full canonical launch intent plus description, imageUri and socialLinks, with `initialBuyWei` as a canonical decimal uint128 amount; a normal launch includes its positive initial ETH buy and quote-profile recovery may use `"0"` | Atomic Host launch and any initial buy using fresh price/readiness and mandatory actual-settlement simulation |
 | ETH buy | `{kind:"buy",token,recipient,inputAmount,slippageBps}` | Exact ETH input through the pinned Universal Router |
 | ETH sell | Buy fields with `kind:"sell"`, plus `funding` | Required finite approvals first, then a separately prepared fresh ETH sell |
 | Quote claim | `{kind:"claim",token,recipient}` | The signing beneficiary claims its positive accrued quote-asset balance |
