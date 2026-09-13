@@ -1,6 +1,7 @@
 import { decodeAbiParameters, decodeEventLog, encodeAbiParameters, getCreate2Address, keccak256, parseAbi,
   parseAbiParameters, toEventSelector, toHex, zeroAddress, zeroHash } from 'viem';
 import { canonicalJson, need } from './core.mjs';
+import { anyQuotePositionManagerResourceHash, isAnyQuotePositionManagerEngine } from './any-quote-position-manager.mjs';
 
 export const CHECKPOINT_SCHEMA = 'programmable.module-mode-launch-source-checkpoints.v2';
 const ENTRY_SCHEMA = 'programmable.module-mode-launch-source-checkpoint.v2';
@@ -209,8 +210,10 @@ export function engineResourceCommitment(identity, state) {
       && state.lockedTokenDust >= 0n && state.lockedTokenDust < 10n ** 27n
       && Number.isInteger(state.quoteDecimals) && state.quoteDecimals >= 0 && state.quoteDecimals <= 36,
     'Any Quote locked position resources differ');
-    hash = keccak256(encodeAbiParameters(parseAbiParameters('bytes32,int24,int24,uint128,uint256,uint8'),
-      [poolId, lower, upper, state.lockedLiquidity, state.lockedTokenDust, state.quoteDecimals]));
+    hash = isAnyQuotePositionManagerEngine(manifest.source?.engine)
+      ? anyQuotePositionManagerResourceHash(identity, state)
+      : keccak256(encodeAbiParameters(parseAbiParameters('bytes32,int24,int24,uint128,uint256,uint8'),
+        [poolId, lower, upper, state.lockedLiquidity, state.lockedTokenDust, state.quoteDecimals]));
   } else if (manifest.catalogDefinition.interface === 'quote-v1') {
     need(manifest.revision.fixedConfigurationHash !== zeroHash, 'Quote resources require reviewed fixed configuration');
     const currencies = [a.token, a.quoteAsset].sort((x, y) => x.toLowerCase().localeCompare(y.toLowerCase()));

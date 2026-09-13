@@ -29,6 +29,8 @@ const ENGINE_SOURCE_ALIASES = [
   ["dependencies/scoped/uniswap/uerc20-factory/", "@uniswap/uerc20-factory/"],
   ["dependencies/scoped/uniswap/v4-core/", "@uniswap/v4-core/"],
   ["dependencies/scoped/uniswap/v4-periphery/", "@uniswap/v4-periphery/"],
+  ["dependencies/scoped/uniswap/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"],
+  ["dependencies/scoped/uniswap/universal-router/", "@uniswap/universal-router/"],
   ["dependencies/scoped/solady/src/", "@solady/src/"],
 ] as const;
 const SHARED_QUOTE_SOURCE_ALIASES = [
@@ -36,6 +38,9 @@ const SHARED_QUOTE_SOURCE_ALIASES = [
   ["lib/openzeppelin-uniswap-hooks/", "@openzeppelin/uniswap-hooks/"],
   ["lib/v4-core/", "@uniswap/v4-core/"],
   ["lib/v4-periphery/", "@uniswap/v4-periphery/"],
+  ["lib/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"],
+  ["lib/universal-router/", "@uniswap/universal-router/"],
+  ["lib/permit2/", "permit2/"],
   ["lib/solmate/src/", "solmate/src/"],
   ["lib/forge-std/src/", "forge-std/"],
 ] as const;
@@ -167,4 +172,3 @@ export function verifyModuleEngineBuildArtifactV1(artifact: ModuleEngineBuildArt
   const expected = { ...contents, artifactDigest: moduleReviewDigestV1(MODULE_ENGINE_BUILD_SCHEMA_V1, contents) };
   need(json(artifact) === json(expected) && new TextEncoder().encode(json(artifact)).length <= MODULE_REVIEW_LIMITS_V1.artifactBytes, "MODULE_REVIEW_BUILD_BINDING_INVALID");
 }
-

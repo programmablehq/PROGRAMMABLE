@@ -12,7 +12,7 @@ export const ANY_QUOTE_NATIVE_BUY_OPERATION_ID = keccak256(stringToHex("spot.buy
 export const ANY_QUOTE_NATIVE = "0x0000000000000000000000000000000000000000" as Address;
 export const ANY_QUOTE_WETH = getAddress("0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73");
 export const ANY_QUOTE_USDG = getAddress("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168");
-/** The installed SDK's chain-4663 address table still contains a superseded router. */
+/** Release-bound official deployments, with runtime pins checked before execution. */
 export const ANY_QUOTE_INFRASTRUCTURE = {
   universalRouter: getAddress(uniswap.universalRouter.address),
   universalRouterCodeHash: uniswap.universalRouter.runtimeCodeHash as Hex,

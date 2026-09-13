@@ -235,7 +235,7 @@ function fixture(pools, options = {}) {
     assert.equal(url, "https://api.robinhood.com/rhj/assets", "No Trading API call or credential is needed");
     return new Response(JSON.stringify({ assets: [] }), { status: 200 });
   };
-  return { calls, rpcs, options: { now: NOW, rpcs, fetchImpl } };
+  return { calls, rpcs, options: { now: NOW, rpcs, fetchImpl, routeDiscovery: "pool-index" } };
 }
 
 test("Initialize records bind the real key, indexed asset, manager and canonical range", () => {
@@ -386,7 +386,7 @@ test("empty direct hints still allow an independently verified indirect route; e
   assert.equal(absent.retryable, true);
 });
 
-test("arbitrary quote readiness works without a Trading API key and independently requotes both directions", async () => {
+test("explicit pool-index diagnostics independently requote both directions without an API key", async () => {
   const f = fixture([pool(ZERO, Q, { fee: 500, liquidity: 0n }), pool()]);
   const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, f.options);
   assert.equal(result.status, "compatible", JSON.stringify(result));
@@ -596,26 +596,21 @@ function classicCoverageResponse(input, coverage) {
     output: { token: input.tokenOut, amount: input.amountIn.toString() }, route: [hops] } };
 }
 
-test("API compiler coverage fallback independently qualifies available native V4 routes", async () => {
+test("unsupported API paths never fall back to our pool search", async () => {
   for (const coverage of ["mixed", "v3-only", "weth-endpoint"]) {
     const p = pool(), f = fixture([p]), requests = [];
     const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, { ...f.options, discoverExternalRoute: async input => {
       requests.push(input); return classicCoverageResponse(input, coverage);
     } });
-    assert.equal(result.status, "compatible", JSON.stringify(result));
-    assert.equal(requests.length, 2, "Both buy and sell API paths receive a bounded fallback");
-    assert.equal(result.routes.buy.provider, "uniswap-v4-initialize");
-    assert.equal(result.routes.sell.provider, "uniswap-v4-initialize");
-    assert.deepEqual(result.checkpoint, checkpoint);
-    assert.equal(result.routes.buy.hops[0].tokenIn, ZERO);
-    assert.equal(result.routes.sell.hops[0].tokenOut, ZERO);
-    assert.ok(f.calls.some(call => call.method === "eth_getLogs"), "Discovers independent native pool records");
-    assert.notEqual(result.routes.buy.amountOut, requests[0].amountIn.toString(), "Uses verified execution output, not API output");
-    assert.equal(result.checks.externalQuotes, "same-block-bidirectional");
+    assert.equal(result.status, "inconclusive", JSON.stringify(result));
+    assert.equal(result.code, "ROUTE_ISOLATION_UNAVAILABLE");
+    assert.equal(result.retryable, true);
+    assert.equal(requests.length, 1);
+    assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0);
   }
 });
 
-test("API compiler coverage fallback preserves provider, malformed-response and qualification errors", async () => {
+test("API discovery preserves provider, malformed-response and qualification errors", async () => {
   for (const mode of ["provider", "invalid-amount"]) {
     const f = fixture([pool()]);
     const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, { ...f.options, discoverExternalRoute: async input => {
@@ -632,4 +627,84 @@ test("API compiler coverage fallback preserves provider, malformed-response and 
     discoverExternalRoute: async input => classicCoverageResponse(input, "mixed") });
   assert.equal(result.status, "inconclusive");
   assert.equal(result.retryable, true);
+});
+
+
+test("default discovery requires official API configuration without silently scanning pools", async () => {
+  for (const apiKey of [undefined, "short", "bad key with whitespace"]) {
+    const f = fixture([pool()]);
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, {
+      ...f.options, routeDiscovery: undefined, apiKey,
+    });
+    assert.equal(result.status, "inconclusive");
+    assert.equal(result.code, "UNISWAP_ROUTING_NOT_CONFIGURED");
+    assert.equal(result.retryable, true);
+    assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0);
+  }
+});
+
+test("official discovery requests native ETH and executable V4 paths and verifies the returned quotes", async () => {
+  const f = fixture([pool()]), requests = [], apiKey = "fixture-uniswap-key-not-a-secret";
+  const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, {
+    ...f.options, routeDiscovery: undefined, apiKey,
+    fetchImpl: async (url, init) => {
+      if (url !== "https://trade-api.gateway.uniswap.org/v1/quote") return f.options.fetchImpl(url, init);
+      const body = JSON.parse(init.body); requests.push(body);
+      assert.equal(init.headers["x-api-key"], apiKey);
+      assert.equal(init.headers["x-universal-router-version"], "2.1.1");
+      assert.equal(init.redirect, "error");
+      assert.deepEqual(body.protocols, ["V4"]);
+      assert.equal(body.hooksOptions, "V4_HOOKS_INCLUSIVE");
+      assert.equal(body.routingPreference, "BEST_PRICE");
+      assert.equal(body.type, "EXACT_INPUT");
+      assert.equal(body.tokenInChainId, 4663); assert.equal(body.tokenOutChainId, 4663);
+      assert.equal(body.tokenIn === ZERO || body.tokenOut === ZERO, true);
+      return Response.json(classicCoverageResponse({ ...body, amountIn: BigInt(body.amount) }, "native"));
+    },
+  });
+  assert.equal(result.status, "compatible", JSON.stringify(result));
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].tokenIn, ZERO); assert.equal(requests[1].tokenOut, ZERO);
+  assert.equal(result.routes.buy.provider, "uniswap-trading-api");
+  assert.equal(result.routes.sell.provider, "uniswap-trading-api");
+  assert.notEqual(result.routes.buy.amountOut, requests[0].amount, "Independent quote replaces provider amount");
+  assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0);
+  assert.equal(JSON.stringify(result).includes(apiKey), false);
+});
+
+test("official API failures cannot turn into an independently discovered signable route", async () => {
+  for (const status of [401, 404, 429, 503]) {
+    const f = fixture([pool()]);
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, {
+      ...f.options, routeDiscovery: undefined, apiKey: "fixture-uniswap-key-not-a-secret",
+      fetchImpl: async (url, init) => url === "https://trade-api.gateway.uniswap.org/v1/quote"
+        ? new Response("", { status }) : f.options.fetchImpl(url, init),
+    });
+    assert.equal(result.status, "inconclusive");
+    assert.equal(result.retryable, true);
+    assert.equal(result.code, status === 404 ? "MARKET_ROUTE_UNAVAILABLE" : "PROVIDER_UNAVAILABLE");
+    assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0);
+  }
+});
+
+
+test("default HTTP discovery rejects custom candidate envelopes and split API quotes", async () => {
+  for (const kind of ["candidates", "split"]) {
+    const p = pool(), f = fixture([p]);
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, {
+      ...f.options, routeDiscovery: undefined, apiKey: "fixture-uniswap-key-not-a-secret",
+      fetchImpl: async (url, init) => {
+        if (url !== "https://trade-api.gateway.uniswap.org/v1/quote") return f.options.fetchImpl(url, init);
+        const body = JSON.parse(init.body);
+        if (kind === "candidates") return Response.json({ schema: "programmable.any-quote.v4-candidates.v1",
+          chainId: 4663, poolManager: a.ANY_QUOTE_INFRASTRUCTURE.poolManager,
+          routes: [[a.anyQuoteV4CandidateHopV1(p, body.tokenIn, body.tokenOut)]] });
+        const raw = classicCoverageResponse({ ...body, amountIn: BigInt(body.amount) }, "native");
+        raw.quote.route.push(raw.quote.route[0]); return Response.json(raw);
+      },
+    });
+    assert.equal(result.status, "inconclusive", JSON.stringify(result));
+    assert.equal(result.code, kind === "candidates" ? "ROUTE_RESPONSE_INVALID" : "ROUTE_SHAPE_UNSUPPORTED");
+    assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0);
+  }
 });

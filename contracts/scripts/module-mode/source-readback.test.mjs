@@ -161,9 +161,8 @@ test('Quote Planner CBOR opt-in requires its exact source profile, target and co
 
 // Synthetic bytes at the exact trailer offsets in the AQINIT20 provider record. This models a
 // future complete creation readback, not the current runtime-only publication or a deployment proof.
-function anyQuoteEthContext() {
+function anyQuoteEthContext({ file = 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol', name = 'AnyQuoteLPModuleV1' } = {}) {
   const { expected, value } = quotePlannerContext(), role = 'engine';
-  const file = 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol', name = 'AnyQuoteLPModuleV1';
   const target = { [file]: name }, trailer = 'a164736f6c634300081a000a';
   const creationCode = `0x${'00'.repeat(15265)}${trailer}`, template = `0x${'00'.repeat(10845)}${trailer}`;
   const args = `0x${'22'.repeat(32)}`, immutable = `0x${addr(10).slice(2).padStart(64, '0')}`;
@@ -409,4 +408,19 @@ test('Blockscout full flag alone never accepts absent creation bytes or incomple
     compiler_version: 'v0.8.26+commit.8a97fa7a', optimization_enabled: true, optimizations_runs: 1000, evm_version: 'cancun',
     name: expected.role, file_path: `src/${expected.role}.sol`, deployed_bytecode: plan.contracts[expected.role].runtime };
   assert.throws(() => validatePublishedSource(plan, expected.build, expected.role, v), /hex bytes/);
+});
+
+
+test('PositionManager engine retains exact target, source and compiler-marker readback', () => {
+  const file = 'src/module-engine/any-quote/AnyQuotePositionManagerLPModuleV1.sol', name = 'AnyQuotePositionManagerLPModuleV1';
+  const { expected, value } = anyQuoteEthContext({ file, name });
+  expected.sourceProfile = 'module-engine-any-quote-v1';
+  assert.equal(validateSourcifySource(expected, value).independentByteComparison, 'exact-complete-creation-and-runtime');
+  assert.throws(() => validateSourcifySource({ ...expected, sourceProfile: 'module-engine-any-quote-eth-v1' }, value), /compilation target/);
+  const wrong = structuredClone(expected); wrong.build.artifacts.engine.compilationTarget = { [file]: 'AnyQuoteLPModuleV1' };
+  assert.throws(() => validateSourcifySource(wrong, value), /target|compilation|metadata/i);
+  const wrongSource = structuredClone(value); wrongSource.sources[file].content += '// changed';
+  assert.throws(() => validateSourcifySource(expected, wrongSource));
+  const wrongCompiler = structuredClone(value); wrongCompiler.metadata.compiler.version = '0.8.27';
+  assert.throws(() => validateSourcifySource(expected, wrongCompiler));
 });

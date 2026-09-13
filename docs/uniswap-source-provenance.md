@@ -22,6 +22,12 @@ The authoritative machine-readable records are:
 
 Unlisted Uniswap repositories are not production dependencies.
 
+Robinhood Any Quote's additive PositionManager engine and versioned Universal Router
+2.1.1 interface dependencies are described in
+[`docs/any-quote-uniswap-standard.md`](any-quote-uniswap-standard.md). Their exact
+source pins are recorded in the same dependency manifest. This candidate does not
+change the active Ethereum components below or activate an Any Quote revision.
+
 ## Active official components
 
 | Component and accepted revision | Purpose | License | Deployment or runtime authority | Audit and review scope | Local verification | Upgrade rule |

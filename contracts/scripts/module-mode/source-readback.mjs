@@ -86,9 +86,12 @@ function quotePlannerAuxdataProfile(plan, role, profile, artifact, input, metada
   need(bytes(artifact.deployedBytecode.object) === bytes(plan.contracts[role].runtime), 'Quote Planner complete runtime differs from its compiled template');
 }
 
-export function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata) {
-  const target = { 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol': 'AnyQuoteLPModuleV1' };
-  equal(artifact.compilationTarget, target, 'ETH Engine compilation target differs');
+export function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata, sourceProfile) {
+  const legacy = { 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol': 'AnyQuoteLPModuleV1' };
+  const positions = { 'src/module-engine/any-quote/AnyQuotePositionManagerLPModuleV1.sol': 'AnyQuotePositionManagerLPModuleV1' };
+  const target = sourceProfile === 'module-engine-any-quote-v1'
+    && canonicalJson(artifact.compilationTarget) === canonicalJson(positions) ? positions : legacy;
+  equal(artifact.compilationTarget, target, 'Any Quote Engine compilation target differs');
   const compilerSettings = { optimizer: { enabled: true, runs: 1000 }, evmVersion: 'cancun', viaIR: true,
     metadata: { bytecodeHash: 'none' }, libraries: {}, remappings: [] };
   equal(settings(input.settings), compilerSettings, 'ETH Engine compiler settings differ');
@@ -172,7 +175,7 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
   // Both reviewed Any Quote LP profiles retain this exact compiler marker. This describes the
   // complete bytes already checked above; it does not grant the private canonical source witness.
   const anyQuoteEngineAuxdata = ['module-engine-any-quote-eth-v1', 'module-engine-any-quote-v1'].includes(sourceProfile) && role === 'engine';
-  if (anyQuoteEngineAuxdata) anyQuoteEthEngineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata);
+  if (anyQuoteEngineAuxdata) anyQuoteEthEngineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata, sourceProfile);
   const compilerTrailer = compilerAuxdataProfile !== undefined || anyQuoteEngineAuxdata;
   for (const [label, code] of [['creation', c], ['runtime', r]]) {
     // Auxdata describes compiler bytes; it never authorizes a transformation or an ignored range.

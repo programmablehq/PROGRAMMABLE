@@ -1,6 +1,7 @@
 import { getAddress, keccak256, toFunctionSignature, toHex } from 'viem';
 import { bytes, canonicalJson, need } from './core.mjs';
 import { alignPublishedImmutableIds } from './launch-source-profiles.mjs';
+import { isAnyQuotePositionManagerEngine, ANY_QUOTE_POSITION_MANAGER_ENGINE } from './any-quote-position-manager.mjs';
 import { SOURCIFY_COMPILER, anyQuoteEthEngineAuxdataProfile, exactSolcVersionAuxdata,
   exactSolcVersionAuxdataDescription, validateSourcifyCompilation, validateSourcifyRuntimeImmutables } from './source-readback.mjs';
 
@@ -17,7 +18,9 @@ const empty = (value, label) => keys(value, [], label);
 
 /** Validates present public data only. The operator must separately supply its private canonical target authority. */
 export function validateSourcifyCreationGap(target, value, recompilation) {
-  const role = target.role, selected = targets[role];
+  const role = target.role, positions = role === 'engine' && target.sourceProfile === 'module-engine-any-quote-v1'
+    && isAnyQuotePositionManagerEngine({ sourcePath: target.file, contractName: target.name });
+  const selected = positions ? [ANY_QUOTE_POSITION_MANAGER_ENGINE.sourcePath, ANY_QUOTE_POSITION_MANAGER_ENGINE.contractName] : targets[role];
   need(PROFILES.has(target.sourceProfile) && selected && target.file === selected[0] && target.name === selected[1], 'Exact Any Quote source profile required');
   keys(value, ['matchId', 'creationMatch', 'runtimeMatch', 'verifiedAt', 'creationBytecode', 'runtimeBytecode', 'deployment',
     'sources', 'compilation', 'abi', 'metadata', 'storageLayout', 'transientStorageLayout', 'userdoc', 'devdoc', 'sourceIds',
@@ -41,7 +44,7 @@ export function validateSourcifyCreationGap(target, value, recompilation) {
     deployedBytecode: { ...rawArtifact.evm.deployedBytecode, object: `0x${rawArtifact.evm.deployedBytecode.object}` } };
   need(metadata.compiler?.version === SOURCIFY_COMPILER, 'Pinned compiler metadata required');
   validateSourcifyCompilation({ artifact, input: target.input, metadata, file: target.file, name: target.name, role, recompilation }, value);
-  if (role === 'engine') anyQuoteEthEngineAuxdataProfile(artifact, target.input, metadata);
+  if (role === 'engine') anyQuoteEthEngineAuxdataProfile(artifact, target.input, metadata, target.sourceProfile);
   else need(target.input.settings.metadata?.appendCBOR === false && target.input.settings.metadata.bytecodeHash === 'none'
     && target.input.settings.evmVersion === 'cancun' && target.input.settings.optimizer?.enabled === true
     && target.input.settings.optimizer.runs === 1000 && target.input.settings.viaIR !== true, 'Exact Any Quote token compiler profile required');

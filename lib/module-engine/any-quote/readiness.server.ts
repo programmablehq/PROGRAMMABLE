@@ -36,6 +36,9 @@ const min = (...v: bigint[]) => v.reduce((a, b) => a < b ? a : b);
 export type AnyQuoteReadinessOptionsV1 = {
   /** Server configuration only. Never put this key into an API response, URL, evidence or cache key. */
   apiKey?: string;
+  /** Production defaults to the official API. Pool-index discovery is an explicit diagnostic
+   * adapter only; an API failure or unsupported route never selects it automatically. */
+  routeDiscovery?: "uniswap-trading-api" | "pool-index";
   rpcs?: readonly [TradeRpcV1, TradeRpcV1];
   fetchImpl?: typeof fetch;
   now?: bigint;
@@ -273,27 +276,28 @@ async function discover(input: DiscoveryInput, ctx: Context, options: AnyQuoteRe
       validUntil: (ctx.now + ROUTE_LIFETIME).toString(), evidenceHash: "0x" };
     return { route: { ...value, evidenceHash: anyQuoteEvidenceHashV1(value) }, spot: anyQuoteRationalV1(1n, 1n) };
   }
-  if (!options.discoverExternalRoute && (!options.apiKey || !/^[\x21-\x7e]{16,512}$/.test(options.apiKey))) return discoverNativeV4(input, ctx, qualify);
+  if (!options.discoverExternalRoute && options.routeDiscovery === "pool-index") return discoverNativeV4(input, ctx, qualify);
+  if (!options.discoverExternalRoute && (!options.apiKey || !/^[\x21-\x7e]{16,512}$/.test(options.apiKey))) {
+    throw new AnyQuoteErrorV1("UNISWAP_ROUTING_NOT_CONFIGURED");
+  }
   const raw = options.discoverExternalRoute ? await options.discoverExternalRoute(input) : await fetchJson(QUOTE_URL, options, {
     type: "EXACT_INPUT", amount: input.amountIn.toString(), tokenInChainId: 4663, tokenOutChainId: 4663,
-    tokenIn: input.tokenIn, tokenOut: input.tokenOut, swapper: PROBE_OWNER, recipient: PROBE_OWNER,
-    protocols: ["V2", "V3", "V4"], hooksOptions: "V4_HOOKS_INCLUSIVE", routingPreference: "BEST_PRICE", slippageTolerance: 1,
+    // The route envelope retains its historical WETH identifier, but the executable ETH
+    // boundary is native. Never rewrite a returned WETH hop to make it appear executable.
+    tokenIn: anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? ANY_QUOTE_NATIVE : input.tokenIn,
+    tokenOut: anyQuoteSameAddressV1(input.tokenOut, ANY_QUOTE_WETH) ? ANY_QUOTE_NATIVE : input.tokenOut,
+    swapper: PROBE_OWNER, recipient: PROBE_OWNER,
+    protocols: ["V4"], hooksOptions: "V4_HOOKS_INCLUSIVE", routingPreference: "BEST_PRICE", slippageTolerance: 1,
     permitAmount: "EXACT", generatePermitAsTransaction: false,
   });
-  if (raw && typeof raw === "object" && "schema" in raw) {
+  if (options.discoverExternalRoute && raw && typeof raw === "object" && "schema" in raw) {
     const discovered = parseAnyQuoteV4DiscoveryV1(raw);
     const result = await chooseNativeCandidate(discovered.routes, input, ctx, "uniswap-v4-discovery", qualify);
     if (!result.candidate) throw result.qualificationError ?? new AnyQuoteErrorV1("NATIVE_V4_EXECUTABLE_ROUTE_UNAVAILABLE");
     return result.candidate;
   }
   const parsed = parseAnyQuoteExternalRouteV1(raw, { ...input, checkpoint: ctx.checkpoint, validUntil: ctx.now + ROUTE_LIFETIME });
-  try { requireAnyQuoteNativeUnlockRouteV1(parsed, anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? "buy" : "sell"); }
-  catch (error) {
-    // A valid API path can exceed this compiler's coverage even when an independently
-    // executable native V4 path exists. Preserve malformed-data and provider failures.
-    if (!(error instanceof AnyQuoteErrorV1) || error.code !== "ROUTE_ISOLATION_UNAVAILABLE") throw error;
-    return discoverNativeV4(input, ctx, qualify);
-  }
+  requireAnyQuoteNativeUnlockRouteV1(parsed, anyQuoteSameAddressV1(input.tokenIn, ANY_QUOTE_WETH) ? "buy" : "sell");
   const spots = await Promise.all(parsed.hops.map(hop => inspectHop(hop, ctx)));
   const amountOut = await quoteHops(parsed.hops, input.amountIn, ctx);
   const route = { ...parsed, amountOut: amountOut.toString() };

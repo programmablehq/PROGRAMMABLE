@@ -6,6 +6,8 @@
 @uniswap/uerc20-factory/=lib/uerc20-factory/
 @uniswap/v4-core/=lib/v4-core/
 @uniswap/v4-periphery/=lib/v4-periphery/
+@uniswap/v4-periphery-v211/=lib/v4-periphery-v211/
+@uniswap/universal-router/=lib/universal-router/
 blocknumberish/=lib/blocknumberish/
 continuous-clearing-auction/=lib/continuous-clearing-auction/src/
 forge-std/=lib/forge-std/src/
