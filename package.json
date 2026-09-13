@@ -250,6 +250,7 @@
     "@tiptap/starter-kit": "^3.30.5",
     "@uniswap/liquidity-launcher-sdk": "1.0.1",
     "@uniswap/sdk-core": "7.19.0",
+    "@uniswap/smart-order-router": "4.31.10",
     "@uniswap/universal-router-sdk": "5.11.1",
     "@uniswap/v4-sdk": "2.3.1",
     "@vercel/blob": "2.6.1",
@@ -282,6 +283,9 @@
     "@tiptap/react": {
       "@tiptap/extension-bubble-menu": "3.30.5",
       "@tiptap/extension-floating-menu": "3.30.5"
+    },
+    "@uniswap/smart-order-router": {
+      "@uniswap/v4-sdk": "$@uniswap/v4-sdk"
     },
     "@uniswap/universal-router-sdk": {
       "@openzeppelin/contracts@4.7.0": "4.9.6"
