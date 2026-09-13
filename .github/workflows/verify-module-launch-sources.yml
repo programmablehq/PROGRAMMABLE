@@ -53,7 +53,7 @@ jobs:
       - name: Verify and publish finalized launch sources
         run: |
           set -o pipefail
-          MODULE_MODE_SOLC="$RUNNER_TEMP/module-mode-solc" node --test contracts/scripts/module-mode/verify-launch-source.test.mjs contracts/scripts/module-mode/launch-source-profiles.test.mjs
+          MODULE_MODE_SOLC="$RUNNER_TEMP/module-mode-solc" node --test contracts/scripts/module-mode/verify-launch-source.test.mjs contracts/scripts/module-mode/launch-source-profiles.test.mjs contracts/scripts/module-mode/source-readback.test.mjs
           node contracts/scripts/module-mode/verify-launch-source.mjs \
             --publish \
             --solc "$RUNNER_TEMP/module-mode-solc" \
