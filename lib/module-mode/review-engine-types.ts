@@ -1,5 +1,7 @@
 import type { MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1 } from "./review-engine-shared-quote-eth";
 export { MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1 } from "./review-engine-shared-quote-eth";
+import type { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "./review-engine-position-manager";
+export { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "./review-engine-position-manager";
 // Engine review wire, kept byte-compatible with the protected backend engine-build.v1 profile.
 import type { Hex as ModuleDigestV1 } from "viem";
 import type { ReviewSubject as ModuleReviewSubjectV1 } from "./review-contract";
@@ -20,7 +22,7 @@ export const MODULE_ENGINE_QUOTE_NVDA_ENVIRONMENT_V1 = Object.freeze({
   profile: "programmable.engine-quote-nvda-v4-v3@1",
   sourceDigest: "0x99893b6a331147270eec445b65cbb3ee43265fb8aba36f72063c1542ef7ff41d",
 } as const);
-export type ModuleEngineTestEnvironmentV1 = typeof MODULE_ENGINE_QUOTE_ENVIRONMENT_V1 | typeof MODULE_ENGINE_QUOTE_NVDA_ENVIRONMENT_V1 | typeof MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 | typeof MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1;
+export type ModuleEngineTestEnvironmentV1 = typeof MODULE_ENGINE_QUOTE_ENVIRONMENT_V1 | typeof MODULE_ENGINE_QUOTE_NVDA_ENVIRONMENT_V1 | typeof MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 | typeof MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1 | typeof MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1;
 export const MODULE_ENGINE_CONTEXT_ABI_V1 = [
   { name: "host", type: "address" }, { name: "launchId", type: "bytes32" },
   { name: "token", type: "address" }, { name: "creator", type: "address" },
@@ -138,6 +140,12 @@ export interface ModuleEngineTestRequestV1 {
   readonly cases: readonly ModuleEngineCompiledCaseV1[];
 }
 export interface ModuleEngineTestResultV1 {
+  readonly positionManagerChecks?: readonly {
+    readonly id: string;
+    readonly canonicalPeriphery: boolean | null;
+    readonly positionCustody: boolean | null;
+    readonly exactSettlementAndAllowances: boolean | null;
+  }[];
   readonly sharedQuoteEthChecks?: readonly {
     readonly id: string;
     readonly policyAndRuntimeBound: boolean | null;

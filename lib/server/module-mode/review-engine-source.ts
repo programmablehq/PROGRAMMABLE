@@ -1,5 +1,6 @@
 import { MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_POLICY_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_AREAS_V1,
   MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_LEDGER_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_INFRASTRUCTURE_V1 } from "../../module-mode/review-engine-shared-quote-eth";
+import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1, MODULE_ENGINE_POSITION_MANAGER_REVIEW_AREAS_V1 } from "../../module-mode/review-engine-position-manager";
 // Server and operator source reconstruction. Never imported by the browser review UI.
 import { decodeAbiParameters, encodeAbiParameters, keccak256 } from "viem";
 import { validateModuleSubmissionRequest } from "../../../packages/classic-modules/src/open-transport.mjs";
@@ -29,8 +30,6 @@ const ENGINE_SOURCE_ALIASES = [
   ["dependencies/scoped/uniswap/uerc20-factory/", "@uniswap/uerc20-factory/"],
   ["dependencies/scoped/uniswap/v4-core/", "@uniswap/v4-core/"],
   ["dependencies/scoped/uniswap/v4-periphery/", "@uniswap/v4-periphery/"],
-  ["dependencies/scoped/uniswap/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"],
-  ["dependencies/scoped/uniswap/universal-router/", "@uniswap/universal-router/"],
   ["dependencies/scoped/solady/src/", "@solady/src/"],
 ] as const;
 const SHARED_QUOTE_SOURCE_ALIASES = [
@@ -38,19 +37,24 @@ const SHARED_QUOTE_SOURCE_ALIASES = [
   ["lib/openzeppelin-uniswap-hooks/", "@openzeppelin/uniswap-hooks/"],
   ["lib/v4-core/", "@uniswap/v4-core/"],
   ["lib/v4-periphery/", "@uniswap/v4-periphery/"],
-  ["lib/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"],
-  ["lib/universal-router/", "@uniswap/universal-router/"],
-  ["lib/permit2/", "permit2/"],
   ["lib/solmate/src/", "solmate/src/"],
   ["lib/forge-std/src/", "forge-std/"],
 ] as const;
-function soliditySources(files: readonly {path:string;bytes:string}[], sharedQuote: boolean): Record<string,{content:string}> {
+const POSITION_MANAGER_SOURCE_ALIASES = [
+  ["dependencies/scoped/uniswap/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"],
+  ["dependencies/scoped/uniswap/universal-router/", "@uniswap/universal-router/"],
+  ["lib/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"],
+  ["lib/universal-router/", "@uniswap/universal-router/"],
+  ["lib/permit2/", "permit2/"],
+] as const;
+function soliditySources(files: readonly {path:string;bytes:string}[], sharedQuote: boolean, positionManager: boolean): Record<string,{content:string}> {
   const sources: Record<string,{content:string}> = Object.create(null);
   for (const f of files) if (f.path.endsWith(".sol")) sources[f.path]={content:new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(atob(f.bytes),c=>c.charCodeAt(0)))};
   const prefix="dependencies/openzeppelin-contracts/contracts/";
   for(const [path,source] of Object.entries(sources)) if(path.startsWith(prefix)) {const alias=`@openzeppelin/contracts/${path.slice(prefix.length)}`;need(!Object.hasOwn(sources,alias),"MODULE_BUILD_SOURCE_ALIAS_COLLISION");sources[alias]=source;}
   for(const [path,source] of Object.entries(sources)) {
-    const match=ENGINE_SOURCE_ALIASES.find(([prefix])=>path.startsWith(prefix));
+    const match=ENGINE_SOURCE_ALIASES.find(([prefix])=>path.startsWith(prefix))
+      ?? (positionManager ? POSITION_MANAGER_SOURCE_ALIASES.find(([prefix])=>path.startsWith(prefix)) : undefined);
     if(!match) continue;
     const alias=`${match[1]}${path.slice(match[0].length)}`;
     need(!Object.hasOwn(sources,alias),"MODULE_BUILD_SOURCE_ALIAS_COLLISION");
@@ -74,7 +78,8 @@ function sourceInput(source: unknown, subject: ModuleReviewSubjectV1, plan: Modu
   need(target && target.runtime === MODULE_ENGINE_PROFILE_V1, "MODULE_BUILD_ADAPTER_UNSUPPORTED");
   need(/^[A-Za-z_$][A-Za-z0-9_$]{0,255}$/u.test(target.entrypoint), "MODULE_BUILD_ENTRYPOINT_INVALID");
   const nativeEth = plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1.profile;
-  const sharedQuote = nativeEth || plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile;
+  const positionManager = plan.testEnvironment?.profile === MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1.profile;
+  const sharedQuote = positionManager || nativeEth || plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile;
   if (sharedQuote) {
     need(checked.request.descriptor.requiresHost.includes(nativeEth ? MODULE_ENGINE_SHARED_QUOTE_ETH_POLICY_V1.hostRequirement : MODULE_ENGINE_SHARED_QUOTE_POLICY_V1.hostRequirement), "MODULE_ENGINE_SHARED_QUOTE_HOST_PROFILE_MISSING");
     const schema = object(checked.request.descriptor.configuration), fields = object(schema.fields);
@@ -94,7 +99,7 @@ function sourceInput(source: unknown, subject: ModuleReviewSubjectV1, plan: Modu
     }, required: MODULE_ENGINE_SHARED_QUOTE_CONFIGURATION_ABI_V1.map(argument => argument.path[0]) };
     need(json(schema) === json(expected), "MODULE_ENGINE_SHARED_QUOTE_SOURCE_SCHEMA_INVALID");
   }
-  const sources = soliditySources(checked.request.files, sharedQuote);
+  const sources = soliditySources(checked.request.files, sharedQuote, positionManager);
   need(Object.hasOwn(sources, target.sourcePath), "MODULE_BUILD_TARGET_MISSING");
   const standard = { language: "Solidity", sources, settings: NATIVE_SETTINGS_V1 };
   need(new TextEncoder().encode(json(standard)).length <= MODULE_REVIEW_LIMITS_V1.standardJsonBytes, "MODULE_BUILD_PROFILE_CAPACITY_EXCEEDED");
@@ -109,7 +114,8 @@ function compiledCases(plan: ModuleEngineBuildPlanV1, source: ReturnType<typeof 
   return plan.cases.map(c => {
     let configBytes = c.rawConfigBytes ?? encodeModuleEngineConfiguration(plan.configurationAbi, compileOpenConfig(descriptor.configuration, c.parameters, { roles: { author: descriptor.author, reward: descriptor.rewardWallet } }), descriptor.configuration);
     const nativeEth = plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1.profile;
-    const sharedQuote = nativeEth || plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile;
+    const sharedQuote = nativeEth || plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile
+      || plan.testEnvironment?.profile === MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1.profile;
     let sharedQuoteConfiguration: ModuleEngineCompiledCaseV1["sharedQuoteConfiguration"];
     if (sharedQuote && c.expectedDeployment === "success") {
       need(configBytes.length === 514, "MODULE_ENGINE_SHARED_QUOTE_CONFIGURATION_INVALID");
@@ -149,6 +155,7 @@ function compilerIdentity(standard: unknown) {
 }
 function artifactContents(subject: ModuleReviewSubjectV1, plan: ModuleEngineBuildPlanV1, source: ReturnType<typeof sourceInput>, engine: ModuleEngineContractArtifactV1, tests: ModuleEngineTestResultV1) {
   const descriptor = source.checked.request.descriptor;
+  const positionManager = plan.testEnvironment?.profile === MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1.profile;
   const planDigest = moduleReviewDigestV1(MODULE_ENGINE_PLAN_SCHEMA_V1, plan), cases = compiledCases(plan, source, engine);
   validateModuleEngineTestResultsV1(tests, subject.requestDigest, planDigest, cases, plan.testEnvironment);
   return {
@@ -160,8 +167,8 @@ function artifactContents(subject: ModuleReviewSubjectV1, plan: ModuleEngineBuil
     ...(plan.testEnvironment === undefined ? {} : { testEnvironment: plan.testEnvironment }),
     compiler: compilerIdentity(source.standard), engine, executionGas: plan.executionGas, operationPermissions: plan.operationPermissions, moneyRights: plan.moneyRights, coinRights: plan.coinRights, testEconomics: plan.testEconomics, cases, tests,
     reviewRequired: plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1.profile
-      ? [...MODULE_ENGINE_REVIEW_AREAS_V1, ...MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_AREAS_V1] : plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile
-      ? [...MODULE_ENGINE_REVIEW_AREAS_V1, ...MODULE_ENGINE_SHARED_QUOTE_REVIEW_AREAS_V1] : MODULE_ENGINE_REVIEW_AREAS_V1, approved: false as const, registryApproved: false as const, available: false as const,
+      ? [...MODULE_ENGINE_REVIEW_AREAS_V1, ...MODULE_ENGINE_SHARED_QUOTE_ETH_REVIEW_AREAS_V1] : positionManager || plan.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile
+      ? [...MODULE_ENGINE_REVIEW_AREAS_V1, ...MODULE_ENGINE_SHARED_QUOTE_REVIEW_AREAS_V1, ...(positionManager ? MODULE_ENGINE_POSITION_MANAGER_REVIEW_AREAS_V1 : [])] : MODULE_ENGINE_REVIEW_AREAS_V1, approved: false as const, registryApproved: false as const, available: false as const,
   };
 }
 /** API-side reconstruction binds the authenticated worker result; no contributor code executes here. */

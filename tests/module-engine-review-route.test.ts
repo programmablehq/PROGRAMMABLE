@@ -96,7 +96,7 @@ describe("source-bound Quote dependency environment", () => {
     expect(()=>parseEngineReviewArtifact(artifact,parseReviewSubject(frozen.subject),frozen.plan as ModuleEngineBuildPlanV1)).toThrow("MODULE_ENGINE_BUILD_PLAN_MISMATCH");
   });
   it("publishes the same byte-preserving scoped source aliases and rejects collisions", () => {
-    const prefixes=["openzeppelin/contracts/","openzeppelin/uniswap-hooks/","uniswap/blocknumberish/","uniswap/liquidity-launcher/","uniswap/uerc20-factory/","uniswap/v4-core/","uniswap/v4-periphery/","uniswap/v4-periphery-v211/","uniswap/universal-router/","solady/src/"];
+    const prefixes=["openzeppelin/contracts/","openzeppelin/uniswap-hooks/","uniswap/blocknumberish/","uniswap/liquidity-launcher/","uniswap/uerc20-factory/","uniswap/v4-core/","uniswap/v4-periphery/","solady/src/"];
     const source=structuredClone(frozen.source),content="// exact source bytes\npragma solidity 0.8.26;\n";
     const sha256=createHash("sha256").update(content).digest("hex");
     const append=(path:string)=>{source.files.push({path,sha256,encoding:"base64",bytes:Buffer.from(content).toString("base64")});source.descriptor.source.files.push({path,sha256});};

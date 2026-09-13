@@ -1,4 +1,5 @@
 import { MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1, MODULE_ENGINE_SHARED_QUOTE_ETH_POLICY_V1 } from "./review-engine-shared-quote-eth";
+import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "./review-engine-position-manager";
 import type { ModuleEngineCatalogDefinition, ModuleEngineReleaseIdentity, ModuleEngineRevisionDefinition } from "../module-engine/catalog";
 import { createModuleEngineHostManifest, isModuleEngineSharedQuoteRelease, isModuleEngineAnyQuoteEthRelease, ENGINE_ZERO_ADDRESS, ENGINE_ZERO_HASH } from "../module-engine/catalog";
 import { nativeCanonicalJson } from "./native-catalog";
@@ -19,8 +20,9 @@ export function createReviewedModuleEngineManifest(input: { job: Pick<ReviewJob,
   for (const key of ["executionGas", "moneyRights", "coinRights", "operationPermissions"] as const) same(revision[key], artifact[key], key);
   same(input.definition.configurationAbi, artifact.configurationAbi, "configuration mapping"); same(plan.configurationAbi, artifact.configurationAbi, "plan configuration mapping");
   const sharedQuote = isModuleEngineSharedQuoteRelease(input.release), nativeEth = isModuleEngineAnyQuoteEthRelease(input.release);
-  const expectedEnvironment = nativeEth ? MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1 : MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1;
-  const sharedReview = artifact.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile || artifact.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1.profile;
+  const positionManager = artifact.testEnvironment?.profile === MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1.profile;
+  const expectedEnvironment = nativeEth ? MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1 : positionManager ? MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 : MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1;
+  const sharedReview = positionManager || artifact.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1.profile || artifact.testEnvironment?.profile === MODULE_ENGINE_SHARED_QUOTE_ETH_ENVIRONMENT_V1.profile;
   if (sharedQuote !== sharedReview) throw new Error("Engine shared-hook profile differs from the protected build.");
   if (sharedQuote) {
     same(artifact.testEnvironment, expectedEnvironment, "shared-hook environment");
