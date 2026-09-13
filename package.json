@@ -285,11 +285,13 @@
       "@tiptap/extension-floating-menu": "3.30.5"
     },
     "@uniswap/smart-order-router": {
-      "@uniswap/v4-sdk": "$@uniswap/v4-sdk"
+      "@uniswap/v4-sdk": "$@uniswap/v4-sdk",
+      "bn.js@4.11.6": "4.12.5"
     },
     "@uniswap/universal-router-sdk": {
       "@openzeppelin/contracts@4.7.0": "4.9.6"
     },
+    "@openzeppelin/contracts@4.7.0": "4.9.6",
     "@walletconnect/ethereum-provider": "2.22.4",
     "adm-zip": "0.6.0",
     "axios": "1.18.1",
