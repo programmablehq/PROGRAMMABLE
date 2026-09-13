@@ -6,14 +6,14 @@ import { ModuleCoinConsole } from "@/components/module-coin-console";
 import { fixture, TOKEN, hash } from "./module-engine-fixture";
 import { anyQuoteUiFixture } from "./module-engine-any-quote-ui-fixture";
 import reviewedAnyQuoteRelease from "@/config/module-engine/review-release.json";
+import primaryAnyQuoteRelease from "@/config/module-engine/review-release.any-quote.json";
 import { createAnyQuoteConfigurationSchema } from "@/lib/module-engine/any-quote-configuration";
 import { isModuleEngineSharedQuoteRelease, isModuleEngineAnyQuoteEthRelease } from "@/lib/module-engine/profile";
 import engineEvidence from "./fixtures/module-engine-index.json";
 import { normalizeModuleEngineLaunchV1 } from "@/lib/module-engine/index/provenance-v1";
 import { bindActiveModuleEngineRelease, bindModuleEngineReleaseIdentity, computeModuleEngineHostManifestHash, moduleEngineReleaseIdentity } from "@/lib/module-engine/catalog";
 import { moduleEnginePublicLaunch } from "@/lib/server/robinhood-index/module-source";
-const mocks = vi.hoisted(() => ({ native: vi.fn(), engine: vi.fn(), nativeVersions: vi.fn(), engineVersions: vi.fn(), token: vi.fn(), reviewIdentity: null as unknown }));
-vi.mock("@/config/module-engine/review-release.json", () => ({ get default() { return mocks.reviewIdentity; } }));
+const mocks = vi.hoisted(() => ({ native: vi.fn(), engine: vi.fn(), nativeVersions: vi.fn(), engineVersions: vi.fn(), token: vi.fn() }));
 vi.mock("@/components/module-engine-host", () => ({ ModuleEngineHost: () => null }));
 vi.mock("@/components/module-mode-launch-host", () => ({ ModuleModeLaunchHost: () => null }));
 vi.mock("@/components/module-launch-workspace", () => ({ ModuleLaunchWorkspace: () => null }));
@@ -27,13 +27,12 @@ import { GET } from "@/app/api/module-mode/route";
 import Page from "@/app/launch/modules/page";
 import ManagePage from "@/app/launch/modules/manage/[address]/page";
 
-const { ANY_QUOTE_ETH_GUARD_RELEASE } = await import(new URL("../contracts/scripts/module-engine/any-quote-eth-basis.mjs", import.meta.url).href);
-
-beforeEach(() => { vi.clearAllMocks(); mocks.reviewIdentity = moduleEngineReleaseIdentity(ANY_QUOTE_ETH_GUARD_RELEASE); mocks.native.mockResolvedValue({ schemaVersion: "programmable.module-mode.availability.v1", release: null, catalog: [], reason: "Unavailable" }); mocks.nativeVersions.mockResolvedValue([]); mocks.engineVersions.mockResolvedValue([]); mocks.engine.mockResolvedValue({ ...fixture().availability, release: null, templates: [] }); mocks.token.mockResolvedValue({ token: null }); });
+beforeEach(() => { vi.clearAllMocks(); mocks.native.mockResolvedValue({ schemaVersion: "programmable.module-mode.availability.v1", release: null, catalog: [], reason: "Unavailable" }); mocks.nativeVersions.mockResolvedValue([]); mocks.engineVersions.mockResolvedValue([]); mocks.engine.mockResolvedValue({ ...fixture().availability, release: null, templates: [] }); mocks.token.mockResolvedValue({ token: null }); });
 
 /** A mocked availability sample for route gating only, not a publication or activation claim. */
-function reviewedAnyQuoteAvailability() {
-  const f = anyQuoteUiFixture(isModuleEngineAnyQuoteEthRelease(reviewedAnyQuoteRelease)), release = bindActiveModuleEngineRelease({ ...f.release, ...reviewedAnyQuoteRelease });
+function reviewedAnyQuoteAvailability(value: unknown = primaryAnyQuoteRelease) {
+  const identity = bindModuleEngineReleaseIdentity(value);
+  const f = anyQuoteUiFixture(isModuleEngineAnyQuoteEthRelease(identity)), release = bindActiveModuleEngineRelease({ ...f.release, ...identity });
   if (!isModuleEngineSharedQuoteRelease(release)) throw new Error("Expected the reviewed Any Quote profile");
   const template = structuredClone(f.template);
   template.manifest.manifest.release = moduleEngineReleaseIdentity(release);
@@ -42,12 +41,9 @@ function reviewedAnyQuoteAvailability() {
   return { ...f.availability, release, templates: [template] };
 }
 describe("source-specific Module Mode product routes", () => {
-  it("keeps the installed native ETH review identity separate from public activation", async () => {
-    const { default: installed } = await vi.importActual<{ default: unknown }>("@/config/module-engine/review-release.json");
+  it.each([primaryAnyQuoteRelease, reviewedAnyQuoteRelease])("keeps installed review identity $releaseDigest separate from public activation", async installed => {
     const identity = bindModuleEngineReleaseIdentity(installed);
-    expect(isModuleEngineAnyQuoteEthRelease(identity)).toBe(true);
     expect(() => bindActiveModuleEngineRelease(identity)).toThrow();
-    mocks.reviewIdentity = identity;
     // Review identity alone has no public activation or lifecycle evidence.
     mocks.engine.mockResolvedValue({ ...fixture().availability, release: identity, templates: [] });
     const page = await Page({ searchParams: Promise.resolve({}) });
@@ -76,21 +72,34 @@ describe("source-specific Module Mode product routes", () => {
     expect(await engine.props.requests.versions).toEqual([version]);
     const native = await Page({ searchParams: Promise.resolve({}) }); expect(native.type).toBe(ModuleLaunchWorkspace);
   });
-  it.each([false, true])("offers the exact reviewed public Any Quote generation (native ETH fees: %s)", async nativeEthFees => {
-    mocks.reviewIdentity = moduleEngineReleaseIdentity(anyQuoteUiFixture(nativeEthFees).release);
-    const availability = reviewedAnyQuoteAvailability(); mocks.engine.mockResolvedValue(availability);
+  it("selects the pair-token launch card from the installed ac96 binding even when historical ETH is healthy", async () => {
+    const primary = reviewedAnyQuoteAvailability(), historical = reviewedAnyQuoteAvailability(reviewedAnyQuoteRelease);
+    mocks.engine.mockImplementation(async digest => digest === primary.release.releaseDigest ? primary : historical);
     const page = await Page({ searchParams: Promise.resolve({}) });
     expect(page.type).toBe(ModuleLaunchWorkspace);
     const entry = availableAnyQuoteLibraryEntry(await page.props.requests.anyQuote, page.props.reviewedAnyQuoteDigest);
-    expect(entry?.releaseDigest).toBe(reviewedAnyQuoteRelease.releaseDigest);
-    expect(mocks.engine).toHaveBeenCalledWith(reviewedAnyQuoteRelease.releaseDigest);
-    const selected = await Page({ searchParams: Promise.resolve({ sourceKind: "module-engine-v1", releaseDigest: entry?.releaseDigest }) });
-    expect(selected.type).toBe(ModuleLaunchWorkspace);
-    expect(selected.props.initialSelection.releaseDigest).toBe(reviewedAnyQuoteRelease.releaseDigest);
-    expect(selected.props.requests.selectedEngine).toBe(selected.props.requests.anyQuote);
+    expect(entry?.releaseDigest).toBe("0xac96d652e2043f34b3f736bad999ab673b17aa8750b5d62951e9ec928306273d");
+    expect(isModuleEngineAnyQuoteEthRelease((await page.props.requests.anyQuote).release)).toBe(false);
+    expect(page.props.initialSelection).toEqual({});
+    expect(page.props.requests.selectedNative).toBe(page.props.requests.native);
+    expect(mocks.engine).toHaveBeenCalledExactlyOnceWith(primaryAnyQuoteRelease.releaseDigest);
   });
-  it.each([false, true])("keeps Any Quote hidden without matching public authority (native ETH fees: %s)", async nativeEthFees => {
-    mocks.reviewIdentity = moduleEngineReleaseIdentity(anyQuoteUiFixture(nativeEthFees).release);
+  it.each([
+    { identity: primaryAnyQuoteRelease, shared: true },
+    { identity: reviewedAnyQuoteRelease, shared: false },
+  ])("preserves explicit release $identity.releaseDigest with primary read sharing: $shared", async ({ identity, shared }) => {
+    const primary = reviewedAnyQuoteAvailability(), historical = reviewedAnyQuoteAvailability(reviewedAnyQuoteRelease);
+    mocks.engine.mockImplementation(async digest => digest === primary.release.releaseDigest ? primary : historical);
+    const selected = await Page({ searchParams: Promise.resolve({ sourceKind: "module-engine-v1", releaseDigest: identity.releaseDigest }) });
+    expect(selected.type).toBe(ModuleLaunchWorkspace);
+    expect(selected.props.initialSelection.releaseDigest).toBe(identity.releaseDigest);
+    expect((await selected.props.requests.selectedEngine).release.releaseDigest).toBe(identity.releaseDigest);
+    expect(selected.props.requests.selectedEngine === selected.props.requests.anyQuote).toBe(shared);
+    expect(mocks.engine.mock.calls.map(([digest]) => digest)).toEqual(shared
+      ? [primaryAnyQuoteRelease.releaseDigest] : [primaryAnyQuoteRelease.releaseDigest, reviewedAnyQuoteRelease.releaseDigest]);
+    expect(availableAnyQuoteLibraryEntry(await selected.props.requests.anyQuote, selected.props.reviewedAnyQuoteDigest)?.releaseDigest).toBe(primaryAnyQuoteRelease.releaseDigest);
+  });
+  it("keeps the primary card hidden without matching public authority, including a healthy historical ETH response", async () => {
     const current = reviewedAnyQuoteAvailability();
     mocks.engineVersions.mockResolvedValue([{ releaseDigest: reviewedAnyQuoteRelease.releaseDigest, sourceKind: "module-engine-v1", label: "Any Quote LP" }]);
     for (const unavailable of [
@@ -99,7 +108,7 @@ describe("source-specific Module Mode product routes", () => {
       { ...current, release: { ...current.release, enabled: false } },
       { ...current, templates: [fixture().template] },
       fixture().availability,
-      anyQuoteUiFixture(!nativeEthFees).availability,
+      reviewedAnyQuoteAvailability(reviewedAnyQuoteRelease),
     ]) {
       mocks.engine.mockResolvedValue(unavailable);
       const page = await Page({ searchParams: Promise.resolve({}) });
@@ -109,6 +118,20 @@ describe("source-specific Module Mode product routes", () => {
     mocks.engine.mockRejectedValue(new Error("Current source unavailable"));
     const unavailablePage = await Page({ searchParams: Promise.resolve({}) });
     expect(availableAnyQuoteLibraryEntry(await unavailablePage.props.requests.anyQuote, unavailablePage.props.reviewedAnyQuoteDigest)).toBeNull();
+    expect(mocks.engine.mock.calls.every(([digest]) => digest === primaryAnyQuoteRelease.releaseDigest)).toBe(true);
+  });
+  it("preserves an explicit historical ETH selection when the primary pair-token release is unavailable", async () => {
+    const historical = reviewedAnyQuoteAvailability(reviewedAnyQuoteRelease);
+    mocks.engine.mockImplementation(async digest => {
+      if (digest === reviewedAnyQuoteRelease.releaseDigest) return historical;
+      throw new Error("Primary release unavailable");
+    });
+    const page = await Page({ searchParams: Promise.resolve({ sourceKind: "module-engine-v1", releaseDigest: reviewedAnyQuoteRelease.releaseDigest }) });
+    expect(availableAnyQuoteLibraryEntry(await page.props.requests.anyQuote, page.props.reviewedAnyQuoteDigest)).toBeNull();
+    const selected = await page.props.requests.selectedEngine;
+    expect(selected.release.releaseDigest).toBe("0x99c3214509ebb348a3a7ee97f7eeaef325362a20da475241c2752a277fe93cc2");
+    expect(isModuleEngineAnyQuoteEthRelease(selected.release)).toBe(true);
+    expect(page.props.initialSelection.releaseDigest).toBe(reviewedAnyQuoteRelease.releaseDigest);
   });
   it("renders the setup without waiting for availability or historical discovery", async () => {
     const pending = new Promise<never>(() => {});
@@ -118,7 +141,7 @@ describe("source-specific Module Mode product routes", () => {
     expect(page.type).toBe(ModuleLaunchWorkspace);
     expect(page.props.requests.selectedNative).toBe(page.props.requests.native);
     expect(mocks.native).toHaveBeenCalledExactlyOnceWith(undefined);
-    expect(mocks.engine).toHaveBeenCalledExactlyOnceWith(reviewedAnyQuoteRelease.releaseDigest);
+    expect(mocks.engine).toHaveBeenCalledExactlyOnceWith(primaryAnyQuoteRelease.releaseDigest);
   }, 500);
   it("dispatches exact management hints and uses the indexed source for a plain coin URL", async () => {
     const hinted = await ManagePage({ params: Promise.resolve({ address: TOKEN }), searchParams: Promise.resolve({ sourceKind: "module-engine-v1", releaseDigest: fixture().release.releaseDigest }) });
