@@ -169,9 +169,11 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
     && bytes(r.recompiledBytecode) === compiledRuntime && bytes(r.onchainBytecode) === pin.runtime, `${role}: complete creation/runtime bytes differ`);
   if (compilerAuxdataProfile !== undefined) quotePlannerAuxdataProfile(plan, role, compilerAuxdataProfile, artifact, input,
     build.compilerMetadata?.[role] ?? artifact.metadata, constructorArguments);
-  const ethEngineAuxdata = sourceProfile === 'module-engine-any-quote-eth-v1' && role === 'engine';
-  if (ethEngineAuxdata) anyQuoteEthEngineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata);
-  const compilerTrailer = compilerAuxdataProfile !== undefined || ethEngineAuxdata;
+  // Both reviewed Any Quote LP profiles retain this exact compiler marker. This describes the
+  // complete bytes already checked above; it does not grant the private canonical source witness.
+  const anyQuoteEngineAuxdata = ['module-engine-any-quote-eth-v1', 'module-engine-any-quote-v1'].includes(sourceProfile) && role === 'engine';
+  if (anyQuoteEngineAuxdata) anyQuoteEthEngineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata);
+  const compilerTrailer = compilerAuxdataProfile !== undefined || anyQuoteEngineAuxdata;
   for (const [label, code] of [['creation', c], ['runtime', r]]) {
     // Auxdata describes compiler bytes; it never authorizes a transformation or an ignored range.
     // The creation trailer ends at the compiled template boundary; appended arguments are bound above.

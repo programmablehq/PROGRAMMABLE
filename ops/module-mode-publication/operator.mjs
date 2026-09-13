@@ -6,11 +6,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertRobinhoodFoundationRpcProviders } from '../../contracts/scripts/robinhood-custom-launch-owner-envelope-core.mjs';
 import { resolveReviewedRobinhoodProviderCommitments } from '../../contracts/scripts/robinhood-custom-launch-provider-commitment-custody.mjs';
+import { moduleEngineSdkBundle } from '../../contracts/scripts/module-engine/sdk-bundle.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 async function main() {
   const lock = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'));
   if (lock.packages['node_modules/esbuild'].version !== version) throw new Error('Operator compiler differs from package-lock');
-  const compiled = await build({ absWorkingDir: root, entryPoints: ['ops/module-mode-publication/main.ts'], write: false,
+  const compiled = await build({ ...moduleEngineSdkBundle(), absWorkingDir: root, entryPoints: ['ops/module-mode-publication/main.ts'], write: false,
     bundle: true, packages: 'external', platform: 'node', target: 'node24', format: 'esm', sourcemap: false,
     tsconfig: path.join(root, 'tsconfig.json'), treeShaking: true, logLevel: 'silent' });
   const bytes = compiled.outputFiles[0].contents; const digest = createHash('sha256').update(bytes).digest('hex');

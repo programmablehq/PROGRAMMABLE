@@ -22,6 +22,8 @@ const anyQuoteIndexFixtures = [
 const anyQuoteEthBasis = "contracts/scripts/module-engine/any-quote-eth-basis.mjs";
 const visibilityTest = "tests/robinhood-website-index.test.ts";
 const anyQuoteCanary = "0xb36271399c031ce270e0d1eed5f26dcd08367119";
+const pairTokenPackage = "public/developers/modules/0xa51c62d66f474e63d68e35e5d9596612ed226811799a9f8fd8489ac85091f2bd";
+const pairTokenPublicPaths = [`${pairTokenPackage}/manifest.json`, `${pairTokenPackage}/source.json`];
 // Public synthetic index evidence includes both sides of the final salt-domain correction.
 const anyQuoteAddresses = [
   "0xd803cd624d58e1f31d1043f630953e6dbdf6a128",
@@ -45,6 +47,7 @@ const hashPaths = [
   "public/developers/modules/0x81185e910dec1032df4bd027f8139f524606f628c0a63dbae62c69bb86e470da/manifest.json",
   "public/developers/modules/0x616f4584f5ec576a88bac5b6d5ee1ae841713f02129ab71a9b47e7e900312b2f/manifest.json",
   "public/developers/modules/0xeec9f1128106907da53b9a729206a0ad78e1e6c0379fde31636a2986f9b03c08/manifest.json",
+  ...pairTokenPublicPaths,
 ];
 
 before(() => {
@@ -97,6 +100,19 @@ test("accepts exact Engine V1 public hash fields and the reviewed fixture addres
   assert.deepEqual(scan(t, Object.fromEntries(hashPaths.map((path) => [path, publicFields(path)]))), []);
 });
 
+test("accepts the exact public creation hash inside the reviewed base64 source package", (t) => {
+  const bytes = Buffer.from(JSON.stringify({ tokenCreationCodeHash: creationHash })).toString("base64");
+  assert.deepEqual(scan(t, { [`${pairTokenPackage}/source.json`]: { files: [{ bytes }] } }), []);
+});
+
+test("detects credentials beside the allowed creation hash inside the base64 source package", (t) => {
+  const path = `${pairTokenPackage}/source.json`;
+  for (const apiKey of [material, creationHash]) {
+    const bytes = Buffer.from(JSON.stringify({ tokenCreationCodeHash: creationHash, apiKey })).toString("base64");
+    assertFiles(scan(t, { [path]: { files: [{ bytes }] } }), [path]);
+  }
+});
+
 test("detects a generic credential beside allowed fields on the same JSON line", (t) => {
   const files = Object.fromEntries(hashPaths.map((path) => [path, {
     ...publicFields(path), apiKey: material,
@@ -128,6 +144,10 @@ test("keeps public values detectable in adjacent or unlisted paths", (t) => {
     "public/developers/modules/unreviewed/manifest.json": { tokenCreationCodeHash: creationHash },
     [`public/developers/modules/0x${"1".repeat(64)}/manifest.json`]: { tokenCreationCodeHash: creationHash },
     [`${hashPaths[2]}.backup`]: { tokenCreationCodeHash: creationHash },
+    ...Object.fromEntries(pairTokenPublicPaths.flatMap((path) => [
+      [`${path}.backup`, { tokenCreationCodeHash: creationHash }],
+      [`fixtures/${path}`, { tokenCreationCodeHash: creationHash }],
+    ])),
   };
   assertFiles(scan(t, files), Object.keys(files));
 });

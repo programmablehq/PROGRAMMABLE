@@ -16,6 +16,7 @@ import { launchSourceWire } from './launch-source-shared.mjs';
 import { checkpointEntry, CHECKPOINT_SCHEMA, engineLaunchIdentity } from './launch-source-profiles.mjs';
 import { canonicalJson } from './core.mjs';
 import { EXPECTED_COMPILER_PROFILE, resolveRobinhoodReproductionCompiler } from '../robinhood-custom-launch-standard-json-core.mjs';
+import { bindEngineReview } from '../module-engine/publication-plan.mjs';
 
 let cachedSourceCompiler;
 async function sourceTestSolc() {
@@ -52,6 +53,305 @@ function actualSourceTargets() {
     return result;
   })();
 }
+
+const quoteActual = JSON.parse(brotliDecompressSync(readFileSync(new URL('./quote-source-readback.fixture.json.br', import.meta.url))));
+let actualQuoteTargetPromise;
+function actualQuoteEngineTarget() {
+  return actualQuoteTargetPromise ??= (async () => {
+    const { release, acceptedBundle: bundle, publication: readback, launch, runtime } = quoteActual;
+    const checked = await bindEngineReview(bundle, release), wire = await launchSourceWire();
+    assert.equal(release.sourceVersion, 'module-engine-any-quote-v1');
+    assert.equal(release.releaseDigest, '0xac96d652e2043f34b3f736bad999ab673b17aa8750b5d62951e9ec928306273d');
+    assert.equal(readback.available, false, 'This source comparison does not manufacture an activated catalog');
+    assert.equal(readback.releaseDigest, release.releaseDigest);
+    const publication = { template: { status: 'prepared', manifest: bundle.manifest, manifestHash: checked.manifestHash } };
+    const log = launch.receipt.logs.find(row => row.address.toLowerCase() === release.contracts.host.address
+      && row.topics[0] === encodeEventTopics({ abi: wire.moduleEngineHostAbi, eventName: 'EngineLaunchBound' })[0]);
+    assert.ok(log);
+    const identity = engineLaunchIdentity({ release, receipt: launch.receipt, log, publication,
+      revision: [readback.revision, readback.immutableRuntimeOffsets, readback.immutableConstructorOffsets, readback.eligibleFamilies] }, wire);
+    assert.equal(launch.transaction.hash, launch.receipt.transactionHash);
+    assert.equal(launch.transaction.blockHash, launch.receipt.blockHash);
+    assert.equal(launch.transaction.blockNumber, launch.receipt.blockNumber);
+    assert.equal(launch.transaction.to.toLowerCase(), release.contracts.host.address);
+    assert.equal(launch.transaction.from.toLowerCase(), identity.launch.creator.toLowerCase());
+    assert.equal(launch.transaction.input, encodeFunctionData({ abi: wire.moduleEngineHostAbi, functionName: 'launch', args: [identity.parameters] }));
+    assert.equal(launch.receipt.status, '0x1');
+    assert.deepEqual(runtime.providers.map(row => row.providerId), ['quicknode', 'alchemy']);
+    assert.deepEqual(runtime.providers[0].block, runtime.providers[1].block);
+    assert.deepEqual(runtime.providers[0].runtime, runtime.providers[1].runtime);
+    assert.deepEqual(runtime.targets, [['token', identity.launch.token.toLowerCase()], ['engine', identity.launch.engine.toLowerCase()]]);
+    assert.equal(identity.runtime, runtime.providers[0].runtime.engine);
+    const standard = wire.moduleEngineStandardInputV1(bundle.source, checked.artifact.subject, checked.buildPlan);
+    const digest = wire.reviewDigest('programmable.modules.compiler-input.v1', standard);
+    assert.equal(digest, '0x60be050c239d2ab31d865dd4dcaa09bab172ef7d16e9fda5815a081da8c58855');
+    assert.equal(digest, checked.artifact.compiler.completeInputHash);
+    assert.equal(digest, bundle.manifest.manifest.source.compiler.completeInputHash);
+    const input = { ...standard, settings: { ...standard.settings,
+      outputSelection: { '*': { '*': ['abi', 'metadata', 'storageLayout', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
+    const compiled = await compile(input, await sourceTestSolc()), expected = checked.artifact.engine;
+    const target = { ...sourceTarget({ role: 'engine', file: expected.sourcePath, name: expected.contractName,
+      sourceProfile: release.sourceVersion, sourceCommit: release.sourceCommit }, input, compiled),
+      address: identity.launch.engine.toLowerCase(), runtime: identity.runtime, creationCode: identity.creationCode,
+      constructorArguments: identity.constructorArguments, transactionHash: launch.receipt.transactionHash,
+      creation: { transactionHash: launch.receipt.transactionHash, blockNumber: BigInt(launch.receipt.blockNumber).toString(),
+        blockHash: launch.receipt.blockHash, transactionIndex: BigInt(launch.receipt.transactionIndex).toString(),
+        transactionSender: launch.transaction.from }, protectedCompleteInputHash: digest };
+    assert.equal(`0x${target.artifact.evm.bytecode.object}`, expected.creationBytecode);
+    assert.equal(`0x${target.artifact.evm.deployedBytecode.object}`, expected.runtimeTemplate);
+    assert.equal(canonicalJson(target.artifact.abi), canonicalJson(expected.abi));
+    assert.equal(canonicalJson(target.artifact.evm.deployedBytecode.immutableReferences),
+      canonicalJson(Object.fromEntries(expected.immutableReferences.map(({ id, ranges }) => [id, ranges]))));
+    return target;
+  })();
+}
+
+let actualQuoteTargetsPromise;
+function actualQuoteSourceTargets() {
+  return actualQuoteTargetsPromise ??= (async () => {
+    const engine = await actualQuoteEngineTarget(), binary = await sourceTestSolc();
+    const input = { ...quoteActual.factory.stdJsonInput, settings: { ...quoteActual.factory.stdJsonInput.settings,
+      outputSelection: { '*': { '*': ['abi', 'metadata', 'storageLayout', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
+    const result = await compile(input, binary), tokenValue = JSON.parse(quoteActual.rawToken);
+    assert.equal(keccak256(quoteActual.factory.runtimeBytecode.onchainBytecode), quoteActual.release.contracts.tokenFactory.runtimeCodeHash);
+    const token = { ...sourceTarget({ role: 'token', file: 'lib/uerc20-factory/src/tokens/UERC20.sol', name: 'UERC20',
+      sourceProfile: quoteActual.release.sourceVersion, sourceCommit: quoteActual.release.sourceCommit }, input, result),
+      address: tokenValue.address.toLowerCase(), runtime: tokenValue.runtimeBytecode.onchainBytecode,
+      creation: engine.creation, transactionHash: engine.transactionHash, constructorArguments: '0x' };
+    token.creationCode = `0x${token.artifact.evm.bytecode.object}`;
+    assert.equal(keccak256(token.creationCode), quoteActual.release.tokenCreationCodeHash);
+    assert.equal(token.runtime, quoteActual.runtime.providers[0].runtime.token);
+    const fixtures = {};
+    for (const [role, target, raw] of [['token', token, quoteActual.rawToken], ['engine', engine, quoteActual.rawEngine]]) {
+      const value = JSON.parse(raw), recompilation = sourcifyNeedsRecompilation(target.input, value)
+        ? await recompileSourcifyInput(value, target.input, { PATH: process.env.PATH, MODULE_MODE_SOLC: binary }) : undefined;
+      fixtures[role] = { target, value, raw: Buffer.from(raw), recompilation };
+    }
+    return fixtures;
+  })();
+}
+
+// Only the isolated operator regression activates this temporary catalog. Every review/source field
+// is genuine; this test-only status is not a current website activation or an Ethereum-finality proof.
+function quoteTestPublication() {
+  const bundle = quoteActual.acceptedBundle;
+  return { template: { status: 'available', manifest: bundle.manifest,
+    manifestHash: bundle.review.command.hostManifestHash, reviewDigest: bundle.review.decisionDigest },
+    requestDigest: bundle.artifact.subject.requestDigest, review: bundle.review,
+    reviewedBuild: { artifact: bundle.artifact, plan: bundle.buildPlan, subject: bundle.artifact.subject } };
+}
+
+test('the quote engine compiler input binds both accepted pins under isolated catalog authority', async () => {
+  assert.equal(quoteActual.publication.available, false, 'The retained live prepared catalog is not relabelled');
+  const wire = await launchSourceWire(), publication = quoteTestPublication();
+  const target = await engineBuild({ release: quoteActual.release }, publication, { wire, binary: await sourceTestSolc(),
+    fetchPublic: async url => {
+      const kind = /\/(source|manifest|review)\.json$/.exec(String(url))?.[1]; assert.ok(kind);
+      return Response.json({ source: quoteActual.acceptedBundle.source, manifest: publication.template.manifest, review: publication.review }[kind]);
+    } });
+  assert.equal(target.protectedCompleteInputHash, '0x60be050c239d2ab31d865dd4dcaa09bab172ef7d16e9fda5815a081da8c58855');
+});
+
+test('the actual quote source records validate every present field while retaining the provider creation gap', async () => {
+  for (const fixture of Object.values(await actualQuoteSourceTargets())) {
+    const proof = validateSourcifyCreationGap(fixture.target, fixture.value, fixture.recompilation);
+    assert.equal(proof.creationMatch, null); assert.equal(proof.runtimeMatch, 'match');
+    assert.equal(proof.status, 'canonical-creation-binding-required');
+    assert.equal(sourceRecordsStatus([proof]), 'failed');
+    assert.deepEqual(proof.validatedPresentFields, Object.keys(fixture.value).sort());
+    assert.deepEqual(fixture.value, JSON.parse(fixture.raw));
+    assert.throws(() => validatePublished(fixture.target, fixture.value, fixture.recompilation), /Sourcify no-CBOR match is unavailable/);
+  }
+});
+
+// All receipts, public sources and state reads below are retained real responses. Protected release/catalog installation,
+// the scan returning this one launch, and latest/finalized selectors are explicit offline controls.
+// They exercise private issuance after future protected activation, not current availability/finality.
+async function replayQuoteOperator(fault) {
+  const directory = await mkdtemp(path.join(tmpdir(), 'quote-source-operator-'));
+  try {
+    const release = { ...quoteActual.release, enabled: true, status: 'active',
+      // These installation digests are deliberately synthetic authority controls, never live evidence.
+      ...Object.fromEntries(['deploymentEvidenceDigest', 'sourceVerificationDigest', 'lifecycleEvidenceDigest']
+        .map(key => [key, keccak256(textHex(`quote-offline-test-only-${key}`))])) };
+    const wire = await launchSourceWire(), publication = quoteTestPublication();
+    const catalog = { schemaVersion: 'programmable.module-engine.catalog.v1', sourceReleaseDigest: release.releaseDigest, entries: [publication] };
+    const files = { 'module-mode/robinhood.preview.json': null, 'module-mode/catalog.json': {},
+      'module-mode/historical-releases.json': { schemaVersion: 'programmable.module-mode-historical-releases.v1', releases: [] },
+      'module-engine/robinhood.json': release, 'module-engine/catalog.json': fault === 'prepared-catalog' ? quoteActual.preparedCatalog : catalog,
+      'module-engine/historical-releases.json': { schemaVersion: 'programmable.module-engine.historical-releases.v1', releases: [] } };
+    for (const [file, value] of Object.entries(files)) {
+      const target = path.join(directory, 'config', file); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, JSON.stringify(value));
+    }
+    const stateFile = path.join(directory, 'checkpoint.json'), prior = `${JSON.stringify({ schemaVersion: CHECKPOINT_SCHEMA, chainId: 4663, releases: {} })}\n`;
+    await writeFile(stateFile, prior);
+    const snapshot = quoteActual.canonical, head = snapshot.block, created = { number: textHex(BigInt(snapshot.creation.blockNumber)), hash: snapshot.creation.blockHash };
+    const receipt = quoteActual.canonicalCreationRpc.eth_getTransactionReceipt.result;
+    const transaction = quoteActual.canonicalCreationRpc.eth_getTransactionByHash.result;
+    const host = release.contracts.host.address, engine = snapshot.targets.engine.address.toLowerCase(), token = snapshot.targets.token.address.toLowerCase();
+    const log = receipt.logs.find(row => row.address.toLowerCase() === host
+      && row.topics[0] === encodeEventTopics({ abi: wire.moduleEngineHostAbi, eventName: 'EngineLaunchBound' })[0]);
+    assert.ok(log); assert.equal(quoteActual.publication.available, false);
+    const key = call => canonicalJson(call).toLowerCase(), reads = new Map();
+    for (const row of quoteActual.canonicalRpc) for (const { call, result } of row.entries) reads.set(key(call), result);
+    const publicReads = [], rechecks = [], badHash = `0x${'00'.repeat(32)}`;
+    const selector = (name, type) => encodeFunctionData({ abi: parseAbi([`function ${name}() view returns (${type})`]), functionName: name });
+    const request = async batch => batch.map(({ method, params }) => {
+      if (method === 'eth_chainId') return textHex(4663n);
+      if (method === 'eth_getBlockByNumber') {
+        if (params[0] === 'latest' || params[0] === 'finalized') return head;
+        const block = BigInt(params[0]) === BigInt(created.number) ? created : BigInt(params[0]) === BigInt(head.number) ? head : null;
+        assert.ok(block);
+        if (publicReads.length) rechecks.push({ block: block.number, afterSource: publicReads.at(-1) });
+        if (publicReads.length && (fault === 'creation-reorg' && block === created || fault === 'runtime-reorg' && block === head)) return { ...block, hash: badHash };
+        return block;
+      }
+      if (method === 'eth_getLogs') { assert.equal(params[0].address.toLowerCase(), host); assert.equal(params[0].toBlock, created.number); return [log]; }
+      if (method === 'eth_getTransactionReceipt') { assert.equal(params[0], receipt.transactionHash); return fault === 'receipt-sender' ? { ...receipt, from: zeroAddress } : receipt; }
+      if (method === 'eth_getTransactionByHash') { assert.equal(params[0], transaction.hash); return transaction; }
+      assert.ok(['eth_call', 'eth_getCode'].includes(method));
+      assert.deepEqual(params[1], { blockHash: head.hash, requireCanonical: true });
+      const value = reads.get(key({ method, params })); assert.ok(value, 'Every quote getter/runtime must exist in the retained canonical snapshot');
+      if (method === 'eth_getCode' && fault === 'released-ledger' && params[0].toLowerCase() === release.contracts.ledger.address) return `${value}00`;
+      if (method === 'eth_call' && params[0].to.toLowerCase() === engine) {
+        if (fault === 'resource' && params[0].data === selector('lockedLiquidity', 'uint128')) return `0x${'0'.repeat(64)}`;
+        if (fault === 'context' && params[0].data === selector('contextHash', 'bytes32')) return badHash;
+        if (fault === 'shared-hook' && params[0].data === selector('sharedHook', 'address')) return `0x${'0'.repeat(64)}`;
+      }
+      return value;
+    });
+    const fetchPublic = async (url, init = {}) => {
+      assert.notEqual(init.method, 'POST', 'Readable source is not resubmitted');
+      const value = String(url), kind = /\/(source|manifest|review)\.json$/.exec(value)?.[1];
+      if (kind) return Response.json({ source: quoteActual.acceptedBundle.source, manifest: publication.template.manifest, review: publication.review }[kind]);
+      if (value.endsWith('/api-docs/swagger.json')) return Response.json(quoteActual.preflight.api);
+      if (value.endsWith('/chains')) return Response.json(quoteActual.preflight.chains);
+      if (value.includes(release.contracts.tokenFactory.address)) return Response.json(quoteActual.factory);
+      const role = value.toLowerCase().includes(token) ? 'token' : value.toLowerCase().includes(engine) ? 'engine' : null;
+      assert.ok(role); publicReads.push(role);
+      const raw = role === 'token' ? quoteActual.rawToken : quoteActual.rawEngine;
+      if (fault === 'source-map' && role === 'token') { const changed = JSON.parse(raw); changed.creationBytecode.sourceMap += ';'; return Response.json(changed); }
+      return new Response(raw, { headers: { 'content-type': 'application/json' } });
+    };
+    const report = await run(parseOptions(['--publish', '--state-file', stateFile,
+      '--max-blocks', String(BigInt(created.number) - BigInt(release.startBlock) + 1n), '--solc', await sourceTestSolc()]),
+    { root: directory, request, fetchPublic });
+    return { report, publicReads, rechecks, prior, checkpoint: await readFile(stateFile, 'utf8') };
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+test('the quote operator issues private source evidence only inside an isolated activated catalog replay', async () => {
+  const { report, publicReads, rechecks, checkpoint } = await replayQuoteOperator();
+  assert.equal(report.status, 'verified', JSON.stringify(report.releases, (_, value) => typeof value === 'bigint' ? value.toString() : value));
+  assert.deepEqual(publicReads, ['token', 'engine']);
+  assert.equal(report.records.length, 2);
+  for (const record of report.records) {
+    assert.equal(record.status, 'verified'); assert.equal(record.evidenceClass, 'exact-public-source-and-canonical-create2-v1');
+    assert.equal(record.sourceVersion, 'module-engine-any-quote-v1'); assert.equal(record.creationMatch, null); assert.equal(record.runtimeMatch, 'match');
+    assert.equal(record.canonicalCreation.method, 'authenticated-AnyQuote-launch-receipt-CREATE2-and-runtime-binding');
+    assert.equal(record.canonicalCreation.releaseDigest, quoteActual.release.releaseDigest);
+    assert.equal(record.canonicalCreation.resourcesHash, quoteActual.canonical.resources.resourcesHash);
+    assert.ok(rechecks.some(row => row.afterSource === record.role && BigInt(row.block) === BigInt(quoteActual.canonical.creation.blockNumber)));
+    assert.ok(rechecks.some(row => row.afterSource === record.role && BigInt(row.block) === BigInt(quoteActual.canonical.block.number)));
+  }
+  assert.equal(report.records[0].sourceTextProvenance, 'public-source-compiles-to-released-initcode');
+  assert.equal(report.records[0].protectedCompleteInputHash, null);
+  assert.equal(report.records[1].protectedCompleteInputHash, '0x60be050c239d2ab31d865dd4dcaa09bab172ef7d16e9fda5815a081da8c58855');
+  const saved = JSON.parse(checkpoint).releases;
+  assert.deepEqual(Object.keys(saved), [quoteActual.release.releaseDigest]);
+  assert.equal(saved[quoteActual.release.releaseDigest].nextBlock, '60132136');
+  assert.equal(saved[quoteActual.release.releaseDigest].blockHash, quoteActual.canonical.creation.blockHash);
+});
+
+test('quote prepared authority, source, release, receipt, resource and reorg failures cannot advance a checkpoint', async () => {
+  for (const fault of ['prepared-catalog', 'source-map', 'released-ledger', 'receipt-sender', 'resource', 'context', 'shared-hook', 'creation-reorg', 'runtime-reorg']) {
+    const { report, publicReads, checkpoint, prior } = await replayQuoteOperator(fault);
+    assert.equal(report.status, 'failed', fault); assert.equal(checkpoint, prior, fault);
+    if (fault === 'source-map' || fault.endsWith('reorg')) assert.deepEqual(publicReads, ['token', 'engine']);
+    else assert.deepEqual(publicReads, [], fault);
+  }
+});
+
+// This in-memory envelope models a future full provider comparison only. The fixture retains the
+// actual404 bodies unchanged; no successful source readback, deployment freshness or authority is claimed.
+function quoteFullComparison(target) {
+  const metadata = JSON.parse(target.artifact.metadata), { outputSelection, ...settings } = target.input.settings;
+  const refs = target.artifact.evm.deployedBytecode.immutableReferences, trailer = '0xa164736f6c634300081a000a';
+  const creationCode = `0x${target.artifact.evm.bytecode.object}`, template = `0x${target.artifact.evm.deployedBytecode.object}`;
+  const transformations = Object.entries(refs).flatMap(([id, list]) => list.map(ref => ({ id, type: 'replace', offset: ref.start, reason: 'immutable' })));
+  const immutables = Object.fromEntries(Object.entries(refs).map(([id, [ref]]) => [id,
+    `0x${target.runtime.slice(2 + ref.start * 2, 2 + (ref.start + ref.length) * 2)}`]));
+  return { chainId: '4663', address: target.address, match: 'match', creationMatch: 'match', runtimeMatch: 'match',
+    matchId: '1', verifiedAt: quoteActual.runtime.observedAt,
+    compilation: { language: 'Solidity', compiler: 'solc', compilerVersion: '0.8.26+commit.8a97fa7a',
+      name: target.name, fullyQualifiedName: `${target.file}:${target.name}`, compilerSettings: settings },
+    stdJsonInput: { ...target.input, settings }, sources: target.input.sources, metadata, abi: target.artifact.abi,
+    deployment: { ...target.creation, deployer: target.creation.transactionSender },
+    creationBytecode: { recompiledBytecode: creationCode, onchainBytecode: target.creationCode,
+      cborAuxdata: { 1: { offset: (creationCode.length - trailer.length) / 2, value: trailer } }, linkReferences: {},
+      transformations: [{ type: 'insert', offset: (creationCode.length - 2) / 2, reason: 'constructorArguments' }],
+      transformationValues: { constructorArguments: target.constructorArguments } },
+    runtimeBytecode: { recompiledBytecode: template, onchainBytecode: target.runtime,
+      cborAuxdata: { 1: { offset: (template.length - trailer.length) / 2, value: trailer } }, linkReferences: {},
+      immutableReferences: refs, transformations, transformationValues: { immutables } } };
+}
+
+test('the retained quote engine accepts its exact compiled trailer in a modeled full source comparison', async () => {
+  const target = await actualQuoteEngineTarget(), value = quoteFullComparison(target), proof = validatePublished(target, value);
+  assert.deepEqual(value.creationBytecode.cborAuxdata, { 1: { offset: 15265, value: '0xa164736f6c634300081a000a' } });
+  assert.deepEqual(value.runtimeBytecode.cborAuxdata, { 1: { offset: 10845, value: '0xa164736f6c634300081a000a' } });
+  assert.equal(proof.independentByteComparison, 'exact-complete-creation-and-runtime');
+  assert.equal(proof.creationBytecodeHash, '0xea220b3d13a97a539769be7529bce084b28f49b3433e52d86f77469b7d94490e');
+  assert.equal(proof.runtimeCodeHash, '0x50ff424fc96646574cf75655351f21c3c40fe52a836d6a2da70733ca1997f1b7');
+  assert.equal(proof.evidenceClass, undefined, 'Full-byte comparison does not issue the private canonical witness');
+  for (const value of Object.values(quoteActual.unavailableSourceRecords)) {
+    assert.equal(value.creationMatch, null); assert.equal(value.runtimeMatch, null); assert.equal(value.match, null);
+  }
+});
+
+test('the retained quote comparison rejects altered bytes and provider evidence without extending canonical authority', async () => {
+  const target = await actualQuoteEngineTarget();
+  const mutations = [
+    v => { v.creationMatch = null; }, v => { v.runtimeMatch = null; }, v => { v.match = 'partial'; },
+    v => { v.address = zeroAddress; }, v => { v.deployment.transactionHash = `0x${'00'.repeat(32)}`; },
+    v => { v.creationBytecode.onchainBytecode += '00'; },
+    v => { v.creationBytecode.transformationValues.constructorArguments += '00'; },
+    v => { v.runtimeBytecode.onchainBytecode = `0x00${v.runtimeBytecode.onchainBytecode.slice(4)}`; },
+    v => { v.runtimeBytecode.immutableReferences[Object.keys(v.runtimeBytecode.immutableReferences)[0]][0].start++; },
+    v => { v.runtimeBytecode.transformationValues.immutables[Object.keys(v.runtimeBytecode.transformationValues.immutables)[0]] = `0x${'ff'.repeat(32)}`; },
+    v => { v.sources[target.file].content += '\n// changed source\n'; },
+    v => { v.metadata.compiler.version = '0.8.27'; }, v => { v.abi.pop(); },
+    ...['creationBytecode', 'runtimeBytecode'].flatMap(kind => [
+      v => { v[kind].recompiledBytecode += '00'; }, v => { v[kind].cborAuxdata = {}; },
+      v => { v[kind].cborAuxdata[1].offset++; }, v => { v[kind].cborAuxdata[1].value = '0xa164736f6c634300081b000a'; },
+      v => { v[kind].cborAuxdata[2] = structuredClone(v[kind].cborAuxdata[1]); },
+      v => { v[kind].transformations.push({ id: '1', type: 'replace', offset: v[kind].cborAuxdata[1].offset, reason: 'cborAuxdata' }); },
+      v => { v[kind].linkReferences = { unexpected: {} }; },
+    ]),
+  ];
+  for (const mutate of mutations) {
+    const value = structuredClone(quoteFullComparison(target)); mutate(value);
+    assert.throws(() => validatePublished(target, value), undefined, mutate.toString());
+  }
+  for (const sourceProfile of ['module-engine-v1', 'module-native-v1', 'module-native-v2', 'unrecognized'])
+    assert.throws(() => validatePublished({ ...target, sourceProfile }, quoteFullComparison(target)), /unexpected creation CBOR/);
+  assert.throws(() => validateSourcifyCreationGap(target, quoteActual.unavailableSourceRecords.engine));
+  const unavailable = await ensureTargetResult(target, false, { binary: await sourceTestSolc(),
+    beforePublish: () => assert.fail('An unavailable quote record cannot request private canonical authority'),
+    fetchPublic: async () => Response.json(quoteActual.unavailableSourceRecords.engine, { status: 404 }) });
+  assert.equal(sourceRecordsStatus([unavailable]), 'source-publication-required');
+  assert.notEqual(unavailable.status, 'verified');
+  const directory = await mkdtemp(path.join(tmpdir(), 'quote-source-unavailable-checkpoint-'));
+  try {
+    const state = { schemaVersion: CHECKPOINT_SCHEMA, chainId: 4663, releases: {} };
+    const file = path.join(directory, 'checkpoint.json'), before = `${JSON.stringify(state)}\n`;
+    await writeFile(file, before);
+    await checkpointVerifiedRelease(file, state, quoteActual.release, BigInt(target.creation.blockNumber) + 1n,
+      target.creation.blockHash, quoteActual.runtime.observedAt, [unavailable]);
+    assert.equal(await readFile(file, 'utf8'), before);
+    assert.deepEqual(state.releases, {});
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('the actual engine build binds the public source to both authenticated reviewed input pins', async () => {
   const wire = await launchSourceWire(), publication = actual.launch.publication;
@@ -109,7 +409,7 @@ test('every actual Sourcify field is required and mutations fail without masking
     v => { v.signatures.function[0].signatureHash4 = '0x00000000'; }, v => { v.signatures.function.push(v.signatures.function[0]); },
     v => { v.proxyResolution.isProxy = true; }, v => { v.proxyResolution.implementations = [zeroAddress]; },
   ];
-  for (const fixture of Object.values(await actualSourceTargets())) {
+  for (const fixture of [...Object.values(await actualSourceTargets()), ...Object.values(await actualQuoteSourceTargets())]) {
     for (const field of Object.keys(fixture.value)) {
       const changed = structuredClone(fixture.value); delete changed[field];
       assert.throws(() => validateSourcifyCreationGap(fixture.target, changed, fixture.recompilation), undefined, `missing ${field}`);
@@ -124,7 +424,7 @@ test('every actual Sourcify field is required and mutations fail without masking
 });
 
 test('saved, copied and flag-bearing targets cannot issue canonical evidence and unknown statuses cannot checkpoint', async () => {
-  for (const fixture of Object.values(await actualSourceTargets())) {
+  for (const fixture of [...Object.values(await actualSourceTargets()), ...Object.values(await actualQuoteSourceTargets())]) {
     const target = { ...fixture.target, evidenceClass: 'exact-public-source-and-canonical-create2-v1', checkpointEligible: true };
     const result = await ensureTargetResult(target, false, { binary: await sourceTestSolc(),
       beforePublish: () => assert.fail('An unbound target cannot request canonical authority'), fetchPublic: async () => Response.json(fixture.value) });

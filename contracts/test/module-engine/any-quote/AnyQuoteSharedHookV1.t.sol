@@ -6,12 +6,15 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import { IUnlockCallback } from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import { PoolManager } from "@uniswap/v4-core/src/PoolManager.sol";
 import { PoolSwapTest } from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import { Hooks } from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import { StateLibrary } from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import { TransientStateLibrary } from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
+import { CustomRevert } from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import { BalanceDelta } from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
 import { PoolId, PoolIdLibrary } from "@uniswap/v4-core/src/types/PoolId.sol";
@@ -21,10 +24,13 @@ import { LiquidityAmounts } from "@uniswap/v4-periphery/src/libraries/LiquidityA
 
 import { AnyQuoteTypesV1 as A } from "../../../src/module-engine/any-quote/AnyQuoteTypesV1.sol";
 import { AnyQuoteSharedHookV1 } from "../../../src/module-engine/any-quote/AnyQuoteSharedHookV1.sol";
-import { IAnyQuoteLedgerV1 } from "../../../src/module-engine/any-quote/IAnyQuoteLedgerV1.sol";
+import { AnyQuoteLedgerV1 } from "../../../src/module-engine/any-quote/AnyQuoteLedgerV1.sol";
 
 contract AnyQuoteHookTestToken is ERC20 {
     uint8 private immutable _decimals;
+    address public rejectedRecipient;
+
+    error RecipientRejected();
 
     constructor(string memory symbol_, uint8 decimals_) ERC20(symbol_, symbol_) {
         _decimals = decimals_;
@@ -36,6 +42,15 @@ contract AnyQuoteHookTestToken is ERC20 {
 
     function mint(address recipient, uint256 amount) external {
         _mint(recipient, amount);
+    }
+
+    function rejectRecipient(address recipient) external {
+        rejectedRecipient = recipient;
+    }
+
+    function _update(address from, address to, uint256 amount) internal override {
+        if (from != address(0) && to == rejectedRecipient) revert RecipientRejected();
+        super._update(from, to, amount);
     }
 }
 
@@ -50,10 +65,21 @@ contract AnyQuoteHookTestPosition is IUnlockCallback {
     }
 
     function initialize(PoolKey memory key, address token, int24 tick) external {
-        _manager.initialize(key, TickMath.getSqrtPriceAtTick(tick));
         bool token0 = Currency.unwrap(key.currency0) == token;
         int24 lower = token0 ? tick : TickMath.minUsableTick(A.TICK_SPACING);
         int24 upper = token0 ? TickMath.maxUsableTick(A.TICK_SPACING) : tick;
+        _initialize(key, token, tick, lower, upper);
+    }
+
+    /// @dev A finite one-sided range makes complete inventory exhaustion practical in the hook fixture.
+    function initializeNarrowRange(PoolKey memory key, address token, int24 tick) external {
+        bool token0 = Currency.unwrap(key.currency0) == token;
+        _initialize(key, token, tick, token0 ? tick : tick - A.TICK_SPACING, token0 ? tick + A.TICK_SPACING : tick);
+    }
+
+    function _initialize(PoolKey memory key, address token, int24 tick, int24 lower, int24 upper) private {
+        _manager.initialize(key, TickMath.getSqrtPriceAtTick(tick));
+        bool token0 = Currency.unwrap(key.currency0) == token;
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(lower);
         uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(upper);
         uint128 liquidity = token0
@@ -83,12 +109,14 @@ contract AnyQuoteHookTestPosition is IUnlockCallback {
 contract AnyQuoteSharedHookV1Test is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
+    using TransientStateLibrary for IPoolManager;
 
     IPoolManager private manager;
     AnyQuoteSharedHookV1 private hook;
-    IAnyQuoteLedgerV1 private ledger;
+    AnyQuoteLedgerV1 private ledger;
     PoolSwapTest private router;
     address private alice;
+    address private bob;
     address private creator;
     address private rewardAdmin;
     uint256 private serial;
@@ -108,16 +136,20 @@ contract AnyQuoteSharedHookV1Test is Test {
         uint256 creator;
         uint16 platformRemainder;
         uint16 creatorRemainder;
+        uint256 tokenBalance;
+        uint256 quoteBalance;
+        uint256 nativeBalance;
     }
 
     function setUp() public {
         vm.chainId(A.CHAIN_ID);
         alice = makeAddr("unprivileged-trader");
+        bob = makeAddr("other-unprivileged-trader");
         creator = makeAddr("module-coin-creator");
         rewardAdmin = makeAddr("reward-admin");
         manager = IPoolManager(address(new PoolManager(address(this))));
         hook = _deployHook();
-        ledger = IAnyQuoteLedgerV1(hook.ledger());
+        ledger = AnyQuoteLedgerV1(hook.ledger());
         router = new PoolSwapTest(manager);
     }
 
@@ -233,6 +265,104 @@ contract AnyQuoteSharedHookV1Test is Test {
         _assertTrade(f, false, -int256(1 ether));
     }
 
+    function test_anotherTraderCarryCanRejectTinyAmountWithoutChangingState() public {
+        Fixture memory f = _fixture(true, 0, 0, true);
+        uint256 snapshot = vm.snapshotState();
+        _assertTrade(f, true, -int256(1));
+        assertTrue(vm.revertToState(snapshot));
+        _fundOtherTrader(f);
+        _assertTradeFor(f, true, -int256(333), bob);
+        (uint16 platform, uint16 author) = hook.feeCarry(f.poolId, true);
+        assertEq(platform, 9990);
+        assertEq(author, 0);
+        bytes32 beforeState = _rollbackState(f);
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CustomRevert.WrappedError.selector,
+                address(hook),
+                IHooks.beforeSwap.selector,
+                abi.encodeWithSelector(AnyQuoteSharedHookV1.InvalidSwap.selector),
+                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+            )
+        );
+        router.swap(
+            f.key, SwapParams(f.quote0, -int256(1), _limit(f.quote0)), PoolSwapTest.TestSettings(false, false), ""
+        );
+        assertEq(_rollbackState(f), beforeState);
+        _assertTrade(f, true, -int256(1 ether));
+    }
+
+    function test_exactMaxSellUsesAcquiredInventoryAfterAnotherTradersCarry() public {
+        Fixture memory f = _fixture(true, 100, 300, true);
+        _assertTrade(f, true, -int256(1 ether + 337));
+        uint256 acquired = f.token.balanceOf(alice);
+        _fundOtherTrader(f);
+        _assertTradeFor(f, true, -int256(1 ether), bob);
+        _assertTradeFor(f, false, int256(0.0001 ether + 337), bob);
+        (uint16 platform, uint16 author) = hook.feeCarry(f.poolId, false);
+        assertEq(platform, 6230);
+        assertEq(author, 2300);
+        uint256 bobQuote = f.quote.balanceOf(bob);
+        uint256 bobToken = f.token.balanceOf(bob);
+        uint256 quoteBefore = f.quote.balanceOf(alice);
+        BalanceDelta delta = _assertTrade(f, false, -int256(acquired));
+        assertEq(f.token.balanceOf(alice), 0);
+        assertEq(f.quote.balanceOf(alice) - quoteBefore, uint256(int256(delta.amount0())));
+        assertGt(f.quote.balanceOf(alice), quoteBefore);
+        assertEq(f.quote.balanceOf(bob), bobQuote);
+        assertEq(f.token.balanceOf(bob), bobToken);
+        assertEq(
+            ledger.totalReceived(address(f.quote)),
+            manager.balanceOf(address(ledger), Currency.wrap(address(f.quote)).toId())
+        );
+    }
+
+    function test_quoteClaimsRemainIndependentAfterPrimaryInventoryExhaustion() public {
+        for (uint256 order; order < 2; ++order) {
+            Fixture memory f = _fixture(order == 0, 100, 300, false);
+            f.position.initializeNarrowRange(f.key, address(f.token), f.registration.initialTick);
+            f.quote.mint(alice, 1_000_000 ether);
+            f.quote.rejectRecipient(creator);
+            // Core rounds the initial deposit up and the range's maximum swap output down.
+            // The remaining raw unit is rounding dust, with no active liquidity left to execute a buy.
+            _assertTrade(f, true, int256(f.token.balanceOf(address(manager)) - 1));
+            assertEq(f.token.balanceOf(address(manager)), 1);
+            assertEq(manager.getLiquidity(PoolId.wrap(f.poolId)), 0);
+            bytes32 beforeState = _rollbackState(f);
+            vm.prank(alice);
+            vm.expectRevert();
+            router.swap(
+                f.key,
+                SwapParams(f.quote0, -int256(1 ether), _limit(f.quote0)),
+                PoolSwapTest.TestSettings(false, false),
+                ""
+            );
+            assertEq(_rollbackState(f), beforeState);
+            vm.expectRevert();
+            ledger.claimQuoteFor(address(f.quote), creator);
+            assertEq(_rollbackState(f), beforeState);
+
+            bytes32 poolBefore = _poolState(f);
+            uint256 platform = ledger.claimableQuote(address(f.quote), A.PLATFORM_RECIPIENT);
+            uint256 author = ledger.claimableQuote(address(f.quote), creator);
+            assertGt(platform, 0);
+            assertGt(author, 0);
+            uint256 lpQuote = f.quote.balanceOf(address(manager)) - platform - author;
+            assertEq(ledger.claimQuoteFor(address(f.quote), A.PLATFORM_RECIPIENT), platform);
+            assertEq(f.quote.balanceOf(A.PLATFORM_RECIPIENT), platform);
+            vm.prank(creator);
+            assertEq(ledger.claimQuoteTo(address(f.quote), alice), author);
+            assertEq(ledger.claimableQuote(address(f.quote), creator), 0);
+            assertEq(ledger.totalClaimed(address(f.quote)), platform + author);
+            assertEq(f.quote.balanceOf(address(manager)), lpQuote);
+            assertEq(f.quote.balanceOf(address(ledger)), 0);
+            assertEq(f.quote.balanceOf(address(hook)), 0);
+            assertEq(_poolState(f), poolBefore);
+            _assertBacking(f.quote);
+        }
+    }
+
     function test_directCallbackCannotMintFees() public {
         Fixture memory f = _fixture(true, 100, 300, true);
         vm.prank(alice);
@@ -258,11 +388,21 @@ contract AnyQuoteSharedHookV1Test is Test {
     }
 
     function _assertTrade(Fixture memory f, bool buy, int256 specified) private returns (BalanceDelta delta) {
+        return _assertTradeFor(f, buy, specified, alice);
+    }
+
+    function _assertTradeFor(Fixture memory f, bool buy, int256 specified, address actor)
+        private
+        returns (BalanceDelta delta)
+    {
         BeforeTrade memory before_;
         before_.platform = ledger.claimableQuote(address(f.quote), A.PLATFORM_RECIPIENT);
         before_.creator = ledger.claimableQuote(address(f.quote), creator);
         (before_.platformRemainder, before_.creatorRemainder) = hook.feeCarry(f.poolId, buy);
-        vm.prank(alice);
+        before_.tokenBalance = f.token.balanceOf(actor);
+        before_.quoteBalance = f.quote.balanceOf(actor);
+        before_.nativeBalance = actor.balance;
+        vm.prank(actor);
         delta = router.swap(
             f.key,
             SwapParams(buy == f.quote0, specified, _limit(buy == f.quote0)),
@@ -275,14 +415,19 @@ contract AnyQuoteSharedHookV1Test is Test {
         int128 tokenDelta = f.quote0 ? delta.amount1() : delta.amount0();
         assertTrue(buy ? quoteDelta < 0 && tokenDelta > 0 : quoteDelta > 0 && tokenDelta < 0);
         uint256 gross = buy ? uint256(-int256(quoteDelta)) : uint256(int256(quoteDelta)) + platform + creatorFee;
-        uint256 creatorBps = buy ? f.registration.buyCreatorFeeBps : f.registration.sellCreatorFeeBps;
-        assertEq(platform, (gross * 30 + before_.platformRemainder) / 10_000);
-        assertEq(creatorFee, (gross * creatorBps + before_.creatorRemainder) / 10_000);
-        (uint16 nextP, uint16 nextC) = hook.feeCarry(f.poolId, buy);
-        assertEq(nextP, (gross * 30 + before_.platformRemainder) % 10_000);
-        assertEq(nextC, (gross * creatorBps + before_.creatorRemainder) % 10_000);
+        {
+            uint256 creatorBps = buy ? f.registration.buyCreatorFeeBps : f.registration.sellCreatorFeeBps;
+            assertEq(platform, (gross * 30 + before_.platformRemainder) / 10_000);
+            assertEq(creatorFee, (gross * creatorBps + before_.creatorRemainder) / 10_000);
+            (uint16 nextP, uint16 nextC) = hook.feeCarry(f.poolId, buy);
+            assertEq(nextP, (gross * 30 + before_.platformRemainder) % 10_000);
+            assertEq(nextC, (gross * creatorBps + before_.creatorRemainder) % 10_000);
+        }
         if (specified < 0) assertEq(buy ? int256(quoteDelta) : int256(tokenDelta), specified);
         else assertEq(buy ? int256(tokenDelta) : int256(quoteDelta), specified);
+        _assertActorDelta(f.quote, actor, before_.quoteBalance, quoteDelta);
+        _assertActorDelta(f.token, actor, before_.tokenBalance, tokenDelta);
+        assertEq(actor.balance, before_.nativeBalance);
         assertEq(f.token.balanceOf(address(router)), 0);
         assertEq(f.quote.balanceOf(address(router)), 0);
         _assertBacking(f.quote);
@@ -292,17 +437,121 @@ contract AnyQuoteSharedHookV1Test is Test {
         (uint160 price,,,) = manager.getSlot0(PoolId.wrap(f.poolId));
         bool zeroForOne = buy == f.quote0;
         uint160 limit = zeroForOne ? price - 1 : price + 1;
-        (uint16 p, uint16 c) = hook.feeCarry(f.poolId, buy);
-        uint256 claims = manager.balanceOf(hook.ledger(), Currency.wrap(address(f.quote)).toId());
+        bytes32 beforeState = _rollbackState(f);
         vm.prank(alice);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CustomRevert.WrappedError.selector,
+                address(hook),
+                IHooks.afterSwap.selector,
+                abi.encodeWithSelector(AnyQuoteSharedHookV1.PartialFillUnsupported.selector),
+                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+            )
+        );
         router.swap(f.key, SwapParams(zeroForOne, specified, limit), PoolSwapTest.TestSettings(false, false), "");
-        (uint16 afterP, uint16 afterC) = hook.feeCarry(f.poolId, buy);
-        assertEq(afterP, p);
-        assertEq(afterC, c);
-        assertEq(manager.balanceOf(hook.ledger(), Currency.wrap(address(f.quote)).toId()), claims);
-        (uint160 afterPrice,,,) = manager.getSlot0(PoolId.wrap(f.poolId));
-        assertEq(afterPrice, price);
+        assertEq(_rollbackState(f), beforeState);
+    }
+
+    function _fundOtherTrader(Fixture memory f) private {
+        f.quote.mint(bob, 1000 ether);
+        vm.startPrank(bob);
+        f.quote.approve(address(router), type(uint256).max);
+        f.token.approve(address(router), type(uint256).max);
+        vm.stopPrank();
+    }
+
+    function _assertActorDelta(AnyQuoteHookTestToken asset, address actor, uint256 beforeBalance, int128 delta)
+        private
+        view
+    {
+        assertEq(
+            asset.balanceOf(actor),
+            delta < 0 ? beforeBalance - uint256(-int256(delta)) : beforeBalance + uint256(int256(delta))
+        );
+    }
+
+    function _rollbackState(Fixture memory f) private view returns (bytes32 state) {
+        (uint16 buyP, uint16 buyC) = hook.feeCarry(f.poolId, true);
+        (uint16 sellP, uint16 sellC) = hook.feeCarry(f.poolId, false);
+        state = keccak256(
+            abi.encode(
+                _poolState(f),
+                _ledgerState(f),
+                buyP,
+                buyC,
+                sellP,
+                sellC,
+                f.token.totalSupply(),
+                f.quote.totalSupply(),
+                manager.isUnlocked(),
+                manager.getNonzeroDeltaCount()
+            )
+        );
+        address[9] memory accounts = [
+            alice,
+            bob,
+            creator,
+            A.PLATFORM_RECIPIENT,
+            address(router),
+            address(hook),
+            address(ledger),
+            address(f.position),
+            address(manager)
+        ];
+        for (uint256 i; i < accounts.length; ++i) {
+            state = keccak256(abi.encode(state, _accountState(f, accounts[i])));
+        }
+    }
+
+    function _accountState(Fixture memory f, address account) private view returns (bytes32) {
+        bytes32 balances = keccak256(
+            abi.encode(
+                f.token.balanceOf(account),
+                f.quote.balanceOf(account),
+                account.balance,
+                ledger.claimableQuote(address(f.quote), account),
+                ledger.claimedBy(address(f.quote), account),
+                ledger.contributionByLaunch(f.registration.launchId, account)
+            )
+        );
+        bytes32 claims = keccak256(
+            abi.encode(
+                manager.balanceOf(account, Currency.wrap(address(f.token)).toId()),
+                manager.balanceOf(account, Currency.wrap(address(f.quote)).toId()),
+                manager.balanceOf(account, 0)
+            )
+        );
+        return keccak256(
+            abi.encode(
+                balances,
+                claims,
+                manager.currencyDelta(account, Currency.wrap(address(f.token))),
+                manager.currencyDelta(account, Currency.wrap(address(f.quote))),
+                manager.currencyDelta(account, Currency.wrap(address(0)))
+            )
+        );
+    }
+
+    function _ledgerState(Fixture memory f) private view returns (bytes32) {
+        (uint256 platform, uint256 author, uint256 credited) = ledger.accounting(f.registration.launchId);
+        return keccak256(
+            abi.encode(
+                platform,
+                author,
+                credited,
+                ledger.totalReceived(address(f.quote)),
+                ledger.totalCredited(address(f.quote)),
+                ledger.totalClaimed(address(f.quote))
+            )
+        );
+    }
+
+    function _poolState(Fixture memory f) private view returns (bytes32) {
+        (uint160 price, int24 tick, uint24 protocolFee, uint24 lpFee) = manager.getSlot0(PoolId.wrap(f.poolId));
+        (uint256 fee0, uint256 fee1) = manager.getFeeGrowthGlobals(PoolId.wrap(f.poolId));
+        return keccak256(
+            abi.encode(price, tick, protocolFee, lpFee, fee0, fee1, manager.getLiquidity(PoolId.wrap(f.poolId)))
+        );
     }
 
     function _fixture(bool quote0, uint16 buyBps, uint16 sellBps, bool initialize) private returns (Fixture memory f) {
