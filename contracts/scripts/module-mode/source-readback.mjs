@@ -86,7 +86,7 @@ function quotePlannerAuxdataProfile(plan, role, profile, artifact, input, metada
   need(bytes(artifact.deployedBytecode.object) === bytes(plan.contracts[role].runtime), 'Quote Planner complete runtime differs from its compiled template');
 }
 
-function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata) {
+export function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata) {
   const target = { 'src/module-engine/any-quote/AnyQuoteLPModuleV1.sol': 'AnyQuoteLPModuleV1' };
   equal(artifact.compilationTarget, target, 'ETH Engine compilation target differs');
   const compilerSettings = { optimizer: { enabled: true, runs: 1000 }, evmVersion: 'cancun', viaIR: true,
@@ -96,8 +96,7 @@ function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata) {
   equal(metadata.settings, { ...compilerSettings, compilationTarget: target }, 'ETH Engine compiler metadata settings differ');
 }
 
-function exactSolcVersionAuxdata(code, compiled, role, label) {
-  const auxdata = code.cborAuxdata;
+export function exactSolcVersionAuxdataDescription(auxdata, compiled, role, label) {
   need(auxdata && typeof auxdata === 'object' && !Array.isArray(auxdata), `${role}: ${label} compiler auxdata map required`);
   const entries = Object.entries(auxdata);
   need(entries.length === 1 && /^[1-9][0-9]*$/.test(entries[0][0]), `${role}: ${label} must describe one compiler trailer`);
@@ -106,9 +105,46 @@ function exactSolcVersionAuxdata(code, compiled, role, label) {
   equal(Object.keys(entry).sort(), ['offset', 'value'], `${role}: ${label} compiler auxdata fields differ`);
   const offset = (compiled.length - SOLC_VERSION_AUXDATA.length) / 2;
   need(offset >= 0 && Number.isSafeInteger(entry.offset) && entry.offset === offset
-    && bytes(entry.value) === SOLC_VERSION_AUXDATA && compiled.slice(2 + offset * 2) === SOLC_VERSION_AUXDATA.slice(2)
-    && bytes(code.onchainBytecode).slice(2 + offset * 2, compiled.length) === SOLC_VERSION_AUXDATA.slice(2),
+    && bytes(entry.value) === SOLC_VERSION_AUXDATA && compiled.slice(2 + offset * 2) === SOLC_VERSION_AUXDATA.slice(2),
   `${role}: ${label} compiler trailer must exactly match the terminal compiled and onchain bytes`);
+  return offset;
+}
+export function exactSolcVersionAuxdata(code, compiled, role, label) {
+  const offset = exactSolcVersionAuxdataDescription(code.cborAuxdata, compiled, role, label);
+  need(bytes(code.onchainBytecode).slice(2 + offset * 2, compiled.length) === SOLC_VERSION_AUXDATA.slice(2),
+    `${role}: ${label} compiler trailer must exactly match the terminal compiled and onchain bytes`);
+}
+
+export function validateSourcifyCompilation({ artifact, input, metadata, file, name, role, recompilation }, value) {
+  const compilation = value.compilation;
+  need(compilation?.language === 'Solidity' && compilation.compiler === 'solc' && compilation.compilerVersion === SOURCIFY_COMPILER
+    && compilation.name === name && compilation.fullyQualifiedName === `${file}:${name}`, `${role}: Sourcify compiler/target differs`);
+  publicationSettings(input, value, artifact, recompilation, role);
+  equal(value.sources, input.sources, `${role}: Sourcify source closure differs`);
+  equal(value.metadata, metadata, `${role}: Sourcify full compiler metadata differs`);
+  // ABI item order has no semantic meaning; argument, tuple and output order remain exact.
+  equal(abiEntries(value.abi), abiEntries(artifact.abi), `${role}: Sourcify ABI differs`);
+}
+
+export function validateSourcifyRuntimeImmutables(artifact, runtime, r, role) {
+  const compiledRefs = artifact.deployedBytecode.immutableReferences ?? {}, refs = r.immutableReferences ?? {};
+  // AST numeric ids are local to the compilation's source unit set. All byte offsets/lengths must still match.
+  const ranges = value => Object.values(value).flat().sort((a, b) => a.start - b.start || a.length - b.length);
+  equal(ranges(refs), ranges(compiledRefs), `${role}: immutable reference offsets differ`);
+  const transforms = Object.entries(refs).flatMap(([id, list]) => list.map(ref => ({ id, type: 'replace', offset: ref.start, reason: 'immutable' })));
+  const sort = list => [...list].sort((a, b) => a.offset - b.offset || String(a.id).localeCompare(String(b.id)));
+  need(Array.isArray(r.transformations), `${role}: runtime transformations missing`);
+  equal(sort(r.transformations), sort(transforms), `${role}: runtime transformations differ`);
+  const immutableValues = {};
+  for (const [id, list] of Object.entries(refs)) {
+    need(list.length > 0, `${role}: empty immutable reference`);
+    for (const ref of list) {
+      const actual = `0x${runtime.slice(2 + ref.start * 2, 2 + (ref.start + ref.length) * 2)}`;
+      need(ref.length === 32 && actual.length === 66 && (!immutableValues[id] || immutableValues[id] === actual), `${role}: inconsistent immutable value`);
+      immutableValues[id] = actual;
+    }
+  }
+  equal(r.transformationValues, transforms.length ? { immutables: immutableValues } : {}, `${role}: runtime immutable values differ`);
 }
 
 /** Independent complete-byte comparison. Provider `match` is preserved as such, never relabelled `exact_match`. */
@@ -120,14 +156,7 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
   need(value.match === 'match' && value.creationMatch === 'match' && value.runtimeMatch === 'match', `${role}: Sourcify no-CBOR match is unavailable`);
   need(typeof value.matchId === 'string' && /^[1-9][0-9]*$/.test(value.matchId) && typeof value.verifiedAt === 'string'
     && Number.isFinite(Date.parse(value.verifiedAt)), `${role}: Sourcify match identity missing`);
-  const compilation = value.compilation;
-  need(compilation?.language === 'Solidity' && compilation.compiler === 'solc' && compilation.compilerVersion === SOURCIFY_COMPILER
-    && compilation.name === name && compilation.fullyQualifiedName === `${file}:${name}`, `${role}: Sourcify compiler/target differs`);
-  publicationSettings(input, value, artifact, recompilation, role);
-  equal(value.sources, input.sources, `${role}: Sourcify source closure differs`);
-  equal(value.metadata, build.compilerMetadata?.[role] ?? artifact.metadata, `${role}: Sourcify full compiler metadata differs`);
-  // ABI item order has no semantic meaning; argument, tuple and output order remain exact.
-  equal(abiEntries(value.abi), abiEntries(artifact.abi), `${role}: Sourcify ABI differs`);
+  validateSourcifyCompilation({ artifact, input, metadata: build.compilerMetadata?.[role] ?? artifact.metadata, file, name, role, recompilation }, value);
   need(value.deployment?.transactionHash === hash(creation.transactionHash)
     && BigInt(value.deployment.blockNumber) === BigInt(creation.blockNumber)
     && BigInt(value.deployment.transactionIndex) === BigInt(creation.transactionIndex)
@@ -154,24 +183,7 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
   const expectedCreationTransforms = constructorArguments === '0x' ? [] : [{ type: 'insert', offset: (compiledCreation.length - 2) / 2, reason: 'constructorArguments' }];
   equal(c.transformations, expectedCreationTransforms, `${role}: creation transformation differs`);
   equal(c.transformationValues, constructorArguments === '0x' ? {} : { constructorArguments }, `${role}: constructor transformation differs`);
-  const compiledRefs = artifact.deployedBytecode.immutableReferences ?? {}, refs = r.immutableReferences ?? {};
-  // AST numeric ids are local to the compilation's source unit set. All byte offsets/lengths must still match.
-  const ranges = value => Object.values(value).flat().sort((a, b) => a.start - b.start || a.length - b.length);
-  equal(ranges(refs), ranges(compiledRefs), `${role}: immutable reference offsets differ`);
-  const transforms = Object.entries(refs).flatMap(([id, list]) => list.map(ref => ({ id, type: 'replace', offset: ref.start, reason: 'immutable' })));
-  const sort = list => [...list].sort((a, b) => a.offset - b.offset || String(a.id).localeCompare(String(b.id)));
-  need(Array.isArray(r.transformations), `${role}: runtime transformations missing`);
-  equal(sort(r.transformations), sort(transforms), `${role}: runtime transformations differ`);
-  const immutableValues = {};
-  for (const [id, list] of Object.entries(refs)) {
-    need(list.length > 0, `${role}: empty immutable reference`);
-    for (const ref of list) {
-      const actual = `0x${pin.runtime.slice(2 + ref.start * 2, 2 + (ref.start + ref.length) * 2)}`;
-      need(ref.length === 32 && actual.length === 66 && (!immutableValues[id] || immutableValues[id] === actual), `${role}: inconsistent immutable value`);
-      immutableValues[id] = actual;
-    }
-  }
-  equal(r.transformationValues, transforms.length ? { immutables: immutableValues } : {}, `${role}: runtime immutable values differ`);
+  validateSourcifyRuntimeImmutables(artifact, pin.runtime, r, role);
   return { role, address: pin.address, runtimeCodeHash: pin.runtimeCodeHash, constructorArguments,
     sourcePaths: Object.keys(input.sources).sort(), sourceCommit: plan.sourceCommit, provider: 'sourcify-v2',
     providerMatch: value.match, creationMatch: value.creationMatch, runtimeMatch: value.runtimeMatch,

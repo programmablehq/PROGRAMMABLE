@@ -13,6 +13,7 @@ import {
 import { canonicalJson, need } from './core.mjs';
 import { boundedPublicJson, exactJson, SOURCIFY_BASE, SOURCIFY_COMPILER, sourcifyPreflight, sourcifyNeedsRecompilation, validateSourcifySource } from './source-readback.mjs';
 import { recompileSourcifyInput } from './source-recompile.mjs';
+import { ETH_CANONICAL_SOURCE_CLASS, validateSourcifyCreationGap } from './source-creation-gap.mjs';
 import { launchSourceWire } from './launch-source-shared.mjs';
 import { alignPublishedImmutableIds, bindCheckpointEntry, bindNativeTokenIdentity, checkpointEntry, checkpointState, engineLaunchIdentity, engineResourceCommitment,
   nativeForwarderSalt, receiptEvent, releaseInventory, sourceProfile } from './launch-source-profiles.mjs';
@@ -22,6 +23,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const RPC = 'https://rpc.mainnet.chain.robinhood.com';
 const MAX = (1n << 256n) - 1n;
 const STATE_SCHEMA = 'programmable.module-mode-launch-source-checkpoint.v1';
+const ETH_PROFILE = 'module-engine-any-quote-eth-v1';
+// Only bindEngineLaunch can issue this in-process authority; saved JSON and caller flags cannot opt in.
+const canonicalEthTargets = new WeakMap();
+function canonicalTargetDigest(target) {
+  return keccak256(toHex(canonicalJson({ role: target.role, address: target.address, file: target.file, name: target.name,
+    sourceProfile: target.sourceProfile, sourceCommit: target.sourceCommit, input: target.input, artifact: target.artifact,
+    sourceIds: Object.fromEntries(Object.entries(target.compilation.sources).map(([file, source]) => [file, source.id])),
+    runtime: target.runtime, creationCode: target.creationCode, constructorArguments: target.constructorArguments,
+    creation: target.creation, transactionHash: target.transactionHash, protectedCompleteInputHash: target.protectedCompleteInputHash ?? null,
+    resources: target.resources ?? null, requestDigest: target.requestDigest ?? null, manifestHash: target.manifestHash ?? null,
+    reviewDigest: target.reviewDigest ?? null, artifactDigest: target.artifactDigest ?? null })));
+}
 const FORWARDER_EVENT_ABI = parseAbi(['event LockedPositionFeeForwarderDeployed(address indexed forwarder,address indexed feeRecipient,bytes32 indexed salt,bytes32 configurationHash,address positionManager)']);
 const FORWARDER_EVENT_TOPIC = keccak256(toHex('LockedPositionFeeForwarderDeployed(address,address,bytes32,bytes32,address)'));
 const POSITION_TRANSFER_ABI = parseAbi(['event Transfer(address indexed from,address indexed to,uint256 indexed tokenId)']);
@@ -250,7 +263,7 @@ async function templates(release, codes, binary, fetchPublic = fetch, targets = 
     const { value: source } = await boundedPublicJson(`${SOURCIFY_BASE}/v2/contract/4663/${pin.address}?fields=all`, fetchPublic);
     need(source.chainId === '4663' && same(source.address, pin.address) && source.creationMatch === 'match' && source.runtimeMatch === 'match', 'Factory source identity is not verified');
     need(source.compilation?.compilerVersion === SOURCIFY_COMPILER && same(source.runtimeBytecode?.onchainBytecode, codes[target.factory]), 'Factory source/runtime differs from the active release');
-    const input = { ...source.stdJsonInput, settings: { ...source.stdJsonInput.settings, outputSelection: { '*': { '*': ['abi', 'metadata', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
+    const input = { ...source.stdJsonInput, settings: { ...source.stdJsonInput.settings, outputSelection: { '*': { '*': ['abi', 'metadata', 'storageLayout', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
     const result = await compile(input, binary);
     const factoryArtifact = result.contracts?.[target.factoryFile]?.[target.factoryName];
     const artifact = result.contracts?.[target.file]?.[target.name];
@@ -360,9 +373,12 @@ export async function engineBuild(entry, publication, context) {
   wire.verifyModuleEnginePublication({ release, publication, source, manifest, review });
   const reviewed = publication.reviewedBuild, expected = reviewed.artifact.engine;
   const standard = wire.moduleEngineStandardInputV1(source, reviewed.subject, reviewed.plan);
-  need(wire.reviewDigest('programmable.modules.compiler-input.v1', standard) === reviewed.artifact.compiler.completeInputHash, 'Engine compiler input differs from accepted build');
+  const completeInputHash = wire.reviewDigest('programmable.modules.compiler-input.v1', standard);
+  need(completeInputHash === reviewed.artifact.compiler.completeInputHash, 'Engine compiler input differs from accepted build');
+  if (release.sourceVersion === ETH_PROFILE) need(completeInputHash === publication.template.manifest.manifest.source.compiler.completeInputHash,
+    'ETH Engine compiler input differs from protected manifest');
   const input = { ...standard, settings: { ...standard.settings,
-    outputSelection: { '*': { '*': ['abi', 'metadata', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
+    outputSelection: { '*': { '*': ['abi', 'metadata', 'storageLayout', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
   const result = await compile(input, binary), target = sourceTarget({ role: 'engine', file: expected.sourcePath,
     name: expected.contractName, sourceCommit: release.sourceCommit, sourceProfile: release.sourceVersion }, input, result);
   need(same(`0x${target.artifact.evm.bytecode.object}`, expected.creationBytecode)
@@ -370,7 +386,7 @@ export async function engineBuild(entry, publication, context) {
     && canonicalJson(target.artifact.abi) === canonicalJson(expected.abi)
     && canonicalJson(target.artifact.evm.deployedBytecode.immutableReferences ?? {})
       === canonicalJson(Object.fromEntries(expected.immutableReferences.map(({ id, ranges }) => [id, ranges]))), 'Local Engine compilation differs from accepted artifact');
-  return target;
+  return { ...target, ...(release.sourceVersion === ETH_PROFILE ? { protectedCompleteInputHash: completeInputHash } : {}) };
 }
 
 async function quoteResources(identity, release, log, receipt, creation, context) {
@@ -485,6 +501,14 @@ async function bindEngineLaunch(entry, log, tokenBuild, context) {
     engine.resources = { profile: 'quote-shared-v1', resourcesHash, poolId: state.poolId, sharedHook: bindings.sharedHook,
       tickLower: state.tickLower, tickUpper: state.tickUpper, lockedLiquidity: String(state.lockedLiquidity), lockedTokenDust: String(state.lockedTokenDust),
       quoteDecimals: state.quoteDecimals, ...(identity.nativeFeeRoute ? { nativeFeeRouteHash: state.nativeFeeRouteHash } : {}), additionalSourceTargets: [] };
+    if (release.sourceVersion === ETH_PROFILE) {
+      need(typeof context.beforePublish === 'function', 'Canonical source snapshot recheck unavailable');
+      need(same(receipt.from, creation.transactionSender), 'ETH creation receipt/transaction sender differs');
+      token.sourceProfile = ETH_PROFILE;
+      for (const target of [token, engine]) canonicalEthTargets.set(target, { digest: canonicalTargetDigest(target), recheck: context.beforePublish,
+        releaseDigest: release.releaseDigest, launchId: a.launchId, resourcesHash,
+        runtimeSnapshot: { blockNumber: BigInt(context.stateNumber).toString(), blockHash: context.stateBlock.blockHash, requireCanonical: true } });
+    }
     return [token, engine];
   }
   if (identity.manifest.catalogDefinition.interface === 'quote-v1') return [token, engine, await quoteResources(identity, release, log, receipt, creation, context)];
@@ -502,7 +526,7 @@ export async function ensureTargetResult(target, publish, context) {
     ...(error.verificationId ? { verificationId: error.verificationId } : {}) }; }
 }
 export function sourceRecordsStatus(records) {
-  return records.some(item => item.status === 'failed') ? 'failed'
+  return records.some(item => item.status !== undefined && !['verified', 'not-published'].includes(item.status)) ? 'failed'
     : records.some(item => item.status === 'not-published') ? 'source-publication-required' : 'verified';
 }
 export async function checkpointVerifiedRelease(file, state, release, nextBlock, blockHash, checkedAt, records) {
@@ -525,6 +549,23 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
     if (missing) return null;
     const recompilation = sourcifyNeedsRecompilation(target.input, response.value)
       ? await recompileSourcifyInput(response.value, target.input, { PATH: process.env.PATH, MODULE_MODE_SOLC: binary }) : undefined;
+    if (response.value?.creationMatch === null && canonicalEthTargets.has(target)) {
+      const authority = canonicalEthTargets.get(target);
+      need(canonicalTargetDigest(target) === authority.digest, 'Canonical source target changed after binding');
+      const publication = validateSourcifyCreationGap(target, response.value, recompilation);
+      await authority.recheck(target);
+      need(canonicalTargetDigest(target) === authority.digest, 'Canonical source target changed during readback');
+      return { ...publication, status: 'verified', evidenceClass: ETH_CANONICAL_SOURCE_CLASS, role: target.role, address: target.address,
+        releaseSourceCommit: target.sourceCommit, sourceTextProvenance: target.role === 'engine'
+          ? 'protected-reviewed-complete-input' : 'public-source-compiles-to-released-initcode',
+        protectedCompleteInputHash: target.protectedCompleteInputHash ?? null,
+        sourcePaths: Object.keys(target.input.sources).sort(), sourceUrl: url, sourceResponseBytesDigest: keccak256(response.raw),
+        runtimeCodeHash: keccak256(target.runtime), creationBytecodeHash: keccak256(target.creationCode), constructorArguments: target.constructorArguments,
+        comparison: 'exact-public-source-runtime-and-canonical-create2-creation',
+        canonicalCreation: { ...target.creation, releaseDigest: authority.releaseDigest, launchId: authority.launchId,
+          resourcesHash: authority.resourcesHash, runtimeSnapshot: authority.runtimeSnapshot,
+          method: 'authenticated-ETH-launch-receipt-CREATE2-and-runtime-binding' } };
+    }
     return { ...validatePublished(target, response.value, recompilation), sourceResponseBytesDigest: keccak256(response.raw) };
   }
   const current = await read();

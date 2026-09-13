@@ -1,14 +1,300 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { encodeAbiParameters, encodeEventTopics, keccak256, parseAbi, parseAbiParameters, toHex as textHex, zeroAddress } from 'viem';
+import { brotliDecompressSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
+import { encodeAbiParameters, encodeEventTopics, encodeFunctionData, encodeFunctionResult, keccak256, parseAbi, parseAbiParameters, toHex as textHex, zeroAddress } from 'viem';
 import { parseOptions, patchImmutables, scanRange, validatePublished, boundLaunchBatch, resolveCreationTransactions,
-  checkpointVerifiedRelease, ensureTargetResult, sourceRecordsStatus } from './verify-launch-source.mjs';
-import { checkpointEntry, CHECKPOINT_SCHEMA } from './launch-source-profiles.mjs';
+  checkpointVerifiedRelease, ensureTargetResult, sourceRecordsStatus, compile, sourceTarget, engineBuild, run } from './verify-launch-source.mjs';
+import { validateSourcifyCreationGap } from './source-creation-gap.mjs';
+import { sourcifyNeedsRecompilation } from './source-readback.mjs';
+import { recompileSourcifyInput } from './source-recompile.mjs';
+import { launchSourceWire } from './launch-source-shared.mjs';
+import { checkpointEntry, CHECKPOINT_SCHEMA, engineLaunchIdentity } from './launch-source-profiles.mjs';
 import { canonicalJson } from './core.mjs';
+import { EXPECTED_COMPILER_PROFILE, resolveRobinhoodReproductionCompiler } from '../robinhood-custom-launch-standard-json-core.mjs';
+
+let cachedSourceCompiler;
+async function sourceTestSolc() {
+  if (process.env.MODULE_MODE_SOLC) return process.env.MODULE_MODE_SOLC;
+  // Contracts release CI already warms solc 0.8.26 in Foundry's SVM cache. Reuse
+  // the existing byte/version-pinned local resolver; no PATH guess or download.
+  cachedSourceCompiler ??= resolveRobinhoodReproductionCompiler({ compiler: EXPECTED_COMPILER_PROFILE }, { allowDownload: false });
+  return (await cachedSourceCompiler).path;
+}
+after(async () => { if (cachedSourceCompiler) await rm((await cachedSourceCompiler).cleanupDirectory, { recursive: true, force: true }); });
+
+const actual = JSON.parse(brotliDecompressSync(readFileSync(new URL('./source-creation-gap.fixture.json.br', import.meta.url))));
+let actualTargetPromise;
+function actualSourceTargets() {
+  return actualTargetPromise ??= (async () => {
+    const binary = await sourceTestSolc(), result = {};
+    for (const role of ['token', 'engine']) {
+      const raw = Buffer.from(role === 'token' ? actual.rawToken : actual.rawEngine), value = JSON.parse(raw);
+      const [file, name] = value.compilation.fullyQualifiedName.split(':');
+      const standard = role === 'token' ? actual.factory.stdJsonInput : value.stdJsonInput;
+      const input = { ...standard, settings: { ...standard.settings,
+        outputSelection: { '*': { '*': ['abi', 'metadata', 'storageLayout', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
+      const output = await compile(input, binary), receipt = actual.launch.receipt;
+      const target = { ...sourceTarget({ role, file, name }, input, output), address: value.address.toLowerCase(),
+        sourceProfile: actual.launch.release.sourceVersion, sourceCommit: actual.launch.release.sourceCommit,
+        runtime: value.runtimeBytecode.onchainBytecode, transactionHash: receipt.transactionHash,
+        creation: { transactionHash: receipt.transactionHash, blockNumber: BigInt(receipt.blockNumber).toString(), blockHash: receipt.blockHash,
+          transactionIndex: BigInt(receipt.transactionIndex).toString(), transactionSender: receipt.from }, constructorArguments: '0x' };
+      target.creationCode = `0x${target.artifact.evm.bytecode.object}`;
+      const recompilation = sourcifyNeedsRecompilation(target.input, value)
+        ? await recompileSourcifyInput(value, target.input, { PATH: process.env.PATH, MODULE_MODE_SOLC: binary }) : undefined;
+      result[role] = { target, value, raw, recompilation };
+    }
+    return result;
+  })();
+}
+
+test('the actual engine build binds the public source to both authenticated reviewed input pins', async () => {
+  const wire = await launchSourceWire(), publication = actual.launch.publication;
+  const binary = await sourceTestSolc(), build = source => engineBuild({ release: actual.launch.release }, publication, { wire,
+    binary, fetchPublic: async url => {
+      const kind = /\/(source|manifest|review)\.json$/.exec(String(url))?.[1];
+      assert.ok(kind, 'Only the existing public module source files are read');
+      return Response.json({ source, manifest: publication.template.manifest, review: publication.review }[kind]);
+    } });
+  const target = await build(actual.sourcePacket);
+  assert.equal(target.protectedCompleteInputHash, '0x60be050c239d2ab31d865dd4dcaa09bab172ef7d16e9fda5815a081da8c58855');
+  const changed = structuredClone(actual.sourcePacket), file = changed.files.find(item => item.path.endsWith('/AnyQuoteLPModuleV1.sol'));
+  assert.ok(file);
+  const content = Buffer.concat([Buffer.from(file.bytes, 'base64'), Buffer.from('\n// paired source comment forgery\n')]);
+  file.bytes = content.toString('base64'); file.sha256 = createHash('sha256').update(content).digest('hex');
+  await assert.rejects(build(changed), /public source bytes differ|source|artifact|build/i);
+});
+
+test('actual creation-gap source records validate all present data without becoming full provider matches', async () => {
+  for (const [role, fixture] of Object.entries(await actualSourceTargets())) {
+    const { target, value, raw, recompilation } = fixture;
+    const proof = validateSourcifyCreationGap(target, value, recompilation);
+    assert.equal(proof.creationMatch, null); assert.equal(proof.runtimeMatch, 'match');
+    assert.equal(proof.providerClassification, 'RUNTIME_MATCH_CREATION_ACQUISITION_UNAVAILABLE');
+    assert.deepEqual(proof.validatedPresentFields, Object.keys(value).sort());
+    assert.equal(proof.evidenceClass, undefined, 'Present-data validation cannot issue canonical authority');
+    assert.equal(proof.status, 'canonical-creation-binding-required');
+    assert.equal(sourceRecordsStatus([proof]), 'failed', 'Present-data proof cannot authorize a checkpoint');
+    assert.deepEqual(value, JSON.parse(raw), 'Provider data is not synthesized or rewritten');
+    assert.throws(() => validatePublished(target, value, recompilation), /Sourcify no-CBOR match is unavailable/);
+    assert.equal(Object.keys(target.compilation.sources).length, role === 'token' ? 19 : 47);
+  }
+});
+
+test('every actual Sourcify field is required and mutations fail without masking auxiliary compiler data', async () => {
+  const changes = [
+    v => { v.unrecognized = null; }, v => { v.chainId = '1'; }, v => { v.address = zeroAddress; }, v => { v.matchId = '0'; },
+    v => { v.verifiedAt = 'invalid'; }, v => { v.match = 'partial'; }, v => { v.runtimeMatch = null; }, v => { v.creationMatch = 'match'; },
+    v => { v.deployment.transactionHash = `0x${'00'.repeat(32)}`; }, v => { v.creationBytecode.onchainBytecode = '0x'; },
+    v => { v.creationBytecode.transformations = []; }, v => { v.creationBytecode.transformationValues = {}; },
+    v => { v.creationBytecode.recompiledBytecode += '00'; }, v => { v.runtimeBytecode.onchainBytecode += '00'; },
+    v => { v.runtimeBytecode.recompiledBytecode += '00'; }, v => { v.creationBytecode.sourceMap += ';'; },
+    v => { v.runtimeBytecode.sourceMap += ';'; }, v => { v.creationBytecode.cborAuxdata = { 1: { offset: 0, value: '0x00' } }; },
+    v => { v.creationBytecode.linkReferences = { Lib: {} }; }, v => { v.runtimeBytecode.immutableReferences = {}; },
+    v => { v.runtimeBytecode.transformations.pop(); }, v => { v.runtimeBytecode.transformationValues = {}; },
+    v => { v.sources[Object.keys(v.sources)[0]].content += '\n'; }, v => { v.compilation.compilerVersion = '0.8.27'; },
+    v => { v.compilation.compilerSettings.optimizer.runs++; }, v => { v.compilation.extra = true; }, v => { v.abi.pop(); },
+    v => { v.metadata.output.userdoc.notice = 'forged'; }, v => { v.storageLayout.storage[0].astId++; },
+    v => { v.storageLayout.storage[0].slot = '999'; }, v => { v.transientStorageLayout = {}; },
+    v => { v.userdoc.notice = 'forged'; }, v => { v.devdoc.details = 'forged'; }, v => { v.sourceIds[Object.keys(v.sourceIds)[0]].id++; },
+    v => { v.additionalInput = {}; }, v => { v.stdJsonInput.sources = {}; }, v => { v.stdJsonOutput.sources = {}; },
+    v => { v.stdJsonInput.settings.outputSelection = 'invalid'; }, v => { v.stdJsonInput.extra = true; },
+    v => { v.compilation.compilerSettings.outputSelection = {}; },
+    v => { v.stdJsonOutput.contracts[Object.keys(v.stdJsonOutput.contracts)[0]][v.compilation.name].evm.bytecode.object += '00'; },
+    v => { v.signatures.function[0].signatureHash4 = '0x00000000'; }, v => { v.signatures.function.push(v.signatures.function[0]); },
+    v => { v.proxyResolution.isProxy = true; }, v => { v.proxyResolution.implementations = [zeroAddress]; },
+  ];
+  for (const fixture of Object.values(await actualSourceTargets())) {
+    for (const field of Object.keys(fixture.value)) {
+      const changed = structuredClone(fixture.value); delete changed[field];
+      assert.throws(() => validateSourcifyCreationGap(fixture.target, changed, fixture.recompilation), undefined, `missing ${field}`);
+    }
+    for (const change of changes) {
+      const changed = structuredClone(fixture.value); change(changed);
+      assert.throws(() => validateSourcifyCreationGap(fixture.target, changed, fixture.recompilation), undefined, change.toString());
+    }
+    const wrongContext = structuredClone(fixture.target); wrongContext.compilation.sources[fixture.target.file].id++;
+    assert.throws(() => validateSourcifyCreationGap(wrongContext, fixture.value, fixture.recompilation), /source IDs/);
+  }
+});
+
+test('saved, copied and flag-bearing targets cannot issue canonical evidence and unknown statuses cannot checkpoint', async () => {
+  for (const fixture of Object.values(await actualSourceTargets())) {
+    const target = { ...fixture.target, evidenceClass: 'exact-public-source-and-canonical-create2-v1', checkpointEligible: true };
+    const result = await ensureTargetResult(target, false, { binary: await sourceTestSolc(),
+      beforePublish: () => assert.fail('An unbound target cannot request canonical authority'), fetchPublic: async () => Response.json(fixture.value) });
+    assert.equal(result.status, 'failed'); assert.equal(sourceRecordsStatus([result]), 'failed');
+  }
+  for (const status of ['pending', 'exact-public-source-bytes-canonical-freshness-pending', 'unknown', null])
+    assert.equal(sourceRecordsStatus([{ status }]), 'failed');
+  const directory = await mkdtemp(path.join(tmpdir(), 'source-present-data-checkpoint-'));
+  try {
+    const fixture = (await actualSourceTargets()).token;
+    const proof = validateSourcifyCreationGap(fixture.target, fixture.value, fixture.recompilation);
+    const selected = actual.launch.release, hash = actual.launch.receipt.blockHash, checkedAt = '2026-09-13T00:00:00Z';
+    const previous = checkpointEntry(selected, 60419321n, hash, checkedAt);
+    const state = { schemaVersion: CHECKPOINT_SCHEMA, chainId: 4663, releases: { [selected.releaseDigest]: previous } };
+    const file = path.join(directory, 'checkpoint.json'), before = `${JSON.stringify(state)}\n`;
+    await writeFile(file, before);
+    await checkpointVerifiedRelease(file, state, selected, 60419322n, hash, checkedAt, [proof]);
+    assert.equal(await readFile(file, 'utf8'), before);
+    assert.deepEqual(state.releases[selected.releaseDigest], previous);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+// These mocks replay retained public values through the real run(), catalogue, compiler, receipt,
+// CREATE2 and resource binders. They never replace a production validator or issue private authority.
+async function replayActualOperator(fault) {
+  const directory = await mkdtemp(path.join(tmpdir(), 'source-canonical-operator-'));
+  try {
+    const selected = actual.launch.release, wire = await launchSourceWire();
+    const identity = engineLaunchIdentity(actual.launch, wire), { receipt, log, revision, state } = actual.launch;
+    const head = { number: textHex(BigInt(actual.canonical.checkpoint.number)), hash: actual.canonical.checkpoint.hash };
+    const creation = actual.canonical.creation, created = { number: receipt.blockNumber, hash: receipt.blockHash };
+    const files = { 'module-mode/robinhood.preview.json': null, 'module-mode/catalog.json': {},
+      'module-mode/historical-releases.json': { schemaVersion: 'programmable.module-mode-historical-releases.v1', releases: [] },
+      'module-engine/robinhood.json': selected, 'module-engine/catalog.json': actual.catalog,
+      'module-engine/historical-releases.json': { schemaVersion: 'programmable.module-engine.historical-releases.v1', releases: [] } };
+    for (const [file, value] of Object.entries(files)) {
+      const target = path.join(directory, 'config', file); await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, JSON.stringify(value));
+    }
+    const stateFile = path.join(directory, 'checkpoint.json');
+    const prior = `${JSON.stringify({ schemaVersion: CHECKPOINT_SCHEMA, chainId: 4663, releases: {} })}\n`;
+    await writeFile(stateFile, prior);
+    const calls = new Map(), publicReads = [], submissions = [], canonicalRechecks = [], unexpected = [];
+    const host = selected.contracts.host.address, engine = actual.canonical.launch.engine, token = actual.canonical.launch.token;
+    const register = (address, abi, name, args, result) => calls.set(`${address.toLowerCase()}:${encodeFunctionData({ abi, functionName: name, args })}`,
+      encodeFunctionResult({ abi, functionName: name, result }));
+    const getter = (address, name, type, result) => register(address, parseAbi([`function ${name}() view returns (${type})`]), name, [], result);
+    getter(host, 'SOURCE_VERSION', 'bytes32', wire.moduleEngineSourceId(selected));
+    register(host, wire.moduleEngineHostAbi, 'getRevision', [actual.canonical.launch.revisionId], revision);
+    register(host, wire.moduleEngineHostAbi, 'getLaunch', [actual.canonical.launch.launchId], actual.canonical.launch);
+    getter(token, 'name', 'string', identity.parameters.name); getter(token, 'symbol', 'string', identity.parameters.symbol);
+    getter(token, 'decimals', 'uint8', 18); getter(token, 'creator', 'address', host); getter(token, 'graffiti', 'bytes32', identity.graffiti);
+    getter(engine, 'contextHash', 'bytes32', keccak256(encodeAbiParameters([wire.moduleEngineConstructorParameters[0]], [identity.context])));
+    for (const [name, type] of Object.entries({ poolId: 'bytes32', initialTick: 'int24', tickLower: 'int24', tickUpper: 'int24',
+      lockedLiquidity: 'uint128', lockedTokenDust: 'uint256', quoteDecimals: 'uint8' })) getter(engine, name, type, state[name]);
+    for (const name of ['sharedHook', 'poolManager']) getter(engine, name, 'address', selected.contracts[name].address);
+    register(selected.contracts.sharedHook.address, wire.anyQuoteNativeFeeRouteAbi, 'nativeFeeRouteHash', [state.poolId],
+      fault === 'resource-mismatch' ? `0x${'00'.repeat(32)}` : state.nativeFeeRouteHash);
+    const runtimes = new Map(Object.entries(actual.runtimeCode).map(([role, code]) => [selected.contracts[role].address, code]));
+    runtimes.set(token, JSON.parse(actual.rawToken).runtimeBytecode.onchainBytecode);
+    runtimes.set(engine, JSON.parse(actual.rawEngine).runtimeBytecode.onchainBytecode);
+    const badHash = `0x${'00'.repeat(32)}`;
+    const request = async batch => batch.map(({ method, params }) => {
+      if (method === 'eth_chainId') return textHex(4663n);
+      if (method === 'eth_getBlockByNumber') {
+        if (params[0] === 'finalized' || params[0] === 'latest') return head;
+        const block = BigInt(params[0]) === BigInt(created.number) ? created : BigInt(params[0]) === BigInt(head.number) ? head : null;
+        assert.ok(block, 'Only the retained creation and canonical snapshot blocks are requested');
+        if (publicReads.length) canonicalRechecks.push({ number: params[0], afterSource: publicReads.at(-1) });
+        if (publicReads.length && (fault === 'creation-reorg' && block === created || fault === 'runtime-reorg' && block === head)) return { ...block, hash: badHash };
+        return block;
+      }
+      if (method === 'eth_getLogs') {
+        assert.equal(params[0].address.toLowerCase(), host); assert.equal(params[0].toBlock, created.number);
+        return [log];
+      }
+      if (method === 'eth_getTransactionReceipt') return fault === 'receipt-sender-mismatch' ? { ...receipt, from: zeroAddress } : receipt;
+      if (method === 'eth_getTransactionByHash') return { hash: creation.transactionHash, blockHash: creation.blockHash,
+        blockNumber: textHex(BigInt(creation.blockNumber)), transactionIndex: textHex(BigInt(creation.transactionIndex)), from: creation.transactionSender };
+      if (method === 'eth_getCode' || method === 'eth_call') {
+        assert.deepEqual(params[1], { blockHash: head.hash, requireCanonical: true });
+        if (method === 'eth_getCode') {
+          const code = runtimes.get(params[0].toLowerCase()); assert.ok(code, 'Runtime bytes must exist in retained public evidence');
+          return fault === 'released-code-mismatch' && params[0].toLowerCase() === host ? `${code}00` : code;
+        }
+        const result = calls.get(`${params[0].to.toLowerCase()}:${params[0].data}`);
+        assert.ok(result, `Unexpected replay call ${params[0].data.slice(0, 10)}`); return result;
+      }
+      unexpected.push(method); assert.fail(`Unexpected replay RPC method ${method}`);
+    });
+    const fetchPublic = async (url, init = {}) => {
+      const value = String(url), kind = /\/(source|manifest|review)\.json$/.exec(value)?.[1];
+      const role = value.toLowerCase().includes(token) ? 'token' : value.toLowerCase().includes(engine) ? 'engine' : null;
+      if (init.method === 'POST') {
+        assert.equal(fault, 'source-initially-missing', 'Already-readable public source must not be resubmitted');
+        assert.ok(role); assert.equal(value.toLowerCase(), `https://sourcify.dev/server/v2/verify/4663/${role === 'token' ? token : engine}`);
+        const body = JSON.parse(init.body), provider = JSON.parse(role === 'token' ? actual.rawToken : actual.rawEngine);
+        assert.equal(body.creationTransactionHash, receipt.transactionHash); assert.equal(body.compilerVersion, '0.8.26+commit.8a97fa7a');
+        assert.equal(body.contractIdentifier, provider.compilation.fullyQualifiedName); assert.deepEqual(body.stdJsonInput.sources, provider.stdJsonInput.sources);
+        submissions.push(role);
+        return Response.json({ verificationId: `${role}-synthetic-offline-job` }, { status: 202 });
+      }
+      if (kind) return Response.json({ source: actual.sourcePacket, manifest: actual.launch.publication.template.manifest, review: actual.launch.publication.review }[kind]);
+      if (value.endsWith('/api-docs/swagger.json')) return Response.json(actual.preflight.api);
+      if (value.endsWith('/chains')) return Response.json(actual.preflight.chains);
+      if (value.includes(selected.contracts.tokenFactory.address)) return Response.json(actual.factory);
+      assert.ok(role, 'Only the existing authenticated publication and Sourcify source endpoints are requested'); publicReads.push(role);
+      // Controlled absence/job responses test the existing flow, not a historical claim of absence.
+      if (fault === 'source-initially-missing' && !submissions.includes(role)) return new Response(null, { status: 404 });
+      const raw = role === 'token' ? actual.rawToken : actual.rawEngine;
+      if (fault === 'source-mismatch' && role === 'token') { const changed = JSON.parse(raw); changed.storageLayout.storage[0].slot = '999'; return Response.json(changed); }
+      return new Response(raw, { headers: { 'content-type': 'application/json' } });
+    };
+    const options = parseOptions(['--publish', '--state-file', stateFile, '--max-blocks', String(BigInt(created.number) - BigInt(selected.startBlock) + 1n),
+      '--solc', await sourceTestSolc()]);
+    const report = await run(options, { root: directory, request, fetchPublic });
+    assert.deepEqual(unexpected, []);
+    return { report, publicReads, submissions, canonicalRechecks, prior, checkpoint: await readFile(stateFile, 'utf8') };
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+test('the complete operator issues the distinct ETH source witness and advances only its exact replay checkpoint', async () => {
+  const { report, publicReads, canonicalRechecks, checkpoint } = await replayActualOperator();
+  assert.equal(report.status, 'verified', JSON.stringify(report.releases.map(({ status, error, records }) => ({ status, error, records }))));
+  assert.deepEqual(publicReads, ['token', 'engine']); assert.equal(report.records.length, 2);
+  for (const record of report.records) {
+    assert.equal(record.status, 'verified'); assert.equal(record.evidenceClass, 'exact-public-source-and-canonical-create2-v1');
+    assert.equal(record.creationMatch, null); assert.equal(record.runtimeMatch, 'match');
+    assert.equal(record.canonicalCreation.transactionHash, actual.launch.receipt.transactionHash);
+    assert.equal(record.canonicalCreation.resourcesHash, actual.canonical.launch.resourcesHash);
+    assert.deepEqual(record.canonicalCreation.runtimeSnapshot, { blockNumber: actual.canonical.checkpoint.number, blockHash: actual.canonical.checkpoint.hash, requireCanonical: true });
+    assert.ok(canonicalRechecks.some(call => call.afterSource === record.role && BigInt(call.number) === BigInt(actual.launch.receipt.blockNumber)));
+    assert.ok(canonicalRechecks.some(call => call.afterSource === record.role && BigInt(call.number) === BigInt(actual.canonical.checkpoint.number)));
+  }
+  assert.equal(report.records[0].sourceTextProvenance, 'public-source-compiles-to-released-initcode');
+  assert.equal(report.records[0].protectedCompleteInputHash, null);
+  assert.equal(report.records[1].protectedCompleteInputHash, '0x60be050c239d2ab31d865dd4dcaa09bab172ef7d16e9fda5815a081da8c58855');
+  assert.equal((report.records[1].constructorArguments.length - 2) / 2, 512);
+  const saved = JSON.parse(checkpoint).releases[actual.launch.release.releaseDigest];
+  assert.equal(saved.nextBlock, '60419322'); assert.equal(saved.blockHash, actual.launch.receipt.blockHash);
+});
+
+test('an initially absent source uses the existing submission flow and the same canonical readback authority', async () => {
+  const { report, submissions, publicReads, checkpoint } = await replayActualOperator('source-initially-missing');
+  assert.equal(report.status, 'verified', JSON.stringify(report.releases.map(({ status, error }) => ({ status, error }))));
+  assert.deepEqual(submissions, ['token', 'engine']); assert.deepEqual(publicReads, ['token', 'token', 'engine', 'engine']);
+  assert.ok(report.records.every(record => record.status === 'verified' && record.creationMatch === null
+    && record.evidenceClass === 'exact-public-source-and-canonical-create2-v1'));
+  assert.equal(JSON.parse(checkpoint).releases[actual.launch.release.releaseDigest].nextBlock, '60419322');
+});
+
+test('canonical creation and runtime reorgs retain the checkpoint after exact public readback', async () => {
+  for (const fault of ['creation-reorg', 'runtime-reorg']) {
+    const { report, publicReads, prior, checkpoint } = await replayActualOperator(fault);
+    assert.equal(report.status, 'failed'); assert.deepEqual(publicReads, ['token', 'engine']);
+    assert.equal(report.records.length, 2); assert.ok(report.records.every(record => record.status === 'failed' && /changed before source publication/.test(record.error)));
+    assert.equal(checkpoint, prior);
+  }
+});
+
+test('source, release, receipt and resource mismatches cannot advance the actual operator checkpoint', async () => {
+  for (const fault of ['source-mismatch', 'released-code-mismatch', 'receipt-sender-mismatch', 'resource-mismatch']) {
+    const { report, publicReads, prior, checkpoint } = await replayActualOperator(fault);
+    assert.equal(report.status, 'failed', fault); assert.equal(checkpoint, prior, fault);
+    if (fault === 'source-mismatch') {
+      assert.deepEqual(publicReads, ['token', 'engine']); assert.equal(report.records[0].status, 'failed');
+      assert.match(report.records[0].error, /storage layout/); assert.equal(report.records[1].status, 'verified');
+    } else { assert.deepEqual(publicReads, []); assert.equal(report.records.length, 0); }
+  }
+});
 
 const address = `0x${'12'.repeat(20)}`;
 const release = { chainId: 4663, startBlock: '100', releaseDigest: `0x${'34'.repeat(32)}`, contracts: { launcher: { address } } };
