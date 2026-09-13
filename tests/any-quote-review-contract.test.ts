@@ -133,8 +133,8 @@ describe("PositionManager review requires its own environment and custody eviden
   // Synthetic parser vectors; no execution, independent review, or publication authority.
   const resultsFixture = (): ModuleEngineTestResultV1 => ({
     ...structuredClone(frozen.artifact.tests) as ModuleEngineTestResultV1,
-    sharedQuoteChecks: cases.map(c => ({ id: c.id, ...Object.fromEntries(MODULE_ENGINE_SHARED_QUOTE_CHECKS_V1.map(key => [key, c.expectedDeployment === "success" ? true : null])) })) as NonNullable<ModuleEngineTestResultV1["sharedQuoteChecks"]>,
-    positionManagerChecks: cases.map(c => ({ id: c.id, ...Object.fromEntries(MODULE_ENGINE_POSITION_MANAGER_CHECKS_V1.map(key => [key, c.expectedDeployment === "success" ? true : null])) })) as NonNullable<ModuleEngineTestResultV1["positionManagerChecks"]>,
+    sharedQuoteChecks: cases.map(c => ({ id: c.id, ...Object.fromEntries(MODULE_ENGINE_SHARED_QUOTE_CHECKS_V1.map(key => [key, c.expectedDeployment === "success" ? true : null])) as Record<typeof MODULE_ENGINE_SHARED_QUOTE_CHECKS_V1[number], boolean | null> })),
+    positionManagerChecks: cases.map(c => ({ id: c.id, ...Object.fromEntries(MODULE_ENGINE_POSITION_MANAGER_CHECKS_V1.map(key => [key, c.expectedDeployment === "success" ? true : null])) as Record<typeof MODULE_ENGINE_POSITION_MANAGER_CHECKS_V1[number], boolean | null> })),
   });
   const verify = (r: ModuleEngineTestResultV1) => validateModuleEngineTestResultsV1(r, subject.requestDigest, frozen.artifact.planDigest as `0x${string}`, cases, MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1);
 
