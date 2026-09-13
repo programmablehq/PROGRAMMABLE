@@ -332,6 +332,151 @@ test("staged smoke scans complete catalogs and token pages with only the protect
   assert.doesNotMatch(JSON.stringify(result), /fixture-vercel-token|fixture-protection-bypass/u);
 });
 
+function incompleteEthereum(spec, unavailable = false) {
+  spec.body.status = unavailable ? "unavailable" : "partial";
+  spec.status = unavailable ? 503 : 200;
+  spec.headers["x-programmable-indexing-status"] = spec.body.status;
+  spec.body.sources.custom = "unavailable";
+  spec.body.sourceEvidence.custom = null;
+  if (unavailable) {
+    spec.body.sources.classic = "unavailable";
+    spec.body.sourceEvidence.classic = null;
+    spec.body.updatedAt = null;
+    spec.body.items = [];
+    spec.body.presentations = [];
+    spec.body.page = { number: 1, size: 50, totalItems: 0, totalPages: 0, hasMore: false };
+  }
+}
+
+for (const unavailable of [false, true]) test(`staged ${unavailable ? "unavailable" : "partial"} first catalog can recover only to complete evidence`, async () => {
+  let firstPages = 0;
+  const waits = [], retries = [];
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1 && ++firstPages === 1) incompleteEthereum(spec, unavailable);
+  });
+  const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+    waitImpl: async delay => { waits.push(delay); }, onCatalogRetry: retry => retries.push(retry) }));
+  assert.deepEqual(waits, [5_000]);
+  assert.equal(firstPages, 2);
+  assert.equal(retries.length, 1);
+  assert.equal(f.calls.filter(call => call.url.pathname === "/api/explore/robinhood").length, 2);
+  assert.equal(f.calls.filter(call => call.url.hostname === "api.vercel.com").length, 2);
+  assert.deepEqual(result.chains.map(chain => chain.totalItems), [51, 1]);
+  assert.doesNotMatch(JSON.stringify(result), /partial|unavailable|fixture-vercel-token|fixture-protection-bypass/u);
+});
+
+test("persistent staged incompleteness exhausts three attempts without accepting a binding", async () => {
+  for (const unavailable of [false, true]) {
+    let firstPages = 0;
+    const waits = [];
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum") { firstPages += 1; incompleteEthereum(spec, unavailable); }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+      waitImpl: async delay => { waits.push(delay); } })), /ethereum response status.*is incomplete/u);
+    assert.equal(firstPages, 3);
+    assert.deepEqual(waits, [5_000, 5_000]);
+    assert.equal(f.calls.filter(call => call.url.hostname === "api.vercel.com").length, 1);
+  }
+});
+
+test("malformed or untrusted incomplete source envelopes never trigger availability retries", async () => {
+  for (const mutate of [
+    spec => { spec.body.chainId = 4663; },
+    spec => { spec.headers["x-programmable-indexing-status"] = "ready"; },
+    spec => { delete spec.headers["x-content-type-options"]; },
+    spec => { spec.status = 403; },
+    spec => { spec.body.sources.custom = "private-provider-error-must-not-leak"; },
+    spec => { spec.body.sources.extra = "unavailable"; },
+    spec => { spec.body.sourceEvidence.custom = {}; },
+    spec => { spec.body.sourceEvidence.classic = null; },
+    spec => { spec.body.sourceEvidence.classic.sourceCommit = "c".repeat(40); },
+    spec => { spec.body.sourceEvidence.classic.commitment = "invalid"; },
+    spec => { spec.body.page = null; },
+    spec => { spec.body.updatedAt = null; },
+  ]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum") { incompleteEthereum(spec); mutate(spec); }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+      waitImpl: async () => assert.fail("invalid source envelope was retried") })), error => {
+      assert.match(error.message, /indexed website ethereum response status/u);
+      assert.doesNotMatch(error.message, /private-provider-error-must-not-leak/u);
+      return true;
+    });
+    assert.equal(f.calls.filter(call => call.url.pathname === "/api/explore/ethereum").length, 1);
+  }
+});
+
+test("production, later-page incompleteness and other-chain integrity failures are not retried", async () => {
+  for (const kind of ["production", "later-page", "other-chain"]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum" && (kind !== "later-page" || spec.body.page.number === 2)) incompleteEthereum(spec);
+      if (kind === "other-chain" && url.pathname === "/api/explore/robinhood") spec.body.sourceEvidence.router.binding = "invalid";
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+      ...(kind === "production" ? { targetKind: "production", targetUrl: "https://programmable.market" } : {}),
+      waitImpl: async () => assert.fail("nonretryable observation was retried") })),
+    kind === "other-chain" ? /Robinhood Router binding/u : /ethereum response status/u);
+  }
+});
+
+test("recovered staged catalogs still require valid complete pagination and final deployment binding", async () => {
+  for (const failBinding of [false, true]) {
+    let firstPages = 0, waits = 0;
+    const f = fixture(({ url, spec, bindingCount }) => {
+      if (url.pathname === "/api/explore/ethereum") {
+        if (spec.body.page.number === 1 && ++firstPages === 1) incompleteEthereum(spec);
+        if (!failBinding && spec.body.page.number === 2) {
+          spec.body.items[0] = ethereumItem(1);
+          spec.body.presentations[0].tokenAddress = ADDRESS(1);
+        }
+      }
+      if (failBinding && url.hostname === "api.vercel.com" && bindingCount === 2) spec.body.meta.githubCommitSha = "c".repeat(40);
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl, waitImpl: async () => { waits += 1; } })),
+      failBinding ? /exact staged deployment binding/u : /duplicate launch across pages/u);
+    assert.equal(waits, 1);
+  }
+});
+
+test("each complete retry captures a fresh observation clock for both catalogs", async t => {
+  let now = NOW, firstPages = 0;
+  t.mock.method(Date, "now", () => now);
+  const f = fixture(({ url, spec }) => {
+    if (!url.pathname.startsWith("/api/explore/")) return;
+    const generatedAt = new Date(now).toISOString();
+    spec.body.updatedAt = generatedAt;
+    if (spec.body.chainId === 1) {
+      for (const source of Object.values(spec.body.sourceEvidence)) source.generatedAt = generatedAt;
+      if (spec.body.page.number === 1 && ++firstPages === 1) incompleteEthereum(spec);
+    } else spec.body.sourceEvidence.router.updatedAt = generatedAt;
+  });
+  const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl, nowMs: undefined,
+    waitImpl: async () => { now += 10_000; } }));
+  assert.equal(result.observedAt, new Date(NOW + 10_000).toISOString());
+  for (const chain of result.chains) for (const page of chain.pages) assert.equal(page.updatedAt, result.observedAt);
+});
+
+test("staged retries cannot start after the elapsed retry window", async t => {
+  for (const expireDuringWait of [false, true]) {
+    let now = NOW, waits = 0, firstPages = 0;
+    const clock = t.mock.method(Date, "now", () => now);
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum") {
+        firstPages += 1;
+        incompleteEthereum(spec);
+        if (!expireDuringWait) now += 60_000;
+      }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+      waitImpl: async () => { waits += 1; now += 60_000; } })), /ethereum response status.*is incomplete/u);
+    assert.equal(firstPages, 1);
+    assert.equal(waits, expireDuringWait ? 1 : 0);
+    clock.mock.restore();
+  }
+});
+
 test("production observation uses the canonical domain without authentication or bypass", async () => {
   const f = fixture();
   const result = await runIndexedWebsiteReadSmoke(input({ targetKind: "production", targetUrl: "https://programmable.market", fetchImpl: f.fetchImpl }));

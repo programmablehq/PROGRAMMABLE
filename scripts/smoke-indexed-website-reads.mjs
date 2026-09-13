@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setTimeout as wait } from "node:timers/promises";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { encodeAbiParameters, keccak256 } from "viem";
@@ -24,6 +25,9 @@ const PAGE_SIZE = 50;
 const MAXIMUM_ITEMS = 10_000;
 const MAXIMUM_RESPONSE_BYTES = 2 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
+const STAGED_CATALOG_ATTEMPTS = 3;
+const STAGED_CATALOG_RETRY_DELAY_MS = 5_000;
+const STAGED_CATALOG_RETRY_WINDOW_MS = 60_000;
 const PRODUCTION_ORIGIN = "https://programmable.market";
 const LAUNCH_PROJECTION_SOURCE = "https://api.programmable.market/v4/chains/4663/finalized-launch-projections";
 const LAUNCH_CONTRACT_URL = "https://programmable.market/openapi/custom-launch-v4.2.json";
@@ -36,9 +40,54 @@ const record = (value) => value !== null && typeof value === "object" && !Array.
 const check = (condition, label) => { if (!condition) throw new Error(`indexed website ${label} is invalid`); };
 const hash = (text) => `sha256:${createHash("sha256").update(text).digest("hex")}`;
 
+function responseStatusSummary(body, response) {
+  const status = value => ["ready", "stale", "syncing", "partial", "unavailable"].includes(value) ? value : "invalid";
+  const source = value => ["current", "last-known-good", "unavailable"].includes(value) ? value : "invalid";
+  return `http=${response.status}, body=${status(body?.status)}, header=${status(response.headers.get("x-programmable-indexing-status"))}, ` +
+    `chain=${[1, 4663].includes(body?.chainId) ? body.chainId : "invalid"}, ` +
+    `classic=${source(body?.sources?.classic)}, custom=${source(body?.sources?.custom)}`;
+}
+
+class IncompleteEthereumCatalogError extends Error {}
+
+function isIncompleteEthereumCatalog(body, response, expectations, nowMs) {
+  if (!record(body) || body.chainId !== 1 || !record(body.sources) || !record(body.sourceEvidence) ||
+    Object.keys(body.sources).sort().join(",") !== "classic,custom" ||
+    Object.keys(body.sourceEvidence).sort().join(",") !== "classic,custom" ||
+    response.headers.get("x-programmable-indexing-status") !== body.status ||
+    response.headers.get("x-content-type-options") !== "nosniff") return false;
+  const unavailable = Object.values(body.sources).filter(value => value === "unavailable").length;
+  if (!(response.status === 200 && body.status === "partial" && unavailable === 1 ||
+    response.status === 503 && body.status === "unavailable" && unavailable === 2)) return false;
+  if (!["classic", "custom"].every(name => body.sources[name] === "unavailable"
+    ? body.sourceEvidence[name] === null
+    : ["current", "last-known-good"].includes(body.sources[name]) && record(body.sourceEvidence[name]))) return false;
+  if (!record(body.page) || body.page.number !== 1 || body.page.size !== PAGE_SIZE ||
+    !Number.isSafeInteger(body.page.totalItems) || body.page.totalItems < 0 || body.page.totalItems > MAXIMUM_ITEMS ||
+    body.page.totalPages !== Math.ceil(body.page.totalItems / PAGE_SIZE) || body.page.hasMore !== (body.page.totalPages > 1) ||
+    !Array.isArray(body.items) || body.items.length !== Math.min(PAGE_SIZE, body.page.totalItems) ||
+    !Array.isArray(body.presentations)) return false;
+  if (unavailable === 2 && (body.updatedAt !== null || body.page.totalItems !== 0 || body.presentations.length !== 0)) return false;
+  try {
+    for (const name of ["classic", "custom"]) if (body.sources[name] !== "unavailable") {
+      validateEthereumSource(name, body.sourceEvidence[name], expectations, nowMs);
+      check(body.updatedAt === body.sourceEvidence[name].generatedAt, "incomplete source timestamp");
+    }
+  } catch { return false; }
+  return true;
+}
+
 function timestamp(value, nowMs) {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) &&
     new Date(value).toISOString() === value && Date.parse(value) <= nowMs + 60_000;
+}
+
+function validateEthereumSource(name, source, expectations, nowMs) {
+  check(record(source) && source.source === (name === "classic" ? "envio-classic-v3" : "canonical-launch-stamp-router") &&
+    BLOCK.test(source.asOfBlock ?? "") && HASH.test(source.asOfBlockHash ?? "") && DIGEST.test(source.commitment ?? "") &&
+    timestamp(source.generatedAt, nowMs), "Ethereum source evidence");
+  if (name === "classic") check(source.deployment === expectations.ethereum.deployment && source.sourceCommit === expectations.ethereum.sourceCommit,
+    "Ethereum source release binding");
 }
 
 function exactTarget(value, kind) {
@@ -56,14 +105,10 @@ function validateSources(body, route, expectations, nowMs) {
     check(record(body.sources) && Object.keys(body.sources).sort().join(",") === "classic,custom" && record(body.sourceEvidence), "Ethereum sources");
     for (const name of ["classic", "custom"]) {
       const source = body.sourceEvidence[name];
-      check(["current", "last-known-good"].includes(body.sources[name]) && record(source) &&
-        source.source === (name === "classic" ? "envio-classic-v3" : "canonical-launch-stamp-router") &&
-        BLOCK.test(source.asOfBlock ?? "") && HASH.test(source.asOfBlockHash ?? "") && DIGEST.test(source.commitment ?? "") &&
-        timestamp(source.generatedAt, nowMs), "Ethereum source evidence");
+      check(["current", "last-known-good"].includes(body.sources[name]), "Ethereum source evidence");
+      validateEthereumSource(name, source, expectations, nowMs);
     }
     const classic = body.sourceEvidence.classic;
-    check(classic.deployment === expectations.ethereum.deployment && classic.sourceCommit === expectations.ethereum.sourceCommit,
-      "Ethereum source release binding");
     check(body.updatedAt === [classic.generatedAt, body.sourceEvidence.custom.generatedAt].sort()[0], "Ethereum oldest source timestamp");
     check(body.status === (Object.values(body.sources).every(value => value === "current") ? "ready" : "stale"), "Ethereum source status");
   } else {
@@ -198,7 +243,7 @@ export function validateIndexedWebsiteList({ body, response, route, pageNumber, 
   check(response.status === 200 && record(body) && body.chainId === route.chainId &&
     (route.chainId === 1 ? ["ready", "stale"] : ["ready", "stale", "syncing"]).includes(body.status) &&
     response.headers.get("x-programmable-indexing-status") === body.status &&
-    response.headers.get("x-content-type-options") === "nosniff", `${route.slug} response status`);
+    response.headers.get("x-content-type-options") === "nosniff", `${route.slug} response status (${responseStatusSummary(body, response)})`);
   check(record(body.page) && body.page.number === pageNumber && body.page.size === PAGE_SIZE &&
     Number.isSafeInteger(body.page.totalItems) && body.page.totalItems > 0 && body.page.totalItems <= MAXIMUM_ITEMS &&
     body.page.totalPages === Math.ceil(body.page.totalItems / PAGE_SIZE) && body.page.hasMore === (pageNumber < body.page.totalPages) &&
@@ -247,7 +292,7 @@ async function observeReads(input, target, headers, observedAt) {
     const text = await readBoundedResponseText(response, { maximumBytes: MAXIMUM_RESPONSE_BYTES, label: "indexed website response" });
     return { response, text, bodyDigest: hash(text) };
   }
-  return Promise.all(INDEXED_WEBSITE_ROUTES.map(async route => {
+  const results = await Promise.allSettled(INDEXED_WEBSITE_ROUTES.map(async route => {
     let first;
     const identities = new Set();
     const pages = [];
@@ -255,6 +300,10 @@ async function observeReads(input, target, headers, observedAt) {
       const result = await request(`${route.path}?page=${number}&pageSize=${PAGE_SIZE}&sort=newest&mode=all`, "application/json");
       let body;
       try { body = JSON.parse(result.text); } catch { throw new Error("indexed website JSON is invalid"); }
+      if (input.targetKind === "staged" && route.chainId === 1 && number === 1 &&
+        isIncompleteEthereumCatalog(body, result.response, expectations, Date.parse(observedAt))) {
+        throw new IncompleteEthereumCatalogError(`indexed website ethereum response status (${responseStatusSummary(body, result.response)}) is incomplete`);
+      }
       validateIndexedWebsiteList({ body, response: result.response, route, pageNumber: number, expectations, nowMs: Date.parse(observedAt) });
       first ??= body;
       check(body.page.totalItems === first.page.totalItems, "catalog changed during pagination; rerun smoke");
@@ -291,13 +340,18 @@ async function observeReads(input, target, headers, observedAt) {
     return { chainId: route.chainId, status, totalItems: identities.size, pages,
       tokenPage: { path: tokenPath, tokenAddress: item.tokenAddress, bodyDigest: token.bodyDigest } };
   }));
+  const failures = results.filter(result => result.status === "rejected");
+  // Settle both chains and never let a transient Ethereum response hide a
+  // source, identity, pagination or transport failure in the other observation.
+  const failure = failures.find(result => !(result.reason instanceof IncompleteEthereumCatalogError)) ?? failures[0];
+  if (failure) throw failure.reason;
+  return results.map(result => result.value);
 }
 
 export async function runIndexedWebsiteReadSmoke(input) {
   const target = exactTarget(input.targetUrl, input.targetKind);
   check(/^dpl_[A-Za-z0-9]{20,80}$/u.test(input.deploymentId ?? "") &&
     /^[0-9a-f]{40}$/u.test(input.gitHead ?? "") && /^prj_[A-Za-z0-9]{8,128}$/u.test(input.projectId ?? ""), "deployment identity");
-  const observedAt = new Date(input.nowMs ?? Date.now()).toISOString();
   const headers = {};
   if (input.targetKind === "staged") {
     check(typeof input.automationBypassSecret === "string" && input.automationBypassSecret.length >= 16 &&
@@ -318,7 +372,24 @@ export async function runIndexedWebsiteReadSmoke(input) {
     }
   }
   await binding();
-  const chains = await observeReads(input, target, headers, observedAt);
+  const retryDeadlineMs = Date.now() + STAGED_CATALOG_RETRY_WINDOW_MS;
+  let chains;
+  let observedAt;
+  for (let attempt = 1; attempt <= STAGED_CATALOG_ATTEMPTS; attempt += 1) {
+    observedAt = new Date(input.nowMs ?? Date.now()).toISOString();
+    try {
+      chains = await observeReads(input, target, headers, observedAt);
+      break;
+    } catch (error) {
+      if (!(error instanceof IncompleteEthereumCatalogError) || attempt === STAGED_CATALOG_ATTEMPTS ||
+        Date.now() + STAGED_CATALOG_RETRY_DELAY_MS >= retryDeadlineMs) throw error;
+      input.onCatalogRetry?.({ attempt, nextAttempt: attempt + 1, detail: error.message });
+      // Discard the complete failed observation and capture a fresh timestamp
+      // for the next one. Only a fully validated final snapshot becomes evidence.
+      await (input.waitImpl ?? wait)(STAGED_CATALOG_RETRY_DELAY_MS);
+      if (Date.now() >= retryDeadlineMs) throw error;
+    }
+  }
   await binding();
   return { schemaVersion: "programmable.indexed-website-read-evidence.v1", mode: INDEXED_WEBSITE_READ_MODE,
     targetKind: input.targetKind, targetUrl: target.origin, deploymentId: input.deploymentId, gitHead: input.gitHead,
@@ -330,7 +401,8 @@ async function main() {
   const result = await runIndexedWebsiteReadSmoke({ targetKind: "staged", targetUrl: process.env.STAGED_TARGET_URL,
     deploymentId: process.env.STAGED_DEPLOYMENT_ID, gitHead: process.env.VERIFIED_SHA,
     projectId: process.env.VERCEL_PROJECT_ID, teamId: process.env.VERCEL_ORG_ID, token: process.env.VERCEL_TOKEN,
-    automationBypassSecret: process.env.VERCEL_AUTOMATION_BYPASS_SECRET });
+    automationBypassSecret: process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+    onCatalogRetry: observation => process.stderr.write(`${JSON.stringify(observation)}; no release evidence accepted for this attempt\n`) });
   check(process.env.INDEXED_WEBSITE_POLICY_MODE === result.mode, "preflight mode");
   check(typeof process.env.INDEXED_WEBSITE_EVIDENCE_OUTPUT === "string" && process.env.INDEXED_WEBSITE_EVIDENCE_OUTPUT.length > 0 &&
     typeof process.env.GITHUB_OUTPUT === "string" && process.env.GITHUB_OUTPUT.length > 0, "evidence output");
