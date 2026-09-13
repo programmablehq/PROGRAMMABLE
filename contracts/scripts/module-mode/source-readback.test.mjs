@@ -233,7 +233,7 @@ test('ETH engine auxdata never masks byte, constructor, immutable, source or pro
 
 test('ETH compiler trailer support requires the exact profile, engine target and compiler settings', () => {
   const mutations = [
-    ...[undefined, 'module-native-v1', 'module-native-v2', 'module-engine-v1', 'module-engine-any-quote-v1'].map(profile => ({ expected }) => { expected.sourceProfile = profile; }),
+    ...[undefined, 'module-native-v1', 'module-native-v2', 'module-engine-v1', 'module-engine-any-quote-v2'].map(profile => ({ expected }) => { expected.sourceProfile = profile; }),
     ({ expected, value }) => {
       expected.role = 'token';
       for (const entries of [expected.plan.contracts, expected.build.artifacts, expected.build.standardInputs, expected.build.compilerMetadata]) {

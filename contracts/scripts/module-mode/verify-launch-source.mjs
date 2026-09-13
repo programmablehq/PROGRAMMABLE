@@ -24,8 +24,9 @@ const RPC = 'https://rpc.mainnet.chain.robinhood.com';
 const MAX = (1n << 256n) - 1n;
 const STATE_SCHEMA = 'programmable.module-mode-launch-source-checkpoint.v1';
 const ETH_PROFILE = 'module-engine-any-quote-eth-v1';
+const canonicalSourceProfiles = new Set([ETH_PROFILE, 'module-engine-any-quote-v1']);
 // Only bindEngineLaunch can issue this in-process authority; saved JSON and caller flags cannot opt in.
-const canonicalEthTargets = new WeakMap();
+const canonicalAnyQuoteTargets = new WeakMap();
 function canonicalTargetDigest(target) {
   return keccak256(toHex(canonicalJson({ role: target.role, address: target.address, file: target.file, name: target.name,
     sourceProfile: target.sourceProfile, sourceCommit: target.sourceCommit, input: target.input, artifact: target.artifact,
@@ -375,8 +376,8 @@ export async function engineBuild(entry, publication, context) {
   const standard = wire.moduleEngineStandardInputV1(source, reviewed.subject, reviewed.plan);
   const completeInputHash = wire.reviewDigest('programmable.modules.compiler-input.v1', standard);
   need(completeInputHash === reviewed.artifact.compiler.completeInputHash, 'Engine compiler input differs from accepted build');
-  if (release.sourceVersion === ETH_PROFILE) need(completeInputHash === publication.template.manifest.manifest.source.compiler.completeInputHash,
-    'ETH Engine compiler input differs from protected manifest');
+  if (canonicalSourceProfiles.has(release.sourceVersion)) need(completeInputHash === publication.template.manifest.manifest.source.compiler.completeInputHash,
+    'Any Quote Engine compiler input differs from protected manifest');
   const input = { ...standard, settings: { ...standard.settings,
     outputSelection: { '*': { '*': ['abi', 'metadata', 'storageLayout', 'evm.bytecode', 'evm.deployedBytecode'], '': ['ast'] } } } };
   const result = await compile(input, binary), target = sourceTarget({ role: 'engine', file: expected.sourcePath,
@@ -386,7 +387,7 @@ export async function engineBuild(entry, publication, context) {
     && canonicalJson(target.artifact.abi) === canonicalJson(expected.abi)
     && canonicalJson(target.artifact.evm.deployedBytecode.immutableReferences ?? {})
       === canonicalJson(Object.fromEntries(expected.immutableReferences.map(({ id, ranges }) => [id, ranges]))), 'Local Engine compilation differs from accepted artifact');
-  return { ...target, ...(release.sourceVersion === ETH_PROFILE ? { protectedCompleteInputHash: completeInputHash } : {}) };
+  return { ...target, ...(canonicalSourceProfiles.has(release.sourceVersion) ? { protectedCompleteInputHash: completeInputHash } : {}) };
 }
 
 async function quoteResources(identity, release, log, receipt, creation, context) {
@@ -501,11 +502,11 @@ async function bindEngineLaunch(entry, log, tokenBuild, context) {
     engine.resources = { profile: 'quote-shared-v1', resourcesHash, poolId: state.poolId, sharedHook: bindings.sharedHook,
       tickLower: state.tickLower, tickUpper: state.tickUpper, lockedLiquidity: String(state.lockedLiquidity), lockedTokenDust: String(state.lockedTokenDust),
       quoteDecimals: state.quoteDecimals, ...(identity.nativeFeeRoute ? { nativeFeeRouteHash: state.nativeFeeRouteHash } : {}), additionalSourceTargets: [] };
-    if (release.sourceVersion === ETH_PROFILE) {
+    if (canonicalSourceProfiles.has(release.sourceVersion)) {
       need(typeof context.beforePublish === 'function', 'Canonical source snapshot recheck unavailable');
-      need(same(receipt.from, creation.transactionSender), 'ETH creation receipt/transaction sender differs');
-      token.sourceProfile = ETH_PROFILE;
-      for (const target of [token, engine]) canonicalEthTargets.set(target, { digest: canonicalTargetDigest(target), recheck: context.beforePublish,
+      need(same(receipt.from, creation.transactionSender), 'Any Quote creation receipt/transaction sender differs');
+      token.sourceProfile = release.sourceVersion;
+      for (const target of [token, engine]) canonicalAnyQuoteTargets.set(target, { digest: canonicalTargetDigest(target), recheck: context.beforePublish,
         releaseDigest: release.releaseDigest, launchId: a.launchId, resourcesHash,
         runtimeSnapshot: { blockNumber: BigInt(context.stateNumber).toString(), blockHash: context.stateBlock.blockHash, requireCanonical: true } });
     }
@@ -549,8 +550,8 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
     if (missing) return null;
     const recompilation = sourcifyNeedsRecompilation(target.input, response.value)
       ? await recompileSourcifyInput(response.value, target.input, { PATH: process.env.PATH, MODULE_MODE_SOLC: binary }) : undefined;
-    if (response.value?.creationMatch === null && canonicalEthTargets.has(target)) {
-      const authority = canonicalEthTargets.get(target);
+    if (response.value?.creationMatch === null && canonicalAnyQuoteTargets.has(target)) {
+      const authority = canonicalAnyQuoteTargets.get(target);
       need(canonicalTargetDigest(target) === authority.digest, 'Canonical source target changed after binding');
       const publication = validateSourcifyCreationGap(target, response.value, recompilation);
       await authority.recheck(target);
@@ -564,7 +565,8 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
         comparison: 'exact-public-source-runtime-and-canonical-create2-creation',
         canonicalCreation: { ...target.creation, releaseDigest: authority.releaseDigest, launchId: authority.launchId,
           resourcesHash: authority.resourcesHash, runtimeSnapshot: authority.runtimeSnapshot,
-          method: 'authenticated-ETH-launch-receipt-CREATE2-and-runtime-binding' } };
+          method: target.sourceProfile === ETH_PROFILE ? 'authenticated-ETH-launch-receipt-CREATE2-and-runtime-binding'
+            : 'authenticated-AnyQuote-launch-receipt-CREATE2-and-runtime-binding' } };
     }
     return { ...validatePublished(target, response.value, recompilation), sourceResponseBytesDigest: keccak256(response.raw) };
   }

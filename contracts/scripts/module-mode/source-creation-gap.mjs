@@ -5,7 +5,7 @@ import { SOURCIFY_COMPILER, anyQuoteEthEngineAuxdataProfile, exactSolcVersionAux
   exactSolcVersionAuxdataDescription, validateSourcifyCompilation, validateSourcifyRuntimeImmutables } from './source-readback.mjs';
 
 export const ETH_CANONICAL_SOURCE_CLASS = 'exact-public-source-and-canonical-create2-v1';
-const PROFILE = 'module-engine-any-quote-eth-v1';
+const PROFILES = new Set(['module-engine-any-quote-eth-v1', 'module-engine-any-quote-v1']);
 const targets = { token: ['lib/uerc20-factory/src/tokens/UERC20.sol', 'UERC20'],
   engine: ['src/module-engine/any-quote/AnyQuoteLPModuleV1.sol', 'AnyQuoteLPModuleV1'] };
 const equal = (a, b, label) => need(canonicalJson(a) === canonicalJson(b), label);
@@ -18,7 +18,7 @@ const empty = (value, label) => keys(value, [], label);
 /** Validates present public data only. The operator must separately supply its private canonical target authority. */
 export function validateSourcifyCreationGap(target, value, recompilation) {
   const role = target.role, selected = targets[role];
-  need(target.sourceProfile === PROFILE && selected && target.file === selected[0] && target.name === selected[1], 'Exact ETH source profile required');
+  need(PROFILES.has(target.sourceProfile) && selected && target.file === selected[0] && target.name === selected[1], 'Exact Any Quote source profile required');
   keys(value, ['matchId', 'creationMatch', 'runtimeMatch', 'verifiedAt', 'creationBytecode', 'runtimeBytecode', 'deployment',
     'sources', 'compilation', 'abi', 'metadata', 'storageLayout', 'transientStorageLayout', 'userdoc', 'devdoc', 'sourceIds',
     'additionalInput', 'stdJsonInput', 'stdJsonOutput', 'signatures', 'proxyResolution', 'match', 'chainId', 'address'], 'Unexpected Sourcify evidence fields');
@@ -28,7 +28,7 @@ export function validateSourcifyCreationGap(target, value, recompilation) {
     && typeof value.verifiedAt === 'string' && Number.isFinite(Date.parse(value.verifiedAt)), 'Sourcify match identity missing');
   equal(value.deployment, { transactionHash: null, blockNumber: null, transactionIndex: null, deployer: null }, 'Conflicting Sourcify deployment evidence');
   need(value.additionalInput === null && value.transientStorageLayout === null, 'Unexpected additional compiler evidence');
-  equal(value.proxyResolution, { isProxy: false, proxyType: null, implementations: [] }, 'Only direct ETH deployments are eligible');
+  equal(value.proxyResolution, { isProxy: false, proxyType: null, implementations: [] }, 'Only direct Any Quote deployments are eligible');
   keys(value.compilation, ['language', 'compiler', 'compilerVersion', 'compilerSettings', 'name', 'fullyQualifiedName'], 'Unexpected compiler identity fields');
   keys(value.stdJsonInput, ['language', 'sources', 'settings'], 'Unexpected standard compiler input fields');
   for (const settings of [value.compilation.compilerSettings, value.stdJsonInput.settings]) {
@@ -44,7 +44,7 @@ export function validateSourcifyCreationGap(target, value, recompilation) {
   if (role === 'engine') anyQuoteEthEngineAuxdataProfile(artifact, target.input, metadata);
   else need(target.input.settings.metadata?.appendCBOR === false && target.input.settings.metadata.bytecodeHash === 'none'
     && target.input.settings.evmVersion === 'cancun' && target.input.settings.optimizer?.enabled === true
-    && target.input.settings.optimizer.runs === 1000 && target.input.settings.viaIR !== true, 'Exact ETH token compiler profile required');
+    && target.input.settings.optimizer.runs === 1000 && target.input.settings.viaIR !== true, 'Exact Any Quote token compiler profile required');
   const c = value.creationBytecode, r = value.runtimeBytecode;
   const bytecodeKeys = ['onchainBytecode', 'recompiledBytecode', 'sourceMap', 'linkReferences', 'cborAuxdata', 'transformations', 'transformationValues'];
   keys(c, bytecodeKeys, 'Unexpected creation bytecode evidence'); keys(r, [...bytecodeKeys, 'immutableReferences'], 'Unexpected runtime bytecode evidence');
