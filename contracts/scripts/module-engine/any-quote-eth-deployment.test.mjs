@@ -179,7 +179,7 @@ function nativeWalletFixture(kind) {
   else {
     const { releaseDigest, initialBuyWei, slippageBps, ...input } = intent;
     const { description, imageUri, socialLinks, ...priceIntent } = intent;
-    recipe = { kind, template, input: { ...input, anyQuotePreparation: { intent: priceIntent, predictedToken: token } } };
+    recipe = { kind, template, input: { ...input, anyQuotePreparation: { schemaVersion: 'programmable.any-quote.launch-preview.v1', intent: priceIntent, predictedToken: token } } };
   }
   const prepared = { kind, account: owner, releaseDigest: identity.releaseDigest, token, recipient, minimumAmount: '10', expiresAt: '2000000000',
     transaction: { from: owner, to, value, data: kind === 'claim'
@@ -197,6 +197,12 @@ test('native claim handoff accepts only the exact ETH selector and payout recipi
 });
 test('native launch handoff retains the positive initial purchase and exact ETH value', () => {
   const { plan, envelope } = nativeWalletFixture('launch'); anyQuoteWalletStep(plan, 0, envelope);
+  for (const mutate of [v => { delete v.recipe.input.anyQuotePreparation.schemaVersion; },
+    v => { v.recipe.input.anyQuotePreparation.executionDeadline = '2000000180'; },
+    v => { v.prepared.anyQuote = { executionDeadline: '2000000180' }; }]) {
+    const changed = structuredClone(envelope); mutate(changed);
+    assert.throws(() => anyQuoteWalletStep(plan, 0, changed), /Historical launch timing differs/);
+  }
   const wrongValue = structuredClone(envelope); wrongValue.prepared.transaction.value = '101';
   assert.throws(() => anyQuoteWalletStep(plan, 0, wrongValue), /target\/value/);
   const empty = nativeWalletFixture('launch'); empty.plan.steps[0].intent.initialBuyWei = '0'; empty.envelope.recipe.input.anyQuotePreparation.intent.initialBuyWei = '0';

@@ -374,6 +374,16 @@ export function anyQuoteWalletStep(plan, stepIndex, envelope) {
       && (plan.identity.sourceVersion !== 'module-engine-any-quote-eth-v1' || BigInt(initialBuyWei) > 0n) && Number.isInteger(slippageBps)
       && typeof description === 'string' && typeof imageUri === 'string' && socialLinks, 'Complete reviewed bootstrap intent required');
     need(anyQuotePreparation?.intent?.initialBuyWei === initialBuyWei && anyQuotePreparation.predictedToken === step.target, 'Prepared bootstrap launch differs');
+    if (anyQuotePreparation.schemaVersion === 'programmable.any-quote.launch-preview.v2') {
+      const executionDeadline = BigInt(uint(anyQuotePreparation.executionDeadline, 'Launch execution deadline', true));
+      need(plan.identity.sourceVersion === 'module-engine-any-quote-v1' && prepared.expiresAt === anyQuotePreparation.validUntil
+        && prepared.anyQuote?.executionDeadline === anyQuotePreparation.executionDeadline
+        && executionDeadline > BigInt(prepared.expiresAt)
+        && BigInt(prepared.expiresAt) <= BigInt(anyQuotePreparation.readiness.checkpoint.timestamp) + 45n
+        && executionDeadline === BigInt(uint(anyQuotePreparation.readiness.checkpoint.timestamp, 'Original launch timestamp', true)) + 180n
+        && (BigInt(initialBuyWei) === 0n || prepared.initialOperation?.deadline === anyQuotePreparation.executionDeadline), 'Prepared launch execution deadline differs');
+    } else need(anyQuotePreparation.schemaVersion === 'programmable.any-quote.launch-preview.v1'
+      && !Object.hasOwn(anyQuotePreparation, 'executionDeadline') && !Object.hasOwn(prepared.anyQuote ?? {}, 'executionDeadline'), 'Historical launch timing differs');
   } else if (action === 'claim') {
     equal(recipe, { kind: 'claim', template: recipe.template, account: plan.owner, token: intent.token, recipient: intent.recipient }, 'Prepared beneficiary claim');
     need(prepared.kind === 'claim' && prepared.token === intent.token && prepared.recipient === intent.recipient && BigInt(prepared.minimumAmount) > 0n, 'Positive actual beneficiary fees required');
