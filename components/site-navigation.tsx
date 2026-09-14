@@ -14,7 +14,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   DiscordBrandIcon,
   DuneBrandIcon,
-  GitHubBrandIcon,
   XBrandIcon,
 } from "@/components/brand-icons";
 import {
@@ -28,7 +27,6 @@ import styles from "@/components/site-navigation.module.css";
 
 const desktopNavItems = [
   { href: "/explore", label: "Explore" },
-  { href: "/swap", label: "Swap" },
   { href: "/launch", label: "Launch" },
 ];
 
@@ -66,15 +64,6 @@ function HeaderSocialLinks({ mobile = false }: { mobile?: boolean }) {
         aria-label="Programmable on X"
       >
         <XBrandIcon />
-      </a>
-      <a
-        className="header-social-link"
-        href="https://github.com/programmablehq"
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Programmable on GitHub"
-      >
-        <GitHubBrandIcon />
       </a>
       <a
         className="header-social-link"

@@ -95,7 +95,7 @@ function render(launch: LaunchResource) {
 }
 
 describe("agent supplied launch metadata preview", () => {
-  it("shows chain, identity, bio, bound image reference and every full social destination without inputs", () => {
+  it("shows bound metadata while omitting GitHub from public social destinations", () => {
     const launch = v4Launch();
     const html = render(launch);
     expect(html).toContain("Robinhood Chain · 4663");
@@ -109,6 +109,10 @@ describe("agent supplied launch metadata preview", () => {
     expect(html).toContain(metadata.presentation.image!.uri);
     expect(html).toContain(metadata.presentation.image!.contentSha256);
     for (const link of metadata.presentation.links) {
+      if (link.kind === "github") {
+        expect(html).not.toContain(`href="${link.uri}"`);
+        continue;
+      }
       expect(html).toContain(`href="${link.uri}"`);
       expect(html).toContain(link.uri);
     }

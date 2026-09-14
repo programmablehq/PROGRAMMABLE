@@ -21,11 +21,6 @@ const resourceLinks = [
     label: "Analytics",
   },
   {
-    href: "https://github.com/programmablehq",
-    label: "GitHub",
-    external: true,
-  },
-  {
     href: "https://dexscreener.com/robinhood/0x3df16f271060e4941c0386047def159f42e629dc0455db623c5b363eeacbcc1d",
     label: "DEX Screener",
     external: true,

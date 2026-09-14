@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isGitHubUrl } from "@/lib/public-link-visibility";
 
 import styles from "@/components/hookathon-countdown.module.css";
 import {
@@ -117,22 +118,24 @@ export function HookathonCountdown({
           : `${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes and ${countdown.seconds} seconds remaining`}
       </p>
 
-      <div className={styles.actions}>
-        {countdown.ended ? (
-          <span className={styles.closedAction} aria-disabled="true">
-            Submissions closed
-          </span>
-        ) : (
-          <a
-            className={styles.secondaryAction}
-            href={hookbuilderUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Open Hookbuilder
-          </a>
-        )}
-      </div>
+      {countdown.ended || !isGitHubUrl(hookbuilderUrl) ? (
+        <div className={styles.actions}>
+          {countdown.ended ? (
+            <span className={styles.closedAction} aria-disabled="true">
+              Submissions closed
+            </span>
+          ) : (
+            <a
+              className={styles.secondaryAction}
+              href={hookbuilderUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open Hookbuilder
+            </a>
+          )}
+        </div>
+      ) : null}
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {countdown.ended ? "Submissions closed" : ""}
       </p>

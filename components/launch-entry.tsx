@@ -1,24 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Puzzle } from "lucide-react";
+import { ArrowRight, Clock3, Puzzle } from "lucide-react";
 
 import launchExperience from "@/components/launch-experience.module.css";
 import { ProfileChainSelector } from "@/components/profile-chain-selector";
 import { useViewChain, type ViewChainId } from "@/components/view-chain";
-import { isConfiguredClassicV3ReleaseReady } from "@/lib/classic-v3-release";
 import { resolveImplementedLaunchModel } from "@/lib/launch-model-gating";
 import type { LaunchModel } from "@/lib/launch";
 import { DEFAULT_VIEW_CHAIN_ID } from "@/lib/view-chain";
 
-const launchEnvironment =
-  process.env.NEXT_PUBLIC_PROGRAMMABLE_ONCHAIN_NETWORK === "rehearsal"
-    ? "rehearsal"
-    : "production";
-const classicV3LaunchAvailable =
-  isConfiguredClassicV3ReleaseReady(launchEnvironment);
+const classicV3LaunchAvailable = false;
 
 function loadLaunchForm() {
   return import("@/components/launch-builder");
@@ -183,10 +176,11 @@ export function LaunchModelPicker({
           Create a Uniswap v4 hook with your own logic.
         </span>
         <span
-          className={`launch-model-action ${launchExperience.modelAction}`}
+          className={launchExperience.maintenanceStatus}
+          id="launch-model-custom-status"
         >
-          Build a hook
-          <ArrowRight aria-hidden="true" size={16} />
+          <Clock3 aria-hidden="true" size={14} />
+          Getting updated currently
         </span>
       </span>
     </>
@@ -256,12 +250,6 @@ export function LaunchModelPicker({
                 className={`launch-model-card-heading ${launchExperience.modelHeading}`}
               >
                 <strong id="launch-model-classic-title">Classic</strong>
-                {!classicV3LaunchAvailable ? <small
-                  id="launch-model-classic-status"
-                  data-status="pending"
-                >
-                  Unavailable
-                </small> : null}
               </span>
               <span
                 className={`launch-model-description ${launchExperience.modelDescription}`}
@@ -270,7 +258,12 @@ export function LaunchModelPicker({
                 Create a fixed-supply token with locked liquidity and optional
                 trading fees.
               </span>
-              {classicV3LaunchAvailable ? (
+              {!classicV3LaunchAvailable ? (
+                <span className={launchExperience.maintenanceStatus} id="launch-model-classic-status">
+                  <Clock3 aria-hidden="true" size={14} />
+                  Getting updated currently
+                </span>
+              ) : (
                 <span
                   className={`launch-model-action ${launchExperience.modelAction}`}
                 >
@@ -279,17 +272,19 @@ export function LaunchModelPicker({
                     : "Create a coin"}
                   <ArrowRight aria-hidden="true" size={16} />
                 </span>
-              ) : null}
+              )}
             </span>
           </button>
         ) : (
-          <Link
+          <button
             className={`launch-model-card ${launchExperience.modelCard} liquid-glass-surface`}
             data-launch-model-option="modules"
-            data-launch-model-available="true"
-            href="/launch/modules"
+            data-launch-model-available="false"
+            data-launch-model-launchable="false"
+            type="button"
+            disabled
             aria-labelledby="launch-model-modules-title"
-            aria-describedby="launch-model-modules-description"
+            aria-describedby="launch-model-modules-description launch-model-modules-status"
           >
             <span className={`${launchExperience.modelArt} ${launchExperience.moduleArt}`} aria-hidden="true">
               <Puzzle className={launchExperience.modulePuzzle} strokeWidth={0.7} />
@@ -301,25 +296,27 @@ export function LaunchModelPicker({
               <span className={`launch-model-description ${launchExperience.modelDescription}`} id="launch-model-modules-description">
                 Create a coin and add upgrades with modules.
               </span>
-              <span className={`launch-model-action ${launchExperience.modelAction}`}>
-                Create a coin <ArrowRight aria-hidden="true" size={16} />
+              <span className={launchExperience.maintenanceStatus} id="launch-model-modules-status">
+                <Clock3 aria-hidden="true" size={14} />
+                Getting updated currently
               </span>
             </span>
-          </Link>
+          </button>
         )}
 
-        <Link
+        <button
           className={`launch-model-card ${launchExperience.modelCard} liquid-glass-surface`}
           data-launch-model-option="custom"
-          data-launch-model-available="true"
-          data-launch-model-entry="api-key-launch"
+          data-launch-model-available="false"
+          data-launch-model-entry="maintenance"
           data-launch-model-launchable="false"
-          href="/developers/hooks"
+          type="button"
+          disabled
           aria-labelledby="launch-model-custom-title"
-          aria-describedby="launch-model-custom-description"
+          aria-describedby="launch-model-custom-description launch-model-custom-status"
         >
           {customCardContent}
-        </Link>
+        </button>
 
       </div>
       {modelLoadError ? (

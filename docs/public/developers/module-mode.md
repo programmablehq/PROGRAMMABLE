@@ -27,7 +27,7 @@ The agent uses `identity.author` in the source descriptor and defaults the rewar
 
 An API key authorizes its assigned requests. Module submission needs `modules:submit`; context and private progress reads need `modules:read`. It does not sign transactions or approve a module. Documentation and capability reads are public. The CLI also accepts the older `PROGRAMMABLE_MODULES_API_KEY` alias; configure only one value or keep both identical.
 
-The current standalone CLI is **1.0.0-development.8** and retains the existing source/API and configuration formats. The [API reference](https://programmable.market/developers/module-mode-api-v1.md#before-writing-source) provides the complete context contract, upfront inputs and copyable commands. For an agent starting from an idea, use the [contributor prompt](https://github.com/programmablehq/PROGRAMMABLE/blob/production/packages/classic-modules/AGENT_GUIDE.md#starting-prompt).
+The current standalone CLI is **1.0.0-development.8** and retains the existing source/API and configuration formats. The [API reference](https://programmable.market/developers/module-mode-api-v1.md#before-writing-source) provides the complete context contract, upfront inputs and copyable commands. For an agent starting from an idea, use the contributor prompt.
 
 ## Describe the actual runtime
 
@@ -43,7 +43,7 @@ The Engine interface supports different operation models. These source reference
 - **Escrow:** an exact quote deposit creates a liability for the payer; withdrawal follows the recorded unlock rule. The primary coin remains locked and this profile offers no swap market.
 - **Creator-attested settlement:** a payer funds an immutable beneficiary, amount, obligation hash and refund deadline. The launch creator can fulfill before expiry; the payer can refund an unresolved request at or after expiry. Creator attestation is the trust model. An evidence hash does not verify external delivery. The downloadable starter fixes request windows between 60 seconds and 30 days and offers no swaps.
 
-The [Engine host specification](https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/spec/module-engine-host-v1.md) defines exact operation permissions, gas/data bounds, token behavior and quote-market requirements. Transfer-tax or transfer-blocked assets can prevent progress. A new custody rule, price model or external dependency needs executable source and its own evidence.
+The Engine host specification defines exact operation permissions, gas/data bounds, token behavior and quote-market requirements. Transfer-tax or transfer-blocked assets can prevent progress. A new custody rule, price model or external dependency needs executable source and its own evidence.
 
 ## General and fixed configuration
 
@@ -112,10 +112,10 @@ Module funding, creator fees and earned author claims remain separate. Changing 
 
 ## Recover transactions and claims
 
-Keep the chain, account, token address, exact release identity and transaction hash. After a timeout, check the wallet's submitted transaction and canonical receipt before starting another action. The existing [operation recovery client](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode-operation-recovery.ts) reconciles Native and Engine transactions against their original release, calldata, value and receipt. A saved browser record cannot authorize a new send; a mined receipt is still separate from finalized indexing.
+Keep the chain, account, token address, exact release identity and transaction hash. After a timeout, check the wallet's submitted transaction and canonical receipt before starting another action. The existing operation recovery client reconciles Native and Engine transactions against their original release, calldata, value and receipt. A saved browser record cannot authorize a new send; a mined receipt is still separate from finalized indexing.
 
-For website-independent reads and wallet preparation, use the [Native management client](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode/management.ts) or [Engine client](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-engine/client.ts) from the verified source revision, with the original release evidence and your own RPC. Verify the deployed target and current wallet role before signing. The source-contribution CLI does not send launches, swaps or claims.
+For website-independent reads and wallet preparation, use the Native management client or Engine client from the verified source revision, with the original release evidence and your own RPC. Verify the deployed target and current wallet role before signing. The source-contribution CLI does not send launches, swaps or claims.
 
 Accrued fee claims remain in the original release's ledger. Read `claimable(account)` there and use its verified `claimTo(recipient)` interface from the entitled wallet, with zero native value plus network gas. Engine integrations can use `prepareModuleEngineClaim`; Native integrations use the existing `claim-fees` management intent. The recipient does not choose whose credit is claimed. Module budget rewards and escrow refunds use their separate instance/host actions. A website outage or later release does not transfer these rights to another ledger or administrator.
 
-The [contributor reference](https://github.com/programmablehq/PROGRAMMABLE/blob/production/docs/architecture/module-mode-contributor-starter.md) contains the package layout, build procedure and host interface requirements.
+The contributor reference contains the package layout, build procedure and host interface requirements.

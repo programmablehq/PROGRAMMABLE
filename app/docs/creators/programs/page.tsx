@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 
-import { DocsExternalLink } from "@/components/docs-external-link";
-import docsStyles from "@/components/docs-experience.module.css";
-import { PROGRAMMABLE_PUBLIC_REPOSITORIES } from "@/components/docs-public-policy";
 import { DocsShell } from "@/components/docs-shell";
 
 export const metadata: Metadata = {
@@ -60,20 +57,6 @@ export default function CreatorProgramsDocsPage() {
           program says so explicitly. A pull request does not create an
           automatic payment.
         </p>
-        <div className={docsStyles.sourceLinks}>
-          <DocsExternalLink
-            href={PROGRAMMABLE_PUBLIC_REPOSITORIES.product}
-            variant="chip"
-          >
-            Product repository
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={PROGRAMMABLE_PUBLIC_REPOSITORIES.developers}
-            variant="chip"
-          >
-            Developer docs
-          </DocsExternalLink>
-        </div>
       </section>
 
       <section id="support">
@@ -83,12 +66,6 @@ export default function CreatorProgramsDocsPage() {
           revision, reproduction steps that do not depend on a wallet and the
           result you expected.
         </p>
-        <DocsExternalLink
-          href={PROGRAMMABLE_PUBLIC_REPOSITORIES.productIssues}
-          variant="chip"
-        >
-          Report a product or docs issue
-        </DocsExternalLink>
       </section>
     </DocsShell>
   );

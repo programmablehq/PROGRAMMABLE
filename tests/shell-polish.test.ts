@@ -20,8 +20,8 @@ describe("public shell polish", () => {
 
     expect(source).toContain("<span>Programmable</span>");
     expect(source).toContain("© 2026 Programmable");
-    expect(source).toContain('label: "GitHub"');
-    expect(source).toContain('href: "https://github.com/programmablehq"');
+    expect(source).not.toContain('label: "GitHub"');
+    expect(source).not.toContain('href: "https://github.com/programmablehq"');
     expect(source).not.toContain('href: "https://github.com/0xprogrammable"');
     expect(source).toContain('label: "Discord"');
     expect(source).toContain('label: "X"');
@@ -41,10 +41,10 @@ describe("public shell polish", () => {
     const officialLinks = read("docs/public/reference/official-links.md");
     const readme = read("README.md");
 
-    expect(navigation).toContain('href="https://github.com/programmablehq"');
+    expect(navigation).not.toContain('href="https://github.com/programmablehq"');
     expect(navigation).toContain('href="https://x.com/ProgrammableHQ"');
     expect(navigation).not.toContain('href="https://github.com/0xprogrammable"');
-    expect(structuredData).toContain('"https://github.com/programmablehq"');
+    expect(structuredData).not.toContain('"https://github.com/programmablehq"');
     expect(structuredData).toContain('"https://x.com/ProgrammableHQ"');
     expect(structuredData).not.toContain('"https://github.com/0xprogrammable"');
     expect(rootLayout).toContain('creator: "@ProgrammableHQ"');

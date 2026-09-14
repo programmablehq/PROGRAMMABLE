@@ -26,4 +26,4 @@ The public Programmable contracts have not undergone an external audit or public
 
 Contract interactions can be irreversible. Review the token address, permissions and transaction effects, including the rules that may limit transfers or trading. Holding V4 does not create equity, a claim on protocol revenue or a guaranteed return.
 
-Report vulnerabilities through the private security reporting channel of the affected [Programmable repository](https://github.com/programmablehq). Keep credentials, signatures and unpublished exploit details out of public issues.
+Report vulnerabilities through the private security reporting channel of the affected Programmable repository. Keep credentials, signatures and unpublished exploit details out of public issues.

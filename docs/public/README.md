@@ -34,4 +34,4 @@ Integrators identify a coin by its chain and contract address, then verify the r
 
 ## Community and public records
 
-Follow [Programmable on X](https://x.com/ProgrammableHQ), join [Discord](https://discord.com/invite/programmable), read the source on [GitHub](https://github.com/programmablehq), and track launches, earned fees and burns on [Dune](https://dune.com/programmablehq/analytics). The [official links](reference/official-links.md) page collects the product and developer entry points.
+Follow [Programmable on X](https://x.com/ProgrammableHQ), join [Discord](https://discord.com/invite/programmable), and track launches, earned fees and burns on [Dune](https://dune.com/programmablehq/analytics). The [official links](reference/official-links.md) page collects the product and developer entry points.

@@ -22,4 +22,4 @@ Publishing a module makes it available for use. Earnings start when a coin using
 
 A Custom Launch submits one concrete token and contract package. It does not create a Module Mode catalog entry. Reusable source in a Custom project can be published in its repository, but catalog distribution uses the separate module contribution workflow.
 
-Historical template application records remain available in [Launch Policy](https://github.com/programmablehq/Launch-Policy). They are records of the former intake process, not the current submission route.
+Historical template application records remain available in Launch Policy. They are records of the former intake process, not the current submission route.

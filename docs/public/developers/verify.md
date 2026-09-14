@@ -31,7 +31,7 @@ Fetch the [Developer manifest](https://developers.programmable.family/api/v2/man
 
 Backfill Router events from the manifest start block and follow its finality policy. Extract the launch ID, token, hook, PoolManager and pool ID. Cross-check the appropriate point lookup, `launchStamp` and `stampProof` at the same canonical block. The hosted launch feed is a discovery aid; it does not replace these onchain checks.
 
-The token lookup identifies a token's launch record, while the pool lookup binds the market used by a trading integration. A component lookup must not identify one launch when that component is shared infrastructure. The [Developers repository](https://github.com/programmablehq/Developers) contains the complete Ethereum verifier and conformance fixtures.
+The token lookup identifies a token's launch record, while the pool lookup binds the market used by a trading integration. A component lookup must not identify one launch when that component is shared infrastructure. The Developers repository contains the complete Ethereum verifier and conformance fixtures.
 
 ## Interpret the result
 

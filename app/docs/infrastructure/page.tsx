@@ -33,12 +33,6 @@ const resources = [
     href: PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.abiUrl,
     label: "Router ABI",
   },
-  {
-    description:
-      "Verification algorithm, terminal guidance and runnable examples.",
-    href: PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.referenceUrl,
-    label: "GitHub reference",
-  },
 ] as const;
 
 export default function InfrastructureDocsPage() {
@@ -120,9 +114,8 @@ export default function InfrastructureDocsPage() {
       <section id="resources">
         <h2>Public resources</h2>
         <p>
-          Use these resources together. The manifest identifies the deployment,
-          the ABI defines the reads, and the reference explains how to verify
-          the result.
+          Use these resources together. The manifest identifies the deployment
+          and the ABI defines the reads.
         </p>
 
         <ul className={styles.linkList}>

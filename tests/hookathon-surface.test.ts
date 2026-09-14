@@ -34,18 +34,18 @@ describe("Hookathon surface", () => {
     expect(html).toContain(">Execution<");
     expect(html).toContain("Anyone can enter, with no team size limit");
     expect(html).not.toContain("How to enter");
-    expect(html).toContain(
+    expect(html).not.toContain(
       'href="https://github.com/0xprogrammable/submit-launch"',
     );
-    expect(html).toContain(">Submit Launch</a>");
+    expect(html).not.toContain(">Submit Launch</a>");
   });
 
-  it("uses one accessible Hookbuilder action without announcing every second", () => {
+  it("omits the GitHub Hookbuilder action without announcing every second", () => {
     const html = renderHookathon(confirmation);
 
     expect(html).not.toContain("Copy builder prompt");
-    expect(html).toContain('href="https://github.com/0xprogrammable/hookbuilder"');
-    expect(html).toContain("Open Hookbuilder");
+    expect(html).not.toContain('href="https://github.com/0xprogrammable/hookbuilder"');
+    expect(html).not.toContain("Open Hookbuilder");
     expect(html).not.toContain("↗");
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('role="status" aria-live="polite"');

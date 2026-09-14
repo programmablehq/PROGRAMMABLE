@@ -229,7 +229,8 @@ describe("interaction accessibility", () => {
 
     expect(source).not.toContain('if (pathname === "/") return null;');
     expect(source).toContain('aria-label="Programmable on X"');
-    expect(source).toContain('aria-label="Programmable on GitHub"');
+    expect(source).not.toContain('aria-label="Programmable on GitHub"');
+    expect(source).not.toContain('href: "/swap"');
     expect(source).toContain('aria-label="Programmable on Discord"');
     expect(source).toContain('aria-label="Programmable on DEX Screener"');
     expect(landing).toContain('href="#explore"');

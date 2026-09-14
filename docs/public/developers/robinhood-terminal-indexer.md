@@ -206,8 +206,6 @@ executable trade route.
 7. Record the endpoint, UTC observation time, response status, manifest digest, Router, V3 coordinates and provider
    identities for reproducibility. Never include an API key, signed transaction or private request body.
 
-For non-sensitive integration failures, [open a GitHub issue](https://github.com/programmablehq/PROGRAMMABLE/issues).
-
 ## MultiRole V2
 
 Use the public [MultiRole capabilities](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/capabilities) and [versioned guide](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/guide.md). The Router protocol is `programmable.multi-role-launch-stamp-router.v2`. Read the complete `context`, including `chainBindings`, deployment, profile and provider bindings. Do not substitute Router V1 addresses or getters.

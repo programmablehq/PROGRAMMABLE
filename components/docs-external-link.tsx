@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import { GitHubBrandIcon, XBrandIcon } from "@/components/brand-icons";
 import styles from "@/components/docs-experience.module.css";
+import { isGitHubUrl } from "@/lib/public-link-visibility";
 
 export type DocsExternalLinkVariant = "address" | "chip" | "inline";
 
@@ -47,6 +48,7 @@ export function DocsExternalLink({
   href: string;
   variant?: DocsExternalLinkVariant;
 }) {
+  if (isGitHubUrl(href)) return <span>{children}</span>;
   const provider = getDocsExternalLinkProvider(href);
   const variantClassName =
     variant === "address"

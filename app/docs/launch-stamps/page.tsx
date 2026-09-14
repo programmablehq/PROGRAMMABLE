@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PublicExternalLink } from "@/components/public-external-link";
 import Link from "next/link";
 
 import { DocsShell } from "@/components/docs-shell";
@@ -461,14 +462,6 @@ export default function LaunchStampDocsPage() {
             <dt>ABI file SHA-256</dt>
             <dd>{router.abiSha256}</dd>
           </div>
-          <div>
-            <dt>GitHub ABI source</dt>
-            <dd>
-              <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.abiGithubUrl}>
-                Exact published file
-              </a>
-            </dd>
-          </div>
         </dl>
         <p className={styles.detailLine}>
           Hash the exact downloaded ABI file bytes. Do not normalize or
@@ -612,9 +605,9 @@ export default function LaunchStampDocsPage() {
         <p className={styles.detailLine}>
           A matching topic is only a discovery candidate. The full backfill,
           checkpoint subscription and reorg procedure is in the{" "}
-          <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.terminalGuideUrl}>
+          <PublicExternalLink href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.terminalGuideUrl}>
             terminal and scanner guide
-          </a>
+          </PublicExternalLink>
           .
         </p>
       </section>
@@ -774,26 +767,6 @@ export default function LaunchStampDocsPage() {
           <li>
             <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.abiUrl}>
               Frozen Router ABI
-            </a>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.referenceUrl}>
-              GitHub Router reference
-            </a>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.terminalGuideUrl}>
-              Terminal and scanner guide
-            </a>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.jsonRpcVerifierUrl}>
-              JSON-RPC verifier
-            </a>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.viemVerifierUrl}>
-              viem verifier
             </a>
           </li>
         </ul>

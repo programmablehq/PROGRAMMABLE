@@ -162,16 +162,6 @@ export default function MachineReadableDocsPage() {
             </span>
           </li>
           <li>
-            <a href="https://github.com/programmablehq/PROGRAMMABLE/releases/download/programmable-launch-v3.3.9/programmable-launch-3.3.9.tgz">
-              <code>@programmable/launch 3.3.9</code>
-            </a>
-            <span>
-              Immutable CLI asset with exactly pack, validate, submit and
-              status; validate --remote adds public capabilities and
-              non-persisting preflight.
-            </span>
-          </li>
-          <li>
             <a href="/docs/developers.md">
               <code>/docs/developers.md</code>
             </a>
@@ -284,42 +274,6 @@ export default function MachineReadableDocsPage() {
               Hash the exact downloaded bytes and match{" "}
               <code>{router.abiSha256}</code>.
             </span>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.abiGithubUrl}>
-              Router ABI on GitHub
-            </a>
-            <span>The same interface in the public developer repository.</span>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.referenceUrl}>
-              GitHub Router reference
-            </a>
-            <span>
-              Complete point-verification specification and finalized PCAN test
-              case.
-            </span>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.terminalGuideUrl}>
-              Terminal and scanner guide
-            </a>
-            <span>
-              Backfill, checkpoint continuation, overlap, reorg and finality
-              handling.
-            </span>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.jsonRpcVerifierUrl}>
-              JSON-RPC verifier
-            </a>
-            <span>Dependency-light reference implementation.</span>
-          </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.viemVerifierUrl}>
-              viem verifier
-            </a>
-            <span>Typed application reference implementation.</span>
           </li>
         </ul>
       </section>
