@@ -55,7 +55,8 @@ describe("topbar and Explore hero polish", () => {
     );
     expect(navigation).toContain('aria-label="Programmable on X"');
     expect(navigation).toContain('href="https://x.com/ProgrammableHQ"');
-    expect(navigation).toContain('aria-label="Programmable on GitHub"');
+    expect(navigation).not.toContain('aria-label="Programmable on GitHub"');
+    expect(navigation).not.toContain('href: "/swap"');
     expect(navigation).toContain('aria-label="Programmable on Discord"');
     expect(navigation).toContain('aria-label="Programmable on DEX Screener"');
     expect(navigation).toContain('aria-label="Programmable analytics on Dune"');

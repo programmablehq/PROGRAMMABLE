@@ -7,7 +7,6 @@ export const PROGRAMMABLE_MAIN_TOKEN_PRESENTATION = Object.freeze({
     { kind: "x" as const, url: "https://x.com/ProgrammableHQ" },
   ],
   supplementalLinks: [
-    { kind: "github" as const, url: "https://github.com/programmablehq" },
     {
       kind: "discord" as const,
       url: "https://discord.com/invite/programmable",

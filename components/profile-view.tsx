@@ -1,5 +1,7 @@
 "use client";
 
+import { isGitHubUrl } from "@/lib/public-link-visibility";
+
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -42,7 +44,7 @@ import {
   prepareAvatarImage,
   prepareProfileBannerImage,
 } from "@/lib/profile/avatar";
-import { GitHubBrandIcon, XBrandIcon } from "@/components/brand-icons";
+import { XBrandIcon } from "@/components/brand-icons";
 import { WebsiteLinkIcon } from "@/components/website-link-icon";
 import { PartnerLaunchAttribution } from
   "@/components/partner-launch-attribution";
@@ -3412,14 +3414,9 @@ export function ProfileView({ onchainData, viewChainId = 4663, onChangeChain }: 
       value: savedProfile.websiteUrl ?? "",
       icon: <WebsiteLinkIcon />,
     },
-    {
-      kind: "github" as const,
-      value: savedProfile.githubUrl ?? "",
-      icon: <GitHubBrandIcon aria-hidden="true" />,
-    },
   ].flatMap((link) => {
     const resolved = resolveProfileLink(link.value, link.kind);
-    return resolved ? [{ ...link, ...resolved }] : [];
+    return resolved && !isGitHubUrl(resolved.href) ? [{ ...link, ...resolved }] : [];
   });
   const avatarFallback = account
     ? (savedProfile.username || account.slice(2, 4)).slice(0, 2).toUpperCase()

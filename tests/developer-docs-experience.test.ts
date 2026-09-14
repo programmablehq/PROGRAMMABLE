@@ -88,14 +88,14 @@ describe("Developer documentation experience", () => {
     expect(developerPage).not.toContain("DeveloperDocsWorkbench");
   });
 
-  it("puts the deployment manifest, frozen ABI and GitHub reference first", () => {
+  it("keeps the deployment manifest and frozen ABI without a GitHub reference link", () => {
     expect(developerPage).toContain(
       "PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.manifestUrl",
     );
     expect(developerPage).toContain(
       "PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.abiUrl",
     );
-    expect(developerPage).toContain(
+    expect(developerPage).not.toContain(
       "PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.referenceUrl",
     );
     expect(developerDocsMarkdown).toContain(

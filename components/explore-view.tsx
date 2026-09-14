@@ -1,5 +1,7 @@
 "use client";
 
+import { isGitHubUrl } from "@/lib/public-link-visibility";
+
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -3288,7 +3290,7 @@ export function getTokenCards(
       imageUrl:
         token.imageUrl?.trim() ||
         getFallbackTokenImage(token.tokenAddress ?? token.id),
-      links: [...(token.links ?? [])].sort(
+      links: [...(token.links ?? [])].filter((link) => link.kind !== "github" && !isGitHubUrl(link.url)).sort(
         (left, right) => tokenLinkOrder[left.kind] - tokenLinkOrder[right.kind],
       ),
       valuation: getExploreValuationMetric(token),

@@ -16,6 +16,7 @@ import { PROGRAMMABLE_MAIN_TOKEN_ADDRESS } from
   "@/lib/creator-article/programmable-example-v1";
 import { PROGRAMMABLE_MAIN_TOKEN_PRESENTATION } from
   "@/lib/programmable-main-token-presentation";
+import { isGitHubUrl } from "@/lib/public-link-visibility";
 
 import styles from "./creator-article.module.css";
 
@@ -29,10 +30,6 @@ type CreatorArticleHeaderLinkV1 = Readonly<{
 const PROGRAMMABLE_CURRENT_X =
   PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.links.find(({ kind }) => kind === "x")!
     .url;
-const PROGRAMMABLE_CURRENT_GITHUB =
-  PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.supplementalLinks.find(
-    ({ kind }) => kind === "github",
-  )!.url;
 
 function currentCreatorArticleHeaderLinkV1(
   article: CreatorArticleV1,
@@ -46,9 +43,7 @@ function currentCreatorArticleHeaderLinkV1(
   const normalized = link.href.toLowerCase().replace(/\/+$/u, "");
   const href = normalized === "https://x.com/0xprogrammable"
     ? PROGRAMMABLE_CURRENT_X
-    : normalized === "https://github.com/0xprogrammable"
-      ? PROGRAMMABLE_CURRENT_GITHUB
-      : link.href;
+    : link.href;
   return href === link.href
     ? link
     : Object.freeze({ href, label: creatorArticleLinkLabelV1(href) });
@@ -73,7 +68,7 @@ export function CreatorArticle({
     ) : null;
   }
   const headerContent = creatorArticleHeaderContentV1(article.document.content);
-  const headerLinks = headerContent.links.map((link) =>
+  const headerLinks = headerContent.links.filter((link) => !isGitHubUrl(link.href)).map((link) =>
     currentCreatorArticleHeaderLinkV1(article, link)
   );
   const updated = new Intl.DateTimeFormat("en", {
@@ -231,6 +226,7 @@ function renderInline(nodes: readonly CreatorArticleInlineV1[]) {
 function applyMark(mark: CreatorArticleMarkV1, content: ReactNode, key: number) {
   if (mark.type === "bold") return <strong key={`bold-${key}`}>{content}</strong>;
   if (mark.type === "italic") return <em key={`italic-${key}`}>{content}</em>;
+  if (isGitHubUrl(mark.attrs.href)) return content;
   return (
     <a
       className={styles.link}

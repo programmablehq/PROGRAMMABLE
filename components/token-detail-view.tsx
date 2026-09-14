@@ -1,5 +1,7 @@
 "use client";
 
+import { isGitHubUrl } from "@/lib/public-link-visibility";
+
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -1647,7 +1649,7 @@ function TokenDetailContent({
         }
       }
     }
-    return links;
+    return links.filter((link) => link.kind !== "github" && !isGitHubUrl(link.url));
   }, [token.links, token.tokenAddress]);
   const isRouterStamped = token.launchStampProvenance !== undefined;
   const creatorAddress = isRouterStamped
@@ -2061,6 +2063,7 @@ function CustomProjectDetailContent({
     || getFallbackTokenImage(project.tokenAddress ?? project.customProjectId);
   const imageSource = getTokenCardImageSource(imageUrl);
   const authorities = project.postLaunchAuthorityInventory.postLaunchAuthorities;
+  const projectLinks = project.links.filter((link) => link.kind !== "github" && !isGitHubUrl(link.url));
   const metrics = customMarketMetrics(project);
   const visibleCreatorArticle = publishedCreatorArticle
       && (!creatorArticle || publishedCreatorArticle.revision >= creatorArticle.revision)
@@ -2145,9 +2148,9 @@ function CustomProjectDetailContent({
               <span className={styles.categoryBadge}>Custom V4 Hook</span>
             </div>
             <h1 className={styles.name}>{project.name}</h1>
-            {project.links.length > 0 ? (
+            {projectLinks.length > 0 ? (
               <nav className={styles.links} aria-label={`${project.name} links`}>
-                {project.links.map((link) => (
+                {projectLinks.map((link) => (
                   <a
                     className={`${styles.socialLink} ${link.kind === "website" ? styles.websiteLink : ""}`}
                     href={link.url}

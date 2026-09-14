@@ -74,7 +74,7 @@ describe("creator article public renderer", () => {
     expect(provider("https://programmable.market/docs")).toBe("docs");
   });
 
-  it("renders a provider-bound icon next to a published social link", () => {
+  it("keeps GitHub article text without a public link or social icon", () => {
     const githubArticle = parseCreatorArticleV1({
       ...article,
       document: {
@@ -95,8 +95,9 @@ describe("creator article public renderer", () => {
     const html = renderToStaticMarkup(createElement(CreatorArticle, {
       article: githubArticle,
     }));
-    expect(html).toContain('data-creator-link-provider="github"');
-    expect(html).toContain("<svg");
+    expect(html).not.toContain('href="https://github.com');
+    expect(html).not.toContain('data-creator-link-provider="github"');
+    expect(html).not.toContain("<svg");
     expect(html).toContain(">github.com<");
   });
 
@@ -180,7 +181,7 @@ describe("creator article public renderer", () => {
       article: staleArticle,
     }));
     expect(html).toContain('href="https://x.com/ProgrammableHQ"');
-    expect(html).toContain('href="https://github.com/programmablehq"');
+    expect(html).not.toContain('href="https://github.com/programmablehq"');
     expect(html).not.toContain('href="https://x.com/0xProgrammable"');
     expect(html).not.toContain('href="https://github.com/0xprogrammable"');
   });

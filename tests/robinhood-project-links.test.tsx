@@ -4,16 +4,21 @@ import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 
 describe("Coin metadata presentation", () => {
-  it("renders every supported social as an individually named external link", () => {
+  it("renders remaining socials as named external links and omits GitHub", () => {
     const links = ["Website", "X", "Telegram", "Discord", "GitHub", "GitBook"].map(label => ({ label, url: `https://example.com/${label.toLowerCase()}` }));
     const html = renderToStaticMarkup(<RobinhoodProjectLinks links={links} name="Coin" />);
     expect(html).toContain('aria-label="Coin links"');
-    expect(html.match(/<a /g)).toHaveLength(6);
+    expect(html.match(/<a /g)).toHaveLength(5);
     for (const link of links) {
+      if (link.label === "GitHub") {
+        expect(html).not.toContain(`href="${link.url}"`);
+        continue;
+      }
       expect(html).toContain(`aria-label="${link.label} (opens in a new tab)"`);
       expect(html).toContain(`href="${link.url}"`);
     }
-    expect(html.match(/rel="noopener noreferrer"/g)).toHaveLength(6);
+    expect(html.match(/rel="noopener noreferrer"/g)).toHaveLength(5);
+    expect(renderToStaticMarkup(<RobinhoodProjectLinks links={[{ label: "Website", url: "https://github.com/example/project" }]} name="Coin" />)).toBe("");
     expect(renderToStaticMarkup(<RobinhoodProjectLinks links={[]} name="Coin" />)).toBe("");
   });
 

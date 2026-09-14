@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isGitHubUrl } from "@/lib/public-link-visibility";
 
 import { XBrandIcon } from "@/components/brand-icons";
 import { WebsiteLinkIcon } from "@/components/website-link-icon";
@@ -976,6 +977,7 @@ function PredictionMarketAssetCardFrameV2({
   variant: "public" | "preview";
 }>) {
   const Heading = headingLevel === "h2" ? "h2" : "h3";
+  const visibleLinks = model.links.filter((link) => !isGitHubUrl(link.url));
   const primaryContent = (
     <>
       <div className={styles.art}>
@@ -1057,9 +1059,9 @@ function PredictionMarketAssetCardFrameV2({
             <dd>{model.chainLabel}</dd>
           </div>
         </dl>
-        {model.links.length > 0 ? (
+        {visibleLinks.length > 0 ? (
           <nav aria-label={`${model.name} links`} className={styles.socials}>
-            {model.links.map((link) => {
+            {visibleLinks.map((link) => {
               const label = socialLabel(link.kind);
               return (
                 <a

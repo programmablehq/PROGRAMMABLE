@@ -17,7 +17,6 @@ export const programmableSiteStructuredData = {
       },
       sameAs: [
         "https://x.com/ProgrammableHQ",
-        "https://github.com/programmablehq",
         "https://discord.com/invite/programmable",
       ],
     },

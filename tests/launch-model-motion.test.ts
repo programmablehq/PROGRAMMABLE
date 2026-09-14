@@ -60,12 +60,12 @@ describe("launch model artwork", () => {
       'aria-labelledby="launch-model-custom-title"',
     );
     expect(source).toContain(
-      'aria-describedby="launch-model-custom-description"',
+      'aria-describedby="launch-model-custom-description launch-model-custom-status"',
     );
     expect(source).toContain('data-launch-model-option="custom"');
-    expect(source).toContain('data-launch-model-available="true"');
-    expect(source).toContain('data-launch-model-entry="api-key-launch"');
-    expect(source).toContain(
+    expect(source).toContain('data-launch-model-available="false"');
+    expect(source).toContain('data-launch-model-entry="maintenance"');
+    expect(source).not.toContain(
       'href="/developers/hooks"',
     );
     expect(source).not.toContain('onChoose("custom")');

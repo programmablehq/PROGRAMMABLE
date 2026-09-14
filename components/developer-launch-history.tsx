@@ -1,5 +1,8 @@
 "use client";
 
+import { isGitHubUrl } from "@/lib/public-link-visibility";
+import { PublicExternalLink } from "@/components/public-external-link";
+
 import {
   useCallback,
   useEffect,
@@ -1996,7 +1999,8 @@ function ProjectMetadataReview({
   const { token, presentation } = projectMetadata;
   const initials = [...token.symbol].slice(0, 2).join("").toUpperCase();
   const imagePreview = useVerifiedProjectImageV1(presentation.image);
-  const linkLabels = projectMetadataLinkDisplayLabels(presentation.links);
+  const visibleLinks = presentation.links.filter((link) => link.kind !== "github" && !isGitHubUrl(link.uri));
+  const linkLabels = projectMetadataLinkDisplayLabels(visibleLinks);
   const requirements = walletProjectMetadataRequirementsV1(projectMetadata);
   const completeForProfile = !requiresCurrentProjectMetadata(launch)
     || requirements.complete;
@@ -2052,9 +2056,9 @@ function ProjectMetadataReview({
               : "Image preview unavailable. Wallet review continues with the bound image reference."}
         </p>
       ) : null}
-      {presentation.links.length > 0 ? (
+      {visibleLinks.length > 0 ? (
         <nav className={styles.projectLinks} aria-label={`${token.name} links`}>
-          {presentation.links.map((link, index) => (
+          {visibleLinks.map((link, index) => (
             <a
               href={link.uri}
               key={`${link.kind}:${link.uri}`}
@@ -2104,10 +2108,9 @@ function ProjectMetadataReview({
           <dt>Website</dt>
           <dd>
             {website ? (
-              <a href={website.uri} rel="noreferrer" target="_blank">
+              <PublicExternalLink href={website.uri} rel="noreferrer" target="_blank">
                 {website.uri}
-                <span className={styles.visuallyHidden}>, opens in a new tab</span>
-              </a>
+              </PublicExternalLink>
             ) : "Missing"}
           </dd>
         </div>
@@ -2115,10 +2118,9 @@ function ProjectMetadataReview({
           <dt>X</dt>
           <dd>
             {xLink ? (
-              <a href={xLink.uri} rel="noreferrer" target="_blank">
+              <PublicExternalLink href={xLink.uri} rel="noreferrer" target="_blank">
                 {xLink.uri}
-                <span className={styles.visuallyHidden}>, opens in a new tab</span>
-              </a>
+              </PublicExternalLink>
             ) : "Missing"}
           </dd>
         </div>
