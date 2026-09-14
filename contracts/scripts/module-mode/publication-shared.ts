@@ -27,6 +27,7 @@ export { assertAnyQuoteLifecycleIdentityV1, prepareAnyQuoteLifecycleLaunchV1, pr
   prepareAnyQuoteLifecycleApprovalV1, prepareAnyQuoteLifecycleClaimV1, revalidateAnyQuoteLifecyclePreparationV1,
   verifyAnyQuoteLifecycleReceiptV1 } from '../../../lib/module-engine/any-quote/lifecycle';
 export { readAnyQuoteIdentityTradeQuoteV1, readAnyQuoteIdentityLaunchPreviewV1 } from '../../../lib/server/module-engine/any-quote-preparation';
+export { TradeRpcExecutionRevertedV1 } from '../../../lib/server/custom-launch/routed-trade-rpc-v1';
 
 export { isModuleEngineSharedQuoteRelease, isModuleEngineAnyQuoteEthRelease, MODULE_ENGINE_ANY_QUOTE_ETH_PROFILE_ID } from '../../../lib/module-engine/profile';
 export { moduleEngineAnyQuoteEthHostAbi, moduleEngineAnyQuoteEthHookAbi, moduleEngineAnyQuoteEthLedgerAbi } from '../../../lib/module-engine/abi';
