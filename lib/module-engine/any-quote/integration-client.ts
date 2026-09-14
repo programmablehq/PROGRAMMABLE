@@ -3,8 +3,7 @@ import type { Address, Hex } from "viem";
 import type { ModuleEngineRelease, ModuleEngineTemplate } from "../catalog";
 import { prepareModuleEngineAnyQuoteSwap, prepareModuleEngineLaunch, type ModuleEngineClient, type PrepareModuleEngineLaunchInput } from "../client";
 import { ANY_QUOTE_NATIVE, ANY_QUOTE_NATIVE_BUY_OPERATION_ID, AnyQuoteErrorV1, anyQuoteSameAddressV1, type AnyQuoteReadinessV1 } from "./types";
-import { assertAnyQuoteLaunchPreparation, anyQuoteLaunchIntent, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "./integration";
-import { buildAnyQuoteSwapV1 } from "./route";
+import { assertAnyQuoteLaunchPreparation, anyQuoteLaunchIntent, buildAnyQuoteInitialBuy, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "./integration";
 
 async function request<T>(endpoint: "readiness" | "launch-preview" | "trade-quote", body: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/module-mode/any-quote/${endpoint}`, { method: "POST", cache: "no-store", credentials: "same-origin", signal,
@@ -27,8 +26,8 @@ export async function prepareModuleEngineAnyQuoteLaunch(input: PrepareModuleEngi
   const preview = await request<AnyQuoteLaunchPreparation>("launch-preview", { ...intent, description: input.description, imageUri: input.imageUri, socialLinks: input.socialLinks });
   assertAnyQuoteLaunchPreparation(preview, intent, release, BigInt(Math.floor(Date.now() / 1000)));
   const initialOperation = preview.initialBuy ? () => {
-    const route = buildAnyQuoteSwapV1({ pool: preview.pool, owner: input.account, recipient: input.account, side: "buy", amountIn: input.initialBuyWei,
-      minimumAmountOut: BigInt(preview.initialBuy!.minimumOutput), deadline: BigInt(preview.validUntil), externalRoute: preview.initialBuy!.externalRoute });
+    const route = buildAnyQuoteInitialBuy({ preview, owner: input.account, recipient: input.account, amountIn: input.initialBuyWei,
+      minimumAmountOut: BigInt(preview.initialBuy!.minimumOutput) });
     return { operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, recipient: input.account, inputAsset: ANY_QUOTE_NATIVE, inputAmount: input.initialBuyWei,
       outputAsset: preview.predictedToken, minimumOutput: BigInt(preview.initialBuy!.minimumOutput), data: route.nativeBuyOperationData! };
   } : undefined;

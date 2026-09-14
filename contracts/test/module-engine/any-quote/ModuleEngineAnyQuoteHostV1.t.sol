@@ -326,6 +326,49 @@ contract ModuleEngineAnyQuoteHostV1Test is Test {
         assertEq(weth.balanceOf(MANAGER), 0);
     }
 
+    function test_nativeLaunchCanExecuteAfterQuoteReviewExpiryBeforeFixedExecutionDeadline() public {
+        Host.LaunchParameters memory p = _nativeParams(101);
+        uint256 preparedAt = block.timestamp;
+        p.initialOperation.deadline = preparedAt + 180;
+        bytes32 exactParametersHash = keccak256(abi.encode(p));
+        // Offchain review ends at +45; the original bytes remain executable at +179.
+        vm.warp(preparedAt + 179);
+        vm.prank(ALICE);
+        Host.Launch memory launched = host.launch{ value: 1 ether }(p);
+        assertEq(keccak256(abi.encode(p)), exactParametersHash);
+        assertGt(IERC20(launched.token).balanceOf(ALICE), 0);
+        assertEq(host.ledger().claimableQuote(WETH, A.PLATFORM_RECIPIENT), 0.003 ether);
+        assertEq(host.nonces(launched.launchId, ALICE), 1);
+        assertEq(ALICE.balance, 99 ether);
+    }
+
+    function test_nativeLaunchRejectsAtFixedExecutionDeadlineWithoutMovingFunds() public {
+        Host.LaunchParameters memory p = _nativeParams(102);
+        p.initialOperation.deadline = block.timestamp + 180;
+        address token = p.initialOperation.outputAsset;
+        vm.warp(p.initialOperation.deadline);
+        vm.prank(ALICE);
+        vm.expectRevert(Host.InvalidQuoteInfrastructure.selector);
+        host.launch{ value: 1 ether }(p);
+        assertEq(token.code.length, 0);
+        assertEq(ALICE.balance, 100 ether);
+        assertEq(weth.balanceOf(MANAGER), 0);
+    }
+
+    function test_delayedNativeLaunchStillEnforcesItsOriginalOutputMinimum() public {
+        Host.LaunchParameters memory p = _nativeParams(103);
+        p.initialOperation.deadline = block.timestamp + 180;
+        p.initialOperation.minimumOutput = A.TOKEN_SUPPLY;
+        address token = p.initialOperation.outputAsset;
+        vm.warp(block.timestamp + 90);
+        vm.prank(ALICE);
+        vm.expectRevert(Host.InsufficientOutput.selector);
+        host.launch{ value: 1 ether }(p);
+        assertEq(token.code.length, 0);
+        assertEq(ALICE.balance, 100 ether);
+        assertEq(weth.balanceOf(MANAGER), 0);
+    }
+
     function test_nativeExcessFundingAndWrongActorAreRejectedAtomically() public {
         Host.LaunchParameters memory p = _nativeParams(5);
         vm.prank(ALICE);

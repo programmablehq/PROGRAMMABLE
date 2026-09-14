@@ -9,9 +9,9 @@ import { ANY_QUOTE_CONFIGURATION_ABI, createAnyQuoteConfigurationSchema } from "
 import { ANY_QUOTE_INFRASTRUCTURE, ANY_QUOTE_NATIVE, ANY_QUOTE_NATIVE_BUY_OPERATION_ID, ANY_QUOTE_WETH, type AnyQuoteExternalRouteV1 } from "@/lib/module-engine/any-quote/types";
 import { anyQuoteEvidenceHashV1, anyQuoteModulePoolKeyV1, anyQuotePoolIdV1, buildAnyQuoteSwapV1 } from "@/lib/module-engine/any-quote/route";
 import { planAnyQuoteInitialPriceV1, encodeAnyQuoteConfigurationV1 } from "@/lib/module-engine/any-quote/price";
-import { anyQuoteLaunchIntent, anyQuoteMinimumOutput, anyQuotePoolFor, assertAnyQuoteConfiguration, assertAnyQuoteLaunchPreparation, predictAnyQuoteToken, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "@/lib/module-engine/any-quote/integration";
+import { anyQuoteLaunchIntent, anyQuoteMinimumOutput, anyQuotePoolFor, assertAnyQuoteConfiguration, assertAnyQuoteLaunchPreparation, predictAnyQuoteToken, anyQuoteLaunchExecutionDeadline, buildAnyQuoteInitialBuy, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "@/lib/module-engine/any-quote/integration";
 import { compileModuleEngineLaunch, predictModuleEngineAddress } from "@/lib/module-engine/operation-plan";
-import { prepareModuleEngineAnyQuoteSwap, prepareModuleEngineAnyQuoteApproval, prepareModuleEngineApproval, prepareModuleEngineClaim, readModuleEngineLaunch, readModuleEngineAdministration, readModuleEngineFeeControls, prepareModuleEngineFeeChange, revalidateModuleEngineTransaction, releaseModuleEnginePreparation, verifyModuleEngineLaunchReceipt, verifyModuleEngineClaimReceipt } from "@/lib/module-engine/client";
+import { prepareModuleEngineLaunch, prepareModuleEngineSourceLaunchV1, prepareModuleEngineAnyQuoteSwap, prepareModuleEngineAnyQuoteApproval, prepareModuleEngineApproval, prepareModuleEngineClaim, readModuleEngineLaunch, readModuleEngineAdministration, readModuleEngineFeeControls, prepareModuleEngineFeeChange, revalidateModuleEngineTransaction, releaseModuleEnginePreparation, verifyModuleEngineLaunchReceipt, verifyModuleEngineClaimReceipt } from "@/lib/module-engine/client";
 import { assertModuleEngineOperationAvailability, fetchModuleEngineAvailability } from "@/lib/module-engine/availability-client";
 import { ENGINE_CONTEXT, moduleEngineAnyQuoteHookAbi, moduleEngineAnyQuoteLedgerAbi, moduleEngineHostAbi, moduleEngineLaunchParameters, moduleEnginePlanParameters } from "@/lib/module-engine/abi";
 import { readAnyQuoteLaunchPreview, readAnyQuoteReadiness, readAnyQuoteTradeQuote } from "@/lib/server/module-engine/any-quote";
@@ -139,6 +139,90 @@ function tradeFixture(buy: boolean) {
   return { ...f, quote, allowance };
 }
 
+function walletWindowPreview(f: ReturnType<typeof sharedFixture>) {
+  const validUntil = (f.state.timestamp + 45n).toString(), executionDeadline = (f.state.timestamp + 180n).toString();
+  const readiness = { ...f.preview.readiness, validUntil, price: { ...f.preview.readiness.price, validUntil }, routes: {
+    buy: { ...f.preview.readiness.routes.buy, validUntil }, sell: { ...f.preview.readiness.routes.sell, validUntil },
+  } };
+  const price = planAnyQuoteInitialPriceV1({ token: f.preview.predictedToken, quoteAsset: QUOTE, quoteDecimals: 36, quoteUsd: readiness.price.usd });
+  const priceEvidenceHash = anyQuoteEvidenceHashV1({ domain: "programmable.any-quote.price-intent.v2", intent: f.intent, readinessEvidenceHash: readiness.evidenceHash, price, validUntil, executionDeadline });
+  const preview: AnyQuoteLaunchPreparation = { ...f.preview, schemaVersion: "programmable.any-quote.launch-preview.v2", readiness, validUntil, executionDeadline,
+    ...encodeAnyQuoteConfigurationV1({ sharedHook: f.identity.contracts.sharedHook.address, quoteAsset: QUOTE, initialTick: price.initialTick, validUntil: BigInt(executionDeadline), priceEvidenceHash }) };
+  preview.evidenceHash = anyQuoteEvidenceHashV1({ ...preview, evidenceHash: undefined });
+  return preview;
+}
+
+describe("Any Quote launch wallet deadline", () => {
+  it("keeps v1 timing and rejects an execution-window field smuggled into a historical preview", () => {
+    const f = sharedFixture();
+    expect(assertAnyQuoteLaunchPreparation(f.preview, f.intent, f.identity, f.state.timestamp)).toBe(f.preview);
+    expect(anyQuoteLaunchExecutionDeadline(f.preview)).toBe(BigInt(f.preview.validUntil));
+    const changed = { ...f.preview, executionDeadline: (f.state.timestamp + 180n).toString() } as unknown as AnyQuoteLaunchPreparation;
+    changed.evidenceHash = anyQuoteEvidenceHashV1({ ...changed, evidenceHash: undefined });
+    expect(() => assertAnyQuoteLaunchPreparation(changed, f.intent, f.identity, f.state.timestamp)).toThrow("LAUNCH_PREVIEW_MISMATCH");
+  });
+  it.each([-1n, 1n, 60n])("rejects a fully resealed execution deadline shifted from the original snapshot by %s seconds", shift => {
+    const f = sharedFixture(), preview = walletWindowPreview(f);
+    expect(assertAnyQuoteLaunchPreparation(preview, f.intent, f.identity, f.state.timestamp)).toBe(preview);
+    if (preview.schemaVersion !== "programmable.any-quote.launch-preview.v2") throw new Error("Expected v2");
+    const executionDeadline = (BigInt(preview.executionDeadline) + shift).toString();
+    const price = planAnyQuoteInitialPriceV1({ token: preview.predictedToken, quoteAsset: QUOTE, quoteDecimals: 36, quoteUsd: preview.readiness.price.usd });
+    const priceEvidenceHash = anyQuoteEvidenceHashV1({ domain: "programmable.any-quote.price-intent.v2", intent: preview.intent,
+      readinessEvidenceHash: preview.readiness.evidenceHash, price, validUntil: preview.validUntil, executionDeadline });
+    const changed: AnyQuoteLaunchPreparation = { ...preview, executionDeadline,
+      ...encodeAnyQuoteConfigurationV1({ sharedHook: f.identity.contracts.sharedHook.address, quoteAsset: QUOTE, initialTick: preview.initialTick, validUntil: BigInt(executionDeadline), priceEvidenceHash }) };
+    changed.evidenceHash = anyQuoteEvidenceHashV1({ ...changed, evidenceHash: undefined });
+    expect(() => assertAnyQuoteLaunchPreparation(changed, f.intent, f.identity, f.state.timestamp + 20n)).toThrow("LAUNCH_PREVIEW_TIMING_INVALID");
+  });
+  it("keeps quote review freshness independent from the future execution deadline", () => {
+    const f = sharedFixture(), preview = walletWindowPreview(f);
+    expect(assertAnyQuoteLaunchPreparation(preview, f.intent, f.identity, f.state.timestamp + 44n)).toBe(preview);
+    expect(() => assertAnyQuoteLaunchPreparation(preview, f.intent, f.identity, f.state.timestamp + 45n)).toThrow("LAUNCH_PREVIEW_TIMING_INVALID");
+    const route = buildAnyQuoteInitialBuy({ preview, owner: ACCOUNT, recipient: ACCOUNT, amountIn: 1000n, minimumAmountOut: 1980n, now: f.state.timestamp });
+    expect(decodeFunctionData({ abi: parseAbi(["function execute(bytes,bytes[],uint256) payable"]), data: route.transaction.data }).args?.[2]).toBe(f.state.timestamp + 180n);
+    expect(() => buildAnyQuoteInitialBuy({ preview, owner: ACCOUNT, recipient: ACCOUNT, amountIn: 1000n, minimumAmountOut: 1980n, now: f.state.timestamp + 45n })).toThrow("LAUNCH_ROUTE_TIMING_INVALID");
+    expect(() => buildAnyQuoteSwapV1({ pool: preview.pool, owner: ACCOUNT, recipient: ACCOUNT, side: "buy", amountIn: 1000n,
+      minimumAmountOut: 1980n, deadline: f.state.timestamp + 180n, externalRoute: preview.readiness.routes.buy, now: f.state.timestamp })).toThrow("TRADE_BOUNDS_INVALID");
+  });
+  it("rejects resealed freshness beyond 45 seconds and inconsistent route checkpoints", () => {
+    const f = sharedFixture(), preview = walletWindowPreview(f);
+    const validUntil = (f.state.timestamp + 60n).toString();
+    const extended = structuredClone(preview);
+    extended.validUntil = validUntil;
+    extended.readiness.validUntil = validUntil;
+    extended.readiness.price.validUntil = validUntil;
+    extended.readiness.routes.buy.validUntil = validUntil;
+    extended.readiness.routes.sell.validUntil = validUntil;
+    const price = planAnyQuoteInitialPriceV1({ token: preview.predictedToken, quoteAsset: QUOTE, quoteDecimals: 36, quoteUsd: preview.readiness.price.usd });
+    Object.assign(extended, encodeAnyQuoteConfigurationV1({ sharedHook: f.identity.contracts.sharedHook.address, quoteAsset: QUOTE, initialTick: preview.initialTick,
+      validUntil: anyQuoteLaunchExecutionDeadline(preview), priceEvidenceHash: anyQuoteEvidenceHashV1({ domain: "programmable.any-quote.price-intent.v2", intent: preview.intent,
+        readinessEvidenceHash: preview.readiness.evidenceHash, price, validUntil, executionDeadline: preview.executionDeadline }) }));
+    extended.evidenceHash = anyQuoteEvidenceHashV1({ ...extended, evidenceHash: undefined });
+    expect(() => assertAnyQuoteLaunchPreparation(extended, f.intent, f.identity, f.state.timestamp)).toThrow("LAUNCH_PREVIEW_TIMING_INVALID");
+    for (const direction of ["buy", "sell"] as const) {
+      const changed = structuredClone(preview);
+      changed.readiness.routes[direction].checkpoint = { ...changed.readiness.checkpoint, hash: hash(999) };
+      changed.evidenceHash = anyQuoteEvidenceHashV1({ ...changed, evidenceHash: undefined });
+      expect(() => assertAnyQuoteLaunchPreparation(changed, f.intent, f.identity, f.state.timestamp)).toThrow("LAUNCH_PREVIEW_TIMING_INVALID");
+    }
+  });
+  it("rejects a preview that expires during the awaited settlement trace", async () => {
+    const f = sharedFixture(), preview = walletWindowPreview(f), settlement = settlementRpcFixture(preview.readiness.routes.buy, addr(99));
+    let now = Number(f.state.timestamp) * 1000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    const rpcs = settlement.rpcs.map(provider => (async (method, params) => {
+      const result = await provider(method, params);
+      if (method === "debug_traceCall") now = Number(preview.validUntil) * 1000;
+      return result;
+    }) satisfies TradeRpcV1) as unknown as readonly [TradeRpcV1, TradeRpcV1];
+    try {
+      await expect(readAnyQuoteIdentityLaunchPreviewV1({ ...f.intent, identity: f.identity, template: f.template, description: "Expired during validation" }, {
+        client: f.client, readiness: async () => preview.readiness, options: { rpcs },
+      })).rejects.toMatchObject({ code: "READINESS_EXPIRED" });
+    } finally { clock.mockRestore(); }
+  });
+});
+
 describe("Any Quote pair-token profile integration", () => {
   it.each([false, true])("keeps fee-conversion restrictions separate from an executable trade route (native ETH fees=%s)", async nativeEthFees => {
     const f = tradeFixture(true), catalog = anyQuoteUiFixture(nativeEthFees), intermediate = addr(20);
@@ -180,7 +264,7 @@ describe("Any Quote pair-token profile integration", () => {
     expect(preview).not.toHaveProperty("nativeFeeRoute");
     expect(assertAnyQuoteLaunchPreparation(preview, intent, f.release, f.state.timestamp)).toBe(preview);
     const compiled = await compileModuleEngineLaunch({ ...f.launchInput, ...intent, configuration: {}, anyQuotePreparation: preview },
-      f.identity, f.template.manifest, 36, BigInt(preview.validUntil));
+      f.identity, f.template.manifest, 36, anyQuoteLaunchExecutionDeadline(preview));
     expect(compiled.parameters).toMatchObject({ quoteAsset: QUOTE, buyCreatorFeeBps, sellCreatorFeeBps, initialOperation: { inputAmount: 0n } });
     // The selected pair is the fee asset even when only one direction charges creator fees.
     Object.assign(f.launch, { buyCreatorFeeBps, sellCreatorFeeBps });
@@ -294,9 +378,11 @@ describe("Any Quote source identity lifecycle preparation", () => {
     await expect(prepareAnyQuoteLifecycleApprovalV1({ ...buy, identity: buy.identity, account: ACCOUNT })).rejects.toThrow("predecessor of a sell");
   });
   it.each(["0", "100000000000000"])("prepares the exact quote-profile launch through settlement, compiler and operator checks (initial ETH wei=%s)", async initialBuyWei => {
-    const f = sharedFixture(), intent = { ...f.intent, initialBuyWei };
-    const readiness = { ...f.preview.readiness, routes: { ...f.preview.readiness.routes,
-      buy: { ...f.preview.readiness.routes.buy, amountIn: initialBuyWei === "0" ? "1000" : initialBuyWei } } };
+    const f = sharedFixture(), history = lifecycleHistory(f), intent = { ...f.intent, initialBuyWei }, originalTimestamp = f.state.timestamp;
+    const freshUntil = (originalTimestamp + 45n).toString();
+    const readiness = { ...f.preview.readiness, validUntil: freshUntil, price: { ...f.preview.readiness.price, validUntil: freshUntil }, routes: {
+      sell: { ...f.preview.readiness.routes.sell, validUntil: freshUntil },
+      buy: { ...f.preview.readiness.routes.buy, validUntil: freshUntil, amountIn: initialBuyWei === "0" ? "1000" : initialBuyWei } } };
     const settlement = settlementRpcFixture(readiness.routes.buy, addr(99));
     const initialTraces: unknown[][] = [];
     // Synthetic provider responses stay below the actual preview/compiler boundary.
@@ -312,14 +398,14 @@ describe("Any Quote source identity lifecycle preparation", () => {
       ] };
     }) satisfies TradeRpcV1) as unknown as readonly [TradeRpcV1, TradeRpcV1];
     const preview = await readAnyQuoteIdentityLaunchPreviewV1({ ...intent, identity: f.identity, template: f.template, description: "Identity launch" }, { client: f.client, readiness: async () => readiness, options: { rpcs } });
+    expect(preview).toMatchObject({ schemaVersion: "programmable.any-quote.launch-preview.v2", validUntil: freshUntil, executionDeadline: (originalTimestamp + 180n).toString() });
     expect(initialTraces).toHaveLength(initialBuyWei === "0" ? 0 : 2);
     const input = { ...f.launchInput, ...intent, imageUri: "", socialLinks: {}, anyQuotePreparation: preview };
-    const route = preview.initialBuy ? buildAnyQuoteSwapV1({ pool: preview.pool, owner: ACCOUNT, recipient: ACCOUNT, side: "buy",
-      amountIn: BigInt(initialBuyWei), minimumAmountOut: BigInt(preview.initialBuy.minimumOutput), deadline: BigInt(preview.validUntil),
-      externalRoute: preview.initialBuy.externalRoute, now: f.state.timestamp }) : null;
+    const route = preview.initialBuy ? buildAnyQuoteInitialBuy({ preview, owner: ACCOUNT, recipient: ACCOUNT,
+      amountIn: BigInt(initialBuyWei), minimumAmountOut: BigInt(preview.initialBuy.minimumOutput), now: f.state.timestamp }) : null;
     const initialOperation = route ? () => ({ operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, recipient: ACCOUNT, inputAsset: ANY_QUOTE_NATIVE,
       inputAmount: BigInt(initialBuyWei), outputAsset: preview.predictedToken, minimumOutput: 1980n, data: route.nativeBuyOperationData! }) : undefined;
-    const compiled = await compileModuleEngineLaunch({ ...input, initialOperation }, f.identity, f.template.manifest, 36, BigInt(preview.validUntil));
+    const compiled = await compileModuleEngineLaunch({ ...input, initialOperation }, f.identity, f.template.manifest, 36, anyQuoteLaunchExecutionDeadline(preview));
     const read = vi.mocked(f.client.readContract).getMockImplementation()!;
     vi.mocked(f.client.readContract).mockImplementation(async value => value.functionName === "predictTokenAddress" ? [compiled.predictedToken, compiled.graffiti] : read(value));
     const result = { ...f.launch, launchId: compiled.launchId, token: compiled.predictedToken, engine: compiled.engine, constructorHash: compiled.constructorHash, initCodeHash: compiled.initCodeHash, configurationHash: compiled.configurationHash, planHash: compiled.planHash, engineCodeHash: compiled.engineCodeHash };
@@ -329,6 +415,7 @@ describe("Any Quote source identity lifecycle preparation", () => {
     const preparation = await prepareAnyQuoteLifecycleLaunchV1({ ...f, identity: f.identity, input });
     if ("kind" in preparation) throw new Error("Unexpected funding");
     expect(BigInt(preparation.prepared.transaction.value)).toBe(BigInt(initialBuyWei));
+    expect(preparation.prepared).toMatchObject({ expiresAt: freshUntil, anyQuote: { executionDeadline: (originalTimestamp + 180n).toString() } });
     const launch = decodeFunctionData({ abi: moduleEngineHostAbi, data: preparation.prepared.transaction.data });
     expect(launch.functionName).toBe("launch");
     if (launch.functionName !== "launch") throw new Error("Expected launch calldata");
@@ -338,7 +425,7 @@ describe("Any Quote source identity lifecycle preparation", () => {
     if (route) {
       expect(route).toMatchObject({ routerVersion: "2.1.1", finalMinimum: "1980", transaction: { to: ANY_QUOTE_INFRASTRUCTURE.universalRouter } });
       expect(parameters.initialOperation).toMatchObject({ operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, actor: ACCOUNT, recipient: ACCOUNT,
-        inputAsset: ANY_QUOTE_NATIVE, outputAsset: getAddress(preview.predictedToken), deadline: BigInt(preview.validUntil), data: route.nativeBuyOperationData });
+        inputAsset: ANY_QUOTE_NATIVE, outputAsset: getAddress(preview.predictedToken), deadline: originalTimestamp + 180n, data: route.nativeBuyOperationData });
     }
     // Exercise the actual canonical helper envelope across the existing operator boundary.
     // Compiler input deliberately omits these financial fields; the preview intent retains them.
@@ -379,6 +466,35 @@ describe("Any Quote source identity lifecycle preparation", () => {
       expect(() => anyQuoteWalletStep(changedPlan, 0, changed)).toThrow();
     }
     await expect(revalidateAnyQuoteLifecyclePreparationV1({ ...f, identity: f.identity, preparation: JSON.parse(JSON.stringify(preparation)) })).resolves.toEqual(preparation.prepared.transaction);
+    const estimate = vi.mocked(f.client.estimateGas).getMockImplementation()!;
+    let liveNow = Number(originalTimestamp + 44n) * 1000;
+    const freshnessClock = vi.spyOn(Date, "now").mockImplementation(() => liveNow);
+    try {
+      // Advance only the live clock while a real awaited estimate completes. The
+      // canonical block remains unchanged, so stale-block success cannot hide expiry.
+      vi.mocked(f.client.estimateGas).mockImplementation(async request => {
+        const gas = await estimate(request); liveNow = Number(freshUntil) * 1000; return gas;
+      });
+      await expect(prepareAnyQuoteLifecycleLaunchV1({ ...f, identity: f.identity, input })).rejects.toThrow("expired");
+      liveNow = Number(originalTimestamp + 44n) * 1000;
+      await expect(prepareModuleEngineLaunch({ ...input, initialOperation })).rejects.toThrow("expired");
+      liveNow = Number(originalTimestamp + 44n) * 1000;
+      await expect(prepareModuleEngineSourceLaunchV1({ ...input, identity: f.identity, template: f.template, initialOperation })).rejects.toThrow("expired");
+      // Final estimate follows original reconstruction and current simulation.
+      liveNow = Number(originalTimestamp + 44n) * 1000; let estimates = 0;
+      vi.mocked(f.client.estimateGas).mockImplementation(async request => {
+        const gas = await estimate(request); if (++estimates === 3) liveNow = Number(freshUntil) * 1000; return gas;
+      });
+      await expect(revalidateAnyQuoteLifecyclePreparationV1({ ...f, identity: f.identity, preparation })).rejects.toThrow("expired");
+      expect(estimates).toBe(3);
+      // A fresh refresh at a later canonical block keeps the original signed bytes.
+      vi.mocked(f.client.estimateGas).mockImplementation(estimate);
+      liveNow = Number(originalTimestamp + 20n) * 1000; history.latest = 101n; f.state.timestamp = originalTimestamp + 20n;
+      await expect(revalidateAnyQuoteLifecyclePreparationV1({ ...f, identity: f.identity, preparation })).resolves.toEqual(preparation.prepared.transaction);
+      expect(preparation.prepared).toMatchObject({ anyQuote: { executionDeadline: (originalTimestamp + 180n).toString() } });
+    } finally {
+      freshnessClock.mockRestore(); vi.mocked(f.client.estimateGas).mockImplementation(estimate); history.latest = 100n; f.state.timestamp = originalTimestamp;
+    }
     if (route) {
       const changed = structuredClone(preparation);
       changed.prepared = { ...changed.prepared, transaction: { ...changed.prepared.transaction, data: encodeFunctionData({ abi: moduleEngineHostAbi, functionName: "launch", args: [{ ...parameters,
@@ -388,6 +504,34 @@ describe("Any Quote source identity lifecycle preparation", () => {
     }
     settlement.state.recipientAdjustment = -1n;
     await expect(readAnyQuoteIdentityLaunchPreviewV1({ ...intent, identity: f.identity, template: f.template, description: "Identity launch" }, { client: f.client, readiness: async () => readiness, options: { rpcs } })).rejects.toMatchObject({ status: "incompatible" });
+    // Provider/header/log responses are modeled here; the actual compiler, lifecycle,
+    // operator and receipt verifiers run unchanged across a delayed wallet handoff.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Number(originalTimestamp + 90n) * 1000);
+    try {
+      history.latest = 101n; f.state.timestamp = originalTimestamp + 90n;
+      await expect(revalidateAnyQuoteLifecyclePreparationV1({ ...f, identity: f.identity, preparation })).rejects.toThrow("expired");
+      Object.assign(f.launch, result);
+      f.feeState.configurationHash = keccak256(encodeAbiParameters(parseAbiParameters("bytes32,uint256,address,address,address,address,bytes32,address,address[],uint16[]"),
+        [f.release.economicsPolicyId, 4663n, f.release.contracts.ledger.address, f.identity.contracts.poolManager.address, f.identity.contracts.sharedHook.address,
+          f.host, result.launchId, QUOTE, [ACCOUNT], [10_000]]));
+      Object.assign(f.registration, lifecycleLog(f.release.contracts.ledger.address, registrationAbi, "QuoteLaunchRegistered", {
+        launchId: result.launchId, asset: QUOTE, configurationHash: f.feeState.configurationHash, creatorWallets: [ACCOUNT], creatorSharesBps: [10_000],
+      }));
+      const actualRead = vi.mocked(f.client.readContract).getMockImplementation()!;
+      vi.mocked(f.client.readContract).mockImplementation(async value => {
+        if (value.functionName === "graffiti") return compiled.graffiti;
+        if (value.functionName === "contextHash") return keccak256(encodeAbiParameters(parseAbiParameters(ENGINE_CONTEXT), [compiled.context]));
+        if (value.functionName === "nonces") return value.blockNumber === 100n ? 0n : 1n;
+        return actualRead(value);
+      });
+      vi.mocked(f.client.getCode).mockImplementation(value => value.address.toLowerCase() === preview.predictedToken.toLowerCase() && value.blockNumber === 100n ? Promise.resolve("0x") : getCode(value));
+      const logs = [lifecycleLog(f.host, moduleEngineHostAbi, "EngineLaunchBound", { ...result, runtimeCodeHash: result.engineCodeHash, economicsPolicyId: f.release.economicsPolicyId }),
+        lifecycleLog(f.host, moduleEngineHostAbi, "EngineLaunchParametersBound", { launchId: result.launchId, encodedParameters: encodeAbiParameters(moduleEngineLaunchParameters, [parameters]) }),
+        ...(route ? [lifecycleLog(f.host, moduleEngineHostAbi, "EngineOperationExecuted", { ...parameters.initialOperation, launchId: result.launchId, outputAmount: 2000n, resultHash: keccak256(parameters.initialOperation.data) })] : [])];
+      const receipt = lifecycleReceipt(f, preparation, logs);
+      await expect(verifyAnyQuoteLifecycleReceiptV1({ ...f, identity: f.identity, preparation, receipt })).resolves.toMatchObject({ kind: "launch", finalized: false, ...(route ? { outputAmount: "2000" } : {}) });
+      expect(preparation.prepared.transaction.data).toBe(encodeFunctionData({ abi: moduleEngineHostAbi, functionName: "launch", args: [parameters] }));
+    } finally { clock.mockRestore(); }
   });
   it("binds a canonical swap receipt to the signed router bytes and final token transfer", async () => {
     const f = tradeFixture(true); lifecycleHistory(f);
@@ -632,7 +776,7 @@ describe("Any Quote financial integration", () => {
       options: { rpcs: settlement.rpcs },
     });
     expect(preview.initialBuy).toBeNull(); expect(preview.intent.initialBuyWei).toBe("0");
-    expect(preview.configurationHash).toBe(f.preview.configurationHash);
+    expect(preview).toMatchObject({ schemaVersion: "programmable.any-quote.launch-preview.v2", executionDeadline: (f.state.timestamp + 180n).toString(), validUntil: (f.state.timestamp + 45n).toString(), initialTick: f.preview.initialTick });
     expect(assertAnyQuoteLaunchPreparation(preview, f.intent, f.release, f.state.timestamp)).toBe(preview);
     expect(f.client.call).not.toHaveBeenCalled();
     expect(settlement.calls.some(call => call.method === "debug_traceCall")).toBe(true);

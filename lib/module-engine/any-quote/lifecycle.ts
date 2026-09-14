@@ -7,9 +7,9 @@ import { assertModuleEngineSourceIdentityV1, assertModuleEngineSourceReceiptV1, 
   type ModuleEngineApprovalRequired, type ModuleEngineClient, type ModuleEngineReceiptResult, type ModuleEngineSourcePreparationV1,
   type PreparedModuleEngineApproval, type PreparedModuleEngineClaim, type PreparedModuleEngineLaunch, type PreparedModuleEngineSwap,
   type PrepareModuleEngineLaunchInput } from "../client";
-import { anyQuoteEvidenceHashV1, buildAnyQuoteSwapV1 } from "./route";
+import { anyQuoteEvidenceHashV1 } from "./route";
 import { ANY_QUOTE_NATIVE, ANY_QUOTE_NATIVE_BUY_OPERATION_ID } from "./types";
-import type { AnyQuoteLaunchPreparation, AnyQuoteTradeQuote } from "./integration";
+import { buildAnyQuoteInitialBuy, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "./integration";
 
 export type AnyQuoteLifecycleJsonV1<T> = T extends bigint ? string : T extends readonly (infer V)[] ? AnyQuoteLifecycleJsonV1<V>[] : T extends object ? { [K in keyof T]: AnyQuoteLifecycleJsonV1<T[K]> } : T;
 type Unsigned = PreparedModuleEngineLaunch | PreparedModuleEngineSwap | PreparedModuleEngineApproval | PreparedModuleEngineClaim;
@@ -49,9 +49,8 @@ async function materialize(client: ModuleEngineClient, release: ModuleEngineShar
   if (recipe.kind === "launch") {
     const preview = recipe.input.anyQuotePreparation;
     const initialOperation = preview.initialBuy ? () => {
-      const route = buildAnyQuoteSwapV1({ pool: preview.pool, owner: recipe.input.account, recipient: recipe.input.account, side: "buy",
-        amountIn: BigInt(preview.intent.initialBuyWei), minimumAmountOut: BigInt(preview.initialBuy!.minimumOutput), deadline: BigInt(preview.validUntil),
-        externalRoute: preview.initialBuy!.externalRoute, now: BigInt(preview.readiness.checkpoint.timestamp) });
+      const route = buildAnyQuoteInitialBuy({ preview, owner: recipe.input.account, recipient: recipe.input.account,
+        amountIn: BigInt(preview.intent.initialBuyWei), minimumAmountOut: BigInt(preview.initialBuy!.minimumOutput), now: BigInt(preview.readiness.checkpoint.timestamp) });
       return { operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, recipient: recipe.input.account, inputAsset: ANY_QUOTE_NATIVE,
         inputAmount: BigInt(preview.intent.initialBuyWei), outputAsset: preview.predictedToken, minimumOutput: BigInt(preview.initialBuy!.minimumOutput), data: route.nativeBuyOperationData! };
     } : undefined;
@@ -76,9 +75,15 @@ async function materialize(client: ModuleEngineClient, release: ModuleEngineShar
 async function prepare(input: Common, recipeValue: AnyQuoteLifecycleRecipeV1): Promise<AnyQuoteLifecyclePreparationV1 | AnyQuoteLifecycleApprovalRequiredV1> {
   const release = identity(json(input.identity)), recipe = freeze(json(recipeValue)), result = await materialize(input.client, release, recipe);
   if ("kind" in result) return json(result);
+  assertLaunchHandoffFreshness(recipe);
   const unsigned = json(result.source.prepared);
   const value = { schemaVersion: "programmable.any-quote.lifecycle-preparation.v1" as const, identity: release, recipe, prepared: unsigned, ...(result.funding ? { funding: json(result.funding) } : {}), evidenceHash: "0x" as const };
   return freeze({ ...value, evidenceHash: anyQuoteEvidenceHashV1({ ...value, evidenceHash: undefined }) });
+}
+function assertLaunchHandoffFreshness(recipe: AnyQuoteLifecycleRecipeV1) {
+  if (recipe.kind === "launch" && recipe.input.anyQuotePreparation.schemaVersion === "programmable.any-quote.launch-preview.v2") {
+    need(BigInt(Math.floor(Date.now() / 1000)) < BigInt(recipe.input.anyQuotePreparation.validUntil), "launch preparation expired");
+  }
 }
 export async function prepareAnyQuoteLifecycleLaunchV1(input: Common & { template: ModuleEngineTemplate; input: LaunchInput }) {
   const keys: (keyof LaunchInput)[] = ["templateId", "account", "quoteAsset", "name", "symbol", "description", "imageUri", "socialLinks", "creatorSalt", "engineSalt", "launchData", "creatorWallets", "creatorSharesBps", "buyCreatorFeeBps", "sellCreatorFeeBps", "deadlineSeconds", "anyQuotePreparation"];
@@ -122,6 +127,7 @@ export async function revalidateAnyQuoteLifecyclePreparationV1(input: Common & {
   const estimated = await input.client.estimateGas({ account: source.prepared.account, to: source.prepared.transaction.to, data: source.prepared.transaction.data,
     value: BigInt(source.prepared.transaction.value), blockNumber: current.blockNumber });
   need(source.prepared.transaction.gas && estimated <= BigInt(source.prepared.transaction.gas), "current gas exceeds the bound preparation");
+  assertLaunchHandoffFreshness(preparation.recipe);
   return preparation.prepared.transaction;
 }
 export async function verifyAnyQuoteLifecycleReceiptV1(input: Common & { preparation: AnyQuoteLifecyclePreparationV1; receipt: TransactionReceipt }): Promise<AnyQuoteLifecycleReceiptV1> {

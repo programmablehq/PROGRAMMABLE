@@ -2,7 +2,7 @@ import { decodeAbiParameters, getCreate2Address, encodeAbiParameters, keccak256,
 import type { ModuleEngineReleaseIdentity } from "../catalog";
 import { isModuleEngineSharedQuoteRelease, isModuleEngineAnyQuoteEthRelease } from "../profile";
 import { anyQuoteNativeFeeRouteFromExternal, decodeAnyQuoteNativeFeeRoute, type AnyQuoteNativeFeeRoute } from "./native-fee-route";
-import { anyQuoteEvidenceHashV1, anyQuotePoolIdV1 } from "./route";
+import { anyQuoteEvidenceHashV1, anyQuotePoolIdV1, buildAnyQuoteLaunchSwapV2, buildAnyQuoteSwapV1 } from "./route";
 import { encodeAnyQuoteConfigurationV1, planAnyQuoteInitialPriceV1 } from "./price";
 import { ANY_QUOTE_INFRASTRUCTURE, ANY_QUOTE_SCHEMA_ID, AnyQuoteErrorV1, anyQuoteAddressV1, anyQuoteSameAddressV1,
   type AnyQuoteCheckpointV1, type AnyQuoteExternalRouteV1, type AnyQuoteModulePoolV1, type AnyQuoteReadinessV1 } from "./types";
@@ -13,13 +13,28 @@ export interface AnyQuoteLaunchIntent {
   creatorSalt: Hex; engineSalt: Hex; buyCreatorFeeBps: number; sellCreatorFeeBps: number;
   creatorWallets: readonly Address[]; creatorSharesBps: readonly number[]; initialBuyWei: string; slippageBps: number;
 }
-export interface AnyQuoteLaunchPreparation {
-  schemaVersion: "programmable.any-quote.launch-preview.v1"; intent: AnyQuoteLaunchIntent;
+interface AnyQuoteLaunchPreparationFields {
+  intent: AnyQuoteLaunchIntent;
   readiness: AnyQuoteCompatibleReadiness; predictedToken: Address; pool: AnyQuoteModulePoolV1;
   configuration: Hex; configurationHash: Hex; initialTick: number; validUntil: string;
   actualFdvUsd: { numerator: string; denominator: string }; evidenceHash: Hex;
   initialBuy: null | { output: string; minimumOutput: string; externalRoute: AnyQuoteExternalRouteV1 };
   nativeFeeRoute?: AnyQuoteNativeFeeRoute;
+}
+export type AnyQuoteLaunchPreparation = AnyQuoteLaunchPreparationFields & (
+  | { schemaVersion: "programmable.any-quote.launch-preview.v1"; executionDeadline?: never }
+  | { schemaVersion: "programmable.any-quote.launch-preview.v2"; executionDeadline: string }
+);
+/** The review expires independently of the already encoded transaction's execution deadline. */
+export function anyQuoteLaunchExecutionDeadline(preview: AnyQuoteLaunchPreparation): bigint {
+  return BigInt(preview.schemaVersion === "programmable.any-quote.launch-preview.v2" ? preview.executionDeadline : preview.validUntil);
+}
+export function buildAnyQuoteInitialBuy(input: { preview: AnyQuoteLaunchPreparation; owner: Address; recipient: Address; amountIn: bigint; minimumAmountOut: bigint; now?: bigint }) {
+  const { preview, ...request } = input;
+  const swap = { ...request, pool: preview.pool, externalRoute: preview.initialBuy?.externalRoute ?? preview.readiness.routes.buy };
+  return preview.schemaVersion === "programmable.any-quote.launch-preview.v2"
+    ? buildAnyQuoteLaunchSwapV2({ ...swap, deadline: BigInt(preview.executionDeadline), freshUntil: BigInt(preview.validUntil), checkpoint: preview.readiness.checkpoint })
+    : buildAnyQuoteSwapV1({ ...swap, side: "buy", deadline: BigInt(preview.validUntil) });
 }
 export interface AnyQuoteTradeQuote {
   schemaVersion: "programmable.any-quote.trade-quote.v1"; releaseDigest: Hex; templateId: string;
@@ -76,18 +91,29 @@ export function assertAnyQuoteConfiguration(input: { configuration: Hex; release
 /** A preview commits to the exact actor and economics; its hash is provenance, not a new signing authority. */
 export function assertAnyQuoteLaunchPreparation(preview: AnyQuoteLaunchPreparation, expected: AnyQuoteLaunchIntent, release: ModuleEngineReleaseIdentity, now: bigint) {
   const intent = anyQuoteLaunchIntent(expected);
-  if (!isModuleEngineSharedQuoteRelease(release) || preview.schemaVersion !== "programmable.any-quote.launch-preview.v1"
+  const walletWindow = preview.schemaVersion === "programmable.any-quote.launch-preview.v2";
+  if (!isModuleEngineSharedQuoteRelease(release) || (!walletWindow && preview.schemaVersion !== "programmable.any-quote.launch-preview.v1")
+    || (walletWindow ? isModuleEngineAnyQuoteEthRelease(release) : Object.hasOwn(preview, "executionDeadline"))
     || anyQuoteEvidenceHashV1(preview.intent) !== anyQuoteEvidenceHashV1(intent) || preview.evidenceHash !== anyQuoteEvidenceHashV1({ ...preview, evidenceHash: undefined })
     || !anyQuoteSameAddressV1(preview.predictedToken, predictAnyQuoteToken(intent, release)) || preview.readiness.status !== "compatible"
     || !anyQuoteSameAddressV1(preview.readiness.quoteAsset, intent.quoteAsset) || BigInt(preview.validUntil) > BigInt(preview.readiness.validUntil)) throw new AnyQuoteErrorV1("LAUNCH_PREVIEW_MISMATCH");
+  const executionDeadline = anyQuoteLaunchExecutionDeadline(preview);
+  if (walletWindow && (BigInt(preview.validUntil) <= now || executionDeadline <= BigInt(preview.validUntil)
+    || BigInt(preview.validUntil) > BigInt(preview.readiness.checkpoint.timestamp) + 45n
+    || executionDeadline !== BigInt(preview.readiness.checkpoint.timestamp) + 180n || executionDeadline > now + 180n
+    || [preview.readiness.price, preview.readiness.routes.buy, preview.readiness.routes.sell].some(value => BigInt(preview.validUntil) > BigInt(value.validUntil))
+    || [preview.readiness.routes.buy, preview.readiness.routes.sell].some(route => anyQuoteEvidenceHashV1(route.checkpoint) !== anyQuoteEvidenceHashV1(preview.readiness.checkpoint)))) {
+    throw new AnyQuoteErrorV1("LAUNCH_PREVIEW_TIMING_INVALID");
+  }
   const price = planAnyQuoteInitialPriceV1({ token: preview.predictedToken, quoteAsset: intent.quoteAsset, quoteDecimals: preview.readiness.token.decimals, quoteUsd: preview.readiness.price.usd });
-  const evidenceHash = anyQuoteEvidenceHashV1({ domain: "programmable.any-quote.price-intent.v1", intent, readinessEvidenceHash: preview.readiness.evidenceHash, price, validUntil: preview.validUntil });
-  const encoded = encodeAnyQuoteConfigurationV1({ sharedHook: release.contracts.sharedHook.address, quoteAsset: intent.quoteAsset, initialTick: price.initialTick, validUntil: BigInt(preview.validUntil), priceEvidenceHash: evidenceHash });
+  const evidenceHash = anyQuoteEvidenceHashV1({ domain: walletWindow ? "programmable.any-quote.price-intent.v2" : "programmable.any-quote.price-intent.v1", intent, readinessEvidenceHash: preview.readiness.evidenceHash, price, validUntil: preview.validUntil,
+    ...(walletWindow ? { executionDeadline: preview.executionDeadline } : {}) });
+  const encoded = encodeAnyQuoteConfigurationV1({ sharedHook: release.contracts.sharedHook.address, quoteAsset: intent.quoteAsset, initialTick: price.initialTick, validUntil: executionDeadline, priceEvidenceHash: evidenceHash });
   if (encoded.configuration !== preview.configuration || encoded.configurationHash !== preview.configurationHash || price.initialTick !== preview.initialTick
     || anyQuoteEvidenceHashV1(price.actualFdvUsd) !== anyQuoteEvidenceHashV1(preview.actualFdvUsd)
     || anyQuoteEvidenceHashV1(anyQuotePoolFor(preview.predictedToken, intent.quoteAsset, release.contracts.sharedHook.address)) !== anyQuoteEvidenceHashV1(preview.pool)
     || (BigInt(intent.initialBuyWei) === 0n) !== (preview.initialBuy === null)) throw new AnyQuoteErrorV1("LAUNCH_PREVIEW_MISMATCH");
-  assertAnyQuoteConfiguration({ configuration: preview.configuration, release, quoteAsset: intent.quoteAsset, now, validUntil: BigInt(preview.validUntil) });
+  assertAnyQuoteConfiguration({ configuration: preview.configuration, release, quoteAsset: intent.quoteAsset, now, validUntil: executionDeadline });
   if (isModuleEngineAnyQuoteEthRelease(release)) {
     if (!preview.nativeFeeRoute) throw new AnyQuoteErrorV1("NATIVE_FEE_ROUTE_MISSING");
     const route = decodeAnyQuoteNativeFeeRoute(preview.nativeFeeRoute.launchData, preview.pool);

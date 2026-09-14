@@ -145,15 +145,28 @@ export function validateAnyQuoteExternalRouteV1(route: AnyQuoteExternalRouteV1) 
   if (!equivalentAsset(current, final)) throw new AnyQuoteErrorV1("DISCONNECTED_ROUTE");
 }
 
-export function buildAnyQuoteSwapV1(input: {
+type AnyQuoteSwapInput = {
   pool: AnyQuoteModulePoolV1; owner: Address; recipient: Address; side: "buy" | "sell";
   amountIn: bigint; minimumAmountOut: bigint; deadline: bigint; externalRoute: AnyQuoteExternalRouteV1; now?: bigint;
-}) {
-  const owner = anyQuoteAddressV1(input.owner), recipient = anyQuoteAddressV1(input.recipient);
+};
+export function buildAnyQuoteSwapV1(input: AnyQuoteSwapInput) {
   const now = input.now ?? BigInt(Math.floor(Date.now() / 1000));
+  if (input.deadline <= now || input.deadline > now + 300n || input.deadline > BigInt(input.externalRoute.validUntil)) throw new AnyQuoteErrorV1("TRADE_BOUNDS_INVALID");
+  return encodeAnyQuoteSwap(input);
+}
+/** Launch-only wallet window. The original quote must still be fresh when these fixed bytes are prepared or handed off. */
+export function buildAnyQuoteLaunchSwapV2(input: Omit<AnyQuoteSwapInput, "side"> & { freshUntil: bigint; checkpoint: AnyQuoteCheckpointV1 }) {
+  const now = input.now ?? BigInt(Math.floor(Date.now() / 1000));
+  if (input.freshUntil <= now || input.freshUntil > BigInt(input.externalRoute.validUntil) || input.deadline <= input.freshUntil
+    || input.freshUntil > BigInt(input.checkpoint.timestamp) + 45n
+    || input.deadline !== BigInt(input.checkpoint.timestamp) + 180n || input.deadline > now + 180n
+    || anyQuoteEvidenceHashV1(input.checkpoint) !== anyQuoteEvidenceHashV1(input.externalRoute.checkpoint)) throw new AnyQuoteErrorV1("LAUNCH_ROUTE_TIMING_INVALID");
+  return encodeAnyQuoteSwap({ ...input, side: "buy" });
+}
+function encodeAnyQuoteSwap(input: AnyQuoteSwapInput) {
+  const owner = anyQuoteAddressV1(input.owner), recipient = anyQuoteAddressV1(input.recipient);
   if (input.side !== "buy" && input.side !== "sell") throw new AnyQuoteErrorV1("INVALID_TRADE_SIDE");
-  if (input.amountIn <= 0n || input.amountIn > INT128_MAX || input.minimumAmountOut <= 0n || input.minimumAmountOut > INT128_MAX
-    || input.deadline <= now || input.deadline > now + 300n || input.deadline > BigInt(input.externalRoute.validUntil)) throw new AnyQuoteErrorV1("TRADE_BOUNDS_INVALID");
+  if (input.amountIn <= 0n || input.amountIn > INT128_MAX || input.minimumAmountOut <= 0n || input.minimumAmountOut > INT128_MAX) throw new AnyQuoteErrorV1("TRADE_BOUNDS_INVALID");
   anyQuoteModulePoolKeyV1(input.pool); const route = input.externalRoute;
   validateAnyQuoteExternalRouteV1(route);
   if (BigInt(input.side === "buy" ? route.amountOut : route.amountIn) > INT128_MAX) throw new AnyQuoteErrorV1("MODULE_QUOTE_AMOUNT_OUTSIDE_RANGE");

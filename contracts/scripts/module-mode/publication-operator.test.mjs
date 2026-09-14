@@ -2,7 +2,9 @@ import '../module-engine/wallet-operator.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { decodeFunctionData, encodeFunctionResult, keccak256, parseAbi } from 'viem';
 import { hexQuantity } from './core.mjs';
 import { createPublicationPlan, assertPublicationPlan, bindPublicationModule, assertAuthenticatedOperationPlan, registryAbi, registryV2Abi } from './publication-plan.mjs';
@@ -180,4 +182,107 @@ test('UI-check server enforces exact origin and disables all wallet/journal/prov
     assert.equal((await fetch(`${url}/state`, { method: 'POST', headers: { ...headers, origin: 'https://untrusted.invalid' }, body: '{}' })).status, 400);
     assert.equal((await fetch(`${url}/state`, { method: 'POST', headers, body: '{"a":1,"a":2}' })).status, 400);
   } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+// This exercises the actual browser script with a delayed wallet response. It
+// proves handoff/recovery behavior, not onchain execution or receipt validity.
+async function deadlineUi({ version = 2, expireDuringArm = false, missingExecutionDeadline = false } = {}) {
+  const initialTime = 1_789_373_800_000, freshness = initialTime + 40_000, execution = initialTime + 180_000;
+  let now = initialTime, timerId = 0, handedOff = false, recordedHash = null, resolveWallet, rejectWallet;
+  const nodes = new Map(), timers = new Map(), calls = [];
+  const element = () => ({ hidden: false, disabled: false, checked: false, textContent: '', value: '', append() {}, focus() {}, querySelector: element });
+  const node = key => { if (!nodes.has(key)) nodes.set(key, element()); return nodes.get(key); };
+  const owner = '0x0000000000000000000000000000000000000001', target = '0x0000000000000000000000000000000000000002';
+  const request = { from: owner, to: target, value: '0x11c37937e08000', data: '0x1234', gas: '0x8387e0', maxFeePerGas: '0xb104201', chainId: '0x1237' };
+  const prepared = { request, expiresAt: freshness, requestDigest: h(201), observation: { simulatedResult: { synthetic: true }, anyQuote: {
+    recipe: { input: { anyQuotePreparation: { schemaVersion: `programmable.any-quote.launch-preview.v${version}`, validUntil: String(freshness / 1000) } } },
+    prepared: { expiresAt: String(freshness / 1000), anyQuote: missingExecutionDeadline ? {} : { executionDeadline: String(execution / 1000) } },
+  } } };
+  const state = { uiCheck: false, owner, stepIndex: 0, totalSteps: 1, step: { label: 'Synthetic launch timing test', functionName: 'launch',
+    to: target, target, value: '5000000000000000', preparation: 'fresh-canonical-any-quote', arguments: {} },
+    contractSourceCommit: 'fixture', sourceCommit: 'fixture', releaseDigest: h(202), planDigest: h(203), authority: { runId: 'fixture' }, canRetry: false, actionInProgress: false };
+  const provider = { isMetaMask: true, on() {}, async request({ method, params }) {
+    calls.push({ method, params });
+    if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [owner];
+    if (method === 'eth_chainId') return '0x1237';
+    if (method === 'eth_sendTransaction') return new Promise((resolve, reject) => { resolveWallet = resolve; rejectWallet = reject; });
+    throw new Error(`Unexpected synthetic wallet method: ${method}`);
+  } };
+  const fetch = async (route, options) => {
+    const input = JSON.parse(options.body); calls.push({ route, input }); let value;
+    if (route === '/state') value = { ...state, journalState: recordedHash ? 'transaction-recorded' : handedOff ? 'outcome-unknown' : 'not-requested', transactionHash: recordedHash };
+    else if (route === '/prepare') value = prepared;
+    else if (route === '/arm') { handedOff = true; if (expireDuringArm) now = freshness; value = { request, requestDigest: prepared.requestDigest }; }
+    else if (route === '/record') { recordedHash = input.transactionHash; value = { transactionHash: recordedHash }; }
+    else throw new Error(`Unexpected synthetic operator route: ${route}`);
+    return { ok: true, json: async () => structuredClone(value) };
+  };
+  runInNewContext(await readFile(new URL('./publication-operator.js', import.meta.url), 'utf8'), {
+    document: { getElementById: node, querySelector: () => ({ content: 'synthetic' }), createElement: element }, window: { ethereum: provider }, fetch,
+    Date: class extends Date { static now() { return now; } },
+    setTimeout(fn, delay) { timers.set(++timerId, { fn, at: now + delay }); return timerId; }, clearTimeout(id) { timers.delete(id); },
+  });
+  await new Promise(resolve => setImmediate(resolve)); await node('connect').onclick(); await node('prepare').onclick();
+  return { node, calls, request, freshness, execution,
+    advance(time) { now = time; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.fn(); } },
+    async send() { node('reviewed').checked = true; node('reviewed').onchange(); return node('send').onclick(); },
+    resolve(hash) { assert.equal(typeof resolveWallet, 'function'); resolveWallet(hash); },
+    reject() { assert.equal(typeof rejectWallet, 'function'); rejectWallet(new Error('Synthetic owner rejection')); },
+  };
+}
+test('launch v2 shows separate review and execution deadlines; v1 cannot gain a longer window from an extra field', async () => {
+  const ui = await deadlineUi();
+  assert.equal(ui.node('error').textContent, '');
+  assert.equal(ui.node('expiry').textContent, new Date(ui.freshness).toLocaleTimeString());
+  assert.equal(ui.node('execution-expiry').textContent, new Date(ui.execution).toLocaleTimeString());
+  assert.equal(ui.node('execution-expiry-row').hidden, false);
+  assert.match(ui.node('confirmation-note').textContent, /must be included before/);
+  const old = await deadlineUi({ version: 1 });
+  assert.equal(old.node('execution-expiry-row').hidden, true);
+  assert.match(old.node('confirmation-note').textContent, /limited time/);
+  const malformed = await deadlineUi({ missingExecutionDeadline: true });
+  assert.match(malformed.node('error').textContent, /deadline is unavailable/);
+  assert.equal(malformed.node('confirmation').hidden, true);
+});
+test('a future launch execution deadline never permits opening the wallet after review freshness expires', async () => {
+  const ui = await deadlineUi(); ui.advance(ui.freshness); await ui.send();
+  assert.equal(ui.node('confirmation').hidden, true);
+  assert.equal(ui.calls.some(call => call.route === '/arm' || call.method === 'eth_sendTransaction'), false);
+  const late = await deadlineUi({ expireDuringArm: true }); await late.send();
+  assert.equal(late.calls.filter(call => call.route === '/arm').length, 1);
+  assert.equal(late.calls.some(call => call.method === 'eth_sendTransaction'), false);
+  assert.match(late.node('error').textContent, /expired before MetaMask opened/);
+  assert.equal(late.node('recovery').hidden, false); assert.equal(late.node('prepare').hidden, true);
+});
+test('a request opened while fresh records its actual hash after review expiry without preparing or sending twice', async () => {
+  const ui = await deadlineUi(), pending = ui.send(); await new Promise(resolve => setImmediate(resolve));
+  ui.advance(ui.freshness + 1);
+  assert.match(ui.node('status').textContent, /Confirm in MetaMask/);
+  assert.equal(ui.node('prepare').hidden, true);
+  ui.resolve(h(204)); await pending;
+  assert.equal(ui.calls.filter(call => call.method === 'eth_sendTransaction').length, 1);
+  assert.deepEqual(ui.calls.find(call => call.method === 'eth_sendTransaction').params[0], ui.request);
+  assert.equal(ui.calls.filter(call => call.route === '/prepare').length, 1);
+  assert.equal(ui.calls.filter(call => call.route === '/record' && call.input.transactionHash === h(204)).length, 1);
+  assert.match(ui.node('status').textContent, /Transaction recorded/);
+  assert.equal(ui.node('error').textContent, '');
+});
+test('execution expiry explains cancellation and reconciliation, still retaining a hash returned late', async () => {
+  const ui = await deadlineUi(), pending = ui.send(); await new Promise(resolve => setImmediate(resolve));
+  ui.advance(ui.execution);
+  assert.match(ui.node('status').textContent, /deadline passed.*Cancel any unsigned request.*already submitted/);
+  assert.equal(ui.calls.some(call => call.route === '/record'), false);
+  assert.equal(ui.calls.filter(call => call.method === 'eth_sendTransaction').length, 1);
+  ui.resolve(h(205)); await pending;
+  assert.equal(ui.calls.filter(call => call.route === '/record' && call.input.transactionHash === h(205)).length, 1);
+  assert.match(ui.node('status').textContent, /Check its receipt/);
+});
+test('wallet rejection after review expiry keeps durable recovery and stops the execution timer', async () => {
+  const ui = await deadlineUi(), pending = ui.send(); await new Promise(resolve => setImmediate(resolve));
+  ui.advance(ui.freshness + 1); ui.reject(); await pending; const status = ui.node('status').textContent;
+  ui.advance(ui.execution);
+  assert.equal(ui.node('status').textContent, status);
+  assert.match(ui.node('error').textContent, /Synthetic owner rejection.*not sent again automatically/);
+  assert.equal(ui.node('prepare').hidden, true); assert.equal(ui.node('recovery').hidden, false);
+  assert.equal(ui.calls.some(call => call.route === '/record'), false);
 });

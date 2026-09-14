@@ -10,7 +10,7 @@ import { bindActiveModuleEngineRelease, bindModuleEngineReleaseIdentity, bindMod
 import { encodeModuleEngineConfiguration } from "./configuration";
 import { isModuleEngineSharedQuoteRelease, isModuleEngineAnyQuoteRelease, isModuleEngineAnyQuoteEthRelease, moduleEngineSharedQuoteProfileId, moduleEngineContractRoles, moduleEngineSourceId } from "./profile";
 import { ANY_QUOTE_INFRASTRUCTURE, ANY_QUOTE_NATIVE_BUY_OPERATION_ID } from "./any-quote/types";
-import { assertAnyQuoteLaunchPreparation, anyQuoteMinimumOutput, type AnyQuoteTradeQuote, type AnyQuoteLaunchPreparation } from "./any-quote/integration";
+import { assertAnyQuoteLaunchPreparation, anyQuoteMinimumOutput, anyQuoteLaunchExecutionDeadline, buildAnyQuoteInitialBuy, type AnyQuoteTradeQuote, type AnyQuoteLaunchPreparation } from "./any-quote/integration";
 import { anyQuoteEvidenceHashV1, anyQuoteModulePoolKeyV1, buildAnyQuoteSwapV1 } from "./any-quote/route";
 import { anyQuoteNativeFeeRouteAbi, decodeAnyQuoteNativeFeeRoute, ANY_QUOTE_NATIVE_FEE_ROUTE_PARAMETERS } from "./any-quote/native-fee-route";
 import anyQuoteChainProfile from "@/contracts/spec/robinhood-custom-launch/chain-4663.v1.json";
@@ -36,7 +36,7 @@ interface PreparedBase {
 export interface PreparedModuleEngineLaunch extends PreparedBase {
   readonly kind: "launch"; readonly predictedToken: Address; readonly engine: Address; readonly launchId: Hex; readonly revisionId: Hex; readonly planHash: Hex;
   readonly configurationHash: Hex; readonly engineCodeHash: Hex; readonly quoteAsset: Address; readonly quoteDecimals: number; readonly initialOperation: Readonly<ModuleEngineOperation>;
-  readonly anyQuote?: { readonly initialBuyWei: bigint; readonly outputAmount: bigint; readonly minimumOutput: bigint; readonly actualFdvUsd: { numerator: string; denominator: string } };
+  readonly anyQuote?: { readonly initialBuyWei: bigint; readonly outputAmount: bigint; readonly minimumOutput: bigint; readonly actualFdvUsd: { numerator: string; denominator: string }; readonly executionDeadline?: bigint };
   readonly platformFeeBps: 10 | 30; readonly buyCreatorFeeBps: number; readonly sellCreatorFeeBps: number;
 }
 export interface PreparedModuleEngineOperation extends PreparedBase {
@@ -337,10 +337,23 @@ export async function prepareModuleEngineLaunch(input: PrepareModuleEngineLaunch
   const availability = active(input.availability), release = freeze(availability.release);
   const template = availability.templates.find(item => item.manifest.manifest.catalogDefinition.id === input.templateId); need(template, "Template is not in the current catalog.");
   const source = await prepareModuleEngineLaunchAt(input, await assertModuleEngineRelease({ client: input.client, release }), template);
+  if (input.anyQuotePreparation?.schemaVersion === "programmable.any-quote.launch-preview.v2") need(BigInt(Math.floor(Date.now() / 1000)) < BigInt(input.anyQuotePreparation.validUntil), "Launch preview expired.");
   return "kind" in source ? source : bindPublicSourcePreparation(source, input.client, release);
 }
 export async function prepareModuleEngineSourceLaunchV1(input: Omit<PrepareModuleEngineLaunchInput, "availability"> & { identity: ModuleEngineReleaseIdentity; template: ModuleEngineTemplate; blockNumber?: bigint }): Promise<ModuleEngineSourcePreparationV1<PreparedModuleEngineLaunch> | ModuleEngineApprovalRequired> {
-  return prepareModuleEngineLaunchAt(input, await assertModuleEngineSourceIdentityV1(input), input.template);
+  const source = await prepareModuleEngineLaunchAt(input, await assertModuleEngineSourceIdentityV1(input), input.template);
+  // Explicit original-block reconstruction verifies receipts after quote expiry.
+  // A new preparation must still be fresh when the asynchronous checks finish.
+  if (input.blockNumber === undefined && input.anyQuotePreparation?.schemaVersion === "programmable.any-quote.launch-preview.v2")
+    need(BigInt(Math.floor(Date.now() / 1000)) < BigInt(input.anyQuotePreparation.validUntil), "Launch preview expired.");
+  return source;
+}
+async function assertAnyQuoteLaunchCheckpoint(client: ModuleEngineClient, preview: AnyQuoteLaunchPreparation | undefined, current: BoundBlock) {
+  if (preview?.schemaVersion !== "programmable.any-quote.launch-preview.v2") return;
+  const checkpoint = preview.readiness.checkpoint, number = BigInt(checkpoint.number);
+  need(number <= current.blockNumber, "Launch quote checkpoint is ahead of preparation.");
+  const quoted = await client.getBlock({ blockNumber: number });
+  need(quoted.number === number && quoted.hash === checkpoint.hash && quoted.timestamp === BigInt(checkpoint.timestamp), "Launch quote checkpoint differs from its canonical header.");
 }
 async function prepareModuleEngineLaunchAt(input: Omit<PrepareModuleEngineLaunchInput, "availability">, block: BoundBlock, rawTemplate: ModuleEngineTemplate): Promise<ModuleEngineSourcePreparationV1<PreparedModuleEngineLaunch> | ModuleEngineApprovalRequired> {
   const account = moduleAddress(input.account, "account"), release = block.release, template = await assertTemplate(input.client, block, rawTemplate, true), m = template.manifest.manifest;
@@ -348,6 +361,7 @@ async function prepareModuleEngineLaunchAt(input: Omit<PrepareModuleEngineLaunch
   const quoteCode = await input.client.getCode({ address: quoteAsset, blockNumber: block.blockNumber }); need(quoteCode && quoteCode !== "0x", "Quote asset is not a deployed token.");
   const quoteDecimals = Number(await read(input.client, quoteAsset, "decimals", [], block.blockNumber)); need(Number.isInteger(quoteDecimals) && quoteDecimals >= 0 && quoteDecimals <= (isModuleEngineSharedQuoteRelease(release) ? 36 : 18), "Quote decimals are unsupported.");
   const expiresAt = input.anyQuotePreparation ? BigInt(input.anyQuotePreparation.validUntil) : deadline(block.timestamp, input.deadlineSeconds);
+  const executionDeadline = input.anyQuotePreparation ? anyQuoteLaunchExecutionDeadline(input.anyQuotePreparation) : expiresAt;
   if (isModuleEngineSharedQuoteRelease(release)) {
     need(input.anyQuotePreparation, "A current Any Quote preview is required.");
     need(quoteDecimals === input.anyQuotePreparation.readiness.token.decimals, "Quote decimals changed from the price preview.");
@@ -355,15 +369,15 @@ async function prepareModuleEngineLaunchAt(input: Omit<PrepareModuleEngineLaunch
       name: input.name, symbol: input.symbol, creatorSalt: input.creatorSalt, engineSalt: input.engineSalt, buyCreatorFeeBps: input.buyCreatorFeeBps, sellCreatorFeeBps: input.sellCreatorFeeBps,
       creatorWallets: input.creatorWallets, creatorSharesBps: input.creatorSharesBps, initialBuyWei: input.anyQuotePreparation.intent.initialBuyWei, slippageBps: input.anyQuotePreparation.intent.slippageBps }, release, block.timestamp);
   }
-  const compiled = await compileModuleEngineLaunch(input, release, template.manifest, quoteDecimals, expiresAt);
+  const compiled = await compileModuleEngineLaunch(input, release, template.manifest, quoteDecimals, executionDeadline);
   const { parameters, graffiti, predictedToken, launchId, configurationHash, constructorHash, initCodeHash, engineCodeHash, initialOperation, buyCreatorFeeBps, sellCreatorFeeBps, planHash } = compiled;
   const host = release.contracts.host.address, engineIdentity = { address: compiled.engine };
   if (input.anyQuotePreparation) {
     const preview = input.anyQuotePreparation;
     if (preview.initialBuy) {
-      const route = buildAnyQuoteSwapV1({ pool: preview.pool, owner: account, recipient: account, side: "buy", amountIn: BigInt(preview.intent.initialBuyWei), minimumAmountOut: BigInt(preview.initialBuy.minimumOutput), deadline: expiresAt, externalRoute: preview.initialBuy.externalRoute, now: block.timestamp });
+      const route = buildAnyQuoteInitialBuy({ preview, owner: account, recipient: account, amountIn: BigInt(preview.intent.initialBuyWei), minimumAmountOut: BigInt(preview.initialBuy.minimumOutput), now: block.timestamp });
       need(BigInt(preview.initialBuy.minimumOutput) === anyQuoteMinimumOutput(BigInt(preview.initialBuy.output), preview.intent.slippageBps), "Initial buy output limit differs.");
-      equal(Object.fromEntries(Object.entries(initialOperation).map(([key, value]) => [key, typeof value === "bigint" ? value.toString() : value])), Object.fromEntries(Object.entries({ operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, actor: account, recipient: account, inputAsset: ZERO, inputAmount: BigInt(preview.intent.initialBuyWei), outputAsset: predictedToken, minimumOutput: BigInt(preview.initialBuy.minimumOutput), deadline: expiresAt, nonce: 0n, data: route.nativeBuyOperationData }).map(([key, value]) => [key, typeof value === "bigint" ? value.toString() : value])), "Exact initial ETH buy");
+      equal(Object.fromEntries(Object.entries(initialOperation).map(([key, value]) => [key, typeof value === "bigint" ? value.toString() : value])), Object.fromEntries(Object.entries({ operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, actor: account, recipient: account, inputAsset: ZERO, inputAmount: BigInt(preview.intent.initialBuyWei), outputAsset: predictedToken, minimumOutput: BigInt(preview.initialBuy.minimumOutput), deadline: executionDeadline, nonce: 0n, data: route.nativeBuyOperationData }).map(([key, value]) => [key, typeof value === "bigint" ? value.toString() : value])), "Exact initial ETH buy");
       await assertAnyQuoteRouteAccounting(input.client, block, route.balanceAccounting, predictedToken);
     } else need(initialOperation.operationId === ZERO_HASH, "Initial buy was not requested.");
   }
@@ -372,21 +386,26 @@ async function prepareModuleEngineLaunchAt(input: Omit<PrepareModuleEngineLaunch
   if (initialOperation.operationId !== ZERO_HASH && !(isModuleEngineSharedQuoteRelease(release) && initialOperation.operationId === ANY_QUOTE_NATIVE_BUY_OPERATION_ID)) { const required = await validateOperation(input.client, block, { launchId, revisionId: m.revision.packageId, creator: account, token: predictedToken, quoteAsset }, initialOperation, account); if (required) return required; }
   const transaction = tx(account, host, encodeFunctionData({ abi: moduleEngineHostAbi, functionName: "launch", args: [parameters] }), initialOperation.inputAsset === ZERO ? initialOperation.inputAmount : 0n, "launch", `Launch ${parameters.symbol} with ${m.catalogDefinition.title}`);
   const simulated = await simulate(input.client, block, transaction), result = launchRecord(decodeFunctionResult({ abi: moduleEngineHostAbi, functionName: "launch", data: simulated.data }));
+  await assertAnyQuoteLaunchCheckpoint(input.client, input.anyQuotePreparation, block);
   for (const [key, expected] of Object.entries({ launchId, revisionId: m.revision.packageId, token: predictedToken, creator: account, quoteAsset, engine: engineIdentity.address, engineCodeHash, constructorHash, initCodeHash, configurationHash, planHash })) same(result[key as keyof ModuleEngineLaunchRecord], expected, `Simulated ${key}`);
   // Host V1 admits its immutable reviewed family list into Ledger V2. Its reused Registry V1
   // has no Native V2 familyFeeEligibility getter; the list itself selects the 10/30 bps policy.
   const platformFeeBps = isModuleEngineSharedQuoteRelease(release) || m.revision.eligibleFamilies.length > 0 ? 30 : 10;
-  const prepared: PreparedModuleEngineLaunch = { sourceKind: "module-engine-v1", kind: "launch", ...(isModuleEngineAnyQuoteEthRelease(release) ? { nativeEthFees: true } : {}), account, releaseDigest: release.releaseDigest, blockNumber: block.blockNumber, expiresAt, gasEstimate: simulated.gasEstimate, transaction: { ...transaction, gas: toHex(simulated.gasEstimate * 12n / 10n) }, predictedToken, engine: engineIdentity.address, launchId, revisionId: m.revision.packageId, planHash, configurationHash, engineCodeHash, quoteAsset, quoteDecimals, initialOperation, platformFeeBps, buyCreatorFeeBps, sellCreatorFeeBps, ...(input.anyQuotePreparation ? { anyQuote: { initialBuyWei: BigInt(input.anyQuotePreparation.intent.initialBuyWei), outputAmount: BigInt(input.anyQuotePreparation.initialBuy?.output ?? "0"), minimumOutput: BigInt(input.anyQuotePreparation.initialBuy?.minimumOutput ?? "0"), actualFdvUsd: input.anyQuotePreparation.actualFdvUsd } } : {}) };
+  const prepared: PreparedModuleEngineLaunch = { sourceKind: "module-engine-v1", kind: "launch", ...(isModuleEngineAnyQuoteEthRelease(release) ? { nativeEthFees: true } : {}), account, releaseDigest: release.releaseDigest, blockNumber: block.blockNumber, expiresAt, gasEstimate: simulated.gasEstimate, transaction: { ...transaction, gas: toHex(simulated.gasEstimate * 12n / 10n) }, predictedToken, engine: engineIdentity.address, launchId, revisionId: m.revision.packageId, planHash, configurationHash, engineCodeHash, quoteAsset, quoteDecimals, initialOperation, platformFeeBps, buyCreatorFeeBps, sellCreatorFeeBps, ...(input.anyQuotePreparation ? { anyQuote: { initialBuyWei: BigInt(input.anyQuotePreparation.intent.initialBuyWei), outputAmount: BigInt(input.anyQuotePreparation.initialBuy?.output ?? "0"), minimumOutput: BigInt(input.anyQuotePreparation.initialBuy?.minimumOutput ?? "0"), actualFdvUsd: input.anyQuotePreparation.actualFdvUsd,
+    ...(input.anyQuotePreparation.schemaVersion === "programmable.any-quote.launch-preview.v2" ? { executionDeadline } : {}) } } : {}) };
   return { prepared, refresh: async (current: BoundBlock) => {
-    need(current.timestamp <= expiresAt, "Launch preview expired."); await assertTemplate(input.client, current, template, true);
+    need(input.anyQuotePreparation?.schemaVersion === "programmable.any-quote.launch-preview.v2" ? current.timestamp < expiresAt : current.timestamp <= expiresAt, "Launch preview expired.");
+    await assertTemplate(input.client, current, template, true);
     if (initialOperation.operationId !== ZERO_HASH && !(isModuleEngineSharedQuoteRelease(release) && initialOperation.operationId === ANY_QUOTE_NATIVE_BUY_OPERATION_ID)) need(!await validateOperation(input.client, current, { ...result }, initialOperation, account), "Initial funding approval changed.");
     if (input.anyQuotePreparation?.initialBuy) {
       const p = input.anyQuotePreparation;
-      const route = buildAnyQuoteSwapV1({ pool: p.pool, owner: account, recipient: account, side: "buy", amountIn: BigInt(p.intent.initialBuyWei), minimumAmountOut: BigInt(p.initialBuy!.minimumOutput), deadline: expiresAt, externalRoute: p.initialBuy!.externalRoute, now: current.timestamp });
+      const route = buildAnyQuoteInitialBuy({ preview: p, owner: account, recipient: account, amountIn: BigInt(p.intent.initialBuyWei), minimumAmountOut: BigInt(p.initialBuy!.minimumOutput), now: current.timestamp });
       await assertAnyQuoteRouteAccounting(input.client, current, route.balanceAccounting, predictedToken);
     }
     const fresh = await simulate(input.client, current, transaction); const currentLaunch = launchRecord(decodeFunctionResult({ abi: moduleEngineHostAbi, functionName: "launch", data: fresh.data }));
     for (const key of ["launchId", "planHash", "token", "engine", "engineCodeHash", "configurationHash"] as const) same(currentLaunch[key], result[key], `Current launch ${key}`);
+    await assertAnyQuoteLaunchCheckpoint(input.client, input.anyQuotePreparation, current);
+    if (input.anyQuotePreparation?.schemaVersion === "programmable.any-quote.launch-preview.v2") need(BigInt(Math.floor(Date.now() / 1000)) < expiresAt, "Launch preview expired.");
   }, receipt: (receipt, current) => verifyModuleEngineLaunchReceiptAt({ client: input.client, release, expected: result, receipt }, current) };
 }
 export async function prepareModuleEngineOperation(input: { client: ModuleEngineClient; release: ModuleEngineRelease; template: ModuleEngineTemplate; account: Address; token: Address; intent: ModuleEngineOperationIntent; deadlineSeconds?: number }): Promise<PreparedModuleEngineOperation | ModuleEngineApprovalRequired> {

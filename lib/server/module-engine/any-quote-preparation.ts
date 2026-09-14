@@ -6,10 +6,10 @@ import { assertModuleEngineSourceIdentityV1, readModuleEngineSourceLaunchV1, rea
 import { isModuleEngineSharedQuoteRelease, isModuleEngineAnyQuoteEthRelease } from "@/lib/module-engine/profile";
 import { compileModuleEngineLaunch, type ModuleEngineLaunchInputs } from "@/lib/module-engine/operation-plan";
 import { moduleEngineAnyQuoteHostAbi, moduleEngineHostAbi } from "@/lib/module-engine/abi";
-import { anyQuoteLaunchIntent, anyQuoteMinimumOutput, anyQuotePoolFor, anyQuoteSlippageBps, predictAnyQuoteToken,
+import { anyQuoteLaunchIntent, anyQuoteMinimumOutput, anyQuotePoolFor, anyQuoteSlippageBps, predictAnyQuoteToken, buildAnyQuoteInitialBuy,
   type AnyQuoteCompatibleReadiness, type AnyQuoteLaunchIntent, type AnyQuoteLaunchPreparation, type AnyQuoteTradeQuote } from "@/lib/module-engine/any-quote/integration";
 import { encodeAnyQuoteConfigurationV1, planAnyQuoteInitialPriceV1 } from "@/lib/module-engine/any-quote/price";
-import { anyQuoteEvidenceHashV1, anyQuoteModulePoolKeyV1, anyQuoteSwapPathV1, buildAnyQuoteSwapV1 } from "@/lib/module-engine/any-quote/route";
+import { anyQuoteEvidenceHashV1, anyQuoteModulePoolKeyV1, anyQuoteSwapPathV1 } from "@/lib/module-engine/any-quote/route";
 import { assessAnyQuoteAssetV1, requoteAnyQuoteExternalRouteV1, type AnyQuoteReadinessOptionsV1 } from "@/lib/module-engine/any-quote/readiness.server";
 import { ANY_QUOTE_INFRASTRUCTURE, ANY_QUOTE_NATIVE_BUY_OPERATION_ID, ANY_QUOTE_NATIVE, AnyQuoteErrorV1,
   anyQuoteSameAddressV1, anyQuoteUintV1, type AnyQuoteCheckpointV1 } from "@/lib/module-engine/any-quote/types";
@@ -131,23 +131,33 @@ export type AnyQuoteLaunchPreviewInput = AnyQuoteLaunchIntent & Pick<ModuleEngin
 /** Predictable source-bound launch, with no output estimate until a real execution proves an optional first buy. */
 export async function readAnyQuoteIdentityLaunchPreviewV1(input: AnyQuoteLaunchPreviewInput & AnyQuoteIdentitySelectionV1, deps: AnyQuoteIdentityPreparationDependenciesV1 = {}): Promise<AnyQuoteLaunchPreparation> {
   const intent = anyQuoteLaunchIntent(input), { release, template } = identitySelection({ ...input, ...intent }), client = anyQuotePreparationClientV1(deps);
-  const [block, readiness] = await Promise.all([assertModuleEngineSourceIdentityV1({ client, identity: release }), compatible({ quoteAsset: intent.quoteAsset, ...(BigInt(intent.initialBuyWei) > 0n ? { probeEthAmount: BigInt(intent.initialBuyWei) } : {}) }, deps)]);
+  const walletWindow = !isModuleEngineAnyQuoteEthRelease(release);
+  const [sourceBlock, readiness] = await Promise.all([assertModuleEngineSourceIdentityV1({ client, identity: release }), compatible({ quoteAsset: intent.quoteAsset, ...(BigInt(intent.initialBuyWei) > 0n ? { probeEthAmount: BigInt(intent.initialBuyWei) } : {}) }, deps)]);
+  const block = walletWindow && sourceBlock.blockNumber !== BigInt(readiness.checkpoint.number)
+    ? await assertModuleEngineSourceIdentityV1({ client, identity: release, blockNumber: BigInt(readiness.checkpoint.number) }) : sourceBlock;
+  if (walletWindow && (block.blockHash !== readiness.checkpoint.hash || block.timestamp !== BigInt(readiness.checkpoint.timestamp))) throw new AnyQuoteErrorV1("QUOTE_STATE_CHANGED");
   await readModuleEngineSourceTemplateV1({ client, identity: release, template, newLaunch: true, blockNumber: block.blockNumber });
   const predictedToken = predictAnyQuoteToken(intent, release), price = planAnyQuoteInitialPriceV1({ token: predictedToken, quoteAsset: intent.quoteAsset, quoteDecimals: readiness.token.decimals, quoteUsd: readiness.price.usd });
-  const validUntil = min(block.timestamp + 180n, BigInt(readiness.validUntil)).toString();
+  const validUntil = min(block.timestamp + (walletWindow ? 45n : 180n), BigInt(readiness.validUntil),
+    ...(walletWindow ? [BigInt(readiness.price.validUntil), BigInt(readiness.routes.buy.validUntil), BigInt(readiness.routes.sell.validUntil)] : [])).toString();
   if (BigInt(validUntil) <= block.timestamp) throw new AnyQuoteErrorV1("READINESS_EXPIRED");
+  const executionDeadline = walletWindow ? block.timestamp + 180n : BigInt(validUntil);
+  if (walletWindow && executionDeadline <= BigInt(validUntil)) throw new AnyQuoteErrorV1("READINESS_EXPIRED");
   if (!isModuleEngineAnyQuoteEthRelease(release)) await verifyAnyQuoteLaunchSettlementV1({ account: intent.account, ledger: release.contracts.ledger.address,
     creatorWallets: intent.creatorWallets, buyCreatorFeeBps: intent.buyCreatorFeeBps, sellCreatorFeeBps: intent.sellCreatorFeeBps,
     externalRoute: readiness.routes.buy, deadline: BigInt(validUntil), now: block.timestamp, rpcs: rpcs(deps) });
-  const priceEvidenceHash = anyQuoteEvidenceHashV1({ domain: "programmable.any-quote.price-intent.v1", intent, readinessEvidenceHash: readiness.evidenceHash, price, validUntil });
-  const encoded = encodeAnyQuoteConfigurationV1({ sharedHook: release.contracts.sharedHook.address, quoteAsset: intent.quoteAsset, initialTick: price.initialTick, validUntil: BigInt(validUntil), priceEvidenceHash });
-  const preview: AnyQuoteLaunchPreparation = { schemaVersion: "programmable.any-quote.launch-preview.v1", intent, readiness, predictedToken,
+  const timing = walletWindow ? { schemaVersion: "programmable.any-quote.launch-preview.v2" as const, executionDeadline: executionDeadline.toString() }
+    : { schemaVersion: "programmable.any-quote.launch-preview.v1" as const };
+  const priceEvidenceHash = anyQuoteEvidenceHashV1({ domain: walletWindow ? "programmable.any-quote.price-intent.v2" : "programmable.any-quote.price-intent.v1", intent, readinessEvidenceHash: readiness.evidenceHash, price, validUntil,
+    ...(walletWindow ? { executionDeadline: executionDeadline.toString() } : {}) });
+  const encoded = encodeAnyQuoteConfigurationV1({ sharedHook: release.contracts.sharedHook.address, quoteAsset: intent.quoteAsset, initialTick: price.initialTick, validUntil: executionDeadline, priceEvidenceHash });
+  const preview: AnyQuoteLaunchPreparation = { ...timing, intent, readiness, predictedToken,
     pool: anyQuotePoolFor(predictedToken, intent.quoteAsset, release.contracts.sharedHook.address), ...encoded, initialTick: price.initialTick, validUntil, actualFdvUsd: price.actualFdvUsd, initialBuy: null, evidenceHash: "0x" };
   if (isModuleEngineAnyQuoteEthRelease(release)) preview.nativeFeeRoute = anyQuoteNativeFeeRouteFromExternal(readiness.routes.sell, preview.pool);
   if (BigInt(intent.initialBuyWei) > 0n) {
-    const compiledRoute = buildAnyQuoteSwapV1({ pool: preview.pool, owner: intent.account, recipient: intent.account, side: "buy", amountIn: BigInt(intent.initialBuyWei), minimumAmountOut: 1n, deadline: BigInt(validUntil), externalRoute: readiness.routes.buy, now: block.timestamp });
+    const compiledRoute = buildAnyQuoteInitialBuy({ preview, owner: intent.account, recipient: intent.account, amountIn: BigInt(intent.initialBuyWei), minimumAmountOut: 1n, now: block.timestamp });
     const compiled = await compileModuleEngineLaunch({ ...input, ...intent, configuration: {}, anyQuotePreparation: preview,
-      initialOperation: () => ({ operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, recipient: intent.account, inputAsset: ANY_QUOTE_NATIVE, inputAmount: BigInt(intent.initialBuyWei), outputAsset: predictedToken, minimumOutput: 1n, data: compiledRoute.nativeBuyOperationData! }) }, release, template.manifest, readiness.token.decimals, BigInt(validUntil));
+      initialOperation: () => ({ operationId: ANY_QUOTE_NATIVE_BUY_OPERATION_ID, recipient: intent.account, inputAsset: ANY_QUOTE_NATIVE, inputAmount: BigInt(intent.initialBuyWei), outputAsset: predictedToken, minimumOutput: 1n, data: compiledRoute.nativeBuyOperationData! }) }, release, template.manifest, readiness.token.decimals, executionDeadline);
     const transaction = { from: intent.account, to: release.contracts.host.address, data: encodeFunctionData({ abi: moduleEngineHostAbi, functionName: "launch", args: [compiled.parameters] }), value: toHex(BigInt(intent.initialBuyWei)) };
     const rpc = agreedTradeRpcV1(rpcs(deps));
     if (String(compiledRoute.balanceAccounting.mode) !== "unlock-deltas") throw new AnyQuoteErrorV1("ROUTE_ACCOUNTING_UNSUPPORTED");
@@ -159,5 +169,6 @@ export async function readAnyQuoteIdentityLaunchPreviewV1(input: AnyQuoteLaunchP
     }, 0n);
     preview.initialBuy = { output: output.toString(), minimumOutput: anyQuoteMinimumOutput(output, intent.slippageBps).toString(), externalRoute: readiness.routes.buy };
   }
+  if (walletWindow && BigInt(Math.floor(Date.now() / 1000)) >= BigInt(validUntil)) throw new AnyQuoteErrorV1("READINESS_EXPIRED");
   return { ...preview, evidenceHash: anyQuoteEvidenceHashV1({ ...preview, evidenceHash: undefined }) };
 }
