@@ -6,6 +6,13 @@ import { REPOSITORY_ROOT } from './build.mjs';
 
 const METHODS = new Set(['eth_chainId', 'eth_getBlockByNumber', 'eth_getTransactionCount', 'eth_getBalance', 'eth_getCode', 'eth_getStorageAt', 'eth_call', 'eth_estimateGas', 'eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_getLogs', 'debug_traceCall']);
 const MAX_BYTES = 4 * 1024 * 1024;
+export class ReadOnlyRpcExecutionRevertedV1 extends Error {
+  constructor(data) {
+    super('The read-only simulated call reverted.'); this.name = 'ReadOnlyRpcExecutionRevertedV1';
+    need(typeof data === 'string' && /^0x(?:[0-9a-f]{2}){0,32768}$/i.test(data), 'Invalid bounded execution revert');
+    this.code = 'RPC_EXECUTION_REVERTED'; this.data = data.toLowerCase();
+  }
+}
 export async function reviewedProviders(environment = process.env) {
   const urls = [environment.ROBINHOOD_MAINNET_RPC_URL_PRIMARY, environment.ROBINHOOD_MAINNET_RPC_URL_SECONDARY];
   const commitments = await resolveReviewedRobinhoodProviderCommitments({ env: environment, repositoryRoot: REPOSITORY_ROOT });
@@ -35,9 +42,16 @@ export function rpcClient(url, label, fetchImpl = fetch) {
       const chunks = []; let total = 0;
       for await (const chunk of response.body) { total += chunk.length; need(total <= MAX_BYTES, 'RPC response limit exceeded'); chunks.push(chunk); }
       const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      need(payload.jsonrpc === '2.0' && payload.id === nextId && !payload.error && Object.hasOwn(payload, 'result'), `${label}: ${method} RPC response failed`);
+      need(payload && typeof payload === 'object' && !Array.isArray(payload) && payload.jsonrpc === '2.0' && payload.id === nextId,
+        `${label}: ${method} RPC response failed`);
+      if (method === 'eth_call' && payload.error && typeof payload.error === 'object' && !Array.isArray(payload.error) && !Object.hasOwn(payload, 'result')) {
+        const error = payload.error;
+        if (error.code === 3 && typeof error.message === 'string' && /^execution reverted\b/i.test(error.message)
+          && typeof error.data === 'string' && /^0x(?:[0-9a-f]{2}){0,32768}$/i.test(error.data)) throw new ReadOnlyRpcExecutionRevertedV1(error.data);
+      }
+      need(!payload.error && Object.hasOwn(payload, 'result'), `${label}: ${method} RPC response failed`);
       return payload.result;
-    } catch { throw new Error(`${label}: ${method} read failed`); }
+    } catch (error) { if (error instanceof ReadOnlyRpcExecutionRevertedV1) throw error; throw new Error(`${label}: ${method} read failed`); }
     finally { release(); }
   };
 }

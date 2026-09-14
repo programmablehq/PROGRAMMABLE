@@ -7,6 +7,8 @@ import { runInNewContext } from 'node:vm';
 import { keccak256, toHex } from 'viem';
 import { buildPlan, assertPlan, digest, HOOK_MASK, HOOK_FLAGS, materializeRuntime } from './core.mjs';
 import { walletRequest, prepareWalletRequest, revalidateWalletRequest, rpcClient, observeReceipt } from './rpc.mjs';
+import { publicationValidators } from './publication-shared.mjs';
+import { anyQuoteReadinessRpcs } from '../module-engine/operation-rpc.mjs';
 import { armJournal, armRetryJournal, retryJournalEntry, journalEntry, recordTransaction, journalDirectory } from './journal.mjs';
 import { assertContinuationPlan, assertOriginalRequest, walletRetryRequest } from './recovery.mjs';
 import { sameOrigin, startOperator } from './operator.mjs';
@@ -240,6 +242,55 @@ test('RPC client refuses mutation methods and never exposes credential URLs or e
   let calls = 0; const rpc = rpcClient('https://example.invalid/secret-canary-credential', 'primary', async () => { calls++; throw new Error('secret-canary-credential'); });
   await assert.rejects(rpc('eth_sendRawTransaction', ['0x']), /read-only/); assert.equal(calls, 0);
   await assert.rejects(rpc('eth_getCode', []), error => error.message === 'primary: eth_getCode read failed');
+});
+test('RPC client retains only validated bounded eth_call revert bytes without provider text', async () => {
+  const error = { code: 3, message: 'execution reverted: secret-canary-provider-text', data: '0xABCD' };
+  const rpc = rpcClient('https://synthetic.invalid/secret-canary-credential', 'primary', async (_url, init) =>
+    Response.json({ jsonrpc: '2.0', id: JSON.parse(init.body).id, error }));
+  await assert.rejects(rpc('eth_call', []), value => value.code === 'RPC_EXECUTION_REVERTED' && value.data === '0xabcd'
+    && value.message === 'The read-only simulated call reverted.' && !JSON.stringify(value).includes('secret-canary'));
+  for (const method of ['eth_getLogs', 'eth_estimateGas', 'eth_getCode'])
+    await assert.rejects(rpc(method, []), value => value.message === `primary: ${method} read failed` && value.data === undefined);
+});
+test('RPC client never promotes invalid, mismatched or non-execution error envelopes', async () => {
+  const revert = { code: 3, message: 'execution reverted: secret-canary-provider-text', data: '0xabcd' };
+  const envelope = id => ({ jsonrpc: '2.0', id, error: revert });
+  for (const modify of [
+    value => ({ ...value, id: value.id + 1 }), value => ({ ...value, id: String(value.id) }),
+    value => ({ ...value, jsonrpc: '1.0' }), value => ({ ...value, result: '0x01' }),
+    value => ({ ...value, error: { ...revert, code: -32000 } }),
+    value => ({ ...value, error: { ...revert, message: 'provider unavailable' } }),
+    value => ({ ...value, error: { ...revert, data: '0xabc' } }),
+    value => ({ ...value, error: { ...revert, data: 'not bytes' } }),
+    value => ({ ...value, error: { ...revert, data: `0x${'ab'.repeat(32_769)}` } }),
+    value => ({ ...value, error: { code: 3, message: revert.message } }),
+    value => ({ ...value, error: [revert] }), () => null,
+  ]) {
+    const rpc = rpcClient('https://synthetic.invalid', 'primary', async (_url, init) => Response.json(modify(envelope(JSON.parse(init.body).id))));
+    await assert.rejects(rpc('eth_call', []), value => value.message === 'primary: eth_call read failed' && value.code === undefined && value.data === undefined);
+  }
+  const http = rpcClient('https://synthetic.invalid', 'primary', async (_url, init) => Response.json(envelope(JSON.parse(init.body).id), { status: 503 }));
+  await assert.rejects(http('eth_call', []), value => value.message === 'primary: eth_call read failed' && value.data === undefined);
+});
+test('Any Quote RPC adapter uses the actual publication SDK class and preserves the operation checkpoint', async () => {
+  const api = await publicationValidators(), calls = [];
+  const rpc = rpcClient('https://synthetic.invalid', 'primary', async (_url, init) => {
+    const request = JSON.parse(init.body); calls.push(request);
+    return Response.json({ jsonrpc: '2.0', id: request.id, ...(request.method === 'eth_call'
+      ? { error: { code: 3, message: 'execution reverted: secret-canary-provider-text', data: '0xABCD' } } : { result: '0x01' }) });
+  });
+  const [adapted] = anyQuoteReadinessRpcs([{ rpc }], { number: '0x100' }, api);
+  await assert.rejects(adapted('eth_call', [{ to: addr(1), data: '0x1234' }, { blockHash: `0x${'11'.repeat(32)}`, requireCanonical: true }]),
+    error => error instanceof api.TradeRpcExecutionRevertedV1 && error.data === '0xabcd' && error.message === 'The simulated call reverted.');
+  assert.deepEqual(calls[0].params[1], { blockHash: `0x${'11'.repeat(32)}`, requireCanonical: true });
+  await adapted('eth_getBlockByNumber', ['latest', false]);
+  assert.deepEqual(calls[1].params, ['0x100', false]);
+  await adapted('eth_getBlockByNumber', ['0x90', false]);
+  assert.deepEqual(calls[2].params, ['0x90', false]);
+  assert.deepEqual(calls.map(call => call.id), [1, 2, 3], 'A retained revert releases the transport queue without changing request identities');
+  const lookalike = Object.assign(new Error('untrusted error shape'), { code: 'RPC_EXECUTION_REVERTED', data: '0xabcd' });
+  const [untrusted] = anyQuoteReadinessRpcs([{ rpc: async () => { throw lookalike; } }], { number: '0x100' }, api);
+  await assert.rejects(untrusted('eth_call', []), error => error === lookalike && !(error instanceof api.TradeRpcExecutionRevertedV1));
 });
 test('owner journal locks even an ambiguous wallet handoff and rejects duplicate/replaced tx', async () => {
   const directory = await mkdtemp(path.join(os.homedir(), '.module-owner-test-')); await chmod(directory, 0o700);

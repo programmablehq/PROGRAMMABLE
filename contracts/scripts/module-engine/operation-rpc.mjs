@@ -7,6 +7,7 @@ import { address, bytes, digest, exactKeys, hash, jsonSafe, need, sha256, uint }
 import { REPOSITORY_ROOT } from '../module-mode/build.mjs';
 import { exactJson } from '../module-mode/source-readback.mjs';
 import { publicationValidators } from '../module-mode/publication-shared.mjs';
+import { ReadOnlyRpcExecutionRevertedV1 } from '../module-mode/rpc.mjs';
 import { ZERO_ADDRESS, registryAbi } from '../module-mode/publication-plan.mjs';
 import { ENGINE_PUBLICATION_OPERATOR_SCHEMA, equal, equalEngineLaunchPlan } from './publication-plan.mjs';
 import { assertEnginePermission, bindAnyQuotePreactivationPacket, isAnyQuoteLifecyclePlan } from './lifecycle-operator-plan.mjs';
@@ -427,6 +428,16 @@ async function anyQuoteFunding(plan, stepIndex, providers, block, c, api) {
   else need(permit[0] === amount && BigInt(permit[2]) === BigInt(funding.permit2Nonce), 'Exact Permit2 predecessor amount/nonce differs');
   if (step.kind === 'any-quote-sell') need(erc20 >= amount && permit[0] >= amount && BigInt(permit[1]) > c.quantity(block.timestamp), 'Sell funding predecessors are not complete');
 }
+/** Bridge transport-validated reverts into the same compiled SDK graph as readiness. */
+export function anyQuoteReadinessRpcs(providers, block, api) {
+  return providers.map(provider => async (method, params = []) => {
+    try { return await provider.rpc(method, method === 'eth_getBlockByNumber' && params[0] === 'latest' ? [block.number, ...params.slice(1)] : params); }
+    catch (error) {
+      if (method === 'eth_call' && error instanceof ReadOnlyRpcExecutionRevertedV1) throw new api.TradeRpcExecutionRevertedV1(error.data);
+      throw error;
+    }
+  });
+}
 export async function materializeAnyQuoteOperation(plan, stepIndex, providers, block, c, original) {
   const api = await publicationValidators(), client = anyQuoteClient(providers, c, block), step = plan.steps[stepIndex];
   await anyQuoteFunding(plan, stepIndex, providers, block, c, api);
@@ -435,8 +446,7 @@ export async function materializeAnyQuoteOperation(plan, stepIndex, providers, b
     await api.revalidateAnyQuoteLifecyclePreparationV1({ client, identity: plan.identity, preparation: original }); return original;
   }
   const template = { status: 'available', manifest: plan.bundle.manifest, manifestHash: plan.bundle.review.command.hostManifestHash, reviewDigest: plan.bundle.review.decisionDigest };
-  const common = { client, identity: plan.identity, template, account: plan.owner }, rpcs = providers.map(provider => (method, params = []) => provider.rpc(method,
-    method === 'eth_getBlockByNumber' && params[0] === 'latest' ? [block.number, ...params.slice(1)] : params));
+  const common = { client, identity: plan.identity, template, account: plan.owner }, rpcs = anyQuoteReadinessRpcs(providers, block, api);
   const dependencies = { client, options: { rpcs } }; let envelope;
   if (step.kind === 'any-quote-launch') {
     const preview = await api.readAnyQuoteIdentityLaunchPreviewV1({ ...step.intent, identity: plan.identity, template }, dependencies);

@@ -5,6 +5,8 @@ import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeErrorResult, encodeFunctionResult, keccak256, parseAbi, parseAbiParameters, toFunctionSelector, toHex } from "viem";
+import { rpcClient } from "../../contracts/scripts/module-mode/rpc.mjs";
+import { anyQuoteReadinessRpcs } from "../../contracts/scripts/module-engine/operation-rpc.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 // Deterministic RPC fixtures have their own pinned bytecode profile. Production code and its
@@ -516,6 +518,62 @@ test("intermediate recovery does not expand the 512-record discovery hint limit"
   assert.throws(() => a.parseAnyQuoteV4InitializeV1(records, input),
     error => error.code === "V4_DISCOVERY_CANDIDATE_LIMIT" && error.status === "inconclusive");
   assert.equal(a.ANY_QUOTE_V4_MAX_POOL_CANDIDATES, 64);
+});
+
+// Sanitized matching V4Quoter revert bytes observed through both operator providers.
+// Replaying the wire in synthetic pools is not canonical or funded execution evidence.
+const observedQuoterRevert = "0x6190b2b0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000247a5ed734030a899a4935e15bc2af89eb7a58318e761803d72c00b158e3fe7e2780ccd48100000000000000000000000000000000000000000000000000000000";
+function operatorCandidateFixture(stage = "initial", other = "matching") {
+  const failing = pool(ZERO, Q, { fee: 140000 }), deep = pool(ZERO, Q, { fee: 500 });
+  const candidateFailure = new Error("Synthetic candidate failure"), rejectedBy = new Set();
+  const f = fixture([failing, deep], { override: info => {
+    if (info.method !== "eth_call") return;
+    const read = decodeFunctionData({ abi: readAbi, data: info.params[0].data });
+    if (read.functionName !== "quoteExactInputSingle" || read.args[0].poolKey.fee !== 140000
+      || (stage === "depth" && read.args[0].exactAmount <= ONE_DOLLAR_ETH)) return;
+    if (info.provider === 1 && other === "success") return;
+    rejectedBy.add(info.provider); throw candidateFailure;
+  } });
+  const providers = f.rpcs.map((read, provider) => ({ rpc: rpcClient(`https://provider${provider}.invalid`, `fixture${provider}`, async (_url, init) => {
+    const request = JSON.parse(init.body);
+    try { return Response.json({ jsonrpc: "2.0", id: request.id, result: await read(request.method, request.params) }); }
+    catch (error) {
+      if (error !== candidateFailure) throw error;
+      const failure = { code: 3, message: "execution reverted: secret-canary-provider-text", data: observedQuoterRevert };
+      if (provider === 1) {
+        if (other === "different-revert") failure.data = "0x1234";
+        if (other === "malformed") failure.data = "not bytes";
+        if (other === "provider-code") failure.code = -32000;
+        if (other === "message-only") delete failure.data;
+      }
+      return Response.json({ jsonrpc: "2.0", id: request.id, error: failure }, { status: provider === 1 && other === "outage" ? 503 : 200 });
+    }
+  }) }));
+  return { ...f, deep, rejectedBy, options: { ...f.options, rpcs: anyQuoteReadinessRpcs(providers, { number: toHex(HEIGHT) }, a) } };
+}
+
+test("the stock operator wire and SDK bridge can discard only an agreed reverted candidate", async () => {
+  for (const stage of ["initial", "depth"]) {
+    const f = operatorCandidateFixture(stage), result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, f.options);
+    assert.equal(result.status, "compatible", `${stage}: ${JSON.stringify(result)}`);
+    assert.deepEqual([...f.rejectedBy], [0, 1]);
+    for (const side of ["buy", "sell"]) {
+      assert.equal(result.routes[side].hops[0].poolId, f.deep.poolId);
+      assert.deepEqual(result.routes[side].checkpoint, checkpoint);
+    }
+    assert.equal(result.price.source, "qualified-amm");
+    assert.equal(result.checks.fullExecution, "required-before-signing");
+    assert.ok(f.calls.filter(call => call.method === "eth_call").every(call => call.params[1].blockHash === HASH && call.params[1].requireCanonical === true));
+  }
+});
+
+test("operator wire disagreement, outage and malformed reverts cannot choose a healthy fallback", async () => {
+  for (const other of ["success", "different-revert", "outage", "malformed", "provider-code", "message-only"]) {
+    const f = operatorCandidateFixture("initial", other), result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, f.options);
+    assert.equal(result.status, "inconclusive", `${other}: ${JSON.stringify(result)}`);
+    assert.equal(result.code, ["success", "different-revert"].includes(other) ? "TRADE_PROVIDER_DISAGREEMENT" : "PROVIDER_OR_EXECUTION_INCONCLUSIVE", other);
+    assert.equal(result.retryable, true);
+  }
 });
 
 test("a reverted candidate quote stays non-executable without treating malformed successful data as a revert", async () => {
