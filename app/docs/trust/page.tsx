@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 
-import { DocsExternalLink } from "@/components/docs-external-link";
 import docsStyles from "@/components/docs-experience.module.css";
-import { PROGRAMMABLE_PUBLIC_REPOSITORIES } from "@/components/docs-public-policy";
 import { DocsShell } from "@/components/docs-shell";
 
 export const metadata: Metadata = {
@@ -173,20 +171,6 @@ export default function TrustDocsPage() {
           and a minimal reproduction. Do not post private keys, access tokens,
           wallet signatures or unpublished exploit details in a public issue.
         </p>
-        <div className={docsStyles.sourceLinks}>
-          <DocsExternalLink
-            href={PROGRAMMABLE_PUBLIC_REPOSITORIES.product + "/security"}
-            variant="chip"
-          >
-            Security reporting
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={PROGRAMMABLE_PUBLIC_REPOSITORIES.productIssues}
-            variant="chip"
-          >
-            Product and docs issues
-          </DocsExternalLink>
-        </div>
       </section>
     </DocsShell>
   );

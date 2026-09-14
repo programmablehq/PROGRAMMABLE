@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PublicExternalLink } from "@/components/public-external-link";
 import { DocsShell } from "@/components/docs-shell";
 import styles from "@/components/developer-docs.module.css";
 
@@ -80,7 +81,7 @@ export default function ModuleModeDeveloperPage() {
         the reviewed direct Quote/WETH V3 route, qualified price history and liquidity, or direct WETH unwrap. User minimums
         can tighten its checks. Escrow and creator-attested settlement are non-trading profiles with funded liabilities and
         explicit withdrawal or expiry rules. Creator attestation does not independently prove delivery of an external service.</p>
-      <p className={styles.bodyCopy}>Read the <a href="https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/spec/module-engine-host-v1.md">Engine host specification</a>
+      <p className={styles.bodyCopy}>Read the <PublicExternalLink href="https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/spec/module-engine-host-v1.md">Engine host specification</PublicExternalLink>
         {" "}for exact permissions, ABI, market and token limits. These source profiles do not imply an available catalog entry.</p>
     </section>
     <section id="api">
@@ -148,8 +149,8 @@ export default function ModuleModeDeveloperPage() {
         starting another action. The original release, account, token, calldata and value must agree. A saved browser record
         is not permission to resend, and a mined receipt is separate from finalized indexing.</p>
       <p className={styles.bodyCopy}>If the website is unavailable, use the existing
-        <a href="https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode/management.ts"> Native management client</a>
-        {" or "}<a href="https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-engine/client.ts">Engine client</a>
+        <PublicExternalLink href="https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode/management.ts"> Native management client</PublicExternalLink>
+        {" or "}<PublicExternalLink href="https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-engine/client.ts">Engine client</PublicExternalLink>
         {" "}with the verified original release and your RPC. Read accrued credit in the original ledger and review its
         <code> claimTo(recipient)</code> call from the entitled wallet. Claims send zero native value apart from network gas.
         Module budgets and escrow refunds use their own instance or host actions. The source CLI does not send wallet transactions.</p>

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DocsAddress } from "@/components/docs-address";
-import { DocsExternalLink } from "@/components/docs-external-link";
 import { DocsShell } from "@/components/docs-shell";
 import styles from "@/components/docs-experience.module.css";
 type ModelSlug = "classic" | "custom" | "stock-paired";
@@ -343,20 +342,7 @@ function ClassicDocs() {
             </tbody>
           </table>
         </div>
-        <div className={styles.sourceLinks}>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${classicEvidenceCommit}/contracts/deployments/mainnet-classic-v3.json`}
-            variant="chip"
-          >
-            Deployment record
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${classicEvidenceCommit}/contracts/security/CLASSIC-V3.md`}
-            variant="chip"
-          >
-            Security notes
-          </DocsExternalLink>
-        </div>
+        <p>Source revision: <code>{classicEvidenceCommit}</code>.</p>
       </section>
     </DocsShell>
   );
@@ -690,57 +676,7 @@ function StockPairedDocs() {
             </tbody>
           </table>
         </div>
-        <h3>V1</h3>
-        <div className={styles.sourceLinks}>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/docs/superpowers/specs/2026-07-29-stock-paired-v1-design.md`}
-            variant="chip"
-          >
-            V1 model specification
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/contracts/deployments/mainnet-stock-paired-v1.json`}
-            variant="chip"
-          >
-            V1 deployment record
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/contracts/security/STOCK-PAIRED-V1.md`}
-            variant="chip"
-          >
-            V1 security notes
-          </DocsExternalLink>
-        </div>
-        <h3>V2</h3>
-        <div className={styles.sourceLinks}>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/contracts/deployments/mainnet-stock-paired-v2.json`}
-            variant="chip"
-          >
-            V2 deployment record
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/contracts/security/STOCK-PAIRED-V2.md`}
-            variant="chip"
-          >
-            V2 security notes
-          </DocsExternalLink>
-        </div>
-        <h3>V3</h3>
-        <div className={styles.sourceLinks}>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/contracts/deployments/mainnet-stock-paired-v3.json`}
-            variant="chip"
-          >
-            V3 deployment record
-          </DocsExternalLink>
-          <DocsExternalLink
-            href={`https://github.com/0xprogrammable/programmable/blob/${stockPairedEvidenceCommit}/docs/stock-paired/STOCK-PAIRED-V3-RELEASE.md`}
-            variant="chip"
-          >
-            V3 release notes
-          </DocsExternalLink>
-        </div>
+        <p>Source revision: <code>{stockPairedEvidenceCommit}</code>.</p>
       </section>
     </DocsShell>
   );

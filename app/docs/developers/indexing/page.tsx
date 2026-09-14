@@ -373,11 +373,6 @@ export default function IndexLaunchesPage() {
               Use machine-readable docs
             </Link>
           </li>
-          <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.terminalGuideUrl}>
-              Read the terminal guide on GitHub
-            </a>
-          </li>
         </ul>
       </nav>
     </DocsShell>

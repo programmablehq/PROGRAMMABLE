@@ -1027,12 +1027,6 @@ export default function RobinhoodTerminalIndexerPage() {
 
         <ul className={styles.linkList}>
           <li>
-            <a href="https://github.com/programmablehq/PROGRAMMABLE/issues">
-              Report a documentation or integration issue
-            </a>
-            <span>Use a public issue only for non-sensitive evidence.</span>
-          </li>
-          <li>
             <a href="https://discord.com/invite/programmable">
               Contact Programmable support
             </a>

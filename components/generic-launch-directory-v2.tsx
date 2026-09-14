@@ -140,9 +140,6 @@ export function GenericLaunchDetailV2({ recordHash }: { recordHash: string }) {
           <a href={`https://etherscan.io/address/${source.descriptor.primaryContract}`} target="_blank" rel="noreferrer">
             View contract<span className={styles.srOnly}> on Etherscan</span>
           </a>
-          <a href={`https://github.com/${source.sourceRevision.repositoryFullName}/tree/${source.sourceRevision.commitObjectId}`} target="_blank" rel="noreferrer">
-            View source revision
-          </a>
           <Link href="/developers/api-keys">Manage API keys</Link>
         </div>
       </article>

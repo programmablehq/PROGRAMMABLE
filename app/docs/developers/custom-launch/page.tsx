@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { PublicExternalLink } from "@/components/public-external-link";
 import styles from "@/components/developer-docs.module.css";
 import { DocsShell } from "@/components/docs-shell";
 import { PROGRAMMABLE_AGENT_ENTRY } from "@/lib/agent-connection";
@@ -290,9 +291,9 @@ export default function CustomLaunchApiDocsPage() {
           </li>
           <li>
             Install <code>@programmable/launch</code> 3.3.9 from the{" "}
-            <a href="https://github.com/programmablehq/PROGRAMMABLE/releases/download/programmable-launch-v3.3.9/programmable-launch-3.3.9.tgz">
+            <PublicExternalLink href="https://github.com/programmablehq/PROGRAMMABLE/releases/download/programmable-launch-v3.3.9/programmable-launch-3.3.9.tgz">
               immutable GitHub Release asset
-            </a>
+            </PublicExternalLink>
             , verify its checksum, then use the <code>programmable-launch</code>{" "}
             binary.
           </li>

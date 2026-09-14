@@ -113,10 +113,6 @@ import {
   TOKEN_IMAGE_OUTPUT_SIZE,
 } from "@/lib/token-image";
 
-const BUILDER_SKILL_URL =
-  "https://github.com/0xprogrammable/programmable-v4-builder/tree/main/skills/programmable-v4-hook-builder";
-const SUBMISSION_REQUIREMENTS_URL =
-  "https://github.com/0xprogrammable/programmable-v4-builder/blob/main/docs/PUBLIC_GITHUB_PR_BETA.md";
 export const CUSTOM_LAUNCH_PLATFORM_FEE_RECIPIENT =
   "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c";
 const STATUS_POLL_DELAY_MS = 3_000;
@@ -2979,14 +2975,6 @@ function CustomLaunchRuntime({
             <p className={styles.introCopy}>
               Launch an approved version of your project. Connect GitHub and your wallet to find your submission and prepare the wallet steps.
             </p>
-            <div className={styles.actions}>
-              <a className={styles.secondaryButton} href={SUBMISSION_REQUIREMENTS_URL} target="_blank" rel="noreferrer">
-                Read the application guide <ExternalLink aria-hidden="true" size={15} />
-              </a>
-              <a className={styles.textLink} href={BUILDER_SKILL_URL} target="_blank" rel="noreferrer">
-                Prepare a project with your builder
-              </a>
-            </div>
           </section>
           <section className={styles.statusEntry}>
             <div className={styles.statusHeading}>
@@ -3076,10 +3064,6 @@ function CustomLaunchRuntime({
             <span className={styles.instrumentLabel}>No allowed source yet</span>
             <h2>No approved repository is bound to this account.</h2>
             <p>Open a GitHub application, then return when an exact revision has been approved.</p>
-            <div className={styles.actions}>
-              <a className="primary-button" href={SUBMISSION_REQUIREMENTS_URL} target="_blank" rel="noreferrer">Open the application guide</a>
-              <a className={styles.textLink} href={BUILDER_SKILL_URL} target="_blank" rel="noreferrer">Prepare a project with the builder</a>
-            </div>
           </section>
         ) : (
           <div className={styles.applicationList}>
@@ -3399,7 +3383,6 @@ function ApplicationRow({ application, onOpen }: { application: PrincipalCustomL
     : customApplicationHasDurableApprovalV2(application, null)
       ? { title: "Approved for launch", action: "Set up launch", tone: "ready" as const }
     : customApplicationDisplayState(application.state);
-  const githubUrl = `https://github.com/${application.repositoryFullName}/pull/${application.pullRequestNumber}`;
   const opensSetup = customApplicationOpensLaunchExperienceV2(application);
   const guidance = applicationGuidance(application);
   return (
@@ -3412,7 +3395,7 @@ function ApplicationRow({ application, onOpen }: { application: PrincipalCustomL
       <div className={styles.applicationStatus} data-tone={display.tone}>{display.tone === "complete" || display.tone === "ready" ? <CircleCheck aria-hidden="true" size={17} /> : display.tone === "warning" ? <CircleAlert aria-hidden="true" size={17} /> : <Clock3 aria-hidden="true" size={17} />}<span><strong>{display.title}</strong><small>{formatObservedTime(application.updatedAt)}</small></span></div>
       {application.correctionPreview.length > 0 ? <ul className={styles.corrections}>{application.correctionPreview.slice(0, 3).map(({ correctionId, summary }) => <li key={correctionId}>{summary}</li>)}</ul> : null}
       {application.correctionPreview.length === 0 && guidance ? <p className={styles.guidance}>{guidance}</p> : null}
-      {application.state === "launched" ? <Link className={styles.rowAction} href="/explore?model=custom">View in Explore<ArrowRight aria-hidden="true" size={15} /></Link> : opensSetup ? <button className={styles.rowAction} type="button" onClick={onOpen}>{display.action}<ArrowRight aria-hidden="true" size={15} /></button> : <a className={styles.rowAction} href={githubUrl} target="_blank" rel="noreferrer">{display.action}<ExternalLink aria-hidden="true" size={14} /></a>}
+      {application.state === "launched" ? <Link className={styles.rowAction} href="/explore?model=custom">View in Explore<ArrowRight aria-hidden="true" size={15} /></Link> : opensSetup ? <button className={styles.rowAction} type="button" onClick={onOpen}>{display.action}<ArrowRight aria-hidden="true" size={15} /></button> : null}
     </article>
   );
 }

@@ -1,4 +1,5 @@
 import { HookathonCountdown } from "@/components/hookathon-countdown";
+import { PublicExternalLink } from "@/components/public-external-link";
 import styles from "@/components/hookathon-page.module.css";
 import { hookathonConfig } from "@/lib/hookathon/config";
 
@@ -50,13 +51,13 @@ export function HookathonPage({ initialNowMs }: HookathonPageProps) {
           <h2 id="hookathon-eligibility">Eligibility</h2>
           <p>
             {hookathonConfig.eligibility.beforeSubmissionLink}{" "}
-            <a
+            <PublicExternalLink
               href={hookathonConfig.submissionUrl}
               rel="noreferrer"
               target="_blank"
             >
               {hookathonConfig.eligibility.submissionLinkLabel}
-            </a>
+            </PublicExternalLink>
             {hookathonConfig.eligibility.afterSubmissionLink}
           </p>
         </section>

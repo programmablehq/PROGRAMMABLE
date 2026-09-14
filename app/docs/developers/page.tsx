@@ -269,14 +269,6 @@ export default function DeveloperDocsPage() {
             </span>
           </li>
           <li>
-            <a href={PROGRAMMABLE_LAUNCH_STAMP_RESOURCES.referenceUrl}>
-              GitHub Router reference
-            </a>
-            <span>
-              Canonical verification algorithm and finalized PCAN test case.
-            </span>
-          </li>
-          <li>
             <Link href="/docs/launch-stamps">
               Router reference on this site
             </Link>

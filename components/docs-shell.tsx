@@ -8,7 +8,6 @@ import {
   DocsPageNavigation,
   type DocsPageSection,
 } from "@/components/docs-navigation";
-import { PROGRAMMABLE_PUBLIC_REPOSITORIES } from "@/components/docs-public-policy";
 import { DocsSearch } from "@/components/docs-search";
 
 export function DocsShell({
@@ -128,20 +127,6 @@ export function DocsShell({
         <div className={styles.layout} data-docs-layout>
           <article className={styles.content} data-docs-content>
             {children}
-            <footer className={styles.docsFeedback}>
-              <div>
-                <strong>Help improve these docs</strong>
-                <span>Report an unclear, missing or outdated page.</span>
-              </div>
-              <a
-                href={PROGRAMMABLE_PUBLIC_REPOSITORIES.productIssues}
-                rel="noreferrer"
-                target="_blank"
-              >
-                Report a docs issue
-                <span className="sr-only">Opens GitHub in a new tab</span>
-              </a>
-            </footer>
           </article>
           <DocsPageNavigation currentPath={currentPath} sections={sections} />
         </div>
