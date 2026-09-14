@@ -278,10 +278,18 @@ async function discoverNativeV4(input: DiscoveryInput, ctx: Context, qualify?: C
   const live = inspected.flatMap(value => value.status === "fulfilled" && value.value ? [value.value] : []);
   const intermediates = [...new Set(live.map(value => value.intermediate))];
   if (intermediates.length > 8) throw new AnyQuoteErrorV1("V4_DISCOVERY_INTERMEDIATE_LIMIT");
-  const native = new Map(await Promise.all(intermediates.map(async asset => [asset, await discovery.nativePools(asset)] as const)));
-  const paths = await enumerate([...live.map(value => value.pool), ...[...native.values()].flat()], 2);
+  const nativeOutcomes = await Promise.allSettled(intermediates.map(async asset => [asset, await discovery.nativePools(asset)] as const));
+  let discoveryLimit: AnyQuoteErrorV1 | null = null;
+  for (const outcome of nativeOutcomes) if (outcome.status === "rejected") {
+    // An optional branch may exceed discovery capacity without invalidating a
+    // complete alternate route. Provider and malformed-data failures stay terminal.
+    if (!(outcome.reason instanceof AnyQuoteErrorV1) || outcome.reason.code !== "V4_DISCOVERY_CANDIDATE_LIMIT") throw outcome.reason;
+    discoveryLimit ??= outcome.reason;
+  }
+  const native = new Map(nativeOutcomes.flatMap(outcome => outcome.status === "fulfilled" ? [outcome.value] : []));
+  const paths = await enumerate([...live.filter(value => native.has(value.intermediate)).map(value => value.pool), ...[...native.values()].flat()], 2);
   const routed = await chooseNativeCandidate(paths, input, ctx, "uniswap-v4-initialize", qualify);
-  if (!routed.candidate) throw routed.qualificationError ?? direct.qualificationError
+  if (!routed.candidate) throw discoveryLimit ?? routed.qualificationError ?? direct.qualificationError
     ?? new AnyQuoteErrorV1(discovery.hasIncompleteCoverage() ? "V4_DISCOVERY_PROVIDER_UNAVAILABLE" : "NATIVE_V4_EXECUTABLE_ROUTE_UNAVAILABLE");
   return routed.candidate;
 }

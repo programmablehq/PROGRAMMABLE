@@ -442,6 +442,82 @@ test("direct depth failures allow an independently qualified intermediate route"
   assert.deepEqual(result.routes.sell.hops.map(h => h.tokenOut.toLowerCase()), [MID, ZERO].map(x => x.toLowerCase()));
 });
 
+function optionalIntermediateFixture(first = "healthy", second = "overflow") {
+  const native = [pool(ZERO, MID), pool(ZERO, OTHER)];
+  const modes = new Map([[MID, first], [OTHER, second]]);
+  const oversized = new Map([MID, OTHER].map(asset => [asset,
+    Array.from({ length: 513 }, (_, fee) => log(pool(ZERO, asset, { fee }), fee))]));
+  return fixture([pool(MID, Q), pool(OTHER, Q), ...native.filter((_, index) => [first, second][index] !== "empty")], {
+    height: LONG_HEIGHT,
+    override: info => {
+      if (info.method === "eth_getLogs") {
+        const topics = info.params[0].topics;
+        const asset = [MID, OTHER].find(value => topics.length === 4
+          && topics[2] === toHex(0n, { size: 32 }) && topics[3]?.toLowerCase() === toHex(BigInt(value), { size: 32 }));
+        const mode = modes.get(asset);
+        if (mode === "unavailable") throw Error("fixture provider unavailable");
+        quickNodeRangeLimit(info);
+        if (mode === "overflow") return oversized.get(asset);
+        if (mode === "malformed") return [{ ...log(native[1]), data: "0x00" }];
+        if (mode === "disagreement" && info.provider === 0) return [];
+      }
+      quickNodeRangeLimit(info);
+      if (first === "thin") return quoteWithDepth([native[0]])(info);
+    },
+  });
+}
+
+test("optional intermediate overflow cannot displace a complete independently qualified route", async () => {
+  const f = optionalIntermediateFixture();
+  const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, f.options);
+  assert.equal(result.status, "compatible", JSON.stringify(result));
+  assert.deepEqual(result.routes.buy.hops.map(h => h.tokenOut.toLowerCase()), [MID, Q].map(x => x.toLowerCase()));
+  assert.deepEqual(result.routes.sell.hops.map(h => h.tokenOut.toLowerCase()), [MID, ZERO].map(x => x.toLowerCase()));
+  assert.equal(result.price.source, "qualified-amm");
+  assert.equal(result.checks.fullExecution, "required-before-signing");
+  for (const side of ["buy", "sell"]) assert.deepEqual(result.routes[side].checkpoint, longCheckpoint);
+  const calls = f.calls.filter(c => c.method === "eth_call").map(c => ({ ...c, read: decodeFunctionData({ abi: readAbi, data: c.params[0].data }) }));
+  const quotes = calls.filter(c => c.read.functionName === "quoteExactInputSingle");
+  for (const provider of [0, 1]) {
+    assert.ok(quotes.some(c => c.provider === provider && c.read.args[0].zeroForOne));
+    assert.ok(quotes.some(c => c.provider === provider && !c.read.args[0].zeroForOne));
+    assert.ok(quotes.some(c => c.provider === provider && c.read.args[0].exactAmount > ONE_DOLLAR_ETH));
+    assert.ok(f.calls.filter(c => c.provider === provider && c.method === "eth_getLogs").length <= 24);
+  }
+  assert.ok(calls.every(c => c.params[1].blockHash === HASH && c.params[1].requireCanonical === true));
+});
+
+test("optional intermediate overflow remains inconclusive without a surviving qualified route", async () => {
+  for (const first of ["overflow", "empty", "thin"]) {
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, optionalIntermediateFixture(first).options);
+    assert.equal(result.status, "inconclusive", `${first}: ${JSON.stringify(result)}`);
+    assert.equal(result.code, "V4_DISCOVERY_CANDIDATE_LIMIT", first);
+    assert.equal(result.retryable, true);
+  }
+});
+
+test("optional intermediate provider failures remain terminal even beside an overflow", async () => {
+  for (const first of ["healthy", "overflow"]) for (const [second, code] of [
+    ["disagreement", "V4_DISCOVERY_PROVIDER_DISAGREEMENT"],
+    ["unavailable", "V4_DISCOVERY_PROVIDER_UNAVAILABLE"],
+    ["malformed", "V4_DISCOVERY_RESPONSE_INVALID"],
+  ]) {
+    const result = await a.assessAnyQuoteAssetV1({ quoteAsset: Q }, optionalIntermediateFixture(first, second).options);
+    assert.equal(result.status, "inconclusive", `${first}/${second}: ${JSON.stringify(result)}`);
+    assert.equal(result.code, code, `${first}/${second}`);
+    assert.equal(result.retryable, true);
+  }
+});
+
+test("intermediate recovery does not expand the 512-record discovery hint limit", () => {
+  const records = Array.from({ length: 513 }, (_, fee) => log(pool(ZERO, MID, { fee }), fee));
+  const input = { currency: MID, otherCurrency: ZERO, fromBlock: 9070n, toBlock: HEIGHT };
+  assert.equal(a.parseAnyQuoteV4InitializeV1(records.slice(0, 512), input).length, 512);
+  assert.throws(() => a.parseAnyQuoteV4InitializeV1(records, input),
+    error => error.code === "V4_DISCOVERY_CANDIDATE_LIMIT" && error.status === "inconclusive");
+  assert.equal(a.ANY_QUOTE_V4_MAX_POOL_CANDIDATES, 64);
+});
+
 test("a reverted candidate quote stays non-executable without treating malformed successful data as a revert", async () => {
   const reverting = pool(), deep = pool(ZERO, Q, { fee: 500 }), rejectedBy = new Set();
   const f = fixture([reverting, deep], { override: info => {
