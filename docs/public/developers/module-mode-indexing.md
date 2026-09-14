@@ -13,8 +13,8 @@ The detailed event procedure and `/api/module-mode/indexer/v1` JSON contract bel
 | Source version | Source and verification reference |
 | --- | --- |
 | `module-native-v1` | Original Native launcher, V1 fees and launch/configuration commitments described below |
-| `module-native-v2` | Native V2 launcher with its versioned ABI and 10/30-bps policy; use the [Native ABI selector](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode/native-abi.ts) and [source verifier](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode/provenance.ts) |
-| `module-engine-v1` | Engine host launch, canonical parameter and instance bindings; use the [Engine ABI](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-engine/index/abi-v1.ts) and [Engine verifier](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-engine/index/provenance-v1.ts) |
+| `module-native-v2` | Native V2 launcher with its versioned ABI and 10/30-bps policy; use the Native ABI selector and source verifier |
+| `module-engine-v1` | Engine host launch, canonical parameter and instance bindings; use the Engine ABI and Engine verifier |
 
 These are implementation references, not activated deployment claims. Require the selected source's installed release, deployment/source evidence and finalized lifecycle proof. Do not parse an Engine event using the Native V1 JSON contract or infer a new release from a manifest supplied by a coin.
 
@@ -42,14 +42,14 @@ Do not substitute addresses from a token's metadata. Preserve the binding for ea
 3. Fetch the successful transaction receipt. Check the emitting address, transaction hash, block number, block hash, log index and canonical ABI encoding. Reject removed logs.
 4. At that same canonical block, read `launchIdentityVersion()`, `getLaunch(token)` and `getLaunchIdentity(token)` from the launcher. Require version 1 and agreement with the event on launch ID, launching wallet, token, pool, hook and recipe. Check the PoolManager against the release.
 5. Read the matching `ModuleNativeProgramBound`, `ModuleNativeConfigurationBound` and `ModuleNativeTokenIdentityBound` events from the same receipt. Bind the runtime, launch key, funding, token identity and configuration commitments to the same launch ID.
-6. Verify the PoolKey, token identity, runtime program, selected registry revisions, module instances and deployed code at the same block. Recompute the recipe, program, launch and instance commitments using the [reference verifier](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-mode/provenance.ts) from the bound source revision.
+6. Verify the PoolKey, token identity, runtime program, selected registry revisions, module instances and deployed code at the same block. Recompute the recipe, program, launch and instance commitments using the reference verifier from the bound source revision.
 7. Verify finality, store the accepted record and advance the source checkpoint only after the entire range is complete.
 
 The reference verifier checks consistency of supplied evidence. The collector must first obtain and authenticate the RPC results, receipt inclusion, runtime code and rollup finality. An untrusted JSON object claiming `verified` cannot establish provenance.
 
 ## Finality and checkpoints
 
-The source uses `robinhood-ethereum-finalized-v1`. A sequencer receipt alone is not finality under this policy. The collector establishes the transaction's L2 block, its rollup batch membership and the corresponding batch posting on Ethereum at or before the common finalized Ethereum checkpoint. The reference collector compares two independent L2 observations and two independent Ethereum providers. Its implementation is described in the [index architecture](https://github.com/programmablehq/PROGRAMMABLE/blob/production/docs/architecture/module-mode-indexing-v1.md).
+The source uses `robinhood-ethereum-finalized-v1`. A sequencer receipt alone is not finality under this policy. The collector establishes the transaction's L2 block, its rollup batch membership and the corresponding batch posting on Ethereum at or before the common finalized Ethereum checkpoint. The reference collector compares two independent L2 observations and two independent Ethereum providers. Its implementation is described in the index architecture.
 
 Keep a checkpoint for each `(chainId, sourceAddress, sourceReleaseDigest)`. Store its block number and hash. Process logs in block, transaction and log order. Commit rows and their checkpoint atomically. A failed or incomplete range must not advance the checkpoint.
 

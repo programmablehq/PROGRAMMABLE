@@ -35,7 +35,7 @@ MultiRole V2 represents physical components with role masks. A component with to
 
 A verified launch record establishes where a coin came from. It does not prove every trading route, current liquidity, a price, hook safety or fee behavior. Unknown trading behavior must not remove a recognized launch from the index. A terminal can display the identity while keeping quotes or execution unavailable until its adapter supports the exact market.
 
-Fee accounting uses the exact deployed fee source. Count accrual events once, keep recipient liabilities separate and do not count a later claim as new revenue. The launch feed is not a universal fee-claim queue. Ethereum claim integration has a separate [protocol fee claim reference](https://github.com/programmablehq/Developers/blob/main/docs/reference/protocol-fee-claims.md).
+Fee accounting uses the exact deployed fee source. Count accrual events once, keep recipient liabilities separate and do not count a later claim as new revenue. The launch feed is not a universal fee-claim queue. Ethereum claim integration has a separate protocol fee claim reference.
 
 ## Service freshness
 

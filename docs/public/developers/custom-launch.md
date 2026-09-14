@@ -92,12 +92,12 @@ The V4 contract uses
 [historical 4.0 OpenAPI](https://programmable.market/openapi/custom-launch-v4.json),
 [pack-config schema](https://programmable.market/schemas/custom-launch/v4/pack-config.json),
 [source-verification schema](https://programmable.market/schemas/custom-launch/v4/source-verification-status.json) and
-[admission descriptor](https://github.com/programmablehq/Launch-Policy/blob/main/policy/custom-launch-admission-v4.json)
+admission descriptor
 only for that contract. When live discovery selects 4.1, follow the
 [4.1 OpenAPI](https://programmable.market/openapi/custom-launch-v4.1.json),
 [4.1 pack config](https://programmable.market/schemas/custom-launch/v4.1/pack-config.json),
 [4.1 source verification](https://programmable.market/schemas/custom-launch/v4.1/source-verification-status.json) and
-[4.1 admission descriptor](https://github.com/programmablehq/Launch-Policy/blob/main/policy/custom-launch-admission-v4.1.json).
+4.1 admission descriptor.
 Authentication is handed off only through `$PROGRAMMABLE_API_KEY`; it never selects a policy profile or grants wallet
 authority. Historical 4.0 supports no funding and exact wallet transaction value; a funded 4.1 launch requires
 positive wallet transaction value. ERC-20 funding needs separate

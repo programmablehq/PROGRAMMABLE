@@ -13,7 +13,6 @@ V4 is Programmable's token on Robinhood Chain. It has a fixed supply of one bill
 | Contract | [`0xC60bA256B44334A0Cd2C7242E98B88f031abB006`](https://robinhoodchain.blockscout.com/token/0xC60bA256B44334A0Cd2C7242E98B88f031abB006) |
 | Initial supply | 1,000,000,000 V4 |
 | Pool | [V4 / ETH](https://dexscreener.com/robinhood/0x3df16f271060e4941c0386047def159f42e629dc0455db623c5b363eeacbcc1d) |
-| Source code | [V4 token repository](https://github.com/programmablehq/programmable-v4-token) |
 | Burns and activity | [Programmable on Dune](https://dune.com/programmablehq/analytics) |
 
 ## Liquidity and fees

@@ -11,7 +11,6 @@ Contributors can build reusable modules, launch custom applications or integrate
 | Publish behavior that other coin creators can use | [Build a module](../developers/module-mode.md) |
 | Launch a token, hook or application with your own contracts | [Custom Launch quickstart](../developers/custom-launch-quickstart.md) |
 | Add launch discovery to a terminal, explorer or wallet | [Index launches](../developers/indexing.md) |
-| Improve the public product or documentation | [Programmable on GitHub](https://github.com/programmablehq/PROGRAMMABLE) |
 
 Use [Discord](https://discord.com/invite/programmable) for product and integration discussions. Report reproducible source or documentation defects in the relevant GitHub repository. Security reports belong in its private security reporting channel.
 
