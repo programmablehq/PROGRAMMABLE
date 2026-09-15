@@ -57,7 +57,9 @@ No delegatecall, generic host execution, platform-budget access or host-origin P
 
 ## Build, source pins and evidence
 
-Foundation source uses Solidity 0.8.26, Cancun, optimizer 200, via IR, no CBOR metadata or bytecode hash. Use `contracts/scripts/module-foundation/verify.sh`. It confines compilation/tests to this Foundation tree and verifies dependency HEADs before running tests. Auto-detected dependency remappings are disabled because unrelated libraries provide a conflicting `test/` remapping.
+Foundation source uses Solidity 0.8.26, Cancun, optimizer 200, via IR, no CBOR metadata or bytecode hash. Use `npm run contracts:foundation:verify`. Its shell runner selects the committed `module-foundation` profile, confines compilation/tests to this Foundation tree, and verifies dependency HEADs before running tests. Auto-detected dependency remappings are disabled because unrelated libraries provide a conflicting `test/` remapping.
+
+The normal protected Contracts release lane runs this complete profile with an explicit public `FOUNDATION_RPC_URL`. The runner fixes a positive fork block before executing formatting, lint, size-checked compilation and all Foundation tests. RPC failures fail the gate before tests; missing local RPC configuration selects the public endpoint. The shared committed budgets are 1,000 fuzz runs and 32 invariant runs at depth 24 with `fail_on_revert=true`, matching the recorded stateful verification below. Default and legacy CI budgets are unchanged. Foundation has separate artifact/cache paths and is excluded from the incompatible default compiler profile only because its complete suite runs in this mandatory isolated lane. `npm run verify` includes that same Foundation gate through `test:contract-release:ci`; normal build, lint and Slither commands also include its compiler profile.
 
 - Core: `59d3ecf53afa9264a16bba0e38f4c5d2231f80bc`.
 - Universal Router 2.1.1: `999d561c3ad58fb5cab91b602911f3c75591a9c7`.

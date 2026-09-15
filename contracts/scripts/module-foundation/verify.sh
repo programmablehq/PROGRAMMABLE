@@ -29,15 +29,12 @@ verify_pin openzeppelin-uniswap-hooks 26dc8e53f812a1ca390d470342adb6cd8c3286ad
 verify_pin permit2 cc56ad0f3439c502c246fc5cfcc3db92bb8b7219
 verify_pin forge-std 3b20d60d14b343ee4f908cb8079495c07f5e8981
 
-export FOUNDRY_AUTO_DETECT_REMAPPINGS=false
-export FOUNDRY_SRC=src/module-foundation
-export FOUNDRY_TEST=test/module-foundation
-export FOUNDRY_SCRIPT=script/module-foundation
-export FOUNDRY_VIA_IR=true
-export FOUNDRY_OPTIMIZER_RUNS=200
-export FOUNDRY_FUZZ_RUNS=1000
-export FOUNDRY_INVARIANT_RUNS=32
-export FOUNDRY_INVARIANT_DEPTH=24
+export FOUNDRY_PROFILE=module-foundation
+# Keep the compiler and test budgets in the committed profile. Ambient overrides
+# must not silently change its source roots, artifacts, bytecode or invariant work.
+unset FOUNDRY_SRC FOUNDRY_TEST FOUNDRY_SCRIPT FOUNDRY_OUT FOUNDRY_CACHE_PATH
+unset FOUNDRY_VIA_IR FOUNDRY_OPTIMIZER FOUNDRY_OPTIMIZER_RUNS FOUNDRY_AUTO_DETECT_REMAPPINGS
+unset FOUNDRY_FUZZ_RUNS FOUNDRY_INVARIANT_RUNS FOUNDRY_INVARIANT_DEPTH FOUNDRY_INVARIANT_FAIL_ON_REVERT
 export FOUNDATION_RPC_URL="${FOUNDATION_RPC_URL:-https://rpc.mainnet.chain.robinhood.com}"
 # The public RPC does not retain historic metadata for every previously unused CREATE2 address.
 # Fix a fresh block for this entire run, or supply an archive-capable endpoint and explicit retained block.
@@ -45,7 +42,12 @@ if [[ -z "${FOUNDATION_FORK_BLOCK:-}" ]]; then
   FOUNDATION_FORK_BLOCK="$(cast block-number --rpc-url "${FOUNDATION_RPC_URL}")"
 fi
 export FOUNDATION_FORK_BLOCK
+if [[ ! "${FOUNDATION_FORK_BLOCK}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'Foundation requires an explicit positive fork block.\n' >&2
+  exit 1
+fi
 printf 'Foundation fork block: %s\n' "${FOUNDATION_FORK_BLOCK}"
 forge fmt --check src/module-foundation test/module-foundation
+forge lint src/module-foundation
 forge build src/module-foundation/FoundationFactoryV1.sol --sizes --skip-lint
 forge test --match-path 'test/module-foundation/*.t.sol' -vv

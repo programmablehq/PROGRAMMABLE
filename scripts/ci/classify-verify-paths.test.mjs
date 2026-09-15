@@ -344,6 +344,7 @@ test("partitions every artifact-dependent suite without multi-filter side effect
       "scripts/test/any-quote-route-price.test.mjs",
       "scripts/test/any-quote-route-runtime.test.mjs",
     ].join(" "),
+    "npm run contracts:foundation:verify",
   ]);
   for (const path of CONTRACT_RELEASE_TEST_PATHS) {
     assert.match(

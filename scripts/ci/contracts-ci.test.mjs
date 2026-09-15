@@ -5,8 +5,39 @@ import {
   CONTRACT_CI_BUILD, CONTRACT_CI_RELEASE, CONTRACT_CI_ANALYSIS,
   deterministicExclusion, partitionTestInventory, validateBuildReceipt,
 } from "./contracts-ci.mjs";
+import { classifyVerifyPaths } from "./classify-verify-paths.mjs";
 
 const scripts = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url))).scripts;
+
+test("Foundation source, tests, profile and UI select their normal protected verification lanes", () => {
+  for (const source of ["contracts/src/module-foundation/FoundationHookV1.sol", "contracts/test/module-foundation/FoundationInvariantV1.t.sol",
+    "contracts/foundry.toml", "contracts/scripts/module-foundation/verify.sh"]) {
+    const scope = classifyVerifyPaths([source]); assert.equal(scope.contracts, true); assert.equal(scope.interface, true);
+  }
+  for (const source of ["app/api/module-foundation/compose/route.ts", "app/launch/modules/foundation/page.tsx", "app/modules/[token]/page.tsx",
+    "components/module-foundation-actions.tsx", "lib/module-foundation/action-runtime.ts", "lib/server/module-foundation/availability.ts",
+    "tests/module-foundation-action-runtime.test.ts"]) assert.equal(classifyVerifyPaths([source]).interface, true);
+});
+
+test("the complete Foundation profile stays mandatory in CI and normal local verification", () => {
+  assert.equal(scripts["contracts:foundation:verify"],
+    "node --test contracts/scripts/module-foundation/verify.test.mjs && bash contracts/scripts/module-foundation/verify.sh");
+  assert.ok(scripts.verify.includes("npm run test:contract-release:ci"));
+  assert.ok(scripts["test:contract-release:ci"].includes("npm run contracts:foundation:verify"));
+  assert.equal(CONTRACT_CI_RELEASE.filter(command => command.join(" ") === "npm run contracts:foundation:verify").length, 1);
+  assert.match(scripts["contracts:build"], /FOUNDRY_PROFILE=module-foundation forge build --sizes/u);
+  assert.match(scripts["contracts:lint"], /FOUNDRY_PROFILE=module-foundation forge lint src\/module-foundation/u);
+  for (const name of ["contracts:slither", "contracts:slither:strict"]) assert.match(scripts[name], /FOUNDRY_PROFILE=module-foundation slither/u);
+  const config = readFileSync(new URL("../../contracts/foundry.toml", import.meta.url), "utf8");
+  const section = name => config.split(`[profile.${name}]`)[1]?.split(/\n\[/u)[0];
+  const foundation = section("module-foundation"), invariant = section("module-foundation.invariant"), fuzz = section("module-foundation.fuzz");
+  assert.match(section("default"), /skip = .*"src\/module-foundation\/\*\*".*"test\/module-foundation\/\*\*"/u);
+  for (const setting of ['skip = []', 'src = "src/module-foundation"', 'test = "test/module-foundation"', 'out = "out/module-foundation"',
+    'cache_path = "cache/module-foundation"', 'via_ir = true', 'optimizer_runs = 200', 'auto_detect_remappings = false']) assert.ok(foundation.includes(setting), setting);
+  assert.match(fuzz, /runs = 1_000/u);
+  assert.match(invariant, /runs = 32\n/u); assert.match(invariant, /depth = 24\n/u); assert.match(invariant, /fail_on_revert = true/u);
+  assert.match(section("ci"), /runs = 10_000/u); assert.match(section("ci"), /runs = 1_000, depth = 128/u);
+});
 
 test("build, release, and analysis retain all existing contract checks without alternating compiler profiles", () => {
   assert.deepEqual(CONTRACT_CI_BUILD, [
@@ -59,9 +90,10 @@ test("build, release, and analysis retain all existing contract checks without a
   for (const command of scripts["test:contract-release:ci"].split(" && ")) {
     assert.equal(commands.filter((item) => item === (command.startsWith("vitest ") ? `npx ${command}` : command)).length, 1, command);
   }
-  assert.deepEqual(commands.slice(-4), [
+  assert.deepEqual(commands.slice(-5), [
     "forge-late lint src/late-migration", "forge-late build",
     "npm run contracts:late-migration:test", "npm run contracts:late-migration:deployment:test",
+    "npm run contracts:foundation:verify",
   ]);
   assert.equal(commands.filter((command) => command.includes("forge-late")).length, 2);
   assert.equal(scripts["contracts:late-migration:test"],
@@ -100,6 +132,7 @@ test("malformed or incomplete test inventories cannot silently reduce coverage",
   for (const bad of [null, [], {}, { "test/A.t.sol": { A: ["testOne"] } },
     { ...good, "../other.t.sol": { Other: ["testEscape"] } },
     { ...good, "test/late-migration/Late.t.sol": { Late: ["testLate"] } },
+    { ...good, "test/module-foundation/Foundation.t.sol": { Foundation: ["testFoundation"] } },
     { ...good, "test/Glob*.t.sol": { Glob: ["testGlob"] } },
     { ...good, "test/A.t.sol": { A: [] } },
     { ...good, "test/A.t.sol": { A: ["testOne", "testOne"] } },
