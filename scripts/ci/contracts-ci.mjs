@@ -57,6 +57,9 @@ export const CONTRACT_CI_RELEASE = Object.freeze([
   ["forge-late", "build"],
   ["npm", "run", "contracts:late-migration:test"],
   ["npm", "run", "contracts:late-migration:deployment:test"],
+  // This complete isolated profile supplies its own current explicit Robinhood
+  // checkpoint. Missing RPC access must fail instead of accepting skipped forks.
+  ["npm", "run", "contracts:foundation:verify"],
 ]);
 export const CONTRACT_CI_ANALYSIS = Object.freeze([
   ["npm", "run", "contracts:bootstrap"],
@@ -78,7 +81,7 @@ export function partitionTestInventory(inventory) {
   if (files.length < CONTRACT_TEST_PARTITIONS) throw new Error("Forge test inventory is incomplete.");
   const weighted = files.map((file) => {
     if (!/^test\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.t\.sol$/u.test(file)
-      || file.startsWith("test/late-migration/")) throw new Error(`Unexpected default test path: ${file}`);
+      || file.startsWith("test/late-migration/") || file.startsWith("test/module-foundation/")) throw new Error(`Unexpected default test path: ${file}`);
     const suites = inventory[file];
     if (!suites || Array.isArray(suites) || typeof suites !== "object"
       || Object.keys(suites).length === 0) throw new Error(`Invalid test suites: ${file}`);

@@ -11,9 +11,9 @@ optimizer_runs = 1_000
 bytecode_hash = "none"
 cbor_metadata = false
 ffi = false
-# This surface has its own via-IR compiler and invariant/filesystem settings.
-# Both verification entrypoints must run the late-migration profile separately.
-skip = ["src/late-migration/**", "test/late-migration/**"]
+# These surfaces use separate source-bound compiler profiles. The protected
+# Contracts release lane and npm verify run their complete suites separately.
+skip = ["src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**"]
 fs_permissions = [
   { access = "read", path = "./dependencies" },
   { access = "read", path = "./spec" },
@@ -32,6 +32,28 @@ fail_on_revert = false
 [profile.ci]
 fuzz = { runs = 10_000, max_test_rejects = 65_536 }
 invariant = { runs = 1_000, depth = 128, fail_on_revert = false }
+
+# Source-bound foundation compiler profile; does not change existing deployments.
+[profile.module-foundation]
+skip = []
+src = "src/module-foundation"
+test = "test/module-foundation"
+script = "script/module-foundation"
+out = "out/module-foundation"
+cache_path = "cache/module-foundation"
+via_ir = true
+optimizer_runs = 200
+auto_detect_remappings = false
+
+[profile.module-foundation.fuzz]
+runs = 1_000
+max_test_rejects = 65_536
+
+[profile.module-foundation.invariant]
+# Same bounded stateful campaign as the source's recorded verification runs.
+runs = 32
+depth = 24
+fail_on_revert = true
 
 # The late-migration intake uses IR compilation, while enabling IR for the
 # repository-wide profile currently exposes unrelated legacy Yul stack limits.

@@ -2389,6 +2389,12 @@ function PrivyWalletBridge({
               }
               await assertAuthority();
               // Revalidation holds the reviewed target, calldata, value and expiry. No raw request is accepted here.
+              let foundationNonce: number | undefined;
+              if ("sourceKind" in prepared && prepared.sourceKind === "module-foundation-v1") {
+                const { foundationWalletRequestNonce } = await import("@/lib/module-foundation/wallet");
+                foundationNonce = await foundationWalletRequestNonce(prepared);
+                assertCurrentSession();
+              }
               const submittedHash = async (hash: Hex) => {
                 if ("sourceKind" in prepared && prepared.sourceKind === "module-engine-v1") {
                   try {
@@ -2403,6 +2409,7 @@ function PrivyWalletBridge({
                 const result = await sendPrivyTransaction({
                   to: transaction.to, data: transaction.data, value: BigInt(transaction.value),
                   chainId: robinhoodChain.id,
+                  ...(foundationNonce === undefined ? {} : { nonce: foundationNonce }),
                   ...(transaction.gas === undefined ? {} : { gas: BigInt(transaction.gas) }),
                 }, {
                   address: account,
@@ -2414,6 +2421,7 @@ function PrivyWalletBridge({
               const hash = await provider.request({
                 method: "eth_sendTransaction",
                 params: [{ from: account, to: transaction.to, data: transaction.data, value: transaction.value,
+                  ...(foundationNonce === undefined ? {} : { nonce: `0x${foundationNonce.toString(16)}` }),
                   ...(transaction.gas === undefined ? {} : { gas: transaction.gas }) }],
               });
               return submittedHash(parseSubmittedTransactionHash(hash));

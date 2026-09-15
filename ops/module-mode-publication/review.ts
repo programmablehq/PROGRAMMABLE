@@ -57,6 +57,8 @@ function bindSource(job: ReviewJob, sourceBytes: Uint8Array): { source: ModuleSu
   need(checked.ok, "Invalid immutable submission");
   const source = checked.request, artifact = job.artifact;
   need(artifact && job.plan && ["built", "accepted"].includes(job.state), "Completed protected module build required");
+  need(artifact.schemaVersion === "programmable.modules.native-build.v1" || artifact.schemaVersion === "programmable.modules.engine-build.v1",
+    "Foundation uses the separate Foundation protocol/catalog release qualification; the Native/Engine publication operator does not publish Foundation artifacts");
   need(checked.requestDigest === job.subject.requestDigest && source.descriptor.author.toLowerCase() === job.subject.author, "Source does not bind the authenticated author");
   need(artifact.packageId === checked.packageId && artifact.familyId === checked.familyId && artifact.rewardWallet === source.descriptor.rewardWallet.toLowerCase(), "Build package identity differs");
   need(artifact.sourceManifestHash === reviewDigest("programmable.modules.source-manifest.v1", source.descriptor)

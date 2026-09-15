@@ -1,0 +1,2191 @@
+{
+  "purpose": "Synthetic parser/transport fixtures only; never worker, review, deployment or release evidence.",
+  "protocol": {
+    "source": {
+      "format": "programmable.modules.submission.v0.1",
+      "descriptor": {
+        "author": "0x1111111111111111111111111111111111111111",
+        "components": [
+          {
+            "id": "factory",
+            "runtime": "programmable.module-foundation.protocol-solidity@1",
+            "sourcePath": "UnitFoundation.sol",
+            "entrypoint": "UnitFoundationFactory"
+          },
+          {
+            "id": "hook-deployer",
+            "runtime": "programmable.module-foundation.protocol-solidity@1",
+            "sourcePath": "UnitFoundation.sol",
+            "entrypoint": "UnitFoundationHookDeployer"
+          }
+        ],
+        "configuration": {
+          "fields": {
+            "cap": {
+              "bits": 64,
+              "max": "999",
+              "min": "1",
+              "type": "uint"
+            }
+          },
+          "required": [
+            "cap"
+          ],
+          "type": "record"
+        },
+        "constraints": [],
+        "documentation": "README.md",
+        "familySalt": "0x1212121212121212121212121212121212121212121212121212121212121212",
+        "format": "programmable.classic.source-package.v0.1",
+        "management": {
+          "actions": [],
+          "reads": [],
+          "summary": "Bounded service-owned test fixture."
+        },
+        "name": "foundation-protocol-unit-fixture",
+        "ports": {
+          "inputs": {},
+          "outputs": {}
+        },
+        "requiresHost": [
+          "programmable.module-foundation.host@1"
+        ],
+        "rewardWallet": "0x2222222222222222222222222222222222222222",
+        "source": {
+          "files": [
+            {
+              "path": "UnitFoundation.sol",
+              "sha256": "954ba84fac9f14de062d9248ab8256bdd8159c47aceea736dd3556bd7bfa405a"
+            },
+            {
+              "path": "README.md",
+              "sha256": "ec46bbd7abd4e4ced6af295f4ac00753322097f038d676287bc552123381152c"
+            }
+          ]
+        },
+        "version": "1.0.0",
+        "extensions": {
+          "programmable.module-foundation.protocol@1": {
+            "hostAdapterId": "programmable.module-foundation.host@1",
+            "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+            "platformBps": 30,
+            "platformRecipient": "0xd88539d3c4c460136a733a3fd60cf6bf269079da"
+          }
+        }
+      },
+      "files": [
+        {
+          "path": "UnitFoundation.sol",
+          "sha256": "954ba84fac9f14de062d9248ab8256bdd8159c47aceea736dd3556bd7bfa405a",
+          "encoding": "base64",
+          "bytes": "Ly8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IE1JVApwcmFnbWEgc29saWRpdHkgMC44LjI2OwovLyBVbml0IGFkYXB0ZXIgZml4dHVyZSBvbmx5LiBJdCBpcyBpbnRlbnRpb25hbGx5IG5vdCB0aGUgbGF1bmNoIHByb3RvY29sIGFuZCBjYW5ub3QgcGFzcyBwcm90b2NvbCBjb25mb3JtYW5jZS4KY29udHJhY3QgVW5pdEZvdW5kYXRpb25GYWN0b3J5IHsKIHVpbnQyNTYgcHVibGljIGltbXV0YWJsZSBjaGFpbklkOwogYWRkcmVzcyBwdWJsaWMgaW1tdXRhYmxlIHBvb2xNYW5hZ2VyOwogYWRkcmVzcyBwdWJsaWMgaW1tdXRhYmxlIHBvc2l0aW9uTWFuYWdlcjsKIGFkZHJlc3MgcHVibGljIGltbXV0YWJsZSB1bml2ZXJzYWxSb3V0ZXI7CiBhZGRyZXNzIHB1YmxpYyBpbW11dGFibGUgcGVybWl0MjsKIGFkZHJlc3MgcHVibGljIGltbXV0YWJsZSBob29rRGVwbG95ZXI7CiBieXRlczMyIHB1YmxpYyBpbW11dGFibGUgcG9vbE1hbmFnZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSBwb3NpdGlvbk1hbmFnZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSB1bml2ZXJzYWxSb3V0ZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSBwZXJtaXQyQ29kZUhhc2g7CiBieXRlczMyIHB1YmxpYyBpbW11dGFibGUgaG9va0RlcGxveWVyQ29kZUhhc2g7CiBjb25zdHJ1Y3RvcihhZGRyZXNzWzVdIG1lbW9yeSBhZGRyZXNzZXMsYnl0ZXMzMls1XSBtZW1vcnkgaGFzaGVzKSB7CiBjaGFpbklkPWJsb2NrLmNoYWluaWQ7IHBvb2xNYW5hZ2VyPWFkZHJlc3Nlc1swXTtwb3NpdGlvbk1hbmFnZXI9YWRkcmVzc2VzWzFdO3VuaXZlcnNhbFJvdXRlcj1hZGRyZXNzZXNbMl07cGVybWl0Mj1hZGRyZXNzZXNbM107aG9va0RlcGxveWVyPWFkZHJlc3Nlc1s0XTsKIHBvb2xNYW5hZ2VyQ29kZUhhc2g9aGFzaGVzWzBdO3Bvc2l0aW9uTWFuYWdlckNvZGVIYXNoPWhhc2hlc1sxXTt1bml2ZXJzYWxSb3V0ZXJDb2RlSGFzaD1oYXNoZXNbMl07cGVybWl0MkNvZGVIYXNoPWhhc2hlc1szXTtob29rRGVwbG95ZXJDb2RlSGFzaD1oYXNoZXNbNF07CiB9Cn0KY29udHJhY3QgVW5pdEZvdW5kYXRpb25Ib29rRGVwbG95ZXIgeyBmdW5jdGlvbiBmaXh0dXJlT25seSgpIGV4dGVybmFsIHB1cmUgcmV0dXJucyhib29sKSB7IHJldHVybiB0cnVlOyB9IH0K"
+        },
+        {
+          "path": "README.md",
+          "sha256": "ec46bbd7abd4e4ced6af295f4ac00753322097f038d676287bc552123381152c",
+          "encoding": "base64",
+          "bytes": "U2VydmljZS1vd25lZCBwcm90b2NvbCBhZGFwdGVyIHVuaXQgZml4dHVyZS4gTm8gYXBwcm92YWwgb3IgbGF1bmNoIHByb3RvY29sLg=="
+        }
+      ]
+    },
+    "plan": {
+      "schemaVersion": "programmable.modules.foundation-protocol-build-plan.v1",
+      "submissionId": "00000000-0000-4000-8000-000000000001",
+      "requestDigest": "0x55737b9447dab6cfdc8885de8c2e55924e39281aaab5ae6b299dd9ed2fc5939d",
+      "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+      "factoryComponentId": "factory",
+      "hookDeployerComponentId": "hook-deployer",
+      "factoryImmutableBindings": [
+        {
+          "id": "3",
+          "field": "chainId"
+        },
+        {
+          "id": "5",
+          "field": "poolManager"
+        },
+        {
+          "id": "7",
+          "field": "positionManager"
+        },
+        {
+          "id": "9",
+          "field": "universalRouter"
+        },
+        {
+          "id": "11",
+          "field": "permit2"
+        },
+        {
+          "id": "13",
+          "field": "hookDeployer"
+        },
+        {
+          "id": "15",
+          "field": "poolManagerCodeHash"
+        },
+        {
+          "id": "17",
+          "field": "positionManagerCodeHash"
+        },
+        {
+          "id": "19",
+          "field": "universalRouterCodeHash"
+        },
+        {
+          "id": "21",
+          "field": "permit2CodeHash"
+        },
+        {
+          "id": "23",
+          "field": "hookDeployerCodeHash"
+        }
+      ]
+    },
+    "artifact": {
+      "schemaVersion": "programmable.modules.foundation-protocol-build.v1",
+      "authority": "programmable.module-review.foundation-protocol-build.v1",
+      "subject": {
+        "submissionId": "00000000-0000-4000-8000-000000000001",
+        "principalId": "00000000-0000-4000-8000-000000000002",
+        "author": "0x1111111111111111111111111111111111111111",
+        "requestDigest": "0x55737b9447dab6cfdc8885de8c2e55924e39281aaab5ae6b299dd9ed2fc5939d"
+      },
+      "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+      "packageId": "0xdbcd9f17206ff35bcefb4d6ffad25d047c39fbd95c189016a3060ba1512abfe7",
+      "familyId": "0x346cea54dbdb8405c0ceae7702e0a6dc3743140f49a1c6edc28b1c29597c7cda",
+      "rewardWallet": "0x2222222222222222222222222222222222222222",
+      "sourceManifestHash": "0x4d228784d7bfa10099a8365bd194a2196554e8ee57be6821918507afb0044555",
+      "planDigest": "0xbd8181090721189d33515b7ea831b1c073d2590b1d6c6fb1d3dd95955c1e6066",
+      "hostAdapterId": "programmable.module-foundation.host@1",
+      "platformBps": 30,
+      "platformRecipient": "0xd88539d3c4c460136a733a3fd60cf6bf269079da",
+      "compiler": {
+        "version": "0.8.26+commit.8a97fa7a",
+        "binarySha256": "sha256:35ba6661f3bdaed995fc7af14c405502290cf681b3fd062fe8738cfdf6db14ed",
+        "imageDigest": "sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
+        "settingsHash": "0x3f09bc3e507e276bd9206765ea8307e543caf1c2b36cca70bf12849ded71d80e",
+        "completeInputHash": "0x115f0aa81dd7f60f91fd5f4352eff9f04e40a47c2eb209d2a2f6d471746df338",
+        "reproducible": true
+      },
+      "factory": {
+        "componentId": "factory",
+        "sourcePath": "UnitFoundation.sol",
+        "contractName": "UnitFoundationFactory",
+        "abi": [
+          {
+            "inputs": [
+              {
+                "internalType": "address[5]",
+                "name": "addresses",
+                "type": "address[5]"
+              },
+              {
+                "internalType": "bytes32[5]",
+                "name": "hashes",
+                "type": "bytes32[5]"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+          },
+          {
+            "inputs": [],
+            "name": "chainId",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "hookDeployer",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "hookDeployerCodeHash",
+            "outputs": [
+              {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "permit2",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "permit2CodeHash",
+            "outputs": [
+              {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "poolManager",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "poolManagerCodeHash",
+            "outputs": [
+              {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "positionManager",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "positionManagerCodeHash",
+            "outputs": [
+              {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "universalRouter",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "universalRouterCodeHash",
+            "outputs": [
+              {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ],
+        "creationBytecode": "0x6101e060405234610171576105168038038061001a81610195565b928339810190610140818303126101715781601f820112156101715760a09061004282610195565b81830193818186116101715783905b8682106101755750508060bf840112156101715761006e84610195565b9461014086940191821161017157945b8186106101615746608090815283516001600160a01b039081168752602080860151821660c052604080870151831660e052606080880151841661010052878501519093166101205287516101405290870151610160528087015161018052908601516101a052908501516101c052516103479086826101cf83396080518261012e0152518160aa015260c051816101a0015260e0518161029c015261010051816102e00152610120518161021e015261014051816101e6015261016051816103240152610180518160f401526101a0518161016801526101c051816102640152f35b855181526020958601950161007e565b5f80fd5b81516001600160a01b038116810361017157815260209182019101610051565b6040519190601f01601f191682016001600160401b038111838210176101ba57604052565b634e487b7160e01b5f52604160045260245ffdfe6080806040526004361015610012575f80fd5b5f3560e01c908163028541ed1461030f5750806312261ee7146102cb57806335a9e4df146102875780634ac38ac11461024d5780634e7fe09a1461020957806375d30ce4146101cf578063791b98bc1461018b5780638b452cf6146101515780639a8a0592146101175780639c984e6b146100dd5763dc4c90d314610095575f80fd5b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576020907f00000000000000000000000000000000000000000000000000000000000000008152f3",
+        "creationCodeHash": "0x27ef441031fa09708be061e9034745879297f4aab5946dc17679870575e4d009",
+        "runtimeTemplate": "0x6080806040526004361015610012575f80fd5b5f3560e01c908163028541ed1461030f5750806312261ee7146102cb57806335a9e4df146102875780634ac38ac11461024d5780634e7fe09a1461020957806375d30ce4146101cf578063791b98bc1461018b5780638b452cf6146101515780639a8a0592146101175780639c984e6b146100dd5763dc4c90d314610095575f80fd5b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576020907f00000000000000000000000000000000000000000000000000000000000000008152f3",
+        "runtimeTemplateHash": "0xfa19121aa9aaee3f0737bcb51944f406eb28e34f07224755a62f59f586095b90",
+        "immutableReferences": [
+          {
+            "id": "11",
+            "ranges": [
+              {
+                "start": 736,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "13",
+            "ranges": [
+              {
+                "start": 542,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "15",
+            "ranges": [
+              {
+                "start": 486,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "17",
+            "ranges": [
+              {
+                "start": 804,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "19",
+            "ranges": [
+              {
+                "start": 244,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "21",
+            "ranges": [
+              {
+                "start": 360,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "23",
+            "ranges": [
+              {
+                "start": 612,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "3",
+            "ranges": [
+              {
+                "start": 302,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "5",
+            "ranges": [
+              {
+                "start": 170,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "7",
+            "ranges": [
+              {
+                "start": 416,
+                "length": 32
+              }
+            ]
+          },
+          {
+            "id": "9",
+            "ranges": [
+              {
+                "start": 668,
+                "length": 32
+              }
+            ]
+          }
+        ]
+      },
+      "hookDeployer": {
+        "componentId": "hook-deployer",
+        "sourcePath": "UnitFoundation.sol",
+        "contractName": "UnitFoundationHookDeployer",
+        "abi": [
+          {
+            "inputs": [],
+            "name": "fixtureOnly",
+            "outputs": [
+              {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+              }
+            ],
+            "stateMutability": "pure",
+            "type": "function"
+          }
+        ],
+        "creationBytecode": "0x60808060405234601357603e908160188239f35b5f80fdfe60808060405260043610156011575f80fd5b5f3560e01c635cded48a146023575f80fd5b34603a575f366003190112603a5780600160209252f35b5f80fd",
+        "creationCodeHash": "0xce4bd1a00fc2d40bd1775a1af3d883c7028b4c82f2b4a0ce1c92b5f7b307245a",
+        "runtimeTemplate": "0x60808060405260043610156011575f80fd5b5f3560e01c635cded48a146023575f80fd5b34603a575f366003190112603a5780600160209252f35b5f80fd",
+        "runtimeTemplateHash": "0x5b72ddcd31024ec7d0ff5d2bb2f7e0a045f043ad1d41bb06ce972e30a7406b76",
+        "immutableReferences": []
+      },
+      "factoryImmutableBindings": [
+        {
+          "field": "chainId",
+          "id": "3"
+        },
+        {
+          "field": "poolManager",
+          "id": "5"
+        },
+        {
+          "field": "positionManager",
+          "id": "7"
+        },
+        {
+          "field": "universalRouter",
+          "id": "9"
+        },
+        {
+          "field": "permit2",
+          "id": "11"
+        },
+        {
+          "field": "hookDeployer",
+          "id": "13"
+        },
+        {
+          "field": "poolManagerCodeHash",
+          "id": "15"
+        },
+        {
+          "field": "positionManagerCodeHash",
+          "id": "17"
+        },
+        {
+          "field": "universalRouterCodeHash",
+          "id": "19"
+        },
+        {
+          "field": "permit2CodeHash",
+          "id": "21"
+        },
+        {
+          "field": "hookDeployerCodeHash",
+          "id": "23"
+        }
+      ],
+      "tests": {
+        "schemaVersion": "programmable.modules.foundation-protocol-test-results.v1",
+        "requestDigest": "0x55737b9447dab6cfdc8885de8c2e55924e39281aaab5ae6b299dd9ed2fc5939d",
+        "planDigest": "0xbd8181090721189d33515b7ea831b1c073d2590b1d6c6fb1d3dd95955c1e6066",
+        "harnessDigest": "0xacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac",
+        "execution": "isolated-docker-anvil",
+        "checks": {
+          "officialInfrastructure": true,
+          "bothTokenOrders": true,
+          "zeroCreatorQuoteLaunch": true,
+          "metadataSupplyAndPoolIdentity": true,
+          "initialBuyAtomicity": true,
+          "additionalCreatorPositionOwnership": true,
+          "universalRouterFourForms": true,
+          "quoteFeeAccounting30Bps": true,
+          "fixedPlatformRecipientPayout": true,
+          "settlementAndAllowances": true
+        },
+        "allRequiredChecksPassed": true
+      },
+      "reviewRequired": [
+        "foundation-standard-token-fixed-supply-no-transfer-tax",
+        "foundation-immutable-30bps-platform-quote-fee",
+        "foundation-poolmanager-account-and-currency-deltas",
+        "foundation-official-router-empty-hookdata-four-forms",
+        "foundation-one-sided-position-price-and-creator-nft-ownership",
+        "foundation-immutable-host-module-capabilities",
+        "foundation-reentrancy-partialfill-and-quote-transfer-adversaries",
+        "foundation-source-runtime-and-deployment-binding"
+      ],
+      "approved": false,
+      "registryApproved": false,
+      "available": false,
+      "artifactDigest": "0xda507f27adce0142eb5b34a3f7f4e05043c233cf4acb7928474ea39d7b510390"
+    }
+  },
+  "module": {
+    "source": {
+      "format": "programmable.modules.submission.v0.1",
+      "descriptor": {
+        "author": "0x1111111111111111111111111111111111111111",
+        "components": [
+          {
+            "entrypoint": "FoundationFixtureModuleV1",
+            "id": "module",
+            "runtime": "programmable.module-foundation.solidity@1",
+            "sourcePath": "FoundationFixture.sol"
+          },
+          {
+            "entrypoint": "FoundationFixtureFactoryV1",
+            "id": "factory",
+            "runtime": "programmable.module-foundation.solidity@1",
+            "sourcePath": "FoundationFixture.sol"
+          }
+        ],
+        "configuration": {
+          "fields": {
+            "cap": {
+              "bits": 64,
+              "max": "999",
+              "min": "1",
+              "type": "uint"
+            }
+          },
+          "required": [
+            "cap"
+          ],
+          "type": "record"
+        },
+        "constraints": [],
+        "documentation": "README.md",
+        "extensions": {
+          "programmable.module-foundation@1": {
+            "actions": [
+              {
+                "configurationAbi": [
+                  {
+                    "path": [
+                      "amount"
+                    ],
+                    "type": "uint256"
+                  }
+                ],
+                "id": "take",
+                "selector": "0x4fd9efc4"
+              },
+              {
+                "configurationAbi": [],
+                "id": "observe",
+                "selector": "0x14fc78fc"
+              }
+            ],
+            "configurationAbi": [
+              {
+                "path": [
+                  "cap"
+                ],
+                "type": "uint64"
+              }
+            ],
+            "configurationCodec": "programmable.foundation-abi@1",
+            "defaults": {
+              "cap": "5"
+            },
+            "descriptor": {
+              "abiVersion": 1,
+              "actionGas": 250000,
+              "afterGas": 150000,
+              "beforeGas": 150000,
+              "exclusiveGroup": "0x0000000000000000000000000000000000000000000000000000000000000000",
+              "failOpenAfter": true,
+              "moduleId": "0xf4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e",
+              "phases": 7,
+              "resources": 1
+            },
+            "descriptorHash": "0x51030dc76814087bbac39b4c51e117419203e5576349f703e8015b1d9914841b",
+            "hostAdapterId": "programmable.module-foundation.host@1"
+          }
+        },
+        "familySalt": "0x4545454545454545454545454545454545454545454545454545454545454545",
+        "format": "programmable.classic.source-package.v0.1",
+        "management": {
+          "actions": [
+            {
+              "component": "module",
+              "description": "Withdraw only this module's credited quote.",
+              "entrypoint": "onAction",
+              "id": "take",
+              "inputs": {
+                "fields": {
+                  "amount": {
+                    "bits": 256,
+                    "max": "1000",
+                    "min": "0",
+                    "type": "uint"
+                  }
+                },
+                "required": [
+                  "amount"
+                ],
+                "type": "record"
+              },
+              "label": "Claim own quote",
+              "role": "creator"
+            },
+            {
+              "component": "module",
+              "description": "Exercise a permissionless action.",
+              "entrypoint": "onAction",
+              "id": "observe",
+              "inputs": {
+                "fields": {},
+                "required": [],
+                "type": "record"
+              },
+              "label": "Observe",
+              "role": "anyone"
+            }
+          ],
+          "reads": [
+            {
+              "component": "module",
+              "description": "Observed bounded callback and action counts.",
+              "entrypoint": "counts",
+              "id": "counts",
+              "label": "Counts"
+            }
+          ],
+          "summary": "Fixed conformance fixture."
+        },
+        "name": "foundation-module-review-fixture",
+        "ports": {
+          "inputs": {},
+          "outputs": {}
+        },
+        "requiresHost": [
+          "programmable.module-foundation.host@1"
+        ],
+        "rewardWallet": "0x2222222222222222222222222222222222222222",
+        "source": {
+          "files": [
+            {
+              "path": "FoundationFixture.sol",
+              "sha256": "d4775a212ee736ca2ba4c48f9505dbbf8117c5bdd3c1d6bdc8192fe9b26925f5"
+            },
+            {
+              "path": "README.md",
+              "sha256": "37e825bc055b28920f5e75bcf7158a9ab482d03fe9a653c8e28717e003d0b8bb"
+            }
+          ]
+        },
+        "version": "1.0.0"
+      },
+      "files": [
+        {
+          "path": "FoundationFixture.sol",
+          "sha256": "d4775a212ee736ca2ba4c48f9505dbbf8117c5bdd3c1d6bdc8192fe9b26925f5",
+          "encoding": "base64",
+          "bytes": "Ly8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IE1JVApwcmFnbWEgc29saWRpdHkgMC44LjI2OwovLyBGaXhlZCBzZXJ2aWNlLW93bmVkIHJlZ3Jlc3Npb24gZml4dHVyZS4gTm90IGEgcHVibGljIG1vZHVsZSwgYnVzaW5lc3MgZmVhdHVyZSBvciByZWxlYXNlIGF1dGhvcml0eS4KbGlicmFyeSBUIHsKIHN0cnVjdCBDb250ZXh0IHthZGRyZXNzIGhvc3Q7YWRkcmVzcyB0b2tlbjthZGRyZXNzIHF1b3RlO2FkZHJlc3MgY3JlYXRvcjthZGRyZXNzIGxlZGdlcjtieXRlczMyIHBvb2xJZDt9CiBzdHJ1Y3QgRGVzY3JpcHRvciB7Ynl0ZXMzMiBtb2R1bGVJZDt1aW50MTYgYWJpVmVyc2lvbjt1aW50OCBwaGFzZXM7dWludDggcmVzb3VyY2VzO3VpbnQzMiBiZWZvcmVHYXM7dWludDMyIGFmdGVyR2FzO3VpbnQzMiBhY3Rpb25HYXM7Ym9vbCBmYWlsT3BlbkFmdGVyO2J5dGVzMzIgZXhjbHVzaXZlR3JvdXA7fQogc3RydWN0IFN3YXAge2J5dGVzMzIgcG9vbElkO2FkZHJlc3Mgcm91dGVyO2Jvb2wgYnV5O2Jvb2wgZXhhY3RJbnB1dDt1aW50MjU2IHNwZWNpZmllZEFtb3VudDt1aW50MjU2IGdyb3NzUXVvdGU7aW50MTI4IGNvcmVBbW91bnQwO2ludDEyOCBjb3JlQW1vdW50MTt9Cn0KaW50ZXJmYWNlIExlZGdlciB7ZnVuY3Rpb24gY2xhaW1Nb2R1bGUodWludDI1NiBhbW91bnQpIGV4dGVybmFsO30KY29udHJhY3QgRm91bmRhdGlvbkZpeHR1cmVNb2R1bGVWMSB7CiBULkNvbnRleHQgcHJpdmF0ZSBib3VuZDsKIGJ5dGVzMzIgcHVibGljIGNvbmZpZ3VyYXRpb25IYXNoOwogdWludDY0IHByaXZhdGUgY2FwOwogdWludDI1NiBwdWJsaWMgYmVmb3JlQ291bnQ7dWludDI1NiBwdWJsaWMgYWZ0ZXJDb3VudDt1aW50MjU2IHB1YmxpYyBhY3Rpb25Db3VudDt1aW50MjU2IHB1YmxpYyB3aXRoZHJhd247CiBjb25zdHJ1Y3RvcihULkNvbnRleHQgbWVtb3J5IGMsYnl0ZXMgbWVtb3J5IGNvbmZpZ3VyYXRpb24pIHsKICAgcmVxdWlyZShjb25maWd1cmF0aW9uLmxlbmd0aD09MzIpO2NhcD1hYmkuZGVjb2RlKGNvbmZpZ3VyYXRpb24sKHVpbnQ2NCkpO3JlcXVpcmUoY2FwPjAgJiYgY2FwPDEwMDApOwogICBib3VuZD1jO2NvbmZpZ3VyYXRpb25IYXNoPWtlY2NhazI1Nihjb25maWd1cmF0aW9uKTsKIH0KIGZ1bmN0aW9uIGNvbnRleHQoKSBleHRlcm5hbCB2aWV3IHJldHVybnMoVC5Db250ZXh0IG1lbW9yeSkge3JldHVybiBib3VuZDt9CiBmdW5jdGlvbiBkZXNjcmlwdG9yKCkgZXh0ZXJuYWwgcHVyZSByZXR1cm5zKFQuRGVzY3JpcHRvciBtZW1vcnkpIHsKICAgcmV0dXJuIFQuRGVzY3JpcHRvcihrZWNjYWsyNTYoInByb2dyYW1tYWJsZS5mb3VuZGF0aW9uLmZpeHR1cmUubW9kdWxlLnYxIiksMSw3LDEsMTUwMDAwLDE1MDAwMCwyNTAwMDAsdHJ1ZSxieXRlczMyKDApKTsKIH0KIGZ1bmN0aW9uIG9uQmVmb3JlU3dhcChULlN3YXAgY2FsbGRhdGEgYykgZXh0ZXJuYWwgcmV0dXJucyhieXRlczQpIHsKICAgcmVxdWlyZShtc2cuc2VuZGVyPT1ib3VuZC5ob3N0KTtyZXF1aXJlKGMucG9vbElkPT1ib3VuZC5wb29sSWQgJiYgYy5ncm9zc1F1b3RlPT0wICYmIGMuY29yZUFtb3VudDA9PTAgJiYgYy5jb3JlQW1vdW50MT09MCk7CiAgIHJlcXVpcmUoIShjYXA9PTcgJiYgYy5idXkgJiYgIWMuZXhhY3RJbnB1dCkpOwogICBib29sIGRlbmllZDt0cnkgTGVkZ2VyKGJvdW5kLmxlZGdlcikuY2xhaW1Nb2R1bGUoMSkge30gY2F0Y2gge2RlbmllZD10cnVlO31yZXF1aXJlKGRlbmllZCk7CiAgIGJlZm9yZUNvdW50Kys7cmV0dXJuIHRoaXMub25CZWZvcmVTd2FwLnNlbGVjdG9yOwogfQogZnVuY3Rpb24gb25BZnRlclN3YXAoVC5Td2FwIGNhbGxkYXRhIGMpIGV4dGVybmFsIHJldHVybnMoYnl0ZXM0KSB7CiAgIHJlcXVpcmUobXNnLnNlbmRlcj09Ym91bmQuaG9zdCk7cmVxdWlyZShjLnBvb2xJZD09Ym91bmQucG9vbElkICYmIGMuZ3Jvc3NRdW90ZT4wICYmIGMuY29yZUFtb3VudDAhPTAgJiYgYy5jb3JlQW1vdW50MSE9MCk7CiAgIHJlcXVpcmUoIShjYXA9PTcgJiYgIWMuYnV5ICYmICFjLmV4YWN0SW5wdXQpKTsKICAgYWZ0ZXJDb3VudCsrO3JldHVybiB0aGlzLm9uQWZ0ZXJTd2FwLnNlbGVjdG9yOwogfQogZnVuY3Rpb24gb25BY3Rpb24oYWRkcmVzcyBhY3RvcixieXRlcyBjYWxsZGF0YSBkYXRhKSBleHRlcm5hbCByZXR1cm5zKGJ5dGVzNCkgewogICByZXF1aXJlKG1zZy5zZW5kZXI9PWJvdW5kLmhvc3QpO3JlcXVpcmUoZGF0YS5sZW5ndGg+PTQpOwogICBpZihieXRlczQoZGF0YVs6NF0pPT1ieXRlczQoa2VjY2FrMjU2KCJvYnNlcnZlKCkiKSkpIHtyZXF1aXJlKGRhdGEubGVuZ3RoPT00KTthY3Rpb25Db3VudCsrO3JldHVybiB0aGlzLm9uQWN0aW9uLnNlbGVjdG9yO30KICAgcmVxdWlyZShieXRlczQoZGF0YVs6NF0pPT1ieXRlczQoa2VjY2FrMjU2KCJ0YWtlKHVpbnQyNTYpIikpICYmIGRhdGEubGVuZ3RoPT0zNiAmJiBhY3Rvcj09Ym91bmQuY3JlYXRvcik7CiAgIHVpbnQyNTYgYW1vdW50PWFiaS5kZWNvZGUoZGF0YVs0Ol0sKHVpbnQyNTYpKTtyZXF1aXJlKGFtb3VudDw9Y2FwKTsKICAgTGVkZ2VyKGJvdW5kLmxlZGdlcikuY2xhaW1Nb2R1bGUoYW1vdW50KTt3aXRoZHJhd24rPWFtb3VudDthY3Rpb25Db3VudCsrO3JldHVybiB0aGlzLm9uQWN0aW9uLnNlbGVjdG9yOwogfQogZnVuY3Rpb24gY291bnRzKCkgZXh0ZXJuYWwgdmlldyByZXR1cm5zKHVpbnQyNTYsdWludDI1Nix1aW50MjU2LHVpbnQyNTYpIHtyZXR1cm4oYmVmb3JlQ291bnQsYWZ0ZXJDb3VudCxhY3Rpb25Db3VudCx3aXRoZHJhd24pO30KfQpjb250cmFjdCBGb3VuZGF0aW9uRml4dHVyZUZhY3RvcnlWMSB7CiBmdW5jdGlvbiBjcmVhdGVNb2R1bGUoVC5Db250ZXh0IGNhbGxkYXRhIGMsYnl0ZXMgY2FsbGRhdGEgY29uZmlndXJhdGlvbikgZXh0ZXJuYWwgcmV0dXJucyhhZGRyZXNzKSB7CiAgIHJldHVybiBhZGRyZXNzKG5ldyBGb3VuZGF0aW9uRml4dHVyZU1vZHVsZVYxKGMsY29uZmlndXJhdGlvbikpOwogfQp9Cg=="
+        },
+        {
+          "path": "README.md",
+          "sha256": "37e825bc055b28920f5e75bcf7158a9ab482d03fe9a653c8e28717e003d0b8bb",
+          "encoding": "base64",
+          "bytes": "Rml4ZWQgc2VydmljZS1vd25lZCBjYWxsYmFjayBhbmQgb3duLXF1b3RlLWJ1ZGdldCByZWdyZXNzaW9uIGZpeHR1cmUuIEluZGVwZW5kZW50IHByb2Jlczsgbm90IGEgVjQgcG9vbCBvciByZWxlYXNlLg=="
+        }
+      ]
+    },
+    "plan": {
+      "schemaVersion": "programmable.modules.foundation-build-plan.v1",
+      "submissionId": "00000000-0000-4000-8000-000000000045",
+      "requestDigest": "0xb919443c45537ca8ce6429293b408b8990cfe3175f9095d5f054e883e1148909",
+      "moduleComponentId": "module",
+      "factoryComponentId": "factory",
+      "hostAdapterId": "programmable.module-foundation.host@1",
+      "descriptorHash": "0x51030dc76814087bbac39b4c51e117419203e5576349f703e8015b1d9914841b",
+      "configurationCodec": "programmable.foundation-abi@1",
+      "configurationAbi": [
+        {
+          "path": [
+            "cap"
+          ],
+          "type": "uint64"
+        }
+      ],
+      "cases": [
+        {
+          "id": "funded-budget",
+          "parameters": {
+            "cap": "5"
+          },
+          "budgetQuote": "5",
+          "expectedDeployment": "success",
+          "swaps": [
+            {
+              "buy": true,
+              "exactInput": true,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": true,
+              "exactInput": false,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": false,
+              "exactInput": true,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": false,
+              "exactInput": false,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "observe",
+              "actor": "user",
+              "parameters": {},
+              "expectedOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "id": "take",
+              "actor": "creator",
+              "parameters": {
+                "amount": "2"
+              },
+              "expectedOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ]
+            },
+            {
+              "id": "take",
+              "actor": "user",
+              "parameters": {
+                "amount": "1"
+              },
+              "expectedOutcome": "revert",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ]
+            },
+            {
+              "id": "take",
+              "actor": "creator",
+              "parameters": {
+                "amount": "4"
+              },
+              "expectedOutcome": "revert",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ]
+            },
+            {
+              "id": "take",
+              "actor": "creator",
+              "parameters": {
+                "amount": "3"
+              },
+              "expectedOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000005"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "empty-budget",
+          "parameters": {
+            "cap": "5"
+          },
+          "budgetQuote": "0",
+          "expectedDeployment": "success",
+          "swaps": [
+            {
+              "buy": true,
+              "exactInput": true,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": true,
+              "exactInput": false,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": false,
+              "exactInput": true,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": false,
+              "exactInput": false,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "observe",
+              "actor": "user",
+              "parameters": {},
+              "expectedOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "id": "take",
+              "actor": "creator",
+              "parameters": {
+                "amount": "1"
+              },
+              "expectedOutcome": "revert",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "explicit-vetoes",
+          "parameters": {
+            "cap": "7"
+          },
+          "budgetQuote": "1",
+          "expectedDeployment": "success",
+          "swaps": [
+            {
+              "buy": true,
+              "exactInput": true,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": true,
+              "exactInput": false,
+              "beforeOutcome": "revert",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": false,
+              "exactInput": true,
+              "beforeOutcome": "success",
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "buy": false,
+              "exactInput": false,
+              "beforeOutcome": "success",
+              "afterOutcome": "revert",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "observe",
+              "actor": "user",
+              "parameters": {},
+              "expectedOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            },
+            {
+              "id": "take",
+              "actor": "creator",
+              "parameters": {
+                "amount": "1"
+              },
+              "expectedOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "malformed-config",
+          "parameters": {},
+          "budgetQuote": "0",
+          "expectedDeployment": "revert",
+          "rawConfigBytes": "0x",
+          "swaps": [],
+          "actions": []
+        },
+        {
+          "id": "constructor-rejects-zero",
+          "parameters": {},
+          "budgetQuote": "0",
+          "expectedDeployment": "revert",
+          "rawConfigBytes": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "swaps": [],
+          "actions": []
+        }
+      ]
+    },
+    "artifact": {
+      "schemaVersion": "programmable.modules.foundation-build.v1",
+      "authority": "programmable.module-review.foundation-build.v1",
+      "subject": {
+        "submissionId": "00000000-0000-4000-8000-000000000045",
+        "principalId": "00000000-0000-4000-8000-000000000046",
+        "author": "0x1111111111111111111111111111111111111111",
+        "requestDigest": "0xb919443c45537ca8ce6429293b408b8990cfe3175f9095d5f054e883e1148909"
+      },
+      "packageId": "0xfbefb0e15fecb334670da420bf13a68556619cd73f1683456065f0adbd630003",
+      "familyId": "0x929535560e0b12faeb39fa07a27e8bbe0f7e4b5b461e9f43d08de340d0d469d5",
+      "rewardWallet": "0x2222222222222222222222222222222222222222",
+      "sourceManifestHash": "0x466233e0ca44885bfab67f194bcd9aa7a7bd48cfe97017277edbc34e9f31c483",
+      "manifestHash": "0x60d8ff3fe0b69b3f7a0d9ebf7e125e34e189b84a57eebcf9672035425b223a31",
+      "planDigest": "0x0d70955c6e2fe70ea8142d88d5168b15ac507eec53d03e79e91dd9456c58e912",
+      "hostAdapterId": "programmable.module-foundation.host@1",
+      "descriptor": {
+        "abiVersion": 1,
+        "actionGas": 250000,
+        "afterGas": 150000,
+        "beforeGas": 150000,
+        "exclusiveGroup": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "failOpenAfter": true,
+        "moduleId": "0xf4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e",
+        "phases": 7,
+        "resources": 1
+      },
+      "descriptorHash": "0x51030dc76814087bbac39b4c51e117419203e5576349f703e8015b1d9914841b",
+      "configurationSchemaHash": "0x90dc345a929446297602ce2bc70a3077c93d1d94ccee060c50fdb2535335ce0d",
+      "configurationCodec": "programmable.foundation-abi@1",
+      "configurationAbi": [
+        {
+          "path": [
+            "cap"
+          ],
+          "type": "uint64"
+        }
+      ],
+      "compiler": {
+        "version": "0.8.26+commit.8a97fa7a",
+        "binarySha256": "sha256:35ba6661f3bdaed995fc7af14c405502290cf681b3fd062fe8738cfdf6db14ed",
+        "imageDigest": "sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
+        "settingsHash": "0x3f09bc3e507e276bd9206765ea8307e543caf1c2b36cca70bf12849ded71d80e",
+        "completeInputHash": "0x56f9b16c469528c5b283bc7a054bac46aa37396ed2c0f637be268a759cf64b39",
+        "reproducible": true
+      },
+      "module": {
+        "componentId": "module",
+        "sourcePath": "FoundationFixture.sol",
+        "contractName": "FoundationFixtureModuleV1",
+        "abi": [
+          {
+            "inputs": [
+              {
+                "components": [
+                  {
+                    "internalType": "address",
+                    "name": "host",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "token",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "quote",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "creator",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "ledger",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "bytes32",
+                    "name": "poolId",
+                    "type": "bytes32"
+                  }
+                ],
+                "internalType": "struct T.Context",
+                "name": "c",
+                "type": "tuple"
+              },
+              {
+                "internalType": "bytes",
+                "name": "configuration",
+                "type": "bytes"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+          },
+          {
+            "inputs": [],
+            "name": "actionCount",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "afterCount",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "beforeCount",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "configurationHash",
+            "outputs": [
+              {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "context",
+            "outputs": [
+              {
+                "components": [
+                  {
+                    "internalType": "address",
+                    "name": "host",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "token",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "quote",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "creator",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "ledger",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "bytes32",
+                    "name": "poolId",
+                    "type": "bytes32"
+                  }
+                ],
+                "internalType": "struct T.Context",
+                "name": "",
+                "type": "tuple"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "counts",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "descriptor",
+            "outputs": [
+              {
+                "components": [
+                  {
+                    "internalType": "bytes32",
+                    "name": "moduleId",
+                    "type": "bytes32"
+                  },
+                  {
+                    "internalType": "uint16",
+                    "name": "abiVersion",
+                    "type": "uint16"
+                  },
+                  {
+                    "internalType": "uint8",
+                    "name": "phases",
+                    "type": "uint8"
+                  },
+                  {
+                    "internalType": "uint8",
+                    "name": "resources",
+                    "type": "uint8"
+                  },
+                  {
+                    "internalType": "uint32",
+                    "name": "beforeGas",
+                    "type": "uint32"
+                  },
+                  {
+                    "internalType": "uint32",
+                    "name": "afterGas",
+                    "type": "uint32"
+                  },
+                  {
+                    "internalType": "uint32",
+                    "name": "actionGas",
+                    "type": "uint32"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "failOpenAfter",
+                    "type": "bool"
+                  },
+                  {
+                    "internalType": "bytes32",
+                    "name": "exclusiveGroup",
+                    "type": "bytes32"
+                  }
+                ],
+                "internalType": "struct T.Descriptor",
+                "name": "",
+                "type": "tuple"
+              }
+            ],
+            "stateMutability": "pure",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "actor",
+                "type": "address"
+              },
+              {
+                "internalType": "bytes",
+                "name": "data",
+                "type": "bytes"
+              }
+            ],
+            "name": "onAction",
+            "outputs": [
+              {
+                "internalType": "bytes4",
+                "name": "",
+                "type": "bytes4"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "components": [
+                  {
+                    "internalType": "bytes32",
+                    "name": "poolId",
+                    "type": "bytes32"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "router",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "buy",
+                    "type": "bool"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "exactInput",
+                    "type": "bool"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "specifiedAmount",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "grossQuote",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "coreAmount0",
+                    "type": "int128"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "coreAmount1",
+                    "type": "int128"
+                  }
+                ],
+                "internalType": "struct T.Swap",
+                "name": "c",
+                "type": "tuple"
+              }
+            ],
+            "name": "onAfterSwap",
+            "outputs": [
+              {
+                "internalType": "bytes4",
+                "name": "",
+                "type": "bytes4"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "components": [
+                  {
+                    "internalType": "bytes32",
+                    "name": "poolId",
+                    "type": "bytes32"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "router",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "buy",
+                    "type": "bool"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "exactInput",
+                    "type": "bool"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "specifiedAmount",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "grossQuote",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "coreAmount0",
+                    "type": "int128"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "coreAmount1",
+                    "type": "int128"
+                  }
+                ],
+                "internalType": "struct T.Swap",
+                "name": "c",
+                "type": "tuple"
+              }
+            ],
+            "name": "onBeforeSwap",
+            "outputs": [
+              {
+                "internalType": "bytes4",
+                "name": "",
+                "type": "bytes4"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "withdrawn",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ],
+        "abiHash": "0xe6af3f2ad131eed1734617715a7da9c92f9882602f95088fffa146384f088af1",
+        "creationBytecode": "0x6080604052346101e257610a6a8038038061001981610206565b928339810181810360e081126101e25760c0136101e2576040519160c083016001600160401b038111848210176101f2576040526100568161022b565b83526100646020820161022b565b602084019081526100776040830161022b565b6040850190815261008a6060840161022b565b906060860191825261009e6080850161022b565b6080870190815260a08581015190880190815260c086015190959194916001600160401b0382116101e257019686601f890112156101e25787516001600160401b0381116101f2576100f9601f8201601f1916602001610206565b98818a5260208a0198602083830101116101e257815f9260208093018b5e8a010152875197602089036101e25780896020920103126101e25786516001600160401b038116908190036101e257600780546001600160401b0319168217905580151590816101e6575b50156101e257515f80546001600160a01b03199081166001600160a01b03938416179091559151600180548416918316919091179055915160028054831691841691909117905591516003805484169183169190911790559151600480549092169216919091179055516005552060065560405161082a90816102408239f35b5f80fd5b6103e89150105f610162565b634e487b7160e01b5f52604160045260245ffd5b6040519190601f01601f191682016001600160401b038111838210176101f257604052565b51906001600160a01b03821682036101e25756fe6080806040526004361015610012575f80fd5b5f905f3560e01c908163183ccffa146105e757508063235552fa146104b457806329da573814610496578063303e74df1461035b5780636b2ebada1461033d578063817cc1ea14610306578063b810b68214610278578063c80ec5221461025a578063d0496d6a14610187578063d724c960146101695763fcd93e9714610097575f80fd5b34610117576101003660031901126101175780546001600160a01b0316330361011757600554600435148061015e575b8061014b575b80610138575b1561011757600767ffffffffffffffff8154161480610129575b8061011a575b610117576101026009546106ae565b60095560405163fcd93e9760e01b8152602090f35b80fd5b50610123610630565b156100f3565b50610132610621565b156100ed565b50610141610611565b600f0b15156100d3565b50610154610601565b600f0b15156100cd565b5060a43515156100c7565b50346101175780600319360112610117576020600854604051908152f35b50346101175780600319360112610117578060c09160a06040516101aa81610670565b8281528260208201528260408201528260608201528260808201520152604051906101d482610670565b546001600160a01b0390811680835260015482166020808501918252600254841660408087019182526003548616606080890191825260045488166080808b0191825260055460a09b8c019081528551998a5297518a16968901969096529351881692870192909252518616908501525190931692820192909252905191810191909152f35b50346101175780600319360112610117576020600b54604051908152f35b5034610117576040366003190112610117576004356001600160a01b03811681036103025760243567ffffffffffffffff81116102fe57366023820112156102fe5780600401359267ffffffffffffffff84116101175736602485840101116101175760206102eb8560248501866106d0565b6040516001600160e01b03199091168152f35b8280fd5b5080fd5b50346101175780600319360112610117576080600854600954600a54600b5491604051938452602084015260408301526060820152f35b50346101175780600319360112610117576020600954604051908152f35b503461011757806003193601126101175761ffff81610120926101006040516103838161063f565b8281528260208201528260408201528260608201528260808201528260a08201528260c08201528260e08201520152600163ffffffff6040516103c58161063f565b7ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e8152816020820184815281604084016007815260ff60608601888152816080880193620249f0855260a0890196620249f0885261010060c08b019a6203d0908c5260e081019d8e52019c8d5260206040519e8f927ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e84525116910152511660408c0152511660608a015251166080880152511660a0860152511660c084015251151560e083015251610100820152f35b50346101175780600319360112610117576020600a54604051908152f35b503461059857610100366003190112610598575f546001600160a01b031633036105985760055460043514806105dd575b806105cb575b806105b9575b1561059857600767ffffffffffffffff81541614806105ab575b8061059c575b610598576004545f906001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b8352600160048401525af19081610583575b5061057e575060015b15610117576105696008546106ae565b6008556040516311aaa97d60e11b8152602090f35b610559565b6105909193505f9061068c565b5f915f610550565b5f80fd5b506105a5610630565b15610511565b506105b4610621565b61050b565b506105c2610611565b600f0b156104f1565b506105d4610601565b600f0b156104eb565b5060a435156104e5565b34610598575f366003190112610598576020906006548152f35b60c43580600f0b81036105985790565b60e43580600f0b81036105985790565b60443580151581036105985790565b60643580151581036105985790565b610120810190811067ffffffffffffffff82111761065c57604052565b634e487b7160e01b5f52604160045260245ffd5b60c0810190811067ffffffffffffffff82111761065c57604052565b90601f8019910116810190811067ffffffffffffffff82111761065c57604052565b5f1981146106bc5760010190565b634e487b7160e01b5f52601160045260245ffd5b5f8054909391906001600160a01b03163303610598576004821061059857816004116105985782356001600160e01b03191663053f1e3f60e21b8114610812576313f67bf160e21b149081610807575b816107ee575b5015610598576020908201829003600319011261059857600401359067ffffffffffffffff600754168211610598576004546001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b83528860048401525af180156107e3576107d0575b50600b549182018092116107bc5750600b556107ae600a546106ae565b600a55635c085b4160e11b90565b634e487b7160e01b81526011600452602490fd5b6107dc91505f9061068c565b5f80610791565b6040513d5f823e3d90fd5b6003546001600160a01b0391821691161490505f610726565b602483149150610720565b505090506004915003610598576107ae600a546106ae56",
+        "creationCodeHash": "0xdc664f22cbae6154f07d218513100c38fe48c2ffea37a98fc43e0a8843164825",
+        "runtimeBytecode": "0x6080806040526004361015610012575f80fd5b5f905f3560e01c908163183ccffa146105e757508063235552fa146104b457806329da573814610496578063303e74df1461035b5780636b2ebada1461033d578063817cc1ea14610306578063b810b68214610278578063c80ec5221461025a578063d0496d6a14610187578063d724c960146101695763fcd93e9714610097575f80fd5b34610117576101003660031901126101175780546001600160a01b0316330361011757600554600435148061015e575b8061014b575b80610138575b1561011757600767ffffffffffffffff8154161480610129575b8061011a575b610117576101026009546106ae565b60095560405163fcd93e9760e01b8152602090f35b80fd5b50610123610630565b156100f3565b50610132610621565b156100ed565b50610141610611565b600f0b15156100d3565b50610154610601565b600f0b15156100cd565b5060a43515156100c7565b50346101175780600319360112610117576020600854604051908152f35b50346101175780600319360112610117578060c09160a06040516101aa81610670565b8281528260208201528260408201528260608201528260808201520152604051906101d482610670565b546001600160a01b0390811680835260015482166020808501918252600254841660408087019182526003548616606080890191825260045488166080808b0191825260055460a09b8c019081528551998a5297518a16968901969096529351881692870192909252518616908501525190931692820192909252905191810191909152f35b50346101175780600319360112610117576020600b54604051908152f35b5034610117576040366003190112610117576004356001600160a01b03811681036103025760243567ffffffffffffffff81116102fe57366023820112156102fe5780600401359267ffffffffffffffff84116101175736602485840101116101175760206102eb8560248501866106d0565b6040516001600160e01b03199091168152f35b8280fd5b5080fd5b50346101175780600319360112610117576080600854600954600a54600b5491604051938452602084015260408301526060820152f35b50346101175780600319360112610117576020600954604051908152f35b503461011757806003193601126101175761ffff81610120926101006040516103838161063f565b8281528260208201528260408201528260608201528260808201528260a08201528260c08201528260e08201520152600163ffffffff6040516103c58161063f565b7ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e8152816020820184815281604084016007815260ff60608601888152816080880193620249f0855260a0890196620249f0885261010060c08b019a6203d0908c5260e081019d8e52019c8d5260206040519e8f927ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e84525116910152511660408c0152511660608a015251166080880152511660a0860152511660c084015251151560e083015251610100820152f35b50346101175780600319360112610117576020600a54604051908152f35b503461059857610100366003190112610598575f546001600160a01b031633036105985760055460043514806105dd575b806105cb575b806105b9575b1561059857600767ffffffffffffffff81541614806105ab575b8061059c575b610598576004545f906001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b8352600160048401525af19081610583575b5061057e575060015b15610117576105696008546106ae565b6008556040516311aaa97d60e11b8152602090f35b610559565b6105909193505f9061068c565b5f915f610550565b5f80fd5b506105a5610630565b15610511565b506105b4610621565b61050b565b506105c2610611565b600f0b156104f1565b506105d4610601565b600f0b156104eb565b5060a435156104e5565b34610598575f366003190112610598576020906006548152f35b60c43580600f0b81036105985790565b60e43580600f0b81036105985790565b60443580151581036105985790565b60643580151581036105985790565b610120810190811067ffffffffffffffff82111761065c57604052565b634e487b7160e01b5f52604160045260245ffd5b60c0810190811067ffffffffffffffff82111761065c57604052565b90601f8019910116810190811067ffffffffffffffff82111761065c57604052565b5f1981146106bc5760010190565b634e487b7160e01b5f52601160045260245ffd5b5f8054909391906001600160a01b03163303610598576004821061059857816004116105985782356001600160e01b03191663053f1e3f60e21b8114610812576313f67bf160e21b149081610807575b816107ee575b5015610598576020908201829003600319011261059857600401359067ffffffffffffffff600754168211610598576004546001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b83528860048401525af180156107e3576107d0575b50600b549182018092116107bc5750600b556107ae600a546106ae565b600a55635c085b4160e11b90565b634e487b7160e01b81526011600452602490fd5b6107dc91505f9061068c565b5f80610791565b6040513d5f823e3d90fd5b6003546001600160a01b0391821691161490505f610726565b602483149150610720565b505090506004915003610598576107ae600a546106ae56",
+        "runtimeCodeHash": "0x48cdde4d8adbbca8f6aadac583d4da90d819755812373bf2e18464cc213a2d01",
+        "externalSelectors": [
+          "0x183ccffa",
+          "0x235552fa",
+          "0x29da5738",
+          "0x303e74df",
+          "0x6b2ebada",
+          "0x817cc1ea",
+          "0xb810b682",
+          "0xc80ec522",
+          "0xd0496d6a",
+          "0xd724c960",
+          "0xfcd93e97"
+        ]
+      },
+      "factory": {
+        "componentId": "factory",
+        "sourcePath": "FoundationFixture.sol",
+        "contractName": "FoundationFixtureFactoryV1",
+        "abi": [
+          {
+            "inputs": [
+              {
+                "components": [
+                  {
+                    "internalType": "address",
+                    "name": "host",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "token",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "quote",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "creator",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "address",
+                    "name": "ledger",
+                    "type": "address"
+                  },
+                  {
+                    "internalType": "bytes32",
+                    "name": "poolId",
+                    "type": "bytes32"
+                  }
+                ],
+                "internalType": "struct T.Context",
+                "name": "c",
+                "type": "tuple"
+              },
+              {
+                "internalType": "bytes",
+                "name": "configuration",
+                "type": "bytes"
+              }
+            ],
+            "name": "createModule",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ],
+        "abiHash": "0x82f78f3b9060f6cdacad8c77273cc414ef1be53771244d4eeb62c7a811250c53",
+        "creationBytecode": "0x60808060405234601557610bfa908161001a8239f35b5f80fdfe6080806040526004361015610012575f80fd5b5f3560e01c632b2da54814610025575f80fd5b3461017757366003190160e081126101775760c0136101775760c43567ffffffffffffffff8111610177573660238201121561017757806004013567ffffffffffffffff811161017757366024828401011161017757610a6a8084019084821067ffffffffffffffff83111761017b5761019085396004356001600160a01b038116908190036101775781526024356001600160a01b038116908190036101775760208201526044356001600160a01b038116908190036101775760408201526064356001600160a01b038116908190036101775760608201526084356001600160a01b038116929083900361017757806024610100958795608086015260a43560a086015260e060c08601528260e086015201858401375f848284010152601f8019910116010301905ff0801561016c576040516001600160a01b039091168152602090f35b6040513d5f823e3d90fd5b5f80fd5b634e487b7160e01b5f52604160045260245ffdfe6080604052346101e257610a6a8038038061001981610206565b928339810181810360e081126101e25760c0136101e2576040519160c083016001600160401b038111848210176101f2576040526100568161022b565b83526100646020820161022b565b602084019081526100776040830161022b565b6040850190815261008a6060840161022b565b906060860191825261009e6080850161022b565b6080870190815260a08581015190880190815260c086015190959194916001600160401b0382116101e257019686601f890112156101e25787516001600160401b0381116101f2576100f9601f8201601f1916602001610206565b98818a5260208a0198602083830101116101e257815f9260208093018b5e8a010152875197602089036101e25780896020920103126101e25786516001600160401b038116908190036101e257600780546001600160401b0319168217905580151590816101e6575b50156101e257515f80546001600160a01b03199081166001600160a01b03938416179091559151600180548416918316919091179055915160028054831691841691909117905591516003805484169183169190911790559151600480549092169216919091179055516005552060065560405161082a90816102408239f35b5f80fd5b6103e89150105f610162565b634e487b7160e01b5f52604160045260245ffd5b6040519190601f01601f191682016001600160401b038111838210176101f257604052565b51906001600160a01b03821682036101e25756fe6080806040526004361015610012575f80fd5b5f905f3560e01c908163183ccffa146105e757508063235552fa146104b457806329da573814610496578063303e74df1461035b5780636b2ebada1461033d578063817cc1ea14610306578063b810b68214610278578063c80ec5221461025a578063d0496d6a14610187578063d724c960146101695763fcd93e9714610097575f80fd5b34610117576101003660031901126101175780546001600160a01b0316330361011757600554600435148061015e575b8061014b575b80610138575b1561011757600767ffffffffffffffff8154161480610129575b8061011a575b610117576101026009546106ae565b60095560405163fcd93e9760e01b8152602090f35b80fd5b50610123610630565b156100f3565b50610132610621565b156100ed565b50610141610611565b600f0b15156100d3565b50610154610601565b600f0b15156100cd565b5060a43515156100c7565b50346101175780600319360112610117576020600854604051908152f35b50346101175780600319360112610117578060c09160a06040516101aa81610670565b8281528260208201528260408201528260608201528260808201520152604051906101d482610670565b546001600160a01b0390811680835260015482166020808501918252600254841660408087019182526003548616606080890191825260045488166080808b0191825260055460a09b8c019081528551998a5297518a16968901969096529351881692870192909252518616908501525190931692820192909252905191810191909152f35b50346101175780600319360112610117576020600b54604051908152f35b5034610117576040366003190112610117576004356001600160a01b03811681036103025760243567ffffffffffffffff81116102fe57366023820112156102fe5780600401359267ffffffffffffffff84116101175736602485840101116101175760206102eb8560248501866106d0565b6040516001600160e01b03199091168152f35b8280fd5b5080fd5b50346101175780600319360112610117576080600854600954600a54600b5491604051938452602084015260408301526060820152f35b50346101175780600319360112610117576020600954604051908152f35b503461011757806003193601126101175761ffff81610120926101006040516103838161063f565b8281528260208201528260408201528260608201528260808201528260a08201528260c08201528260e08201520152600163ffffffff6040516103c58161063f565b7ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e8152816020820184815281604084016007815260ff60608601888152816080880193620249f0855260a0890196620249f0885261010060c08b019a6203d0908c5260e081019d8e52019c8d5260206040519e8f927ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e84525116910152511660408c0152511660608a015251166080880152511660a0860152511660c084015251151560e083015251610100820152f35b50346101175780600319360112610117576020600a54604051908152f35b503461059857610100366003190112610598575f546001600160a01b031633036105985760055460043514806105dd575b806105cb575b806105b9575b1561059857600767ffffffffffffffff81541614806105ab575b8061059c575b610598576004545f906001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b8352600160048401525af19081610583575b5061057e575060015b15610117576105696008546106ae565b6008556040516311aaa97d60e11b8152602090f35b610559565b6105909193505f9061068c565b5f915f610550565b5f80fd5b506105a5610630565b15610511565b506105b4610621565b61050b565b506105c2610611565b600f0b156104f1565b506105d4610601565b600f0b156104eb565b5060a435156104e5565b34610598575f366003190112610598576020906006548152f35b60c43580600f0b81036105985790565b60e43580600f0b81036105985790565b60443580151581036105985790565b60643580151581036105985790565b610120810190811067ffffffffffffffff82111761065c57604052565b634e487b7160e01b5f52604160045260245ffd5b60c0810190811067ffffffffffffffff82111761065c57604052565b90601f8019910116810190811067ffffffffffffffff82111761065c57604052565b5f1981146106bc5760010190565b634e487b7160e01b5f52601160045260245ffd5b5f8054909391906001600160a01b03163303610598576004821061059857816004116105985782356001600160e01b03191663053f1e3f60e21b8114610812576313f67bf160e21b149081610807575b816107ee575b5015610598576020908201829003600319011261059857600401359067ffffffffffffffff600754168211610598576004546001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b83528860048401525af180156107e3576107d0575b50600b549182018092116107bc5750600b556107ae600a546106ae565b600a55635c085b4160e11b90565b634e487b7160e01b81526011600452602490fd5b6107dc91505f9061068c565b5f80610791565b6040513d5f823e3d90fd5b6003546001600160a01b0391821691161490505f610726565b602483149150610720565b505090506004915003610598576107ae600a546106ae56",
+        "creationCodeHash": "0x8af3f6af1fd3782cf8bf656fbbdab36f60f1d1509ebb6b1c17e6123b38c97f9f",
+        "runtimeBytecode": "0x6080806040526004361015610012575f80fd5b5f3560e01c632b2da54814610025575f80fd5b3461017757366003190160e081126101775760c0136101775760c43567ffffffffffffffff8111610177573660238201121561017757806004013567ffffffffffffffff811161017757366024828401011161017757610a6a8084019084821067ffffffffffffffff83111761017b5761019085396004356001600160a01b038116908190036101775781526024356001600160a01b038116908190036101775760208201526044356001600160a01b038116908190036101775760408201526064356001600160a01b038116908190036101775760608201526084356001600160a01b038116929083900361017757806024610100958795608086015260a43560a086015260e060c08601528260e086015201858401375f848284010152601f8019910116010301905ff0801561016c576040516001600160a01b039091168152602090f35b6040513d5f823e3d90fd5b5f80fd5b634e487b7160e01b5f52604160045260245ffdfe6080604052346101e257610a6a8038038061001981610206565b928339810181810360e081126101e25760c0136101e2576040519160c083016001600160401b038111848210176101f2576040526100568161022b565b83526100646020820161022b565b602084019081526100776040830161022b565b6040850190815261008a6060840161022b565b906060860191825261009e6080850161022b565b6080870190815260a08581015190880190815260c086015190959194916001600160401b0382116101e257019686601f890112156101e25787516001600160401b0381116101f2576100f9601f8201601f1916602001610206565b98818a5260208a0198602083830101116101e257815f9260208093018b5e8a010152875197602089036101e25780896020920103126101e25786516001600160401b038116908190036101e257600780546001600160401b0319168217905580151590816101e6575b50156101e257515f80546001600160a01b03199081166001600160a01b03938416179091559151600180548416918316919091179055915160028054831691841691909117905591516003805484169183169190911790559151600480549092169216919091179055516005552060065560405161082a90816102408239f35b5f80fd5b6103e89150105f610162565b634e487b7160e01b5f52604160045260245ffd5b6040519190601f01601f191682016001600160401b038111838210176101f257604052565b51906001600160a01b03821682036101e25756fe6080806040526004361015610012575f80fd5b5f905f3560e01c908163183ccffa146105e757508063235552fa146104b457806329da573814610496578063303e74df1461035b5780636b2ebada1461033d578063817cc1ea14610306578063b810b68214610278578063c80ec5221461025a578063d0496d6a14610187578063d724c960146101695763fcd93e9714610097575f80fd5b34610117576101003660031901126101175780546001600160a01b0316330361011757600554600435148061015e575b8061014b575b80610138575b1561011757600767ffffffffffffffff8154161480610129575b8061011a575b610117576101026009546106ae565b60095560405163fcd93e9760e01b8152602090f35b80fd5b50610123610630565b156100f3565b50610132610621565b156100ed565b50610141610611565b600f0b15156100d3565b50610154610601565b600f0b15156100cd565b5060a43515156100c7565b50346101175780600319360112610117576020600854604051908152f35b50346101175780600319360112610117578060c09160a06040516101aa81610670565b8281528260208201528260408201528260608201528260808201520152604051906101d482610670565b546001600160a01b0390811680835260015482166020808501918252600254841660408087019182526003548616606080890191825260045488166080808b0191825260055460a09b8c019081528551998a5297518a16968901969096529351881692870192909252518616908501525190931692820192909252905191810191909152f35b50346101175780600319360112610117576020600b54604051908152f35b5034610117576040366003190112610117576004356001600160a01b03811681036103025760243567ffffffffffffffff81116102fe57366023820112156102fe5780600401359267ffffffffffffffff84116101175736602485840101116101175760206102eb8560248501866106d0565b6040516001600160e01b03199091168152f35b8280fd5b5080fd5b50346101175780600319360112610117576080600854600954600a54600b5491604051938452602084015260408301526060820152f35b50346101175780600319360112610117576020600954604051908152f35b503461011757806003193601126101175761ffff81610120926101006040516103838161063f565b8281528260208201528260408201528260608201528260808201528260a08201528260c08201528260e08201520152600163ffffffff6040516103c58161063f565b7ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e8152816020820184815281604084016007815260ff60608601888152816080880193620249f0855260a0890196620249f0885261010060c08b019a6203d0908c5260e081019d8e52019c8d5260206040519e8f927ff4c4d98e878b07656fa02599ba6e7e83b943bbe0089dd68364aed9771b7a377e84525116910152511660408c0152511660608a015251166080880152511660a0860152511660c084015251151560e083015251610100820152f35b50346101175780600319360112610117576020600a54604051908152f35b503461059857610100366003190112610598575f546001600160a01b031633036105985760055460043514806105dd575b806105cb575b806105b9575b1561059857600767ffffffffffffffff81541614806105ab575b8061059c575b610598576004545f906001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b8352600160048401525af19081610583575b5061057e575060015b15610117576105696008546106ae565b6008556040516311aaa97d60e11b8152602090f35b610559565b6105909193505f9061068c565b5f915f610550565b5f80fd5b506105a5610630565b15610511565b506105b4610621565b61050b565b506105c2610611565b600f0b156104f1565b506105d4610601565b600f0b156104eb565b5060a435156104e5565b34610598575f366003190112610598576020906006548152f35b60c43580600f0b81036105985790565b60e43580600f0b81036105985790565b60443580151581036105985790565b60643580151581036105985790565b610120810190811067ffffffffffffffff82111761065c57604052565b634e487b7160e01b5f52604160045260245ffd5b60c0810190811067ffffffffffffffff82111761065c57604052565b90601f8019910116810190811067ffffffffffffffff82111761065c57604052565b5f1981146106bc5760010190565b634e487b7160e01b5f52601160045260245ffd5b5f8054909391906001600160a01b03163303610598576004821061059857816004116105985782356001600160e01b03191663053f1e3f60e21b8114610812576313f67bf160e21b149081610807575b816107ee575b5015610598576020908201829003600319011261059857600401359067ffffffffffffffff600754168211610598576004546001600160a01b0316803b15610598575f80916024604051809481936357b9990360e01b83528860048401525af180156107e3576107d0575b50600b549182018092116107bc5750600b556107ae600a546106ae565b600a55635c085b4160e11b90565b634e487b7160e01b81526011600452602490fd5b6107dc91505f9061068c565b5f80610791565b6040513d5f823e3d90fd5b6003546001600160a01b0391821691161490505f610726565b602483149150610720565b505090506004915003610598576107ae600a546106ae56",
+        "runtimeCodeHash": "0xe6cd0803ea8ed79f72e950179084e8763e8bc02daac02e95ed3b9e9288ca2505",
+        "externalSelectors": [
+          "0x2b2da548"
+        ]
+      },
+      "cases": [
+        {
+          "actions": [
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "observe",
+              "parameters": {}
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "take",
+              "parameters": {
+                "amount": "2"
+              }
+            },
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ],
+              "expectedOutcome": "revert",
+              "id": "take",
+              "parameters": {
+                "amount": "1"
+              }
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ],
+              "expectedOutcome": "revert",
+              "id": "take",
+              "parameters": {
+                "amount": "4"
+              }
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000005"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "take",
+              "parameters": {
+                "amount": "3"
+              }
+            }
+          ],
+          "budgetQuote": "5",
+          "expectedDeployment": "success",
+          "id": "funded-budget",
+          "parameters": {
+            "cap": "5"
+          },
+          "swaps": [
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": true,
+              "exactInput": true
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": true,
+              "exactInput": false
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": false,
+              "exactInput": true
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": false,
+              "exactInput": false
+            }
+          ],
+          "configBytes": "0x0000000000000000000000000000000000000000000000000000000000000005",
+          "configHash": "0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0",
+          "compiledActions": [
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "observe",
+              "parameters": {},
+              "data": "0x14fc78fc"
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "take",
+              "parameters": {
+                "amount": "2"
+              },
+              "data": "0x4fd9efc40000000000000000000000000000000000000000000000000000000000000002"
+            },
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ],
+              "expectedOutcome": "revert",
+              "id": "take",
+              "parameters": {
+                "amount": "1"
+              },
+              "data": "0x4fd9efc40000000000000000000000000000000000000000000000000000000000000001"
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002"
+                }
+              ],
+              "expectedOutcome": "revert",
+              "id": "take",
+              "parameters": {
+                "amount": "4"
+              },
+              "data": "0x4fd9efc40000000000000000000000000000000000000000000000000000000000000004"
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000005"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "take",
+              "parameters": {
+                "amount": "3"
+              },
+              "data": "0x4fd9efc40000000000000000000000000000000000000000000000000000000000000003"
+            }
+          ]
+        },
+        {
+          "actions": [
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "observe",
+              "parameters": {}
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "revert",
+              "id": "take",
+              "parameters": {
+                "amount": "1"
+              }
+            }
+          ],
+          "budgetQuote": "0",
+          "expectedDeployment": "success",
+          "id": "empty-budget",
+          "parameters": {
+            "cap": "5"
+          },
+          "swaps": [
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": true,
+              "exactInput": true
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": true,
+              "exactInput": false
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": false,
+              "exactInput": true
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": false,
+              "exactInput": false
+            }
+          ],
+          "configBytes": "0x0000000000000000000000000000000000000000000000000000000000000005",
+          "configHash": "0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0",
+          "compiledActions": [
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "observe",
+              "parameters": {},
+              "data": "0x14fc78fc"
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "revert",
+              "id": "take",
+              "parameters": {
+                "amount": "1"
+              },
+              "data": "0x4fd9efc40000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        {
+          "actions": [
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "observe",
+              "parameters": {}
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "take",
+              "parameters": {
+                "amount": "1"
+              }
+            }
+          ],
+          "budgetQuote": "1",
+          "expectedDeployment": "success",
+          "id": "explicit-vetoes",
+          "parameters": {
+            "cap": "7"
+          },
+          "swaps": [
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": true,
+              "exactInput": true
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "revert",
+              "buy": true,
+              "exactInput": false
+            },
+            {
+              "afterOutcome": "success",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": false,
+              "exactInput": true
+            },
+            {
+              "afterOutcome": "revert",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "beforeOutcome": "success",
+              "buy": false,
+              "exactInput": false
+            }
+          ],
+          "configBytes": "0x0000000000000000000000000000000000000000000000000000000000000007",
+          "configHash": "0xa66cc928b5edb82af9bd49922954155ab7b0942694bea4ce44661d9a8736c688",
+          "compiledActions": [
+            {
+              "actor": "user",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "observe",
+              "parameters": {},
+              "data": "0x14fc78fc"
+            },
+            {
+              "actor": "creator",
+              "assertions": [
+                {
+                  "callData": "0x817cc1ea",
+                  "expectedData": "0x0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001"
+                }
+              ],
+              "expectedOutcome": "success",
+              "id": "take",
+              "parameters": {
+                "amount": "1"
+              },
+              "data": "0x4fd9efc40000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        },
+        {
+          "actions": [],
+          "budgetQuote": "0",
+          "expectedDeployment": "revert",
+          "id": "malformed-config",
+          "parameters": {},
+          "rawConfigBytes": "0x",
+          "swaps": [],
+          "configBytes": "0x",
+          "configHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+          "compiledActions": []
+        },
+        {
+          "actions": [],
+          "budgetQuote": "0",
+          "expectedDeployment": "revert",
+          "id": "constructor-rejects-zero",
+          "parameters": {},
+          "rawConfigBytes": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "swaps": [],
+          "configBytes": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "configHash": "0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563",
+          "compiledActions": []
+        }
+      ],
+      "tests": {
+        "schemaVersion": "programmable.modules.foundation-test-results.v1",
+        "requestDigest": "0xb919443c45537ca8ce6429293b408b8990cfe3175f9095d5f054e883e1148909",
+        "planDigest": "0x0d70955c6e2fe70ea8142d88d5168b15ac507eec53d03e79e91dd9456c58e912",
+        "harnessDigest": "0xacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac",
+        "execution": "isolated-docker-anvil",
+        "allRequiredChecksPassed": true,
+        "cases": [
+          {
+            "id": "funded-budget",
+            "configHash": "0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0",
+            "deploymentMatched": true,
+            "codeHashMatched": true,
+            "contextMatched": true,
+            "descriptorMatched": true,
+            "configurationMatched": true,
+            "freshInstances": true,
+            "unauthorizedCallbacksReverted": true,
+            "boundedCallbacks": true,
+            "ownQuoteBudgetConserved": true,
+            "stateAssertions": true,
+            "swapOutcomes": [
+              true,
+              true,
+              true,
+              true
+            ],
+            "actionOutcomes": [
+              true,
+              true,
+              true,
+              true,
+              true
+            ]
+          },
+          {
+            "id": "empty-budget",
+            "configHash": "0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0",
+            "deploymentMatched": true,
+            "codeHashMatched": true,
+            "contextMatched": true,
+            "descriptorMatched": true,
+            "configurationMatched": true,
+            "freshInstances": true,
+            "unauthorizedCallbacksReverted": true,
+            "boundedCallbacks": true,
+            "ownQuoteBudgetConserved": true,
+            "stateAssertions": true,
+            "swapOutcomes": [
+              true,
+              true,
+              true,
+              true
+            ],
+            "actionOutcomes": [
+              true,
+              true
+            ]
+          },
+          {
+            "id": "explicit-vetoes",
+            "configHash": "0xa66cc928b5edb82af9bd49922954155ab7b0942694bea4ce44661d9a8736c688",
+            "deploymentMatched": true,
+            "codeHashMatched": true,
+            "contextMatched": true,
+            "descriptorMatched": true,
+            "configurationMatched": true,
+            "freshInstances": true,
+            "unauthorizedCallbacksReverted": true,
+            "boundedCallbacks": true,
+            "ownQuoteBudgetConserved": true,
+            "stateAssertions": true,
+            "swapOutcomes": [
+              true,
+              true,
+              true,
+              true
+            ],
+            "actionOutcomes": [
+              true,
+              true
+            ]
+          },
+          {
+            "id": "malformed-config",
+            "configHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "deploymentMatched": true,
+            "codeHashMatched": null,
+            "contextMatched": null,
+            "descriptorMatched": null,
+            "configurationMatched": null,
+            "freshInstances": null,
+            "unauthorizedCallbacksReverted": null,
+            "boundedCallbacks": null,
+            "ownQuoteBudgetConserved": null,
+            "stateAssertions": null,
+            "swapOutcomes": [],
+            "actionOutcomes": []
+          },
+          {
+            "id": "constructor-rejects-zero",
+            "configHash": "0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563",
+            "deploymentMatched": true,
+            "codeHashMatched": null,
+            "contextMatched": null,
+            "descriptorMatched": null,
+            "configurationMatched": null,
+            "freshInstances": null,
+            "unauthorizedCallbacksReverted": null,
+            "boundedCallbacks": null,
+            "ownQuoteBudgetConserved": null,
+            "stateAssertions": null,
+            "swapOutcomes": [],
+            "actionOutcomes": []
+          }
+        ]
+      },
+      "reviewRequired": [
+        "complete-configuration-and-action-domain",
+        "host-only-callbacks-and-bound-context",
+        "declared-phases-gas-and-failure-policy",
+        "own-quote-budget-and-external-asset-behavior",
+        "fresh-non-upgradeable-instance-and-factory",
+        "affected-resource-and-order-interactions"
+      ],
+      "approved": false,
+      "registryApproved": false,
+      "available": false,
+      "artifactDigest": "0xfd76e97f5bab37b867eff9dc7164b9b78210b80c5d51bbab78369a35656f9ea0"
+    }
+  }
+}

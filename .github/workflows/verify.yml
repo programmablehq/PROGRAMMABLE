@@ -560,11 +560,12 @@ jobs:
       - name: Verify contract release bindings, forks, and late migration
         env:
           LATE_MIGRATION_FORK_RPC_URL: https://eth-mainnet.public.blastapi.io
+          FOUNDATION_RPC_URL: https://rpc.mainnet.chain.robinhood.com
         run: node scripts/ci/contracts-ci.mjs release
 
   contracts-analysis:
     name: Contracts static analysis
-    # Slither creates its own complete build-info for both profiles; it does
+    # Slither creates its own complete build-info for each profile; it does
     # not consume the default artifact and need not wait for that producer.
     needs: [scope]
     if: needs.scope.outputs.contracts == 'true'
@@ -597,7 +598,7 @@ jobs:
       - name: Install exact Slither
         run: pipx install slither-analyzer==0.11.5
 
-      - name: Run both unchanged Slither profiles in their isolated checkout
+      - name: Run all isolated source compiler profiles
         run: node scripts/ci/contracts-ci.mjs analysis
 
   contracts:

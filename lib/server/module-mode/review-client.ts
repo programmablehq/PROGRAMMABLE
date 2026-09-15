@@ -12,10 +12,13 @@ import configuredQuoteEngineReviewRelease from "@/config/module-engine/review-re
 import { MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 } from "@/lib/module-mode/review-engine-shared-quote";
 import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "@/lib/module-mode/review-engine-position-manager";
 import { computeModuleModeReleaseDigest, moduleHash, moduleRecord, MODULE_MODE_SOURCE_VERSION_V2 } from "@/lib/module-mode/release";
-import { isReviewId, parseReviewAttempt, parseReviewJob, parseReviewPlan, parseReviewSourceCorrection, reviewDigest, reviewRecord, parseReviewQueueItem, type ReviewDetail } from "@/lib/module-mode/review-contract";
+import { isReviewId, parseReviewAttempt, parseReviewJob, parseReviewPlan, parseReviewSourceCorrection, reviewDigest, reviewRecord, parseReviewQueueItem, type ReviewDetail,
+  FOUNDATION_SETTINGS_V1, FOUNDATION_HOST_V1, FOUNDATION_BUILD_SCHEMA_V1, FOUNDATION_PROTOCOL_BUILD_V1, FOUNDATION_PROTOCOL_EXTENSION_V1,
+  foundationProtocolReviewManifestV1, foundationProtocolReviewManifestHashV1, type FoundationBuildArtifactV1, type FoundationProtocolBuildV1 } from "@/lib/module-mode/review-contract";
+import { createFoundationModuleManifestV1, hashFoundationModuleManifestV1, readFoundationPackageExtensionV1, encodeFoundationConfigurationV1, encodeFoundationActionV1 } from "@/lib/module-foundation/manifest";
 import { nativeCanonicalJson } from "@/lib/module-mode/native-catalog";
 import { unsupportedManagementCapabilities } from "@/lib/module-mode/management-manifest";
-import { validateModuleSubmissionRequest, MODULE_TRANSPORT_LIMITS } from "@/packages/classic-modules/src/open-transport.mjs";
+import { validateModuleSubmissionRequest, MODULE_TRANSPORT_LIMITS, type ModuleSubmissionRequest } from "@/packages/classic-modules/src/open-transport.mjs";
 import { createPrivyWalletPrincipalAuthenticatorV1, WalletPrincipalAuthenticationErrorV1, type WalletPrincipalAuthenticatorV1 } from "../creator-article/wallet-principal.server";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "../custom-launch/wallet-admin-bff-assertion-v2";
 import { parseStrictJson } from "../projection-target/canonical-json";
@@ -48,6 +51,61 @@ async function bytes(input: Request | Response, maximum: number) {
 }
 function parsed(value: Uint8Array, maximum: number) { return parseStrictJson(new TextDecoder("utf-8", { fatal: true }).decode(value), { maximumBytes: maximum, maximumDepth: 40 }); }
 function jsonHeader(input: Request | Response) { if (input.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") fail(415, "MODULE_REVIEW_JSON_REQUIRED"); }
+
+/** Reconstruct source/ABI bytes from the authenticated submission; never execute author code in the BFF. */
+export function verifyFoundationReviewSourceV1(artifact: FoundationBuildArtifactV1 | FoundationProtocolBuildV1, source: ModuleSubmissionRequest): void {
+  const protocol = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1;
+  const descriptor = source.descriptor;
+  const checked = validateModuleSubmissionRequest(source);
+  if (!checked.ok || checked.totalSourceBytes > 4 * 1024 * 1024 || checked.requestDigest !== artifact.subject.requestDigest
+    || descriptor.author.toLowerCase() !== artifact.subject.author || checked.packageId !== artifact.packageId || checked.familyId !== artifact.familyId
+    || descriptor.rewardWallet.toLowerCase() !== artifact.rewardWallet || artifact.sourceManifestHash !== reviewDigest("programmable.modules.source-manifest.v1", descriptor)
+    || !descriptor.requiresHost.includes(FOUNDATION_HOST_V1)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+  const contracts = protocol ? [artifact.factory, artifact.hookDeployer] : [artifact.factory, artifact.module];
+  for (const contract of contracts) {
+    const component = descriptor.components.find(item => item.id === contract.componentId);
+    if (!component || component.runtime !== (protocol ? "programmable.module-foundation.protocol-solidity@1" : "programmable.module-foundation.solidity@1")
+      || component.sourcePath !== contract.sourcePath || component.entrypoint !== contract.contractName) fail(502, "MODULE_REVIEW_BUILD_PROFILE_MISMATCH");
+  }
+  const sources: Record<string, { content: string }> = Object.create(null);
+  for (const file of source.files) if (file.path.endsWith(".sol")) sources[file.path] = { content: new TextDecoder("utf-8", { fatal: true }).decode(Buffer.from(file.bytes, "base64")) };
+  const aliases = [["dependencies/openzeppelin-contracts/contracts/", "@openzeppelin/contracts/"], ...(protocol ? [
+    ["dependencies/v4-core/", "@uniswap/v4-core/"], ["dependencies/v4-periphery/", "@uniswap/v4-periphery/"],
+    ["dependencies/v4-periphery-v211/", "@uniswap/v4-periphery-v211/"], ["dependencies/permit2/", "permit2/"],
+    ["dependencies/uniswap-hooks/", "@openzeppelin/uniswap-hooks/"], ["dependencies/solmate/", "solmate/"],
+  ] : [])];
+  for (const [prefix, alias] of aliases) for (const [path, content] of Object.entries(sources)) if (path.startsWith(prefix)) {
+    const mapped = alias + path.slice(prefix.length);
+    if (Object.hasOwn(sources, mapped)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    sources[mapped] = content;
+  }
+  const standard = { language: "Solidity", sources, settings: FOUNDATION_SETTINGS_V1 };
+  if (contracts.some(contract => !Object.hasOwn(sources, contract.sourcePath)) || Buffer.byteLength(nativeCanonicalJson(standard)) > 5_242_880
+    || artifact.compiler.completeInputHash !== reviewDigest("programmable.modules.compiler-input.v1", standard)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+  if (artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1) {
+    const extension = reviewRecord(descriptor.extensions?.[FOUNDATION_PROTOCOL_EXTENSION_V1], ["hostAdapterId", "sourceCommit", "platformBps", "platformRecipient"]);
+    if (!same(extension, { hostAdapterId: artifact.hostAdapterId, sourceCommit: artifact.sourceCommit, platformBps: artifact.platformBps, platformRecipient: artifact.platformRecipient })) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    return;
+  }
+  const manifest = createFoundationModuleManifestV1(descriptor, artifact.subject.requestDigest), extension = readFoundationPackageExtensionV1(manifest);
+  if (artifact.manifestHash !== hashFoundationModuleManifestV1(manifest) || !same(extension.descriptor, artifact.descriptor) || extension.descriptorHash !== artifact.descriptorHash
+    || extension.hostAdapterId !== artifact.hostAdapterId || extension.configurationCodec !== artifact.configurationCodec || !same(extension.configurationAbi, artifact.configurationAbi)
+    || artifact.configurationSchemaHash !== reviewDigest("programmable.modules.configuration-schema.v1", descriptor.configuration)
+    || Boolean(artifact.descriptor.phases & 4) !== Boolean(extension.actions.length)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+  const context = { roles: { author: descriptor.author, reward: descriptor.rewardWallet } };
+  for (const item of artifact.cases) {
+    const configBytes = item.rawConfigBytes ?? encodeFoundationConfigurationV1(manifest, item.parameters, context).configuration;
+    if (configBytes !== item.configBytes) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    if (item.expectedDeployment === "success") {
+      const d = artifact.descriptor;
+      if ((item.budgetQuote !== "0" && d.resources !== 1) || item.swaps.length !== (d.phases & 3 ? 4 : 0)
+        || Boolean(item.actions.length) !== Boolean(d.phases & 4)
+        || item.swaps.some(swap => Boolean(d.phases & 1) === (swap.beforeOutcome === "absent") || Boolean(d.phases & 2) === (swap.afterOutcome === "absent"))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    }
+    for (const action of item.compiledActions) if (action.data !== encodeFoundationActionV1(manifest, action.id, action.parameters, context).data) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+  }
+  if (extension.actions.some(action => !artifact.cases.some(item => item.compiledActions.some(test => test.id === action.id && test.expectedOutcome === "success")))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+}
 
 /** Closed server identity only; installing it does not authorize review or public activation. */
 export function bindModuleModeReviewReleaseIdentity(value: unknown): ModuleModeHostReleaseIdentity {
@@ -112,7 +170,8 @@ export function createModuleReviewClient(input: {
         if (job.subject.submissionId !== id) fail(502, "MODULE_REVIEW_SUBJECT_MISMATCH");
         const checked = validateModuleSubmissionRequest(sourceResponse.value);
         if (!checked.ok || checked.requestDigest !== job.subject.requestDigest || checked.request.descriptor.author.toLowerCase() !== job.subject.author) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
-        if (job.artifact && (job.artifact.packageId !== checked.packageId || job.artifact.familyId !== checked.familyId || job.artifact.rewardWallet !== checked.request.descriptor.rewardWallet.toLowerCase() || job.artifact.sourceManifestHash !== reviewDigest("programmable.modules.source-manifest.v1", checked.request.descriptor) || job.artifact.configurationSchemaHash !== reviewDigest("programmable.modules.configuration-schema.v1", checked.request.descriptor.configuration))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+        if (job.artifact && (job.artifact.packageId !== checked.packageId || job.artifact.familyId !== checked.familyId || job.artifact.rewardWallet !== checked.request.descriptor.rewardWallet.toLowerCase() || job.artifact.sourceManifestHash !== reviewDigest("programmable.modules.source-manifest.v1", checked.request.descriptor) || (job.artifact.schemaVersion !== FOUNDATION_PROTOCOL_BUILD_V1 && job.artifact.configurationSchemaHash !== reviewDigest("programmable.modules.configuration-schema.v1", checked.request.descriptor.configuration)))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+        if (job.artifact?.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1 || job.artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1) verifyFoundationReviewSourceV1(job.artifact, checked.request);
         if (job.artifact?.schemaVersion === "programmable.modules.engine-build.v1") {
           if (job.plan?.schemaVersion !== "programmable.modules.engine-build-plan.v1") fail(502, "MODULE_REVIEW_BUILD_PROFILE_MISMATCH");
           verifyModuleEngineBuildArtifactV1(job.artifact, job.subject, job.plan, checked.request);
@@ -135,6 +194,14 @@ export function createModuleReviewClient(input: {
       const validateManifest = (text: unknown, detail: ReviewDetail) => {
         if (typeof text !== "string" || Buffer.byteLength(text) > 2 * 1024 * 1024) fail(400, "MODULE_REVIEW_MANIFEST_REQUIRED");
         if (!detail.job.artifact) fail(409, "MODULE_REVIEW_BUILD_REQUIRED");
+        if (detail.job.artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 || detail.job.artifact.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1) {
+          const artifact = detail.job.artifact;
+          const raw = userInput(() => parsed(Buffer.from(text), 2 * 1024 * 1024));
+          const expected = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 ? foundationProtocolReviewManifestV1(artifact)
+            : createFoundationModuleManifestV1(detail.source.descriptor, detail.job.subject.requestDigest);
+          if (!same(raw, expected)) fail(400, "MODULE_REVIEW_MANIFEST_BUILD_MISMATCH");
+          return artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 ? foundationProtocolReviewManifestHashV1(artifact) : artifact.manifestHash;
+        }
         if (detail.job.artifact.schemaVersion === "programmable.modules.engine-build.v1") {
           const raw = userInput(() => parsed(Buffer.from(text), 2 * 1024 * 1024));
           // loadDetail has already bound this environment to the authenticated source, plan and build.
@@ -165,7 +232,7 @@ export function createModuleReviewClient(input: {
         if (nativeBinding.familyId !== artifact.familyId || nativeBinding.packageId !== artifact.packageId || nativeBinding.factoryCodeHash !== artifact.factory.runtimeCodeHash || nativeBinding.moduleCodeHash !== artifact.program.runtimeCodeHash || nativeBinding.callbackGas !== artifact.callbackGas) fail(400, "MODULE_REVIEW_MANIFEST_BUILD_MISMATCH");
         const expected = userInput(() => createModuleModeHostManifest({ release, definition: manifest.catalogDefinition as ModuleModeCatalogDefinition, nativeBinding: nativeBinding as Parameters<typeof createModuleModeHostManifest>[0]["nativeBinding"], descriptor: detail.source.descriptor }));
         const plan = detail.job.plan;
-        if (!plan || plan.configurationCodec !== "programmable.native-abi@1" || artifact.configurationCodec !== plan.configurationCodec || !same(plan.programAbi, artifact.programAbi) || !same(expected.manifest.configuration.abiMapping, plan.programAbi) || !same(expected.manifest.catalogDefinition.programAbi, plan.programAbi)) fail(400, "MODULE_REVIEW_MANIFEST_ABI_MISMATCH");
+        if (!plan || plan.schemaVersion !== "programmable.modules.native-build-plan.v1" || plan.configurationCodec !== "programmable.native-abi@1" || artifact.configurationCodec !== plan.configurationCodec || !same(plan.programAbi, artifact.programAbi) || !same(expected.manifest.configuration.abiMapping, plan.programAbi) || !same(expected.manifest.catalogDefinition.programAbi, plan.programAbi)) fail(400, "MODULE_REVIEW_MANIFEST_ABI_MISMATCH");
         if (!same(raw, expected) || unsupportedManagementCapabilities(expected.manifest.management).length) fail(400, "MODULE_REVIEW_MANIFEST_INVALID");
         return computeModuleModeHostManifestHash(expected);
       };

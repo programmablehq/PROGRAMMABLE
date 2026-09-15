@@ -7,7 +7,7 @@ const productLinks = [
   { href: "/explore", label: "Explore" },
   { href: "/swap", label: "Swap" },
   { href: "/launch", label: "Launch" },
-  { href: "/launch/modules", label: "Modules" },
+  { href: "/launch/modules/foundation", label: "Modules" },
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/profile", label: "Profile" },
   { href: "/docs", label: "Docs" },

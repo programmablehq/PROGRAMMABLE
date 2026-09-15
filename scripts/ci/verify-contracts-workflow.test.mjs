@@ -34,7 +34,7 @@ test("contract test partitions and integrations consume only the complete build 
       assert.ok(job.steps.every((candidate) => !candidate.uses?.startsWith("actions/download-artifact@")));
       assert.ok(job.steps.every((candidate) => !candidate.run?.includes("verify-receipt")));
       assert.equal(step(job, "Install exact Slither").run, "pipx install slither-analyzer==0.11.5");
-      assert.equal(step(job, "Run both unchanged Slither profiles in their isolated checkout").run,
+      assert.equal(step(job, "Run all isolated source compiler profiles").run,
         "node scripts/ci/contracts-ci.mjs analysis");
       continue;
     }
@@ -63,6 +63,8 @@ test("contract test partitions and integrations consume only the complete build 
     });
   }
   const upload = step(jobs["contracts-build"], "Preserve this run's complete compiler outputs");
+  assert.equal(step(jobs["contracts-release"], "Verify contract release bindings, forks, and late migration").env.FOUNDATION_RPC_URL,
+    "https://rpc.mainnet.chain.robinhood.com");
   assert.equal(upload.with.name, "contracts-build-${{ github.run_id }}-${{ github.run_attempt }}");
   assert.equal(upload.with.path.trim(), "contracts/out\ncontracts/cache");
   assert.equal(upload.with["if-no-files-found"], "error");
