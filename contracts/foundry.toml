@@ -33,6 +33,25 @@ fail_on_revert = false
 fuzz = { runs = 10_000, max_test_rejects = 65_536 }
 invariant = { runs = 1_000, depth = 128, fail_on_revert = false }
 
+# Source-bound foundation compiler profile; does not change existing deployments.
+[profile.module-foundation]
+src = "src/module-foundation"
+test = "test/module-foundation"
+script = "script/module-foundation"
+out = "out/module-foundation"
+cache_path = "cache/module-foundation"
+via_ir = true
+optimizer_runs = 200
+
+[profile.module-foundation.fuzz]
+runs = 1_000
+max_test_rejects = 65_536
+
+[profile.module-foundation.invariant]
+runs = 256
+depth = 64
+fail_on_revert = true
+
 # The late-migration intake uses IR compilation, while enabling IR for the
 # repository-wide profile currently exposes unrelated legacy Yul stack limits.
 # Keep this release surface isolated and reproducible without changing the
