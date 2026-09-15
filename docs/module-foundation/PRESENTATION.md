@@ -28,7 +28,7 @@ const composition = composeFoundationUiSelectionsV1({
 - Nested records flatten to stable JSON-pointer keys such as `/settings/ceiling`.
 - Integers, booleans, strings, bytes and addresses use the existing primitive controls.
 - Account and component handles can display resolved address defaults; explicit input becomes an address-bearing source value.
-- Asset fields use named choices from the caller's verified asset context, retaining chain and decimals through the existing configuration compiler. Missing asset context produces a precise diagnostic.
+- Asset fields accept ERC20 contract addresses on chain 4663. Resolve their metadata through the generic [asset adapter](ASSETS.md) before decoding or composition. Existing verified source aliases remain accepted; displayed defaults use actual addresses. The source compiler retains chain and decimals in its bindings.
 - Bounded compound values use a text control containing inert JSON. The existing source compiler still validates schema, size, ranges and ABI compatibility. A richer list editor can consume the same schema later without package-specific code.
 - Fixed source bindings are omitted from editable fields and restored from the exact schema. Extra form keys, including attempted hidden overrides, are rejected.
 - Source defaults remain editable only where the schema permits it. Required values and source constraints are checked again during composition.
@@ -82,9 +82,11 @@ const intent = prepareFoundationActionIntentV1({
 });
 ```
 
-Presented actions include `id` (`packageId:actionId`), `moduleId` (the source package ID), `version`, `digest`, `actionId`, `label`, `description`, `role`, primitive `fields`, `available` and any `unavailableReason`. The generic UI can retain the complete descriptor while using `id` as its stable key.
+Presented actions include `id` (`packageId:actionId`), `moduleId` (the source package ID), `version`, `digest`, `actionId`, `label`, `description`, `role`, primitive `fields`, `available` and any `unavailableReason`/`unavailableCode`. The generic UI can retain the complete descriptor while using `id` as its stable key.
 
 The source's `creator` role requires the current onchain creator wallet. An explicitly declared `public` action is open to any nonzero caller at the presentation layer. The reviewed module remains responsible for enforcing its actual authorization and state constraints. Other role names need an application-owned `FoundationActionRoleGrantV1` containing the role, account, exact bound context key and verified role-evidence digest. Grants must come from a trusted resolver, never user form data. A grant for another pool, block or caller does not apply.
+
+Without a valid source-bound custom-role grant, presentation and intent preparation report `FOUNDATION_ACTION_ROLE_INTEGRATION_REQUIRED`. This means the application has not established that role's current state. It does not assert that the connected wallet lacks the role. A wrong creator wallet remains a separate `FOUNDATION_ACTION_ROLE_REQUIRED` result.
 
 `prepareFoundationActionIntentV1` validates source identity and action membership again, applies the role constraint, decodes only the reviewed fields and uses `encodeFoundationActionV1` for the action payload. The only transaction target is the bound hook. The final frozen intent contains:
 

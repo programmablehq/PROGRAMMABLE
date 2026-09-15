@@ -108,11 +108,12 @@ describe("Foundation catalog to UI binding", () => {
     }, required: ["amounts", "asset", "recipient", "active"] };
     const context = { assets: { quote: { chainId: 4663, address: address(30), decimals: 6 } }, roles: { creator } };
     const fields = presentFoundationFieldsV1(schema, { amounts: ["1"], asset: { asset: "quote" }, recipient: { role: "creator" }, active: false }, context);
-    expect(fields.find(field => field.key === "/asset")).toMatchObject({ kind: "select", defaultValue: "quote" });
+    expect(fields.find(field => field.key === "/asset")).toMatchObject({ kind: "address", defaultValue: address(30) });
     expect(decodeFoundationFieldsV1(schema, { "/amounts": '["2","3"]', "/asset": "quote", "/recipient": creator, "/active": true }, undefined, context))
       .toEqual({ amounts: ["2", "3"], asset: { asset: "quote" }, recipient: { address: creator }, active: true });
     expect(() => decodeFoundationFieldsV1(schema, { "/amounts": "(()=>evil())()" }, undefined, context)).toThrow(/Invalid JSON/);
-    expect(() => presentFoundationFieldsV1(schema)).toThrow(/verified asset list/);
+    expect(presentFoundationFieldsV1(schema).find(field => field.key === "/asset")).toMatchObject({ kind: "address" });
+    expect(() => decodeFoundationFieldsV1(schema, { "/asset": address(30) })).toThrow(/metadata before preparation/);
   });
 });
 
@@ -136,7 +137,10 @@ describe("Foundation source-bound management actions", () => {
   });
   it("requires a contextual trusted role grant for custom roles", () => {
     const f = fixture("operator"), account = address(90);
-    expect(() => prepareFoundationActionIntentV1({ ...f, selection: f.actionSelection, account, now })).toThrow(/operator role/);
+    expect(presentFoundationActionsV1({ ...f, account, now })[0]).toMatchObject({ available: false,
+      unavailableCode: "FOUNDATION_ACTION_ROLE_INTEGRATION_REQUIRED", unavailableReason: expect.stringContaining("Wallet permission has not been determined") });
+    expect(() => prepareFoundationActionIntentV1({ ...f, selection: f.actionSelection, account, now }))
+      .toThrowError(expect.objectContaining({ code: "FOUNDATION_ACTION_ROLE_INTEGRATION_REQUIRED" }));
     const roleGrants = [{ role: "operator", account, contextKey: f.instance.contextKey, evidenceDigest: hash("verified-role-read") }];
     expect(prepareFoundationActionIntentV1({ ...f, selection: f.actionSelection, account, roleGrants, now }).transaction.from).toBe(account);
     expect(() => prepareFoundationActionIntentV1({ ...f, selection: f.actionSelection, account,

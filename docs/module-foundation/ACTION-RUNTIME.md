@@ -96,6 +96,8 @@ type FoundationActionRoleResolverV1 = (input: {
 
 The resolver must derive a grant from the reviewed source's real role state at that checkpoint. A grant binds the exact role, account, instance context key and evidence digest. Contributors and form inputs cannot install the callback or supply trusted grants. Revalidation invokes the resolver again against the fresh bound instance. The action's own simulation and contract authorization remain necessary even after a grant is resolved.
 
+A missing resolver, a `null` result or an unrelated grant establishes no custom-role authority. The generic presentation reports `FOUNDATION_ACTION_ROLE_INTEGRATION_REQUIRED` and states that wallet permission has not been determined. It does not infer a denial from an unsupported source-role reader.
+
 ## Restore the original selections
 
 ```ts
@@ -109,7 +111,7 @@ const restored = decodeFoundationLaunchSelectionsV1({
 
 The helper decodes the exact foundation `launch` ABI, requires canonical full calldata, and identifies each currently admitted package through module factory, factory code hash, module code hash and descriptor hash. It restores the reviewed ABI fields, then re-encodes them byte for byte against the source configuration schema. UI selection IDs, versions and manifest digests come from that admitted entry. It preserves module order and converts the original `creatorShareBps` into the schema-derived percentage field.
 
-Named tuples, nested records, ABI arrays, integers, booleans, bytes, strings and address fields use the existing generic configuration mapping. Asset addresses require a unique matching asset in the application's verified context because raw ABI addresses contain no token decimals or metadata. Fixed source values remain fixed and are checked by exact re-encoding. The helper never guesses source IDs, package versions, decimals, review digests or release evidence.
+Named tuples, nested records, ABI arrays, integers, booleans, bytes, strings and address fields use the existing generic configuration mapping. Asset addresses require matching, consistent metadata in the application's verified context because raw ABI addresses contain no token decimals or metadata. Equivalent source aliases share one identity; conflicting decimals or chains fail. Refresh the original additional-asset pins through [assets.ts](ASSETS.md) before restoration and runtime preparation. Fixed source values remain fixed and are checked by exact re-encoding. The helper never guesses source IDs, package versions, decimals, review digests or release evidence.
 
 Several packages can legitimately share one runtime and descriptor. In that case the original artifact must supply the package IDs to resolve the ambiguity. A package that is no longer currently admitted is not silently replaced by a newer version.
 

@@ -73,11 +73,12 @@ function catalogOf(entries: FoundationCatalogEntryV1[]) {
 interface ContractRead { address: Address; functionName: string; args?: readonly unknown[]; blockNumber: bigint }
 interface SimulateInput { account: Address; blockNumber: bigint; calls: readonly { to: Address; data: Hex; value?: bigint }[] }
 
-function fixture(count = 1, role = "creator") {
+function fixture(count = 1, role = "creator", selectedAsset = quote) {
   const entries = Array.from({ length: count }, (_, i) => admitted(sourcePackage(i, role), i));
-  const catalog = catalogOf(entries), context: OpenConfigContext = { roles: { creator }, assets: { quote: { address: quote, chainId: 4663, decimals: 6 } } };
+  const catalog = catalogOf(entries), context: OpenConfigContext = { roles: { creator }, assets: { quote: { address: quote, chainId: 4663, decimals: 6 },
+    ...(selectedAsset === quote ? {} : { [`erc20:${selectedAsset}`]: { address: selectedAsset, chainId: 4663, decimals: 6 } }) } };
   const selections: FoundationModuleSelection[] = entries.map(entry => ({ id: entry.manifest.packageId, version: entry.manifest.sourceDescriptor.version,
-    digest: hashFoundationModuleManifestV1(entry.manifest), configuration: { "/settings/ceiling": "100", "/amounts": '["1","2"]', "/recipient": creator, "/asset": "quote", "$creatorSharePercent": "25.50" } }));
+    digest: hashFoundationModuleManifestV1(entry.manifest), configuration: { "/settings/ceiling": "100", "/amounts": '["1","2"]', "/recipient": creator, "/asset": selectedAsset, "$creatorSharePercent": "25.50" } }));
   const environment = { catalog, chainId: 4663, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1, context };
   const composition = composeFoundationUiSelectionsV1({ ...environment, selections, creatorFeeBps: 300 });
   if (!composition.ok) throw new Error(JSON.stringify(composition.diagnostics));
@@ -286,6 +287,16 @@ describe("Foundation original launch configuration restoration", () => {
   it("restores zero modules without inventing a package identity", () => {
     const f = fixture(0); expect(decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: f.calldata }).selections).toEqual([]);
   });
+  it("restores a third asset with exact address/metadata context and equivalent source aliases", async () => {
+    const f = fixture(1, "creator", address(70));
+    const context = { ...f.context, assets: { ...f.context.assets, exactAlias: { chainId: 4663, address: address(70), decimals: 6 } } };
+    const decoded = decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: f.calldata, context, packageIds: [f.entries[0].manifest.packageId] });
+    expect(decoded.selections).toEqual(f.selections);
+    await expect(readFoundationActionRuntimeV1({ ...f.input, context, selections: decoded.selections })).resolves.toMatchObject({ compositionHash: decoded.compositionHash });
+    expect(() => decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: f.calldata,
+      context: { ...context, assets: { ...context.assets, badAlias: { chainId: 4663, address: address(70), decimals: 18 } } } }))
+      .toThrow(/metadata bindings disagree/);
+  });
   it("requires the original package id when different source versions share identical runtime bytes", () => {
     const f = fixture(), nextSource = sourcePackage(0, "creator"); nextSource.version = "1.2.1";
     const catalog = catalogOf([...f.entries, admitted(nextSource)]);
@@ -294,7 +305,7 @@ describe("Foundation original launch configuration restoration", () => {
   });
   it("rejects altered source bindings, unverified assets and noncanonical launch/configuration bytes", () => {
     const f = fixture();
-    expect(() => decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: f.calldata })).toThrow(/verified asset context/);
+    expect(() => decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: f.calldata })).toThrow(/metadata before preparation/);
     expect(() => decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: `${f.calldata}00`, context: f.context })).toThrow(/canonical ABI/);
     const wrongFactory = { ...f.parameters, modules: [{ ...f.parameters.modules[0], factory: address(99) }] };
     expect(() => decodeFoundationLaunchSelectionsV1({ catalog: f.catalog, calldata: encodeFunctionData({ abi: foundationFactoryAbi, functionName: "launch", args: [wrongFactory] }), context: f.context })).toThrow(/No currently admitted package/);

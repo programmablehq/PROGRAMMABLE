@@ -19,7 +19,7 @@ import {
   hashFoundationModuleDescriptorV1,
 } from "./manifest";
 import {
-  FOUNDATION_CREATOR_SHARE_FIELD_V1, bindFoundationActionContextV1, composeFoundationUiSelectionsV1,
+  FOUNDATION_CREATOR_SHARE_FIELD_V1, bindFoundationActionContextV1, composeFoundationUiSelectionsV1, foundationAssetForAddressV1,
   prepareFoundationActionIntentV1, presentFoundationFieldsV1,
   type FoundationActionContextV1, type FoundationActionIntentV1, type FoundationActionRoleGrantV1, type FoundationActionSelectionV1,
 } from "./presentation";
@@ -259,9 +259,7 @@ function decodeConfiguration(schema: OpenConfigSchema, mapping: readonly ModuleE
       const address = moduleAddress(value, "foundation.configuration.address", true);
       if (node.type === "account" || node.type === "component") return { address };
       if (node.type === "asset") {
-        const candidates = Object.entries(context.assets ?? {}).filter(([, asset]) => sameAddress(asset.address, address) && String(asset.chainId) === String(FOUNDATION_CHAIN_ID));
-        foundationRequire(candidates.length === 1, "FOUNDATION_CONFIGURATION_ASSET_CONTEXT", "Restore an unambiguous verified asset context for this configuration address.");
-        return { asset: candidates[0][0] };
+        return { asset: foundationAssetForAddressV1(address, context, "foundation.configuration.asset").key };
       }
       return address;
     }

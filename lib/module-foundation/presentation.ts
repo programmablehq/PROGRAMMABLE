@@ -1,6 +1,6 @@
 import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from "viem";
 import {
-  assertOpenConfigSchema, type OpenConfigContext, type OpenConfigSchema, type OpenConfigValue,
+  assertOpenConfigSchema, type OpenAssetContext, type OpenConfigContext, type OpenConfigSchema, type OpenConfigValue,
 } from "@/packages/classic-modules/src/open-config.mjs";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleAddress, moduleHash, moduleInteger, moduleRecord } from "@/lib/module-mode/release";
@@ -42,6 +42,47 @@ function addressDefault(node: OpenConfigSchema, value: unknown, context: OpenCon
   return undefined;
 }
 
+/** The application supplies this context after verifying immutable metadata and current ERC20 state. */
+export function foundationAssetForAddressV1(raw: unknown, context: OpenConfigContext, path = "foundation.asset"):
+  { key: string; asset: OpenAssetContext } {
+  const address = moduleAddress(raw, path), candidates = Object.entries(context.assets ?? {}).filter(([, asset]) => equalAddress(asset.address, address));
+  foundationRequire(candidates.length > 0, "FOUNDATION_ASSET_CONTEXT_REQUIRED", "Resolve this ERC20 address and its current metadata before preparation.", path);
+  const [, asset] = candidates[0];
+  foundationRequire(String(asset.chainId) === "4663" && Number.isInteger(asset.decimals) && asset.decimals >= 0 && asset.decimals <= 36
+    && candidates.every(([, item]) => String(item.chainId) === String(asset.chainId) && item.decimals === asset.decimals),
+  "FOUNDATION_ASSET_CONTEXT_CONFLICT", "The asset metadata bindings disagree. Restore and verify the original asset metadata.", path);
+  const [key] = candidates.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)[0];
+  return { key, asset };
+}
+
+function verifiedAssetValues(node: OpenConfigSchema, value: unknown, context: OpenConfigContext, path: string): unknown {
+  if (value === undefined || value === missing) return value;
+  if (node.type === "asset") {
+    if (typeof value === "string") return { asset: foundationAssetForAddressV1(value, context, path).key };
+    if (hasOwn(value, "asset") && typeof value.asset === "string") {
+      const asset = context.assets?.[value.asset];
+      foundationRequire(asset, "FOUNDATION_ASSET_CONTEXT_REQUIRED", "Resolve this asset reference and its current metadata before preparation.", path);
+      foundationAssetForAddressV1(asset.address, context, path);
+      return value;
+    }
+    foundationRequire(hasOwn(value, "address"), "FOUNDATION_ASSET_CONTEXT_REQUIRED", "Enter an ERC20 address with verified metadata.", path);
+    const { asset } = foundationAssetForAddressV1(value.address, context, path);
+    foundationRequire(String(value.chainId) === String(asset.chainId) && value.decimals === asset.decimals,
+      "FOUNDATION_ASSET_METADATA_MISMATCH", "The supplied asset metadata differs from the verified metadata.", path);
+    return value;
+  }
+  if (node.type === "record" && value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Object.hasOwn(node.fields, key)
+      ? verifiedAssetValues(node.fields[key], item, context, `${path}/${key}`) : item]));
+  }
+  if (node.type === "array" && Array.isArray(value)) return value.map((item, index) => verifiedAssetValues(node.items, item, context, `${path}/${index}`));
+  if (node.type === "variant" && hasOwn(value, node.tag) && typeof value[node.tag] === "string" && Object.hasOwn(node.variants, value[node.tag] as string)) {
+    const branch = node.variants[value[node.tag] as string];
+    return { ...verifiedAssetValues(branch, value, context, path) as Record<string, unknown> };
+  }
+  return value;
+}
+
 /** Pure schema projection. Nested records become JSON-pointer keys; bounded compound values remain inert JSON text. */
 export function presentFoundationFieldsV1(schema: OpenConfigSchema, defaults: unknown = undefined,
   context: OpenConfigContext = {}): readonly FoundationConfigurationField[] {
@@ -68,12 +109,12 @@ export function presentFoundationFieldsV1(schema: OpenConfigSchema, defaults: un
     } else if (["address", "account", "component"].includes(node.type)) {
       field.kind = "address"; field.defaultValue = addressDefault(node, value, context);
     } else if (node.type === "asset") {
-      const assets = Object.entries(context.assets ?? {});
-      foundationRequire(assets.length > 0, "FOUNDATION_ASSET_CONTEXT_REQUIRED", "A verified asset list is needed for this field.", field.key);
-      field.kind = "select"; field.options = assets.map(([name, asset]) => ({ value: name, label: `${pretty(name)} (${asset.address})` }));
-      if (hasOwn(value, "asset") && typeof value.asset === "string") field.defaultValue = value.asset;
-      else if (hasOwn(value, "address")) field.defaultValue = assets.find(([, asset]) => asset.address.toLowerCase() === String(value.address).toLowerCase()
-        && String(asset.chainId) === String(value.chainId) && asset.decimals === value.decimals)?.[0];
+      field.kind = "address";
+      field.required = required && value === undefined;
+      field.description = [node.help, "Enter an ERC20 contract address on Robinhood Chain. Its metadata is verified before preparation.",
+        value !== undefined ? "Leave empty to use the default asset." : undefined].filter(Boolean).join(" ");
+      field.defaultValue = hasOwn(value, "asset") && typeof value.asset === "string" ? context.assets?.[value.asset]?.address
+        : addressDefault(node, value, context);
     } else if (node.type === "array" || node.type === "variant") {
       field.description = [node.help, node.type === "array" ? `Enter a JSON list with ${node.minItems ?? 0} to ${node.maxItems} items.` : "Enter a JSON object using one of the declared variants."].filter(Boolean).join(" ");
       if (value !== undefined) field.defaultValue = JSON.stringify(value);
@@ -104,9 +145,10 @@ export function decodeFoundationFieldsV1(schema: OpenConfigSchema, input: Founda
     if (supplied === undefined) return value === undefined ? missing : nativeJson(value);
     if (node.type === "account" || node.type === "component") return { address: supplied };
     if (node.type === "asset") {
-      foundationRequire(typeof supplied === "string" && !!context.assets && Object.hasOwn(context.assets, supplied),
-        "FOUNDATION_ASSET_CONTEXT_REQUIRED", "Choose an asset from the current verified list.", key);
-      return { asset: supplied };
+      foundationRequire(typeof supplied === "string", "FOUNDATION_ASSET_CONTEXT_REQUIRED", "Enter an ERC20 contract address.", key);
+      if (supplied === "" && value !== undefined) return nativeJson(value);
+      if (context.assets && Object.hasOwn(context.assets, supplied)) return { asset: supplied };
+      return { asset: foundationAssetForAddressV1(supplied, context, key).key };
     }
     if (node.type === "array" || node.type === "variant") {
       foundationRequire(typeof supplied === "string" && supplied.length <= 131_072, "FOUNDATION_FORM_JSON_LIMIT", "Structured field data exceeds its input limit.", key);
@@ -118,7 +160,7 @@ export function decodeFoundationFieldsV1(schema: OpenConfigSchema, input: Founda
   }
   const result = decode(schema, [], defaults);
   foundationRequire(result !== missing, "FOUNDATION_FORM_VALUE_REQUIRED", "Complete the module configuration.");
-  return result as OpenConfigValue;
+  return verifiedAssetValues(schema, result, context, "") as OpenConfigValue;
 }
 
 function shareEnabled(entry: BoundFoundationCatalogEntryV1) { return (entry.runtime.descriptor.resources & 1) !== 0 && (entry.runtime.descriptor.phases & 4) !== 0; }
@@ -242,26 +284,28 @@ function actionEntry(catalog: FoundationCatalogV1, instance: FoundationActionCon
     "FOUNDATION_ACTION_CATALOG_CHANGED", "The source admission changed. Refresh the module readback.");
   return entry;
 }
-function roleError(role: string, account: Address, instance: FoundationActionContextV1, grants: readonly FoundationActionRoleGrantV1[]): string | null {
-  if (role === "creator") return equalAddress(account, instance.readback.creator) ? null : "This action requires the pool creator's wallet.";
+function roleError(role: string, account: Address, instance: FoundationActionContextV1, grants: readonly FoundationActionRoleGrantV1[]): FoundationDiagnosticV1 | null {
+  if (role === "creator") return equalAddress(account, instance.readback.creator) ? null
+    : { code: "FOUNDATION_ACTION_ROLE_REQUIRED", path: "foundation.action.role", message: "This action requires the pool creator's wallet." };
   if (role === "public") return null;
   const grant = grants.find(item => item.role === role && equalAddress(item.account, account) && item.contextKey === instance.contextKey);
   if (grant) { moduleHash(grant.evidenceDigest, "foundation.action.roleEvidence"); return null; }
-  return `This action requires the ${role} role. Resolve that role against the current module before preparation.`;
+  return { code: "FOUNDATION_ACTION_ROLE_INTEGRATION_REQUIRED", path: "foundation.action.role",
+    message: `The ${role} role needs an application integration that verifies this source's current role state. Wallet permission has not been determined.` };
 }
 export interface FoundationPresentedActionV1 {
   id: string; moduleId: Hex; version: string; digest: Hex; actionId: string; label: string; description: string;
-  role: string; fields: readonly FoundationConfigurationField[]; available: boolean; unavailableReason?: string;
+  role: string; fields: readonly FoundationConfigurationField[]; available: boolean; unavailableReason?: string; unavailableCode?: string;
 }
 export function presentFoundationActionsV1(input: { catalog: FoundationCatalogV1; instance: FoundationActionContextV1; account: Address;
   context?: OpenConfigContext; roleGrants?: readonly FoundationActionRoleGrantV1[]; now?: number }): readonly FoundationPresentedActionV1[] {
   const entry = actionEntry(input.catalog, input.instance, input.now ?? nowSeconds()), account = moduleAddress(input.account, "foundation.action.account");
   return entry.manifest.sourceDescriptor.management.actions.map(action => {
     let reason = roleError(action.role, account, input.instance, input.roleGrants ?? []), fields: readonly FoundationConfigurationField[] = [];
-    try { fields = presentFoundationFieldsV1(action.inputs, undefined, input.context); } catch (error) { reason = foundationDiagnostic(error).message; }
+    try { fields = presentFoundationFieldsV1(action.inputs, undefined, input.context); } catch (error) { reason = foundationDiagnostic(error); }
     return { id: `${entry.manifest.packageId}:${action.id}`, moduleId: entry.manifest.packageId, version: entry.manifest.sourceDescriptor.version, digest: entry.manifestHash,
       actionId: action.id, label: action.label, description: action.description, role: action.role, fields,
-      available: reason === null, ...(reason ? { unavailableReason: reason } : {}) };
+      available: reason === null, ...(reason ? { unavailableReason: reason.message, unavailableCode: reason.code } : {}) };
   });
 }
 export interface FoundationActionSelectionV1 { id: string; version: string; digest: Hex; actionId: string; configuration: FoundationConfiguration }
@@ -281,7 +325,7 @@ export function prepareFoundationActionIntentV1(input: { catalog: FoundationCata
   const action = entry.manifest.sourceDescriptor.management.actions.find(item => item.id === selected.actionId);
   foundationRequire(action, "FOUNDATION_ACTION_UNAVAILABLE", "This source version has no such action.");
   const denied = roleError(action.role, account, input.instance, input.roleGrants ?? []);
-  foundationRequire(denied === null, "FOUNDATION_ACTION_ROLE_REQUIRED", denied ?? "The current wallet lacks this action role.");
+  if (denied) foundationRequire(false, denied.code, denied.message, denied.path);
   const values = decodeFoundationFieldsV1(action.inputs, selected.configuration as FoundationConfiguration, undefined, input.context);
   const encoded = encodeFoundationActionV1(entry.manifest, action.id, values, input.context), r = input.instance.readback;
   const data = encodeFunctionData({ abi: FOUNDATION_MANAGEMENT_ACTION_ABI_V1, functionName: "executeModuleAction", args: [BigInt(r.moduleIndex), encoded.data] });
