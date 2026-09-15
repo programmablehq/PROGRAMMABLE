@@ -5,6 +5,7 @@
   --mf-ink: var(--webde-ink, #fff);
   --mf-muted: var(--webde-muted, #b7b7b3);
   --mf-focus: #f3b4d1;
+  --mf-control-line: #707070;
   color: var(--mf-ink);
   font-family: inherit;
   margin: 0 auto;
@@ -41,7 +42,7 @@
 .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; min-width: 0; }
 .field > label { align-items: baseline; display: flex; flex-wrap: wrap; font-size: 14px; font-weight: 500; gap: 8px; line-height: 20px; }
 .field > label > span { color: var(--mf-muted); font-size: 12px; font-weight: 400; line-height: 16px; }
-.field input, .field textarea, .field select { appearance: auto; background: var(--mf-control); border: 1px solid #505050; border-radius: 8px; box-shadow: none; color: var(--mf-ink); font: inherit; font-size: 16px; line-height: 24px; margin: 0; min-height: 48px; min-width: 0; padding: 12px; width: 100%; }
+.field input, .field textarea, .field select { appearance: auto; background: var(--mf-control); border: 1px solid var(--mf-control-line); border-radius: 8px; box-shadow: none; color: var(--mf-ink); font: inherit; font-size: 16px; line-height: 24px; margin: 0; min-height: 48px; min-width: 0; padding: 12px; width: 100%; }
 .field select { cursor: pointer; }
 .field select option { background: var(--mf-control); color: var(--mf-ink); }
 .field textarea { resize: vertical; }
@@ -66,9 +67,9 @@
 .saved { align-items: center; color: #bbdfc5; display: flex; font-size: 12px; gap: 4px; line-height: 20px; margin: 0; }
 .primaryButton, .secondaryButton, .selectedButton, .textButton, .iconButton { align-items: center; border-radius: 8px; cursor: pointer; display: inline-flex; flex: 0 0 auto; font: inherit; font-size: 16px; font-weight: 500; gap: 8px; justify-content: center; line-height: 24px; min-height: 44px; padding: 8px 12px; text-decoration: none; }
 .primaryButton { background: #fff; border: 1px solid #fff; color: #181818; }
-.secondaryButton { background: transparent; border: 1px solid #555; color: var(--mf-ink); }
+.secondaryButton { background: transparent; border: 1px solid var(--mf-control-line); color: var(--mf-ink); }
 .selectedButton { background: #313131; border: 1px solid #707070; color: var(--mf-ink); }
-.textButton { background: transparent; border: 0; color: var(--mf-ink); font-size: 12px; font-weight: 400; justify-content: start; line-height: 20px; min-height: 32px; padding: 4px 0; text-align: start; text-decoration: underline; text-underline-offset: 4px; }
+.textButton { background: transparent; border: 0; color: var(--mf-ink); font-size: 12px; font-weight: 400; justify-content: start; line-height: 20px; min-height: 44px; padding: 4px 0; text-align: start; text-decoration: underline; text-underline-offset: 4px; }
 .iconButton { background: transparent; border: 0; color: var(--mf-muted); min-height: 44px; padding: 8px; width: 44px; }
 .amountInput { align-items: center; display: flex; position: relative; }
 .amountInput input { padding-right: 96px; }
@@ -81,7 +82,7 @@
 .fixedFee > strong { align-items: center; display: flex; font-size: 20px; font-weight: 500; gap: 12px; line-height: 28px; }
 .fixedFee small { color: var(--mf-muted); font-size: 12px; font-weight: 400; line-height: 20px; }
 .checkLabel { align-items: start; cursor: pointer; display: flex; gap: 12px; min-height: 44px; }
-.checkLabel input { accent-color: #fff; flex: 0 0 20px; height: 20px; margin: 2px 0 0; width: 20px; }
+.checkLabel input { accent-color: #fff; appearance: auto; flex: 0 0 20px; height: 20px; margin: 2px 0 0; width: 20px; }
 .checkLabel > span { display: grid; gap: 4px; min-width: 0; }
 .checkLabel strong { font-size: 14px; font-weight: 500; line-height: 20px; }
 .checkLabel small { color: var(--mf-muted); font-size: 12px; line-height: 20px; }
@@ -110,7 +111,7 @@
 .preview { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 16px; overflow: hidden; position: sticky; top: calc(var(--header-height, 88px) + 24px); }
 .previewHeading { align-items: center; color: var(--mf-muted); display: flex; font-size: 12px; justify-content: space-between; line-height: 20px; padding: 16px; }
 .previewArtwork { aspect-ratio: 4 / 3; background: #1f1f1f; overflow: hidden; }
-.previewArtwork > img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.previewArtwork > img { display: block; height: 100%; object-fit: contain; width: 100%; }
 .artworkPlaceholder { align-items: center; color: #a6a6a2; display: flex; flex-direction: column; gap: 12px; height: 100%; justify-content: center; }
 .artworkPlaceholder > span { font-size: 14px; line-height: 20px; }
 .previewContent { padding: 24px; }
@@ -162,11 +163,12 @@
 .tradeHeader h1 { font-size: 30px; font-weight: 500; letter-spacing: -0.03em; line-height: 36px; margin: 0; }
 .tradeHeader p { color: var(--mf-muted); font-size: 14px; line-height: 20px; margin: 0; }
 .marketLayout { align-items: start; display: grid; gap: 32px; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
-.marketAbout { min-width: 0; }
+.marketAbout { grid-column: 1; grid-row: 1; min-width: 0; }
+.marketLayout > .mainColumn { grid-column: 2; grid-row: 1; }
 .marketAbout > p { color: var(--mf-muted); font-size: 16px; line-height: 24px; margin: 0 0 24px; max-width: 60ch; }
 .tradePanel { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 16px; padding: 24px; }
 .sideButtons { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 24px; }
-.sideButtons button { background: transparent; border: 1px solid #505050; border-radius: 8px; color: var(--mf-muted); cursor: pointer; font: inherit; font-size: 16px; font-weight: 500; line-height: 24px; min-height: 48px; padding: 8px 12px; }
+.sideButtons button { background: transparent; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-muted); cursor: pointer; font: inherit; font-size: 16px; font-weight: 500; line-height: 24px; min-height: 48px; padding: 8px 12px; }
 .sideButtons button[aria-pressed="true"] { background: #fff; border-color: #fff; color: #181818; }
 .tradePanel > form > .primaryButton { margin-top: 16px; width: 100%; }
 .tradeReview { display: grid; gap: 16px; }
@@ -196,6 +198,7 @@
   .form, .reviewPanel, .resultPanel { padding: 24px; }
   .previewContent { padding: 16px; }
   .marketLayout { grid-template-columns: 1fr; }
+  .marketAbout, .marketLayout > .mainColumn { grid-column: auto; grid-row: auto; }
   .tradePanel { max-width: 600px; width: 100%; }
 }
 @media (max-width: 760px) {

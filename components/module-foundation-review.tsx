@@ -83,8 +83,9 @@ export function FoundationFeeDisclosure({ creatorFeeBps, quoteSymbol }: { creato
   </div>;
 }
 
-export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy, disabled, error, onConfirm, onEdit }: {
+export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy, disabled, error, moduleSummary = [], onConfirm, onEdit }: {
   review: FoundationLaunchReview; contextKey: string; symbol: string; busy: boolean; disabled?: boolean; error?: string;
+  moduleSummary?: readonly { name: string; version: string; fields: readonly { label: string; value: string }[] }[];
   onConfirm: () => void; onEdit: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -109,6 +110,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
       {review.metadataUri && foundationPublicUrl(review.metadataUri) ? <div><dt>Metadata</dt><dd><a href={review.metadataUri} target="_blank" rel="noreferrer">View saved metadata <ArrowUpRightIcon size={14} aria-hidden="true" /></a></dd></div> : null}
     </dl></div></details>
     <FoundationPoolDetails pool={review.pool} positions={review.positions} predicted />
+    <details className={styles.details}><summary>Selected modules · {moduleSummary.length}</summary><div className={styles.detailsBody}>{moduleSummary.length ? moduleSummary.map(module => <section key={`${module.name}:${module.version}`} className={styles.position}><h3>{module.name}</h3><p>Version {module.version}</p><dl className={styles.rows}>{module.fields.map(field => <div key={field.label}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></section>) : <p className={styles.help}>No optional modules. The fixed platform fee remains active.</p>}</div></details>
     <FoundationTransactionSteps transactions={review.transactions} />
     {review.notes?.length ? <ul className={styles.notes}>{review.notes.map(note => <li key={note}>{note}</li>)}</ul> : null}
     <p className={styles.help}>Review expires at {new Date(review.expiresAt * 1_000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" })} UTC. The wallet request checks the simulation again.</p>
