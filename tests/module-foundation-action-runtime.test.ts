@@ -140,6 +140,24 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(now 
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation RPC module action binding", () => {
+  it("rejects a withdrawn module admission at action replay even when its host release and runtime bytes are unchanged", async () => {
+    const f = fixture(), prepared = await prepareFoundationModuleActionV1(f.input);
+    const withdrawn = bindFoundationCatalogV1({ schemaVersion: FOUNDATION_CATALOG_SCHEMA_V1, entries: f.entries },
+      { admissions: [], releases: f.entries.map(entry => entry.release!) });
+    f.simulateCalls.mockClear();
+    await expect(revalidateFoundationModuleActionV1(prepared, { ...f.input, catalog: withdrawn })).rejects.toThrow();
+    expect(f.simulateCalls).not.toHaveBeenCalled();
+    expect(prepared.binding.releaseDigest).toBe(f.binding.releaseDigest);
+  });
+
+  it("rejects a withdrawn module runtime release at launch re-decoding while its original source remains admitted", () => {
+    const f = fixture();
+    const withdrawn = bindFoundationCatalogV1({ schemaVersion: FOUNDATION_CATALOG_SCHEMA_V1, entries: f.entries },
+      { admissions: f.entries.map(entry => entry.review!), releases: [] });
+    expect(() => decodeFoundationLaunchSelectionsV1({ catalog: withdrawn, calldata: f.calldata, context: f.context }))
+      .toThrow("No currently admitted package");
+  });
+
   it("reads and binds every installed module at one actual checkpoint", async () => {
     const f = fixture(2), runtime = await readFoundationActionRuntimeV1(f.input);
     expect(runtime.instances).toHaveLength(2);
