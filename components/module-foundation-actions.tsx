@@ -196,7 +196,7 @@ export function ModuleFoundationActionReview({ review, action, configuration, co
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { heading.current?.focus(); const timer = setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(timer); }, []);
   const invalid = foundationActionReviewError(review, action, configuration, contextKey, chainId, now);
-  return <section className={styles.reviewPanel} aria-labelledby={`${id}-title`}>
+  return <section className={styles.reviewPanel} aria-labelledby={`${id}-title`} style={{ overflowWrap: "anywhere" }}>
     <div className={styles.sectionHeading}><span className={styles.eyebrow}>{action.payout ? "Payout review" : "Action review"}</span><h2 id={`${id}-title`} ref={heading} tabIndex={-1}>{action.label}</h2><p>Check the simulated effects before continuing in your wallet.</p></div>
     <p className={styles.simulated}><CheckIcon size={16} aria-hidden="true" />Simulated at block {review.simulationBlock}</p>
     <dl className={styles.rows}><div><dt>Wallet</dt><dd><FoundationAddress value={review.account} label="action wallet" /></dd></div><div><dt>Network ID</dt><dd>{review.chainId}</dd></div></dl>
@@ -291,7 +291,7 @@ export function ModuleFoundationActions({ availability, contextKey, actions, onP
   if (result) return <div className={styles.mainColumn}><ModuleFoundationTransactionResult result={result} onRefresh={onRefreshResult ? () => void refresh() : undefined} refreshing={busy === "refresh"} /><p className={styles.error} role="alert">{error}</p>{result.status === "confirmed" || result.status === "reverted" ? <button type="button" className={styles.secondaryButton} onClick={back}>Return to actions</button> : null}</div>;
   if (prepared) return <ModuleFoundationActionReview review={prepared.review} action={currentAction ?? prepared.action} configuration={prepared.configuration} contextKey={contextKey} chainId={availability.chainId} busy={busy === "confirm"} blockedReason={blockedReason || changedAction || catalogProblem} error={error} onConfirm={() => void confirm()} onEdit={back} />;
   const visible = actions.filter(action => action.visible !== false);
-  return <section className={styles.form} aria-labelledby={`${id}-title`}>
+  return <section className={styles.form} aria-labelledby={`${id}-title`} style={{ overflowWrap: "anywhere" }}>
     <div className={styles.sectionHeading}><h2 id={`${id}-title`} ref={heading} tabIndex={-1}>Manage coin</h2><p>Prepare payouts and available module actions for this pool.</p></div>
     {visible.some(action => action.payout) ? <div className={styles.sectionHeading}><p>A fee balance is credit held in the fee ledger. A payout transfers the available amount to the recipient shown below. Credit alone does not mean it reached a wallet.</p></div> : null}
     {blockedReason || catalogProblem ? <p className={styles.error} role="status">{blockedReason || catalogProblem}</p> : null}
