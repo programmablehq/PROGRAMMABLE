@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import Image from "next/image";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import type { Address } from "viem";
-import { foundationDecimalError, foundationReviewError, type FoundationAvailability, type FoundationPoolIdentity, type FoundationPositionIdentity, type FoundationQuoteAsset, type FoundationTradeDraft, type FoundationTradeReview, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
+import { foundationDecimalError, foundationPublicUrl, foundationReviewError, type FoundationAvailability, type FoundationPoolIdentity, type FoundationPositionIdentity, type FoundationQuoteAsset, type FoundationTradeDraft, type FoundationTradeReview, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { FoundationAddress, FoundationFeeDisclosure, FoundationPoolDetails, FoundationTransactionSteps, ModuleFoundationTransactionResult } from "./module-foundation-review";
 import styles from "./module-foundation-ui.module.css";
 
 export interface ModuleFoundationMarketProps {
   availability: FoundationAvailability;
   contextKey: string;
-  coin: { address: Address; name: string; symbol: string; description: string; decimals: number; balance?: string };
+  coin: { address: Address; name: string; symbol: string; description: string; decimals: number; balance?: string; imageURI?: string; socialLinks?: readonly { label: string; url: string }[] };
   quote: FoundationQuoteAsset;
   pool: FoundationPoolIdentity;
   positions?: readonly FoundationPositionIdentity[];
@@ -39,6 +40,7 @@ export function ModuleFoundationMarket({ availability, contextKey, coin, quote, 
   const [error, setError] = useState("");
   const [amountError, setAmountError] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const lock = useRef(false);
   const active = useRef(true);
   const currentContext = useRef(contextKey);
@@ -58,6 +60,8 @@ export function ModuleFoundationMarket({ availability, contextKey, coin, quote, 
   const invalidReview = review ? foundationReviewError(review, contextKey, now) : null;
   const unavailable = availability.status !== "ready" || !quote.supported;
   const blocked = Boolean(busy || submissionBlocked || unavailable);
+  const imageURI = coin.imageURI && foundationPublicUrl(coin.imageURI) && failedImage !== coin.imageURI ? coin.imageURI : undefined;
+  const socialLinks = coin.socialLinks?.filter(link => link.label.trim() && foundationPublicUrl(link.url)) ?? [];
 
   function edit() { setReview(null); setError(""); requestAnimationFrame(() => input.current?.focus()); }
 
@@ -102,7 +106,7 @@ export function ModuleFoundationMarket({ availability, contextKey, coin, quote, 
 
   return <div className={styles.page}>
     <div className={styles.topline}><span className={styles.eyebrow}>Module Mode</span><span className={styles.network}>{availability.chainName}</span></div>
-    <header className={styles.pageHeading}><h1>{coin.name}</h1><p>{coin.symbol} / {quote.symbol}</p></header>
+    <header className={styles.pageHeading}><div className={styles.marketHeading}>{imageURI ? <Image src={imageURI} alt="" width={64} height={64} unoptimized referrerPolicy="no-referrer" onError={() => setFailedImage(imageURI)} /> : null}<div><h1>{coin.name}</h1><p>{coin.symbol} / {quote.symbol}</p></div></div>{socialLinks.length ? <nav className={styles.coinLinks} aria-label="Coin links">{socialLinks.map(link => <a key={`${link.label}:${link.url}`} href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${link.label} (opens in a new tab)`}>{link.label}<ArrowUpRightIcon size={16} aria-hidden="true" /></a>)}</nav> : null}</header>
     <div className={styles.marketLayout}>
       <div className={styles.mainColumn}>
         {result ? <><ModuleFoundationTransactionResult result={result} onRefresh={onRefreshResult ? () => void refresh() : undefined} refreshing={busy === "refresh"} />{result.status === "confirmed" || result.status === "reverted" ? <button type="button" className={styles.secondaryButton} onClick={() => { setResult(null); setDraft(current => ({ ...current, amount: "" })); edit(); }}>Return to trading</button> : null}</> : <section className={styles.tradePanel} aria-label={`Trade ${coin.symbol}`}>

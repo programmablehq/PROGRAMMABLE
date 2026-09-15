@@ -251,3 +251,17 @@
   .page :is(button, a, input, textarea, select, summary):focus-visible { outline-color: Highlight; }
   .primaryButton, .secondaryButton, .selectedButton { border: 1px solid ButtonText; }
 }
+
+.marketHeading { align-items: center; display: flex; gap: 16px; }
+.marketHeading > div { min-width: 0; }
+.marketHeading h1 { overflow-wrap: anywhere; }
+.marketHeading > img { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 8px; flex: 0 0 64px; height: 64px; object-fit: contain; width: 64px; }
+.marketHeading p { color: var(--mf-muted); font-size: 18px; line-height: 28px; margin: 8px 0 0; }
+.coinLinks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.coinLinks a { align-items: center; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-ink); display: inline-flex; font-size: 14px; gap: 8px; line-height: 20px; max-width: 100%; min-height: 44px; overflow-wrap: anywhere; padding: 8px 12px; text-decoration: none; }
+.coinLinks a > svg { flex: 0 0 16px; }
+@media (hover: hover) { .coinLinks a:hover { background: #313131; } }
+@media (max-width: 420px) {
+  .marketHeading > img { flex-basis: 56px; height: 56px; width: 56px; }
+  .marketHeading p { font-size: 16px; line-height: 24px; }
+}

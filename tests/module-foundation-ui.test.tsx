@@ -68,4 +68,16 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(submitted).not.toContain("View coin");
     expect(submitted).toContain("index confirmation pending");
   });
+  it("renders host-supplied public metadata and omits unsafe image or social URLs", () => {
+    const props = { availability, contextKey: "fixture", quote, pool: { poolId: hash, currency0: address, currency1: address, fee: 3000, tickSpacing: 60, hooks: address, poolManager: address }, creatorFeeBps: 0, onPrepareTrade: vi.fn(), onConfirmTrade: vi.fn() };
+    const coin = { address, name: "UI fixture", symbol: "UI", description: "Local UI fixture.", decimals: 18, imageURI: "https://assets.example.com/coin.webp", socialLinks: [{ label: "Website", url: "https://coin.example.com/about" }, { label: "Unsafe script", url: "javascript:alert(1)" }, { label: "Private credential", url: "https://user:secret@coin.example.com" }, { label: "Plain HTTP", url: "http://coin.example.com" }] };
+    const html = renderToStaticMarkup(<ModuleFoundationMarket {...props} coin={coin} />);
+    expect(html).toContain('src="https://assets.example.com/coin.webp"');
+    expect(html).toContain('href="https://coin.example.com/about"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain("Website (opens in a new tab)");
+    for (const label of ["Unsafe script", "Private credential", "Plain HTTP"]) expect(html).not.toContain(label);
+    const unsafeImage = renderToStaticMarkup(<ModuleFoundationMarket {...props} coin={{ ...coin, imageURI: "data:image/svg+xml,unsafe" }} />);
+    expect(unsafeImage).not.toContain("data:image");
+  });
 });
