@@ -15,6 +15,9 @@ import { buildFoundationExactInput, foundationPoolId, foundationPoolKey, type Fo
 import type { FoundationPrepareModuleActionInputV1 } from "./action-runtime";
 import { readFoundationAssetPins, readFoundationModulePackages, withFoundationModulePackages } from "./metadata";
 import { refreshFoundationAssetsV1, type FoundationAssetPinV1 } from "./assets";
+import type { FoundationCatalogV1 } from "./catalog";
+import type { FoundationModuleSelection } from "./ui-types";
+import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
 
 export function createFoundationClient(): PublicClient {
   return createPublicClient({ chain: robinhoodChain, transport: fallback([
@@ -272,16 +275,29 @@ export async function prepareFoundationLaunch(input: {
     steps: simulation.steps, balances: simulation.balances, simulation: "rpc-sequence" as const });
 }
 
+export interface FoundationTradeModuleReview {
+  catalog: FoundationCatalogV1; selections: readonly FoundationModuleSelection[]; context?: OpenConfigContext;
+}
 export async function prepareFoundationTrade(input: { client: PublicClient; binding: FoundationDeploymentBinding; account: Address;
-  pool: FoundationPool; side: "buy" | "sell"; amountIn: bigint; slippageBps: number }) {
+  pool: FoundationPool; side: "buy" | "sell"; amountIn: bigint; slippageBps: number; moduleReview?: FoundationTradeModuleReview }) {
   const { client, binding } = input, account = getAddress(input.account);
-  const checkpoint = await assertFoundationInfrastructure(client, binding);
+  let checkpoint = await assertFoundationInfrastructure(client, binding);
   if (input.amountIn <= 0n || input.amountIn > FOUNDATION_INT128_MAX || !Number.isInteger(input.slippageBps)
     || input.slippageBps < 1 || input.slippageBps > 1_000) throw new Error("Invalid trade amount or slippage.");
   const key = foundationPoolKey(input.pool);
   if (foundationPoolId(key) !== input.pool.poolId) throw new Error("The pool key changed.");
   const provenance = await assertFoundationPool(client, binding, input.pool, checkpoint.blockNumber);
-  const moduleAssetPins = await readFoundationPoolAssetPins(client, input.pool, checkpoint);
+  const moduleCount = await client.readContract({ address: input.pool.hook, abi: foundationHookAbi, functionName: "moduleCount", blockNumber: checkpoint.blockNumber });
+  if (moduleCount > 8n || (moduleCount > 0n && (!input.moduleReview || BigInt(input.moduleReview.selections.length) !== moduleCount))) {
+    throw new Error("Verify this pool's original admitted module sources before trading.");
+  }
+  const runtime = moduleCount > 0n ? await (await import("./action-runtime")).readFoundationActionRuntimeV1({
+    client, binding, pool: input.pool, catalog: input.moduleReview!.catalog,
+    selections: input.moduleReview!.selections, context: input.moduleReview!.context,
+  }) : null;
+  if (runtime) checkpoint = runtime.checkpoint;
+  const moduleAssetPins = runtime?.moduleAssetPins ?? await readFoundationPoolAssetPins(client, input.pool, checkpoint);
+  if (moduleCount === 0n && moduleAssetPins.length) throw new Error("A base pool cannot declare additional module assets.");
   const currencyIn = input.side === "buy" ? input.pool.quote : input.pool.token;
   const amountOut = (await client.simulateContract({ address: FOUNDATION_INFRASTRUCTURE.v4Quoter.address, abi: foundationQuoterAbi,
     functionName: "quoteExactInputSingle", args: [{ poolKey: key, zeroForOne: getAddress(currencyIn) === key.currency0,
@@ -307,7 +323,9 @@ export async function prepareFoundationTrade(input: { client: PublicClient; bind
   const simulation = await simulateFoundationSequence(client, [...approvals, trade], checkpoint, balanceChecks);
   return sealFoundationSequence({ kind: "trade" as const, sourceKind: "module-foundation-v1" as const, account, binding, checkpoint,
     expiresAt: route.deadline, pool: input.pool, side: input.side, amountIn: input.amountIn, amountOut, minimumOutput,
-    route, provenance, moduleAssetPins, balanceChecks, steps: simulation.steps, balances: simulation.balances, simulation: "rpc-sequence" as const });
+    route, provenance, moduleAssetPins, balanceChecks,
+    moduleReview: runtime ? { selections: input.moduleReview!.selections, context: runtime.configurationContext } : null,
+    steps: simulation.steps, balances: simulation.balances, simulation: "rpc-sequence" as const });
 }
 
 /** Call only after the pool's factory registration and token identity are verified. */

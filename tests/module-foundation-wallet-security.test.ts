@@ -83,6 +83,7 @@ function fixture(index = 0, registered = true) {
     sourceKind: "module-foundation-v1", kind: "trade", account, binding: structuredClone(release),
     expiresAt: BigInt(fixedTime / 1_000 + 300), pool: { token, quote, hook: a(83), poolId: h(33) },
     side: "buy", amountIn: 10n, amountOut: 9n, minimumOutput: 8n,
+    moduleReview: null,
     moduleAssetPins: [], balanceChecks: [{ token: quote, account, delta: -10n }, { token, account, minimumDelta: 8n }],
     balances: [{ token: quote, account, before: 100n, after: 90n, delta: -10n },
       { token, account, before: 0n, after: 9n, delta: 9n }],
@@ -101,6 +102,7 @@ function fixture(index = 0, registered = true) {
   const extraCode = "0x60016000f3" as Hex;
   const getCode = vi.fn(async () => extraCode);
   const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
+    if (functionName === "moduleCount") return 0n;
     if (functionName === "name") return "Additional asset";
     if (functionName === "symbol") return "EXTRA";
     if (functionName === "decimals") return 6;

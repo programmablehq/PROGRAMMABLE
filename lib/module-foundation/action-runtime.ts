@@ -6,7 +6,8 @@ import type { OpenConfigContext, OpenConfigSchema, OpenConfigValue } from "@/pac
 import type { ModuleEngineConfigurationArgument, ModuleEngineConfigurationComponent } from "@/lib/module-engine/catalog";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleAddress, moduleHash, moduleInteger } from "@/lib/module-mode/release";
-import { foundationFactoryAbi } from "./abi";
+import { foundationFactoryAbi, foundationTokenAbi } from "./abi";
+import { readFoundationModulePackages } from "./metadata";
 import {
   assertFoundationInfrastructure, assertFoundationPool, readFoundationPoolAssetPins, readFoundationQuote, simulateFoundationSequence,
   type FoundationBalanceCheck, type FoundationCheckpoint, type FoundationDeploymentBinding, type FoundationPreparedStep,
@@ -111,9 +112,14 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
   foundationRequire(Array.isArray(input.selections) && input.selections.length <= 8, "FOUNDATION_MODULE_LIMIT", "Restore at most eight original module selections.");
   const { client, binding, pool } = input, checkpoint = await assertFoundationInfrastructure(client, binding);
   const provenance = await assertFoundationPool(client, binding, pool, checkpoint.blockNumber);
-  const [moduleAssetPins, quote] = await Promise.all([
+  const [moduleAssetPins, quote, metadata] = await Promise.all([
     readFoundationPoolAssetPins(client, pool, checkpoint), readFoundationQuote(client, pool.quote, undefined, checkpoint.blockNumber),
+    client.readContract({ address: pool.token, abi: foundationTokenAbi, functionName: "metadata", blockNumber: checkpoint.blockNumber }),
   ]);
+  const modulePackageIds = readFoundationModulePackages(metadata[3], input.selections.length);
+  foundationRequire(modulePackageIds === undefined ? input.selections.length === 0
+    : input.selections.every((selection, index) => modulePackageIds[index] === moduleHash(selection.id, "foundation.packageId")),
+  "FOUNDATION_ACTION_PACKAGE_IDENTITIES", "The original ordered source package identities must match the token's immutable metadata.");
   const configurationContext = originalAssetContext(input, provenance.creator, quote.decimals, moduleAssetPins);
   input.context = configurationContext;
   const composition = assertOriginalComposition(input, provenance.creatorFeeBps);
@@ -152,6 +158,7 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
   const sourceVerificationDigest = foundationDataDigest("programmable.module-foundation.action-rpc-observations.v1", jsonObservation({
     chainId: FOUNDATION_CHAIN_ID, binding, checkpoint, pool, registeredLaunch: provenance.record, creator: provenance.creator,
     creatorFeeBps: provenance.creatorFeeBps, hostCodeHash, compositionHash, modules: observed, moduleAssetPins, configurationContext, quote,
+    modulePackageIds: modulePackageIds ?? [], sourceMetadataHash: keccak256(metadata[3]),
   }));
   const instances = observed.map(item => {
     const entry = resolveFoundationCatalogEntryV1(input.catalog, moduleHash(input.selections[item.moduleIndex].id, "foundation.packageId"));

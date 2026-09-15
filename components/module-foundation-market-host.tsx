@@ -77,8 +77,13 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
     if (!session.account || !details) throw new Error("Connect your wallet and load the verified pool first.");
     const account = session.account, context = session.contextKey; session.assertCurrent(account, context);
     const current = await session.resolveAuthority();
+    if (details.ledger.modules.length > 0 && (!modules?.selections || !modules.context || modules.error)) {
+      throw new Error("Wait for this pool's original module sources and asset bindings to be verified before trading.");
+    }
     const sequence = await prepareFoundationTrade({ client: session.client, binding: current, account, pool: details.pool,
-      side: draft.side, amountIn: foundationParseAmount(draft.amount, draft.side === "buy" ? details.quote.decimals : 18, false), slippageBps: draft.slippageBps });
+      side: draft.side, amountIn: foundationParseAmount(draft.amount, draft.side === "buy" ? details.quote.decimals : 18, false), slippageBps: draft.slippageBps,
+      ...(details.ledger.modules.length > 0 ? { moduleReview: { catalog: await session.resolveCatalog(),
+        selections: modules!.selections!, context: modules!.context } } : {}) });
     const fees = await simulateFoundationTradeFees({ client: session.client, binding: current, pool: details.pool,
       steps: sequence.steps, checkpoint: sequence.checkpoint });
     session.assertCurrent(account, context);

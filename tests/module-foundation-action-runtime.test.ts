@@ -175,6 +175,17 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(now 
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation RPC module action binding", () => {
+  it.each(["missing", "wrong-order"])("rejects %s immutable source identities while installed runtime and composition stay unchanged", async change => {
+    const f = fixture(2), originalComposition = f.state.compositionHash;
+    expect(f.installed[0].codeHash).toBe(f.installed[1].codeHash);
+    f.state.socialData = change === "missing" ? "0x"
+      : withFoundationModulePackages("0x", f.entries.map(entry => entry.manifest.packageId).reverse(), f.pins);
+    await expect(readFoundationActionRuntimeV1(f.input)).rejects.toMatchObject({ code: "FOUNDATION_ACTION_PACKAGE_IDENTITIES" });
+    expect(f.state.compositionHash).toBe(originalComposition); expect(f.state.count).toBe(2n);
+    expect(f.readContract.mock.calls.filter(([call]) => call.functionName === "metadata").every(([call]) => call.blockNumber === checkpoint.blockNumber)).toBe(true);
+    expect(f.readContract.mock.calls.some(([call]) => call.functionName === "moduleAt")).toBe(false);
+    expect(f.simulateCalls).not.toHaveBeenCalled();
+  });
   it("reconstructs original asset context from fresh immutable metadata and retains only consistent host aliases", async () => {
     const extra = address(70), f = fixture(1, "creator", extra);
     const runtime = await readFoundationActionRuntimeV1({ ...f.input, context: { assets: { alias: { chainId: 4663, address: extra, decimals: 6 } } } });
@@ -264,8 +275,11 @@ describe("Foundation RPC module action binding", () => {
     expect(f.simulateCalls).not.toHaveBeenCalled();
   });
   it("represents an empty composition and rejects an absent action position", async () => {
-    const f = fixture(0); expect((await readFoundationActionRuntimeV1(f.input)).instances).toEqual([]);
+    const f = fixture(0); f.state.socialData = "0x";
+    expect((await readFoundationActionRuntimeV1(f.input)).instances).toEqual([]);
     await expect(prepareFoundationModuleActionV1(f.input)).rejects.toThrow(/no module/);
+    f.state.count = 1n;
+    await expect(readFoundationActionRuntimeV1(f.input)).rejects.toMatchObject({ code: "FOUNDATION_ACTION_COMPOSITION_MISMATCH" });
   });
   it.each(["child-code", "factory-code", "child-configuration", "host-configuration", "child-descriptor", "host-descriptor", "context"])("rejects %s changes in the unselected second module", async mutation => {
     const f = fixture(2);

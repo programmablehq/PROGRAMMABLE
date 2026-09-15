@@ -4,10 +4,11 @@ import { readFoundationResolution, writeFoundationResolution, type FoundationRes
 import { assertFoundationInfrastructure, assertFoundationPool, assertFoundationPreparedSequence, simulateFoundationSequence,
   type FoundationBalanceCheck, type FoundationDeploymentBinding, type FoundationPreparedStep,
   type prepareFoundationLaunch, type prepareFoundationTrade, type prepareFoundationClaim, type prepareFoundationModuleAction } from "./client";
-import { decodeFoundationLaunchSelectionsV1, revalidateFoundationModuleActionV1, type FoundationActionRoleResolverV1 } from "./action-runtime";
+import { decodeFoundationLaunchSelectionsV1, readFoundationActionRuntimeV1, revalidateFoundationModuleActionV1, type FoundationActionRoleResolverV1 } from "./action-runtime";
 import type { FoundationCatalogV1 } from "./catalog";
 import { FOUNDATION_INFRASTRUCTURE } from "./constants";
 import { refreshFoundationAssetsV1 } from "./assets";
+import { foundationHookAbi } from "./abi";
 
 export type FoundationPreparedSequence = Awaited<ReturnType<typeof prepareFoundationLaunch>> | Awaited<ReturnType<typeof prepareFoundationTrade>> | Awaited<ReturnType<typeof prepareFoundationClaim>> | Awaited<ReturnType<typeof prepareFoundationModuleAction>>;
 export interface FoundationWalletPreparation {
@@ -93,7 +94,7 @@ export async function revalidateFoundationWalletStep(value: FoundationWalletPrep
       binding.state = "ready";
       return transaction;
     }
-    const checkpoint = await assertFoundationInfrastructure(binding.client, current);
+    let checkpoint = await assertFoundationInfrastructure(binding.client, current);
     if (sequence.kind === "launch" && sequence.parameters.modules.length > 0) {
       if (!binding.resolveCatalog) throw new Error("The current module admissions cannot be checked. Review again.");
       // Re-decode and exactly re-encode against today's admissions; a stable host release does not freeze module approval.
@@ -107,6 +108,16 @@ export async function revalidateFoundationWalletStep(value: FoundationWalletPrep
         packageIds: sequence.modulePackageIds, context: assets.context });
     }
     if (sequence.kind !== "launch") await assertFoundationPool(binding.client, current, sequence.pool, checkpoint.blockNumber);
+    if (sequence.kind === "trade") {
+      const count = await binding.client.readContract({ address: sequence.pool.hook, abi: foundationHookAbi, functionName: "moduleCount", blockNumber: checkpoint.blockNumber });
+      if (count > 8n || (count > 0n && (!binding.resolveCatalog || !sequence.moduleReview
+        || BigInt(sequence.moduleReview.selections.length) !== count))) throw new Error("Verify this pool's current module admissions before trading.");
+      if (count > 0n) {
+        const runtime = await readFoundationActionRuntimeV1({ client: binding.client, binding: current, pool: sequence.pool,
+          catalog: await binding.resolveCatalog!(), selections: sequence.moduleReview!.selections, context: sequence.moduleReview!.context });
+        checkpoint = runtime.checkpoint;
+      }
+    }
     if (sequence.kind === "trade" && sequence.moduleAssetPins.length) await refreshFoundationAssetsV1({ client: binding.client, pins: sequence.moduleAssetPins, checkpoint });
     const remaining = sequence.steps.slice(binding.index);
     const checks: readonly FoundationBalanceCheck[] = sequence.kind === "claim"

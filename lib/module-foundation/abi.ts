@@ -40,6 +40,7 @@ export const foundationHookAbi = parseAbi([
   "function creatorFeeBps() view returns (uint16)", "function ledger() view returns (address)",
   "function poolId() view returns (bytes32)", "function poolKey() view returns (PoolKey)",
   "function feeCarry(bool buy) view returns (uint16 platform,uint16 creator)",
+  "function moduleCount() view returns (uint256)",
 ]);
 
 export const foundationQuoterAbi = parseAbi([
