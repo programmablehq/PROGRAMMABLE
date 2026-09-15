@@ -16,7 +16,7 @@ type FoundationAssetPinV1 = readonly [
 
 Chain 4663 is fixed by this adapter version. Tuples retain first-occurrence order and canonical lowercase addresses and hashes. Each additional asset appears once. `parseFoundationAssetPinsV1` validates shape, decimals, identity and limits. `mergeFoundationAssetPinsV1` deduplicates identical tuples, rejects conflicting metadata and applies the combined limit. `hashFoundationAssetPinsV1` binds the full ordered table and chain to the `programmable.module-foundation.assets.v1` domain.
 
-These helpers do not create provenance. The launch owner must commit the actual tuples in immutable metadata, recover them from the verified original launch, and compare them with fresh chain reads. The intended social-data location is `foundation.assets` beside the ordered `foundation.packages` identities. The existing 1,200-byte metadata limit still applies and must fail explicitly if exceeded. A browser cache or a digest supplied by the browser cannot replace that commitment.
+These helpers do not create provenance. The launch host commits the actual tuples in immutable metadata, recovers them from the verified original launch, and compares them with fresh chain reads. Social data stores them at `foundation.assets` beside the ordered `foundation.packages` identities. The existing 1,200-byte metadata limit still applies and fails explicitly if exceeded. A browser cache or a digest supplied by the browser cannot replace that commitment.
 
 Names and symbols are current display metadata, outside the immutable tuple. A rename can update the display without changing the address, decimals or code commitment. A runtime or decimals change rejects refresh. Proxy runtime hashing is not proof that its implementation or transfer behavior is immutable; current exact transaction simulation remains required.
 
@@ -68,6 +68,21 @@ The collector follows the actual source schema through records, bounded lists, a
 `resolveFoundationAssetFieldsV1` also returns `value`, validated by the actual source configuration compiler. Literal chain/decimals in JSON and fixed source subtrees must match the verified metadata. The final field decoder accepts either an actual resolved address or a trusted existing alias, and rejects an unresolved address. ABI encoding still contains the address only, so immutable pin binding is required separately.
 
 Use `action.inputs` with the same helpers for management actions. The launch controller and backend must independently reconstruct asset metadata and exact source selection IDs, versions, manifest digests and creator shares before composition. Keep `composeFoundationUiSelectionsV1` as the final selection and capability validator. Recovery passes the refreshed complete asset context to `decodeFoundationLaunchSelectionsV1`, which re-encodes the original configuration exactly.
+
+## Modular trades
+
+Trading a pool that contains modules requires its complete current source admission, original selections and verified asset context:
+
+```ts
+const prepared = await prepareFoundationTrade({
+  client, binding, account, pool, side, amountIn, slippageBps,
+  moduleReview: { catalog, selections, context },
+});
+```
+
+The SDK reads the actual hook module count. For a nonempty pool it runs `readFoundationActionRuntimeV1` before the Quoter or swap simulation. That reader checks the ordered package IDs in the token's immutable metadata, current admission, exact compiled configuration, every installed module and the complete asset-pin context. A factory registration or caller-supplied alias cannot substitute for those checks. A base pool with zero modules can omit `moduleReview`.
+
+The privately sealed preparation preserves the verified original selections and asset context. Its wallet binding must provide `resolveCatalog` for modular trades. Immediately before each wallet request, the wallet obtains the current catalog, revalidates the entire runtime and uses that runtime's checkpoint for the remaining sequence simulation. Withdrawn admission, changed code/decimals, missing pins or source identities require another valid review. Additional ERC20 assets always receive a nonnegative wallet-balance check; the input retains its exact debit and the output its net minimum.
 
 ## V1 action balance boundary
 

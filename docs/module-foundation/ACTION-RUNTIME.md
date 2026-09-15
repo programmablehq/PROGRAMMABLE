@@ -50,6 +50,8 @@ The validator rebuilds the intent and repeats the simulation with the reviewed b
 
 The V1 runtime fixes the actual host adapter to `programmable.module-foundation.host@1` and chain 4663. It uses the SDK's `assertFoundationInfrastructure` and `assertFoundationPool` before reading modules. Those assertions establish the currently pinned infrastructure and canonical launch-factory registration. The module factory in a catalog entry is a separate address from the foundation launch factory in `binding`.
 
+The reader first recovers the actual token's immutable ordered package IDs and additional-asset pins, verifies the package IDs against the original selections, and reconstructs the asset context from current code and metadata. Nonempty compositions require those source identities even when several sources happen to share identical runtime bytes.
+
 All subsequent reads use the returned block number:
 
 1. Hook `moduleCount()`, `compositionHash()` and deployed code.
