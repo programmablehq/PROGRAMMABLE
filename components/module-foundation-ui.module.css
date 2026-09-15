@@ -16,6 +16,8 @@
 .page *, .page *::before, .page *::after { box-sizing: border-box; }
 .page h1, .page h2, .page h3 { color: var(--mf-ink); text-wrap: balance; }
 .page p { text-wrap: pretty; }
+.sessionStatus { padding-bottom: 0; }
+.sessionStatus section { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 8px; padding: 24px; }
 .topline { align-items: center; display: flex; gap: 16px; justify-content: space-between; min-height: 44px; }
 .backButton { align-items: center; background: transparent; border: 0; color: var(--mf-muted); cursor: pointer; display: inline-flex; font: inherit; font-size: 14px; gap: 8px; min-height: 44px; padding: 8px 0; }
 .network { color: var(--mf-muted); font-size: 14px; line-height: 20px; text-align: right; }
