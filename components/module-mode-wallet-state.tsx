@@ -6,15 +6,20 @@ import { walletChainIdsEqual } from "@/lib/wallet-chain-id";
 import type { ModuleModeDraft } from "@/lib/module-mode/builder";
 import type { ModuleNativeWalletTransaction, PreparedModuleNativeTransaction } from "@/lib/module-mode/native-client";
 import type { PreparedModuleEngineTransaction } from "@/lib/module-engine/client";
+import type { FoundationWalletPreparation } from "@/lib/module-foundation/wallet";
 import { isProgrammableTokenImageUrl, readTokenImageUploadResponse } from "@/lib/token-image";
 import { beginModuleModeOperation, clearModuleModeOperation, moduleModeOperationSnapshot, parseModuleModeOperation, rememberModuleModeTransactionHash, subscribeToModuleModeOperation, type ModuleModeOperation, type ModuleModeRecoveryPreparation } from "@/lib/module-mode-operation-store";
 
-export type PreparedModuleModeTransaction = PreparedModuleNativeTransaction | PreparedModuleEngineTransaction;
+export type PreparedModuleModeTransaction = PreparedModuleNativeTransaction | PreparedModuleEngineTransaction | FoundationWalletPreparation;
 
 /** Select only the concrete source's private preparation validator. No source can fall back to another protocol. */
 export async function revalidateModuleModeTransaction(prepared: PreparedModuleModeTransaction, account: Address): Promise<ModuleNativeWalletTransaction> {
   if (!prepared || typeof prepared !== "object") throw new Error("The transaction preparation is invalid.");
   if ("sourceKind" in prepared) {
+    if (prepared.sourceKind === "module-foundation-v1") {
+      const { revalidateFoundationWalletStep } = await import("@/lib/module-foundation/wallet");
+      return revalidateFoundationWalletStep(prepared, account);
+    }
     if (prepared.sourceKind !== "module-engine-v1") throw new Error("The transaction source is unsupported.");
     const { revalidateModuleEngineTransaction } = await import("@/lib/module-engine/client");
     return revalidateModuleEngineTransaction(prepared, account);

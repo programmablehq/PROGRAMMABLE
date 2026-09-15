@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { decodeAbiParameters, decodeFunctionData, keccak256, toHex, type Address } from "viem";
-import type { OpenConfigSchema } from "@/packages/classic-modules/src/open-config.mjs";
+import type { OpenConfigContext, OpenConfigSchema } from "@/packages/classic-modules/src/open-config.mjs";
 import type { OpenSourcePackage } from "@/packages/classic-modules/src/open-packages.mjs";
 import type { FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
 import {
   FOUNDATION_CAPABILITIES_V1, FOUNDATION_CONFIGURATION_CODEC_V1, FOUNDATION_HOST_ADAPTER_ID_V1,
   FOUNDATION_PACKAGE_EXTENSION_V1, FOUNDATION_ZERO_HASH, createFoundationModuleManifestV1,
   foundationDataDigest, hashFoundationModuleDescriptorV1, hashFoundationModuleManifestV1,
-  type FoundationModuleDescriptorV1,
+  type FoundationModuleDescriptorV1, type FoundationPackageExtensionV1,
 } from "@/lib/module-foundation/manifest";
 import { FOUNDATION_CATALOG_SCHEMA_V1, bindFoundationCatalogV1, type FoundationCatalogEntryV1 } from "@/lib/module-foundation/catalog";
 import {
@@ -21,7 +21,7 @@ const hash = (value: string) => keccak256(toHex(value));
 const address = (value: number) => `0x${value.toString(16).padStart(40, "0")}` as Address;
 const creator = address(3), now = 1_800_000_000;
 
-function fixture(role = "creator", modify?: (source: OpenSourcePackage) => void) {
+function fixture(role = "creator", modify?: (source: OpenSourcePackage) => void, context?: OpenConfigContext) {
   const descriptor: FoundationModuleDescriptorV1 = { moduleId: hash("technical.state-cell"), abiVersion: 1, phases: 6, resources: 1,
     beforeGas: 0, afterGas: 50_000, actionGas: 60_000, failOpenAfter: false, exclusiveGroup: FOUNDATION_ZERO_HASH };
   const source: OpenSourcePackage = {
@@ -56,7 +56,7 @@ function fixture(role = "creator", modify?: (source: OpenSourcePackage) => void)
     deploymentEvidenceDigest: hash("deploy"), runtimeVerificationDigest: hash("runtime"), factory: address(10),
     factoryCodeHash: hash("factory-code"), moduleCodeHash: hash("module-code"), descriptorHash: hashFoundationModuleDescriptorV1(descriptor) } };
   const catalog = bindFoundationCatalogV1({ schemaVersion: FOUNDATION_CATALOG_SCHEMA_V1, entries: [entry] }, { admissions: [entry.review!], releases: [entry.release!] });
-  const environment = { catalog, chainId: 4663, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1 };
+  const environment = { catalog, chainId: 4663, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1, context };
   const selection: FoundationModuleSelection = { id: manifest.packageId, version: source.version, digest: manifestHash,
     configuration: { "/settings/ceiling": "100", [FOUNDATION_CREATOR_SHARE_FIELD_V1]: "25.50" } };
   const composition = composeFoundationUiSelectionsV1({ ...environment, selections: [selection], creatorFeeBps: 300 });
@@ -72,6 +72,25 @@ function fixture(role = "creator", modify?: (source: OpenSourcePackage) => void)
 }
 
 describe("Foundation catalog to UI binding", () => {
+  it("checks asset bindings inserted by the compiler inside fixed array children against the verified context", () => {
+    const asset = address(70), context: OpenConfigContext = { assets: { verified: { chainId: 4663, address: asset, decimals: 6 } } };
+    const f = fixture("creator", source => {
+      if (source.configuration.type !== "record") throw new Error("Expected fixture record");
+      source.configuration.fields.cells = { type: "array", maxItems: 1, binding: { mode: "input", default: [{}] },
+        items: { type: "record", fields: { asset: { type: "asset", binding: { mode: "fixed", value: { chainId: 4663, address: asset, decimals: 6 } } } }, required: ["asset"] } };
+      source.configuration.required.push("cells");
+      const extension = source.extensions![FOUNDATION_PACKAGE_EXTENSION_V1] as unknown as FoundationPackageExtensionV1;
+      extension.configurationAbi = [...extension.configurationAbi, { path: ["cells"], type: "tuple[]", components: [{ name: "asset", type: "address" }] }];
+    }, context);
+    expect(composeFoundationUiSelectionsV1({ ...f, selections: [f.selection], creatorFeeBps: 300 }).ok).toBe(true);
+    expect(composeFoundationUiSelectionsV1({ ...f, selections: [f.selection], creatorFeeBps: 300, context: {} })).toMatchObject({
+      ok: false, modules: [], diagnostics: [expect.objectContaining({ code: "FOUNDATION_ASSET_CONTEXT_REQUIRED" })],
+    });
+    expect(composeFoundationUiSelectionsV1({ ...f, selections: [f.selection], creatorFeeBps: 300,
+      context: { assets: { verified: { chainId: 4663, address: asset, decimals: 18 } } } })).toMatchObject({
+      ok: false, modules: [], diagnostics: [expect.objectContaining({ code: "FOUNDATION_ASSET_METADATA_MISMATCH" })],
+    });
+  });
   it("projects primitive nested fields and exact source identity without exposing fixed fields", () => {
     const f = fixture(), [module] = presentFoundationCatalogV1(f);
     expect(module).toMatchObject({ id: f.entry.manifest.packageId, version: "1.2.0", digest: f.selection.digest, available: true });

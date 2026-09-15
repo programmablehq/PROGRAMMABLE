@@ -149,6 +149,10 @@ export interface FoundationTransactionResult {
   pool?: FoundationPoolIdentity;
   positions?: readonly FoundationPositionIdentity[];
   metadataStatus?: "stored" | "indexed" | "pending";
+  /** A mined approval can leave further steps. A mined launch remains complete even if its detail readback is delayed. */
+  operationComplete?: boolean;
+  verificationStatus?: "pending" | "verified";
+  stepLabel?: string;
 }
 
 export interface FoundationWalletAction {

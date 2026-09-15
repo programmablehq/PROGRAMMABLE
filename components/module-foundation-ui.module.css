@@ -28,6 +28,7 @@
 .availability { background: var(--mf-surface); border: 1px solid #484848; border-radius: 8px; margin-bottom: 24px; padding: 16px 24px; }
 .availability strong { font-size: 16px; font-weight: 500; line-height: 24px; }
 .availability p { color: var(--mf-muted); font-size: 14px; line-height: 20px; margin: 4px 0 0; max-width: 80ch; }
+.availability button { margin-top: 12px; }
 .layout { align-items: start; display: grid; gap: 32px; grid-template-columns: minmax(0, 1fr) 320px; }
 .mainColumn { display: grid; gap: 16px; min-width: 0; }
 .form, .reviewPanel, .resultPanel { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 16px; min-width: 0; padding: 32px; }

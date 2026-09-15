@@ -1,13 +1,15 @@
-import { keccak256, sha256, toHex, type Hex } from "viem";
+import { keccak256, sha256, toHex, encodeAbiParameters, parseAbi, toFunctionSelector, type Hex } from "viem";
 import { nativeCanonicalJson, nativeJson } from "./native-catalog";
 import type { OpenSourcePackage } from "@/packages/classic-modules/src/open-packages.mjs";
 import type { ModuleReviewDecisionCommandV1, ModuleReviewDecisionRecordV1 } from "@/lib/server/module-mode/review-decision-wire-v1";
 
-import { parseEngineReviewArtifact, validateModuleEngineBuildPlanV1 } from "./review-engine-contract";
+import { ENGINE_REVIEW_COMPILER, parseEngineReviewArtifact, validateModuleEngineBuildPlanV1 } from "./review-engine-contract";
 import type { ModuleEngineBuildArtifactV1, ModuleEngineBuildPlanV1 } from "./review-engine-types";
+import { parseModuleEngineConfigurationAbi } from "../module-engine/configuration";
+import type { ModuleEngineConfigurationArgument as ModuleEngineConfigurationArgumentV1 } from "../module-engine/catalog";
 export type { ModuleReviewDecisionCommandV1, ModuleReviewDecisionRecordV1 };
-export type AnyReviewPlan = ReviewPlan | ModuleEngineBuildPlanV1;
-export type AnyReviewBuildArtifact = ReviewBuildArtifact | ModuleEngineBuildArtifactV1;
+export type AnyReviewPlan = ReviewPlan | ModuleEngineBuildPlanV1 | FoundationBuildPlanV1 | FoundationProtocolPlanV1;
+export type AnyReviewBuildArtifact = ReviewBuildArtifact | ModuleEngineBuildArtifactV1 | FoundationBuildArtifactV1 | FoundationProtocolBuildV1;
 export const MODULE_REVIEW_STATES = ["awaiting_plan", "queued", "running", "built", "build_failed", "changes_requested", "accepted", "rejected"] as const;
 export type ModuleReviewState = typeof MODULE_REVIEW_STATES[number];
 export interface ReviewSubject { submissionId: string; principalId: string; author: string; requestDigest: Hex }
@@ -90,8 +92,11 @@ export function parseReviewProgramAbi(value: unknown): ReviewProgramArgument[] {
   return value as ReviewProgramArgument[];
 }
 export function parseReviewPlan(value: unknown, subject: ReviewSubject): AnyReviewPlan {
-  return reviewRecord(value).schemaVersion === "programmable.modules.engine-build-plan.v1"
-    ? validateModuleEngineBuildPlanV1(nativeJson(value), subject) : parseNativeReviewPlan(value, subject);
+  const raw = nativeJson(value), schema = reviewRecord(raw).schemaVersion;
+  if (schema === FOUNDATION_PLAN_SCHEMA_V1) return validateFoundationBuildPlanV1(raw, subject);
+  if (schema === FOUNDATION_PROTOCOL_PLAN_V1) return validateFoundationProtocolPlanV1(raw, subject);
+  return schema === "programmable.modules.engine-build-plan.v1"
+    ? validateModuleEngineBuildPlanV1(raw, subject) : parseNativeReviewPlan(raw, subject);
 }
 export function parseNativeReviewPlan(value: unknown, subject: ReviewSubject): ReviewPlan {
   const p = reviewRecord(nativeJson(value), ["schemaVersion", "submissionId", "requestDigest", "programComponentId", "factoryComponentId", "configurationCodec", "programAbi", "callbackGas", "cases"]);
@@ -115,7 +120,9 @@ export function parseNativeReviewPlan(value: unknown, subject: ReviewSubject): R
   return p as unknown as ReviewPlan;
 }
 export function parseReviewArtifact(value: unknown, subject: ReviewSubject): AnyReviewBuildArtifact {
-  return reviewRecord(value).schemaVersion === "programmable.modules.engine-build.v1"
+  const schema = reviewRecord(value).schemaVersion;
+  if (schema === FOUNDATION_BUILD_SCHEMA_V1 || schema === FOUNDATION_PROTOCOL_BUILD_V1) return parseFoundationReviewArtifact(value, subject);
+  return schema === "programmable.modules.engine-build.v1"
     ? parseEngineReviewArtifact(value, subject) : parseNativeReviewArtifact(value, subject);
 }
 export function parseNativeReviewArtifact(value: unknown, subject: ReviewSubject): ReviewBuildArtifact {
@@ -161,10 +168,14 @@ export function parseReviewJob(value: unknown): ReviewJob {
   const artifact = r.artifact === null ? null : plan?.schemaVersion === "programmable.modules.engine-build-plan.v1"
     ? parseEngineReviewArtifact(r.artifact, subject, plan) : parseReviewArtifact(r.artifact, subject);
   requireValue(!artifact || artifact.planDigest === r.planDigest, "build plan binding");
-  requireValue(!artifact || (plan !== null && artifact.configurationCodec === plan.configurationCodec &&
-    (artifact.schemaVersion === "programmable.modules.native-build.v1" && plan.schemaVersion === "programmable.modules.native-build-plan.v1"
-      ? nativeCanonicalJson(artifact.programAbi) === nativeCanonicalJson(plan.programAbi)
-      : artifact.schemaVersion === "programmable.modules.engine-build.v1" && plan.schemaVersion === "programmable.modules.engine-build-plan.v1" && nativeCanonicalJson(artifact.configurationAbi) === nativeCanonicalJson(plan.configurationAbi))), "build configuration ABI binding");
+  if (artifact && plan) {
+    if (artifact.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1 || artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1) parseFoundationReviewArtifact(artifact, subject, plan);
+    else requireValue("configurationCodec" in plan && artifact.configurationCodec === plan.configurationCodec &&
+      (artifact.schemaVersion === "programmable.modules.native-build.v1" && plan.schemaVersion === "programmable.modules.native-build-plan.v1"
+        ? nativeCanonicalJson(artifact.programAbi) === nativeCanonicalJson(plan.programAbi)
+        : artifact.schemaVersion === "programmable.modules.engine-build.v1" && plan.schemaVersion === "programmable.modules.engine-build-plan.v1" && nativeCanonicalJson(artifact.configurationAbi) === nativeCanonicalJson(plan.configurationAbi)), "build configuration ABI binding");
+  }
+  requireValue(!artifact || plan !== null, "required build plan");
   requireValue(!["built", "accepted"].includes(String(r.state)) || artifact !== null, "required build");
   return { ...(r as unknown as ReviewJob), subject, plan, artifact };
 }
@@ -178,7 +189,7 @@ export function parseReviewAttempt(value: unknown, subject: ReviewSubject): Revi
   return r as unknown as ReviewAttempt;
 }
 export function summarizeReviewJob(job: ReviewJob): ReviewQueueItem {
-  return { subject: job.subject, state: job.state, reviewRevision: job.reviewRevision, attempt: job.attempt, lastError: job.lastError, createdAt: job.createdAt, updatedAt: job.updatedAt, build: job.artifact ? { artifactDigest: job.artifact.artifactDigest, programName: job.artifact.schemaVersion === "programmable.modules.engine-build.v1" ? job.artifact.engine.contractName : job.artifact.program.contractName, testsPassed: job.artifact.tests.allRequiredChecksPassed, caseCount: job.artifact.tests.cases.length } : null };
+  return { subject: job.subject, state: job.state, reviewRevision: job.reviewRevision, attempt: job.attempt, lastError: job.lastError, createdAt: job.createdAt, updatedAt: job.updatedAt, build: job.artifact ? { artifactDigest: job.artifact.artifactDigest, programName: job.artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 ? job.artifact.factory.contractName : job.artifact.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1 ? job.artifact.module.contractName : job.artifact.schemaVersion === "programmable.modules.engine-build.v1" ? job.artifact.engine.contractName : job.artifact.program.contractName, testsPassed: job.artifact.tests.allRequiredChecksPassed, caseCount: reviewArtifactCheckCount(job.artifact) } : null };
 }
 export function parseReviewQueueItem(value: unknown): ReviewQueueItem {
   const raw = reviewRecord(value);
@@ -197,4 +208,338 @@ export function parseReviewQueueItem(value: unknown): ReviewQueueItem {
 }
 export function reviewStateLabel(state: ModuleReviewState) {
   return ({ awaiting_plan: "Needs build plan", queued: "Queued", running: "Building", built: "Ready for review", build_failed: "Build failed", changes_requested: "Changes requested", accepted: "Review approved", rejected: "Rejected" })[state];
+}
+
+export function reviewArtifactCheckCount(artifact: AnyReviewBuildArtifact): number {
+  return artifact.schemaVersion === "programmable.modules.foundation-protocol-build.v1" ? Object.keys(artifact.tests.checks).length : artifact.tests.cases.length;
+}
+
+/** Review binds immutable source/build facts; release, deployment and activation are separate authorities. */
+export function foundationProtocolReviewManifestV1(artifact: FoundationProtocolBuildV1) {
+  return { hostAdapterId: artifact.hostAdapterId, sourceCommit: artifact.sourceCommit, sourceManifestHash: artifact.sourceManifestHash,
+    compiler: artifact.compiler, platformBps: artifact.platformBps, platformRecipient: artifact.platformRecipient,
+    factory: artifact.factory, hookDeployer: artifact.hookDeployer, factoryImmutableBindings: artifact.factoryImmutableBindings };
+}
+export function foundationProtocolReviewManifestHashV1(artifact: FoundationProtocolBuildV1): Hex {
+  return reviewDigest("programmable.module-foundation.protocol-host-manifest.v1", foundationProtocolReviewManifestV1(artifact));
+}
+
+export function parseFoundationReviewArtifact(value: unknown, subject: ReviewSubject, suppliedPlan?: AnyReviewPlan): FoundationBuildArtifactV1 | FoundationProtocolBuildV1 {
+  const raw = reviewRecord(nativeJson(value));
+  const protocol = raw.schemaVersion === "programmable.modules.foundation-protocol-build.v1";
+  reviewRecord(raw, ["schemaVersion", "authority", "subject", "packageId", "familyId", "rewardWallet", "sourceManifestHash", "planDigest", "hostAdapterId", "compiler", "factory", "tests", "reviewRequired", "approved", "registryApproved", "available", "artifactDigest",
+    ...(protocol ? ["sourceCommit", "platformBps", "platformRecipient", "hookDeployer", "factoryImmutableBindings"] : ["manifestHash", "descriptor", "descriptorHash", "configurationSchemaHash", "configurationCodec", "configurationAbi", "module", "cases"])]);
+  const { artifactDigest, ...contents } = raw;
+  requireValue(raw.schemaVersion === (protocol ? FOUNDATION_PROTOCOL_BUILD_V1 : FOUNDATION_BUILD_SCHEMA_V1)
+    && raw.authority === (protocol ? "programmable.module-review.foundation-protocol-build.v1" : "programmable.module-review.foundation-build.v1")
+    && isReviewDigest(artifactDigest) && artifactDigest === reviewDigest(String(raw.schemaVersion), contents), "Foundation artifact digest");
+  requireValue(nativeCanonicalJson(parseReviewSubject(raw.subject)) === nativeCanonicalJson(subject) && raw.hostAdapterId === FOUNDATION_HOST_V1
+    && raw.approved === false && raw.registryApproved === false && raw.available === false && typeof raw.rewardWallet === "string" && ADDRESS.test(raw.rewardWallet), "Foundation artifact authority");
+  for (const key of ["packageId", "familyId", "sourceManifestHash", "planDigest"]) requireValue(isReviewDigest(raw[key]), "Foundation identity");
+  const compiler = reviewRecord(raw.compiler, ["version", "binarySha256", "imageDigest", "settingsHash", "completeInputHash", "reproducible"]);
+  requireValue(Object.entries(ENGINE_REVIEW_COMPILER).every(([key, value]) => compiler[key] === value) && compiler.reproducible === true
+    && compiler.settingsHash === reviewDigest("programmable.modules.compiler-settings.v1", FOUNDATION_SETTINGS_V1) && isReviewDigest(compiler.completeInputHash), "Foundation compiler profile");
+  requireValue(nativeCanonicalJson(raw.reviewRequired) === nativeCanonicalJson(protocol ? FOUNDATION_PROTOCOL_REVIEW_AREAS_V1 : FOUNDATION_REVIEW_AREAS_V1)
+    && new TextEncoder().encode(nativeCanonicalJson(raw)).length <= 2 * 1024 * 1024, "Foundation review coverage");
+  const target = (contract: { componentId: string; sourcePath: string; contractName: string }) => {
+    requireValue(typeof contract.componentId === "string" && ID.test(contract.componentId) && typeof contract.sourcePath === "string" && contract.sourcePath.length <= 512
+      && typeof contract.contractName === "string" && /^[A-Za-z_$][A-Za-z0-9_$]{0,255}$/u.test(contract.contractName), "Foundation target");
+    return { id: contract.componentId, sourcePath: contract.sourcePath, entrypoint: contract.contractName };
+  };
+  if (protocol) {
+    const artifact = raw as unknown as FoundationProtocolBuildV1;
+    const plan = validateFoundationProtocolPlanV1({ schemaVersion: FOUNDATION_PROTOCOL_PLAN_V1, submissionId: subject.submissionId, requestDigest: subject.requestDigest,
+      sourceCommit: artifact.sourceCommit, factoryComponentId: artifact.factory.componentId, hookDeployerComponentId: artifact.hookDeployer.componentId, factoryImmutableBindings: artifact.factoryImmutableBindings }, subject);
+    requireValue(artifact.platformBps === 30 && artifact.platformRecipient === "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "Foundation protocol economics");
+    for (const [contract, bindings] of [[artifact.factory, plan.factoryImmutableBindings], [artifact.hookDeployer, []]] as const) {
+      requireValue(Array.isArray(contract.immutableReferences) && contract.immutableReferences.length <= 11, "Foundation immutable references");
+      const rebuilt = foundationProtocolContractArtifact({ abi: contract.abi, evm: { bytecode: { object: contract.creationBytecode.slice(2) }, deployedBytecode: { object: contract.runtimeTemplate.slice(2),
+        immutableReferences: Object.fromEntries(contract.immutableReferences.map(ref => [ref.id, ref.ranges])) } } }, target(contract), bindings);
+      requireValue(nativeCanonicalJson(contract) === nativeCanonicalJson(rebuilt), "Foundation protocol contract");
+    }
+    const tests = reviewRecord(artifact.tests, ["schemaVersion", "requestDigest", "planDigest", "harnessDigest", "execution", "checks", "allRequiredChecksPassed"]);
+    const checks = reviewRecord(tests.checks, FOUNDATION_PROTOCOL_CHECKS_V1);
+    requireValue(tests.schemaVersion === "programmable.modules.foundation-protocol-test-results.v1" && tests.requestDigest === subject.requestDigest && tests.planDigest === artifact.planDigest
+      && isReviewDigest(tests.harnessDigest) && tests.execution === "isolated-docker-anvil" && tests.allRequiredChecksPassed === true && Object.values(checks).every(value => value === true), "Foundation protocol tests");
+    requireValue(artifact.planDigest === reviewDigest(plan.schemaVersion, plan) && (!suppliedPlan || nativeCanonicalJson(suppliedPlan) === nativeCanonicalJson(plan)), "Foundation protocol plan");
+    return artifact;
+  }
+  const artifact = raw as unknown as FoundationBuildArtifactV1;
+  const descriptor = validateFoundationDescriptorV1(artifact.descriptor);
+  requireValue(artifact.descriptorHash === hashFoundationDescriptorV1(descriptor) && isReviewDigest(artifact.manifestHash) && isReviewDigest(artifact.configurationSchemaHash)
+    && Array.isArray(artifact.cases) && artifact.cases.length > 0 && artifact.cases.length <= 16, "Foundation descriptor");
+  const plan = validateFoundationBuildPlanV1({ schemaVersion: FOUNDATION_PLAN_SCHEMA_V1, submissionId: subject.submissionId, requestDigest: subject.requestDigest,
+    moduleComponentId: artifact.module.componentId, factoryComponentId: artifact.factory.componentId, hostAdapterId: artifact.hostAdapterId, descriptorHash: artifact.descriptorHash,
+    configurationCodec: artifact.configurationCodec, configurationAbi: artifact.configurationAbi,
+    cases: artifact.cases.map(value => Object.fromEntries(Object.entries(value).filter(([key]) => !["configBytes", "configHash", "compiledActions"].includes(key)))) }, subject);
+  for (const [contract, factory] of [[artifact.module, false], [artifact.factory, true]] as const) {
+    const rebuilt = foundationModuleContractArtifact({ abi: contract.abi, evm: { bytecode: { object: contract.creationBytecode.slice(2) }, deployedBytecode: { object: contract.runtimeBytecode.slice(2), immutableReferences: {} } } }, target(contract), factory);
+    requireValue(nativeCanonicalJson(contract) === nativeCanonicalJson(rebuilt), "Foundation module contract");
+  }
+  for (const value of artifact.cases) {
+    hex(value.configBytes); requireValue(value.configHash === keccak256(value.configBytes) && Array.isArray(value.compiledActions) && value.compiledActions.length === value.actions.length, "Foundation compiled case");
+    value.compiledActions.forEach((action: FoundationCompiledCaseV1["compiledActions"][number], index: number) => {
+      const { data, ...expected } = action; hex(data, 4);
+      requireValue(nativeCanonicalJson(expected) === nativeCanonicalJson(value.actions[index]), "Foundation compiled action");
+    });
+  }
+  validateResults(artifact.tests, subject.requestDigest, artifact.planDigest, artifact.cases);
+  requireValue(artifact.planDigest === reviewDigest(plan.schemaVersion, plan) && (!suppliedPlan || nativeCanonicalJson(suppliedPlan) === nativeCanonicalJson(plan)), "Foundation module plan");
+  return artifact;
+}
+
+// Inert DTO profiles mirrored from the protected backend Foundation adapter v1.
+export const FOUNDATION_PLAN_SCHEMA_V1 = "programmable.modules.foundation-build-plan.v1" as const;
+export const FOUNDATION_BUILD_SCHEMA_V1 = "programmable.modules.foundation-build.v1" as const;
+export const FOUNDATION_PROFILE_V1 = "programmable.module-foundation.solidity@1" as const;
+export const FOUNDATION_EXTENSION_V1 = "programmable.module-foundation@1" as const;
+export const FOUNDATION_HOST_V1 = "programmable.module-foundation.host@1" as const;
+export const FOUNDATION_CODEC_V1 = "programmable.foundation-abi@1" as const;
+export const FOUNDATION_MANIFEST_SCHEMA_V1 = "programmable.module-foundation.package.v1" as const;
+export const FOUNDATION_DESCRIPTOR_ABI_V1 = [{ type: "tuple", components: [
+  { name: "moduleId", type: "bytes32" }, { name: "abiVersion", type: "uint16" },
+  { name: "phases", type: "uint8" }, { name: "resources", type: "uint8" },
+  { name: "beforeGas", type: "uint32" }, { name: "afterGas", type: "uint32" },
+  { name: "actionGas", type: "uint32" }, { name: "failOpenAfter", type: "bool" },
+  { name: "exclusiveGroup", type: "bytes32" },
+] }] as const;
+export interface FoundationDescriptorV1 {
+  moduleId: Hex; abiVersion: 1; phases: number; resources: number;
+  beforeGas: number; afterGas: number; actionGas: number; failOpenAfter: boolean; exclusiveGroup: Hex;
+}
+export interface FoundationAssertionV1 { readonly callData: `0x${string}`; readonly expectedData: `0x${string}` }
+export interface FoundationSwapV1 {
+  readonly buy: boolean; readonly exactInput: boolean;
+  readonly beforeOutcome: "success" | "revert" | "absent";
+  readonly afterOutcome: "success" | "revert" | "absent";
+  readonly assertions: readonly FoundationAssertionV1[];
+}
+export interface FoundationActionV1 {
+  readonly id: string; readonly actor: "creator" | "user"; readonly parameters: unknown;
+  readonly expectedOutcome: "success" | "revert"; readonly assertions: readonly FoundationAssertionV1[];
+}
+export interface FoundationCaseV1 {
+  readonly id: string; readonly parameters: unknown; readonly budgetQuote: string;
+  readonly expectedDeployment: "success" | "revert"; readonly rawConfigBytes?: `0x${string}`;
+  readonly swaps: readonly FoundationSwapV1[]; readonly actions: readonly FoundationActionV1[];
+}
+/** Chosen by the existing authenticated reviewer plan endpoint, never by an uploaded executable. */
+export interface FoundationBuildPlanV1 {
+  readonly schemaVersion: typeof FOUNDATION_PLAN_SCHEMA_V1;
+  readonly submissionId: string; readonly requestDigest: Hex;
+  readonly moduleComponentId: string; readonly factoryComponentId: string;
+  readonly hostAdapterId: typeof FOUNDATION_HOST_V1; readonly descriptorHash: Hex;
+  readonly configurationCodec: typeof FOUNDATION_CODEC_V1;
+  readonly configurationAbi: readonly ModuleEngineConfigurationArgumentV1[];
+  readonly cases: readonly FoundationCaseV1[];
+}
+export interface FoundationCompiledCaseV1 extends FoundationCaseV1 {
+  readonly configBytes: `0x${string}`; readonly configHash: Hex;
+  readonly compiledActions: readonly (FoundationActionV1 & { readonly data: `0x${string}` })[];
+}
+export interface FoundationTestResultV1 {
+  readonly schemaVersion: "programmable.modules.foundation-test-results.v1";
+  readonly requestDigest: Hex; readonly planDigest: Hex;
+  readonly harnessDigest: Hex; readonly execution: "isolated-docker-anvil";
+  readonly cases: readonly {
+    readonly id: string; readonly configHash: Hex; readonly deploymentMatched: boolean;
+    readonly codeHashMatched: boolean | null; readonly contextMatched: boolean | null;
+    readonly descriptorMatched: boolean | null; readonly configurationMatched: boolean | null;
+    readonly freshInstances: boolean | null; readonly unauthorizedCallbacksReverted: boolean | null;
+    readonly boundedCallbacks: boolean | null; readonly ownQuoteBudgetConserved: boolean | null;
+    readonly swapOutcomes: readonly boolean[]; readonly actionOutcomes: readonly boolean[];
+    readonly stateAssertions: boolean | null;
+  }[];
+  readonly allRequiredChecksPassed: boolean;
+}
+export interface FoundationBuildArtifactV1 {
+  readonly schemaVersion: typeof FOUNDATION_BUILD_SCHEMA_V1;
+  readonly authority: "programmable.module-review.foundation-build.v1";
+  readonly subject: ReviewSubject; readonly packageId: Hex; readonly familyId: Hex;
+  readonly rewardWallet: string; readonly sourceManifestHash: Hex; readonly manifestHash: Hex;
+  readonly planDigest: Hex; readonly hostAdapterId: typeof FOUNDATION_HOST_V1;
+  readonly descriptor: FoundationDescriptorV1; readonly descriptorHash: Hex;
+  readonly configurationSchemaHash: Hex; readonly configurationCodec: typeof FOUNDATION_CODEC_V1;
+  readonly configurationAbi: readonly ModuleEngineConfigurationArgumentV1[];
+  readonly compiler: {
+    readonly version: string; readonly binarySha256: string; readonly imageDigest: string;
+    readonly settingsHash: Hex; readonly completeInputHash: Hex; readonly reproducible: true;
+  };
+  readonly factory: ReviewContractArtifact; readonly module: ReviewContractArtifact;
+  readonly cases: readonly FoundationCompiledCaseV1[]; readonly tests: FoundationTestResultV1;
+  readonly reviewRequired: readonly string[]; readonly approved: false; readonly registryApproved: false; readonly available: false;
+  readonly artifactDigest: Hex;
+}
+
+export const FOUNDATION_PROTOCOL_PLAN_V1 = "programmable.modules.foundation-protocol-build-plan.v1" as const;
+export const FOUNDATION_PROTOCOL_BUILD_V1 = "programmable.modules.foundation-protocol-build.v1" as const;
+export const FOUNDATION_PROTOCOL_EXTENSION_V1 = "programmable.module-foundation.protocol@1" as const;
+export const FOUNDATION_PROTOCOL_CHECKS_V1 = Object.freeze([
+  "officialInfrastructure", "bothTokenOrders", "zeroCreatorQuoteLaunch", "metadataSupplyAndPoolIdentity",
+  "initialBuyAtomicity", "additionalCreatorPositionOwnership", "universalRouterFourForms",
+  "quoteFeeAccounting30Bps", "fixedPlatformRecipientPayout", "settlementAndAllowances",
+] as const);
+export const FOUNDATION_PROTOCOL_REVIEW_AREAS_V1 = Object.freeze([
+  "foundation-standard-token-fixed-supply-no-transfer-tax", "foundation-immutable-30bps-platform-quote-fee",
+  "foundation-poolmanager-account-and-currency-deltas", "foundation-official-router-empty-hookdata-four-forms",
+  "foundation-one-sided-position-price-and-creator-nft-ownership", "foundation-immutable-host-module-capabilities",
+  "foundation-reentrancy-partialfill-and-quote-transfer-adversaries", "foundation-source-runtime-and-deployment-binding",
+] as const);
+export const FOUNDATION_PROTOCOL_FIELDS_V1 = ["chainId", "poolManager", "positionManager", "universalRouter", "permit2", "hookDeployer", "poolManagerCodeHash", "positionManagerCodeHash", "universalRouterCodeHash", "permit2CodeHash", "hookDeployerCodeHash"] as const;
+type Field = typeof FOUNDATION_PROTOCOL_FIELDS_V1[number];
+export interface FoundationProtocolPlanV1 {
+  readonly schemaVersion: typeof FOUNDATION_PROTOCOL_PLAN_V1; readonly submissionId: string; readonly requestDigest: Hex;
+  readonly sourceCommit: string; readonly factoryComponentId: string; readonly hookDeployerComponentId: string;
+  readonly factoryImmutableBindings: readonly { readonly id: string; readonly field: Field }[];
+}
+export interface FoundationProtocolContractV1 {
+  readonly componentId: string; readonly sourcePath: string; readonly contractName: string; readonly abi: readonly unknown[];
+  readonly creationBytecode: Hex; readonly creationCodeHash: Hex; readonly runtimeTemplate: Hex; readonly runtimeTemplateHash: Hex;
+  readonly immutableReferences: readonly { readonly id: string; readonly ranges: readonly { readonly start: number; readonly length: 32 }[] }[];
+}
+export interface FoundationProtocolTestResultV1 {
+  readonly schemaVersion: "programmable.modules.foundation-protocol-test-results.v1"; readonly requestDigest: Hex; readonly planDigest: Hex;
+  readonly harnessDigest: Hex; readonly execution: "isolated-docker-anvil";
+  readonly checks: Readonly<Record<typeof FOUNDATION_PROTOCOL_CHECKS_V1[number], true>>; readonly allRequiredChecksPassed: true;
+}
+export interface FoundationProtocolBuildV1 {
+  readonly schemaVersion: typeof FOUNDATION_PROTOCOL_BUILD_V1; readonly authority: "programmable.module-review.foundation-protocol-build.v1";
+  readonly subject: ReviewSubject; readonly packageId: Hex; readonly familyId: Hex; readonly rewardWallet: string;
+  readonly sourceCommit: string; readonly sourceManifestHash: Hex; readonly planDigest: Hex;
+  readonly hostAdapterId: typeof FOUNDATION_HOST_V1; readonly platformBps: 30; readonly platformRecipient: "0xd88539d3c4c460136a733a3fd60cf6bf269079da";
+  readonly compiler: { readonly version: string; readonly binarySha256: string; readonly imageDigest: string; readonly settingsHash: Hex; readonly completeInputHash: Hex; readonly reproducible: true };
+  readonly factory: FoundationProtocolContractV1; readonly hookDeployer: FoundationProtocolContractV1;
+  readonly factoryImmutableBindings: FoundationProtocolPlanV1["factoryImmutableBindings"];
+  readonly tests: FoundationProtocolTestResultV1; readonly reviewRequired: readonly string[];
+  readonly approved: false; readonly registryApproved: false; readonly available: false; readonly artifactDigest: Hex;
+}
+export const FOUNDATION_SETTINGS_V1 = Object.freeze({ optimizer: { enabled: true, runs: 200 }, evmVersion: "cancun", viaIR: true, metadata: { bytecodeHash: "none", appendCBOR: false } });
+export const FOUNDATION_REVIEW_AREAS_V1 = Object.freeze([
+  "complete-configuration-and-action-domain", "host-only-callbacks-and-bound-context",
+  "declared-phases-gas-and-failure-policy", "own-quote-budget-and-external-asset-behavior",
+  "fresh-non-upgradeable-instance-and-factory", "affected-resource-and-order-interactions",
+]);
+const ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u;
+const exact = reviewRecord, object = reviewRecord, foundationJsonV1 = nativeCanonicalJson, json = nativeCanonicalJson;
+const need: typeof requireValue = requireValue;
+function hex(value: unknown, min = 0, max = 16_384): asserts value is `0x${string}` { need(typeof value === "string" && /^0x(?:[0-9a-f]{2})*$/u.test(value) && value.length >= 2 + min * 2 && value.length <= 2 + max * 2, "BYTES_INVALID"); }
+function assertions(value: unknown) { need(Array.isArray(value) && value.length <= 16, "ASSERTIONS_INVALID"); for (const v of value) { const r = exact(v, ["callData", "expectedData"]); hex(r.callData, 4); hex(r.expectedData); } }
+export function validateFoundationDescriptorV1(value: unknown): FoundationDescriptorV1 {
+  const d = exact(value, ["moduleId", "abiVersion", "phases", "resources", "beforeGas", "afterGas", "actionGas", "failOpenAfter", "exclusiveGroup"]);
+  need(typeof d.moduleId === "string" && HASH.test(d.moduleId) && d.abiVersion === 1 && Number.isInteger(d.phases) && Number(d.phases) >= 1 && Number(d.phases) <= 7
+    && Number.isInteger(d.resources) && Number(d.resources) >= 0 && Number(d.resources) <= 1 && typeof d.failOpenAfter === "boolean", "DESCRIPTOR_INVALID");
+  hex(d.exclusiveGroup, 32, 32);
+  for (const [key, bit, max] of [["beforeGas", 1, 300_000], ["afterGas", 2, 300_000], ["actionGas", 4, 2_000_000]] as const)
+    need(Number.isInteger(d[key]) && ((Number(d.phases) & bit) !== 0 ? Number(d[key]) >= 10_000 && Number(d[key]) <= max : d[key] === 0), "DESCRIPTOR_GAS_INVALID");
+  need((Number(d.phases) & 2) !== 0 || !d.failOpenAfter, "DESCRIPTOR_FAILURE_POLICY_INVALID");
+  need((Number(d.phases) & 4) !== 0 || d.resources === 0, "DESCRIPTOR_RESOURCE_INVALID");
+  return d as unknown as FoundationDescriptorV1;
+}
+export const hashFoundationDescriptorV1 = (d: FoundationDescriptorV1) => keccak256(encodeAbiParameters(FOUNDATION_DESCRIPTOR_ABI_V1, [validateFoundationDescriptorV1(d)]));
+export function validateFoundationBuildPlanV1(value: unknown, subject: ReviewSubject): FoundationBuildPlanV1 {
+  exact(subject, ["submissionId", "principalId", "author", "requestDigest"]);
+  need(UUID.test(subject.submissionId) && UUID.test(subject.principalId) && ADDRESS.test(subject.author) && HASH.test(subject.requestDigest), "SUBJECT_INVALID");
+  const p = exact(value, ["schemaVersion", "submissionId", "requestDigest", "moduleComponentId", "factoryComponentId", "hostAdapterId", "descriptorHash", "configurationCodec", "configurationAbi", "cases"]);
+  need(p.schemaVersion === FOUNDATION_PLAN_SCHEMA_V1 && p.submissionId === subject.submissionId && p.requestDigest === subject.requestDigest, "SUBJECT_MISMATCH");
+  need(p.hostAdapterId === FOUNDATION_HOST_V1 && p.configurationCodec === FOUNDATION_CODEC_V1 && typeof p.descriptorHash === "string" && HASH.test(p.descriptorHash), "ADAPTER_UNSUPPORTED");
+  need(typeof p.moduleComponentId === "string" && ID.test(p.moduleComponentId) && typeof p.factoryComponentId === "string" && ID.test(p.factoryComponentId) && p.moduleComponentId !== p.factoryComponentId, "TARGET_INVALID");
+  parseModuleEngineConfigurationAbi(p.configurationAbi);
+  need(Array.isArray(p.cases) && p.cases.length > 0 && p.cases.length <= 16, "CASES_INVALID");
+  const ids = new Set<string>(); let positive = false;
+  for (const raw of p.cases) {
+    const c = exact(raw, ["id", "parameters", "budgetQuote", "expectedDeployment", "swaps", "actions", ...(Object.hasOwn(object(raw), "rawConfigBytes") ? ["rawConfigBytes"] : [])]);
+    need(typeof c.id === "string" && ID.test(c.id) && !ids.has(c.id), "CASE_ID_INVALID"); ids.add(c.id);
+    need(typeof c.budgetQuote === "string" && /^(0|[1-9][0-9]{0,24})$/u.test(c.budgetQuote) && BigInt(c.budgetQuote) <= 10n ** 24n, "BUDGET_INVALID");
+    need(c.expectedDeployment === "success" || c.expectedDeployment === "revert", "CASE_OUTCOME_INVALID");
+    if (Object.hasOwn(c, "rawConfigBytes")) { need(c.expectedDeployment === "revert", "NEGATIVE_CONFIG_INVALID"); hex(c.rawConfigBytes); }
+    need(Array.isArray(c.swaps) && c.swaps.length <= 4 && Array.isArray(c.actions) && c.actions.length <= 16, "VECTORS_INVALID");
+    need(c.expectedDeployment === "success" || c.swaps.length + c.actions.length === 0, "NEGATIVE_VECTOR_INVALID");
+    const quadrants = new Set<string>();
+    for (const rawSwap of c.swaps) {
+      const s = exact(rawSwap, ["buy", "exactInput", "beforeOutcome", "afterOutcome", "assertions"]);
+      need(typeof s.buy === "boolean" && typeof s.exactInput === "boolean", "SWAP_INVALID");
+      const key = `${s.buy}:${s.exactInput}`; need(!quadrants.has(key), "SWAP_DUPLICATE"); quadrants.add(key);
+      need(["success", "revert", "absent"].includes(String(s.beforeOutcome)) && ["success", "revert", "absent"].includes(String(s.afterOutcome)), "SWAP_OUTCOME_INVALID"); assertions(s.assertions);
+    }
+    for (const rawAction of c.actions) {
+      const a = exact(rawAction, ["id", "actor", "parameters", "expectedOutcome", "assertions"]);
+      need(typeof a.id === "string" && ID.test(a.id) && ["creator", "user"].includes(String(a.actor)) && ["success", "revert"].includes(String(a.expectedOutcome)), "ACTION_INVALID"); assertions(a.assertions);
+    }
+    positive ||= c.expectedDeployment === "success";
+  }
+  need(positive && new TextEncoder().encode(foundationJsonV1(value)).length <= 256 * 1024, "PLAN_CAPACITY");
+  return JSON.parse(foundationJsonV1(value)) as FoundationBuildPlanV1;
+}
+export function validateFoundationProtocolPlanV1(value: unknown, subject: ReviewSubject): FoundationProtocolPlanV1 {
+  exact(subject, ["submissionId", "principalId", "author", "requestDigest"]);
+  need(UUID.test(subject.submissionId) && UUID.test(subject.principalId) && /^0x(?!0{40}$)[0-9a-f]{40}$/u.test(subject.author) && HASH.test(subject.requestDigest), "PROTOCOL_SUBJECT_INVALID");
+  const p = exact(value, ["schemaVersion", "submissionId", "requestDigest", "sourceCommit", "factoryComponentId", "hookDeployerComponentId", "factoryImmutableBindings"]);
+  need(p.schemaVersion === FOUNDATION_PROTOCOL_PLAN_V1 && p.submissionId === subject.submissionId && p.requestDigest === subject.requestDigest
+    && typeof p.sourceCommit === "string" && /^(?!0{40}$)[0-9a-f]{40}$/u.test(p.sourceCommit), "PROTOCOL_SOURCE_INVALID");
+  for (const field of ["factoryComponentId", "hookDeployerComponentId"]) need(typeof p[field] === "string" && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(p[field]), "PROTOCOL_TARGET_INVALID");
+  need(p.factoryComponentId !== p.hookDeployerComponentId && Array.isArray(p.factoryImmutableBindings) && p.factoryImmutableBindings.length === FOUNDATION_PROTOCOL_FIELDS_V1.length, "PROTOCOL_IMMUTABLES_INVALID");
+  const ids = new Set<string>(), fields = new Set<string>();
+  for (const raw of p.factoryImmutableBindings) {
+    const b = exact(raw, ["id", "field"]);
+    need(typeof b.id === "string" && /^(0|[1-9][0-9]{0,9})$/u.test(b.id) && !ids.has(b.id)
+      && typeof b.field === "string" && FOUNDATION_PROTOCOL_FIELDS_V1.includes(b.field as Field) && !fields.has(b.field), "PROTOCOL_IMMUTABLES_INVALID");
+    ids.add(b.id); fields.add(b.field);
+  }
+  return JSON.parse(json(value)) as FoundationProtocolPlanV1;
+}
+
+const MODULE_ABI = parseAbi([
+  "function context() view returns((address host,address token,address quote,address creator,address ledger,bytes32 poolId))",
+  "function configurationHash() view returns(bytes32)",
+  "function descriptor() view returns((bytes32 moduleId,uint16 abiVersion,uint8 phases,uint8 resources,uint32 beforeGas,uint32 afterGas,uint32 actionGas,bool failOpenAfter,bytes32 exclusiveGroup))",
+  "function onBeforeSwap((bytes32 poolId,address router,bool buy,bool exactInput,uint256 specifiedAmount,uint256 grossQuote,int128 coreAmount0,int128 coreAmount1)) returns(bytes4)",
+  "function onAfterSwap((bytes32 poolId,address router,bool buy,bool exactInput,uint256 specifiedAmount,uint256 grossQuote,int128 coreAmount0,int128 coreAmount1)) returns(bytes4)",
+  "function onAction(address actor,bytes data) returns(bytes4)",
+]);
+const FACTORY_ABI = parseAbi(["function createModule((address host,address token,address quote,address creator,address ledger,bytes32 poolId),bytes) returns(address)"]);
+function foundationModuleContractArtifact(raw: unknown, target: { id: string; sourcePath: string; entrypoint: string }, factory: boolean): ReviewContractArtifact {
+  const r = object(raw), abi = r.abi; need(Array.isArray(abi) && abi.length <= 256, "ABI_INVALID");
+  const evm = object(r.evm), deployed = object(evm.deployedBytecode), creation = object(evm.bytecode);
+  need(deployed.immutableReferences === undefined || Object.keys(object(deployed.immutableReferences)).length === 0, "UNIFORM_RUNTIME_REQUIRED");
+  const runtimeBytecode = `0x${String(deployed.object)}` as const, creationBytecode = `0x${String(creation.object)}` as const;
+  hex(runtimeBytecode, 1, 24_576); hex(creationBytecode, 1, 49_152);
+  const functions = abi.filter(a => object(a).type === "function");
+  const types = (value: unknown): unknown => { need(Array.isArray(value), "ABI_INVALID"); return value.map(v => { const p = object(v); return { type: p.type, ...(p.components ? { components: types(p.components) } : {}) }; }); };
+  for (const item of factory ? FACTORY_ABI : MODULE_ABI) {
+    const actual = functions.find(f => toFunctionSelector(f) === toFunctionSelector(item));
+    need(actual && foundationJsonV1(types(object(actual).outputs)) === foundationJsonV1(types(item.outputs)), "INTERFACE_MISMATCH");
+  }
+  if (factory) { const constructor = abi.find(a => object(a).type === "constructor"); need(!constructor || Array.isArray(constructor.inputs) && constructor.inputs.length === 0, "FACTORY_CONSTRUCTOR_UNSUPPORTED"); }
+  return { componentId: target.id, sourcePath: target.sourcePath, contractName: target.entrypoint, abi,
+    abiHash: reviewDigest("programmable.modules.abi.v1", abi), creationBytecode, creationCodeHash: keccak256(creationBytecode),
+    runtimeBytecode, runtimeCodeHash: keccak256(runtimeBytecode), externalSelectors: functions.map(f => toFunctionSelector(f)).sort() };
+}
+function validateResults(result: FoundationTestResultV1, requestDigest: Hex, planDigest: Hex, cases: readonly FoundationCompiledCaseV1[]) {
+  exact(result, ["schemaVersion", "requestDigest", "planDigest", "harnessDigest", "execution", "cases", "allRequiredChecksPassed"]);
+  need(result.schemaVersion === "programmable.modules.foundation-test-results.v1" && result.requestDigest === requestDigest && result.planDigest === planDigest && HASH.test(result.harnessDigest)
+    && result.execution === "isolated-docker-anvil" && result.allRequiredChecksPassed === true && Array.isArray(result.cases) && result.cases.length === cases.length, "TEST_BINDING_INVALID");
+  result.cases.forEach((r, i) => {
+    exact(r, ["id", "configHash", "deploymentMatched", "codeHashMatched", "contextMatched", "descriptorMatched", "configurationMatched", "freshInstances", "unauthorizedCallbacksReverted", "boundedCallbacks", "ownQuoteBudgetConserved", "swapOutcomes", "actionOutcomes", "stateAssertions"]);
+    const c = cases[i]!, expected = c.expectedDeployment === "success" ? true : null;
+    need(r.id === c.id && r.configHash === c.configHash && r.deploymentMatched === true && [r.codeHashMatched, r.contextMatched, r.descriptorMatched, r.configurationMatched, r.freshInstances, r.unauthorizedCallbacksReverted, r.boundedCallbacks, r.ownQuoteBudgetConserved, r.stateAssertions].every(v => v === expected), "TEST_CASE_FAILED");
+    need(Array.isArray(r.swapOutcomes) && r.swapOutcomes.length === c.swaps.length && r.swapOutcomes.every((v: unknown) => v === true)
+      && Array.isArray(r.actionOutcomes) && r.actionOutcomes.length === c.actions.length && r.actionOutcomes.every((v: unknown) => v === true), "TEST_VECTOR_FAILED");
+  });
+}
+function foundationProtocolContractArtifact(value: unknown, target: { id: string; sourcePath: string; entrypoint: string }, bindings: FoundationProtocolPlanV1["factoryImmutableBindings"]): FoundationProtocolContractV1 {
+  const r = object(value), evm = object(r.evm), bytecode = object(evm.bytecode), deployed = object(evm.deployedBytecode);
+  const creationBytecode = `0x${String(bytecode.object)}` as Hex, runtimeTemplate = `0x${String(deployed.object)}` as Hex;
+  need(Array.isArray(r.abi) && r.abi.length <= 256 && /^0x(?:[0-9a-f]{2})+$/u.test(creationBytecode) && creationBytecode.length <= 2 + 49_152 * 2
+    && /^0x(?:[0-9a-f]{2})+$/u.test(runtimeTemplate) && runtimeTemplate.length <= 2 + 24_576 * 2, "PROTOCOL_BYTECODE_INVALID");
+  const references = object(deployed.immutableReferences ?? {});
+  need(Object.keys(references).sort().join() === bindings.map(b => b.id).sort().join(), "PROTOCOL_IMMUTABLES_MISMATCH");
+  const occupied = new Set<number>();
+  const immutableReferences = Object.entries(references).sort(([a], [b]) => a.localeCompare(b)).map(([id, raw]) => {
+    need(Array.isArray(raw) && raw.length > 0 && raw.length <= 256, "PROTOCOL_IMMUTABLES_INVALID");
+    const ranges = raw.map(value => { const p = exact(value, ["start", "length"]); need(Number.isSafeInteger(p.start) && Number(p.start) >= 0 && p.length === 32 && (Number(p.start) + 32) * 2 <= runtimeTemplate.length - 2, "PROTOCOL_IMMUTABLES_INVALID");
+      for (let i = Number(p.start); i < Number(p.start) + 32; i++) { need(!occupied.has(i), "PROTOCOL_IMMUTABLES_OVERLAP"); occupied.add(i); }
+      need(runtimeTemplate.slice(2 + Number(p.start) * 2, 2 + (Number(p.start) + 32) * 2) === "0".repeat(64), "PROTOCOL_IMMUTABLES_TEMPLATE_INVALID"); return { start: Number(p.start), length: 32 as const }; });
+    return { id, ranges };
+  });
+  return { componentId: target.id, sourcePath: target.sourcePath, contractName: target.entrypoint, abi: r.abi, creationBytecode, creationCodeHash: keccak256(creationBytecode), runtimeTemplate, runtimeTemplateHash: keccak256(runtimeTemplate), immutableReferences };
 }

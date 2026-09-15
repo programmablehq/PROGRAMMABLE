@@ -8,10 +8,14 @@ import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleAddress, moduleHash, moduleInteger } from "@/lib/module-mode/release";
 import { foundationFactoryAbi } from "./abi";
 import {
-  assertFoundationInfrastructure, assertFoundationPool, simulateFoundationSequence,
+  assertFoundationInfrastructure, assertFoundationPool, readFoundationPoolAssetPins, readFoundationQuote, simulateFoundationSequence,
   type FoundationBalanceCheck, type FoundationCheckpoint, type FoundationDeploymentBinding, type FoundationPreparedStep,
 } from "./client";
 import { FOUNDATION_CHAIN_ID } from "./constants";
+import {
+  hashFoundationAssetPinsV1, mergeFoundationAssetPinsV1, refreshFoundationAssetsV1, resolveFoundationAssetFieldsV1, resolveFoundationAssetsV1,
+  type FoundationAssetPinV1, type FoundationResolvedAssetV1,
+} from "./assets";
 import { assertBoundFoundationCatalogV1, resolveFoundationCatalogEntryV1, type FoundationCatalogV1 } from "./catalog";
 import { hashFoundationCompositionV1 } from "./composition";
 import {
@@ -48,6 +52,8 @@ export interface FoundationActionRuntimeInputV1 {
 }
 export interface FoundationActionRuntimeV1 {
   checkpoint: FoundationCheckpoint; instances: readonly FoundationActionContextV1[];
+  /** Original configuration assets are derived from base assets and the token's immutable pin metadata. */
+  configurationContext: OpenConfigContext; moduleAssetPins: readonly FoundationAssetPinV1[];
   /** Digest of the completed RPC observations, not a substitute for source review or release authority. */
   sourceVerificationDigest: Hex; creatorFeeBps: number; compositionHash: Hex;
 }
@@ -79,6 +85,24 @@ async function codeHash(client: PublicClient, address: Address, checkpoint: Foun
   return keccak256(code);
 }
 
+function originalAssetContext(input: FoundationActionRuntimeInputV1, creator: Address, quoteDecimals: number,
+  pins: readonly FoundationAssetPinV1[]): OpenConfigContext {
+  const assets: NonNullable<OpenConfigContext["assets"]> = {
+    token: { chainId: FOUNDATION_CHAIN_ID, address: input.pool.token, decimals: 18 },
+    quote: { chainId: FOUNDATION_CHAIN_ID, address: input.pool.quote, decimals: quoteDecimals },
+    ...Object.fromEntries(pins.map(([address, decimals]) => [`erc20:${address.toLowerCase()}`, { chainId: FOUNDATION_CHAIN_ID, address, decimals }])),
+  };
+  for (const [key, claimed] of Object.entries(input.context?.assets ?? {})) {
+    const address = moduleAddress(claimed.address, `foundation.assets.${key}`);
+    const actual = Object.values(assets).find(asset => sameAddress(asset.address, address));
+    foundationRequire(actual && String(claimed.chainId) === String(FOUNDATION_CHAIN_ID) && claimed.decimals === actual.decimals
+      && (!Object.hasOwn(assets, key) || sameAddress(assets[key].address, address)),
+    "FOUNDATION_ACTION_ASSET_CONTEXT", "Asset aliases must match the pool's actual base assets or immutable additional-asset metadata.");
+    assets[key] = { ...actual };
+  }
+  return { ...input.context, roles: { ...input.context?.roles, creator }, assets };
+}
+
 /** Read every installed module at one current checkpoint before exposing a bound management context. */
 export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntimeInputV1): Promise<FoundationActionRuntimeV1> {
   assertBoundFoundationCatalogV1(raw.catalog);
@@ -87,6 +111,11 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
   foundationRequire(Array.isArray(input.selections) && input.selections.length <= 8, "FOUNDATION_MODULE_LIMIT", "Restore at most eight original module selections.");
   const { client, binding, pool } = input, checkpoint = await assertFoundationInfrastructure(client, binding);
   const provenance = await assertFoundationPool(client, binding, pool, checkpoint.blockNumber);
+  const [moduleAssetPins, quote] = await Promise.all([
+    readFoundationPoolAssetPins(client, pool, checkpoint), readFoundationQuote(client, pool.quote, undefined, checkpoint.blockNumber),
+  ]);
+  const configurationContext = originalAssetContext(input, provenance.creator, quote.decimals, moduleAssetPins);
+  input.context = configurationContext;
   const composition = assertOriginalComposition(input, provenance.creatorFeeBps);
   const [count, compositionHash, hostCodeHash] = await Promise.all([
     client.readContract({ address: pool.hook, abi: foundationActionRuntimeAbiV1, functionName: "moduleCount", blockNumber: checkpoint.blockNumber }),
@@ -122,7 +151,7 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
   foundationRequire(endBlock.hash === checkpoint.blockHash, "FOUNDATION_ACTION_CHECKPOINT_CHANGED", "Chain state changed while reading the module composition. Refresh it.");
   const sourceVerificationDigest = foundationDataDigest("programmable.module-foundation.action-rpc-observations.v1", jsonObservation({
     chainId: FOUNDATION_CHAIN_ID, binding, checkpoint, pool, registeredLaunch: provenance.record, creator: provenance.creator,
-    creatorFeeBps: provenance.creatorFeeBps, hostCodeHash, compositionHash, modules: observed,
+    creatorFeeBps: provenance.creatorFeeBps, hostCodeHash, compositionHash, modules: observed, moduleAssetPins, configurationContext, quote,
   }));
   const instances = observed.map(item => {
     const entry = resolveFoundationCatalogEntryV1(input.catalog, moduleHash(input.selections[item.moduleIndex].id, "foundation.packageId"));
@@ -135,7 +164,7 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
       moduleContext: item.moduleContext,
     } });
   });
-  return freeze({ checkpoint, instances, sourceVerificationDigest, creatorFeeBps: provenance.creatorFeeBps, compositionHash });
+  return freeze({ checkpoint, instances, sourceVerificationDigest, creatorFeeBps: provenance.creatorFeeBps, compositionHash, configurationContext, moduleAssetPins });
 }
 
 /** Executed only by application code. A source role remains subject to the module's own authorization in simulation. */
@@ -154,13 +183,15 @@ export interface FoundationPreparedModuleActionV1 {
   kind: "module-action"; sourceKind: "module-foundation-v1"; simulation: "rpc-sequence";
   account: Address; binding: FoundationDeploymentBinding; pool: FoundationPool; moduleIndex: number;
   selections: readonly FoundationModuleSelection[]; selection: FoundationActionSelectionV1; configurationContext: OpenConfigContext;
+  moduleAssetPins: readonly FoundationAssetPinV1[]; assets: readonly FoundationResolvedAssetV1[];
   intent: FoundationActionIntentV1; checkpoint: FoundationCheckpoint; sourceVerificationDigest: Hex; expiresAt: bigint;
   steps: SequenceSimulation["steps"]; balances: SequenceSimulation["balances"]; balanceChecks: readonly FoundationBalanceCheck[];
 }
 
-function walletChecks(pool: FoundationPool, account: Address, minima: readonly FoundationActionWalletMinimumV1[]): FoundationBalanceCheck[] {
+function walletChecks(pool: FoundationPool, account: Address, minima: readonly FoundationActionWalletMinimumV1[],
+  pins: readonly FoundationAssetPinV1[] = []): FoundationBalanceCheck[] {
   foundationRequire(Array.isArray(minima) && minima.length <= 4, "FOUNDATION_ACTION_BALANCE_LIMIT", "At most four wallet assets can be checked in one action.");
-  const checks = new Map<string, FoundationBalanceCheck>([pool.token, pool.quote].map(raw => {
+  const checks = new Map<string, FoundationBalanceCheck>([pool.token, pool.quote, ...pins.map(pin => pin[0])].map(raw => {
     const token = moduleAddress(raw, "foundation.action.balanceToken"); return [token.toLowerCase(), { token, account, minimumDelta: 0n }];
   })), supplied = new Set<string>();
   for (const item of minima) {
@@ -178,7 +209,8 @@ export async function prepareFoundationModuleActionV1(raw: FoundationPrepareModu
   const input = { ...raw, binding: snapshot(raw.binding), pool: snapshot(raw.pool), selections: snapshot(raw.selections),
     selection: snapshot(raw.selection), context: snapshot(raw.context ?? {}), minimumWalletDeltas: snapshot(raw.minimumWalletDeltas ?? []) };
   const account = moduleAddress(input.account, "foundation.action.account"), moduleIndex = moduleInteger(input.moduleIndex, "foundation.action.moduleIndex", 7);
-  const checks = walletChecks(input.pool, account, input.minimumWalletDeltas), runtime = await readFoundationActionRuntimeV1(input);
+  walletChecks(input.pool, account, input.minimumWalletDeltas);
+  const runtime = await readFoundationActionRuntimeV1(input);
   const instance = runtime.instances[moduleIndex];
   foundationRequire(instance, "FOUNDATION_ACTION_MODULE_MISSING", "This pool has no module at the selected position.");
   const entry = resolveFoundationCatalogEntryV1(input.catalog, instance.packageId);
@@ -191,7 +223,24 @@ export async function prepareFoundationModuleActionV1(raw: FoundationPrepareModu
     const grant = await input.resolveRole({ client: input.client, checkpoint: runtime.checkpoint, instance, account, actionId: action.id, role: action.role });
     if (grant) roleGrants = [nativeJson(grant) as unknown as FoundationActionRoleGrantV1];
   }
-  const intent = prepareFoundationActionIntentV1({ catalog: input.catalog, instance, selection: input.selection, account, context: input.context, roleGrants });
+  const actionAssets = await resolveFoundationAssetFieldsV1({ client: input.client, schema: action.inputs, configuration: input.selection.configuration,
+    context: runtime.configurationContext, checkpoint: runtime.checkpoint });
+  const minimumAssets = await resolveFoundationAssetsV1({ client: input.client, addresses: input.minimumWalletDeltas.map(item => item.token),
+    context: actionAssets.context, checkpoint: runtime.checkpoint });
+  const moduleAssetPins = mergeFoundationAssetPinsV1(runtime.moduleAssetPins, actionAssets.pins, minimumAssets.pins);
+  const checks = walletChecks(input.pool, account, input.minimumWalletDeltas, moduleAssetPins);
+  const [pinnedAssets, token, quote] = await Promise.all([
+    refreshFoundationAssetsV1({ client: input.client, pins: moduleAssetPins, context: minimumAssets.context, checkpoint: runtime.checkpoint }),
+    readFoundationQuote(input.client, input.pool.token, undefined, runtime.checkpoint.blockNumber),
+    readFoundationQuote(input.client, input.pool.quote, undefined, runtime.checkpoint.blockNumber),
+  ]);
+  foundationRequire(token.decimals === 18 && quote.decimals === runtime.configurationContext.assets!.quote.decimals,
+    "FOUNDATION_ACTION_ASSET_METADATA", "The pool's current asset metadata differs from its verified source context.");
+  const assets: FoundationResolvedAssetV1[] = [token, quote].map(asset => ({ chainId: FOUNDATION_CHAIN_ID, address: asset.address,
+    decimals: asset.decimals, runtimeCodeHash: asset.codeHash, name: asset.name, symbol: asset.symbol }));
+  assets.push(...pinnedAssets.assets);
+  const intent = prepareFoundationActionIntentV1({ catalog: input.catalog, instance, selection: input.selection, account,
+    context: pinnedAssets.context, roleGrants });
   const step: FoundationPreparedStep = { kind: "module-action", label: intent.label, transaction: intent.transaction, gasUsed: 0n,
     effect: action.description };
   const simulation = await simulateFoundationSequence(input.client, [step], runtime.checkpoint, checks);
@@ -203,7 +252,8 @@ export async function prepareFoundationModuleActionV1(raw: FoundationPrepareModu
   const expiresAt = BigInt(intent.expiresAt);
   foundationRequire(expiresAt > BigInt(Math.floor(Date.now() / 1000)), "FOUNDATION_ACTION_PREPARATION_EXPIRED", "Action preparation expired during simulation. Prepare again.");
   return freeze({ kind: "module-action", sourceKind: "module-foundation-v1", simulation: "rpc-sequence", account,
-    binding: input.binding, pool: input.pool, moduleIndex, selections: input.selections, selection: input.selection, configurationContext: input.context,
+    binding: input.binding, pool: input.pool, moduleIndex, selections: input.selections, selection: input.selection,
+    configurationContext: runtime.configurationContext, moduleAssetPins, assets,
     intent, checkpoint: runtime.checkpoint, sourceVerificationDigest: runtime.sourceVerificationDigest, expiresAt,
     steps: simulation.steps, balances: simulation.balances, balanceChecks });
 }
@@ -223,8 +273,12 @@ export async function revalidateFoundationModuleActionV1(prepared: FoundationPre
       "FOUNDATION_ACTION_BALANCE_MINIMUM", "The reviewed action contains an invalid caller balance check.");
     return { token: check.token, minimumDelta: check.minimumDelta };
   });
+  const reviewedAssetDigest = hashFoundationAssetPinsV1(prepared.moduleAssetPins);
+  if (prepared.moduleAssetPins.length) await refreshFoundationAssetsV1({ client: input.client, pins: prepared.moduleAssetPins });
   const fresh = await prepareFoundationModuleActionV1({ ...input, pool: prepared.pool, selections: prepared.selections,
     context: prepared.configurationContext, moduleIndex: prepared.moduleIndex, selection: prepared.selection, minimumWalletDeltas });
+  foundationRequire(hashFoundationAssetPinsV1(fresh.moduleAssetPins) === reviewedAssetDigest, "FOUNDATION_ACTION_ASSET_PINS_CHANGED",
+    "The action's asset identities or metadata changed after review. Prepare the action again.");
   const original = prepared.steps[0].transaction, actual = fresh.steps[0].transaction;
   foundationRequire(sameAddress(actual.from, original.from) && sameAddress(actual.to, original.to) && sameHex(actual.data, original.data)
     && actual.value === 0n && original.value === 0n && sameAddress(fresh.intent.moduleInstance, prepared.intent.moduleInstance)

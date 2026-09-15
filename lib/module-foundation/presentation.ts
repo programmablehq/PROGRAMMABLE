@@ -1,6 +1,6 @@
 import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from "viem";
 import {
-  assertOpenConfigSchema, type OpenAssetContext, type OpenConfigContext, type OpenConfigSchema, type OpenConfigValue,
+  assertOpenConfigSchema, compileOpenConfig, type OpenAssetContext, type OpenConfigContext, type OpenConfigSchema, type OpenConfigValue,
 } from "@/packages/classic-modules/src/open-config.mjs";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleAddress, moduleHash, moduleInteger, moduleRecord } from "@/lib/module-mode/release";
@@ -185,6 +185,13 @@ function choiceForUi(input: Environment, value: FoundationModuleSelection): Foun
   foundationRequire(creatorShareBps <= 10_000, "FOUNDATION_CREATOR_SHARE_PERCENT", "The creator-fee share cannot exceed 100%.", FOUNDATION_CREATOR_SHARE_FIELD_V1);
   const configuration = decodeFoundationFieldsV1(entry.manifest.sourceDescriptor.configuration,
     Object.fromEntries(Object.entries(record).filter(([key]) => key !== FOUNDATION_CREATOR_SHARE_FIELD_V1)), entry.runtime.defaults, input.context);
+  // The compiler can insert fixed fields inside array/variant children after form decoding.
+  const compiled = compileOpenConfig(entry.manifest.sourceDescriptor.configuration, configuration, input.context);
+  for (const binding of compiled.bindings) if (binding.kind === "asset") {
+    const { asset } = foundationAssetForAddressV1(binding.resolved.address, input.context ?? {}, binding.path);
+    foundationRequire(String(asset.chainId) === binding.resolved.chainId && asset.decimals === binding.resolved.decimals,
+      "FOUNDATION_ASSET_METADATA_MISMATCH", "The source asset metadata differs from the verified metadata.", binding.path);
+  }
   return { packageId: entry.manifest.packageId, configuration, creatorShareBps };
 }
 

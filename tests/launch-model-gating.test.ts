@@ -12,7 +12,7 @@ import {
   normalizeDeepDraft,
   stockQuoteOptionTabIndex,
 } from "../components/launch-builder";
-import { LaunchModelPicker } from "../components/launch-entry";
+import { LaunchModelPicker, ModuleFoundationLaunchCard } from "../components/launch-entry";
 import appDeployments from "../contracts/config/app-deployments.v1.json";
 import {
   createClassicV3Draft,
@@ -248,7 +248,10 @@ describe("unreleased launch model gating", () => {
     const modulesCard = html.match(/<button[^>]*data-launch-model-option="modules"[^>]*>/u)?.[0];
     expect(modulesCard).not.toContain("href=");
     expect(modulesCard).toContain('disabled=""');
+    expect(modulesCard).toContain('data-launch-model-available="false"');
+    expect(modulesCard).toContain('data-launch-model-entry="maintenance"');
     expect(modulesCard).toContain('data-launch-model-launchable="false"');
+    expect(html).not.toContain('href="/launch/modules/foundation"');
     expect(html).not.toContain('id="launch-model-modules-status">Preview</small>');
     expect(html).not.toContain('data-launch-model-option="classic"');
     expect(html).toMatch(/name="launch-chain"[^>]*checked=""[^>]*value="4663"/);
@@ -266,6 +269,22 @@ describe("unreleased launch model gating", () => {
     expect(customCard).not.toContain("href=");
     expect(html).not.toContain("approved GitHub revision");
     expect(html).not.toContain("Build or resume");
+  });
+
+  it("opens the Foundation route only after entry availability is verified", () => {
+    const closed = renderToStaticMarkup(createElement(ModuleFoundationLaunchCard));
+    expect(closed).toContain('disabled=""');
+    expect(closed).not.toContain("href=");
+
+    const open = renderToStaticMarkup(createElement(ModuleFoundationLaunchCard, { available: true }));
+    const modulesCard = open.match(/<a[^>]*data-launch-model-option="modules"[^>]*>/u)?.[0];
+    expect(modulesCard).toContain('href="/launch/modules/foundation"');
+    expect(modulesCard).toContain('data-launch-model-available="true"');
+    expect(modulesCard).toContain('data-launch-model-entry="foundation"');
+    expect(modulesCard).toContain('data-launch-model-launchable="false"');
+    expect(open).not.toContain('href="/launch/modules"');
+    expect(open).not.toContain("Getting updated currently");
+    expect(open).toContain("Configure a coin");
   });
 
   it("keeps the Deep preset concise while retaining its material limits", () => {
