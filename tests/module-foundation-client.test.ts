@@ -12,7 +12,7 @@ const ledger = getAddress("0x6000000000000000000000000000000000000000");
 const zero = getAddress("0x0000000000000000000000000000000000000000");
 const hash = toHex(1, { size: 32 });
 const binding: FoundationDeploymentBinding = { releaseDigest: hash, sourceCommit: "a".repeat(40), startBlock: 1n,
-  factory: { address: factory, runtimeCodeHash: hash }, hookDeployer: { address: factory, runtimeCodeHash: hash } };
+  factory: { address: factory, runtimeCodeHash: hash }, hookDeployer: { address: ledger, runtimeCodeHash: hash } };
 const pool = { token, quote, hook, poolId: foundationPoolId(foundationPoolKey({ token, quote, hook })) };
 const step: FoundationPreparedStep = { label: "Swap", kind: "buy", transaction: { from: account, to: factory, data: "0x1234", value: 0n }, gasUsed: 0n, effect: "Spend 10; receive at least 8." };
 const checkpoint = { blockNumber: 1n, blockHash: hash, timestamp: 1n };

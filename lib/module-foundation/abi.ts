@@ -11,6 +11,15 @@ export interface FoundationLaunchResult {
   token: Address; hook: Address; ledger: Address; poolId: Hex; baseVault: Address;
   basePositionId: bigint; creatorPositionId: bigint; initialBuyTokenAmount: bigint;
 }
+/** Exact FoundationLaunchTypesV2.LaunchResultV2 field order. No vault exists in V2. */
+export interface FoundationLaunchResultV2 {
+  token: Address; hook: Address; ledger: Address; poolId: Hex;
+  basePositionOwner: Address; creatorPositionOwner: Address; roundingInventoryRecipient: Address;
+  basePositionId: bigint; creatorPositionId: bigint; initialBuyTokenAmount: bigint;
+  baseTokenPrincipal: bigint; baseTokenRounding: bigint; creatorQuotePrincipal: bigint; actualQuoteRefund: bigint;
+}
+export type FoundationLaunchRecord = (FoundationLaunchResult & { factoryVersion: "v1" })
+  | (FoundationLaunchResultV2 & { factoryVersion: "v2" });
 
 export const foundationMetadataParameters = parseAbiParameters("(string name,string symbol,string description,string imageURI,string website,bytes socialData)");
 export const foundationLaunchParameters = parseAbiParameters("((string name,string symbol,string description,string imageURI,string website,bytes socialData) metadata,address quote,uint8 quoteDecimals,int24 initialTick,uint16 creatorFeeBps,uint128 additionalQuoteAmount,uint128 initialBuyQuoteAmount,uint128 initialBuyMinimumTokenAmount,uint64 deadline,bytes32 tokenSalt,bytes32 hookSalt,(address factory,bytes32 factoryCodeHash,bytes32 moduleCodeHash,bytes32 descriptorHash,bytes configuration,uint16 creatorShareBps)[] modules)");
@@ -33,12 +42,37 @@ export const foundationFactoryAbi = parseAbi([
   "function permit2() view returns (address)",
 ]);
 
+export const foundationFactoryV2Abi = parseAbi([
+  "struct Metadata { string name; string symbol; string description; string imageURI; string website; bytes socialData; }",
+  "struct ModuleSelection { address factory; bytes32 factoryCodeHash; bytes32 moduleCodeHash; bytes32 descriptorHash; bytes configuration; uint16 creatorShareBps; }",
+  "struct LaunchParams { Metadata metadata; address quote; uint8 quoteDecimals; int24 initialTick; uint16 creatorFeeBps; uint128 additionalQuoteAmount; uint128 initialBuyQuoteAmount; uint128 initialBuyMinimumTokenAmount; uint64 deadline; bytes32 tokenSalt; bytes32 hookSalt; ModuleSelection[] modules; }",
+  "struct LaunchResultV2 { address token; address hook; address ledger; bytes32 poolId; address basePositionOwner; address creatorPositionOwner; address roundingInventoryRecipient; uint256 basePositionId; uint256 creatorPositionId; uint256 initialBuyTokenAmount; uint128 baseTokenPrincipal; uint128 baseTokenRounding; uint128 creatorQuotePrincipal; uint256 actualQuoteRefund; }",
+  "function launch(LaunchParams p) returns (LaunchResultV2 result)",
+  "function launchOf(address token) view returns (LaunchResultV2 result)",
+  "function predictTokenAddress(address creator,bytes32 tokenSalt,Metadata metadata) view returns (address)",
+  "function hookInitCodeHash(address creator,address predictedToken,LaunchParams p) view returns (bytes32)",
+  "function predictHookAddress(address creator,address predictedToken,LaunchParams p) view returns (address)",
+  "function hookDeployer() view returns (address)",
+  "function VERSION_ID() view returns (bytes32)",
+  "function MODULE_ABI_ID() view returns (bytes32)",
+  "function LP_CUSTODY_ID() view returns (bytes32)",
+  "function LP_RECIPIENT() view returns (address)",
+  "function ROUNDING_INVENTORY_RECIPIENT() view returns (address)",
+  "function LP_FEE() view returns (uint24)",
+  "function poolManager() view returns (address)",
+  "function positionManager() view returns (address)",
+  "function universalRouter() view returns (address)",
+  "function permit2() view returns (address)",
+  "event FoundationLaunchedV2(address indexed token,address indexed creator,bytes32 indexed poolId,address hook,address ledger,address quote,bytes32 metadataHash,bytes32 compositionHash,bytes32 custodyId,uint256 initialBuyQuoteAmount,LaunchResultV2 result)",
+]);
+
 export const foundationHookAbi = parseAbi([
   "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
   "function initializer() view returns (address)", "function token() view returns (address)",
   "function quote() view returns (address)", "function creator() view returns (address)",
   "function creatorFeeBps() view returns (uint16)", "function ledger() view returns (address)",
   "function poolId() view returns (bytes32)", "function poolKey() view returns (PoolKey)",
+  "function initialTick() view returns (int24)",
   "function feeCarry(bool buy) view returns (uint16 platform,uint16 creator)",
   "function moduleCount() view returns (uint256)",
 ]);

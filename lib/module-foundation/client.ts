@@ -6,10 +6,10 @@ import {
 import { robinhoodChain } from "@/lib/chains";
 import { hasUnsafeDisplayCharacters, isValidTokenSymbol, MAX_METADATA_URL_BYTES, MAX_TOKEN_DESCRIPTION_BYTES, MAX_TOKEN_NAME_BYTES, utf8ByteLength } from "@/lib/metadata-policy";
 import { moduleTokenMetadata, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
-import { foundationFactoryAbi, foundationHookAbi, foundationLedgerAbi, foundationMetadataParameters, foundationPermit2Abi, foundationQuoterAbi, foundationTokenAbi,
-  type FoundationContractModule, type FoundationLaunchParameters, type FoundationLaunchResult, type FoundationMetadata } from "./abi";
+import { foundationFactoryV2Abi, foundationHookAbi, foundationLedgerAbi, foundationMetadataParameters, foundationPermit2Abi, foundationQuoterAbi, foundationTokenAbi,
+  type FoundationContractModule, type FoundationLaunchParameters, type FoundationLaunchRecord, type FoundationMetadata } from "./abi";
 import { FOUNDATION_ABI_ID, FOUNDATION_CHAIN_ID, foundationCreatorFeeBps, FOUNDATION_INFRASTRUCTURE,
-  FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_ZERO_HASH } from "./constants";
+  FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_ZERO_HASH, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
 import { foundationParseAmount, planFoundationPrice } from "./price";
 import { buildFoundationExactInput, foundationPoolId, foundationPoolKey, type FoundationPool } from "./route";
 import type { FoundationPrepareModuleActionInputV1 } from "./action-runtime";
@@ -18,6 +18,9 @@ import { refreshFoundationAssetsV1, type FoundationAssetPinV1 } from "./assets";
 import type { FoundationCatalogV1 } from "./catalog";
 import type { FoundationModuleSelection } from "./ui-types";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
+import { assertFoundationV2Result, decodeFoundationLaunchResult, foundationFactoryAbiFor, foundationFactoryVersion, readFoundationLaunchRecord, readFoundationV2Positions,
+  foundationV2PositionCalls, foundationV2PositionSpecs, verifyFoundationV2PositionData, type FoundationDeploymentBinding } from "./protocol";
+export type { FoundationDeploymentBinding } from "./protocol";
 
 export function createFoundationClient(): PublicClient {
   return createPublicClient({ chain: robinhoodChain, transport: fallback([
@@ -26,14 +29,6 @@ export function createFoundationClient(): PublicClient {
   ], { rank: false, retryCount: 0 }), batch: { multicall: false } });
 }
 
-/** Source/runtime pins only. The caller must independently resolve release authority before presenting execution. */
-export interface FoundationDeploymentBinding {
-  releaseDigest: Hex;
-  sourceCommit: string;
-  startBlock: bigint;
-  factory: { address: Address; runtimeCodeHash: Hex };
-  hookDeployer: { address: Address; runtimeCodeHash: Hex };
-}
 export interface FoundationTransaction {
   from: Address; to: Address; data: Hex; value: bigint;
 }
@@ -69,6 +64,7 @@ export async function prepareFoundationModuleAction(input: FoundationPrepareModu
 }
 
 export async function assertFoundationInfrastructure(client: PublicClient, binding: FoundationDeploymentBinding, blockNumber?: bigint): Promise<FoundationCheckpoint> {
+  const factoryVersion = foundationFactoryVersion(binding), factoryAbi = foundationFactoryAbiFor(binding);
   if (await client.getChainId() !== FOUNDATION_CHAIN_ID) throw new Error("The RPC is connected to a different network.");
   const block = await client.getBlock(blockNumber === undefined ? { blockTag: "latest" } : { blockNumber });
   if (block.number === null || !block.hash || block.number < binding.startBlock
@@ -80,10 +76,21 @@ export async function assertFoundationInfrastructure(client: PublicClient, bindi
     const code = await client.getCode({ address: pin.address, blockNumber: block.number! });
     if (!code || code === "0x" || keccak256(code).toLowerCase() !== pin.runtimeCodeHash.toLowerCase()) throw new Error(`The ${role} runtime does not match this release.`);
   }));
-  const version = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "VERSION_ID", blockNumber: block.number });
-  if (version !== FOUNDATION_ABI_ID) throw new Error("This factory uses a different module interface.");
+  const version = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "VERSION_ID", blockNumber: block.number });
+  if (version.toLowerCase() !== (factoryVersion === "v2" ? FOUNDATION_FACTORY_V2_ID : FOUNDATION_ABI_ID).toLowerCase()) throw new Error("This factory uses a different reviewed factory version.");
+  if (factoryVersion === "v2") {
+    const [moduleAbi, custody, recipient, roundingRecipient, fee] = await Promise.all([
+      client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "MODULE_ABI_ID", blockNumber: block.number }),
+      client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "LP_CUSTODY_ID", blockNumber: block.number }),
+      client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "LP_RECIPIENT", blockNumber: block.number }),
+      client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "ROUNDING_INVENTORY_RECIPIENT", blockNumber: block.number }),
+      client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "LP_FEE", blockNumber: block.number }),
+    ]);
+    if (moduleAbi !== FOUNDATION_ABI_ID || custody !== FOUNDATION_LP_CUSTODY_DEAD_ID || getAddress(recipient) !== FOUNDATION_DEAD_ADDRESS
+      || getAddress(roundingRecipient) !== FOUNDATION_DEAD_ADDRESS || fee !== 0) throw new Error("The V2 factory's irreversible LP custody or module interface is inconsistent.");
+  }
   await Promise.all((["poolManager", "positionManager", "universalRouter", "permit2", "hookDeployer"] as const).map(async role => {
-    const actual = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: role, blockNumber: block.number! });
+    const actual = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: role, blockNumber: block.number! });
     const expected = role === "hookDeployer" ? binding.hookDeployer.address : FOUNDATION_INFRASTRUCTURE[role].address;
     if (getAddress(actual) !== getAddress(expected)) throw new Error(`The factory's ${role} binding changed.`);
   }));
@@ -109,11 +116,10 @@ export async function readFoundationQuote(client: PublicClient, raw: Address, ac
 
 /** Canonical factory registration, not a claimed pool key, establishes this source's guarantees. */
 export async function assertFoundationPool(client: PublicClient, binding: FoundationDeploymentBinding, pool: FoundationPool, blockNumber: bigint) {
-  const record = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi,
-    functionName: "launchOf", args: [getAddress(pool.token)], blockNumber });
+  const record = await readFoundationLaunchRecord(client, binding, getAddress(pool.token), blockNumber);
   if (BigInt(record.token) === 0n || getAddress(record.token) !== getAddress(pool.token)
     || getAddress(record.hook) !== getAddress(pool.hook) || record.poolId !== pool.poolId
-    || BigInt(record.ledger) === 0n || BigInt(record.baseVault) === 0n || record.basePositionId === 0n) {
+    || BigInt(record.ledger) === 0n || (record.factoryVersion === "v1" && BigInt(record.baseVault) === 0n) || record.basePositionId === 0n) {
     throw new Error("This pool is not a launch from the selected foundation release.");
   }
   const [initializer, token, quote, ledger, poolId, key, creatorFeeBps, creator] = await Promise.all([
@@ -131,7 +137,9 @@ export async function assertFoundationPool(client: PublicClient, binding: Founda
     || poolId !== pool.poolId || foundationPoolId(key) !== poolId
     || foundationPoolId(foundationPoolKey(pool)) !== poolId) throw new Error("The registered pool's onchain identity is inconsistent.");
   foundationCreatorFeeBps(creatorFeeBps);
-  return { record, key, creatorFeeBps, creator };
+  const positions = record.factoryVersion === "v2" ? await readFoundationV2Positions(client, record, pool.quote,
+    await client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "initialTick", blockNumber }), blockNumber) : undefined;
+  return { record, key, creatorFeeBps, creator, positions };
 }
 
 export function foundationMetadata(input: { name: string; symbol: string; description: string; imageURI: string; socialLinks: ModuleSocialLinks;
@@ -172,11 +180,12 @@ async function erc20Approvals(client: PublicClient, input: { account: Address; t
 }
 
 /** Executes every approval and operation in one ephemeral RPC state, never a broadcast or fabricated allowance slot. */
-export async function simulateFoundationSequence(client: PublicClient, steps: readonly FoundationPreparedStep[], checkpoint: FoundationCheckpoint, checks: readonly FoundationBalanceCheck[] = []) {
+export async function simulateFoundationSequence(client: PublicClient, steps: readonly FoundationPreparedStep[], checkpoint: FoundationCheckpoint, checks: readonly FoundationBalanceCheck[] = [], postReads: readonly { to: Address; data: Hex }[] = []) {
   if (steps.length === 0 || steps.length > 8) throw new Error("Invalid transaction sequence.");
   const account = steps[0].transaction.from;
   if (steps.some(step => getAddress(step.transaction.from) !== getAddress(account))) throw new Error("A sequence must have one payer.");
   if (checks.length > 4) throw new Error("Too many balance checks.");
+  if (postReads.length > 11) throw new Error("Too many launch NFT and settlement checks.");
   const readBalance = (check: FoundationBalanceCheck) => ({ to: check.token,
     data: encodeFunctionData({ abi: erc20Abi, functionName: "balanceOf", args: [check.account] }) });
   for (const check of checks.filter(check => check.newToken)) {
@@ -188,9 +197,9 @@ export async function simulateFoundationSequence(client: PublicClient, steps: re
   const simulation = await client.simulateCalls({ account, blockNumber: checkpoint.blockNumber,
     calls: [...previousChecks.map(readBalance),
       ...steps.map(step => ({ to: step.transaction.to, data: step.transaction.data, value: step.transaction.value })),
-      ...checks.map(readBalance)],
+      ...checks.map(readBalance), ...postReads],
   });
-  if (simulation.results.length !== offset + steps.length + checks.length) throw new Error("The simulation did not cover every transaction and balance check.");
+  if (simulation.results.length !== offset + steps.length + checks.length + postReads.length) throw new Error("The simulation did not cover every transaction, balance and NFT check.");
   const results = simulation.results.slice(offset, offset + steps.length).map((result, index) => {
     if (result.status !== "success") throw new Error(`Simulation failed at ${steps[index].label}: ${result.error.message}`);
     // A non-reverting false ERC20 approval is still a failed approval.
@@ -212,7 +221,59 @@ export async function simulateFoundationSequence(client: PublicClient, steps: re
   });
   const block = await client.getBlock({ blockNumber: checkpoint.blockNumber });
   if (block.hash !== checkpoint.blockHash) throw new Error("Chain state changed during simulation. Review again.");
-  return { results, steps: steps.map((step, index) => ({ ...step, gasUsed: results[index].gasUsed })), checkpoint, balances };
+  const postData = simulation.results.slice(offset + steps.length + checks.length).map(result => {
+    if (result.status !== "success") throw new Error("A simulated launch NFT could not be read.");
+    return result.data;
+  });
+  return { results, steps: steps.map((step, index) => ({ ...step, gasUsed: results[index].gasUsed })), checkpoint, balances, postData };
+}
+
+/** Read both minted NFTs inside the same simulated state; result tuple owners alone are insufficient. */
+export async function simulateFoundationV2Launch(input: {
+  client: PublicClient; binding: FoundationDeploymentBinding; parameters: FoundationLaunchParameters;
+  steps: readonly FoundationPreparedStep[]; checkpoint: FoundationCheckpoint; checks: readonly FoundationBalanceCheck[];
+  expected: { token: Address; hook: Address; poolId: Hex }; price: ReturnType<typeof planFoundationPrice>;
+}) {
+  if (foundationFactoryVersion(input.binding) !== "v2") throw new Error("V2 NFT checks require an exact V2 source binding.");
+  const launch = input.steps.at(-1);
+  if (!launch || launch.kind !== "launch" || getAddress(launch.transaction.to) !== getAddress(input.binding.factory.address)
+    || launch.transaction.value !== 0n || launch.transaction.data.toLowerCase() !== encodeFunctionData({ abi: foundationFactoryV2Abi,
+      functionName: "launch", args: [input.parameters] }).toLowerCase()
+    || input.checks.length < 2 || input.checks.length > 4 || getAddress(input.checks[0].token) !== getAddress(input.parameters.quote)
+    || getAddress(input.checks[1].token) !== getAddress(input.expected.token) || input.checks[0].newToken === true || input.checks[1].newToken !== true
+    || input.checks.some(check => getAddress(check.account) !== getAddress(launch.transaction.from))) {
+    throw new Error("The V2 launch calldata and wallet checks must match the reviewed request.");
+  }
+  const factoryQuoteBefore = await input.client.readContract({ address: input.parameters.quote, abi: erc20Abi,
+    functionName: "balanceOf", args: [input.binding.factory.address], blockNumber: input.checkpoint.blockNumber });
+  const decode = (simulation: Awaited<ReturnType<typeof simulateFoundationSequence>>) => {
+    const result = decodeFoundationLaunchResult(input.binding, simulation.results.at(-1)!.data);
+    if (result.factoryVersion !== "v2") throw new Error("The launch result has a different factory version.");
+    assertFoundationV2Result(result, input.parameters);
+    if (getAddress(result.token) !== getAddress(input.expected.token) || getAddress(result.hook) !== getAddress(input.expected.hook)
+      || result.poolId !== input.expected.poolId || result.baseTokenPrincipal !== input.price.base.principal
+      || result.baseTokenRounding !== input.price.base.dust || result.creatorQuotePrincipal !== (input.price.creator?.principal ?? 0n)
+      || simulation.balances[0]?.delta !== result.actualQuoteRefund - input.parameters.initialBuyQuoteAmount - input.parameters.additionalQuoteAmount
+      || result.initialBuyTokenAmount !== simulation.balances[1]?.delta) throw new Error("The V2 simulated launch differs from its exact source, principal or wallet movement.");
+    return result;
+  };
+  const first = await simulateFoundationSequence(input.client, input.steps, input.checkpoint, input.checks);
+  const predicted = decode(first);
+  const specs = foundationV2PositionSpecs(predicted, input.parameters.quote, input.parameters.initialTick,
+    { base: input.price.base.liquidity, creator: input.price.creator?.liquidity });
+  const nftCalls = foundationV2PositionCalls(specs);
+  const settlementCalls = [
+    { to: input.parameters.quote, data: encodeFunctionData({ abi: erc20Abi, functionName: "balanceOf", args: [input.binding.factory.address] }) },
+    { to: predicted.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "balanceOf", args: [input.binding.factory.address] }) },
+    { to: predicted.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "balanceOf", args: [FOUNDATION_DEAD_ADDRESS] }) },
+  ];
+  const simulation = await simulateFoundationSequence(input.client, input.steps, input.checkpoint, input.checks, [...nftCalls, ...settlementCalls]);
+  const result = decode(simulation);
+  if (result.basePositionId !== predicted.basePositionId || result.creatorPositionId !== predicted.creatorPositionId) throw new Error("The simulated NFT identities changed within one checkpoint.");
+  const positions = verifyFoundationV2PositionData(specs, result.poolId, simulation.postData.slice(0, nftCalls.length));
+  const [quoteAfter, tokenAfter, roundingAfter] = simulation.postData.slice(nftCalls.length).map(data => decodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", data }));
+  if (quoteAfter !== factoryQuoteBefore || tokenAfter !== 0n || roundingAfter < result.baseTokenRounding) throw new Error("The V2 factory quote refund or token rounding settlement is incomplete.");
+  return { result, simulation, positions };
 }
 
 export async function prepareFoundationLaunch(input: {
@@ -220,7 +281,7 @@ export async function prepareFoundationLaunch(input: {
   startValuationQuote: string; initialBuy: string; additionalLiquidity: string; creatorFeeBps: number;
   modules: readonly FoundationContractModule[]; tokenSalt: Hex; slippageBps: number; signal?: AbortSignal;
 }) {
-  const { client, binding } = input, account = getAddress(input.account);
+  const { client, binding } = input, account = getAddress(input.account), factoryAbi = foundationFactoryAbiFor(binding);
   const modulePackageIds = readFoundationModulePackages(input.metadata.socialData, input.modules.length);
   if (input.modules.length > 0 && !modulePackageIds) throw new Error("Bind the original module source identities into the coin metadata before preparing.");
   const checkpoint = await assertFoundationInfrastructure(client, binding);
@@ -231,7 +292,7 @@ export async function prepareFoundationLaunch(input: {
   const funding = additionalQuoteAmount + initialBuyQuoteAmount;
   if (funding > FOUNDATION_INT128_MAX || quote.balance === null || quote.balance < funding) throw new Error("Your quote-token balance does not cover this launch.");
   if (!Number.isInteger(input.slippageBps) || input.slippageBps < 1 || input.slippageBps > 1_000) throw new Error("Choose slippage between 0.01% and 10%.");
-  const token = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "predictTokenAddress",
+  const token = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "predictTokenAddress",
     args: [account, input.tokenSalt, input.metadata], blockNumber: checkpoint.blockNumber });
   const moduleAssetPins = readFoundationAssetPins(input.metadata.socialData);
   if (moduleAssetPins.some(pin => [token, quote.address].some(base => getAddress(pin[0]) === getAddress(base)))
@@ -242,34 +303,44 @@ export async function prepareFoundationLaunch(input: {
     initialTick: price.initialTick, creatorFeeBps: foundationCreatorFeeBps(input.creatorFeeBps),
     additionalQuoteAmount, initialBuyQuoteAmount, initialBuyMinimumTokenAmount: initialBuyQuoteAmount > 0n ? 1n : 0n,
     deadline: checkpoint.timestamp + 300n, tokenSalt: input.tokenSalt, hookSalt: FOUNDATION_ZERO_HASH, modules: input.modules };
-  const initCodeHash = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "hookInitCodeHash",
+  const initCodeHash = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "hookInitCodeHash",
     args: [account, token, p], blockNumber: checkpoint.blockNumber });
   const hook = await mineFoundationHook(binding.hookDeployer.address, initCodeHash, input.signal);
   p.hookSalt = hook.salt;
   const key = foundationPoolKey({ token, quote: quote.address, hook: hook.address }), poolId = foundationPoolId(key);
   const approvals = await erc20Approvals(client, { account, token: quote.address, spender: binding.factory.address, amount: funding, blockNumber: checkpoint.blockNumber });
   const launchStep = (): FoundationPreparedStep => ({ label: "Launch coin and pool", kind: "launch", gasUsed: 0n,
-    transaction: { from: account, to: binding.factory.address, value: 0n, data: encodeFunctionData({ abi: foundationFactoryAbi, functionName: "launch", args: [p] }) },
-    effect: `Create the coin, bind the pool and positions, and spend at most ${funding} raw quote units.`, amount: funding });
+    transaction: { from: account, to: binding.factory.address, value: 0n, data: encodeFunctionData({ abi: factoryAbi, functionName: "launch", args: [p] }) },
+    effect: foundationFactoryVersion(binding) === "v2"
+      ? `Create the coin and mint the base LP NFT and any optional LP NFT directly to DEAD. Their principal and any LP-position proceeds are irretrievable. Spend at most ${funding} raw quote units; return unused quote.`
+      : `Create the coin, bind the pool and positions, and spend at most ${funding} raw quote units.`, amount: funding });
   const checks = (): FoundationBalanceCheck[] => [
-    { token: quote.address, account, delta: -initialBuyQuoteAmount - (price.creator?.principal ?? 0n) },
+    foundationFactoryVersion(binding) === "v2" ? { token: quote.address, account, minimumDelta: -funding }
+      : { token: quote.address, account, delta: -initialBuyQuoteAmount - (price.creator?.principal ?? 0n) },
     { token, account, newToken: true, minimumDelta: p.initialBuyMinimumTokenAmount },
     ...moduleAssetPins.map(([asset]) => ({ token: asset, account, minimumDelta: 0n })),
   ];
   let simulation = await simulateFoundationSequence(client, [...approvals, launchStep()], checkpoint, checks());
-  let result = decodeFunctionResult({ abi: foundationFactoryAbi, functionName: "launch", data: simulation.results.at(-1)!.data }) as FoundationLaunchResult;
+  let result: FoundationLaunchRecord = decodeFoundationLaunchResult(binding, simulation.results.at(-1)!.data);
   if (initialBuyQuoteAmount > 0n) {
     p.initialBuyMinimumTokenAmount = result.initialBuyTokenAmount * BigInt(10_000 - input.slippageBps) / 10_000n;
     if (p.initialBuyMinimumTokenAmount === 0n) throw new Error("The initial buy is too small for a positive minimum output.");
-    simulation = await simulateFoundationSequence(client, [...approvals, launchStep()], checkpoint, checks());
-    result = decodeFunctionResult({ abi: foundationFactoryAbi, functionName: "launch", data: simulation.results.at(-1)!.data }) as FoundationLaunchResult;
+    if (foundationFactoryVersion(binding) === "v1") {
+      simulation = await simulateFoundationSequence(client, [...approvals, launchStep()], checkpoint, checks());
+      result = decodeFoundationLaunchResult(binding, simulation.results.at(-1)!.data);
+    }
+  }
+  if (foundationFactoryVersion(binding) === "v2") {
+    const checked = await simulateFoundationV2Launch({ client, binding, parameters: p, steps: [...approvals, launchStep()], checkpoint,
+      checks: checks(), expected: { token, hook: hook.address, poolId }, price });
+    result = checked.result; simulation = checked.simulation;
   }
   if (getAddress(result.token) !== getAddress(token) || getAddress(result.hook) !== getAddress(hook.address)
     || result.poolId !== poolId || result.basePositionId === 0n || result.initialBuyTokenAmount < p.initialBuyMinimumTokenAmount
     || result.initialBuyTokenAmount !== simulation.balances[1].delta
     || (additionalQuoteAmount > 0n) !== (result.creatorPositionId > 0n)) throw new Error("The simulated launch does not match its plan.");
   return sealFoundationSequence({ kind: "launch" as const, sourceKind: "module-foundation-v1" as const, account, binding,
-    checkpoint, expiresAt: p.deadline, quote, parameters: p, result, price, poolKey: key, modulePackageIds: modulePackageIds ?? [],
+    checkpoint, expiresAt: p.deadline, quote, parameters: p, result, factoryVersion: result.factoryVersion, price, poolKey: key, modulePackageIds: modulePackageIds ?? [],
     moduleAssetPins, balanceChecks: checks(),
     metadataHash: keccak256(encodeAbiParameters(foundationMetadataParameters, [input.metadata])),
     steps: simulation.steps, balances: simulation.balances, simulation: "rpc-sequence" as const });

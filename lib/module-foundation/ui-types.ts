@@ -100,6 +100,8 @@ export interface FoundationPositionIdentity {
   tickLower: number;
   tickUpper: number;
   ownershipDescription: string;
+  /** Absent only for saved V1 UI data. DEAD custody is never represented as a vault. */
+  custody?: "permanent-vault-v1" | "wallet-owned-v1" | "dead-v1";
 }
 
 export interface FoundationTransactionSummary {
@@ -112,7 +114,7 @@ export interface FoundationTransactionSummary {
   spender?: Address;
 }
 
-export interface FoundationLaunchReview {
+interface FoundationLaunchReviewCommon {
   id: string;
   contextKey: string;
   account: Address;
@@ -137,6 +139,25 @@ export interface FoundationLaunchReview {
   transactions: readonly FoundationTransactionSummary[];
   notes?: readonly string[];
 }
+
+export interface FoundationRoundingInventoryReview {
+  recipient: Address;
+  /** Human token units. Transfer to DEAD does not reduce ERC20 totalSupply. */
+  tokenAmount: string;
+  unrecoverable: boolean;
+}
+export interface FoundationQuoteFundingReview {
+  /** Maximum quote debit including initial buy and optional additional liquidity. */
+  maximum: string;
+  /** Actual quote principal allocated to the optional creator-funded LP NFT. */
+  principal: string;
+  /** Exact quote returned, including unused funding and any extra quote received during construction. */
+  refund: string;
+}
+export type FoundationLaunchReview = FoundationLaunchReviewCommon & (
+  { factoryVersion?: "v1"; lpCustodyId?: never; roundingInventory?: FoundationRoundingInventoryReview; quoteFunding?: FoundationQuoteFundingReview }
+  | { factoryVersion: "v2"; lpCustodyId: Hex; roundingInventory: FoundationRoundingInventoryReview & { unrecoverable: true }; quoteFunding: FoundationQuoteFundingReview }
+);
 
 export interface FoundationTransactionResult {
   status: "submitted" | "confirmed" | "reverted" | "unconfirmed";

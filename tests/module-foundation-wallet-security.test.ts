@@ -1,6 +1,6 @@
 import { webcrypto } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAddress, keccak256, toHex, type Hex, type PublicClient } from "viem";
+import { encodeFunctionData, getAddress, keccak256, toHex, type Hex, type PublicClient } from "viem";
 import {
   bindFoundationWalletStep, foundationWalletRequestNonce, readFoundationPending, reconcileFoundationPending,
   revalidateFoundationWalletStep, submitFoundationWalletStep,
@@ -8,9 +8,14 @@ import {
 } from "@/lib/module-foundation/wallet";
 import type { FoundationDeploymentBinding, FoundationPreparedStep } from "@/lib/module-foundation/client";
 import { acknowledgeFoundationResolution, readFoundationResolution } from "@/lib/module-foundation/result-store";
+import { foundationFactoryV2Abi, type FoundationLaunchParameters } from "@/lib/module-foundation/abi";
+import { FOUNDATION_DEAD_ADDRESS, FOUNDATION_LP_CUSTODY_DEAD_ID } from "@/lib/module-foundation/constants";
+import { foundationPoolId, foundationPoolKey } from "@/lib/module-foundation/route";
+import { planFoundationPrice } from "@/lib/module-foundation/price";
+import { foundationLaunchPositionPresentation } from "@/lib/module-foundation/ui-readback";
 
 const sdk = vi.hoisted(() => ({
-  valid: new WeakSet<object>(), infrastructure: vi.fn(), pool: vi.fn(), simulate: vi.fn(),
+  valid: new WeakSet<object>(), infrastructure: vi.fn(), pool: vi.fn(), simulate: vi.fn(), simulateV2: vi.fn(),
 }));
 vi.mock("@/lib/module-foundation/client", async original => ({
   ...await original<typeof import("@/lib/module-foundation/client")>(),
@@ -20,6 +25,7 @@ vi.mock("@/lib/module-foundation/client", async original => ({
   assertFoundationInfrastructure: sdk.infrastructure,
   assertFoundationPool: sdk.pool,
   simulateFoundationSequence: sdk.simulate,
+  simulateFoundationV2Launch: sdk.simulateV2,
 }));
 
 const a = (n: number) => getAddress(toHex(n, { size: 20 }));
@@ -60,6 +66,7 @@ beforeEach(() => {
   sdk.infrastructure.mockReset().mockResolvedValue({ blockNumber: 100n, blockHash, timestamp: BigInt(fixedTime / 1_000) });
   sdk.pool.mockReset().mockResolvedValue({});
   sdk.simulate.mockReset().mockResolvedValue({});
+  sdk.simulateV2.mockReset().mockResolvedValue({});
   storage = new MemoryStorage(); locks = new ExclusiveLocks(); now = fixedTime;
   vi.spyOn(Date, "now").mockImplementation(() => now);
   vi.stubGlobal("window", Object.assign(new EventTarget(), { localStorage: storage }));
@@ -69,18 +76,26 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-function fixture(index = 0, registered = true) {
-  const release: FoundationDeploymentBinding = {
+function fixture(index = 0, registered = true, v2 = false) {
+  const originalRelease = {
     releaseDigest: h(30), sourceCommit: "a".repeat(40), startBlock: 1n,
     factory: { address: a(81), runtimeCodeHash: h(31) },
     hookDeployer: { address: a(82), runtimeCodeHash: h(32) },
   };
+  const release: FoundationDeploymentBinding = v2 ? { ...originalRelease, factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID } : originalRelease;
+  const price = planFoundationPrice({ token, quote, valuationQuoteRaw: 100_000_000_000n, additionalQuoteRaw: 0n });
+  const parameters: FoundationLaunchParameters = { metadata: { name: "Fixture", symbol: "FX", description: "", imageURI: "https://example.com/i.png", website: "", socialData: "0x" },
+    quote, quoteDecimals: 6, initialTick: price.initialTick, creatorFeeBps: 100, additionalQuoteAmount: 0n,
+    initialBuyQuoteAmount: 10n, initialBuyMinimumTokenAmount: 8n, deadline: BigInt(fixedTime / 1_000 + 300), tokenSalt: h(301), hookSalt: h(302), modules: [] };
+  const requestTo = v2 ? release.factory.address : router;
+  const requestData = v2 ? encodeFunctionData({ abi: foundationFactoryV2Abi, functionName: "launch", args: [parameters] }) : callData;
   const trade: FoundationPreparedStep = { label: "Buy coin", kind: "buy", gasUsed: 100_000n,
-    transaction: { from: account, to: router, data: callData, value: 0n }, effect: "Spend 10; receive at least 8." };
+    transaction: { from: account, to: requestTo, data: requestData, value: 0n }, effect: "Spend 10; receive at least 8." };
+  if (v2) { trade.kind = "launch"; trade.label = "Launch with LP NFTs at DEAD"; }
   const approval: FoundationPreparedStep = { label: "Approve quote", kind: "approve", gasUsed: 40_000n,
     transaction: { from: account, to: quote, data: "0xabcdef01", value: 0n }, effect: "Approve 10.", amount: 10n, spender: router };
   const sequence = {
-    sourceKind: "module-foundation-v1", kind: "trade", account, binding: structuredClone(release),
+    sourceKind: "module-foundation-v1", kind: v2 ? "launch" : "trade", account, binding: structuredClone(release),
     expiresAt: BigInt(fixedTime / 1_000 + 300), pool: { token, quote, hook: a(83), poolId: h(33) },
     side: "buy", amountIn: 10n, amountOut: 9n, minimumOutput: 8n,
     moduleReview: null,
@@ -88,6 +103,11 @@ function fixture(index = 0, registered = true) {
     balances: [{ token: quote, account, before: 100n, after: 90n, delta: -10n },
       { token, account, before: 0n, after: 9n, delta: 9n }],
     steps: index === 1 ? [approval, trade] : [trade],
+    ...(v2 ? { parameters, price, modulePackageIds: [], result: { factoryVersion: "v2", token, hook: a(83), ledger: a(84),
+      poolId: foundationPoolId(foundationPoolKey({ token, quote, hook: a(83) })), basePositionOwner: FOUNDATION_DEAD_ADDRESS,
+      creatorPositionOwner: a(0), roundingInventoryRecipient: FOUNDATION_DEAD_ADDRESS, basePositionId: 77n, creatorPositionId: 0n,
+      initialBuyTokenAmount: 9n, baseTokenPrincipal: price.base.principal, baseTokenRounding: price.base.dust,
+      creatorQuotePrincipal: 0n, actualQuoteRefund: 0n } } : {}),
   // This boundary fixture supplies only fields read by the wallet. Real SDK construction is checked separately.
   } as unknown as FoundationPreparedSequence;
   if (registered) sdk.valid.add(sequence);
@@ -96,7 +116,7 @@ function fixture(index = 0, registered = true) {
   const getTransactionReceipt = vi.fn(async () => ({ from: account, to: router, transactionHash, blockNumber: 101n, blockHash, status: "success" }));
   const getBlock = vi.fn(async () => ({ number: 100n, hash: blockHash, timestamp: BigInt(fixedTime / 1_000) }));
   const estimateGas = vi.fn(async (request: unknown) => {
-    expect(request).toMatchObject({ account, to: router, data: callData, value: 0n });
+    expect(request).toMatchObject({ account, to: requestTo, data: requestData, value: 0n });
     return 100_000n;
   });
   const extraCode = "0x60016000f3" as Hex;
@@ -120,6 +140,39 @@ function fixture(index = 0, registered = true) {
   });
   return { sequence, release, client, resolveAuthority, bind, send, getTransaction, getTransactionReceipt, getBlock, estimateGas, getCode, readContract, extraCode };
 }
+
+describe("foundation V2 final wallet revalidation dispatch", () => {
+  it("rechecks V2 NFTs and settlement immediately before the exact wallet request", async () => {
+    const f = fixture(0, true, true);
+    await expect(submitFoundationWalletStep(f.bind(), f.send)).resolves.toBe(transactionHash);
+    expect(sdk.simulateV2).toHaveBeenCalledOnce();
+    expect(sdk.simulateV2).toHaveBeenCalledWith(expect.objectContaining({ client: f.client, binding: f.release, steps: f.sequence.steps }));
+    expect(sdk.simulate).not.toHaveBeenCalled();
+    expect(f.estimateGas).toHaveBeenCalledOnce();
+  });
+  it("does not request gas or a signature after a fresh V2 custody failure", async () => {
+    const f = fixture(0, true, true); sdk.simulateV2.mockRejectedValueOnce(new Error("The creator launch NFT has incorrect DEAD custody"));
+    await expect(submitFoundationWalletStep(f.bind(), f.send)).rejects.toThrow("DEAD custody");
+    expect(f.estimateGas).not.toHaveBeenCalled();
+    expect(readFoundationPending(account)).toBeNull();
+  });
+  it.each(["version", "custody", "startBlock"])("rejects a changed release %s with the same factory bytes", async field => {
+    const f = fixture(0, true, true);
+    f.resolveAuthority.mockResolvedValue(field === "version"
+      ? { ...f.release, factoryVersion: "v1", lpCustodyId: undefined }
+      : field === "custody" ? { ...f.release, factoryVersion: "v2", lpCustodyId: h(999) } : { ...f.release, startBlock: 2n });
+    await expect(submitFoundationWalletStep(f.bind(), f.send)).rejects.toThrow(/release|custody/i);
+    expect(sdk.simulateV2).not.toHaveBeenCalled(); expect(f.estimateGas).not.toHaveBeenCalled();
+  });
+  it("presents DEAD as irrevocable NFT custody without a vault label", () => {
+    const f = fixture(0, true, true);
+    if (f.sequence.kind !== "launch") throw new Error("Expected launch fixture");
+    const positions = foundationLaunchPositionPresentation(f.sequence, account);
+    expect(positions[0]).toMatchObject({ owner: FOUNDATION_DEAD_ADDRESS, custody: "dead-v1" });
+    expect(positions[0].ownershipDescription).toContain("irretrievable");
+    expect(positions[0].ownershipDescription).not.toContain("vault");
+  });
+});
 
 describe("foundation private wallet preparation", () => {
   it("preserves exact debit, minimum output and zero-loss additional asset checks at wallet replay", async () => {
