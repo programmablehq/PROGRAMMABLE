@@ -2,6 +2,14 @@
 useDefault = true
 
 [[allowlists]]
+description = "Foundation V2 local evidence pins the public FoundationTokenV1 source SHA-256"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^contracts/security/module-foundation-v2/local-checks\.json$''']
+regexes = ['''^\s*"src/module-foundation/FoundationTokenV1\.sol": "ea5e86ec9f766e763c6dfba46523a7df5c222e20f8e707aaef0db8878e375618",\s*$''']
+
+[[allowlists]]
 description = "Module Mode pins the verified public token creation-bytecode commitment"
 targetRules = ["generic-api-key"]
 condition = "AND"
