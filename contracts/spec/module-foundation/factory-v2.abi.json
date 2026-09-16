@@ -1,0 +1,1119 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "manager",
+        "type": "address",
+        "internalType": "contract IPoolManager"
+      },
+      {
+        "name": "positions",
+        "type": "address",
+        "internalType": "contract IPositionManager"
+      },
+      {
+        "name": "router",
+        "type": "address",
+        "internalType": "contract IFoundationUniversalRouterV2"
+      },
+      {
+        "name": "permits",
+        "type": "address",
+        "internalType": "contract IAllowanceTransfer"
+      },
+      {
+        "name": "deployer",
+        "type": "address",
+        "internalType": "contract FoundationHookDeployerV1"
+      },
+      {
+        "name": "expectedCodeHashes",
+        "type": "bytes32[5]",
+        "internalType": "bytes32[5]"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "LP_CUSTODY_ID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "LP_FEE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "LP_RECIPIENT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MODULE_ABI_ID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ROUNDING_INVENTORY_RECIPIENT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "VERSION_ID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "chainId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hookDeployer",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract FoundationHookDeployerV1"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hookDeployerCodeHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hookInitCodeHash",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "predictedToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct FoundationTypesV1.LaunchParams",
+        "components": [
+          {
+            "name": "metadata",
+            "type": "tuple",
+            "internalType": "struct FoundationTypesV1.Metadata",
+            "components": [
+              {
+                "name": "name",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "symbol",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "description",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "imageURI",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "website",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "socialData",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ]
+          },
+          {
+            "name": "quote",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "quoteDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "initialTick",
+            "type": "int24",
+            "internalType": "int24"
+          },
+          {
+            "name": "creatorFeeBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "additionalQuoteAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "initialBuyQuoteAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "initialBuyMinimumTokenAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "deadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "tokenSalt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hookSalt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modules",
+            "type": "tuple[]",
+            "internalType": "struct FoundationTypesV1.ModuleSelection[]",
+            "components": [
+              {
+                "name": "factory",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "factoryCodeHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "moduleCodeHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "descriptorHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "configuration",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "creatorShareBps",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "launch",
+    "inputs": [
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct FoundationTypesV1.LaunchParams",
+        "components": [
+          {
+            "name": "metadata",
+            "type": "tuple",
+            "internalType": "struct FoundationTypesV1.Metadata",
+            "components": [
+              {
+                "name": "name",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "symbol",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "description",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "imageURI",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "website",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "socialData",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ]
+          },
+          {
+            "name": "quote",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "quoteDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "initialTick",
+            "type": "int24",
+            "internalType": "int24"
+          },
+          {
+            "name": "creatorFeeBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "additionalQuoteAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "initialBuyQuoteAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "initialBuyMinimumTokenAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "deadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "tokenSalt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hookSalt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modules",
+            "type": "tuple[]",
+            "internalType": "struct FoundationTypesV1.ModuleSelection[]",
+            "components": [
+              {
+                "name": "factory",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "factoryCodeHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "moduleCodeHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "descriptorHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "configuration",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "creatorShareBps",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "tuple",
+        "internalType": "struct FoundationLaunchTypesV2.LaunchResultV2",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "hook",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "ledger",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "poolId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "basePositionOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "creatorPositionOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roundingInventoryRecipient",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "basePositionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "creatorPositionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initialBuyTokenAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "baseTokenPrincipal",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "baseTokenRounding",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "creatorQuotePrincipal",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "actualQuoteRefund",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "launchOf",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct FoundationLaunchTypesV2.LaunchResultV2",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "hook",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "ledger",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "poolId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "basePositionOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "creatorPositionOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roundingInventoryRecipient",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "basePositionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "creatorPositionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initialBuyTokenAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "baseTokenPrincipal",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "baseTokenRounding",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "creatorQuotePrincipal",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "actualQuoteRefund",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "permit2",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAllowanceTransfer"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "permit2CodeHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPoolManager"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolManagerCodeHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "positionManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPositionManager"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "positionManagerCodeHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "predictHookAddress",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "predictedToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct FoundationTypesV1.LaunchParams",
+        "components": [
+          {
+            "name": "metadata",
+            "type": "tuple",
+            "internalType": "struct FoundationTypesV1.Metadata",
+            "components": [
+              {
+                "name": "name",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "symbol",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "description",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "imageURI",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "website",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "socialData",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ]
+          },
+          {
+            "name": "quote",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "quoteDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "initialTick",
+            "type": "int24",
+            "internalType": "int24"
+          },
+          {
+            "name": "creatorFeeBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "additionalQuoteAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "initialBuyQuoteAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "initialBuyMinimumTokenAmount",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "deadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "tokenSalt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hookSalt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "modules",
+            "type": "tuple[]",
+            "internalType": "struct FoundationTypesV1.ModuleSelection[]",
+            "components": [
+              {
+                "name": "factory",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "factoryCodeHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "moduleCodeHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "descriptorHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "configuration",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "creatorShareBps",
+                "type": "uint16",
+                "internalType": "uint16"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "predictTokenAddress",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenSalt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "metadata_",
+        "type": "tuple",
+        "internalType": "struct FoundationTypesV1.Metadata",
+        "components": [
+          {
+            "name": "name",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "imageURI",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "website",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "socialData",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "universalRouter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IFoundationUniversalRouterV2"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "universalRouterCodeHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "FoundationLaunchedV2",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "hook",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "ledger",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "quote",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "metadataHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "compositionHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "custodyId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "initialBuyQuoteAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "result",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct FoundationLaunchTypesV2.LaunchResultV2",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "hook",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "ledger",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "poolId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "basePositionOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "creatorPositionOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roundingInventoryRecipient",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "basePositionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "creatorPositionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "initialBuyTokenAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "baseTokenPrincipal",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "baseTokenRounding",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "creatorQuotePrincipal",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "actualQuoteRefund",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "DeadlineExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidConfiguration",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInfrastructure",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSettlement",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+]
