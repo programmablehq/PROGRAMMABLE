@@ -96,3 +96,11 @@ it.each([undefined, "0x2222222222222222222222222222222222222222"])("does not fal
   expect(await response.json()).toEqual({ ...unavailableFoundation(), token });
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+it.each([true, false])("rejects a retained-token response at the default launch boundary even when available=%s", async available => {
+  const value = { ...(available ? availableFixture() : unavailableFoundation()), token: "0x1111111111111111111111111111111111111111" };
+  const fetcher = vi.fn(async () => Response.json(value));
+  vi.stubGlobal("fetch", fetcher);
+  await expect(readFoundationAvailabilityResponse(fetcher)).rejects.toThrow("not bound to this request");
+  expect(await (await GET()).json()).toEqual(unavailableFoundation());
+});

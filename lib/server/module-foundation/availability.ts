@@ -37,8 +37,9 @@ export async function readFoundationAvailabilityResponse(fetcher: typeof fetch =
   } finally { await reader.cancel().catch(() => undefined); }
   const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   parseFoundationAvailability(value);
-  if (token !== undefined && (value === null || typeof value !== "object" || !("token" in value) || value.token !== token.toLowerCase())) {
-    throw new Error("The returned launch version is not bound to this coin.");
+  if (value === null || typeof value !== "object" || (token === undefined
+    ? "token" in value : !("token" in value) || value.token !== token.toLowerCase())) {
+    throw new Error("The returned launch version is not bound to this request.");
   }
   return value;
 }
