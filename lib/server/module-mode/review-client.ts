@@ -13,8 +13,9 @@ import { MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 } from "@/lib/module-mode/rev
 import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "@/lib/module-mode/review-engine-position-manager";
 import { computeModuleModeReleaseDigest, moduleHash, moduleRecord, MODULE_MODE_SOURCE_VERSION_V2 } from "@/lib/module-mode/release";
 import { isReviewId, parseReviewAttempt, parseReviewJob, parseReviewPlan, parseReviewSourceCorrection, reviewDigest, reviewRecord, parseReviewQueueItem, type ReviewDetail,
-  FOUNDATION_SETTINGS_V1, FOUNDATION_HOST_V1, FOUNDATION_BUILD_SCHEMA_V1, FOUNDATION_PROTOCOL_BUILD_V1, FOUNDATION_PROTOCOL_EXTENSION_V1,
-  foundationProtocolReviewManifestV1, foundationProtocolReviewManifestHashV1, type FoundationBuildArtifactV1, type FoundationProtocolBuildV1 } from "@/lib/module-mode/review-contract";
+  FOUNDATION_SETTINGS_V1, FOUNDATION_HOST_V1, FOUNDATION_BUILD_SCHEMA_V1, FOUNDATION_PROTOCOL_BUILD_V1, FOUNDATION_PROTOCOL_BUILD_V2, FOUNDATION_PROTOCOL_EXTENSION_V1, FOUNDATION_PROTOCOL_EXTENSION_V2, FOUNDATION_LP_CUSTODY_ID_V2,
+  isFoundationProtocolArtifact, foundationProtocolReviewManifest, foundationProtocolReviewManifestHash, type FoundationBuildArtifactV1, type FoundationProtocolBuildV1,
+  type FoundationProtocolBuildV2, type AnyFoundationProtocolBuild } from "@/lib/module-mode/review-contract";
 import { createFoundationModuleManifestV1, hashFoundationModuleManifestV1, readFoundationPackageExtensionV1, encodeFoundationConfigurationV1, encodeFoundationActionV1 } from "@/lib/module-foundation/manifest";
 import { nativeCanonicalJson } from "@/lib/module-mode/native-catalog";
 import { unsupportedManagementCapabilities } from "@/lib/module-mode/management-manifest";
@@ -53,8 +54,8 @@ function parsed(value: Uint8Array, maximum: number) { return parseStrictJson(new
 function jsonHeader(input: Request | Response) { if (input.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") fail(415, "MODULE_REVIEW_JSON_REQUIRED"); }
 
 /** Reconstruct source/ABI bytes from the authenticated submission; never execute author code in the BFF. */
-export function verifyFoundationReviewSourceV1(artifact: FoundationBuildArtifactV1 | FoundationProtocolBuildV1, source: ModuleSubmissionRequest): void {
-  const protocol = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1;
+export function verifyFoundationReviewSource(artifact: FoundationBuildArtifactV1 | AnyFoundationProtocolBuild, source: ModuleSubmissionRequest): void {
+  const protocol = isFoundationProtocolArtifact(artifact);
   const descriptor = source.descriptor;
   const checked = validateModuleSubmissionRequest(source);
   if (!checked.ok || checked.totalSourceBytes > 4 * 1024 * 1024 || checked.requestDigest !== artifact.subject.requestDigest
@@ -82,9 +83,13 @@ export function verifyFoundationReviewSourceV1(artifact: FoundationBuildArtifact
   const standard = { language: "Solidity", sources, settings: FOUNDATION_SETTINGS_V1 };
   if (contracts.some(contract => !Object.hasOwn(sources, contract.sourcePath)) || Buffer.byteLength(nativeCanonicalJson(standard)) > 5_242_880
     || artifact.compiler.completeInputHash !== reviewDigest("programmable.modules.compiler-input.v1", standard)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
-  if (artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1) {
-    const extension = reviewRecord(descriptor.extensions?.[FOUNDATION_PROTOCOL_EXTENSION_V1], ["hostAdapterId", "sourceCommit", "platformBps", "platformRecipient"]);
-    if (!same(extension, { hostAdapterId: artifact.hostAdapterId, sourceCommit: artifact.sourceCommit, platformBps: artifact.platformBps, platformRecipient: artifact.platformRecipient })) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+  if (isFoundationProtocolArtifact(artifact)) {
+    const v2 = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2;
+    const extension = reviewRecord(descriptor.extensions?.[v2 ? FOUNDATION_PROTOCOL_EXTENSION_V2 : FOUNDATION_PROTOCOL_EXTENSION_V1],
+      ["hostAdapterId", "sourceCommit", "platformBps", "platformRecipient", ...(v2 ? ["factoryVersion", "lpCustodyId"] : [])]);
+    if (v2 && (artifact.factoryVersion !== "v2" || artifact.lpCustodyId !== FOUNDATION_LP_CUSTODY_ID_V2)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    if (!same(extension, { hostAdapterId: artifact.hostAdapterId, sourceCommit: artifact.sourceCommit, platformBps: artifact.platformBps, platformRecipient: artifact.platformRecipient,
+      ...(v2 ? { factoryVersion: artifact.factoryVersion, lpCustodyId: artifact.lpCustodyId } : {}) })) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
     return;
   }
   const manifest = createFoundationModuleManifestV1(descriptor, artifact.subject.requestDigest), extension = readFoundationPackageExtensionV1(manifest);
@@ -105,6 +110,15 @@ export function verifyFoundationReviewSourceV1(artifact: FoundationBuildArtifact
     for (const action of item.compiledActions) if (action.data !== encodeFoundationActionV1(manifest, action.id, action.parameters, context).data) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
   }
   if (extension.actions.some(action => !artifact.cases.some(item => item.compiledActions.some(test => test.id === action.id && test.expectedOutcome === "success")))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+}
+
+export function verifyFoundationReviewSourceV1(artifact: FoundationBuildArtifactV1 | FoundationProtocolBuildV1, source: ModuleSubmissionRequest): void {
+  if (artifact.schemaVersion !== FOUNDATION_BUILD_SCHEMA_V1 && artifact.schemaVersion !== FOUNDATION_PROTOCOL_BUILD_V1) fail(502, "MODULE_REVIEW_BUILD_PROFILE_MISMATCH");
+  verifyFoundationReviewSource(artifact, source);
+}
+export function verifyFoundationReviewSourceV2(artifact: FoundationProtocolBuildV2, source: ModuleSubmissionRequest): void {
+  if (artifact.schemaVersion !== FOUNDATION_PROTOCOL_BUILD_V2) fail(502, "MODULE_REVIEW_BUILD_PROFILE_MISMATCH");
+  verifyFoundationReviewSource(artifact, source);
 }
 
 /** Closed server identity only; installing it does not authorize review or public activation. */
@@ -170,8 +184,8 @@ export function createModuleReviewClient(input: {
         if (job.subject.submissionId !== id) fail(502, "MODULE_REVIEW_SUBJECT_MISMATCH");
         const checked = validateModuleSubmissionRequest(sourceResponse.value);
         if (!checked.ok || checked.requestDigest !== job.subject.requestDigest || checked.request.descriptor.author.toLowerCase() !== job.subject.author) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
-        if (job.artifact && (job.artifact.packageId !== checked.packageId || job.artifact.familyId !== checked.familyId || job.artifact.rewardWallet !== checked.request.descriptor.rewardWallet.toLowerCase() || job.artifact.sourceManifestHash !== reviewDigest("programmable.modules.source-manifest.v1", checked.request.descriptor) || (job.artifact.schemaVersion !== FOUNDATION_PROTOCOL_BUILD_V1 && job.artifact.configurationSchemaHash !== reviewDigest("programmable.modules.configuration-schema.v1", checked.request.descriptor.configuration)))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
-        if (job.artifact?.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1 || job.artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1) verifyFoundationReviewSourceV1(job.artifact, checked.request);
+        if (job.artifact && (job.artifact.packageId !== checked.packageId || job.artifact.familyId !== checked.familyId || job.artifact.rewardWallet !== checked.request.descriptor.rewardWallet.toLowerCase() || job.artifact.sourceManifestHash !== reviewDigest("programmable.modules.source-manifest.v1", checked.request.descriptor) || (!isFoundationProtocolArtifact(job.artifact) && job.artifact.configurationSchemaHash !== reviewDigest("programmable.modules.configuration-schema.v1", checked.request.descriptor.configuration)))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+        if (job.artifact?.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1 || isFoundationProtocolArtifact(job.artifact)) verifyFoundationReviewSource(job.artifact, checked.request);
         if (job.artifact?.schemaVersion === "programmable.modules.engine-build.v1") {
           if (job.plan?.schemaVersion !== "programmable.modules.engine-build-plan.v1") fail(502, "MODULE_REVIEW_BUILD_PROFILE_MISMATCH");
           verifyModuleEngineBuildArtifactV1(job.artifact, job.subject, job.plan, checked.request);
@@ -194,13 +208,13 @@ export function createModuleReviewClient(input: {
       const validateManifest = (text: unknown, detail: ReviewDetail) => {
         if (typeof text !== "string" || Buffer.byteLength(text) > 2 * 1024 * 1024) fail(400, "MODULE_REVIEW_MANIFEST_REQUIRED");
         if (!detail.job.artifact) fail(409, "MODULE_REVIEW_BUILD_REQUIRED");
-        if (detail.job.artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 || detail.job.artifact.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1) {
+        if (isFoundationProtocolArtifact(detail.job.artifact) || detail.job.artifact.schemaVersion === FOUNDATION_BUILD_SCHEMA_V1) {
           const artifact = detail.job.artifact;
           const raw = userInput(() => parsed(Buffer.from(text), 2 * 1024 * 1024));
-          const expected = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 ? foundationProtocolReviewManifestV1(artifact)
+          const expected = isFoundationProtocolArtifact(artifact) ? foundationProtocolReviewManifest(artifact)
             : createFoundationModuleManifestV1(detail.source.descriptor, detail.job.subject.requestDigest);
           if (!same(raw, expected)) fail(400, "MODULE_REVIEW_MANIFEST_BUILD_MISMATCH");
-          return artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 ? foundationProtocolReviewManifestHashV1(artifact) : artifact.manifestHash;
+          return isFoundationProtocolArtifact(artifact) ? foundationProtocolReviewManifestHash(artifact) : artifact.manifestHash;
         }
         if (detail.job.artifact.schemaVersion === "programmable.modules.engine-build.v1") {
           const raw = userInput(() => parsed(Buffer.from(text), 2 * 1024 * 1024));
