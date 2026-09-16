@@ -46,7 +46,7 @@ export function parseFoundationLocateQuery(params: URLSearchParams): LocateQuery
 async function locate(query: LocateQuery, signal: AbortSignal): Promise<FoundationLocateResponse> {
   signal.throwIfAborted();
   let availability;
-  try { availability = parseFoundationAvailability(await readFoundationAvailabilityResponse()); }
+  try { availability = parseFoundationAvailability(await readFoundationAvailabilityResponse(fetch, 12_000, query.token)); }
   catch { return { transactionHash: null, reason: releaseUnavailable }; }
   const binding = availability.binding;
   if (!availability.available || !binding) return { transactionHash: null, reason: releaseUnavailable };

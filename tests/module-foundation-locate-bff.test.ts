@@ -43,7 +43,7 @@ describe("foundation candidate BFF", () => {
     expect(await response.json()).toEqual({ transactionHash: candidate });
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(mocks.availability).toHaveBeenCalledWith();
+    expect(mocks.availability).toHaveBeenCalledWith(fetch, 12_000, token);
     expect(mocks.locator).toHaveBeenCalledWith(token, { signal: expect.any(AbortSignal) });
     expect(mocks.index).not.toHaveBeenCalled();
     expect(mocks.head).toHaveBeenCalledWith({ cacheTime: 0 });

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { getAddress } from "viem";
 import { GET, maxDuration } from "@/app/api/module-foundation/route";
 import { FOUNDATION_AVAILABILITY_SCHEMA, unavailableFoundation } from "@/lib/module-foundation/availability";
 import { readFoundationAvailabilityResponse } from "@/lib/server/module-foundation/availability";
@@ -60,4 +61,38 @@ it("retains the shorter default for composition and discovery callers", async ()
   const result = readFoundationAvailabilityResponse(fetcher).then(() => "unexpected success", error => error.name);
   await vi.advanceTimersByTimeAsync(12_000);
   expect(await result).toBe("TimeoutError");
+});
+
+it("resolves an existing coin through its retained release rather than the active launch default", async () => {
+  const token = getAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+  const existing = { ...availableFixture(), token: token.toLowerCase() };
+  const fetcher = vi.fn(async (url: URL) => Response.json(url.pathname.endsWith(`/token/${token}`) ? existing : unavailableFoundation()));
+  vi.stubGlobal("fetch", fetcher);
+  const response = await GET(new Request(`https://programmable.example/api/module-foundation?token=${token}`));
+  expect(await response.json()).toMatchObject({ available: true, token: token.toLowerCase(), binding: existing.binding });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][0].href).toBe(`https://foundation-authority.example/v1/modules/foundation/availability/token/${token}`);
+});
+
+it.each(["", "0x0000000000000000000000000000000000000000", "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", "https://other.example", "0x1234"])("rejects an invalid token lookup before contacting the authority: %s", async token => {
+  const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+  const response = await GET(new Request(`https://programmable.example/api/module-foundation?token=${encodeURIComponent(token)}`));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ available: false });
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each(["?releaseDigest=0x1234", "?token=0x1111111111111111111111111111111111111111&token=0x2222222222222222222222222222222222222222", "?token=0x1111111111111111111111111111111111111111&origin=https://other.example"])("rejects ambiguous or caller-selected release authority: %s", async query => {
+  const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+  expect((await GET(new Request(`https://programmable.example/api/module-foundation${query}`))).status).toBe(400);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each([undefined, "0x2222222222222222222222222222222222222222"])("does not fall back to the current release for an unbound token response", async returnedToken => {
+  const token = "0x1111111111111111111111111111111111111111";
+  const fetcher = vi.fn(async () => Response.json({ ...availableFixture(), ...(returnedToken === undefined ? {} : { token: returnedToken }) }));
+  vi.stubGlobal("fetch", fetcher);
+  const response = await GET(new Request(`https://programmable.example/api/module-foundation?token=${token}`));
+  expect(await response.json()).toEqual({ ...unavailableFoundation(), token });
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

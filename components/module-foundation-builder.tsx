@@ -22,6 +22,8 @@ type Errors = Record<string, string>;
 
 export interface ModuleFoundationBuilderProps {
   availability: FoundationAvailability;
+  /** Custody of the currently verified launch factory; unknown while availability loads. */
+  factoryVersion?: "v1" | "v2";
   /** Changes whenever the authenticated wallet, chain or source release changes. */
   contextKey: string;
   catalog: readonly FoundationModuleDescriptor[];
@@ -54,7 +56,7 @@ function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes
     initialBuy: initial?.initialBuy ?? "0", startValuationQuote: initial?.startValuationQuote ?? "", additionalLiquidity: initial?.additionalLiquidity ?? "0", modules: initial?.modules ?? EMPTY_MODULES };
 }
 
-export function ModuleFoundationBuilder({ availability, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, submissionBlocked }: ModuleFoundationBuilderProps) {
+export function ModuleFoundationBuilder({ availability, factoryVersion, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, submissionBlocked }: ModuleFoundationBuilderProps) {
   const [draft, setDraft] = useState<EditableDraft>(() => initialForm(initialDraft, quoteAssets, availability.chainId));
   const [localImage, setLocalImage] = useState<LocalImage | null>(null);
   const [imagePreparing, setImagePreparing] = useState(false);
@@ -182,6 +184,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       });
       return;
     }
+    setAnnouncement("");
     const request = ++generation.current;
     const context = currentContext.current;
     const assertCurrent = () => {
@@ -275,7 +278,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
               <div className={styles.twoFields}><Field label="Creator fee" id="foundation-creator-fee" error={errors.creatorFeeBps}><select id="foundation-creator-fee" value={draft.creatorFeeBps} onChange={event => update("creatorFeeBps", Number(event.target.value))}><option value={0}>0% · No creator fee</option>{Array.from({ length: 10 }, (_, index) => index + 1).map(percent => <option key={percent} value={percent * 100}>{percent}%</option>)}</select><p className={styles.help}>Your fee on each buy and sell.</p></Field><div className={styles.fixedFee}><span>Platform fee</span><strong>0.3% <small>Always added</small></strong><p className={styles.help}>Separate from your creator fee.</p></div></div>
               <Field label="Initial buy" id="foundation-initial-buy" optional error={errors.initialBuy} hint="Buy your coin as part of the launch. Enter 0 to launch without an initial buy."><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" value={draft.initialBuy} aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={`foundation-initial-buy-help${errors.initialBuy ? " foundation-initial-buy-error" : ""}`} onChange={event => update("initialBuy", event.target.value)} /><span>{quoteSymbol}</span></div></Field>
               <div className={styles.liquidityOption}><label className={styles.checkLabel}><input type="checkbox" checked={extraLiquidity} onChange={event => { setExtraLiquidity(event.target.checked); if (!event.target.checked) update("additionalLiquidity", "0"); }} /><span><strong>Add creator liquidity</strong><small>Optional additional {quoteSymbol} from your wallet.</small></span></label>
-                {extraLiquidity ? <Field label="Additional liquidity" id="foundation-liquidity" error={errors.additionalLiquidity} hint="Creates a separate position NFT you own and can manage. The base position stays separate."><div className={styles.amountInput}><input id="foundation-liquidity" name="additionalLiquidity" inputMode="decimal" autoComplete="off" value={draft.additionalLiquidity} aria-invalid={Boolean(errors.additionalLiquidity) || undefined} aria-describedby={`foundation-liquidity-help${errors.additionalLiquidity ? " foundation-liquidity-error" : ""}`} onChange={event => update("additionalLiquidity", event.target.value)} /><span>{quoteSymbol}</span></div></Field> : null}
+                {extraLiquidity ? <Field label="Additional liquidity" id="foundation-liquidity" error={errors.additionalLiquidity} hint={factoryVersion === "v2" ? "This liquidity stays in the pool permanently. Its position NFT goes directly to the burn address, so you cannot withdraw or transfer it. Unused funding is returned." : factoryVersion === "v1" ? "Creates a separate position NFT you own and can manage. The base position stays separate." : "The launch review will show the exact amount invested and who controls its position NFT."}><div className={styles.amountInput}><input id="foundation-liquidity" name="additionalLiquidity" inputMode="decimal" autoComplete="off" value={draft.additionalLiquidity} aria-invalid={Boolean(errors.additionalLiquidity) || undefined} aria-describedby={`foundation-liquidity-help${errors.additionalLiquidity ? " foundation-liquidity-error" : ""}`} onChange={event => update("additionalLiquidity", event.target.value)} /><span>{quoteSymbol}</span></div></Field> : null}
               </div>
               <p className={styles.help}>The base pool starts with your coin supply. You do not need to fund its quote liquidity. Buying brings quote tokens into the pool; the base position principal is permanently locked.</p>
             </section>
@@ -292,7 +295,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       </div>
       <aside className={styles.preview} aria-label="Coin preview">
         <div className={styles.previewHeading}><span>Coin preview</span><span>{phase === "result" ? "Submitted details" : "Your draft"}</span></div>
-        <div className={styles.previewArtwork}>{imageSource ? <Image src={imageSource} alt={`${draft.name.trim() || "Coin"} preview`} width={320} height={240} unoptimized /> : <div className={styles.artworkPlaceholder}><ImageIcon size={36} weight="light" aria-hidden="true" /><span>Your coin image</span></div>}</div>
+        <div className={styles.previewArtwork}>{imageSource ? <Image src={imageSource} alt={`${draft.name.trim() || "Coin"} preview`} width={320} height={240} loading="eager" unoptimized /> : <div className={styles.artworkPlaceholder}><ImageIcon size={36} weight="light" aria-hidden="true" /><span>Your coin image</span></div>}</div>
         <div className={styles.previewContent}><div className={styles.coinName}><h2>{draft.name.trim() || "Your coin"}</h2><span>{draft.symbol.trim() || "SYMBOL"}</span></div><p className={styles.previewDescription}>{draft.description.trim() || "Your coin’s story will appear here."}</p><div className={styles.previewMarket}><span>Trading pair</span><strong>{draft.symbol.trim() || "COIN"} / {quote?.symbol || "QUOTE"}</strong></div><FoundationFeeDisclosure creatorFeeBps={draft.creatorFeeBps} quoteSymbol={quoteSymbol} /><div className={styles.previewFoot}><span>Uniswap v4</span><span>{draft.modules.length ? `${draft.modules.length} optional ${draft.modules.length === 1 ? "module" : "modules"}` : "Base coin"}</span></div></div>
       </aside>
     </div>

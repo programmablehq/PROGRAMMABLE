@@ -49,5 +49,5 @@ fi
 printf 'Foundation fork block: %s\n' "${FOUNDATION_FORK_BLOCK}"
 forge fmt --check src/module-foundation test/module-foundation
 forge lint src/module-foundation
-forge build src/module-foundation/FoundationFactoryV1.sol --sizes
+forge build src/module-foundation/FoundationFactoryV1.sol src/module-foundation/FoundationFactoryV2.sol --sizes
 forge test --match-path 'test/module-foundation/*.t.sol' -vv

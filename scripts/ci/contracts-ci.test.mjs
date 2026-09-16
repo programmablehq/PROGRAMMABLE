@@ -11,6 +11,8 @@ const scripts = JSON.parse(readFileSync(new URL("../../package.json", import.met
 
 test("Foundation source, tests, profile and UI select their normal protected verification lanes", () => {
   for (const source of ["contracts/src/module-foundation/FoundationHookV1.sol", "contracts/test/module-foundation/FoundationInvariantV1.t.sol",
+    "contracts/src/module-foundation/FoundationFactoryV2.sol", "contracts/test/module-foundation/FoundationCustodyV2.t.sol",
+    "contracts/spec/module-foundation/factory-v2.abi.json",
     "contracts/foundry.toml", "contracts/scripts/module-foundation/verify.sh"]) {
     const scope = classifyVerifyPaths([source]); assert.equal(scope.contracts, true); assert.equal(scope.interface, true);
   }

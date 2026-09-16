@@ -10,7 +10,7 @@ import { FOUNDATION_HOST_ADAPTER_ID_V1, foundationRequire } from "@/lib/module-f
 import { foundationAssetAddressesForFieldsV1, resolveFoundationAssetsV1 } from "@/lib/module-foundation/assets";
 import { assertFoundationInfrastructure, createFoundationClient, foundationMetadata, readFoundationQuote } from "@/lib/module-foundation/client";
 import { FOUNDATION_CHAIN_ID, FOUNDATION_INFRASTRUCTURE } from "@/lib/module-foundation/constants";
-import { foundationFactoryAbi } from "@/lib/module-foundation/abi";
+import { foundationFactoryAbiFor } from "@/lib/module-foundation/protocol";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleHash, moduleRecord } from "@/lib/module-mode/release";
 import type { FoundationLaunchDraft } from "@/lib/module-foundation/ui-types";
@@ -72,7 +72,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const moduleAssetPins = resolved.pins;
     const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,
       modulePackageIds: selected.map(({ entry }) => entry.manifest.packageId), moduleAssetPins });
-    const token = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "predictTokenAddress",
+    const token = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbiFor(binding), functionName: "predictTokenAddress",
       args: [account, body.tokenSalt, metadata], blockNumber: checkpoint.blockNumber });
     foundationRequire(getAddress(token) !== quote.address && !moduleAssetPins.some(([address]) => getAddress(address) === getAddress(token)),
       "FOUNDATION_ASSET_CONTEXT_CONFLICT", "The predicted coin overlaps an existing asset. Prepare with a new launch salt.");

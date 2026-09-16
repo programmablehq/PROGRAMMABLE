@@ -24,7 +24,7 @@ import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type Fo
 import styles from "./module-foundation-ui.module.css";
 
 export function ModuleFoundationMarketHost({ token, transactionHash }: { token: Address; transactionHash?: Hex }) {
-  const session = useFoundationSession();
+  const session = useFoundationSession(token);
   const [readback, setReadback] = useState<{ context: string; details: FoundationPoolDetails } | null>(null);
   const [error, setError] = useState(""); const [refreshKey, setRefreshKey] = useState(0);
   const trades = useRef(new WeakMap<FoundationTradeReview, Awaited<ReturnType<typeof prepareFoundationTrade>>>());

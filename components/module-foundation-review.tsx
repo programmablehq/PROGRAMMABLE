@@ -103,6 +103,20 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
       <div><dt>Additional creator liquidity</dt><dd>{review.additionalLiquidity} {review.quote.symbol}</dd></div>
       <div><dt>Launch wallet</dt><dd><FoundationAddress value={review.account} label="launch wallet" /></dd></div>
     </dl>
+    {review.factoryVersion === "v2" ? <section className={styles.position} aria-labelledby="foundation-custody-title">
+      <h3 id="foundation-custody-title">Launch liquidity is permanent</h3>
+      <p>The base LP NFT and any additional LP NFT shown in this review go directly to the burn address. The liquidity stays in the pool. You cannot withdraw it, transfer its NFT or collect proceeds belonging to that position.</p>
+      <dl className={styles.rows}>
+        <div><dt>Maximum wallet funding</dt><dd>{review.quoteFunding.maximum} {review.quote.symbol}</dd></div>
+        <div><dt>Additional liquidity committed</dt><dd>{review.quoteFunding.principal} {review.quote.symbol}</dd></div>
+        <div><dt>Funding returned</dt><dd>{review.quoteFunding.refund} {review.quote.symbol}</dd></div>
+      </dl>
+      <p className={styles.help}>The funding includes your initial buy. Creator fees from trading remain separately claimable. Later liquidity added by other people has its own ownership.</p>
+      <details className={styles.transactionDetails}><summary>Burn address and rounding remainder</summary>
+        <FoundationAddress value={review.roundingInventory.recipient} label="burn address" />
+        <p className={styles.help}>The launch also sends {review.roundingInventory.tokenAmount} {symbol} left over from position rounding to this address. These coins cannot be recovered; the token&apos;s total supply stays unchanged.</p>
+      </details>
+    </section> : null}
     <FoundationFeeDisclosure creatorFeeBps={review.creatorFeeBps} quoteSymbol={review.quote.symbol} />
     <details className={styles.details}><summary>Coin and metadata</summary><div className={styles.detailsBody}><dl className={styles.rows}>
       <div><dt>Coin address</dt><dd><FoundationAddress value={review.tokenAddress} label="coin address" /></dd></div>
