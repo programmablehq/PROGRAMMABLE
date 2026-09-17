@@ -98,6 +98,40 @@ function assertFiles(findings, paths, count = paths.length) {
   assert.deepEqual([...new Set(findings.map(({ File }) => File))].sort(), [...paths].sort());
 }
 
+const foundationEvidencePath = "contracts/security/module-foundation-v2/local-checks.json";
+const foundationTokenSourcePath = "src/module-foundation/FoundationTokenV1.sol";
+const foundationTokenSourceHash = createHash("sha256").update(readFileSync(
+  new URL("../../contracts/src/module-foundation/FoundationTokenV1.sol", import.meta.url),
+)).digest("hex");
+const foundationSourceLine = `    "${foundationTokenSourcePath}": "${foundationTokenSourceHash}",`;
+
+test("accepts the Foundation evidence line bound to the actual public token source bytes", (t) => {
+  const evidence = readFileSync(new URL(`../../${foundationEvidencePath}`, import.meta.url), "utf8");
+  assert.ok(evidence.split("\n").includes(foundationSourceLine));
+  assert.deepEqual(scan(t, { [foundationEvidencePath]: foundationSourceLine }, { raw: true }), []);
+});
+
+test("detects replacement material under the Foundation evidence source path", (t) => {
+  assertFiles(scan(t, { [foundationEvidencePath]: foundationSourceLine.replace(foundationTokenSourceHash, material) }, { raw: true }), [foundationEvidencePath]);
+});
+
+test("keeps the Foundation source digest detectable under a credential field", (t) => {
+  assertFiles(scan(t, { [foundationEvidencePath]: `"apiKey": "${foundationTokenSourceHash}",` }, { raw: true }), [foundationEvidencePath]);
+});
+
+test("detects credentials before and after the allowed Foundation source line", (t) => {
+  for (const before of [true, false]) {
+    const credential = `"apiKey": "${material}",`;
+    const line = before ? `${credential} ${foundationSourceLine}` : `${foundationSourceLine} ${credential}`;
+    assertFiles(scan(t, { [foundationEvidencePath]: line }, { raw: true }), [foundationEvidencePath], 2);
+  }
+});
+
+test("keeps the Foundation source line detectable in adjacent and prefixed evidence paths", (t) => {
+  const paths = [foundationEvidencePath.replace(".json", "-next.json"), `${foundationEvidencePath}.backup`, `fixtures/${foundationEvidencePath}`];
+  assertFiles(scan(t, Object.fromEntries(paths.map(path => [path, foundationSourceLine])), { raw: true }), paths);
+});
+
 test("accepts exact Engine V1 public hash fields and the reviewed fixture address", (t) => {
   assert.deepEqual(scan(t, Object.fromEntries(hashPaths.map((path) => [path, publicFields(path)]))), []);
 });

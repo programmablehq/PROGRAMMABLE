@@ -1,13 +1,14 @@
 import {
-  decodeAbiParameters, decodeEventLog, decodeFunctionData, encodeAbiParameters, encodeFunctionData,
+  decodeAbiParameters, decodeEventLog, decodeFunctionData, encodeAbiParameters, encodeFunctionData, encodeFunctionResult,
   getAbiItem, getAddress, isHex, keccak256, parseAbiParameters,
   type Address, type Hex, type PublicClient,
 } from "viem";
-import { foundationFactoryAbi, foundationMetadataParameters, foundationTokenAbi } from "./abi";
+import { foundationFactoryV2Abi, foundationMetadataParameters, foundationTokenAbi } from "./abi";
 import { assertFoundationInfrastructure, type FoundationCheckpoint, type FoundationDeploymentBinding } from "./client";
-import { FOUNDATION_CHAIN_ID } from "./constants";
+import { FOUNDATION_CHAIN_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
 import { foundationReadbackAbi, verifyFoundationLaunchReceipt } from "./readback";
 import { foundationPoolId, foundationPoolKey } from "./route";
+import { assertFoundationV2Result, foundationFactoryAbiFor, foundationFactoryVersion, readFoundationLaunchRecord } from "./protocol";
 
 export const FOUNDATION_DISCOVERY_MAX_BLOCKS = 5_000n;
 const MAX_EXPLORER_BYTES = 65_536;
@@ -16,10 +17,23 @@ const MAX_INDEX_LOGS = 2_000;
 const EXPLORER_TIMEOUT_MS = 8_000;
 const explorerOrigin = "https://robinhoodchain.blockscout.com";
 const launchEvent = getAbiItem({ abi: foundationReadbackAbi, name: "FoundationLaunched" });
+const launchEventV2 = getAbiItem({ abi: foundationFactoryV2Abi, name: "FoundationLaunchedV2" });
 const cursorAbi = parseAbiParameters("uint8,uint256,address,bytes32,uint256,uint256,address,bytes32,uint256,uint32,uint32");
 const zeroAddress = "0x0000000000000000000000000000000000000000" as const;
 const sameAddress = (a: Address, b: Address) => getAddress(a) === getAddress(b);
 const sameHex = (a: Hex, b: Hex) => a.toLowerCase() === b.toLowerCase();
+function decodeLaunchEvent(binding: FoundationDeploymentBinding, data: Hex, topics: [] | [Hex, ...Hex[]]) {
+  if (foundationFactoryVersion(binding) === "v2") {
+    const event = decodeEventLog({ abi: foundationFactoryV2Abi, eventName: "FoundationLaunchedV2", data, topics, strict: true }).args;
+    assertFoundationV2Result(event.result);
+    if (!sameAddress(event.token, event.result.token) || !sameAddress(event.hook, event.result.hook)
+      || !sameAddress(event.ledger, event.result.ledger) || !sameHex(event.poolId, event.result.poolId)
+      || !sameHex(event.custodyId, FOUNDATION_LP_CUSTODY_DEAD_ID)) throw new Error("The V2 event has inconsistent identities or custody.");
+    return { ...event, ...event.result, factoryVersion: "v2" as const };
+  }
+  const event = decodeEventLog({ abi: foundationReadbackAbi, eventName: "FoundationLaunched", data, topics, strict: true }).args;
+  return { ...event, factoryVersion: "v1" as const };
+}
 
 /** A locator supplies an untrusted candidate hash. It never establishes launch identity or execution authority. */
 export type FoundationLaunchLocator = (token: Address, options?: { signal?: AbortSignal }) => Promise<Hex | null>;
@@ -101,11 +115,10 @@ export async function discoverFoundationLaunch(input: {
   client: PublicClient; binding: FoundationDeploymentBinding; token: Address;
   locator?: FoundationLaunchLocator; transactionHash?: Hex; signal?: AbortSignal;
 }) {
-  const { client, binding } = input, token = getAddress(input.token);
+  const { client, binding } = input, token = getAddress(input.token), factoryAbi = foundationFactoryAbiFor(binding);
   checkAbort(input.signal);
   const observedAt = await assertFoundationInfrastructure(client, binding);
-  const record = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi,
-    functionName: "launchOf", args: [token], blockNumber: observedAt.blockNumber });
+  const record = await readFoundationLaunchRecord(client, binding, token, observedAt.blockNumber);
   if (BigInt(token) === 0n || !sameAddress(record.token, token) || BigInt(record.hook) === 0n || BigInt(record.ledger) === 0n) {
     throw new Error("This token is not registered by the selected foundation factory.");
   }
@@ -119,16 +132,16 @@ export async function discoverFoundationLaunch(input: {
     || mined.blockNumber > observedAt.blockNumber || mined.input.length > MAX_CALLDATA_BYTES * 2 + 2) {
     throw new Error("The candidate is not a mined transaction to the selected foundation factory.");
   }
-  const decoded = decodeFunctionData({ abi: foundationFactoryAbi, data: mined.input });
+  const decoded = decodeFunctionData({ abi: factoryAbi, data: mined.input });
   if (decoded.functionName !== "launch") throw new Error("The candidate transaction does not call foundation launch.");
   const parameters = decoded.args[0];
-  if (!sameHex(encodeFunctionData({ abi: foundationFactoryAbi, functionName: "launch", args: [parameters] }), mined.input)) {
+  if (!sameHex(encodeFunctionData({ abi: factoryAbi, functionName: "launch", args: [parameters] }), mined.input)) {
     throw new Error("The launch calldata is not its exact canonical ABI encoding.");
   }
   const [predictedToken, predictedHook] = await Promise.all([
-    client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "predictTokenAddress",
+    client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "predictTokenAddress",
       args: [mined.from, parameters.tokenSalt, parameters.metadata], blockNumber: mined.blockNumber }),
-    client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "predictHookAddress",
+    client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "predictHookAddress",
       args: [mined.from, token, parameters], blockNumber: mined.blockNumber }),
   ]);
   const key = foundationPoolKey({ token, quote: parameters.quote, hook: predictedHook });
@@ -187,7 +200,7 @@ export async function readFoundationLaunchIndex(input: {
       || blockNumber < fromBlock || blockNumber > toBlock) throw new Error("The launch-history cursor belongs to a different window, filter or canonical chain.");
     position = { blockNumber, transactionIndex, logIndex };
   }
-  const logs = await client.getLogs({ address: binding.factory.address, event: launchEvent, strict: true,
+  const logs = await client.getLogs({ address: binding.factory.address, event: foundationFactoryVersion(binding) === "v2" ? launchEventV2 : launchEvent, strict: true,
     args: token ? { token } : undefined, fromBlock, toBlock });
   if (logs.length > MAX_INDEX_LOGS) throw new Error("This launch-history range is too busy. Choose a smaller block window.");
   const identities = new Set<string>();
@@ -195,7 +208,7 @@ export async function readFoundationLaunchIndex(input: {
     if (!sameAddress(log.address, binding.factory.address) || log.removed || log.blockNumber < fromBlock || log.blockNumber > toBlock
       || !log.blockHash || !log.transactionHash || !Number.isSafeInteger(log.logIndex) || log.logIndex < 0
       || !Number.isSafeInteger(log.transactionIndex) || log.transactionIndex < 0) throw new Error("A launch log has an invalid origin or block position.");
-    const event = decodeEventLog({ abi: foundationReadbackAbi, eventName: "FoundationLaunched", topics: log.topics, data: log.data, strict: true }).args;
+    const event = decodeLaunchEvent(binding, log.data, log.topics);
     if ((token && !sameAddress(event.token, token)) || BigInt(event.token) === 0n || BigInt(event.creator) === 0n
       || !sameHex(foundationPoolId(foundationPoolKey({ token: event.token, quote: event.quote, hook: event.hook })), event.poolId)) {
       throw new Error("A launch log does not match the requested token or foundation pool identity.");
@@ -216,12 +229,17 @@ export async function readFoundationLaunchIndex(input: {
     if (!blockRead) { blockRead = client.getBlock({ blockNumber: entry.blockNumber }); blocks.set(blockKey, blockRead); }
     const [block, record, metadataHash] = await Promise.all([
       blockRead,
-      client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName: "launchOf", args: [entry.token], blockNumber: toBlock }),
+      readFoundationLaunchRecord(client, binding, entry.token, toBlock),
       client.readContract({ address: entry.token, abi: foundationTokenAbi, functionName: "metadataHash", blockNumber: toBlock }),
     ]);
     if (block.number !== entry.blockNumber || !block.hash || !sameHex(block.hash, entry.blockHash)) throw new Error("A launch log is no longer in its canonical block.");
     if (!sameAddress(record.token, entry.token) || !sameAddress(record.hook, entry.hook) || !sameAddress(record.ledger, entry.ledger)
-      || !sameAddress(record.baseVault, entry.baseVault) || !sameHex(record.poolId, entry.poolId)
+      || record.factoryVersion !== entry.factoryVersion
+      || (record.factoryVersion === "v1" && (entry.factoryVersion !== "v1" || !sameAddress(record.baseVault, entry.baseVault)))
+      || (record.factoryVersion === "v2" && (entry.factoryVersion !== "v2"
+        || !sameHex(encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launchOf", result: record }),
+          encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launchOf", result: entry.result }))))
+      || !sameHex(record.poolId, entry.poolId)
       || record.basePositionId !== entry.basePositionId || record.basePositionId === 0n || record.creatorPositionId !== entry.creatorPositionId
       || record.initialBuyTokenAmount !== entry.initialBuyTokenAmount || !sameHex(metadataHash, entry.metadataHash)) {
       throw new Error("A launch index entry disagrees with the canonical factory or token state.");

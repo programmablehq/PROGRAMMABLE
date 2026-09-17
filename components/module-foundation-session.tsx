@@ -22,13 +22,15 @@ export interface FoundationExecutionResult {
   sequence: FoundationPreparedSequence;
   stepIndex: number;
 }
-export function useFoundationSession() {
+export function useFoundationSession(token?: Address) {
   const walletContext = useWallet();
   const { wallet, authenticated, sessionReady, authReady, connecting, openingWallet, switchingNetwork, disconnecting, openWallet, switchNetwork, sendModuleModeTransaction } = walletContext;
   const client = useMemo(() => createFoundationClient(), []);
-  const [envelope, setEnvelope] = useState<FoundationAvailabilityEnvelope | null>(null);
-  const [availabilityError, setAvailabilityError] = useState(false);
+  const targetKey = token?.toLowerCase() ?? "launch";
+  const [envelopeState, setEnvelopeState] = useState<{ targetKey: string; refresh: number; value: FoundationAvailabilityEnvelope | null } | null>(null);
+  const envelope = envelopeState?.targetKey === targetKey ? envelopeState.value : null;
   const [refresh, setRefresh] = useState(0);
+  const availabilityError = envelopeState?.targetKey === targetKey && envelopeState.refresh === refresh && envelopeState.value === null;
   const [progress, setProgress] = useState("");
   const [resultGeneration, setResultGeneration] = useState(0);
   const account = wallet?.account ? getAddress(wallet.account) : undefined;
@@ -67,14 +69,14 @@ export function useFoundationSession() {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     const controller = new AbortController();
-    void fetchFoundationAvailability(controller.signal).then(value => {
-      if (!controller.signal.aborted) { setEnvelope(value); setAvailabilityError(false); }
-    }).catch(() => { if (!controller.signal.aborted) setAvailabilityError(true); });
+    void fetchFoundationAvailability(controller.signal, token).then(value => {
+      if (!controller.signal.aborted) setEnvelopeState({ targetKey, refresh, value });
+    }).catch(() => { if (!controller.signal.aborted) setEnvelopeState({ targetKey, refresh, value: null }); });
     return () => controller.abort();
-  }, [refresh]);
+  }, [refresh, token, targetKey]);
   const availability: FoundationAvailability = { status: availabilityError ? "unavailable" : !envelope ? "checking" : envelope.available ? "ready" : "unavailable",
     chainId: 4663, chainName: "Robinhood Chain", reason: availabilityError ? "Launch availability could not be checked. Retry to keep working with this release." : envelope?.reason ?? undefined };
-  const contextKey = `${account ?? "disconnected"}:${wallet?.chainId ?? "none"}:${authenticated}:${sessionReady}:${envelope?.binding?.releaseDigest ?? "unavailable"}`;
+  const contextKey = `${account ?? "disconnected"}:${wallet?.chainId ?? "none"}:${authenticated}:${sessionReady}:${targetKey}:${envelope?.binding?.releaseDigest ?? "unavailable"}`;
   const currentContext = useRef(contextKey);
   useLayoutEffect(() => { walletRef.current = walletSnapshot; sourceRef.current = envelope; currentContext.current = contextKey; }, [walletSnapshot, envelope, contextKey]);
   function assertCurrent(expectedAccount: Address, expectedContext = currentContext.current) {
@@ -82,13 +84,13 @@ export function useFoundationSession() {
     assertModuleModeWalletUnchanged(walletRef.current, expectedAccount);
   }
   async function resolveAuthority() {
-    const current = await fetchFoundationAvailability();
+    const current = await fetchFoundationAvailability(undefined, token);
     if (!current.available || !current.binding) throw new Error(current.reason ?? "This release is unavailable.");
     if (current.binding.releaseDigest !== sourceRef.current?.binding?.releaseDigest) throw new Error("The authorized launch version changed. Reload the release and review again.");
     return current.binding;
   }
   async function resolveCatalog() {
-    const current = await fetchFoundationAvailability();
+    const current = await fetchFoundationAvailability(undefined, token);
     if (!current.available || !current.binding || current.binding.releaseDigest !== sourceRef.current?.binding?.releaseDigest) throw new Error("The admitted module catalog changed. Reload and review again.");
     return bindFoundationCatalogV1(current.catalog.document, current.catalog.authority);
   }
@@ -172,7 +174,7 @@ export function useFoundationSession() {
   }
   return { client, account, walletContext, availability, envelope, contextKey, walletAction, submissionBlocked,
     pending, resolution, resolutionState, resultGeneration, acknowledgeResult, progress, assertCurrent, resolveAuthority, resolveCatalog, execute, refreshResult,
-    retryAvailability: () => { setAvailabilityError(false); setRefresh(value => value + 1); } };
+    retryAvailability: () => setRefresh(value => value + 1) };
 }
 
 export function FoundationSessionStatus({ session }: { session: ReturnType<typeof useFoundationSession> }) {

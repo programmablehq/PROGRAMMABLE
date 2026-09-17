@@ -3,8 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { ModuleFoundationBuilder } from "@/components/module-foundation-builder";
 import { ModuleFoundationMarket } from "@/components/module-foundation-market";
-import { FoundationFeeDisclosure, ModuleFoundationTransactionResult } from "@/components/module-foundation-review";
-import { FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationModuleDescriptor, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { FoundationFeeDisclosure, ModuleFoundationLaunchReview, ModuleFoundationTransactionResult } from "@/components/module-foundation-review";
+import { FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { FOUNDATION_DEAD_ADDRESS, FOUNDATION_LP_CUSTODY_DEAD_ID } from "@/lib/module-foundation/constants";
 
 const address = "0x1111111111111111111111111111111111111111" as const;
 const hash = `0x${"11".repeat(32)}` as const;
@@ -52,6 +53,39 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).toContain("Your coin works with no additional modules");
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);
+  });
+  it("discloses irreversible additional funding before V2 review while preserving legacy ownership", () => {
+    const render = (factoryVersion?: "v1" | "v2") => renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} factoryVersion={factoryVersion} contextKey="fixture" catalog={[]} quoteAssets={[quote]} initialDraft={{ additionalLiquidity: "2" }} {...actions} />);
+    const v2 = render("v2");
+    expect(v2).toContain("This liquidity stays in the pool permanently");
+    expect(v2).toContain("you cannot withdraw or transfer it");
+    expect(v2).toContain("Unused funding is returned");
+    expect(v2).not.toContain("separate position NFT you own and can manage");
+    expect(render("v1")).toContain("separate position NFT you own and can manage");
+    const unknown = render();
+    expect(unknown).toContain("review will show the exact amount invested and who controls");
+    expect(unknown).not.toContain("separate position NFT you own and can manage");
+  });
+  it("shows exact V2 principal, refund and token rounding separately from fee claims before the wallet action", () => {
+    const review: FoundationLaunchReview = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
+      id: "fixture", contextKey: "fixture", account: address, chainId: 4663, simulationBlock: "100",
+      expiresAt: Math.floor(Date.now() / 1000) + 300, quote, tokenAddress: address, metadataHash: hash,
+      pool: { poolId: hash, currency0: address, currency1: address, fee: 0, tickSpacing: 60, hooks: address, poolManager: address },
+      positions: [], platformFeeBps: 30, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT, creatorFeeBps: 100,
+      initialBuy: "0.125", minimumInitialTokens: "123", additionalLiquidity: "1.999998", supply: "1000000000", actualStartValuationQuote: "1",
+      quoteFunding: { maximum: "2.125", principal: "1.999998", refund: "0.000002" },
+      roundingInventory: { recipient: FOUNDATION_DEAD_ADDRESS, tokenAmount: "0.000000000000000017", unrecoverable: true },
+      transactions: [{ label: "Launch coin", to: address, chainId: 4663, value: "0", effect: "Local fixture" }] };
+    const render = (value: FoundationLaunchReview) => renderToStaticMarkup(<ModuleFoundationLaunchReview review={value} contextKey="fixture" symbol="UNIT" busy={false} onConfirm={vi.fn()} onEdit={vi.fn()} />);
+    const html = render(review);
+    expect(html).toContain("Launch liquidity is permanent");
+    for (const amount of ["2.125", "1.999998", "0.000002", "0.000000000000000017"]) expect(html).toContain(amount);
+    expect(html).toContain(FOUNDATION_DEAD_ADDRESS);
+    expect(html).toContain("Creator fees from trading remain separately claimable");
+    expect(html).toContain("Later liquidity added by other people has its own ownership");
+    expect(html).toContain("total supply stays unchanged");
+    expect(html.indexOf("Launch liquidity is permanent")).toBeLessThan(html.indexOf("Continue in wallet"));
+    expect(render({ ...review, factoryVersion: "v1", lpCustodyId: undefined, quoteFunding: undefined, roundingInventory: undefined })).not.toContain("Launch liquidity is permanent");
   });
   it("leaves unavailable launch and direct trading unavailable without a source deployment binding", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "unavailable", reason: "Deployment is not bound." }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);

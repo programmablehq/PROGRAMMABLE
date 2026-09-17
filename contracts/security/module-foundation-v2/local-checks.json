@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "foundation-factory-v2-local-checks.v1",
+  "evidenceKind": "local-only-unreviewed-contract-implementation",
+  "baseProductCommit": "7032036df80a8bc61f45b1629dc351e6ca974e07",
+  "preservedProtocolSourceCommit": "df3aa64b49e73924d01b7af59c48196a8c3d6f6a",
+  "branch": "codex/foundation-burn-contracts-v2-20260916",
+  "publicRPC": false,
+  "broadcast": false,
+  "acceptedRelease": false,
+  "gmgnRecognition": "not-established",
+  "sourceSHA256": {
+    "foundry.toml": "661746aeb5e9a0b362f971dea0928c202380f8cad625146e6eab6a1e21941b86",
+    "remappings.txt": "885b66a13264dccdfa2b32fcfca4f20247bbd617027d3807b5cb079be6dbbbe2",
+    "security/module-foundation-v2/run-local-replay.py": "ed27dce5b68d892fea77694ee4c174f767393cf39fdb9b156ae5cd2bfda318a6",
+    "src/module-foundation/FoundationFactoryV1.sol": "e035eb6d966d76bbfd56b006b8740fa9778bce8bf0da5a46005b1a57e292139d",
+    "src/module-foundation/FoundationFactoryV2.sol": "a6b75f396e3be1326d80b9d835c058987017bb1286e2e39a546bf653ee0404a3",
+    "src/module-foundation/FoundationFeeMathV1.sol": "a1b6209f318eb2f05b17cf7c6932a733c01fc53ecaf66e5343d1836dd805ab05",
+    "src/module-foundation/FoundationHookDeployerV1.sol": "992c361cc80cad65114ccbd1950bd3195337f5cb64f86ad4851ff5560dd8241f",
+    "src/module-foundation/FoundationHookV1.sol": "d011239abaf5718cb3391320395a29e464e0759629a7e739b2b5f69507cb9d3d",
+    "src/module-foundation/FoundationLaunchTypesV2.sol": "e0c4169e71ab99223813d8bf7396cc0f667cd2586d79752515b25e93ef619675",
+    "src/module-foundation/FoundationLedgerV1.sol": "a84936da33edda8782e1dfeb43b8cd2af6499f64f273b342f927e2ed8d841780",
+    "src/module-foundation/FoundationPositionVaultV1.sol": "db92886c99773bb5a157d387cd0a6751ddcd6cae86689554e9cf58a05ece3799",
+    "src/module-foundation/FoundationTokenV1.sol": "ea5e86ec9f766e763c6dfba46523a7df5c222e20f8e707aaef0db8878e375618",
+    "src/module-foundation/FoundationTypesV1.sol": "5d1c6b6f685bea5bc8dd67a8be56375d3c744b00b41d6b7dca0cae7a59f26ddd",
+    "src/module-foundation/IFoundationModuleV1.sol": "ccf8c6dfe5fb5882f93ecf0b4e5d608592c8d598fe723b18646d280081526afc",
+    "test/module-foundation/FoundationCustodyFixturesV2.sol": "47651cb7eb70a9e12f9c0481b77790f55c9914d43a91375ee592500c9eda73e0",
+    "test/module-foundation/FoundationCustodyInvariantV2.t.sol": "3aed71ecebbd5e35ad7ef491ffc54579c807973e53434ff4914f9e4e7f061b79",
+    "test/module-foundation/FoundationCustodyV2.t.sol": "a3adee2ed78fee1033584d63127a9ecfb790757dce190d15829f611e05f5473b",
+    "test/module-foundation/FoundationFeeMathV1.t.sol": "1354e672b6e1e04a3bd97c5ac13b6669e4f4314fec4bd6e9c5aa10d7e331ed63",
+    "test/module-foundation/FoundationFixturesV1.sol": "27eec9a6dcbc9fe93bfacd9fa8d4a4f5cba32e55d530c7a58c441137cad5adea",
+    "test/module-foundation/FoundationForkV1.t.sol": "d44a8fa982d0565fe7aa8a441915b8ac07b42debe880ff53ba52c10577f06067",
+    "test/module-foundation/FoundationInvariantV1.t.sol": "d296f57248fd1b0e88fbe8471144414ff4ebebc4822767b8f4df36269d8f0adf"
+  },
+  "compiler": {
+    "version": "solc, the solidity compiler commandline interface\nVersion: 0.8.26+commit.8a97fa7a.Darwin.appleclang",
+    "sha256": "0ff016aef2396b12d1fc65429d8ea6cf53c2ee4b041bb8925644615ee1c30ab9"
+  },
+  "forge": {
+    "version": "forge Version: 1.7.1\nCommit SHA: 4072e48705af9d93e3c0f6e29e93b5e9a40caed8\nBuild Timestamp: 2026-05-08T07:54:31.470926000Z (1778226871)\nBuild Profile: dist",
+    "sha256": "e729589084ca2f1479354353d1ec3d4789451b577f4cdee4e7dc57cae64a38fa"
+  },
+  "compilerSettings": {
+    "profile": "module-foundation",
+    "optimizer": true,
+    "optimizerRuns": 200,
+    "viaIR": true,
+    "evmVersion": "cancun",
+    "bytecodeHash": "none",
+    "cborMetadata": false,
+    "commonConfigChanged": false
+  },
+  "dependencies": {
+    "v4-core": "59d3ecf53afa9264a16bba0e38f4c5d2231f80bc",
+    "v4-periphery": "ad04c9f24a170accf5ea1b2836bbafd514537ca6",
+    "v4-periphery-v211": "3231810e39b8c4d569b9d66907fa4ef8cd2cec22",
+    "universal-router": "999d561c3ad58fb5cab91b602911f3c75591a9c7",
+    "openzeppelin-contracts": "21c8312b022f495ebe3621d5daeed20552b43ff9",
+    "openzeppelin-uniswap-hooks": "26dc8e53f812a1ca390d470342adb6cd8c3286ad",
+    "permit2": "cc56ad0f3439c502c246fc5cfcc3db92bb8b7219",
+    "forge-std": "3b20d60d14b343ee4f908cb8079495c07f5e8981",
+    "solmate": "4b47a19038b798b4a33d9749d25e570443520647"
+  },
+  "abi": {
+    "path": "spec/module-foundation/factory-v2.abi.json",
+    "sha256": "a7f9ab6b9dc4eec8cbb70ff269d253dbfb8206f1499179afbbacd005b12a3457",
+    "source": "actual compiled FoundationFactoryV2 artifact"
+  },
+  "factoryV2": {
+    "creationCodeHash": "0x86b7a27c33248cac17adba08daa8e6d771331bbafca963dfc5236dfa077f0ed9",
+    "runtimeTemplateHash": "0x8d6d56d1a6b12a81dad3484fb02ce1310a2808e11f760dd9a5741788a0994a66",
+    "runtimeBytes": 21968,
+    "creationBytesWithoutArguments": 23292,
+    "instanceRuntimeHash": "requires actual deployment immutables"
+  },
+  "preservedV1BytecodeComparisons": {
+    "FoundationFactoryV1": {
+      "creationCodeHash": "0xda24546f472781b03e59e1f57e21213f68d1242982982e9f7dcc421a30d493fa",
+      "runtimeTemplateHash": "0x033e483b8528134159428bcbc7e757c48c07865119cd123384fdb026589c9a0e",
+      "matchesOriginalProtectedV1Artifact": true,
+      "referenceArtifactSHA256": "a9c95b237211eb9461ec1b658571798f667610539a6767f8ab8e2b627236f618"
+    },
+    "FoundationHookDeployerV1": {
+      "creationCodeHash": "0xbe5dd5abce20638598b658024483a058848ba211a583cc816a6e5ecc6e235029",
+      "runtimeTemplateHash": "0xf480e7f7242d590d1656d6efec70cfe64470d02dc768cad3721d0937066a0152",
+      "matchesOriginalProtectedV1Artifact": true,
+      "referenceArtifactSHA256": "a9c95b237211eb9461ec1b658571798f667610539a6767f8ab8e2b627236f618"
+    },
+    "FoundationTokenV1": {
+      "creationCodeHash": "0x770fd980651dba53d6b8b1d045720d8b655c5a27a3829401f18aa1f07f732bc8",
+      "runtimeTemplateHash": "0x769f69aeff7b176bd74797501b90e675f16738748e7e706e89ebe75a96b9d77e",
+      "matchesSourceBoundFTSTChildTemplate": true,
+      "referenceArtifactSHA256": "dfe5fb9b29657ea751e3b18a81a7636ea71ed68da8a670a9eea8bb43e67a722b"
+    },
+    "FoundationHookV1": {
+      "creationCodeHash": "0x3dffb81176dae5655a6a7e410d748beef9a274d2298105068f4f8c36db64e706",
+      "runtimeTemplateHash": "0x30ba38713327fd86f53c553be0235756f97db632889e31ab2de990f86058bccb",
+      "matchesSourceBoundFTSTChildTemplate": true,
+      "referenceArtifactSHA256": "835aa802dcc5aa73110799e8186f062f44006e6fbc9633c2e122f2b4a2a642d6"
+    },
+    "FoundationLedgerV1": {
+      "creationCodeHash": "0xc974474b5eed468694e6d4bf1893a0b1a7366c1d208dd2e876d853ed51dbc3d0",
+      "runtimeTemplateHash": "0x7b9c4e3dd9f49c1ffd58a7f51339bd2b99f73c4c62925a20be7c4822819a8d8f",
+      "matchesSourceBoundFTSTChildTemplate": true,
+      "referenceArtifactSHA256": "ac50b6de26be269543ae808587111bd24dde8cc3dde4d535712bbbaa50ae4e49"
+    }
+  },
+  "checks": {
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0,
+    "v2IntegrationTests": 18,
+    "v1IntegrationTests": 12,
+    "feeMathTests": 6,
+    "feeMathFuzzRunsEach": 1000,
+    "v1Invariant": {
+      "runs": 32,
+      "calls": 768,
+      "reverts": 0
+    },
+    "v2Invariant": {
+      "runs": 32,
+      "calls": 768,
+      "reverts": 0
+    },
+    "formatExitCode": 0,
+    "newSourceLintExitCode": 0,
+    "reviewedLintWarnings": 4,
+    "v1ProductionSourceBytesUnchanged": true
+  },
+  "replay": {
+    "genesisSHA256": "2145d4286df10b9c7086092c8c30e77f39066200514b3f64d5d0860a10135253",
+    "localTestExecutor": "0x0000000000000000000000000000000046563201",
+    "persistentHeaderUnchanged": true,
+    "persistentBlock": "0x0",
+    "persistentTransactions": 0,
+    "forgeLog": "out/module-foundation-v2/replay-final/forge.log",
+    "forgeLogSHA256": "2253267036dc20c709d2d7cb7281b55492788f0471bf16507c731ae5456cbc90",
+    "resultSHA256": "93d5eb75f4a9c2c3bdb6996adfddb47df378974190975343c15aa15c1fd3da51"
+  },
+  "reviewedInterfacesSHA256": "69418c8c9490c2b00ee1a64d5682ca0c7c152b53e8052b9ab3992038f116d7ef",
+  "newPublicDeployments": false
+}

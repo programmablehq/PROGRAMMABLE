@@ -15,7 +15,7 @@ import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalo
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
 import type { FoundationContractModule } from "@/lib/module-foundation/abi";
 import { verifyFoundationLaunchReceipt } from "@/lib/module-foundation/readback";
-import { foundationPoolPresentation, foundationPositionPresentation } from "@/lib/module-foundation/ui-readback";
+import { foundationLaunchPositionPresentation, foundationPoolPresentation, foundationPositionPresentation } from "@/lib/module-foundation/ui-readback";
 import { foundationStepSummary } from "@/lib/module-foundation/wallet";
 import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationImage,
   type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationQuoteAsset, type FoundationTransactionResult } from "@/lib/module-foundation/ui-types";
@@ -77,22 +77,26 @@ export function ModuleFoundationLaunchHost() {
     if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
     const quote: FoundationQuoteAsset = { address: sequence.quote.address, chainId: 4663, name: sequence.quote.name,
       symbol: sequence.quote.symbol, decimals: sequence.quote.decimals, supported: true, balance: formatUnits(sequence.quote.balance ?? 0n, sequence.quote.decimals) };
+    const positions = foundationLaunchPositionPresentation(sequence, account);
+    const custody = (() => {
+      if (sequence.result.factoryVersion === "v1") return { factoryVersion: "v1" as const };
+      if (binding.factoryVersion !== "v2") throw new Error("The launch liquidity version changed. Review again.");
+      return { factoryVersion: "v2" as const, lpCustodyId: binding.lpCustodyId,
+        roundingInventory: { recipient: sequence.result.roundingInventoryRecipient,
+          tokenAmount: formatUnits(sequence.result.baseTokenRounding, 18), unrecoverable: true as const },
+        quoteFunding: { maximum: formatUnits(sequence.parameters.initialBuyQuoteAmount + sequence.parameters.additionalQuoteAmount, quote.decimals),
+          principal: formatUnits(sequence.result.creatorQuotePrincipal, quote.decimals),
+          refund: formatUnits(sequence.result.actualQuoteRefund, quote.decimals) } };
+    })();
     const review: FoundationLaunchReview = { id: crypto.randomUUID(), contextKey: context, account, chainId: 4663,
       simulationBlock: sequence.checkpoint.blockNumber.toString(), expiresAt: Number(sequence.expiresAt), quote,
       tokenAddress: sequence.result.token, metadataHash: sequence.metadataHash,
       pool: { ...sequence.poolKey, poolId: sequence.result.poolId, poolManager: FOUNDATION_INFRASTRUCTURE.poolManager.address },
-      positions: [{ label: "Permanent launch liquidity", positionManager: FOUNDATION_INFRASTRUCTURE.positionManager.address,
-        tokenId: sequence.result.basePositionId.toString(), owner: sequence.result.baseVault,
-        tickLower: sequence.price.base.tickLower, tickUpper: sequence.price.base.tickUpper,
-        ownershipDescription: "The base position is held by an immutable vault. Its principal cannot be removed or its NFT transferred." },
-      ...(sequence.price.creator ? [{ label: "Additional creator liquidity", positionManager: FOUNDATION_INFRASTRUCTURE.positionManager.address,
-        tokenId: sequence.result.creatorPositionId.toString(), owner: account,
-        tickLower: sequence.price.creator.tickLower, tickUpper: sequence.price.creator.tickUpper,
-        ownershipDescription: "This separate NFT belongs to your wallet. You can withdraw or transfer it through the official PositionManager." }] : [])],
+      positions, ...custody,
       platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
       creatorFeeBps: draft.creatorFeeBps, initialBuy: draft.initialBuy,
       minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
-      additionalLiquidity: formatUnits(sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
+      additionalLiquidity: formatUnits(sequence.result.factoryVersion === "v2" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
       actualStartValuationQuote: formatUnits(sequence.price.actualValuationQuote.numerator / sequence.price.actualValuationQuote.denominator, quote.decimals),
       transactions: sequence.steps.map(foundationStepSummary), notes: ["The initial buy is optional. No creator quote is required for the permanent base position.",
         "The starting valuation is denominated in the selected quote token. It is rounded to the pool's supported tick."] };
@@ -123,6 +127,7 @@ export function ModuleFoundationLaunchHost() {
     return { url: result.uri, sha256: input.image.sha256 };
   }
   return <><FoundationSessionStatus session={session} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
+    factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
     catalog={catalog} quoteAssets={quotes} onResolveQuote={resolveQuote} onUploadImage={upload}
     onPrepareLaunch={prepare} onConfirmLaunch={async review => { const sequence = prepared.current.get(review);
       if (!sequence) throw new Error("Prepare this launch again with your current wallet."); session.assertCurrent(sequence.account, review.contextKey);

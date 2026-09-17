@@ -115,7 +115,7 @@ function fixture(count = 1, role = "creator", selectedAsset = quote, options: { 
   const state = { count: BigInt(count), compositionHash: composition.compositionHash, reorg: false, deltas: new Map<Address, bigint>(), actionReturn: "0x" as Hex, actionFailure: false,
     socialData: withFoundationModulePackages("0x", entries.map(entry => entry.manifest.packageId), pins) };
   vi.mocked(assertFoundationInfrastructure).mockResolvedValue(checkpoint);
-  vi.mocked(assertFoundationPool).mockResolvedValue({ record, creator, creatorFeeBps: 300,
+  vi.mocked(assertFoundationPool).mockResolvedValue({ record: { ...record, factoryVersion: "v1" }, creator, creatorFeeBps: 300, positions: undefined,
     key: { currency0: token, currency1: quote, hooks: hook, fee: 0, tickSpacing: 60 } });
   const readContract = vi.fn(async (call: ContractRead) => {
     expect(call.blockNumber).toBe(checkpoint.blockNumber);

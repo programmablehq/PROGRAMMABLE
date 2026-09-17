@@ -1,7 +1,7 @@
 import { getAddress, keccak256, toHex, type Address, type Hex, type PublicClient } from "viem";
 import type { ModuleNativeWalletTransaction } from "@/lib/module-mode/native-client";
 import { readFoundationResolution, writeFoundationResolution, type FoundationResolutionMetadata } from "./result-store";
-import { assertFoundationInfrastructure, assertFoundationPool, assertFoundationPreparedSequence, simulateFoundationSequence,
+import { assertFoundationInfrastructure, assertFoundationPool, assertFoundationPreparedSequence, simulateFoundationSequence, simulateFoundationV2Launch,
   type FoundationBalanceCheck, type FoundationDeploymentBinding, type FoundationPreparedStep,
   type prepareFoundationLaunch, type prepareFoundationTrade, type prepareFoundationClaim, type prepareFoundationModuleAction } from "./client";
 import { decodeFoundationLaunchSelectionsV1, readFoundationActionRuntimeV1, revalidateFoundationModuleActionV1, type FoundationActionRoleResolverV1 } from "./action-runtime";
@@ -9,6 +9,7 @@ import type { FoundationCatalogV1 } from "./catalog";
 import { FOUNDATION_INFRASTRUCTURE } from "./constants";
 import { refreshFoundationAssetsV1 } from "./assets";
 import { foundationHookAbi } from "./abi";
+import { foundationFactoryVersion } from "./protocol";
 
 export type FoundationPreparedSequence = Awaited<ReturnType<typeof prepareFoundationLaunch>> | Awaited<ReturnType<typeof prepareFoundationTrade>> | Awaited<ReturnType<typeof prepareFoundationClaim>> | Awaited<ReturnType<typeof prepareFoundationModuleAction>>;
 export interface FoundationWalletPreparation {
@@ -80,7 +81,8 @@ export async function revalidateFoundationWalletStep(value: FoundationWalletPrep
   try {
     // This resolver reads the actual accepted server release; a public JSON approval field is insufficient.
     const current = await binding.resolveAuthority(), original = binding.sequence.binding;
-    if (current.releaseDigest !== original.releaseDigest || current.sourceCommit !== original.sourceCommit
+    if (current.releaseDigest !== original.releaseDigest || current.sourceCommit !== original.sourceCommit || current.startBlock !== original.startBlock
+      || foundationFactoryVersion(current) !== foundationFactoryVersion(original) || current.lpCustodyId !== original.lpCustodyId
       || getAddress(current.factory.address) !== getAddress(original.factory.address)
       || current.factory.runtimeCodeHash !== original.factory.runtimeCodeHash
       || getAddress(current.hookDeployer.address) !== getAddress(original.hookDeployer.address)
@@ -124,7 +126,10 @@ export async function revalidateFoundationWalletStep(value: FoundationWalletPrep
       ? [{ token: sequence.pool.quote, account: sequence.recipient, minimumDelta: sequence.minimumOutput }]
       : sequence.balanceChecks;
     // Prior approved steps are omitted. Every remaining operation is simulated against fresh real balances and allowances.
-    await simulateFoundationSequence(binding.client, remaining, checkpoint, checks);
+    if (sequence.kind === "launch" && foundationFactoryVersion(current) === "v2") {
+      await simulateFoundationV2Launch({ client: binding.client, binding: current, parameters: sequence.parameters,
+        steps: remaining, checkpoint, checks, expected: sequence.result, price: sequence.price });
+    } else await simulateFoundationSequence(binding.client, remaining, checkpoint, checks);
     const transaction = await estimateCurrentWalletStep(value, binding);
     binding.state = "ready";
     return transaction;

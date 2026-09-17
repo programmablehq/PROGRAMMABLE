@@ -1,11 +1,11 @@
 import {
   BaseError, ContractFunctionRevertedError, decodeEventLog, decodeFunctionResult, encodeAbiParameters,
-  encodeFunctionData, erc20Abi, getAddress, keccak256, parseAbi, parseAbiParameters, toEventSelector,
-  type Address, type Hex, type PublicClient,
+  encodeFunctionData, encodeFunctionResult, erc20Abi, getAddress, keccak256, parseAbi, parseAbiParameters, toEventSelector,
+  type Address, type Hex, type PublicClient, type TransactionReceipt,
 } from "viem";
 import {
-  foundationFactoryAbi, foundationHookAbi, foundationMetadataParameters, foundationTokenAbi,
-  type FoundationLaunchParameters, type FoundationLaunchResult,
+  foundationFactoryV2Abi, foundationHookAbi, foundationMetadataParameters, foundationTokenAbi,
+  type FoundationLaunchParameters, type FoundationLaunchResult, type FoundationLaunchResultV2,
 } from "./abi";
 import {
   assertFoundationInfrastructure, assertFoundationPool, readFoundationQuote,
@@ -14,9 +14,11 @@ import {
 import {
   FOUNDATION_ABI_ID, FOUNDATION_INFRASTRUCTURE, FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_BPS,
   FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_SUPPLY, FOUNDATION_TICK_SPACING, foundationCreatorFeeBps,
+  FOUNDATION_DEAD_ADDRESS, FOUNDATION_LP_CUSTODY_DEAD_ID,
 } from "./constants";
 import { FOUNDATION_MAX_TICK, FOUNDATION_MIN_TICK } from "./price";
 import { foundationPoolId, type FoundationPool } from "./route";
+import { assertFoundationV2Result, foundationFactoryAbiFor, foundationFactoryVersion, foundationPositionAbi, readFoundationLaunchRecord } from "./protocol";
 
 // These additions follow contracts/src/module-foundation and the pinned PositionManager's PositionInfoLibrary.
 export const foundationReadbackAbi = parseAbi([
@@ -77,6 +79,8 @@ const min = (a: bigint, b: bigint) => a < b ? a : b;
 const descriptorParameters = parseAbiParameters("(bytes32 moduleId,uint16 abiVersion,uint8 phases,uint8 resources,uint32 beforeGas,uint32 afterGas,uint32 actionGas,bool failOpenAfter,bytes32 exclusiveGroup)");
 const selectionsParameters = parseAbiParameters("bytes32,(address factory,bytes32 factoryCodeHash,bytes32 moduleCodeHash,bytes32 descriptorHash,bytes configuration,uint16 creatorShareBps)[]");
 const launchTopic = toEventSelector("FoundationLaunched(address,address,bytes32,address,address,address,address,uint256,uint256,bytes32,bytes32,uint256,uint256)");
+const launchTopicV2 = toEventSelector(foundationFactoryV2Abi.find(item => item.type === "event")!);
+const transferTopic = toEventSelector("Transfer(address,address,uint256)");
 const swapTopic = toEventSelector("FoundationSwap(bytes32,address,bool,bool,uint256,uint256,uint256,int128,int128)");
 
 async function assertCanonical(client: PublicClient, checkpoint: FoundationCheckpoint) {
@@ -158,15 +162,16 @@ export async function readFoundationPoolDetails(input: {
   const { client, binding } = input;
   const checkpoint = await assertFoundationInfrastructure(client, binding, input.blockNumber);
   const blockNumber = checkpoint.blockNumber, token = getAddress(input.token);
-  const record = await client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi,
-    functionName: "launchOf", args: [token], blockNumber });
-  if (!sameAddress(record.token, token) || BigInt(record.token) === 0n || BigInt(record.hook) === 0n) {
+  const registered = await readFoundationLaunchRecord(client, binding, token, blockNumber);
+  if (!sameAddress(registered.token, token) || BigInt(registered.token) === 0n || BigInt(registered.hook) === 0n) {
     throw new Error("This token is not registered by the selected foundation factory.");
   }
-  const quoteAddress = await client.readContract({ address: record.hook, abi: foundationHookAbi, functionName: "quote", blockNumber });
-  const pool: FoundationPool = { token, quote: getAddress(quoteAddress), hook: getAddress(record.hook), poolId: record.poolId };
+  const quoteAddress = await client.readContract({ address: registered.hook, abi: foundationHookAbi, functionName: "quote", blockNumber });
+  const pool: FoundationPool = { token, quote: getAddress(quoteAddress), hook: getAddress(registered.hook), poolId: registered.poolId };
   const provenance = await assertFoundationPool(client, binding, pool, blockNumber);
-  const hook = pool.hook, ledger = record.ledger, vault = record.baseVault;
+  const record = provenance.record;
+  const hook = pool.hook, ledger = record.ledger, vault = record.factoryVersion === "v1" ? record.baseVault : null;
+  const inventoryRecipient = record.factoryVersion === "v1" ? record.baseVault : record.roundingInventoryRecipient;
   const [name, symbol, decimals, totalSupply, metadataValues, metadataHash, quote, initialTick, compositionHash,
     moduleCount, buyCarry, sellCarry, slot0, activeLiquidity, tokenBalance, vaultTokenBalance] = await Promise.all([
     client.readContract({ address: token, abi: foundationTokenAbi, functionName: "name", blockNumber }),
@@ -184,7 +189,7 @@ export async function readFoundationPoolDetails(input: {
     client.readContract({ address: FOUNDATION_INFRASTRUCTURE.stateView.address, abi: foundationReadbackAbi, functionName: "getSlot0", args: [pool.poolId], blockNumber }),
     client.readContract({ address: FOUNDATION_INFRASTRUCTURE.stateView.address, abi: foundationReadbackAbi, functionName: "getLiquidity", args: [pool.poolId], blockNumber }),
     input.account ? client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [input.account], blockNumber }) : Promise.resolve(null),
-    client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [vault], blockNumber }),
+    client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [inventoryRecipient], blockNumber }),
   ]);
   const metadata = { name, symbol, description: metadataValues[0], imageURI: metadataValues[2], website: metadataValues[1], socialData: metadataValues[3] };
   if (!sameHex(keccak256(encodeAbiParameters(foundationMetadataParameters, [metadata])), metadataHash)) {
@@ -200,16 +205,17 @@ export async function readFoundationPoolDetails(input: {
     vaultManager, vaultManagerHash, vaultId, vaultBeneficiary, platformReceived, platformClaimed,
     creatorReceived, creatorCredited, creatorClaimed, moduleClaimedTotal, creatorShareBps, outstandingBacking,
     unallocatedCreatorDust, claimBacking, modules] = await Promise.all([
-    readPosition(client, record.basePositionId, pool, blockNumber, baseTicks, vault),
-    record.creatorPositionId === 0n ? Promise.resolve(null) : readPosition(client, record.creatorPositionId, pool, blockNumber, creatorTicks),
+    vault ? readPosition(client, record.basePositionId, pool, blockNumber, baseTicks, vault) : Promise.resolve(provenance.positions!.base),
+    record.factoryVersion === "v2" ? Promise.resolve(provenance.positions!.creator)
+      : record.creatorPositionId === 0n ? Promise.resolve(null) : readPosition(client, record.creatorPositionId, pool, blockNumber, creatorTicks),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "poolManager", blockNumber }),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "hook", blockNumber }),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "quote", blockNumber }),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "creator", blockNumber }),
-    client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "positionManager", blockNumber }),
-    client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "positionManagerCodeHash", blockNumber }),
-    client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "positionId", blockNumber }),
-    client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "beneficiary", blockNumber }),
+    vault ? client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "positionManager", blockNumber }) : Promise.resolve(null),
+    vault ? client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "positionManagerCodeHash", blockNumber }) : Promise.resolve(null),
+    vault ? client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "positionId", blockNumber }) : Promise.resolve(null),
+    vault ? client.readContract({ address: vault, abi: foundationReadbackAbi, functionName: "beneficiary", blockNumber }) : Promise.resolve(null),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "platformReceived", blockNumber }),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "platformClaimed", blockNumber }),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "creatorReceived", blockNumber }),
@@ -250,11 +256,13 @@ export async function readFoundationPoolDetails(input: {
   ]);
   if (!sameAddress(ledgerManager, FOUNDATION_INFRASTRUCTURE.poolManager.address) || !sameAddress(ledgerHook, hook)
     || !sameAddress(ledgerQuote, pool.quote) || !sameAddress(ledgerCreator, provenance.creator)
-    || !sameAddress(vaultManager, FOUNDATION_INFRASTRUCTURE.positionManager.address)
-    || !sameHex(vaultManagerHash, FOUNDATION_INFRASTRUCTURE.positionManager.runtimeCodeHash)
-    || vaultId !== record.basePositionId || !sameAddress(vaultBeneficiary, provenance.creator)) {
+    || (vault !== null && (!vaultManager || !vaultManagerHash || !vaultBeneficiary
+      || !sameAddress(vaultManager, FOUNDATION_INFRASTRUCTURE.positionManager.address)
+      || !sameHex(vaultManagerHash, FOUNDATION_INFRASTRUCTURE.positionManager.runtimeCodeHash)
+      || vaultId !== record.basePositionId || !sameAddress(vaultBeneficiary, provenance.creator)))) {
     throw new Error("The quote ledger or permanent vault has a foreign binding.");
   }
+  if (record.factoryVersion === "v2" && vaultTokenBalance < record.baseTokenRounding) throw new Error("The permanent V2 rounding inventory is missing.");
   const platform = budget(platformReceived, platformClaimed), creator = budget(creatorCredited, creatorClaimed);
   const moduleCredits = modules.reduce((sum, module) => sum + module.credited, 0n);
   const moduleClaims = modules.reduce((sum, module) => sum + module.claimed, 0n);
@@ -270,7 +278,11 @@ export async function readFoundationPoolDetails(input: {
     creator: getAddress(provenance.creator), creatorFeeBps: provenance.creatorFeeBps, compositionHash, initialTick,
     token: { address: token, ...metadata, decimals, totalSupply, originalSupply: FOUNDATION_SUPPLY, metadataHash, balance: tokenBalance },
     quote, market: { sqrtPriceX96: slot0[0], tick: slot0[1], protocolFee: slot0[2], lpFee: slot0[3], activeLiquidity },
-    positions: { base: { ...basePosition, vault: getAddress(vault), beneficiary: getAddress(vaultBeneficiary), roundingInventory: vaultTokenBalance }, creator: creatorPosition },
+    positions: { base: record.factoryVersion === "v1"
+      ? { ...basePosition, custody: "permanent-vault-v1" as const, vault: getAddress(record.baseVault), beneficiary: getAddress(vaultBeneficiary!), roundingInventory: vaultTokenBalance }
+      : { ...basePosition, custody: "dead-v1" as const, roundingInventoryRecipient: getAddress(record.roundingInventoryRecipient), roundingInventory: vaultTokenBalance,
+        originalPrincipal: record.baseTokenPrincipal, originalRoundingInventory: record.baseTokenRounding },
+      creator: creatorPosition ? { ...creatorPosition, custody: record.factoryVersion === "v2" ? "dead-v1" as const : "wallet-owned-v1" as const } : null },
     ledger: { address: getAddress(ledger), quote: pool.quote, claimBacking, outstandingBacking, unallocatedCreatorDust,
       platform: { ...platform, received: platformReceived, beneficiary: FOUNDATION_PLATFORM_RECIPIENT, bps: FOUNDATION_PLATFORM_BPS },
       creator: { ...creator, received: creatorReceived, beneficiary: getAddress(provenance.creator), shareBps: creatorShareBps },
@@ -284,7 +296,7 @@ export type FoundationPoolDetails = Awaited<ReturnType<typeof readFoundationPool
 export interface FoundationExpectedLaunch {
   transaction: FoundationTransaction;
   parameters: FoundationLaunchParameters;
-  result: FoundationLaunchResult;
+  result: FoundationLaunchResult | FoundationLaunchResultV2;
   metadataHash: Hex;
 }
 
@@ -295,7 +307,7 @@ export async function verifyFoundationLaunchReceipt(input: {
   const { client, binding, expected, transactionHash } = input;
   const planned = expected.transaction, p = expected.parameters;
   if (!sameAddress(planned.to, binding.factory.address) || planned.value !== 0n
-    || !sameHex(planned.data, encodeFunctionData({ abi: foundationFactoryAbi, functionName: "launch", args: [p] }))
+    || !sameHex(planned.data, encodeFunctionData({ abi: foundationFactoryAbiFor(binding), functionName: "launch", args: [p] }))
     || !sameHex(expected.metadataHash, keccak256(encodeAbiParameters(foundationMetadataParameters, [p.metadata])))) {
     throw new Error("The expected launch transaction or metadata does not match its reviewed parameters.");
   }
@@ -310,6 +322,7 @@ export async function verifyFoundationLaunchReceipt(input: {
     || transaction.transactionIndex !== receipt.transactionIndex) {
     throw new Error("The mined transaction does not match the expected factory launch.");
   }
+  if (foundationFactoryVersion(binding) === "v2") return verifyV2LaunchReceipt({ ...input, receipt });
   const candidates = receipt.logs.filter(log => sameAddress(log.address, binding.factory.address) && log.topics[0]
     && sameHex(log.topics[0], launchTopic));
   if (candidates.length !== 1) throw new Error("The receipt must contain exactly one launch event emitted by the expected factory.");
@@ -320,6 +333,7 @@ export async function verifyFoundationLaunchReceipt(input: {
   }
   const event = decodeEventLog({ abi: foundationReadbackAbi, eventName: "FoundationLaunched", data: log.data, topics: log.topics, strict: true }).args;
   const r = expected.result;
+  if (!("baseVault" in r)) throw new Error("A V2 result cannot be read as a V1 vault launch.");
   if (!sameAddress(event.token, r.token) || !sameAddress(event.creator, planned.from) || !sameHex(event.poolId, r.poolId)
     || !sameAddress(event.hook, r.hook) || !sameAddress(event.ledger, r.ledger) || !sameAddress(event.quote, p.quote)
     || BigInt(event.baseVault) === 0n || event.basePositionId === 0n
@@ -333,14 +347,61 @@ export async function verifyFoundationLaunchReceipt(input: {
   if (!sameHex(details.checkpoint.blockHash, receipt.blockHash) || !sameHex(details.token.metadataHash, event.metadataHash)
     || !sameAddress(details.creator, planned.from) || details.initialTick !== p.initialTick || details.creatorFeeBps !== p.creatorFeeBps
     || !sameAddress(details.pool.quote, event.quote) || !sameAddress(details.record.hook, event.hook)
-    || !sameAddress(details.record.ledger, event.ledger) || !sameAddress(details.record.baseVault, event.baseVault)
+    || !sameAddress(details.record.ledger, event.ledger) || details.record.factoryVersion !== "v1" || !sameAddress(details.record.baseVault, event.baseVault)
     || !sameHex(details.record.poolId, event.poolId) || !sameHex(details.compositionHash, event.compositionHash)
     || details.record.basePositionId !== event.basePositionId || details.record.creatorPositionId !== event.creatorPositionId
     || details.record.initialBuyTokenAmount !== event.initialBuyTokenAmount) {
     throw new Error("The launch receipt disagrees with canonical factory and token state.");
   }
   return { evidence: "canonical-receipt" as const, transactionHash, checkpoint: details.checkpoint,
-    transactionIndex: receipt.transactionIndex, logIndex: log.logIndex, event, details };
+    transactionIndex: receipt.transactionIndex, logIndex: log.logIndex, event: { ...event, factoryVersion: "v1" as const }, details };
+}
+
+async function verifyV2LaunchReceipt(input: {
+  client: PublicClient; binding: FoundationDeploymentBinding; transactionHash: Hex; expected: FoundationExpectedLaunch; receipt: TransactionReceipt;
+}) {
+  const { client, binding, transactionHash, expected, receipt } = input, p = expected.parameters;
+  if (!("basePositionOwner" in expected.result)) throw new Error("A V1 vault result cannot be read as a V2 launch.");
+  assertFoundationV2Result(expected.result, p);
+  const validLog = (log: TransactionReceipt["logs"][number]) => !log.removed && log.blockNumber === receipt.blockNumber
+    && !!log.blockHash && sameHex(log.blockHash, receipt.blockHash) && !!log.transactionHash && sameHex(log.transactionHash, transactionHash)
+    && log.transactionIndex === receipt.transactionIndex && log.logIndex !== null;
+  const candidates = receipt.logs.filter(log => sameAddress(log.address, binding.factory.address) && log.topics[0] && sameHex(log.topics[0], launchTopicV2));
+  if (candidates.length !== 1 || !validLog(candidates[0])) throw new Error("The receipt must contain one canonical V2 launch event from the expected factory.");
+  const log = candidates[0];
+  const event = decodeEventLog({ abi: foundationFactoryV2Abi, eventName: "FoundationLaunchedV2", data: log.data, topics: log.topics, strict: true }).args;
+  const r = event.result;
+  assertFoundationV2Result(r, p);
+  if (!sameAddress(event.token, expected.result.token) || !sameAddress(event.creator, expected.transaction.from)
+    || !sameHex(event.poolId, expected.result.poolId) || !sameAddress(event.hook, expected.result.hook)
+    || !sameAddress(event.ledger, expected.result.ledger) || !sameAddress(event.quote, p.quote)
+    || !sameAddress(event.token, r.token) || !sameAddress(event.hook, r.hook) || !sameAddress(event.ledger, r.ledger) || !sameHex(event.poolId, r.poolId)
+    || !sameHex(event.custodyId, FOUNDATION_LP_CUSTODY_DEAD_ID) || !sameHex(event.metadataHash, expected.metadataHash)
+    || !sameHex(event.compositionHash, keccak256(encodeAbiParameters(selectionsParameters, [FOUNDATION_ABI_ID, p.modules])))
+    || event.initialBuyQuoteAmount !== p.initialBuyQuoteAmount || r.baseTokenPrincipal !== expected.result.baseTokenPrincipal
+    || r.baseTokenRounding !== expected.result.baseTokenRounding || r.creatorQuotePrincipal !== expected.result.creatorQuotePrincipal) {
+    throw new Error("The V2 launch event differs from the signed source, metadata, custody or principal.");
+  }
+  for (const id of [r.basePositionId, ...(r.creatorPositionId === 0n ? [] : [r.creatorPositionId])]) {
+    const transfers = receipt.logs.filter(item => sameAddress(item.address, FOUNDATION_INFRASTRUCTURE.positionManager.address)
+      && item.topics[0] && sameHex(item.topics[0], transferTopic)).map(item => ({ log: item,
+      event: decodeEventLog({ abi: foundationPositionAbi, eventName: "Transfer", data: item.data, topics: item.topics, strict: true }).args }))
+      .filter(item => item.event.id === id);
+    if (transfers.length !== 1 || !validLog(transfers[0].log) || BigInt(transfers[0].event.from) !== 0n
+      || !sameAddress(transfers[0].event.to, FOUNDATION_DEAD_ADDRESS)) throw new Error("Each V2 launch NFT must be minted directly from zero to DEAD in this receipt.");
+  }
+  const details = await readFoundationPoolDetails({ client, binding, token: r.token, blockNumber: receipt.blockNumber });
+  if (details.record.factoryVersion !== "v2" || !sameHex(details.checkpoint.blockHash, receipt.blockHash)
+    || !sameAddress(details.creator, expected.transaction.from) || !sameAddress(details.pool.quote, p.quote)
+    || details.initialTick !== p.initialTick || details.creatorFeeBps !== p.creatorFeeBps
+    || !sameHex(details.token.metadataHash, event.metadataHash) || !sameHex(details.compositionHash, event.compositionHash)
+    || !sameHex(encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launchOf", result: details.record }),
+      encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launchOf", result: r }))) {
+    throw new Error("The V2 launch receipt disagrees with canonical factory and token state.");
+  }
+  return { evidence: "canonical-receipt" as const, transactionHash, checkpoint: details.checkpoint,
+    transactionIndex: receipt.transactionIndex, logIndex: log.logIndex,
+    event: { ...event, ...r, factoryVersion: "v2" as const }, details };
 }
 
 /** Real cumulative ledger deltas in ephemeral state; available swap logs additionally identify actual gross amounts. */

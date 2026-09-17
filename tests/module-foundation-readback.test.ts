@@ -219,6 +219,8 @@ describe("source-bound launch receipt", () => {
     const result = await verifyFoundationLaunchReceipt({ client: fixture().client, binding, transactionHash, expected });
     expect(result.evidence).toBe("canonical-receipt");
     expect(result.event.basePositionId).toBe(77n);
+    expect(result.details.positions.base.custody).toBe("permanent-vault-v1");
+    if (result.details.positions.base.custody !== "permanent-vault-v1") throw new Error("Expected V1 vault custody");
     expect(result.details.positions.base.vault).toBe(vault);
     expect(result.event.initialBuyTokenAmount).toBe(90n);
   });
