@@ -5,13 +5,16 @@
   "source": {
     "deployments": "https://developers.uniswap.org/deployments.json",
     "generatedAt": "2026-07-15T22:25:40.000Z",
-    "sourceCommit": "37936185dee7decf681360ec799c124e0e034672"
+    "sourceCommit": "37936185dee7decf681360ec799c124e0e034672",
+    "datasetSha256": "5a16ef209f9e2583b934ea5eddc9cd2588a6caf5d53f4797ab67d059b1b71dbc"
   },
   "runtimeSnapshot": {
-    "blockNumber": 11350986,
-    "blockTimestamp": 1785023580,
-    "capturedAt": "2026-07-25T23:53:00Z",
-    "rpc": "https://ethereum-sepolia-rpc.publicnode.com"
+    "blockNumber": 11722565,
+    "blockHash": "0x1fe0861c9e1c435a83076ff2c84ef8e363d28307bbff21f688179c0ae4835103",
+    "blockTimestamp": 1789633632,
+    "capturedAt": "2026-09-17T08:44:24.243Z",
+    "rpc": "https://ethereum-sepolia-rpc.publicnode.com",
+    "corroboratingRpc": "https://sepolia.gateway.tenderly.co"
   },
   "contracts": {
     "poolManager": {
@@ -49,14 +52,16 @@
       "runtimeCodeHash": "0xa1d2a90564f4f63580b25de42efaff92505c254b00fc666f65ab38126cce5cfa"
     },
     "liquidityLauncher": {
-      "address": "0x00004c4ccc709Ef590F7C81102C0689F0263D4e9",
-      "version": "3.0",
-      "runtimeCodeHash": "0x672007315147b9202d825c5a4f5fed556179de55a89d8052f64d1c49ef366ed6"
+      "address": "0x0000FffFBE8efE702c8703aE3477FF5dE3d319C0",
+      "version": "3.2.0",
+      "runtimeCodeHash": "0x4a586d925c9d59ece13ce2239ebd7dea9ee725f9d33c6667e0fd16ae8d977d80",
+      "sourceCommit": "41442a518de9aa2a60ce5db76046dc4c983dd35a"
     },
     "lbpStrategy": {
-      "address": "0x96641d91e223c766F45b19d09494F5925C3cE000",
-      "version": "3.1",
-      "runtimeCodeHash": "0x273ab7765154c688e0105fed1d25c6861efd2f11ad0be5806d7592cfd723341c"
+      "address": "0x95434E898Af471945Cab33D5064d2aC1A6Ba2000",
+      "version": "3.3.0",
+      "runtimeCodeHash": "0x077959d7cd725a2ec1c0e73acd47b38d5227a1a22e75a83d4dbf7905d7fff02f",
+      "sourceCommit": "1c5904912aefceaceb89c24528cd5e25d0b61597"
     },
     "tokenSplitter": {
       "address": "0x8B7DCeb5639DB986FCf86606C74e6300C40FE3cd",

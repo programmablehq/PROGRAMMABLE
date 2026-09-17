@@ -29,6 +29,11 @@ export class OfficialLauncherSdkError extends Error {
   }
 }
 
+/**
+ * Addresses bundled in the pinned SDK 1.0.1, retained for package compatibility
+ * verification. These are historical SDK defaults, not the current deployment
+ * registry. Current Mainnet/Sepolia runtime pins live in contracts/dependencies.
+ */
 export function getOfficialLauncherDependencies(
   chainId: number,
 ): OfficialLauncherDependencies {

@@ -6,6 +6,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { keccak256 } from "viem";
+import {
+  HISTORICAL_MAINNET_DEPENDENCY_SNAPSHOT,
+  readHistoricalMainnetDependencySnapshot,
+} from "./historical-mainnet-dependency-snapshot.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const contractsDirectory = resolve(scriptDirectory, "..");
@@ -280,12 +284,7 @@ function validateArtifact(component) {
   };
 }
 
-const dependencySnapshotPath = join(
-  contractsDirectory,
-  "dependencies",
-  "ethereum-mainnet.json",
-);
-const dependencySnapshot = readJson(dependencySnapshotPath);
+const dependencySnapshot = readHistoricalMainnetDependencySnapshot();
 if (dependencySnapshot.chainId !== 1) {
   fail("official dependency snapshot is not Ethereum mainnet");
 }
@@ -390,6 +389,8 @@ const report = {
     thinRuntimeMarginBytes: THIN_RUNTIME_MARGIN,
   },
   officialDependencySnapshot: {
+    file: HISTORICAL_MAINNET_DEPENDENCY_SNAPSHOT.file,
+    sha256: HISTORICAL_MAINNET_DEPENDENCY_SNAPSHOT.sha256,
     source: dependencySnapshot.source,
     runtimeSnapshot: dependencySnapshot.runtimeSnapshot,
     constructorDependencies: Object.fromEntries(

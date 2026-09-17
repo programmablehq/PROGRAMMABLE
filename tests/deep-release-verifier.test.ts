@@ -1,6 +1,9 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import Ajv from "ajv";
 import {
   encodeAbiParameters,
@@ -43,6 +46,57 @@ const executorArtifactPath = path.join(
   "DeepKeeperExecutorV1.sol",
   "DeepKeeperExecutorV1.json",
 );
+const historicalSnapshotFile =
+  "dependencies/historical/ethereum-mainnet-25612664.json";
+const historicalSnapshotSha256 =
+  "fbeee8e6323c28d4fed7f755d3c8f27979e67f42139d8883a20c1c4867d03da2";
+const historicalSnapshotPath = path.join(root, "contracts", historicalSnapshotFile);
+const currentSnapshotPath = path.join(root, "contracts/dependencies/ethereum-mainnet.json");
+const readinessPath = path.join(root, "contracts/scripts/verify-deep-v1-readiness.mjs");
+
+// Substitute one file read in a separate process without changing repository
+// files. Both real verifier entrypoints must reject tampered historical bytes.
+function runWithSnapshotOverlay(
+  script: string,
+  args: string[],
+  snapshotPath: string,
+  replacement: string | null,
+) {
+  const directory = fs.mkdtempSync(path.join(tmpdir(), "historical-mainnet-snapshot-"));
+  const preload = path.join(directory, "overlay.mjs");
+  fs.writeFileSync(preload, `
+    import fs from "node:fs";
+    import { syncBuiltinESMExports } from "node:module";
+    const targets = ${JSON.stringify([snapshotPath, pathToFileURL(snapshotPath).href])};
+    const encoded = ${JSON.stringify(replacement === null ? null : Buffer.from(replacement).toString("base64"))};
+    function substitute(file, options) {
+      if (encoded === null) throw Object.assign(new Error("Missing snapshot: " + file), { code: "ENOENT" });
+      const bytes = Buffer.from(encoded, "base64");
+      const encoding = typeof options === "string" ? options : options?.encoding;
+      return encoding ? bytes.toString(encoding) : bytes;
+    }
+    const originalSync = fs.readFileSync;
+    fs.readFileSync = function(file, ...args) {
+      if (targets.includes(String(file))) return substitute(file, args[0]);
+      return originalSync.call(this, file, ...args);
+    };
+    const originalAsync = fs.promises.readFile;
+    fs.promises.readFile = async function(file, ...args) {
+      if (targets.includes(String(file))) return substitute(file, args[0]);
+      return originalAsync.call(this, file, ...args);
+    };
+    syncBuiltinESMExports();
+  `);
+  try {
+    return spawnSync(process.execPath, ["--import", preload, script, ...args], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
 
 function readJson(file: string) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -230,6 +284,62 @@ describe("Deep release manifest lifecycle gates", () => {
     expect(output).toContain(
       "structurally valid (offline; no chain or source-provider claims)",
     );
+  });
+
+  it("retains the exact reviewed snapshot bytes independently of current registry bindings", () => {
+    const historicalBytes = fs.readFileSync(historicalSnapshotPath);
+    expect(createHash("sha256").update(historicalBytes).digest("hex"))
+      .toBe(historicalSnapshotSha256);
+    expect(readJson(historicalSnapshotPath).runtimeSnapshot.blockNumber).toBe(25_612_664);
+    expect(createHash("sha256").update(fs.readFileSync(currentSnapshotPath)).digest("hex"))
+      .not.toBe(historicalSnapshotSha256);
+  });
+
+  const alteredBlock = readJson(historicalSnapshotPath);
+  alteredBlock.runtimeSnapshot.blockNumber += 1;
+  const alteredRuntime = readJson(historicalSnapshotPath);
+  alteredRuntime.contracts.poolManager.runtimeCodeHash = `0x${"11".repeat(32)}`;
+  const alteredSource = readJson(historicalSnapshotPath);
+  alteredSource.source.sourceCommit = "22".repeat(20);
+  const snapshotSubstitutions = [
+    { label: "current snapshot", bytes: fs.readFileSync(currentSnapshotPath, "utf8") },
+    { label: "changed block", bytes: JSON.stringify(alteredBlock) },
+    { label: "changed runtime", bytes: JSON.stringify(alteredRuntime) },
+    { label: "changed source commit", bytes: JSON.stringify(alteredSource) },
+    { label: "whitespace-only drift", bytes: fs.readFileSync(historicalSnapshotPath, "utf8") + "\n" },
+    { label: "malformed JSON", bytes: "{" },
+    { label: "missing historical file", bytes: null },
+  ];
+  for (const [label, script, args] of [
+    ["release verifier", verifierPath, ["--offline"]],
+    ["readiness verifier", readinessPath, []],
+  ] as const) {
+    it.each(snapshotSubstitutions)(`${label} rejects $label without falling back`, ({ bytes }) => {
+      const result = runWithSnapshotOverlay(script, [...args], historicalSnapshotPath, bytes);
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(1);
+      expect(`${result.stdout}\n${result.stderr}`).toContain(bytes === null
+        ? "Missing snapshot:"
+        : "Historical Mainnet dependency snapshot SHA-256 mismatch");
+    });
+  }
+
+  it("verifies historical release provenance without reading the mutable current snapshot", () => {
+    const result = runWithSnapshotOverlay(verifierPath, ["--offline"], currentSnapshotPath, null);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("structurally valid (offline; no chain or source-provider claims)");
+  });
+
+  it("reports the immutable snapshot identity in readiness provenance", () => {
+    const result = runWithSnapshotOverlay(readinessPath, [], currentSnapshotPath, null);
+    expect(result.error).toBeUndefined();
+    // Readiness can still be blocked by its existing clean-checkout/artifact
+    // gates. Reading historical evidence does not grant deployment approval.
+    const report = JSON.parse(result.stdout);
+    expect(report.officialDependencySnapshot.file).toBe(historicalSnapshotFile);
+    expect(report.officialDependencySnapshot.sha256).toBe(historicalSnapshotSha256);
+    expect(report.officialDependencySnapshot.runtimeSnapshot.blockNumber).toBe(25_612_664);
   });
 
   it("binds the reviewed executor source and runtime to Mainnet Automation", () => {
