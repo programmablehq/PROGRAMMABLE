@@ -11,6 +11,7 @@ import { foundationFactoryV2Abi, foundationHookAbi, foundationLedgerAbi, foundat
 import { FOUNDATION_ABI_ID, FOUNDATION_CHAIN_ID, foundationCreatorFeeBps, FOUNDATION_INFRASTRUCTURE,
   FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_ZERO_HASH, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
 import { foundationParseAmount, planFoundationPrice } from "./price";
+import { parseFoundationStartPrice, planFoundationStartPrice, type FoundationStartPrice } from "./start-price";
 import { buildFoundationExactInput, foundationPoolId, foundationPoolKey, type FoundationPool } from "./route";
 import type { FoundationPrepareModuleActionInputV1 } from "./action-runtime";
 import { readFoundationAssetPins, readFoundationModulePackages, withFoundationModulePackages } from "./metadata";
@@ -278,7 +279,7 @@ export async function simulateFoundationV2Launch(input: {
 
 export async function prepareFoundationLaunch(input: {
   client: PublicClient; binding: FoundationDeploymentBinding; account: Address; metadata: FoundationMetadata; quote: Address;
-  startValuationQuote: string; initialBuy: string; additionalLiquidity: string; creatorFeeBps: number;
+  startPrice: FoundationStartPrice; initialBuy: string; additionalLiquidity: string; creatorFeeBps: number;
   modules: readonly FoundationContractModule[]; tokenSalt: Hex; slippageBps: number; signal?: AbortSignal;
 }) {
   const { client, binding } = input, account = getAddress(input.account), factoryAbi = foundationFactoryAbiFor(binding);
@@ -288,7 +289,10 @@ export async function prepareFoundationLaunch(input: {
   const quote = await readFoundationQuote(client, input.quote, account, checkpoint.blockNumber);
   const additionalQuoteAmount = foundationParseAmount(input.additionalLiquidity, quote.decimals);
   const initialBuyQuoteAmount = foundationParseAmount(input.initialBuy, quote.decimals);
-  const valuationQuoteRaw = foundationParseAmount(input.startValuationQuote, quote.decimals, false);
+  const startPrice = parseFoundationStartPrice(input.startPrice, quote);
+  const priceBlock = await client.getBlock({ blockNumber: BigInt(startPrice.checkpoint.number) });
+  if (priceBlock.hash !== startPrice.checkpoint.hash || priceBlock.timestamp !== BigInt(startPrice.checkpoint.timestamp)
+    || BigInt(startPrice.checkpoint.number) > checkpoint.blockNumber) throw new Error("The starting price changed with chain state. Review again.");
   const funding = additionalQuoteAmount + initialBuyQuoteAmount;
   if (funding > FOUNDATION_INT128_MAX || quote.balance === null || quote.balance < funding) throw new Error("Your quote-token balance does not cover this launch.");
   if (!Number.isInteger(input.slippageBps) || input.slippageBps < 1 || input.slippageBps > 1_000) throw new Error("Choose slippage between 0.01% and 10%.");
@@ -298,7 +302,7 @@ export async function prepareFoundationLaunch(input: {
   if (moduleAssetPins.some(pin => [token, quote.address].some(base => getAddress(pin[0]) === getAddress(base)))
     || (moduleAssetPins.length > 0 && input.modules.length === 0)) throw new Error("Only additional module assets can be bound to this launch.");
   if (moduleAssetPins.length) await refreshFoundationAssetsV1({ client, pins: moduleAssetPins, checkpoint });
-  const price = planFoundationPrice({ token, quote: quote.address, valuationQuoteRaw, additionalQuoteRaw: additionalQuoteAmount });
+  const price = planFoundationStartPrice({ token, quote, startPrice, additionalQuoteRaw: additionalQuoteAmount });
   const p: FoundationLaunchParameters = { metadata: input.metadata, quote: quote.address, quoteDecimals: quote.decimals,
     initialTick: price.initialTick, creatorFeeBps: foundationCreatorFeeBps(input.creatorFeeBps),
     additionalQuoteAmount, initialBuyQuoteAmount, initialBuyMinimumTokenAmount: initialBuyQuoteAmount > 0n ? 1n : 0n,
@@ -339,8 +343,11 @@ export async function prepareFoundationLaunch(input: {
     || result.poolId !== poolId || result.basePositionId === 0n || result.initialBuyTokenAmount < p.initialBuyMinimumTokenAmount
     || result.initialBuyTokenAmount !== simulation.balances[1].delta
     || (additionalQuoteAmount > 0n) !== (result.creatorPositionId > 0n)) throw new Error("The simulated launch does not match its plan.");
+  // Mining and simulation can consume the reference lifetime. Never present an expired review.
+  parseFoundationStartPrice(startPrice, quote);
+  const priceExpiry = BigInt(startPrice.price.validUntil);
   return sealFoundationSequence({ kind: "launch" as const, sourceKind: "module-foundation-v1" as const, account, binding,
-    checkpoint, expiresAt: p.deadline, quote, parameters: p, result, factoryVersion: result.factoryVersion, price, poolKey: key, modulePackageIds: modulePackageIds ?? [],
+    checkpoint, expiresAt: priceExpiry < p.deadline ? priceExpiry : p.deadline, quote, parameters: p, result, factoryVersion: result.factoryVersion, price, startPrice, poolKey: key, modulePackageIds: modulePackageIds ?? [],
     moduleAssetPins, balanceChecks: checks(),
     metadataHash: keccak256(encodeAbiParameters(foundationMetadataParameters, [input.metadata])),
     steps: simulation.steps, balances: simulation.balances, simulation: "rpc-sequence" as const });

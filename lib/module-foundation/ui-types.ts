@@ -21,9 +21,6 @@ export interface FoundationQuoteAsset {
   reason?: string;
   /** Human units, verified for the current wallet by the host. */
   balance?: string;
-  /** Only supplied when derived from verified price evidence. */
-  suggestedValuationQuote?: string;
-  valuationSourceLabel?: string;
 }
 
 export interface FoundationImage {
@@ -76,7 +73,6 @@ export interface FoundationLaunchDraft {
   creatorFeeBps: number;
   /** Exact decimal strings denominated in quote, never assumed to be ETH. */
   initialBuy: string;
-  startValuationQuote: string;
   additionalLiquidity: string;
   modules: FoundationModuleSelection[];
 }
@@ -135,7 +131,7 @@ interface FoundationLaunchReviewCommon {
   minimumInitialTokens: string;
   additionalLiquidity: string;
   supply: string;
-  actualStartValuationQuote: string;
+  actualStartMarketCapUsd: string;
   transactions: readonly FoundationTransactionSummary[];
   notes?: readonly string[];
 }

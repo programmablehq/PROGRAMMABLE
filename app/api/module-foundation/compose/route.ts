@@ -14,6 +14,8 @@ import { foundationFactoryAbiFor } from "@/lib/module-foundation/protocol";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleHash, moduleRecord } from "@/lib/module-mode/release";
 import type { FoundationLaunchDraft } from "@/lib/module-foundation/ui-types";
+import { readFoundationStartPrice } from "@/lib/server/module-foundation/start-price";
+import { parseFoundationStartPrice } from "@/lib/module-foundation/start-price";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +34,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       ["account", "releaseDigest", "tokenSalt", "draft"], "foundation.compose") as unknown as {
       account: string; releaseDigest: Hex; tokenSalt: Hex; draft: FoundationLaunchDraft };
     const draft = moduleRecord(body.draft, ["name", "symbol", "description", "image", "socialLinks", "quoteAsset", "creatorFeeBps",
-      "initialBuy", "startValuationQuote", "additionalLiquidity", "modules"], "foundation.compose.draft") as unknown as FoundationLaunchDraft;
+      "initialBuy", "additionalLiquidity", "modules"], "foundation.compose.draft") as unknown as FoundationLaunchDraft;
     const account = getAddress(body.account);
     if (!/^0x[0-9a-fA-F]{64}$/.test(body.tokenSalt)) throw new Error("The launch salt is invalid.");
     const availability = parseFoundationAvailability(await readFoundationAvailabilityResponse());
@@ -68,7 +70,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       deferredAssetKeys: ["token"],
     }));
     // One global bound applies across all selected modules, including defaults and fixed source values.
-    const resolved = await resolveFoundationAssetsV1({ client, addresses, context, checkpoint });
+    const [resolved, startPrice] = await Promise.all([
+      resolveFoundationAssetsV1({ client, addresses, context, checkpoint }), readFoundationStartPrice(quote),
+    ]);
     const moduleAssetPins = resolved.pins;
     const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,
       modulePackageIds: selected.map(({ entry }) => entry.manifest.packageId), moduleAssetPins });
@@ -93,6 +97,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       context: finalContext });
     if (!composition.ok) return NextResponse.json({ error: "The selected modules cannot be composed.", diagnostics: composition.diagnostics }, { status: 422, headers });
     return NextResponse.json({ releaseDigest: binding.releaseDigest, token, metadata, moduleAssetPins, modules: composition.modules,
+      startPrice: parseFoundationStartPrice(startPrice, quote),
       compositionHash: composition.compositionHash, totals: composition.totals }, { headers });
   } catch (error) {
     const message = error instanceof Error && error.message.length < 240 ? error.message : "This launch could not be prepared. Check its details and retry.";

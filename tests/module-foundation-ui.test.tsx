@@ -45,10 +45,12 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(foundationSelectionErrors([selected], [{ ...descriptor, conflictsWith: [descriptor.id] }])[0]).toContain("cannot be combined");
     expect(foundationSelectionErrors([{ ...selected, configuration: { recipient: "bad-address" } }], [descriptor])[0]).toContain("valid address");
   });
-  it("offers a full base coin with no optional modules and no fabricated valuation", () => {
+  it("offers a base coin without an editable starting valuation", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    for (const label of ["Description", "X / Twitter", "Initial buy", "Starting valuation", "Add creator liquidity", "Review launch"]) expect(html).toContain(label);
-    expect(html).toContain('name="startValuationQuote"');
+    for (const label of ["Description", "X / Twitter", "Initial buy", "Add creator liquidity", "Review launch"]) expect(html).toContain(label);
+    expect(html).not.toContain('name="startValuationQuote"');
+    expect(html).not.toContain("Starting valuation");
+    expect(html).not.toContain("foundation-valuation");
     expect(html).toContain("Enter 0 to launch without an initial buy");
     expect(html).toContain("Your coin works with no additional modules");
     expect(html).not.toContain("5000");
@@ -72,7 +74,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
       expiresAt: Math.floor(Date.now() / 1000) + 300, quote, tokenAddress: address, metadataHash: hash,
       pool: { poolId: hash, currency0: address, currency1: address, fee: 0, tickSpacing: 60, hooks: address, poolManager: address },
       positions: [], platformFeeBps: 30, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT, creatorFeeBps: 100,
-      initialBuy: "0.125", minimumInitialTokens: "123", additionalLiquidity: "1.999998", supply: "1000000000", actualStartValuationQuote: "1",
+      initialBuy: "0.125", minimumInitialTokens: "123", additionalLiquidity: "1.999998", supply: "1000000000", actualStartMarketCapUsd: "4998.25",
       quoteFunding: { maximum: "2.125", principal: "1.999998", refund: "0.000002" },
       roundingInventory: { recipient: FOUNDATION_DEAD_ADDRESS, tokenAmount: "0.000000000000000017", unrecoverable: true },
       transactions: [{ label: "Launch coin", to: address, chainId: 4663, value: "0", effect: "Local fixture" }] };

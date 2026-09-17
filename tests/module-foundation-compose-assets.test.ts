@@ -19,9 +19,10 @@ import {
 } from "@/lib/module-foundation/manifest";
 import type { FoundationConfiguration, FoundationLaunchDraft, FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
 
-const mocks = vi.hoisted(() => ({ availability: vi.fn(), infrastructure: vi.fn(), client: vi.fn(),
+const mocks = vi.hoisted(() => ({ availability: vi.fn(), infrastructure: vi.fn(), client: vi.fn(), startPrice: vi.fn(),
   getChainId: vi.fn(), getBlock: vi.fn(), getCode: vi.fn(), readContract: vi.fn() }));
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/server/module-foundation/start-price", () => ({ readFoundationStartPrice: mocks.startPrice }));
 // The fixed server admission boundary and RPC transport are mocked; all source, metadata and asset parsers run.
 vi.mock("@/lib/server/module-foundation/availability", () => ({ readFoundationAvailabilityResponse: mocks.availability }));
 vi.mock("@/lib/module-foundation/client", async importOriginal => ({
@@ -100,7 +101,7 @@ function accepted(entries: FoundationCatalogEntryV1[] = []) {
 function body(selections: FoundationModuleSelection[] = []) {
   const draft: FoundationLaunchDraft = { name: "Fixture coin", symbol: "FIX", description: "A source-bound technical fixture.",
     image: { url: "https://programmable.market/fixture.webp", sha256: hash("image") }, socialLinks: {}, quoteAsset: quote,
-    creatorFeeBps: 300, initialBuy: "0", startValuationQuote: "100000", additionalLiquidity: "0", modules: selections };
+    creatorFeeBps: 300, initialBuy: "0", additionalLiquidity: "0", modules: selections };
   return { account: creator, releaseDigest, tokenSalt, draft };
 }
 const request = (value: unknown) => new Request("http://localhost/api/module-foundation/compose", {
@@ -114,6 +115,12 @@ function predicted(metadata: FoundationMetadata) {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(now * 1000); vi.clearAllMocks();
   assets.clear(); for (const asset of [quote, first, second, third]) assets.set(asset, { code, decimals: asset === second ? 8 : 6 });
+  mocks.startPrice.mockImplementation(async (asset: { address: Address; decimals: number; codeHash: Hex }) => ({
+    chainId: 4663, quoteAsset: asset.address, quoteCodeHash: asset.codeHash, decimals: asset.decimals, targetMarketCapUsd: "5000",
+    checkpoint: { number: "1234", hash: checkpoint.blockHash, timestamp: String(now) },
+    price: { usd: { numerator: "2500", denominator: "1" }, source: "chainlink", observedAt: String(now - 10),
+      validUntil: String(now + 45), evidenceHash: hash("price"), heartbeatSeconds: 86400 },
+  }));
   mocks.availability.mockResolvedValue(accepted()); mocks.infrastructure.mockResolvedValue(checkpoint);
   mocks.getChainId.mockResolvedValue(4663);
   mocks.getBlock.mockResolvedValue({ number: checkpoint.blockNumber, hash: checkpoint.blockHash, timestamp: checkpoint.timestamp });
@@ -136,6 +143,26 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation compose BFF asset bindings", () => {
+  it("supplies the fixed market-cap reference and rejects a submitted valuation override", async () => {
+    const input = body();
+    const response = await POST(request(input)), result = await response.json();
+    expect(response.status).toBe(200);
+    expect(result.startPrice).toMatchObject({ targetMarketCapUsd: "5000", quoteAsset: quote, decimals: 6, quoteCodeHash: keccak256(code) });
+    mocks.startPrice.mockClear(); mocks.availability.mockClear();
+    const overridden = await POST(request({ ...input, draft: { ...input.draft, startValuationQuote: "2" } }));
+    expect(overridden.status).toBe(400);
+    expect(mocks.startPrice).not.toHaveBeenCalled();
+    expect(mocks.availability).not.toHaveBeenCalled();
+  });
+
+  it("does not prepare a launch when the automatic price is unavailable", async () => {
+    mocks.startPrice.mockRejectedValueOnce(new Error("A current price for this quote token is unavailable."));
+    const response = await POST(request(body()));
+    expect(response.status).toBe(400);
+    expect(predictions()).toHaveLength(0);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("current price") });
+  });
+
   it("binds actual ERC20 pins before one prediction and composes the real token, quote, creator and factory", async () => {
     const f = fixture(), input = body([f.selection]); mocks.availability.mockResolvedValue(accepted([f.entry]));
     const response = await POST(request(input)), result = await response.json();

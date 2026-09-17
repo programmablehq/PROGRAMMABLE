@@ -33,7 +33,7 @@ it("returns a current verified response after the old deadline and closes a stal
     const timer = setTimeout(() => resolve(Response.json(availableFixture())), 13_000);
     init.signal!.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal!.reason); }, { once: true });
   })));
-  const delayed = GET();
+  const delayed = GET(new Request("https://programmable.example/api/module-foundation"));
   await vi.advanceTimersByTimeAsync(13_000);
   const success = await delayed;
   expect(success.status).toBe(200);
@@ -45,7 +45,7 @@ it("returns a current verified response after the old deadline and closes a stal
   vi.stubGlobal("fetch", vi.fn((_url: URL, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
     init.signal!.addEventListener("abort", () => { abortedAt = Date.now() - startedAt; reject(init.signal!.reason); }, { once: true });
   })));
-  const stalled = GET().then(response => { settled = true; return response; });
+  const stalled = GET(new Request("https://programmable.example/api/module-foundation")).then(response => { settled = true; return response; });
   await vi.advanceTimersByTimeAsync(54_999);
   expect(settled).toBe(false);
   await vi.advanceTimersByTimeAsync(1);
@@ -102,5 +102,5 @@ it.each([true, false])("rejects a retained-token response at the default launch 
   const fetcher = vi.fn(async () => Response.json(value));
   vi.stubGlobal("fetch", fetcher);
   await expect(readFoundationAvailabilityResponse(fetcher)).rejects.toThrow("not bound to this request");
-  expect(await (await GET()).json()).toEqual(unavailableFoundation());
+  expect(await (await GET(new Request("https://programmable.example/api/module-foundation"))).json()).toEqual(unavailableFoundation());
 });
