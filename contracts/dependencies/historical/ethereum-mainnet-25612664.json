@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "chainId": 1,
+  "network": "ethereum-mainnet",
+  "source": {
+    "deployments": "https://developers.uniswap.org/deployments.json",
+    "generatedAt": "2026-07-15T22:25:40.000Z",
+    "sourceCommit": "37936185dee7decf681360ec799c124e0e034672"
+  },
+  "runtimeSnapshot": {
+    "blockNumber": 25612664,
+    "blockTimestamp": 1785017171,
+    "capturedAt": "2026-07-26",
+    "rpc": "https://ethereum-rpc.publicnode.com"
+  },
+  "contracts": {
+    "poolManager": {
+      "address": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "sourceRef": "v4-core@1.0.0",
+      "runtimeCodeHash": "0x785f1014552b7ce7d5fb7d0c970ca60edee94fd00425d7ca21609acac7ce1293"
+    },
+    "positionManager": {
+      "address": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+      "sourceRef": "v4-periphery@2656054",
+      "runtimeCodeHash": "0x77e36c08b19959a30dde46dec9abe6208e371ff2f56884a56fe1e1a53615528b"
+    },
+    "stateView": {
+      "address": "0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227",
+      "sourceRef": "2656054",
+      "runtimeCodeHash": "0xd7947778589cf4aac9a092a4451292a2056380941635ab7006d3c691d8dfd878"
+    },
+    "v4Quoter": {
+      "address": "0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203",
+      "sourceRef": "2656054",
+      "runtimeCodeHash": "0x06de58fa119c5deaa7a667fb92d3894e25d9160e62fb82c8d86d43b47eefe441"
+    },
+    "feeOnTransferDetector": {
+      "address": "0xbc708B192552e19A088b4C4B8772aEeA83bCf760",
+      "sourceRef": "v4-core@1.0.0",
+      "runtimeCodeHash": "0x4898c26473106647517091f89552ab2412b84110319e548a09bcbde464227d9e"
+    },
+    "erc7914Detector": {
+      "address": "0xc470458fc6A7E43471b31e6a2eB2612215A7102e",
+      "sourceRef": "320811c",
+      "runtimeCodeHash": "0x2ba3ad078beedcfbcd2f91681464c1bc1ba10b139b3d524d7cdf713ee15ae48a"
+    },
+    "permit2": {
+      "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "runtimeCodeHash": "0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131"
+    },
+    "universalRouter": {
+      "address": "0xd92A36B0000531EF3063dEd4De20A0783308446C",
+      "sourceRef": "d2d9c4a",
+      "runtimeCodeHash": "0x41ccd905c8e4de29ce9536ff49233b79e3085a0987d490664e703ee1e7b1dc49"
+    },
+    "continuousClearingAuctionFactory": {
+      "address": "0x000000001F26a0044BaA66024e7b6599c61963F8",
+      "version": "2.1",
+      "runtimeCodeHash": "0xa1d2a90564f4f63580b25de42efaff92505c254b00fc666f65ab38126cce5cfa"
+    },
+    "liquidityLauncher": {
+      "address": "0x00004c4ccc709Ef590F7C81102C0689F0263D4e9",
+      "version": "3.0",
+      "runtimeCodeHash": "0x672007315147b9202d825c5a4f5fed556179de55a89d8052f64d1c49ef366ed6"
+    },
+    "lbpStrategy": {
+      "address": "0x49380c4EfaB1b491006aF7FabAB8B3459F0E6000",
+      "version": "3.1",
+      "runtimeCodeHash": "0x4eb139800b68450186721d392545ee34ae38a749b83e9029825a480f139db0ec"
+    },
+    "tokenSplitter": {
+      "address": "0x8B7DCeb5639DB986FCf86606C74e6300C40FE3cd",
+      "version": "3.0",
+      "runtimeCodeHash": "0x3373016823b274303947e411171478087acc3d1e844c649bc9b84e69de685d62"
+    },
+    "uerc20Factory": {
+      "address": "0x000000e200088D55C39a11F609E5F667729ad49b",
+      "version": "2.0",
+      "runtimeCodeHash": "0x9f042af1533641f048ced56b55898d9e87b2ccb0ec6854292e2cd8ea733e6aeb"
+    }
+  },
+  "notice": "This is a reproducibility snapshot, not production approval. Recheck official deployments and runtime bytecode immediately before any deployment."
+}

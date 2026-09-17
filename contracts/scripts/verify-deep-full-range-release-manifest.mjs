@@ -28,6 +28,7 @@ import {
 } from "./deep-oracle-growth-sequence.mjs";
 import { validateDeepLifecycleConfirmationDepth } from "./deep-lifecycle-confirmations.mjs";
 import { deepReleaseSourceTargets } from "./deep-release-source-targets.mjs";
+import { readHistoricalMainnetDependencySnapshot } from "./historical-mainnet-dependency-snapshot.mjs";
 
 const root = path.resolve(import.meta.dirname, "..", "..");
 const contractsRoot = path.join(root, "contracts");
@@ -40,11 +41,6 @@ const appManifestPath = path.join(
   contractsRoot,
   "config",
   "app-deployments.v1.json",
-);
-const dependencySnapshotPath = path.join(
-  contractsRoot,
-  "dependencies",
-  "ethereum-mainnet.json",
 );
 const releaseSchemaPath = path.join(
   contractsRoot,
@@ -3088,7 +3084,7 @@ async function verifyLiveRelease(release, appRelease, clients, artifacts) {
 const release = await readJson(releasePath);
 const releaseSchema = await readJson(releaseSchemaPath);
 const appManifest = await readJson(appManifestPath);
-const dependencySnapshot = await readJson(dependencySnapshotPath);
+const dependencySnapshot = readHistoricalMainnetDependencySnapshot();
 const lifecycle = await readCanonicalLifecycleEvidence(release);
 const appRelease = appManifest.production?.launchModelReleases?.deep;
 
