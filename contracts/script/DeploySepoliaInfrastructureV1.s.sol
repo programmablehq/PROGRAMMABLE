@@ -24,8 +24,8 @@ contract DeploySepoliaInfrastructureV1 is Script {
     address internal constant POSITION_MANAGER = 0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4;
     address internal constant STATE_VIEW = 0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C;
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-    address internal constant LIQUIDITY_LAUNCHER = 0x00004c4ccc709Ef590F7C81102C0689F0263D4e9;
-    address internal constant LBP_STRATEGY = 0x96641d91e223c766F45b19d09494F5925C3cE000;
+    address internal constant LIQUIDITY_LAUNCHER = 0x0000FffFBE8efE702c8703aE3477FF5dE3d319C0;
+    address internal constant LBP_STRATEGY = 0x95434E898Af471945Cab33D5064d2aC1A6Ba2000;
     address internal constant CCA_FACTORY = 0x000000001F26a0044BaA66024e7b6599c61963F8;
     address internal constant UERC20_FACTORY = 0x000000e200088D55C39a11F609E5F667729ad49b;
 
@@ -36,9 +36,9 @@ contract DeploySepoliaInfrastructureV1 is Script {
     bytes32 internal constant STATE_VIEW_CODEHASH = 0xaaed3db8eb8ebde8014ce4c8a3938496687f4c6374e17a7d735288f6c65ceb9e;
     bytes32 internal constant PERMIT2_CODEHASH = 0x96d9f5c3f0fb0423426b7f970186235b7347027f4e5c19c40c412b7d97fc3751;
     bytes32 internal constant LIQUIDITY_LAUNCHER_CODEHASH =
-        0x672007315147b9202d825c5a4f5fed556179de55a89d8052f64d1c49ef366ed6;
+        0x4a586d925c9d59ece13ce2239ebd7dea9ee725f9d33c6667e0fd16ae8d977d80;
     bytes32 internal constant LBP_STRATEGY_CODEHASH =
-        0x273ab7765154c688e0105fed1d25c6861efd2f11ad0be5806d7592cfd723341c;
+        0x077959d7cd725a2ec1c0e73acd47b38d5227a1a22e75a83d4dbf7905d7fff02f;
     bytes32 internal constant CCA_FACTORY_CODEHASH = 0xa1d2a90564f4f63580b25de42efaff92505c254b00fc666f65ab38126cce5cfa;
     bytes32 internal constant UERC20_FACTORY_CODEHASH =
         0x9f042af1533641f048ced56b55898d9e87b2ccb0ec6854292e2cd8ea733e6aeb;

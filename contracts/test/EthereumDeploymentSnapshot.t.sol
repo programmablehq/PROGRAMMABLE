@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import { Test } from "forge-std/Test.sol";
+import { CurrentOfficialDeploymentSnapshot } from "./shared/CurrentOfficialDeploymentSnapshot.sol";
 
 interface ILBPStrategyConfiguration {
     function poolManager() external view returns (address);
@@ -65,5 +66,12 @@ contract EthereumDeploymentSnapshotTest is Test {
             address(0),
             "CCA protocol fee controller"
         );
+    }
+}
+
+contract EthereumCurrentDeploymentSnapshotTest is CurrentOfficialDeploymentSnapshot {
+    function setUp() public {
+        string memory rpc = vm.envOr("ETHEREUM_RPC_URL", string("https://eth.drpc.org"));
+        _selectCurrentSnapshot("./dependencies/ethereum-mainnet.json", rpc, 1, 13);
     }
 }
