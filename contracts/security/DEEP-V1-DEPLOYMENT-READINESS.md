@@ -59,8 +59,8 @@ the hook's split-vault factory and the automation coordinator's growth-vault fac
 
 ## Mainnet dependencies
 
-The current pinned snapshot is
-[`ethereum-mainnet.json`](../dependencies/ethereum-mainnet.json). It was taken at block `25,612,664` from the official
+The historical release snapshot is
+[`ethereum-mainnet-25612664.json`](../dependencies/historical/ethereum-mainnet-25612664.json). It was taken at block `25,612,664` from the official
 Uniswap deployment dataset generated on `2026-07-15T22:25:40.000Z` from commit
 `37936185dee7decf681360ec799c124e0e034672`.
 

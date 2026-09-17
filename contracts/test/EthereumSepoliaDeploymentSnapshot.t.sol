@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import { Test } from "forge-std/Test.sol";
+import { CurrentOfficialDeploymentSnapshot } from "./shared/CurrentOfficialDeploymentSnapshot.sol";
 
 import { DirectLiquidityLauncherV1 } from "../src/DirectLiquidityLauncherV1.sol";
 import { BoundedDynamicFeeHookFactoryV1 } from "../src/BoundedDynamicFeeHookFactoryV1.sol";
@@ -96,5 +97,12 @@ contract EthereumSepoliaDeploymentSnapshotTest is Test {
         assertEq(PlatformFeeHookFactoryV1(PLATFORM_FEE_HOOK_FACTORY).REQUIRED_HOOK_FLAGS(), 8260);
         assertEq(BoundedDynamicFeeHookFactoryV1(BOUNDED_DYNAMIC_FEE_FACTORY).ALL_HOOK_MASK(), (1 << 14) - 1);
         assertEq(BoundedDynamicFeeHookFactoryV1(BOUNDED_DYNAMIC_FEE_FACTORY).REQUIRED_HOOK_FLAGS(), 12_484);
+    }
+}
+
+contract EthereumSepoliaCurrentDeploymentSnapshotTest is CurrentOfficialDeploymentSnapshot {
+    function setUp() public {
+        string memory rpc = vm.envOr("SEPOLIA_RPC_URL", string("https://sepolia.drpc.org"));
+        _selectCurrentSnapshot("./dependencies/ethereum-sepolia.json", rpc, 11_155_111, 11);
     }
 }
