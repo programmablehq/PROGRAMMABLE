@@ -130,10 +130,10 @@ export async function revalidateFoundationWalletStep(value: FoundationWalletPrep
     if (sequence.kind === "launch" && foundationFactoryVersion(current) === "v2") {
       const checked = await simulateFoundationV2Launch({ client: binding.client, binding: current, parameters: sequence.parameters,
         steps: remaining, checkpoint, checks, expected: sequence.result, price: sequence.price });
-      if (sequence.steps.some(step => step.kind === "wrap")) await assertFoundationNativeBalance(binding.client, account, checked.simulation.steps, checkpoint.blockNumber);
+      if (sequence.steps.some(step => step.transaction.value > 0n)) await assertFoundationNativeBalance(binding.client, account, checked.simulation.steps, checkpoint.blockNumber);
     } else {
       const simulation = await simulateFoundationSequence(binding.client, remaining, checkpoint, checks);
-      if (sequence.steps.some(step => step.kind === "wrap")) await assertFoundationNativeBalance(binding.client, account, simulation.steps, checkpoint.blockNumber);
+      if (sequence.steps.some(step => step.transaction.value > 0n)) await assertFoundationNativeBalance(binding.client, account, simulation.steps, checkpoint.blockNumber);
     }
     const transaction = await estimateCurrentWalletStep(value, binding);
     binding.state = "ready";

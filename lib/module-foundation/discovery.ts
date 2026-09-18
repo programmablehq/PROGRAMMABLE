@@ -1,5 +1,6 @@
+import { decodeFoundationLaunchCall } from "./atomic-launch";
 import {
-  decodeAbiParameters, decodeEventLog, decodeFunctionData, encodeAbiParameters, encodeFunctionData, encodeFunctionResult,
+  decodeAbiParameters, decodeEventLog, encodeAbiParameters, encodeFunctionResult,
   getAbiItem, getAddress, isHex, keccak256, parseAbiParameters,
   type Address, type Hex, type PublicClient,
 } from "viem";
@@ -128,16 +129,11 @@ export async function discoverFoundationLaunch(input: {
   const hash = transactionHash(candidate);
   const mined = await client.getTransaction({ hash });
   if (!sameHex(mined.hash, hash) || !mined.to || !sameAddress(mined.to, binding.factory.address) || BigInt(mined.from) === 0n
-    || mined.value !== 0n || mined.blockNumber === null || !mined.blockHash || mined.blockNumber < binding.startBlock
+    || mined.blockNumber === null || !mined.blockHash || mined.blockNumber < binding.startBlock
     || mined.blockNumber > observedAt.blockNumber || mined.input.length > MAX_CALLDATA_BYTES * 2 + 2) {
     throw new Error("The candidate is not a mined transaction to the selected foundation factory.");
   }
-  const decoded = decodeFunctionData({ abi: factoryAbi, data: mined.input });
-  if (decoded.functionName !== "launch") throw new Error("The candidate transaction does not call foundation launch.");
-  const parameters = decoded.args[0];
-  if (!sameHex(encodeFunctionData({ abi: factoryAbi, functionName: "launch", args: [parameters] }), mined.input)) {
-    throw new Error("The launch calldata is not its exact canonical ABI encoding.");
-  }
+  const { parameters } = decodeFoundationLaunchCall(binding, { data: mined.input, value: mined.value });
   const [predictedToken, predictedHook] = await Promise.all([
     client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "predictTokenAddress",
       args: [mined.from, parameters.tokenSalt, parameters.metadata], blockNumber: mined.blockNumber }),

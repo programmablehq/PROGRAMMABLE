@@ -1,5 +1,8 @@
 "use client";
 
+import { foundationParseAmount } from "@/lib/module-foundation/price";
+import type { FoundationPoolKey } from "@/lib/module-foundation/route";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatUnits, getAddress, toHex, type Address, type Hex } from "viem";
@@ -11,6 +14,7 @@ import { presentFoundationCatalogV1 } from "@/lib/module-foundation/presentation
 import { FOUNDATION_HOST_ADAPTER_ID_V1 } from "@/lib/module-foundation/manifest";
 import { parseFoundationAssetPinsV1 } from "@/lib/module-foundation/assets";
 import { foundationMetadata, prepareFoundationLaunch, readFoundationQuote } from "@/lib/module-foundation/client";
+import { isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
 import { FOUNDATION_WETH, foundationSupportsEth } from "@/lib/module-foundation/native-funding";
 import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalog";
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
@@ -67,24 +71,28 @@ export function ModuleFoundationLaunchHost() {
       await session.acknowledgeResult(session.resolution.operationId, false);
       session.assertCurrent(account, context);
     }
-    if (uploads.current.get(`${account.toLowerCase()}:${draft.image.url}`) !== draft.image.sha256) throw new Error("Choose and upload the exact coin image for this wallet before preparing.");
+    if (!isFoundationDefaultImage(draft.image) && uploads.current.get(`${account.toLowerCase()}:${draft.image.url}`) !== draft.image.sha256) throw new Error("Choose and upload the exact coin image for this wallet before preparing.");
     const binding = await session.resolveAuthority();
     const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
     const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft }) });
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
     const composition = await response.json() as { error?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
-      moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice };
+      moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; pool: FoundationPoolKey } | null };
     if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
     const moduleAssetPins = parseFoundationAssetPinsV1(composition.moduleAssetPins);
     const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,
       modulePackageIds: draft.modules.map(item => item.id as Hex), moduleAssetPins });
     if (nativeCanonicalJson(nativeJson(composition.metadata)) !== nativeCanonicalJson(metadata)) throw new Error("The coin metadata changed. Review again.");
     session.assertCurrent(account, context);
+    const maximumEth = foundationParseAmount(draft.initialBuy, 18);
+    const ethFunding = composition.ethFunding ? { ...composition.ethFunding, maximumEth: BigInt(composition.ethFunding.maximumEth), quoteAmount: BigInt(composition.ethFunding.quoteAmount) } : undefined;
+    if ((maximumEth > 0n) !== Boolean(ethFunding) || (ethFunding && ethFunding.maximumEth !== maximumEth)) throw new Error("The ETH spending amount changed. Create the launch again.");
     const sequence = await prepareFoundationLaunch({ client: session.client, binding, account, tokenSalt,
       metadata, quote: draft.quoteAsset,
-      startPrice: composition.startPrice, initialBuy: draft.initialBuy, additionalLiquidity: draft.additionalLiquidity,
+      startPrice: composition.startPrice, initialBuy: ethFunding ? formatUnits(ethFunding.quoteAmount, composition.startPrice.decimals) : "0", additionalLiquidity: "0", ethFunding,
       creatorFeeBps: draft.creatorFeeBps, modules: composition.modules, slippageBps: 100 });
     session.assertCurrent(account, context);
+    if (sequence.steps.length !== 1 || sequence.steps[0].kind !== "launch") throw new Error("This launch could not be prepared as one transaction.");
     if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
     const quote: FoundationQuoteAsset = { address: sequence.quote.address, chainId: 4663, name: sequence.quote.name,
       symbol: sequence.quote.symbol, decimals: sequence.quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(sequence.quote), balance: formatUnits(sequence.quote.balance ?? 0n, sequence.quote.decimals) };
@@ -120,7 +128,9 @@ export function ModuleFoundationLaunchHost() {
     try {
       const verified = await verifyFoundationLaunchReceipt({ client: session.client, binding: sequence.binding, transactionHash: outcome.result.transactionHash,
         expected: { transaction: sequence.steps[outcome.stepIndex].transaction, parameters: sequence.parameters, result: sequence.result, metadataHash: sequence.metadataHash } });
-      return { ...outcome.result, tokenUrl: `/modules/${verified.details.token.address}?transaction=${outcome.result.transactionHash}`, metadataStatus: "stored", verificationStatus: "verified", operationComplete: true,
+      const tokenUrl = `/modules/${verified.details.token.address}?transaction=${outcome.result.transactionHash}`;
+      router.push(tokenUrl);
+      return { ...outcome.result, tokenUrl, metadataStatus: "stored", verificationStatus: "verified", operationComplete: true,
         pool: foundationPoolPresentation(verified.details), positions: foundationPositionPresentation(verified.details),
         message: "The coin metadata, launch pool and liquidity positions were verified in the confirmed transaction." };
     } catch {

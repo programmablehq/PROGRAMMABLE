@@ -6,7 +6,7 @@ import type { OpenConfigContext, OpenConfigSchema, OpenConfigValue } from "@/pac
 import type { ModuleEngineConfigurationArgument, ModuleEngineConfigurationComponent } from "@/lib/module-engine/catalog";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleAddress, moduleHash, moduleInteger } from "@/lib/module-mode/release";
-import { foundationFactoryAbi, foundationTokenAbi } from "./abi";
+import { foundationFactoryNativeAbi, foundationTokenAbi } from "./abi";
 import { readFoundationModulePackages } from "./metadata";
 import {
   assertFoundationInfrastructure, assertFoundationPool, readFoundationPoolAssetPins, readFoundationQuote, simulateFoundationSequence,
@@ -356,10 +356,13 @@ export function decodeFoundationLaunchSelectionsV1(input: {
   assertBoundFoundationCatalogV1(input.catalog);
   foundationRequire(/^0x(?:[0-9a-fA-F]{2})+$/.test(input.calldata) && input.calldata.length <= 2_097_154,
     "FOUNDATION_LAUNCH_CALLDATA_LIMIT", "Restore bounded canonical launch calldata.");
-  const decoded = decodeFunctionData({ abi: foundationFactoryAbi, data: input.calldata });
-  foundationRequire(decoded.functionName === "launch", "FOUNDATION_LAUNCH_CALLDATA", "The transaction does not call this foundation factory's launch entrypoint.");
+  const decoded = decodeFunctionData({ abi: foundationFactoryNativeAbi, data: input.calldata });
+  foundationRequire((decoded.functionName === "launch" || decoded.functionName === "launchWithEth"), "FOUNDATION_LAUNCH_CALLDATA", "The transaction does not call this foundation factory's launch entrypoint.");
   const parameters = decoded.args[0];
-  foundationRequire(sameHex(encodeFunctionData({ abi: foundationFactoryAbi, functionName: "launch", args: [parameters] }), input.calldata),
+  const canonical = decoded.functionName === "launchWithEth"
+    ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [parameters, decoded.args[1]] })
+    : encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launch", args: [parameters] });
+  foundationRequire(sameHex(canonical, input.calldata),
     "FOUNDATION_LAUNCH_CALLDATA_NONCANONICAL", "The supplied launch bytes are not canonical ABI calldata.");
   foundationRequire(parameters.modules.length <= 8 && (!input.packageIds || input.packageIds.length === parameters.modules.length),
     "FOUNDATION_MODULE_LIMIT", "Restore one package identity for each of at most eight original modules.");

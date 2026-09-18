@@ -1,3 +1,4 @@
+import { assertFoundationLaunchCall } from "./atomic-launch";
 import {
   BaseError, ContractFunctionRevertedError, decodeEventLog, decodeFunctionResult, encodeAbiParameters,
   encodeFunctionData, encodeFunctionResult, erc20Abi, getAddress, keccak256, parseAbi, parseAbiParameters, toEventSelector,
@@ -18,7 +19,7 @@ import {
 } from "./constants";
 import { FOUNDATION_MAX_TICK, FOUNDATION_MIN_TICK } from "./price";
 import { foundationPoolId, type FoundationPool } from "./route";
-import { assertFoundationV2Result, foundationFactoryAbiFor, foundationFactoryVersion, foundationPositionAbi, readFoundationLaunchRecord } from "./protocol";
+import { assertFoundationV2Result, foundationFactoryVersion, foundationPositionAbi, readFoundationLaunchRecord } from "./protocol";
 
 // These additions follow contracts/src/module-foundation and the pinned PositionManager's PositionInfoLibrary.
 export const foundationReadbackAbi = parseAbi([
@@ -306,8 +307,8 @@ export async function verifyFoundationLaunchReceipt(input: {
 }) {
   const { client, binding, expected, transactionHash } = input;
   const planned = expected.transaction, p = expected.parameters;
-  if (!sameAddress(planned.to, binding.factory.address) || planned.value !== 0n
-    || !sameHex(planned.data, encodeFunctionData({ abi: foundationFactoryAbiFor(binding), functionName: "launch", args: [p] }))
+  assertFoundationLaunchCall(binding, planned, p);
+  if (!sameAddress(planned.to, binding.factory.address)
     || !sameHex(expected.metadataHash, keccak256(encodeAbiParameters(foundationMetadataParameters, [p.metadata])))) {
     throw new Error("The expected launch transaction or metadata does not match its reviewed parameters.");
   }

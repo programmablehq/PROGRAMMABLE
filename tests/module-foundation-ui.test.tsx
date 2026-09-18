@@ -47,11 +47,11 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   });
   it("offers a base coin without an editable starting valuation", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    for (const label of ["Description", "X / Twitter", "Initial buy", "Review launch"]) expect(html).toContain(label);
+    for (const label of ["Description", "X / Twitter", "Initial buy", "Create Launch"]) expect(html).toContain(label);
     expect(html).not.toContain('name="startValuationQuote"');
     expect(html).not.toContain("Starting valuation");
     expect(html).not.toContain("foundation-valuation");
-    expect(html).toContain("Enter 0 to launch without an initial buy");
+    expect(html).toContain("Enter 0 to launch without buying");
     expect(html).toContain("Your coin works with no additional modules");
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);
@@ -61,8 +61,8 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).not.toContain("Add creator liquidity");
     expect(html).not.toContain('name="additionalLiquidity"');
     expect(html).toContain("ETH · Ethereum");
-    expect(html).toContain("existing WETH is used first");
-    expect(html).toContain("only ETH for network fees");
+    expect(html).toContain("Launch and buy share one wallet confirmation");
+    expect(html).toContain("Enter 0 to launch without buying");
   });
   it("shows exact V2 principal, refund and token rounding separately from fee claims before the wallet action", () => {
     const review: FoundationLaunchReview = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
