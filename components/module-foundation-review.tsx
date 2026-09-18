@@ -97,7 +97,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
     <div className={styles.simulated}><CheckIcon size={16} aria-hidden="true" /><span>Simulated at block {review.simulationBlock}</span></div>
     <dl className={styles.rows}>
       <div><dt>Supply</dt><dd>{review.supply} {symbol}</dd></div>
-      <div><dt>Starting valuation</dt><dd>{review.actualStartValuationQuote} {review.quote.symbol}</dd></div>
+      <div><dt>Starting market cap</dt><dd>{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(review.actualStartMarketCapUsd))}</dd></div>
       <div><dt>Initial buy</dt><dd>{review.initialBuy} {review.quote.symbol}</dd></div>
       <div><dt>Minimum from initial buy</dt><dd>{review.minimumInitialTokens} {symbol}</dd></div>
       <div><dt>Additional creator liquidity</dt><dd>{review.additionalLiquidity} {review.quote.symbol}</dd></div>

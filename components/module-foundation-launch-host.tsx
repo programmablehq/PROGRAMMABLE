@@ -17,6 +17,7 @@ import type { FoundationContractModule } from "@/lib/module-foundation/abi";
 import { verifyFoundationLaunchReceipt } from "@/lib/module-foundation/readback";
 import { foundationLaunchPositionPresentation, foundationPoolPresentation, foundationPositionPresentation } from "@/lib/module-foundation/ui-readback";
 import { foundationStepSummary } from "@/lib/module-foundation/wallet";
+import type { FoundationStartPrice } from "@/lib/module-foundation/start-price";
 import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationImage,
   type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationQuoteAsset, type FoundationTransactionResult } from "@/lib/module-foundation/ui-types";
 
@@ -62,7 +63,7 @@ export function ModuleFoundationLaunchHost() {
     const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft }) });
     const composition = await response.json() as { error?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
-      moduleAssetPins: unknown; metadata: unknown };
+      moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice };
     if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
     const moduleAssetPins = parseFoundationAssetPinsV1(composition.moduleAssetPins);
     const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,
@@ -71,7 +72,7 @@ export function ModuleFoundationLaunchHost() {
     session.assertCurrent(account, context);
     const sequence = await prepareFoundationLaunch({ client: session.client, binding, account, tokenSalt,
       metadata, quote: draft.quoteAsset,
-      startValuationQuote: draft.startValuationQuote, initialBuy: draft.initialBuy, additionalLiquidity: draft.additionalLiquidity,
+      startPrice: composition.startPrice, initialBuy: draft.initialBuy, additionalLiquidity: draft.additionalLiquidity,
       creatorFeeBps: draft.creatorFeeBps, modules: composition.modules, slippageBps: 100 });
     session.assertCurrent(account, context);
     if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
@@ -97,9 +98,9 @@ export function ModuleFoundationLaunchHost() {
       creatorFeeBps: draft.creatorFeeBps, initialBuy: draft.initialBuy,
       minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
       additionalLiquidity: formatUnits(sequence.result.factoryVersion === "v2" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
-      actualStartValuationQuote: formatUnits(sequence.price.actualValuationQuote.numerator / sequence.price.actualValuationQuote.denominator, quote.decimals),
+      actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
       transactions: sequence.steps.map(foundationStepSummary), notes: ["The initial buy is optional. No creator quote is required for the permanent base position.",
-        "The starting valuation is denominated in the selected quote token. It is rounded to the pool's supported tick."] };
+        "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };
     prepared.current.set(review, sequence); return review;
   }
   async function resultFrom(outcome: FoundationExecutionResult): Promise<FoundationTransactionResult> {

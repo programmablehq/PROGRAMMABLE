@@ -76,7 +76,7 @@ async function fetchJson(url: string, options: AnyQuoteReadinessOptionsV1, body?
   } finally { clearTimeout(timer); }
 }
 
-async function context(options: AnyQuoteReadinessOptionsV1) {
+async function context(options: AnyQuoteReadinessOptionsV1, verifyAmmInfrastructure = true) {
   const now = options.now ?? BigInt(Math.floor(Date.now() / 1000));
   const rpcs = options.rpcs ?? productionTradeRpcsV1();
   const agreed = agreedTradeRpcV1(rpcs, { preserveExecutionReverts: true });
@@ -114,7 +114,7 @@ async function context(options: AnyQuoteReadinessOptionsV1) {
   const pin = async (address: Address, hash: Hex) => {
     if (keccak256(await code(address)).toLowerCase() !== hash.toLowerCase()) throw new AnyQuoteErrorV1("INFRASTRUCTURE_RUNTIME_MISMATCH");
   };
-  await Promise.all([
+  if (verifyAmmInfrastructure) await Promise.all([
     pin(INFRA.universalRouter, INFRA.universalRouterCodeHash), pin(INFRA.poolManager, INFRA.poolManagerCodeHash),
     pin(INFRA.stateView, INFRA.stateViewCodeHash), pin(INFRA.v4Quoter, INFRA.v4QuoterCodeHash),
   ]);
@@ -409,6 +409,21 @@ export function qualifyAnyQuoteDepthV1(smallIn: bigint, smallOut: bigint, largeI
   const base = smallOut * largeIn, observed = largeOut * smallIn;
   const difference = base > observed ? base - observed : observed - base;
   if (difference * 10_000n > base * 200n) throw new AnyQuoteErrorV1("MARKET_PRICE_IMPACT_TOO_HIGH");
+}
+
+/** A USD reference does not require an engine release or an ETH swap route.
+ * Tokens without an authoritative feed retain the existing qualified AMM policy. */
+export async function readAnyQuoteUsdPriceV1(input: { quoteAsset: string }, options: AnyQuoteReadinessOptionsV1 = {}) {
+  const quoteAsset = anyQuoteAddressV1(input.quoteAsset), ctx = await context(options, false);
+  if (await ctx.code(quoteAsset) === "0x") throw new AnyQuoteErrorV1("TOKEN_CONTRACT_NOT_FOUND", "incompatible");
+  const decimals = Number(await ctx.call(quoteAsset, "function decimals() view returns (uint8)"));
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) throw new AnyQuoteErrorV1("UNSUPPORTED_TOKEN_DECIMALS", "incompatible");
+  const price = await trustedPrice(quoteAsset, ctx, options);
+  if (price) return { chainId: 4663 as const, quoteAsset, decimals, checkpoint: ctx.checkpoint, price };
+  const readiness = await assessAnyQuoteAssetV1(input, options);
+  if (readiness.status !== "compatible") throw new AnyQuoteErrorV1(readiness.code, readiness.status);
+  return { chainId: readiness.chainId, quoteAsset: readiness.quoteAsset, decimals: readiness.token.decimals,
+    checkpoint: readiness.checkpoint, price: readiness.price };
 }
 
 export async function assessAnyQuoteAssetV1(input: { quoteAsset: string; probeEthAmount?: bigint }, options: AnyQuoteReadinessOptionsV1 = {}): Promise<AnyQuoteReadinessV1> {

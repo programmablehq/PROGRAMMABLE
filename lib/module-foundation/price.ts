@@ -35,12 +35,15 @@ export function foundationValuationAtTick(tick: number, tokenIsCurrency0: boolea
 }
 
 /** Quote-denominated valuation; no USD assumption or dependency on a third-asset route. */
-export function planFoundationPrice(input: { token: Address; quote: Address; valuationQuoteRaw: bigint; additionalQuoteRaw?: bigint }) {
+export function planFoundationPrice(input: { token: Address; quote: Address; valuationQuoteRaw: bigint | { numerator: bigint; denominator: bigint }; additionalQuoteRaw?: bigint }) {
   const token = getAddress(input.token), quote = getAddress(input.quote);
-  if (token === quote || input.valuationQuoteRaw <= 0n || input.valuationQuoteRaw > (1n << 127n) - 1n) throw new Error("Invalid pool price.");
+  const target = typeof input.valuationQuoteRaw === "bigint"
+    ? { numerator: input.valuationQuoteRaw, denominator: 1n } : input.valuationQuoteRaw;
+  if (token === quote || target.numerator <= 0n || target.denominator <= 0n
+    || target.numerator > ((1n << 127n) - 1n) * target.denominator) throw new Error("Invalid pool price.");
   const tokenIsCurrency0 = BigInt(token) < BigInt(quote);
   const [ratioN, ratioD] = tokenIsCurrency0
-    ? [input.valuationQuoteRaw, FOUNDATION_SUPPLY] : [FOUNDATION_SUPPLY, input.valuationQuoteRaw];
+    ? [target.numerator, FOUNDATION_SUPPLY * target.denominator] : [FOUNDATION_SUPPLY * target.denominator, target.numerator];
   const compare = (tick: number) => foundationSqrtPriceAtTick(tick) ** 2n * ratioD - ratioN * Q192;
   const min = FOUNDATION_MIN_TICK + FOUNDATION_TICK_SPACING;
   const max = FOUNDATION_MAX_TICK - FOUNDATION_TICK_SPACING;
@@ -53,7 +56,7 @@ export function planFoundationPrice(input: { token: Address; quote: Address; val
   const lower = Math.floor(lo / FOUNDATION_TICK_SPACING) * FOUNDATION_TICK_SPACING;
   const candidates = [...new Set([Math.max(min, lower), Math.min(max, lower + FOUNDATION_TICK_SPACING)])].map(tick => {
     const valuation = foundationValuationAtTick(tick, tokenIsCurrency0);
-    return { tick, valuation, error: abs(valuation.numerator - input.valuationQuoteRaw * valuation.denominator) };
+    return { tick, valuation, error: abs(valuation.numerator * target.denominator - target.numerator * valuation.denominator) };
   }).sort((a, b) => {
     const difference = a.error * b.valuation.denominator - b.error * a.valuation.denominator;
     return difference < 0n ? -1 : difference > 0n ? 1 : a.tick - b.tick;
