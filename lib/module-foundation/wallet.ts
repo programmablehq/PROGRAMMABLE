@@ -8,6 +8,7 @@ import { decodeFoundationLaunchSelectionsV1, readFoundationActionRuntimeV1, reva
 import type { FoundationCatalogV1 } from "./catalog";
 import { FOUNDATION_INFRASTRUCTURE } from "./constants";
 import { refreshFoundationAssetsV1 } from "./assets";
+import { assertFoundationNativeBalance } from "./native-funding";
 import { foundationHookAbi } from "./abi";
 import { foundationFactoryVersion } from "./protocol";
 
@@ -62,7 +63,7 @@ export function bindFoundationWalletStep(input: Omit<PrivatePreparation, "state"
   const transaction: ModuleNativeWalletTransaction = {
     chainId: 4663, ...step.transaction, value: toHex(step.transaction.value),
     gas: toHex(step.gasUsed * 120n / 100n + 15_000n),
-    action: step.kind === "claim" || step.kind === "module-action" ? "manage" : step.kind,
+    action: step.kind === "wrap" || step.kind === "claim" || step.kind === "module-action" ? "manage" : step.kind,
     description: step.effect,
   };
   const value = Object.freeze({ sourceKind: "module-foundation-v1" as const, account: sequence.account,
@@ -127,9 +128,13 @@ export async function revalidateFoundationWalletStep(value: FoundationWalletPrep
       : sequence.balanceChecks;
     // Prior approved steps are omitted. Every remaining operation is simulated against fresh real balances and allowances.
     if (sequence.kind === "launch" && foundationFactoryVersion(current) === "v2") {
-      await simulateFoundationV2Launch({ client: binding.client, binding: current, parameters: sequence.parameters,
+      const checked = await simulateFoundationV2Launch({ client: binding.client, binding: current, parameters: sequence.parameters,
         steps: remaining, checkpoint, checks, expected: sequence.result, price: sequence.price });
-    } else await simulateFoundationSequence(binding.client, remaining, checkpoint, checks);
+      if (sequence.steps.some(step => step.kind === "wrap")) await assertFoundationNativeBalance(binding.client, account, checked.simulation.steps, checkpoint.blockNumber);
+    } else {
+      const simulation = await simulateFoundationSequence(binding.client, remaining, checkpoint, checks);
+      if (sequence.steps.some(step => step.kind === "wrap")) await assertFoundationNativeBalance(binding.client, account, simulation.steps, checkpoint.blockNumber);
+    }
     const transaction = await estimateCurrentWalletStep(value, binding);
     binding.state = "ready";
     return transaction;

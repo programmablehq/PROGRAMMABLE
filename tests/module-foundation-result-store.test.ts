@@ -60,6 +60,16 @@ describe("durable foundation transaction results", () => {
     expect(readFoundationResolution(other)).toBeNull();
   });
 
+  it("retains an ETH conversion as a launch prerequisite across reload", async () => {
+    const conversion = { operationKind: "launch", stepKind: "wrap" } as const;
+    const result = writeFoundationResolution(pending, receipt, conversion);
+    vi.resetModules();
+    const reloaded = await import("@/lib/module-foundation/result-store");
+    expect(reloaded.readFoundationResolution(account)?.metadata).toEqual(conversion);
+    await reloaded.acknowledgeFoundationResolution(account, result.operationId);
+    expect(reloaded.readFoundationResolution(account)).toBeNull();
+  });
+
   it("retains reverted and legacy unknown-step outcomes without inventing completion metadata", () => {
     expect(writeFoundationResolution({ ...pending, transactionHash: null }, { ...receipt, status: "reverted" }))
       .toMatchObject({ status: "reverted", transactionHash: txHash });

@@ -133,10 +133,10 @@ export function useFoundationSession(token?: Address) {
               ? `${step.label} is confirmed onchain. Settlement finality is checked separately.`
               : `${step.label} reverted. Network gas may have been charged.` };
           if (outcome.receipt.status === "reverted" || index === sequence.steps.length - 1) return outcome;
-          // The reviewed sequence already authorizes continuing after each successful approval.
-          // Only intermediate approvals are acknowledged here; the final outcome remains durable.
+          // The reviewed sequence already authorizes continuing after each successful approval or ETH conversion.
+          // Only intermediate prerequisites are acknowledged here; the final outcome remains durable.
           const saved = readFoundationResolution(sequence.account);
-          if (step.kind !== "approve" || !saved || saved.transactionHash.toLowerCase() !== hash.toLowerCase()) throw new Error("Review the saved transaction before continuing.");
+          if ((step.kind !== "approve" && step.kind !== "wrap") || !saved || saved.transactionHash.toLowerCase() !== hash.toLowerCase()) throw new Error("Review the saved transaction before continuing.");
           await acknowledgeFoundationResolution(sequence.account, saved.operationId);
         } catch {
           outcome.result = outcome.receipt ? { ...outcome.result, message: "The exact transaction is confirmed. Review its saved result before continuing the remaining steps." }
@@ -188,7 +188,9 @@ export function FoundationSessionStatus({ session, editingNewLaunch = false }: {
     {!session.progress && resolved ? <details className={styles.savedResult} open={!editingNewLaunch} aria-label="Saved transaction result"><summary>{editingNewLaunch
       ? resolved.status === "success" ? "Previous transaction confirmed" : "Previous transaction reverted"
       : resolved.status === "success" ? "Your transaction is confirmed" : "Your transaction reverted"}</summary>
-      <p>{resolved.status === "success" && resolved.metadata?.stepKind === "approve"
+      <p>{resolved.status === "success" && resolved.metadata?.stepKind === "wrap"
+        ? "Your ETH was converted to WETH and is in your wallet. Review the launch again to continue; the converted amount will be used first."
+        : resolved.status === "success" && resolved.metadata?.stepKind === "approve"
         ? "The approval is confirmed. Review the remaining operation with current balances before continuing."
         : resolved.status === "success" ? editingNewLaunch ? "You can configure a new coin below. Your previous transaction is available here."
           : `Your ${resolved.metadata?.stepKind === "launch" ? "launch" : "transaction"} is saved at block ${resolved.blockNumber}. You can return to its details after reloading this page.`

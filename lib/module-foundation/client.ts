@@ -3,6 +3,7 @@ import {
   fallback, getAddress, getCreate2Address, http, keccak256, toHex,
   type Address, type Hex, type PublicClient,
 } from "viem";
+import { assertFoundationNativeBalance, assertFoundationWrapRuntime, foundationWrappedAmount, prepareFoundationNativeFunding } from "./native-funding";
 import { robinhoodChain } from "@/lib/chains";
 import { hasUnsafeDisplayCharacters, isValidTokenSymbol, MAX_METADATA_URL_BYTES, MAX_TOKEN_DESCRIPTION_BYTES, MAX_TOKEN_NAME_BYTES, utf8ByteLength } from "@/lib/metadata-policy";
 import { moduleTokenMetadata, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
@@ -34,7 +35,7 @@ export interface FoundationTransaction {
   from: Address; to: Address; data: Hex; value: bigint;
 }
 export interface FoundationPreparedStep {
-  label: string; kind: "approve" | "launch" | "buy" | "sell" | "claim" | "module-action";
+  label: string; kind: "wrap" | "approve" | "launch" | "buy" | "sell" | "claim" | "module-action";
   transaction: FoundationTransaction; gasUsed: bigint;
   effect: string; spender?: Address; amount?: bigint;
 }
@@ -193,6 +194,7 @@ export async function simulateFoundationSequence(client: PublicClient, steps: re
     const code = await client.getCode({ address: check.token, blockNumber: checkpoint.blockNumber });
     if (code && code !== "0x") throw new Error("The predicted new token already exists.");
   }
+  await assertFoundationWrapRuntime(client, steps, checkpoint.blockNumber);
   const previousChecks = checks.filter(check => !check.newToken);
   const offset = previousChecks.length;
   const simulation = await client.simulateCalls({ account, blockNumber: checkpoint.blockNumber,
@@ -215,7 +217,9 @@ export async function simulateFoundationSequence(client: PublicClient, steps: re
   const balances = checks.map((check, index) => {
     const before = check.newToken ? 0n : balanceAt(previousChecks.indexOf(check));
     const after = balanceAt(offset + steps.length + index), delta = after - before;
-    if ((check.delta !== undefined && delta !== check.delta) || (check.minimumDelta !== undefined && delta < check.minimumDelta)) {
+    const wrapped = steps.some(step => step.kind === "wrap" && getAddress(step.transaction.to) === getAddress(check.token))
+      && getAddress(check.account) === getAddress(account) ? foundationWrappedAmount(steps, check.token) : 0n;
+    if ((check.delta !== undefined && delta !== check.delta + wrapped) || (check.minimumDelta !== undefined && delta < check.minimumDelta + wrapped)) {
       throw new Error("The actual simulated wallet balances do not meet the reviewed amounts.");
     }
     return { token: check.token, account: check.account, before, after, delta };
@@ -254,7 +258,7 @@ export async function simulateFoundationV2Launch(input: {
     if (getAddress(result.token) !== getAddress(input.expected.token) || getAddress(result.hook) !== getAddress(input.expected.hook)
       || result.poolId !== input.expected.poolId || result.baseTokenPrincipal !== input.price.base.principal
       || result.baseTokenRounding !== input.price.base.dust || result.creatorQuotePrincipal !== (input.price.creator?.principal ?? 0n)
-      || simulation.balances[0]?.delta !== result.actualQuoteRefund - input.parameters.initialBuyQuoteAmount - input.parameters.additionalQuoteAmount
+      || simulation.balances[0]?.delta !== foundationWrappedAmount(input.steps, input.parameters.quote) + result.actualQuoteRefund - input.parameters.initialBuyQuoteAmount - input.parameters.additionalQuoteAmount
       || result.initialBuyTokenAmount !== simulation.balances[1]?.delta) throw new Error("The V2 simulated launch differs from its exact source, principal or wallet movement.");
     return result;
   };
@@ -294,7 +298,8 @@ export async function prepareFoundationLaunch(input: {
   if (priceBlock.hash !== startPrice.checkpoint.hash || priceBlock.timestamp !== BigInt(startPrice.checkpoint.timestamp)
     || BigInt(startPrice.checkpoint.number) > checkpoint.blockNumber) throw new Error("The starting price changed with chain state. Review again.");
   const funding = additionalQuoteAmount + initialBuyQuoteAmount;
-  if (funding > FOUNDATION_INT128_MAX || quote.balance === null || quote.balance < funding) throw new Error("Your quote-token balance does not cover this launch.");
+  if (funding > FOUNDATION_INT128_MAX) throw new Error("The initial buy exceeds the supported amount.");
+  const nativeFunding = await prepareFoundationNativeFunding({ client, account, quote, amount: funding, blockNumber: checkpoint.blockNumber });
   if (!Number.isInteger(input.slippageBps) || input.slippageBps < 1 || input.slippageBps > 1_000) throw new Error("Choose slippage between 0.01% and 10%.");
   const token = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "predictTokenAddress",
     args: [account, input.tokenSalt, input.metadata], blockNumber: checkpoint.blockNumber });
@@ -324,18 +329,18 @@ export async function prepareFoundationLaunch(input: {
     { token, account, newToken: true, minimumDelta: p.initialBuyMinimumTokenAmount },
     ...moduleAssetPins.map(([asset]) => ({ token: asset, account, minimumDelta: 0n })),
   ];
-  let simulation = await simulateFoundationSequence(client, [...approvals, launchStep()], checkpoint, checks());
+  let simulation = await simulateFoundationSequence(client, [...nativeFunding, ...approvals, launchStep()], checkpoint, checks());
   let result: FoundationLaunchRecord = decodeFoundationLaunchResult(binding, simulation.results.at(-1)!.data);
   if (initialBuyQuoteAmount > 0n) {
     p.initialBuyMinimumTokenAmount = result.initialBuyTokenAmount * BigInt(10_000 - input.slippageBps) / 10_000n;
     if (p.initialBuyMinimumTokenAmount === 0n) throw new Error("The initial buy is too small for a positive minimum output.");
     if (foundationFactoryVersion(binding) === "v1") {
-      simulation = await simulateFoundationSequence(client, [...approvals, launchStep()], checkpoint, checks());
+      simulation = await simulateFoundationSequence(client, [...nativeFunding, ...approvals, launchStep()], checkpoint, checks());
       result = decodeFoundationLaunchResult(binding, simulation.results.at(-1)!.data);
     }
   }
   if (foundationFactoryVersion(binding) === "v2") {
-    const checked = await simulateFoundationV2Launch({ client, binding, parameters: p, steps: [...approvals, launchStep()], checkpoint,
+    const checked = await simulateFoundationV2Launch({ client, binding, parameters: p, steps: [...nativeFunding, ...approvals, launchStep()], checkpoint,
       checks: checks(), expected: { token, hook: hook.address, poolId }, price });
     result = checked.result; simulation = checked.simulation;
   }
@@ -343,6 +348,7 @@ export async function prepareFoundationLaunch(input: {
     || result.poolId !== poolId || result.basePositionId === 0n || result.initialBuyTokenAmount < p.initialBuyMinimumTokenAmount
     || result.initialBuyTokenAmount !== simulation.balances[1].delta
     || (additionalQuoteAmount > 0n) !== (result.creatorPositionId > 0n)) throw new Error("The simulated launch does not match its plan.");
+  if (nativeFunding.length) await assertFoundationNativeBalance(client, account, simulation.steps, checkpoint.blockNumber);
   // Mining and simulation can consume the reference lifetime. Never present an expired review.
   parseFoundationStartPrice(startPrice, quote);
   const priceExpiry = BigInt(startPrice.price.validUntil);
