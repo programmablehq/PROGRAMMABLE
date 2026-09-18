@@ -8,7 +8,7 @@ const SCHEMA = "programmable.foundation.resolution.v1" as const;
 export const FOUNDATION_RESOLUTION_EVENT = "programmable:foundation-resolution-change";
 
 export interface FoundationResolutionMetadata {
-  stepKind: "approve" | "launch" | "buy" | "sell" | "claim" | "module-action";
+  stepKind: "wrap" | "approve" | "launch" | "buy" | "sell" | "claim" | "module-action";
   operationKind: "launch" | "trade" | "claim" | "module-action";
   token?: Address;
 }
@@ -60,12 +60,12 @@ function metadata(value: unknown): FoundationResolutionMetadata | undefined {
   if (value === undefined) return undefined;
   const item = object(value);
   if (typeof item.stepKind !== "string" || typeof item.operationKind !== "string"
-    || !["approve", "launch", "buy", "sell", "claim", "module-action"].includes(item.stepKind)
+    || !["wrap", "approve", "launch", "buy", "sell", "claim", "module-action"].includes(item.stepKind)
     || !["launch", "trade", "claim", "module-action"].includes(item.operationKind)) return invalid();
   const stepKind = item.stepKind as FoundationResolutionMetadata["stepKind"];
   const operationKind = item.operationKind as FoundationResolutionMetadata["operationKind"];
   const allowed = operationKind === "trade" ? ["approve", "buy", "sell"]
-    : operationKind === "launch" ? ["approve", "launch"]
+    : operationKind === "launch" ? ["wrap", "approve", "launch"]
       : operationKind === "module-action" ? ["approve", "module-action"] : ["claim"];
   if (!allowed.includes(stepKind)) return invalid();
   return Object.freeze({ stepKind, operationKind, ...(item.token === undefined ? {} : { token: address(item.token) }) });

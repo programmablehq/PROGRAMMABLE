@@ -21,6 +21,8 @@ export interface FoundationQuoteAsset {
   reason?: string;
   /** Human units, verified for the current wallet by the host. */
   balance?: string;
+  /** The host verified the canonical Robinhood WETH address, decimals and runtime. */
+  supportsNativeEth?: boolean;
 }
 
 export interface FoundationImage {

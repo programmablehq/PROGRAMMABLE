@@ -100,7 +100,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
       <div><dt>Starting market cap</dt><dd>{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(review.actualStartMarketCapUsd))}</dd></div>
       <div><dt>Initial buy</dt><dd>{review.initialBuy} {review.quote.symbol}</dd></div>
       <div><dt>Minimum from initial buy</dt><dd>{review.minimumInitialTokens} {symbol}</dd></div>
-      <div><dt>Additional creator liquidity</dt><dd>{review.additionalLiquidity} {review.quote.symbol}</dd></div>
+      {/[1-9]/.test(review.additionalLiquidity) ? <div><dt>Additional creator liquidity</dt><dd>{review.additionalLiquidity} {review.quote.symbol}</dd></div> : null}
       <div><dt>Launch wallet</dt><dd><FoundationAddress value={review.account} label="launch wallet" /></dd></div>
     </dl>
     {review.factoryVersion === "v2" ? <section className={styles.position} aria-labelledby="foundation-custody-title">
@@ -108,7 +108,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
       <p>The base LP NFT and any additional LP NFT shown in this review go directly to the burn address. The liquidity stays in the pool. You cannot withdraw it, transfer its NFT or collect proceeds belonging to that position.</p>
       <dl className={styles.rows}>
         <div><dt>Maximum wallet funding</dt><dd>{review.quoteFunding.maximum} {review.quote.symbol}</dd></div>
-        <div><dt>Additional liquidity committed</dt><dd>{review.quoteFunding.principal} {review.quote.symbol}</dd></div>
+        {/[1-9]/.test(review.quoteFunding.principal) ? <div><dt>Additional liquidity committed</dt><dd>{review.quoteFunding.principal} {review.quote.symbol}</dd></div> : null}
         <div><dt>Funding returned</dt><dd>{review.quoteFunding.refund} {review.quote.symbol}</dd></div>
       </dl>
       <p className={styles.help}>The funding includes your initial buy. Creator fees from trading remain separately claimable. Later liquidity added by other people has its own ownership.</p>

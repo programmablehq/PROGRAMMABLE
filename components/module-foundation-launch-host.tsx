@@ -11,6 +11,7 @@ import { presentFoundationCatalogV1 } from "@/lib/module-foundation/presentation
 import { FOUNDATION_HOST_ADAPTER_ID_V1 } from "@/lib/module-foundation/manifest";
 import { parseFoundationAssetPinsV1 } from "@/lib/module-foundation/assets";
 import { foundationMetadata, prepareFoundationLaunch, readFoundationQuote } from "@/lib/module-foundation/client";
+import { FOUNDATION_WETH, foundationSupportsEth } from "@/lib/module-foundation/native-funding";
 import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalog";
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
 import type { FoundationContractModule } from "@/lib/module-foundation/abi";
@@ -37,10 +38,10 @@ export function ModuleFoundationLaunchHost() {
   useEffect(() => {
     let active = true;
     // A convenience choice from the existing chain asset registry; all displayed metadata is read fresh.
-    void readFoundationQuote(session.client, "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", session.account).then(quote => {
+    void readFoundationQuote(session.client, FOUNDATION_WETH, session.account).then(quote => {
       if (!active) return;
       const asset: FoundationQuoteAsset = { address: quote.address, chainId: 4663, name: quote.name, symbol: quote.symbol,
-        decimals: quote.decimals, supported: true, ...(quote.balance === null ? {} : { balance: formatUnits(quote.balance, quote.decimals) }) };
+        decimals: quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(quote), ...(quote.balance === null ? {} : { balance: formatUnits(quote.balance, quote.decimals) }) };
       setQuoteState(current => ({ context: session.contextKey, assets: [asset, ...(current.context === session.contextKey ? current.assets.filter(item => item.address !== asset.address) : [])] }));
     }).catch(() => undefined);
     return () => { active = false; };
@@ -51,7 +52,7 @@ export function ModuleFoundationLaunchHost() {
     const quote = await readFoundationQuote(session.client, getAddress(address), session.account);
     if (session.account) session.assertCurrent(session.account, expectedContext);
     const asset: FoundationQuoteAsset = { address: quote.address, chainId: 4663, name: quote.name, symbol: quote.symbol,
-      decimals: quote.decimals, supported: true, ...(quote.balance === null ? {} : { balance: formatUnits(quote.balance, quote.decimals) }) };
+      decimals: quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(quote), ...(quote.balance === null ? {} : { balance: formatUnits(quote.balance, quote.decimals) }) };
     setQuoteState(current => ({ context: expectedContext, assets: [...(current.context === expectedContext ? current.assets.filter(item => item.address !== asset.address) : []), asset] }));
     return asset;
   }
@@ -86,7 +87,7 @@ export function ModuleFoundationLaunchHost() {
     session.assertCurrent(account, context);
     if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
     const quote: FoundationQuoteAsset = { address: sequence.quote.address, chainId: 4663, name: sequence.quote.name,
-      symbol: sequence.quote.symbol, decimals: sequence.quote.decimals, supported: true, balance: formatUnits(sequence.quote.balance ?? 0n, sequence.quote.decimals) };
+      symbol: sequence.quote.symbol, decimals: sequence.quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(sequence.quote), balance: formatUnits(sequence.quote.balance ?? 0n, sequence.quote.decimals) };
     const positions = foundationLaunchPositionPresentation(sequence, account);
     const custody = (() => {
       if (sequence.result.factoryVersion === "v1") return { factoryVersion: "v1" as const };

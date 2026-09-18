@@ -4,6 +4,7 @@ import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunct
 import { foundationFactoryV2Abi, foundationMetadataParameters, type FoundationLaunchParameters, type FoundationLaunchResultV2 } from "@/lib/module-foundation/abi";
 import { FOUNDATION_ABI_ID, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_INFRASTRUCTURE, FOUNDATION_LP_CUSTODY_DEAD_ID, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
 import { foundationPositionAbi, foundationV2PositionSpecs, type FoundationDeploymentBinding } from "@/lib/module-foundation/protocol";
+import { FOUNDATION_WETH } from "@/lib/module-foundation/native-funding";
 import { planFoundationPrice } from "@/lib/module-foundation/price";
 import { foundationPoolId, foundationPoolKey } from "@/lib/module-foundation/route";
 import type { FoundationPreparedStep, FoundationBalanceCheck } from "@/lib/module-foundation/client";
@@ -15,8 +16,8 @@ export const v2Code = "0x60006000" as const;
 export const v2Now = 1_800_000_000_000;
 export interface V2Read { address: Address; functionName: string; args?: readonly unknown[]; blockNumber?: bigint }
 
-export function foundationV2Fixture(optionalPosition = true) {
-  const token = v2Address(1), quote = v2Address(2), account = v2Address(3), factory = v2Address(4), ledger = v2Address(6);
+export function foundationV2Fixture(optionalPosition = true, nativeQuote = false) {
+  const token = v2Address(1), quote = nativeQuote ? FOUNDATION_WETH : v2Address(2), account = v2Address(3), factory = v2Address(4), ledger = v2Address(6);
   const hook = getAddress("0x50000000000000000000000000000000000020cc"), deployer = v2Address(10);
   const binding: FoundationDeploymentBinding = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
     releaseDigest: v2Hash(1), sourceCommit: "a".repeat(40), startBlock: 1n,
@@ -25,7 +26,7 @@ export function foundationV2Fixture(optionalPosition = true) {
   const additional = optionalPosition ? 1_000_000n : 0n;
   const price = planFoundationPrice({ token, quote, valuationQuoteRaw: 100_000_000_000n, additionalQuoteRaw: additional });
   const metadata = { name: "Example V2", symbol: "EXV2", description: "Local custody fixture.", imageURI: "https://example.com/image.png", website: "", socialData: "0x" as Hex };
-  const parameters: FoundationLaunchParameters = { metadata, quote, quoteDecimals: 6, initialTick: price.initialTick,
+  const parameters: FoundationLaunchParameters = { metadata, quote, quoteDecimals: nativeQuote ? 18 : 6, initialTick: price.initialTick,
     creatorFeeBps: 100, additionalQuoteAmount: additional, initialBuyQuoteAmount: 10_000n, initialBuyMinimumTokenAmount: 80n,
     deadline: checkpoint.timestamp + 300n, tokenSalt: v2Hash(30), hookSalt: v2Hash(31), modules: [] };
   const key = foundationPoolKey({ token, quote, hook }), poolId = foundationPoolId(key), transactionHash = v2Hash(40);
@@ -99,18 +100,19 @@ export function foundationV2Fixture(optionalPosition = true) {
     from: account, to: factory, transactionIndex: 2, logs: [launchLog(), ...specs.map(spec => mintLog(spec.id))] }));
   const getTransaction = vi.fn(async () => ({ hash: transactionHash, from: account, to: factory, input: transaction.data, value: 0n,
     blockNumber: 100n, blockHash: checkpoint.blockHash, transactionIndex: 2, chainId: 4663 }));
-  const simulateCalls = vi.fn(async ({ calls }: { calls: readonly { to: Address; data: Hex }[] }) => {
-    let launched = false;
+  const simulateCalls = vi.fn(async ({ calls }: { calls: readonly { to: Address; data: Hex; value?: bigint }[] }) => {
+    let launched = false, wrapped = 0n;
     return { results: calls.map(call => {
       let data: Hex;
-      if (call.to === factory) { launched = true; data = encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launch", result: currentResult() }); }
+      if (call.to === FOUNDATION_WETH && call.data === "0xd0e30db0") { wrapped += call.value ?? 0n; data = "0x"; }
+      else if (call.to === factory) { launched = true; data = encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launch", result: currentResult() }); }
       else if (call.to === FOUNDATION_INFRASTRUCTURE.positionManager.address) data = nftData(call.data);
       else {
         const decoded = decodeFunctionData({ abi: erc20Abi, data: call.data });
         if (decoded.functionName !== "balanceOf") throw new Error("Unexpected simulated method");
         const recipient = getAddress(decoded.args[0]);
         const balance = call.to === quote ? recipient === factory ? state.factoryQuoteAfter
-          : 1_000_000_000n + (launched ? currentResult().actualQuoteRefund - parameters.initialBuyQuoteAmount - additional + state.quoteDeltaAdjustment : 0n)
+          : 1_000_000_000n + wrapped + (launched ? currentResult().actualQuoteRefund - parameters.initialBuyQuoteAmount - additional + state.quoteDeltaAdjustment : 0n)
           : recipient === account ? (launched ? currentResult().initialBuyTokenAmount : 0n)
             : recipient === factory ? state.factoryTokenAfter : state.inventoryBalance;
         data = encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: balance });
@@ -119,7 +121,7 @@ export function foundationV2Fixture(optionalPosition = true) {
     }) };
   });
   const client = { getChainId: vi.fn(async () => state.chainId), readContract, getBlock, getTransactionReceipt, getTransaction,
-    getCode: vi.fn(async ({ address }: { address: Address }) => state.newToken && address === token ? "0x" : v2Code),
+    getCode: vi.fn(async ({ address }: { address: Address }): Promise<Hex> => state.newToken && address === token ? "0x" : v2Code),
     call: vi.fn(async ({ to, data }: { to: Address; data: Hex }) => {
       if (to !== FOUNDATION_INFRASTRUCTURE.positionManager.address) throw new Error("Unexpected call target");
       return { data: nftData(data) };

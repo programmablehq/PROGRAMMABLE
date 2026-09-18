@@ -47,7 +47,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   });
   it("offers a base coin without an editable starting valuation", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    for (const label of ["Description", "X / Twitter", "Initial buy", "Add creator liquidity", "Review launch"]) expect(html).toContain(label);
+    for (const label of ["Description", "X / Twitter", "Initial buy", "Review launch"]) expect(html).toContain(label);
     expect(html).not.toContain('name="startValuationQuote"');
     expect(html).not.toContain("Starting valuation");
     expect(html).not.toContain("foundation-valuation");
@@ -56,17 +56,13 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);
   });
-  it("discloses irreversible additional funding before V2 review while preserving legacy ownership", () => {
-    const render = (factoryVersion?: "v1" | "v2") => renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} factoryVersion={factoryVersion} contextKey="fixture" catalog={[]} quoteAssets={[quote]} initialDraft={{ additionalLiquidity: "2" }} {...actions} />);
-    const v2 = render("v2");
-    expect(v2).toContain("This liquidity stays in the pool permanently");
-    expect(v2).toContain("you cannot withdraw or transfer it");
-    expect(v2).toContain("Unused funding is returned");
-    expect(v2).not.toContain("separate position NFT you own and can manage");
-    expect(render("v1")).toContain("separate position NFT you own and can manage");
-    const unknown = render();
-    expect(unknown).toContain("review will show the exact amount invested and who controls");
-    expect(unknown).not.toContain("separate position NFT you own and can manage");
+  it("removes creator liquidity even when an old draft supplied it", () => {
+    const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} factoryVersion="v2" contextKey="fixture" catalog={[]} quoteAssets={[{ ...quote, supportsNativeEth: true }]} initialDraft={{ additionalLiquidity: "2" }} {...actions} />);
+    expect(html).not.toContain("Add creator liquidity");
+    expect(html).not.toContain('name="additionalLiquidity"');
+    expect(html).toContain("ETH · Ethereum");
+    expect(html).toContain("existing WETH is used first");
+    expect(html).toContain("only ETH for network fees");
   });
   it("shows exact V2 principal, refund and token rounding separately from fee claims before the wallet action", () => {
     const review: FoundationLaunchReview = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
