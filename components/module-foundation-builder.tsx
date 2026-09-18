@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -77,6 +77,9 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
   const active = useRef(true);
   const currentContext = useRef(contextKey);
   const lock = useRef(false);
+  const refreshLock = useRef(false);
+  const automaticRefreshes = useRef(0);
+  const submittedContext = useRef<string | null>(null);
   useEffect(() => { currentContext.current = contextKey; }, [contextKey]);
   useEffect(() => { active.current = true; return () => { active.current = false; generation.current += 1; quoteGeneration.current += 1; }; }, []);
   useEffect(() => () => { if (localImage) URL.revokeObjectURL(localImage.preview); }, [localImage]);
@@ -207,18 +210,29 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       assertCurrent();
       setPhase("signing");
       const receipt = await onConfirmLaunch(prepared);
-      if (active.current) { setResult(receipt); setPhase("result"); }
+      if (active.current) { automaticRefreshes.current = 0; submittedContext.current = context; setResult(receipt); setPhase("result"); }
     } catch (caught) { if (active.current) { setError(cleanError(caught)); setPhase("editing"); } }
     finally { lock.current = false; }
   }
 
-  async function refreshResult() {
-    if (!result || !onRefreshResult || refreshing) return;
+  const refreshResult = useCallback(async () => {
+    if (!result || !onRefreshResult || refreshLock.current) return;
+    refreshLock.current = true;
     setRefreshing(true);
-    try { const next = await onRefreshResult(result); if (active.current) setResult(next); }
+    try { const next = await onRefreshResult(result); if (active.current) { setResult(next); setError(""); } }
     catch (caught) { if (active.current) setError(cleanError(caught)); }
-    finally { if (active.current) setRefreshing(false); }
-  }
+    finally { refreshLock.current = false; if (active.current) setRefreshing(false); }
+  }, [result, onRefreshResult]);
+
+  useEffect(() => {
+    if (phase !== "result" || !result || !onRefreshResult || refreshing || contextKey !== submittedContext.current
+      || automaticRefreshes.current >= 10 || (result.status !== "submitted" && result.status !== "unconfirmed"
+        && !(result.status === "confirmed" && result.verificationStatus === "pending"))) return;
+    // Read only the saved transaction; a delayed receipt must never trigger another wallet request.
+    const timer = window.setTimeout(() => { automaticRefreshes.current += 1; void refreshResult(); },
+      Math.min(2_000 * 2 ** automaticRefreshes.current, 15_000));
+    return () => window.clearTimeout(timer);
+  }, [contextKey, onRefreshResult, phase, refreshResult, refreshing, result]);
 
   function edit() {
     if (busy) return;
