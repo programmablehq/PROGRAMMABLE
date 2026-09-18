@@ -23,6 +23,8 @@ import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type Fo
 
 export function ModuleFoundationLaunchHost() {
   const router = useRouter(), session = useFoundationSession();
+  const [completedDraft, setCompletedDraft] = useState<string | null>(null);
+  const draftKey = `${session.contextKey}:${session.resultGeneration}`;
   const [quoteState, setQuoteState] = useState<{ context: string; assets: FoundationQuoteAsset[] }>({ context: "", assets: [] });
   const quotes = quoteState.context === session.contextKey ? quoteState.assets : [];
   const uploads = useRef(new Map<string, Hex>());
@@ -57,6 +59,13 @@ export function ModuleFoundationLaunchHost() {
     const account = session.account;
     if (!account) throw new Error("Connect your wallet to prepare the launch.");
     const context = session.contextKey; session.assertCurrent(account, context);
+    if (session.preparationBlocked) throw new Error(session.preparationBlocked);
+    // Reviewing a new draft acknowledges only the completed result currently shown.
+    // Keep the draft mounted; the result store still enforces its exact ID and wallet lock.
+    if (session.resolution) {
+      await session.acknowledgeResult(session.resolution.operationId, false);
+      session.assertCurrent(account, context);
+    }
     if (uploads.current.get(`${account.toLowerCase()}:${draft.image.url}`) !== draft.image.sha256) throw new Error("Choose and upload the exact coin image for this wallet before preparing.");
     const binding = await session.resolveAuthority();
     const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
@@ -127,11 +136,12 @@ export function ModuleFoundationLaunchHost() {
     uploads.current.set(`${account.toLowerCase()}:${result.uri}`, input.image.sha256);
     return { url: result.uri, sha256: input.image.sha256 };
   }
-  return <><FoundationSessionStatus session={session} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
+  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
     catalog={catalog} quoteAssets={quotes} onResolveQuote={resolveQuote} onUploadImage={upload}
     onPrepareLaunch={prepare} onConfirmLaunch={async review => { const sequence = prepared.current.get(review);
       if (!sequence) throw new Error("Prepare this launch again with your current wallet."); session.assertCurrent(sequence.account, review.contextKey);
-      return resultFrom(await session.execute(sequence)); }} onRefreshResult={async result => resultFrom(await session.refreshResult(result))}
-    walletAction={session.walletAction} submissionBlocked={session.submissionBlocked} onBack={() => router.push("/launch")} onRetryAvailability={session.retryAvailability} /></>;
+      const outcome = await session.execute(sequence); setCompletedDraft(draftKey);
+      return resultFrom(outcome); }} onRefreshResult={async result => resultFrom(await session.refreshResult(result))}
+    walletAction={session.walletAction} submissionBlocked={session.preparationBlocked} onBack={() => router.push("/launch")} onRetryAvailability={session.retryAvailability} /></>;
 }

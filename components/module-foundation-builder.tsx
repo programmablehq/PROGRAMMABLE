@@ -91,7 +91,7 @@ export function ModuleFoundationBuilder({ availability, factoryVersion, contextK
   const imageSource = localImage?.preview ?? draft.image?.url;
   const modulesError = foundationSelectionErrors(draft.modules, catalog);
   const unavailable = availability.status !== "ready";
-  const locked = busy || phase === "result" || Boolean(submissionBlocked);
+  const locked = busy || phase === "result";
   const activeReview = review && phase !== "editing" && phase !== "result" ? review : null;
 
   function update<K extends keyof EditableDraft>(key: K, value: EditableDraft[K]) {
@@ -169,7 +169,7 @@ export function ModuleFoundationBuilder({ availability, factoryVersion, contextK
 
   async function prepare(event: FormEvent) {
     event.preventDefault();
-    if (lock.current || imagePreparing || locked || unavailable) return;
+    if (lock.current || imagePreparing || locked || unavailable || submissionBlocked) return;
     if (walletAction) { try { await walletAction.onClick(); } catch (caught) { setError(cleanError(caught)); } return; }
     const checked = validate();
     setErrors(checked.errors); setError("");
@@ -288,7 +288,7 @@ export function ModuleFoundationBuilder({ availability, factoryVersion, contextK
               {errors.modules ? <p className={styles.error} role="alert">{errors.modules}</p> : null}
             </section>
           </fieldset>
-          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button><p className={styles.help}>Your image is saved before the launch is simulated. Review all wallet steps before signing.</p></div>
+          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button><p className={styles.help}>Your image is saved before the launch is simulated. Review all wallet steps before signing.</p></div>
         </form>}
       </div>
       <aside className={styles.preview} aria-label="Coin preview">

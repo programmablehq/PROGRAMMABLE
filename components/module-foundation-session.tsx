@@ -100,10 +100,11 @@ export function useFoundationSession(token?: Address) {
     label: walletStep === "connect" ? "Connect wallet" : "Switch to Robinhood Chain", busy: walletBusy,
     onClick: walletStep === "connect" ? openWallet : () => switchModuleModeNetwork(switchNetwork),
   };
-  const submissionBlocked = pending !== "null" ? "A previous wallet operation needs confirmation before you continue."
-    : resolutionState !== "null" ? "Review the saved transaction result before starting another operation."
+  const preparationBlocked = pending !== "null" ? "A previous wallet operation needs confirmation before you continue."
+    : resolutionState === "unreadable" ? "The saved transaction result could not be read. Check wallet activity before continuing."
     : savedLegacy.blocked ? "A previous Module Mode operation needs recovery before you continue."
       : requestPending ? "Complete the open wallet request before continuing." : undefined;
+  const submissionBlocked = preparationBlocked ?? (resolution ? "Review the saved transaction result before starting another operation." : undefined);
 
   async function execute(sequence: FoundationPreparedSequence): Promise<FoundationExecutionResult> {
     if (executing.current || used.current.has(sequence)) throw new Error("Review a fresh operation before continuing.");
@@ -167,37 +168,40 @@ export function useFoundationSession(token?: Address) {
       message: receipt.status === "success" ? "This transaction is confirmed. Review again if further wallet steps remain." : "The transaction reverted. Network gas may have been charged." };
     return outcome;
   }
-  async function acknowledgeResult(operationId: string) {
+  async function acknowledgeResult(operationId: string, resetDraft = true) {
     if (!account || executing.current) throw new Error("Wait for the current operation to finish.");
     await acknowledgeFoundationResolution(account, operationId);
-    setResultGeneration(value => value + 1);
+    if (resetDraft) setResultGeneration(value => value + 1);
   }
-  return { client, account, walletContext, availability, envelope, contextKey, walletAction, submissionBlocked,
+  return { client, account, walletContext, availability, envelope, contextKey, walletAction, submissionBlocked, preparationBlocked,
     pending, resolution, resolutionState, resultGeneration, acknowledgeResult, progress, assertCurrent, resolveAuthority, resolveCatalog, execute, refreshResult,
     retryAvailability: () => setRefresh(value => value + 1) };
 }
 
-export function FoundationSessionStatus({ session }: { session: ReturnType<typeof useFoundationSession> }) {
+export function FoundationSessionStatus({ session, editingNewLaunch = false }: { session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean }) {
   const [hash, setHash] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const recovery = session.pending !== "null";
   const resolved = session.resolution;
   if (!session.progress && !recovery && session.resolutionState === "null" && !message) return null;
   return <div className={`${styles.page} ${styles.sessionStatus}`}>
     {session.progress ? <p role="status">{session.progress}</p> : null}
-    {!session.progress && resolved ? <section aria-label="Saved transaction result"><h2>{resolved.status === "success" ? "Your transaction is confirmed" : "Your transaction reverted"}</h2>
+    {!session.progress && resolved ? <details className={styles.savedResult} open={!editingNewLaunch} aria-label="Saved transaction result"><summary>{editingNewLaunch
+      ? resolved.status === "success" ? "Previous transaction confirmed" : "Previous transaction reverted"
+      : resolved.status === "success" ? "Your transaction is confirmed" : "Your transaction reverted"}</summary>
       <p>{resolved.status === "success" && resolved.metadata?.stepKind === "approve"
         ? "The approval is confirmed. Review the remaining operation with current balances before continuing."
-        : resolved.status === "success" ? `Your ${resolved.metadata?.stepKind === "launch" ? "launch" : "transaction"} is saved at block ${resolved.blockNumber}. You can return to its details after reloading this page.`
+        : resolved.status === "success" ? editingNewLaunch ? "You can configure a new coin below. Your previous transaction is available here."
+          : `Your ${resolved.metadata?.stepKind === "launch" ? "launch" : "transaction"} is saved at block ${resolved.blockNumber}. You can return to its details after reloading this page.`
           : "The request did not complete. Network gas may have been charged."}</p>
       <p><a href={`${ROBINHOOD_BLOCK_EXPLORER_URL}/tx/${resolved.transactionHash}`} target="_blank" rel="noreferrer">View transaction</a>
         {resolved.status === "success" && resolved.metadata?.stepKind === "launch" && resolved.metadata.token
           ? <> · <a href={`/modules/${resolved.metadata.token}?transaction=${resolved.transactionHash}`}>View coin details</a></> : null}</p>
       {!recovery ? <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => {
-        setBusy(true); setMessage(""); void session.acknowledgeResult(resolved.operationId)
+        setBusy(true); setMessage(""); void session.acknowledgeResult(resolved.operationId, !editingNewLaunch)
           .catch(error => setMessage(error instanceof Error ? error.message : "The saved result could not be acknowledged."))
           .finally(() => setBusy(false));
-      }}>{busy ? "Continuing…" : resolved.status === "success" && resolved.metadata?.stepKind === "launch" ? "Create another coin" : "Continue"}</button> : null}
-    </section> : null}
+      }}>{busy ? "Continuing…" : editingNewLaunch ? "Dismiss" : resolved.status === "success" && resolved.metadata?.stepKind === "launch" ? "Create another coin" : "Continue"}</button> : null}
+    </details> : null}
     {session.resolutionState === "unreadable" ? <p role="alert">The saved transaction result could not be read. Check wallet activity before continuing.</p> : null}
     {recovery ? <section aria-label="Recover wallet operation"><h2>Check your previous transaction</h2><p>The saved request stays protected until its exact transaction is found onchain.</p>
       <form className={styles.field} onSubmit={event => { event.preventDefault(); if (busy || !session.account) return; setBusy(true); setMessage("");
