@@ -325,7 +325,16 @@ async function observeReads(input, target, headers, observedAt) {
     check(typeof main === "string", "token page main content");
     const heading = /<h1\b[^>]*>([\s\S]*?)<\/h1>/iu.exec(main)?.[1];
     const expectedName = item.name?.trim() || (projectedItem(item) ? "Unnamed contract" : "Unnamed token");
-    check(heading && htmlText(heading.replace(/<[^>]*>/gu, "")) === expectedName, "verified token page heading");
+    const actualHeading = heading === undefined ? null : htmlText(heading.replace(/<[^>]*>/gu, ""));
+    if (!(heading && actualHeading === expectedName)) {
+      // Public display text is untrusted. Keep failures bounded and on one log
+      // line, without exporting the HTML body, request headers or credentials.
+      const summarize = value => value === null ? null : { text: value.slice(0, 256), truncated: value.length > 256 };
+      const diagnostic = JSON.stringify({ chainId: route.chainId, tokenPath, httpStatus: token.response.status,
+        expectedName: summarize(expectedName), actualHeading: summarize(actualHeading), bodyDigest: token.bodyDigest })
+        .replace(/[\u007f-\u009f\u2028\u2029]/gu, value => `\\u${value.charCodeAt(0).toString(16).padStart(4, "0")}`);
+      throw new Error(`indexed website verified token page heading is invalid; headingDiagnostic=${diagnostic}`);
+    }
     const anchors = [...main.matchAll(/<a\b[^>]*\bhref="([^"]+)"/giu)].map(match => htmlText(match[1]));
     const explorer = route.chainId === 1 ? "https://etherscan.io" : "https://robinhoodchain.blockscout.com";
     check(anchors.some(href => same(href, `${explorer}/${projectedItem(item) ? "address" : "token"}/${item.tokenAddress}`)) &&

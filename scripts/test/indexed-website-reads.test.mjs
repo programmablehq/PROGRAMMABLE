@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -653,6 +654,68 @@ test("application auth, HTML masquerading as JSON, oversize bodies and broken to
     const f = fixture(mutate);
     await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl })), /indexed website/u);
   }
+});
+
+for (const chainId of [1, 4663]) test(`heading mismatch identifies chain ${chainId} without retrying or accepting evidence`, async () => {
+  const item = chainId === 1 ? ethereumItem(1) : robinhoodItem();
+  const tokenPath = `/token/${item.tokenAddress}${chainId === 1 ? "?chain=1" : ""}`;
+  const actualHeading = "Token details are temporarily unavailable";
+  const body = `<main><h1>${actualHeading}</h1><p>full-body-must-not-leak</p></main>`;
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname + url.search === tokenPath) {
+      spec.text = body;
+      spec.headers["x-private-provider-detail"] = "private-header-must-not-leak";
+    }
+  });
+  await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+    waitImpl: async () => assert.fail("heading mismatch was retried") })), error => {
+    assert.match(error.message, /^indexed website verified token page heading is invalid; headingDiagnostic=/u);
+    const diagnostic = JSON.parse(error.message.split("; headingDiagnostic=")[1]);
+    assert.deepEqual(diagnostic, { chainId, tokenPath, httpStatus: 200,
+      expectedName: { text: item.name, truncated: false }, actualHeading: { text: actualHeading, truncated: false },
+      bodyDigest: `sha256:${createHash("sha256").update(body).digest("hex")}` });
+    assert.doesNotMatch(error.message, /full-body-must-not-leak|private-header-must-not-leak|fixture-vercel-token|fixture-protection-bypass/u);
+    return true;
+  });
+  assert.equal(f.calls.filter(call => call.url.pathname + call.url.search === tokenPath).length, 1);
+  assert.equal(f.calls.filter(call => call.url.hostname === "api.vercel.com").length, 1);
+});
+
+test("heading diagnostics distinguish missing and empty main headings and reject a correct heading outside main", async () => {
+  for (const heading of [null, ""]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname.startsWith("/token/") && url.searchParams.get("chain") === "1") {
+        spec.text = `<main>${heading === null ? "" : "<h1></h1>"}</main><h1>${ethereumItem(1).name}</h1>`;
+      }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+      waitImpl: async () => assert.fail("missing heading was retried") })), error => {
+      const diagnostic = JSON.parse(error.message.split("; headingDiagnostic=")[1]);
+      assert.deepEqual(diagnostic.actualHeading, heading === null ? null : { text: "", truncated: false });
+      return true;
+    });
+  }
+});
+
+test("heading diagnostics bound and escape untrusted text while comparing full names", async () => {
+  const common = `"\n\r\u001b[31m\u0085\u2028\u2029${"x".repeat(300)}`;
+  const expectedName = `${common}expected`, actualHeading = `${common}actual`;
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) spec.body.items[0].name = expectedName;
+    if (url.pathname.startsWith("/token/") && url.searchParams.get("chain") === "1") {
+      spec.text = `<main><h1>${actualHeading}</h1></main>`;
+    }
+  });
+  await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+    waitImpl: async () => assert.fail("long mismatched name was retried") })), error => {
+    assert.doesNotMatch(error.message, /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u);
+    assert.ok(error.message.length < 4_000);
+    const diagnostic = JSON.parse(error.message.split("; headingDiagnostic=")[1]);
+    assert.deepEqual(diagnostic.expectedName, { text: expectedName.slice(0, 256), truncated: true });
+    assert.deepEqual(diagnostic.actualHeading, { text: actualHeading.slice(0, 256), truncated: true });
+    assert.deepEqual(diagnostic.expectedName, diagnostic.actualHeading);
+    return true;
+  });
 });
 
 test("exact deployment binding must hold before and after the observations", async () => {
