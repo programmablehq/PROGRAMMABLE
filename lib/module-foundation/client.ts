@@ -1,3 +1,5 @@
+import { foundationFactoryNativeAbi } from "./abi";
+import { assertFoundationAtomicEth, assertFoundationLaunchCall, type FoundationEthFunding } from "./atomic-launch";
 import {
   createPublicClient, decodeFunctionResult, encodeAbiParameters, encodeFunctionData, erc20Abi,
   fallback, getAddress, getCreate2Address, http, keccak256, toHex,
@@ -241,9 +243,8 @@ export async function simulateFoundationV2Launch(input: {
 }) {
   if (foundationFactoryVersion(input.binding) !== "v2") throw new Error("V2 NFT checks require an exact V2 source binding.");
   const launch = input.steps.at(-1);
+  const launchCall = launch ? assertFoundationLaunchCall(input.binding, launch.transaction, input.parameters) : null;
   if (!launch || launch.kind !== "launch" || getAddress(launch.transaction.to) !== getAddress(input.binding.factory.address)
-    || launch.transaction.value !== 0n || launch.transaction.data.toLowerCase() !== encodeFunctionData({ abi: foundationFactoryV2Abi,
-      functionName: "launch", args: [input.parameters] }).toLowerCase()
     || input.checks.length < 2 || input.checks.length > 4 || getAddress(input.checks[0].token) !== getAddress(input.parameters.quote)
     || getAddress(input.checks[1].token) !== getAddress(input.expected.token) || input.checks[0].newToken === true || input.checks[1].newToken !== true
     || input.checks.some(check => getAddress(check.account) !== getAddress(launch.transaction.from))) {
@@ -258,7 +259,7 @@ export async function simulateFoundationV2Launch(input: {
     if (getAddress(result.token) !== getAddress(input.expected.token) || getAddress(result.hook) !== getAddress(input.expected.hook)
       || result.poolId !== input.expected.poolId || result.baseTokenPrincipal !== input.price.base.principal
       || result.baseTokenRounding !== input.price.base.dust || result.creatorQuotePrincipal !== (input.price.creator?.principal ?? 0n)
-      || simulation.balances[0]?.delta !== foundationWrappedAmount(input.steps, input.parameters.quote) + result.actualQuoteRefund - input.parameters.initialBuyQuoteAmount - input.parameters.additionalQuoteAmount
+      || simulation.balances[0]?.delta !== foundationWrappedAmount(input.steps, input.parameters.quote) + result.actualQuoteRefund - (launchCall?.native ? 0n : input.parameters.initialBuyQuoteAmount + input.parameters.additionalQuoteAmount)
       || result.initialBuyTokenAmount !== simulation.balances[1]?.delta) throw new Error("The V2 simulated launch differs from its exact source, principal or wallet movement.");
     return result;
   };
@@ -284,7 +285,7 @@ export async function simulateFoundationV2Launch(input: {
 export async function prepareFoundationLaunch(input: {
   client: PublicClient; binding: FoundationDeploymentBinding; account: Address; metadata: FoundationMetadata; quote: Address;
   startPrice: FoundationStartPrice; initialBuy: string; additionalLiquidity: string; creatorFeeBps: number;
-  modules: readonly FoundationContractModule[]; tokenSalt: Hex; slippageBps: number; signal?: AbortSignal;
+  modules: readonly FoundationContractModule[]; tokenSalt: Hex; slippageBps: number; signal?: AbortSignal; ethFunding?: FoundationEthFunding;
 }) {
   const { client, binding } = input, account = getAddress(input.account), factoryAbi = foundationFactoryAbiFor(binding);
   const modulePackageIds = readFoundationModulePackages(input.metadata.socialData, input.modules.length);
@@ -299,7 +300,12 @@ export async function prepareFoundationLaunch(input: {
     || BigInt(startPrice.checkpoint.number) > checkpoint.blockNumber) throw new Error("The starting price changed with chain state. Review again.");
   const funding = additionalQuoteAmount + initialBuyQuoteAmount;
   if (funding > FOUNDATION_INT128_MAX) throw new Error("The initial buy exceeds the supported amount.");
-  const nativeFunding = await prepareFoundationNativeFunding({ client, account, quote, amount: funding, blockNumber: checkpoint.blockNumber });
+  const ethFunding = input.ethFunding;
+  if (ethFunding) {
+    await assertFoundationAtomicEth(client, binding, checkpoint.blockNumber);
+    if (ethFunding.quoteAmount !== funding || ethFunding.maximumEth <= 0n || ethFunding.maximumEth > FOUNDATION_INT128_MAX) throw new Error("The ETH funding amount does not match the launch.");
+  }
+  const nativeFunding = ethFunding ? [] : await prepareFoundationNativeFunding({ client, account, quote, amount: funding, blockNumber: checkpoint.blockNumber });
   if (!Number.isInteger(input.slippageBps) || input.slippageBps < 1 || input.slippageBps > 1_000) throw new Error("Choose slippage between 0.01% and 10%.");
   const token = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "predictTokenAddress",
     args: [account, input.tokenSalt, input.metadata], blockNumber: checkpoint.blockNumber });
@@ -317,14 +323,16 @@ export async function prepareFoundationLaunch(input: {
   const hook = await mineFoundationHook(binding.hookDeployer.address, initCodeHash, input.signal);
   p.hookSalt = hook.salt;
   const key = foundationPoolKey({ token, quote: quote.address, hook: hook.address }), poolId = foundationPoolId(key);
-  const approvals = await erc20Approvals(client, { account, token: quote.address, spender: binding.factory.address, amount: funding, blockNumber: checkpoint.blockNumber });
+  const approvals = ethFunding ? [] : await erc20Approvals(client, { account, token: quote.address, spender: binding.factory.address, amount: funding, blockNumber: checkpoint.blockNumber });
   const launchStep = (): FoundationPreparedStep => ({ label: "Launch coin and pool", kind: "launch", gasUsed: 0n,
-    transaction: { from: account, to: binding.factory.address, value: 0n, data: encodeFunctionData({ abi: factoryAbi, functionName: "launch", args: [p] }) },
+    transaction: { from: account, to: binding.factory.address, value: ethFunding?.maximumEth ?? 0n, data: ethFunding
+      ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [p, ethFunding.pool] })
+      : encodeFunctionData({ abi: factoryAbi, functionName: "launch", args: [p] }) },
     effect: foundationFactoryVersion(binding) === "v2"
       ? `Create the coin and mint the base LP NFT and any optional LP NFT directly to DEAD. Their principal and any LP-position proceeds are irretrievable. Spend at most ${funding} raw quote units; return unused quote.`
       : `Create the coin, bind the pool and positions, and spend at most ${funding} raw quote units.`, amount: funding });
   const checks = (): FoundationBalanceCheck[] => [
-    foundationFactoryVersion(binding) === "v2" ? { token: quote.address, account, minimumDelta: -funding }
+    foundationFactoryVersion(binding) === "v2" ? { token: quote.address, account, minimumDelta: ethFunding ? 0n : -funding }
       : { token: quote.address, account, delta: -initialBuyQuoteAmount - (price.creator?.principal ?? 0n) },
     { token, account, newToken: true, minimumDelta: p.initialBuyMinimumTokenAmount },
     ...moduleAssetPins.map(([asset]) => ({ token: asset, account, minimumDelta: 0n })),
@@ -348,12 +356,12 @@ export async function prepareFoundationLaunch(input: {
     || result.poolId !== poolId || result.basePositionId === 0n || result.initialBuyTokenAmount < p.initialBuyMinimumTokenAmount
     || result.initialBuyTokenAmount !== simulation.balances[1].delta
     || (additionalQuoteAmount > 0n) !== (result.creatorPositionId > 0n)) throw new Error("The simulated launch does not match its plan.");
-  if (nativeFunding.length) await assertFoundationNativeBalance(client, account, simulation.steps, checkpoint.blockNumber);
+  if (ethFunding || nativeFunding.length) await assertFoundationNativeBalance(client, account, simulation.steps, checkpoint.blockNumber);
   // Mining and simulation can consume the reference lifetime. Never present an expired review.
   parseFoundationStartPrice(startPrice, quote);
   const priceExpiry = BigInt(startPrice.price.validUntil);
   return sealFoundationSequence({ kind: "launch" as const, sourceKind: "module-foundation-v1" as const, account, binding,
-    checkpoint, expiresAt: priceExpiry < p.deadline ? priceExpiry : p.deadline, quote, parameters: p, result, factoryVersion: result.factoryVersion, price, startPrice, poolKey: key, modulePackageIds: modulePackageIds ?? [],
+    checkpoint, expiresAt: priceExpiry < p.deadline ? priceExpiry : p.deadline, quote, ethFunding, parameters: p, result, factoryVersion: result.factoryVersion, price, startPrice, poolKey: key, modulePackageIds: modulePackageIds ?? [],
     moduleAssetPins, balanceChecks: checks(),
     metadataHash: keccak256(encodeAbiParameters(foundationMetadataParameters, [input.metadata])),
     steps: simulation.steps, balances: simulation.balances, simulation: "rpc-sequence" as const });

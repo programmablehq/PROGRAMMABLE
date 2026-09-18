@@ -73,7 +73,7 @@ export interface FoundationLaunchDraft {
   socialLinks: ModuleSocialLinks;
   quoteAsset: Address;
   creatorFeeBps: number;
-  /** Exact decimal strings denominated in quote, never assumed to be ETH. */
+  /** Native ETH spending ceiling in the single-eth-v1 launch form. */
   initialBuy: string;
   additionalLiquidity: string;
   modules: FoundationModuleSelection[];

@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/module-foundation-session", () => ({ useFoundationSession: () => fixture.session, FoundationSessionStatus: () => null }));
 vi.mock("@/components/module-foundation-builder", () => ({ ModuleFoundationBuilder: (props: ModuleFoundationBuilderProps) => { fixture.builder = props; return null; } }));
 vi.mock("@/components/module-mode-wallet-state", () => ({ uploadModuleModeImage: vi.fn() }));
+import { FOUNDATION_DEFAULT_IMAGE } from "@/lib/module-foundation/default-image";
 import { ModuleFoundationLaunchHost } from "@/components/module-foundation-launch-host";
 import { uploadModuleModeImage } from "@/components/module-mode-wallet-state";
 
@@ -49,6 +50,17 @@ describe("starting a new coin after a saved result", () => {
     expect(assertCurrent).toHaveBeenCalledWith(account, "wallet:release");
     expect(resolveAuthority).toHaveBeenCalledOnce();
     expect(acknowledgeResult.mock.invocationCallOrder[0]).toBeLessThan(resolveAuthority.mock.invocationCallOrder[0]);
+  });
+
+  it("accepts empty optional metadata with only the exact first-party default artwork", async () => {
+    await expect(fixture.builder!.onPrepareLaunch({ ...draft, description: "", image: FOUNDATION_DEFAULT_IMAGE })).rejects.toThrow("Fixture stops before network preparation");
+    expect(uploadModuleModeImage).not.toHaveBeenCalled();
+    expect(resolveAuthority).toHaveBeenCalledOnce();
+  });
+
+  it("does not treat a modified default artwork identity as an uploaded user image", async () => {
+    await expect(fixture.builder!.onPrepareLaunch({ ...draft, image: { ...FOUNDATION_DEFAULT_IMAGE, sha256: hash } })).rejects.toThrow("exact coin image");
+    expect(resolveAuthority).not.toHaveBeenCalled();
   });
 
   it("stops preparation when another tab changed or locked the saved result", async () => {

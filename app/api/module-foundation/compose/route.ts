@@ -1,3 +1,6 @@
+import { readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
+import { assertFoundationAtomicEth } from "@/lib/module-foundation/atomic-launch";
+import { foundationParseAmount } from "@/lib/module-foundation/price";
 import { NextResponse } from "next/server";
 import { getAddress, type Hex } from "viem";
 import { compileOpenConfig, type OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
@@ -31,8 +34,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       size += value.length; if (size > 262_144) throw new Error("The module configuration is too large."); chunks.push(value); }
     } finally { await reader.cancel().catch(() => undefined); }
     const body = moduleRecord(nativeJson(JSON.parse(Buffer.concat(chunks).toString("utf8"))),
-      ["account", "releaseDigest", "tokenSalt", "draft"], "foundation.compose") as unknown as {
-      account: string; releaseDigest: Hex; tokenSalt: Hex; draft: FoundationLaunchDraft };
+      ["account", "releaseDigest", "tokenSalt", "draft", "launchFlow"], "foundation.compose") as unknown as {
+      account: string; releaseDigest: Hex; tokenSalt: Hex; draft: FoundationLaunchDraft; launchFlow: string };
+    if (body.launchFlow !== "single-eth-v1") throw new Error("Refresh the page to use the current launch flow. Keep your coin details before refreshing.");
     const draft = moduleRecord(body.draft, ["name", "symbol", "description", "image", "socialLinks", "quoteAsset", "creatorFeeBps",
       "initialBuy", "additionalLiquidity", "modules"], "foundation.compose.draft") as unknown as FoundationLaunchDraft;
     const account = getAddress(body.account);
@@ -60,6 +64,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     foundationRequire(new Set(selected.map(({ entry }) => entry.runtime.descriptor.moduleId)).size === selected.length,
       "FOUNDATION_MODULE_DUPLICATE", "Choose each module identity once.");
     const client = createFoundationClient(), checkpoint = await assertFoundationInfrastructure(client, binding);
+    const maximumEth = foundationParseAmount(draft.initialBuy, 18);
+    if (maximumEth > 0n) await assertFoundationAtomicEth(client, binding, checkpoint.blockNumber);
+    const ethFunding = maximumEth > 0n ? await readFoundationEthFunding(getAddress(draft.quoteAsset), maximumEth) : undefined;
     const quote = await readFoundationQuote(client, getAddress(draft.quoteAsset), account, checkpoint.blockNumber);
     const context: OpenConfigContext = { roles: { creator: account },
       assets: { quote: { chainId: FOUNDATION_CHAIN_ID, address: quote.address, decimals: quote.decimals } },
@@ -98,6 +105,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!composition.ok) return NextResponse.json({ error: "The selected modules cannot be composed.", diagnostics: composition.diagnostics }, { status: 422, headers });
     return NextResponse.json({ releaseDigest: binding.releaseDigest, token, metadata, moduleAssetPins, modules: composition.modules,
       startPrice: parseFoundationStartPrice(startPrice, quote),
+      ethFunding: ethFunding ? { maximumEth: ethFunding.maximumEth.toString(), quoteAmount: ethFunding.quoteAmount.toString(), pool: ethFunding.pool } : null,
       compositionHash: composition.compositionHash, totals: composition.totals }, { headers });
   } catch (error) {
     const message = error instanceof Error && error.message.length < 240 ? error.message : "This launch could not be prepared. Check its details and retry.";

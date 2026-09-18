@@ -102,7 +102,7 @@ function body(selections: FoundationModuleSelection[] = []) {
   const draft: FoundationLaunchDraft = { name: "Fixture coin", symbol: "FIX", description: "A source-bound technical fixture.",
     image: { url: "https://programmable.market/fixture.webp", sha256: hash("image") }, socialLinks: {}, quoteAsset: quote,
     creatorFeeBps: 300, initialBuy: "0", additionalLiquidity: "0", modules: selections };
-  return { account: creator, releaseDigest, tokenSalt, draft };
+  return { account: creator, releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" };
 }
 const request = (value: unknown) => new Request("http://localhost/api/module-foundation/compose", {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
@@ -143,6 +143,14 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation compose BFF asset bindings", () => {
+  it("rejects an old quote-denominated form before any launch preparation", async () => {
+    const old = body();
+    const requestBody = { ...old, launchFlow: undefined };
+    const response = await POST(request(requestBody));
+    expect(response.status).toBe(400);
+    expect(predictions()).toHaveLength(0);
+  });
+
   it("supplies the fixed market-cap reference and rejects a submitted valuation override", async () => {
     const input = body();
     const response = await POST(request(input)), result = await response.json();

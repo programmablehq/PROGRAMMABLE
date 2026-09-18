@@ -12,12 +12,13 @@ import { sha256, type Address, type Hex } from "viem";
 import { prepareTokenImage, isProgrammableTokenImageUrl } from "@/lib/token-image";
 import { validateModuleSocialLinks, type ModuleSocialKind, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
 import { foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationAvailability, type FoundationConfigurationField, type FoundationImage, type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection, type FoundationQuoteAsset, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
-import { FoundationFeeDisclosure, ModuleFoundationLaunchReview, ModuleFoundationTransactionResult } from "./module-foundation-review";
+import { FOUNDATION_DEFAULT_IMAGE, isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
+import { FoundationFeeDisclosure, ModuleFoundationTransactionResult } from "./module-foundation-review";
 import styles from "./module-foundation-ui.module.css";
 
 type EditableDraft = Omit<FoundationLaunchDraft, "image" | "quoteAsset"> & { quoteAsset: string; image: FoundationImage | null };
 type LocalImage = { blob: Blob; preview: string; sha256: Hex };
-type Phase = "editing" | "uploading" | "preparing" | "review" | "signing" | "result";
+type Phase = "editing" | "uploading" | "preparing" | "signing" | "result";
 type Errors = Record<string, string>;
 
 export interface ModuleFoundationBuilderProps {
@@ -67,7 +68,6 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
   const [errors, setErrors] = useState<Errors>({});
   const [error, setError] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const [review, setReview] = useState<FoundationLaunchReview | null>(null);
   const [result, setResult] = useState<FoundationTransactionResult | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const form = useRef<HTMLFormElement>(null);
@@ -86,18 +86,17 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
   const knownQuote = quoteAssets.find(asset => asset.address.toLowerCase() === quoteAddress.toLowerCase() && asset.chainId === availability.chainId);
   const lookedUpQuote = quoteLookup?.address.toLowerCase() === draft.quoteAsset.toLowerCase() && quoteLookup.status === "resolved" && quoteLookup.contextKey === contextKey ? quoteLookup.asset : undefined;
   const quote = knownQuote ?? lookedUpQuote;
-  const quoteSymbol = quote?.symbol || "quote token";
+  const quoteSymbol = quote?.supportsNativeEth ? "ETH" : quote?.symbol || "quote token";
   const imageSource = localImage?.preview ?? draft.image?.url;
   const modulesError = foundationSelectionErrors(draft.modules, catalog);
   const unavailable = availability.status !== "ready";
   const locked = busy || phase === "result";
-  const activeReview = review && phase !== "editing" && phase !== "result" ? review : null;
 
   function update<K extends keyof EditableDraft>(key: K, value: EditableDraft[K]) {
     generation.current += 1;
     setDraft(current => ({ ...current, [key]: value }));
     setErrors(current => { const next = { ...current }; delete next[key]; return next; });
-    setError(""); setReview(null); setPhase("editing");
+    setError(""); setPhase("editing");
   }
 
   function updateSocial(key: ModuleSocialKind, value: string) {
@@ -118,7 +117,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       setLocalImage({ blob, preview, sha256: digest });
       setDraft(current => ({ ...current, image: null }));
       setErrors(current => { const next = { ...current }; delete next.image; return next; });
-      setAnnouncement("Image selected. It will be saved when you review the launch.");
+      setAnnouncement("Image selected. It will be saved when you create the launch.");
     } catch (caught) { if (active.current && generation.current === request) setImageError(cleanError(caught)); }
     finally { if (active.current) setImagePreparing(false); }
   }
@@ -147,15 +146,14 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
 
   function validate(): { errors: Errors; links: ModuleSocialLinks } {
     const next: Errors = {};
-    if (!draft.name.trim() || new TextEncoder().encode(draft.name.trim()).length > 64) next.name = "Enter a coin name of up to 64 bytes.";
+    if (!draft.name.trim() || new TextEncoder().encode(draft.name.trim()).length > 48) next.name = "Enter a coin name of up to 48 bytes.";
     if (!/^[A-Za-z0-9]{1,12}$/.test(draft.symbol.trim())) next.symbol = "Use 1 to 12 letters or numbers.";
-    if (!draft.description.trim() || new TextEncoder().encode(draft.description.trim()).length > 1_000) next.description = "Add a description of up to 1,000 bytes.";
-    if (!localImage && !draft.image) next.image = "Choose an image for your coin.";
-    if (draft.image && !isProgrammableTokenImageUrl(draft.image.url)) next.image = "Choose an image to save with this launch.";
+    if (new TextEncoder().encode(draft.description.trim()).length > 280) next.description = "Use a description of up to 280 bytes.";
+    if (draft.image && !isFoundationDefaultImage(draft.image) && !isProgrammableTokenImageUrl(draft.image.url)) next.image = "Choose an image to save with this launch.";
     if (!quote?.supported || quote.chainId !== availability.chainId) next.quoteAsset = quote?.reason ?? "Choose and verify a supported quote token.";
     if (!isFoundationCreatorFee(draft.creatorFeeBps)) next.creatorFeeBps = "Choose 0% or a creator fee from 1% to 10%.";
     if (quote) {
-      const buyError = foundationDecimalError(draft.initialBuy, quote.decimals);
+      const buyError = foundationDecimalError(draft.initialBuy, 18);
       if (buyError) next.initialBuy = buyError;
     }
     if (modulesError.length) next.modules = modulesError.join(" ");
@@ -171,7 +169,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     const checked = validate();
     setErrors(checked.errors); setError("");
     if (Object.keys(checked.errors).length) {
-      setAnnouncement("Check the highlighted fields before reviewing.");
+      setAnnouncement("Check the highlighted fields before creating your coin.");
       requestAnimationFrame(() => {
         const invalid = form.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-invalid="true"]');
         let disclosure = invalid?.closest("details");
@@ -184,7 +182,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     const request = ++generation.current;
     const context = currentContext.current;
     const assertCurrent = () => {
-      if (!active.current || generation.current !== request || currentContext.current !== context) throw new Error("Your wallet or launch version changed. Review again; your coin details are kept.");
+      if (!active.current || generation.current !== request || currentContext.current !== context) throw new Error("Your wallet or launch version changed. Create the launch again; your coin details are kept.");
     };
     lock.current = true;
     try {
@@ -197,7 +195,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
         setDraft(current => ({ ...current, image: savedImage }));
         setAnnouncement("Image saved. Preparing the launch simulation.");
       }
-      if (!savedImage) throw new Error("Choose an image before reviewing.");
+      savedImage ??= FOUNDATION_DEFAULT_IMAGE;
       assertCurrent(); setPhase("preparing");
       const prepared = await onPrepareLaunch({ ...draft, name: draft.name.trim(), symbol: draft.symbol.trim().toUpperCase(), description: draft.description.trim(), quoteAsset: quote!.address,
         socialLinks: checked.links, image: savedImage, additionalLiquidity: "0" });
@@ -205,19 +203,12 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       if (!prepared) { setPhase("editing"); return; }
       const invalid = foundationReviewError(prepared, context);
       if (invalid) throw new Error(invalid);
-      if (prepared.quote.address.toLowerCase() !== quote!.address.toLowerCase() || prepared.chainId !== availability.chainId || prepared.creatorFeeBps !== draft.creatorFeeBps || prepared.transactions.length === 0) throw new Error("The launch simulation differs from your coin settings. Review again.");
-      setReview(prepared); setPhase("review");
+      if (prepared.quote.address.toLowerCase() !== quote!.address.toLowerCase() || prepared.chainId !== availability.chainId || prepared.creatorFeeBps !== draft.creatorFeeBps || prepared.transactions.length === 0) throw new Error("Your coin settings changed. Create the launch again.");
+      assertCurrent();
+      setPhase("signing");
+      const receipt = await onConfirmLaunch(prepared);
+      if (active.current) { setResult(receipt); setPhase("result"); }
     } catch (caught) { if (active.current) { setError(cleanError(caught)); setPhase("editing"); } }
-    finally { lock.current = false; }
-  }
-
-  async function confirm() {
-    if (!review || lock.current || submissionBlocked || unavailable) return;
-    const invalid = foundationReviewError(review, currentContext.current);
-    if (invalid) { setError(invalid); return; }
-    lock.current = true; setPhase("signing"); setError("");
-    try { const receipt = await onConfirmLaunch(review); if (active.current) { setResult(receipt); setPhase("result"); } }
-    catch (caught) { if (active.current) { setError(cleanError(caught)); setPhase("review"); } }
     finally { lock.current = false; }
   }
 
@@ -231,11 +222,11 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
 
   function edit() {
     if (busy) return;
-    setPhase("editing"); setReview(null); setError(""); generation.current += 1;
+    setPhase("editing"); setError(""); generation.current += 1;
     requestAnimationFrame(() => document.getElementById("foundation-name")?.focus());
   }
 
-  const actionLabel = walletAction?.label ?? (phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Simulating launch…" : "Review launch");
+  const actionLabel = walletAction?.label ?? (phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Preparing launch…" : phase === "signing" ? "Confirm in your wallet…" : "Create Launch");
   return <div className={styles.page}>
     <div className={styles.topline}>{onBack ? <button type="button" className={styles.backButton} disabled={busy} onClick={onBack}><ArrowLeftIcon size={16} aria-hidden="true" /> All launch modes</button> : <span className={styles.eyebrow}>Module Mode</span>}<span className={styles.network}>{availability.chainName}</span></div>
     <header className={styles.pageHeading}><h1>Create a coin</h1><p>A coin of your own. Built on Uniswap v4.</p></header>
@@ -243,7 +234,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     {submissionBlocked ? <div className={styles.availability} role="status"><strong>A wallet operation needs checking</strong><p>{submissionBlocked}</p></div> : null}
     <div className={styles.layout}>
       <div className={styles.mainColumn}>
-        {result && phase === "result" ? <><ModuleFoundationTransactionResult result={result} onRefresh={onRefreshResult ? () => void refreshResult() : undefined} refreshing={refreshing} />{result.status === "reverted" || (result.status === "confirmed" && !result.tokenUrl && result.operationComplete === false && result.verificationStatus !== "pending") ? <button type="button" className={styles.secondaryButton} onClick={() => { setResult(null); edit(); }}>Return to coin details</button> : null}{error ? <p className={styles.error} role="alert">{error}</p> : null}</> : activeReview ? <ModuleFoundationLaunchReview review={activeReview} contextKey={contextKey} symbol={draft.symbol.trim().toUpperCase()} busy={busy} disabled={unavailable || Boolean(submissionBlocked) || modulesError.length > 0} moduleSummary={draft.modules.map(selection => { const descriptor = catalog.find(item => item.id === selection.id && item.version === selection.version); return { name: descriptor?.name ?? selection.id, version: selection.version, fields: Object.entries(selection.configuration).map(([key, value]) => ({ label: descriptor?.fields.find(field => field.key === key)?.label ?? key, value: typeof value === "boolean" ? value ? "On" : "Off" : value })) }; })} error={error || submissionBlocked || (modulesError.length ? modulesError.join(" ") : undefined) || (unavailable ? availability.reason ?? "Launching is temporarily unavailable." : undefined)} onConfirm={() => void confirm()} onEdit={edit} /> : <form ref={form} className={styles.form} noValidate onSubmit={event => void prepare(event)}>
+        {result && phase === "result" ? <><ModuleFoundationTransactionResult result={result} onRefresh={onRefreshResult ? () => void refreshResult() : undefined} refreshing={refreshing} />{result.status === "reverted" || (result.status === "confirmed" && !result.tokenUrl && result.operationComplete === false && result.verificationStatus !== "pending") ? <button type="button" className={styles.secondaryButton} onClick={() => { setResult(null); edit(); }}>Return to coin details</button> : null}{error ? <p className={styles.error} role="alert">{error}</p> : null}</> : <form ref={form} className={styles.form} noValidate onSubmit={event => void prepare(event)}>
           <fieldset className={styles.fieldset} disabled={locked || imagePreparing}>
             <section className={styles.formSection} aria-labelledby="foundation-coin-heading">
               <div className={styles.sectionHeading}><h2 id="foundation-coin-heading">Your coin</h2><p>Give it a name, a face and a story.</p></div>
@@ -251,13 +242,13 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
                 <button type="button" className={styles.imageButton} onClick={() => imageInput.current?.click()} aria-label={imageSource ? "Change coin image" : "Choose coin image"} data-invalid={Boolean(errors.image || imageError) || undefined} aria-describedby="foundation-image-help foundation-image-error" disabled={locked || imagePreparing}>
                   {imageSource ? <Image src={imageSource} alt="Selected coin artwork" width={96} height={96} unoptimized onError={() => setImageError("The image could not load. Choose another image.")} /> : <ImageIcon size={28} aria-hidden="true" />}
                 </button>
-                <div className={styles.imageCopy}><button type="button" className={styles.secondaryButton} onClick={() => imageInput.current?.click()} disabled={locked || imagePreparing}>{imagePreparing ? "Preparing image…" : imageSource ? "Change image" : "Choose image"}</button><p id="foundation-image-help" className={styles.help}>JPG, PNG or WebP · Up to 8 MB<br />Square crop · At least 256 × 256 pixels</p>{draft.image ? <p className={styles.saved}><CheckIcon size={14} aria-hidden="true" /> Image saved</p> : localImage ? <p className={styles.help}>Selected · saved during review</p> : null}</div>
+                <div className={styles.imageCopy}><button type="button" className={styles.secondaryButton} onClick={() => imageInput.current?.click()} disabled={locked || imagePreparing}>{imagePreparing ? "Preparing image…" : imageSource ? "Change image" : "Choose image"}</button><p id="foundation-image-help" className={styles.help}>Optional · Default artwork if left empty<br />JPG, PNG or WebP · Up to 8 MB<br />Square crop · At least 256 × 256 pixels</p>{draft.image ? <p className={styles.saved}><CheckIcon size={14} aria-hidden="true" /> Image saved</p> : localImage ? <p className={styles.help}>Selected · saved when you create the coin</p> : null}</div>
                 {imageSource ? <button type="button" className={styles.iconButton} aria-label="Remove coin image" disabled={locked || imagePreparing} onClick={() => { setLocalImage(null); update("image", null); setImageError(""); }}><XIcon size={18} aria-hidden="true" /></button> : null}
                 <input ref={imageInput} className={styles.srOnly} type="file" tabIndex={-1} aria-label="Coin image file" accept="image/jpeg,image/png,image/webp" disabled={locked || imagePreparing} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void chooseImage(file); }} />
               </div>
               <p className={styles.error} id="foundation-image-error">{errors.image || imageError || ""}</p>
-              <div className={styles.nameFields}><Field label="Name" id="foundation-name" error={errors.name}><input id="foundation-name" name="name" autoComplete="off" maxLength={64} value={draft.name} placeholder="Coin name" aria-invalid={Boolean(errors.name) || undefined} aria-describedby={errors.name ? "foundation-name-error" : undefined} onChange={event => update("name", event.target.value)} /></Field><Field label="Symbol" id="foundation-symbol" error={errors.symbol}><input id="foundation-symbol" name="symbol" autoComplete="off" spellCheck={false} maxLength={12} value={draft.symbol} placeholder="COIN" aria-invalid={Boolean(errors.symbol) || undefined} aria-describedby={errors.symbol ? "foundation-symbol-error" : undefined} onChange={event => update("symbol", event.target.value.toUpperCase())} /></Field></div>
-              <Field label="Description" id="foundation-description" error={errors.description}><textarea id="foundation-description" name="description" maxLength={1_000} rows={3} value={draft.description} placeholder="What is the story behind your coin?" aria-invalid={Boolean(errors.description) || undefined} aria-describedby={errors.description ? "foundation-description-error" : undefined} onChange={event => update("description", event.target.value)} /></Field>
+              <div className={styles.nameFields}><Field label="Name" id="foundation-name" error={errors.name}><input id="foundation-name" name="name" autoComplete="off" maxLength={48} value={draft.name} placeholder="Coin name" aria-invalid={Boolean(errors.name) || undefined} aria-describedby={errors.name ? "foundation-name-error" : undefined} onChange={event => update("name", event.target.value)} /></Field><Field label="Symbol" id="foundation-symbol" error={errors.symbol}><input id="foundation-symbol" name="symbol" autoComplete="off" spellCheck={false} maxLength={12} value={draft.symbol} placeholder="COIN" aria-invalid={Boolean(errors.symbol) || undefined} aria-describedby={errors.symbol ? "foundation-symbol-error" : undefined} onChange={event => update("symbol", event.target.value.toUpperCase())} /></Field></div>
+              <Field label="Description" optional id="foundation-description" error={errors.description}><textarea id="foundation-description" name="description" maxLength={280} rows={3} value={draft.description} placeholder="What is the story behind your coin?" aria-invalid={Boolean(errors.description) || undefined} aria-describedby={errors.description ? "foundation-description-error" : undefined} onChange={event => update("description", event.target.value)} /></Field>
               <div className={styles.twoFields}>{(["website", "twitter"] as const).map(key => <SocialField key={key} kind={key} value={draft.socialLinks[key] ?? ""} onChange={value => updateSocial(key, value)} error={errors[`social-${key}`]} />)}</div>
               <details className={styles.socialDetails}><summary>Add more social links <span>Optional</span></summary><div className={styles.twoFields}>{(["telegram", "discord", "github", "gitbook"] as const).map(key => <SocialField key={key} kind={key} value={draft.socialLinks[key] ?? ""} onChange={value => updateSocial(key, value)} error={errors[`social-${key}`]} />)}</div></details>
               {errors["social-socialLinks"] ? <p className={styles.error}>{errors["social-socialLinks"]}</p> : null}
@@ -266,12 +257,12 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
               <div className={styles.sectionHeading}><h2 id="foundation-market-heading">Your market</h2><p>Choose what people use to buy and sell your coin.</p></div>
               <Field label="Quote token" id="foundation-quote" error={errors.quoteAsset}>
                 {!customQuote && quoteAssets.length ? <select id="foundation-quote" value={quoteAddress} aria-invalid={Boolean(errors.quoteAsset) || undefined} aria-describedby={errors.quoteAsset ? "foundation-quote-error" : "foundation-quote-help"} onChange={event => { if (event.target.value === "custom") { setCustomQuote(true); update("quoteAsset", ""); } else { update("quoteAsset", event.target.value); } }}><option value="" disabled>Choose a quote token</option>{quoteAssets.filter(asset => asset.chainId === availability.chainId).map(asset => <option key={asset.address} value={asset.address} disabled={!asset.supported}>{asset.supportsNativeEth ? "ETH · Ethereum" : `${asset.symbol} · ${asset.name}`}{asset.supported ? "" : " · Unavailable"}</option>)}{onResolveQuote ? <option value="custom">Use another ERC20 token</option> : null}</select> : <div className={styles.quoteInput}><input id="foundation-quote" name="quoteAsset" autoComplete="off" spellCheck={false} placeholder="0x…" value={draft.quoteAsset} aria-invalid={Boolean(errors.quoteAsset) || undefined} aria-describedby={errors.quoteAsset ? "foundation-quote-error" : "foundation-quote-help"} onChange={event => { quoteGeneration.current += 1; update("quoteAsset", event.target.value); }} />{onResolveQuote ? <button type="button" className={styles.secondaryButton} onClick={() => void resolveQuote()} disabled={locked || (quoteLookup?.status === "checking" && quoteLookup.contextKey === contextKey)}>{quoteLookup?.status === "checking" && quoteLookup.contextKey === contextKey ? "Checking…" : "Check token"}</button> : null}</div>}
-                <p id="foundation-quote-help" className={styles.help}>{quote?.supportsNativeEth ? "Pay with ETH. The pool uses WETH; any amount needed for your initial buy is converted in your wallet." : quote?.supported ? `${quote.symbol} · ${quote.decimals} decimals${quote.balance !== undefined ? ` · Balance ${quote.balance}` : ""}` : quote?.reason ?? "Choose a supported ERC20 on this network. All amounts and swap fees use this token."}</p>
+                <p id="foundation-quote-help" className={styles.help}>{quote?.supportsNativeEth ? "The pool trades against ETH. Pay for the launch and optional initial buy with ETH." : quote?.supported ? `Trading pair: ${quote.symbol}. An optional initial buy is paid with ETH.` : quote?.reason ?? "Choose a supported ERC20 on this network. All amounts and swap fees use this token."}</p>
                 {quoteLookup?.address === draft.quoteAsset && quoteLookup.contextKey === contextKey && quoteLookup.status === "error" ? <p className={styles.error}>{quoteLookup.message}</p> : null}
                 {customQuote && quoteAssets.length ? <button type="button" className={styles.textButton} onClick={() => { setCustomQuote(false); update("quoteAsset", ""); }}>Choose from available tokens</button> : null}
               </Field>
               <div className={styles.twoFields}><Field label="Creator fee" id="foundation-creator-fee" error={errors.creatorFeeBps}><select id="foundation-creator-fee" value={draft.creatorFeeBps} onChange={event => update("creatorFeeBps", Number(event.target.value))}><option value={0}>0% · No creator fee</option>{Array.from({ length: 10 }, (_, index) => index + 1).map(percent => <option key={percent} value={percent * 100}>{percent}%</option>)}</select><p className={styles.help}>Your fee on each buy and sell.</p></Field><div className={styles.fixedFee}><span>Platform fee</span><strong>0.3% <small>Always added</small></strong><p className={styles.help}>Separate from your creator fee.</p></div></div>
-              <Field label="Initial buy" id="foundation-initial-buy" optional error={errors.initialBuy} hint={quote?.supportsNativeEth ? "Pay with ETH; existing WETH is used first. Enter 0 to launch with only ETH for network fees." : "Buy your coin as part of the launch. Enter 0 to launch without an initial buy."}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" value={draft.initialBuy} aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={`foundation-initial-buy-help${errors.initialBuy ? " foundation-initial-buy-error" : ""}`} onChange={event => update("initialBuy", event.target.value)} /><span>{quote?.supportsNativeEth ? "ETH" : quoteSymbol}</span></div></Field>
+              <Field label="Initial buy" id="foundation-initial-buy" optional error={errors.initialBuy} hint="Maximum ETH for your first purchase. Launch and buy share one wallet confirmation; unspent ETH is returned. Enter 0 to launch without buying."><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" value={draft.initialBuy} aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={`foundation-initial-buy-help${errors.initialBuy ? " foundation-initial-buy-error" : ""}`} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
               <p className={styles.help}>The base pool starts with your coin supply. You do not need to fund its quote liquidity. Buying brings quote tokens into the pool; the base position principal is permanently locked.</p>
             </section>
             <section className={styles.formSection} aria-labelledby="foundation-modules-heading"><div className={styles.sectionHeading}><div className={styles.sectionTitle}><h2 id="foundation-modules-heading">Optional modules</h2><span className={styles.muted}>{draft.modules.length} selected</span></div><p>Your coin works with no additional modules.</p></div>
@@ -282,13 +273,13 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
               {errors.modules ? <p className={styles.error} role="alert">{errors.modules}</p> : null}
             </section>
           </fieldset>
-          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button><p className={styles.help}>Your image is saved before the launch is simulated. Review all wallet steps before signing.</p></div>
+          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button><p className={styles.help}>Confirm the launch in your wallet. Your coin page opens automatically after confirmation.</p></div>
         </form>}
       </div>
       <aside className={styles.preview} aria-label="Coin preview">
         <div className={styles.previewHeading}><span>Coin preview</span><span>{phase === "result" ? "Submitted details" : "Your draft"}</span></div>
         <div className={styles.previewArtwork}>{imageSource ? <Image src={imageSource} alt={`${draft.name.trim() || "Coin"} preview`} width={320} height={240} loading="eager" unoptimized /> : <div className={styles.artworkPlaceholder}><ImageIcon size={36} weight="light" aria-hidden="true" /><span>Your coin image</span></div>}</div>
-        <div className={styles.previewContent}><div className={styles.coinName}><h2>{draft.name.trim() || "Your coin"}</h2><span>{draft.symbol.trim() || "SYMBOL"}</span></div><p className={styles.previewDescription}>{draft.description.trim() || "Your coin’s story will appear here."}</p><div className={styles.previewMarket}><span>Trading pair</span><strong>{draft.symbol.trim() || "COIN"} / {quote?.symbol || "QUOTE"}</strong></div><FoundationFeeDisclosure creatorFeeBps={draft.creatorFeeBps} quoteSymbol={quoteSymbol} /><div className={styles.previewFoot}><span>Uniswap v4</span><span>{draft.modules.length ? `${draft.modules.length} optional ${draft.modules.length === 1 ? "module" : "modules"}` : "Base coin"}</span></div></div>
+        <div className={styles.previewContent}><div className={styles.coinName}><h2>{draft.name.trim() || "Your coin"}</h2><span>{draft.symbol.trim() || "SYMBOL"}</span></div><p className={styles.previewDescription}>{draft.description.trim() || "Your coin’s story will appear here."}</p><div className={styles.previewMarket}><span>Trading pair</span><strong>{draft.symbol.trim() || "COIN"} / {quote ? quoteSymbol : "QUOTE"}</strong></div><FoundationFeeDisclosure creatorFeeBps={draft.creatorFeeBps} quoteSymbol={quoteSymbol} /><div className={styles.previewFoot}><span>Uniswap v4</span><span>{draft.modules.length ? `${draft.modules.length} optional ${draft.modules.length === 1 ? "module" : "modules"}` : "Base coin"}</span></div></div>
       </aside>
     </div>
     <p className={styles.srOnly} role="status">{announcement || (phase === "uploading" ? "Saving the exact selected image." : phase === "preparing" ? "Preparing a current launch simulation." : "")}</p>

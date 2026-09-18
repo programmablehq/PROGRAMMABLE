@@ -115,6 +115,13 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
     }
 
     function launch(T.LaunchParams calldata p) external nonReentrant returns (L.LaunchResultV2 memory result) {
+        return _launch(p, bytes(""));
+    }
+
+    function _launch(T.LaunchParams calldata p, bytes memory fundingData)
+        internal
+        returns (L.LaunchResultV2 memory result)
+    {
         _verifyInfrastructure();
         if (p.deadline < block.timestamp) revert DeadlineExpired();
         if (
@@ -127,7 +134,7 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         uint256 quoteBefore = quoteAsset.balanceOf(address(this));
         uint256 funding = uint256(p.initialBuyQuoteAmount) + p.additionalQuoteAmount;
         if (funding != 0) {
-            quoteAsset.safeTransferFrom(msg.sender, address(this), funding);
+            _collectFunding(p, funding, fundingData);
             if (quoteAsset.balanceOf(address(this)) != quoteBefore + funding) revert InvalidSettlement();
         }
         FoundationTokenV1 primary =
@@ -190,6 +197,12 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
             p.initialBuyQuoteAmount,
             result
         );
+    }
+
+    /// @dev Native extensions must supply the exact quote amount without pulling the creator's ERC20s.
+    function _collectFunding(T.LaunchParams calldata p, uint256 funding, bytes memory fundingData) internal virtual {
+        if (fundingData.length != 0) revert InvalidConfiguration();
+        IERC20(p.quote).safeTransferFrom(msg.sender, address(this), funding);
     }
 
     function launchOf(address token) external view returns (L.LaunchResultV2 memory) {
@@ -306,12 +319,12 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         _transferExact(IERC20(token), msg.sender, output);
     }
 
-    function _approve(address token, address spender, uint256 amount) private {
+    function _approve(address token, address spender, uint256 amount) internal {
         IERC20(token).forceApprove(address(permit2), amount);
         permit2.approve(token, spender, uint160(amount), uint48(block.timestamp));
     }
 
-    function _revoke(address token, address spender) private {
+    function _revoke(address token, address spender) internal {
         permit2.approve(token, spender, 0, 0);
         IERC20(token).forceApprove(address(permit2), 0);
     }
