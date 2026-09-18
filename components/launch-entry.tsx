@@ -38,46 +38,12 @@ function LaunchArtworkImage() {
   );
 }
 
-function ModuleFoundationLaunchEntry() {
-  const [available, setAvailable] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    let currentRequest: AbortController | undefined;
-    async function checkAvailability() {
-      currentRequest?.abort();
-      const request = new AbortController();
-      currentRequest = request;
-      const timeout = setTimeout(() => {
-        request.abort();
-        if (active) setAvailable(false);
-      }, 15_000);
-      try {
-        const { fetchFoundationAvailability } = await import("@/lib/module-foundation/availability");
-        if (!active || request.signal.aborted) return;
-        const envelope = await fetchFoundationAvailability(request.signal);
-        if (active && !request.signal.aborted) setAvailable(envelope.available && envelope.binding !== null);
-      } catch {
-        if (active && currentRequest === request) setAvailable(false);
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-    void checkAvailability();
-    const interval = setInterval(() => void checkAvailability(), 60_000);
-    return () => { active = false; currentRequest?.abort(); clearInterval(interval); };
-  }, []);
-
-  return <ModuleFoundationLaunchCard available={available} />;
-}
-
-/** The entry check permits navigation only; the builder revalidates launch authority. */
-export function ModuleFoundationLaunchCard({ available = false }: { available?: boolean }) {
+/** Opening a draft is always available; the builder checks authority before review and submission. */
+export function ModuleFoundationLaunchCard() {
   const cardProps = {
     className: `launch-model-card ${launchExperience.modelCard} liquid-glass-surface`,
     "data-launch-model-option": "modules",
-    "data-launch-model-available": available,
-    "data-launch-model-entry": available ? "foundation" : "maintenance",
+    "data-launch-model-entry": "foundation",
     "data-launch-model-launchable": "false",
     "aria-labelledby": "launch-model-modules-title",
     "aria-describedby": "launch-model-modules-description launch-model-modules-status",
@@ -93,14 +59,12 @@ export function ModuleFoundationLaunchCard({ available = false }: { available?: 
       <span className={`launch-model-description ${launchExperience.modelDescription}`} id="launch-model-modules-description">
         Create a coin and add upgrades with modules.
       </span>
-      <span className={available ? launchExperience.modelAction : launchExperience.maintenanceStatus} id="launch-model-modules-status">
-        {available ? <>Configure a coin<ArrowRight aria-hidden="true" size={16} /></> : <><Clock3 aria-hidden="true" size={14} />Getting updated currently</>}
+      <span className={launchExperience.modelAction} id="launch-model-modules-status">
+        Configure a coin<ArrowRight aria-hidden="true" size={16} />
       </span>
     </span>
   </>;
-  return available
-    ? <Link {...cardProps} href="/launch/modules/foundation">{content}</Link>
-    : <button {...cardProps} type="button" disabled>{content}</button>;
+  return <Link {...cardProps} href="/launch/modules/foundation">{content}</Link>;
 }
 
 export function LaunchExperience({
@@ -342,7 +306,7 @@ export function LaunchModelPicker({
             </span>
           </button>
         ) : (
-          <ModuleFoundationLaunchEntry />
+          <ModuleFoundationLaunchCard />
         )}
 
         <button

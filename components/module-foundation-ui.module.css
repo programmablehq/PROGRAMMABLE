@@ -18,6 +18,10 @@
 .page p { text-wrap: pretty; }
 .sessionStatus { padding-bottom: 0; }
 .sessionStatus section { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 8px; padding: 24px; }
+.savedResult { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 8px; padding: 0 16px; font-size: 14px; }
+.savedResult > summary { cursor: pointer; min-height: 44px; padding: 12px 0; line-height: 20px; }
+.savedResult[open] { padding-bottom: 16px; }
+.savedResult a { text-decoration: underline; text-underline-offset: 3px; }
 .topline { align-items: center; display: flex; gap: 16px; justify-content: space-between; min-height: 44px; }
 .backButton { align-items: center; background: transparent; border: 0; color: var(--mf-muted); cursor: pointer; display: inline-flex; font: inherit; font-size: 14px; gap: 8px; min-height: 44px; padding: 8px 0; }
 .network { color: var(--mf-muted); font-size: 14px; line-height: 20px; text-align: right; }

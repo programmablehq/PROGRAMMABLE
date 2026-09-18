@@ -237,7 +237,7 @@ describe("unreleased launch model gating", () => {
     expect(html).not.toContain("Liquidity Growth");
   });
 
-  it("marks both Robinhood launch entries as unavailable during maintenance", () => {
+  it("opens the Robinhood coin draft immediately while the custom entry stays in maintenance", () => {
     const html = renderToStaticMarkup(
       createElement(LaunchModelPicker, {
         chainId: 4663,
@@ -245,13 +245,13 @@ describe("unreleased launch model gating", () => {
       }),
     );
     expect(html.match(/data-launch-model-option=/g)).toHaveLength(2);
-    const modulesCard = html.match(/<button[^>]*data-launch-model-option="modules"[^>]*>/u)?.[0];
-    expect(modulesCard).not.toContain("href=");
-    expect(modulesCard).toContain('disabled=""');
-    expect(modulesCard).toContain('data-launch-model-available="false"');
-    expect(modulesCard).toContain('data-launch-model-entry="maintenance"');
+    const modulesCard = html.match(/<a[^>]*data-launch-model-option="modules"[^>]*>/u)?.[0];
+    expect(modulesCard).toContain('href="/launch/modules/foundation"');
+    expect(modulesCard).not.toContain("disabled");
+    expect(modulesCard).not.toContain("data-launch-model-available");
+    expect(modulesCard).toContain('data-launch-model-entry="foundation"');
     expect(modulesCard).toContain('data-launch-model-launchable="false"');
-    expect(html).not.toContain('href="/launch/modules/foundation"');
+    expect(html).toContain("Configure a coin");
     expect(html).not.toContain('id="launch-model-modules-status">Preview</small>');
     expect(html).not.toContain('data-launch-model-option="classic"');
     expect(html).toMatch(/name="launch-chain"[^>]*checked=""[^>]*value="4663"/);
@@ -263,7 +263,7 @@ describe("unreleased launch model gating", () => {
     expect(html).toContain('data-launch-model-launchable="false"');
     expect(html).not.toContain("Preflight required");
     expect(html).not.toContain('href="/developers/hooks"');
-    expect(html.match(/Getting updated currently/g)).toHaveLength(2);
+    expect(html.match(/Getting updated currently/g)).toHaveLength(1);
     const customCard = html.match(/<button[^>]*data-launch-model-option="custom"[^>]*>/u)?.[0];
     expect(customCard).toContain('disabled=""');
     expect(customCard).not.toContain("href=");
@@ -271,15 +271,11 @@ describe("unreleased launch model gating", () => {
     expect(html).not.toContain("Build or resume");
   });
 
-  it("opens the Foundation route only after entry availability is verified", () => {
-    const closed = renderToStaticMarkup(createElement(ModuleFoundationLaunchCard));
-    expect(closed).toContain('disabled=""');
-    expect(closed).not.toContain("href=");
-
-    const open = renderToStaticMarkup(createElement(ModuleFoundationLaunchCard, { available: true }));
+  it("renders Foundation draft navigation before hydration without claiming launch authority", () => {
+    const open = renderToStaticMarkup(createElement(ModuleFoundationLaunchCard));
     const modulesCard = open.match(/<a[^>]*data-launch-model-option="modules"[^>]*>/u)?.[0];
     expect(modulesCard).toContain('href="/launch/modules/foundation"');
-    expect(modulesCard).toContain('data-launch-model-available="true"');
+    expect(modulesCard).not.toContain("data-launch-model-available");
     expect(modulesCard).toContain('data-launch-model-entry="foundation"');
     expect(modulesCard).toContain('data-launch-model-launchable="false"');
     expect(open).not.toContain('href="/launch/modules"');
