@@ -29,16 +29,7 @@ contract FoundationNativeV2Test is FoundationForkBaseV2 {
         nativeFactory = FoundationFactoryV2Native(
             payable(deployCode(
                     "FoundationFactoryV2Native.sol:FoundationFactoryV2Native",
-                    abi.encode(
-                        manager,
-                        positions,
-                        IFoundationUniversalRouterV2(ROUTER),
-                        permits,
-                        deployer,
-                        hashes,
-                        WETH,
-                        WETH.codehash
-                    )
+                    abi.encode(manager, positions, IFoundationUniversalRouterV2(ROUTER), permits, deployer, hashes)
                 ))
         );
         factory = FoundationFactoryV2(address(nativeFactory));
