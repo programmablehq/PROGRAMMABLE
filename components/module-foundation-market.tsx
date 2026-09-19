@@ -15,6 +15,8 @@ export interface ModuleFoundationMarketProps {
   contextKey: string;
   coin: { address: Address; name: string; symbol: string; description: string; decimals: number; balance?: string; imageURI?: string; socialLinks?: readonly { label: string; url: string }[] };
   quote: FoundationQuoteAsset;
+  /** Wallet input/output asset; pool identity and fee accounting still use quote. */
+  tradeAsset?: FoundationQuoteAsset;
   pool: FoundationPoolIdentity;
   positions?: readonly FoundationPositionIdentity[];
   creatorFeeBps: number;
@@ -33,7 +35,7 @@ function humanError(caught: unknown) {
   return message.length <= 320 ? message : "The trade could not complete. Check its status before trying again.";
 }
 
-export function ModuleFoundationMarket({ availability, contextKey, coin, quote, pool, positions = [], creatorFeeBps, walletAction, submissionBlocked, onPrepareTrade, onConfirmTrade, onRefreshResult, moduleActions, feeLedger }: ModuleFoundationMarketProps) {
+export function ModuleFoundationMarket({ availability, contextKey, coin, quote, tradeAsset = quote, pool, positions = [], creatorFeeBps, walletAction, submissionBlocked, onPrepareTrade, onConfirmTrade, onRefreshResult, moduleActions, feeLedger }: ModuleFoundationMarketProps) {
   const [draft, setDraft] = useState<FoundationTradeDraft>({ side: "buy", amount: "", slippageBps: 100 });
   const [review, setReview] = useState<FoundationTradeReview | null>(null);
   const [result, setResult] = useState<FoundationTransactionResult | null>(null);
@@ -56,8 +58,8 @@ export function ModuleFoundationMarket({ availability, contextKey, coin, quote, 
     return () => clearInterval(timer);
   }, [review]);
 
-  const inputAsset = draft.side === "buy" ? quote : coin;
-  const outputSymbol = draft.side === "buy" ? coin.symbol : quote.symbol;
+  const inputAsset = draft.side === "buy" ? tradeAsset : coin;
+  const outputSymbol = draft.side === "buy" ? coin.symbol : tradeAsset.symbol;
   const invalidReview = review ? foundationReviewError(review, contextKey, now) : null;
   const unavailable = availability.status !== "ready" || !quote.supported;
   const blocked = Boolean(busy || submissionBlocked || unavailable);

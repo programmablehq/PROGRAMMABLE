@@ -107,7 +107,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!composition.ok) return NextResponse.json({ error: "The selected modules cannot be composed.", diagnostics: composition.diagnostics }, { status: 422, headers });
     return NextResponse.json({ releaseDigest: binding.releaseDigest, token, metadata, moduleAssetPins, modules: composition.modules,
       startPrice: parseFoundationStartPrice(startPrice, quote),
-      ethFunding: ethFunding ? { maximumEth: ethFunding.maximumEth.toString(), quoteAmount: ethFunding.quoteAmount.toString(), pool: ethFunding.pool } : null,
+      ethFunding: ethFunding ? { maximumEth: ethFunding.maximumEth.toString(), quoteAmount: ethFunding.quoteAmount.toString(), path: ethFunding.path } : null,
       compositionHash: composition.compositionHash, totals: composition.totals }, { headers });
   } catch (error) {
     const message = error instanceof Error && error.message.length < 240 ? error.message : "This launch could not be prepared. Check its details and retry.";

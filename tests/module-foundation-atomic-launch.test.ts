@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encodeFunctionData, type Hex, type PublicClient } from "viem";
+import { encodeFunctionData, zeroAddress, type Hex, type PublicClient } from "viem";
 import { foundationFactoryNativeAbi, foundationFactoryV2Abi } from "@/lib/module-foundation/abi";
-import { assertFoundationAtomicEth, decodeFoundationLaunchCall, FOUNDATION_NATIVE_FUNDING_ID, FOUNDATION_NO_FUNDING_POOL } from "@/lib/module-foundation/atomic-launch";
+import { assertFoundationAtomicEth, assertFoundationFundingPath, decodeFoundationLaunchCall, encodeFoundationFundingPath, FOUNDATION_NATIVE_FUNDING_ID, FOUNDATION_NO_FUNDING_POOL } from "@/lib/module-foundation/atomic-launch";
 import { FOUNDATION_WETH, FOUNDATION_WETH_CODE_HASH } from "@/lib/module-foundation/native-funding";
 import { simulateFoundationV2Launch } from "@/lib/module-foundation/client";
 import { verifyFoundationLaunchReceipt } from "@/lib/module-foundation/readback";
@@ -18,11 +18,13 @@ vi.mock("@/lib/module-foundation/constants", async original => {
 beforeEach(() => { vi.spyOn(Date, "now").mockReturnValue(v2Now); vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("No network in SDK fixtures"); })); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-function nativeFixture() {
+function nativeFixture(legacy = false) {
   const f = foundationV2Fixture(false, true);
   const transaction = f.steps[0].transaction;
   transaction.value = f.parameters.initialBuyQuoteAmount;
-  transaction.data = encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [f.parameters, FOUNDATION_NO_FUNDING_POOL] });
+  transaction.data = legacy
+    ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [f.parameters, FOUNDATION_NO_FUNDING_POOL] })
+    : encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEthRoute", args: [f.parameters, encodeFoundationFundingPath([])] });
   // Model the funding source: the contract receives ETH; the caller's quote balance is untouched.
   f.state.quoteDeltaAdjustment = f.parameters.initialBuyQuoteAmount;
   f.checks[0] = { token: f.quote, account: f.account, minimumDelta: 0n };
@@ -32,6 +34,25 @@ function nativeFixture() {
 }
 
 describe("one-transaction native launch", () => {
+  it("continues to discover launches from the immutable previous factory", async () => {
+    const f = nativeFixture(true);
+    const found = await discoverFoundationLaunch({ client: f.client, binding: f.binding, token: f.token, transactionHash: f.transactionHash });
+    expect(found.parameters).toEqual(f.parameters);
+  });
+
+  it("binds a native multi-hop funding path and rejects a WETH start or a currency cycle", () => {
+    const f = nativeFixture();
+    const quote = "0x2E8c31162B855a2FfA90f6F8634643AD6f111E18" as const;
+    const path = [zeroAddress, FOUNDATION_WETH].map(intermediateCurrency => ({ intermediateCurrency, fee: 3000, tickSpacing: 60, hooks: zeroAddress, hookData: "0x" as Hex }));
+    const parameters = { ...f.parameters, quote: quote.toLowerCase() as `0x${string}` };
+    const transaction = { ...f.steps[0].transaction, data: encodeFunctionData({ abi: foundationFactoryNativeAbi,
+      functionName: "launchWithEthRoute", args: [parameters, encodeFoundationFundingPath(path)] }) };
+    expect(decodeFoundationLaunchCall(f.binding, transaction).parameters.quote.toLowerCase()).toBe(quote.toLowerCase());
+    expect(() => assertFoundationFundingPath(parameters.quote, path.slice(1))).toThrow("native ETH");
+    expect(() => assertFoundationFundingPath(parameters.quote, [path[0], path[0]])).toThrow("repeat");
+    expect(() => decodeFoundationLaunchCall(f.binding, { ...transaction, data: encodeFunctionData({ abi: foundationFactoryNativeAbi,
+      functionName: "launchWithEthRoute", args: [parameters, `${encodeFoundationFundingPath(path)}00`] }) })).toThrow("canonical");
+  });
   it("preserves exact custody simulation with one launch call and no caller quote debit", async () => {
     const f = nativeFixture();
     f.state.newToken = true;

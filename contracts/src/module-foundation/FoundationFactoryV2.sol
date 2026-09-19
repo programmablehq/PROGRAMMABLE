@@ -105,6 +105,10 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         universalRouterCodeHash = expectedCodeHashes[2];
         permit2CodeHash = expectedCodeHashes[3];
         hookDeployerCodeHash = expectedCodeHashes[4];
+        if (
+            address(manager).code.length == 0 || address(positions).code.length == 0 || address(router).code.length == 0
+                || address(permits).code.length == 0 || address(deployer).code.length == 0
+        ) revert InvalidInfrastructure();
         _verifyInfrastructure();
         if (
             address(positions.poolManager()) != address(manager) || address(router.poolManager()) != address(manager)
@@ -261,7 +265,7 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         IERC20 currency = IERC20(asset);
         uint256 beforeFactory = currency.balanceOf(address(this));
         uint256 beforeManager = currency.balanceOf(address(poolManager));
-        _approve(asset, address(positionManager), p.debt);
+        bool granted = _approve(asset, address(positionManager), p.debt);
         bytes[] memory params = new bytes[](2);
         params[0] = abi.encode(
             key,
@@ -277,7 +281,7 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         positionManager.modifyLiquidities(
             abi.encode(abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR)), params), deadline
         );
-        _revoke(asset, address(positionManager));
+        _revoke(asset, address(positionManager), granted);
         (PoolKey memory observed, PositionInfo info) = positionManager.getPoolAndPositionInfo(id);
         if (
             currency.balanceOf(address(this)) != beforeFactory - p.debt
@@ -295,7 +299,7 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         address token = Currency.unwrap(Currency.unwrap(key.currency0) == p.quote ? key.currency1 : key.currency0);
         uint256 beforeQuote = IERC20(p.quote).balanceOf(address(this));
         uint256 beforeToken = IERC20(token).balanceOf(address(this));
-        _approve(p.quote, address(universalRouter), p.initialBuyQuoteAmount);
+        bool granted = _approve(p.quote, address(universalRouter), p.initialBuyQuoteAmount);
         bytes[] memory params = new bytes[](3);
         params[0] = abi.encode(
             IV4Router.ExactInputSingleParams(
@@ -310,7 +314,7 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
             params
         );
         universalRouter.execute(hex"10", inputs, p.deadline);
-        _revoke(p.quote, address(universalRouter));
+        _revoke(p.quote, address(universalRouter), granted);
         if (IERC20(p.quote).balanceOf(address(this)) != beforeQuote - p.initialBuyQuoteAmount) {
             revert InvalidSettlement();
         }
@@ -319,14 +323,16 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
         _transferExact(IERC20(token), msg.sender, output);
     }
 
-    function _approve(address token, address spender, uint256 amount) internal {
-        IERC20(token).forceApprove(address(permit2), amount);
+    function _approve(address token, address spender, uint256 amount) internal returns (bool granted) {
+        // Some ERC20s grant Permit2 permanently and reject explicit approval changes.
+        granted = IERC20(token).allowance(address(this), address(permit2)) != type(uint256).max;
+        if (granted) IERC20(token).forceApprove(address(permit2), amount);
         permit2.approve(token, spender, uint160(amount), uint48(block.timestamp));
     }
 
-    function _revoke(address token, address spender) internal {
+    function _revoke(address token, address spender, bool granted) internal {
         permit2.approve(token, spender, 0, 0);
-        IERC20(token).forceApprove(address(permit2), 0);
+        if (granted) IERC20(token).forceApprove(address(permit2), 0);
     }
 
     function _transferExact(IERC20 asset, address recipient, uint256 amount) private {
@@ -342,11 +348,9 @@ contract FoundationFactoryV2 is ReentrancyGuardTransient {
     }
 
     function _verifyInfrastructure() private view {
+        // Construction rejects empty runtimes. Their immutable code hashes also reject later removal.
         if (
-            block.chainid != chainId || address(poolManager).code.length == 0
-                || address(positionManager).code.length == 0 || address(universalRouter).code.length == 0
-                || address(permit2).code.length == 0 || address(hookDeployer).code.length == 0
-                || address(poolManager).codehash != poolManagerCodeHash
+            block.chainid != chainId || address(poolManager).codehash != poolManagerCodeHash
                 || address(positionManager).codehash != positionManagerCodeHash
                 || address(universalRouter).codehash != universalRouterCodeHash
                 || address(permit2).codehash != permit2CodeHash

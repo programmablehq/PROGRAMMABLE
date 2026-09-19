@@ -73,6 +73,7 @@ export const foundationFactoryNativeAbi = [...foundationFactoryV2Abi, ...parseAb
   "struct LaunchResultV2 { address token; address hook; address ledger; bytes32 poolId; address basePositionOwner; address creatorPositionOwner; address roundingInventoryRecipient; uint256 basePositionId; uint256 creatorPositionId; uint256 initialBuyTokenAmount; uint128 baseTokenPrincipal; uint128 baseTokenRounding; uint128 creatorQuotePrincipal; uint256 actualQuoteRefund; }",
   "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
   "function launchWithEth(LaunchParams p,PoolKey fundingPool) payable returns (LaunchResultV2 result)",
+  "function launchWithEthRoute(LaunchParams p,bytes fundingPath) payable returns (LaunchResultV2 result)",
   "function NATIVE_FUNDING_ID() view returns (bytes32)",
   "function wrappedEth() view returns (address)",
   "function wrappedEthCodeHash() view returns (bytes32)",
@@ -93,6 +94,9 @@ export const foundationQuoterAbi = parseAbi([
   "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
   "struct QuoteParams { PoolKey poolKey; bool zeroForOne; uint128 exactAmount; bytes hookData; }",
   "function quoteExactInputSingle(QuoteParams params) returns (uint256 amountOut,uint256 gasEstimate)",
+  "struct PathKey { address intermediateCurrency; uint24 fee; int24 tickSpacing; address hooks; bytes hookData; }",
+  "struct QuoteExactParams { address exactCurrency; PathKey[] path; uint128 exactAmount; }",
+  "function quoteExactInput(QuoteExactParams params) returns (uint256 amountOut,uint256 gasEstimate)",
 ]);
 export const foundationPermit2Abi = parseAbi([
   "function allowance(address owner,address token,address spender) view returns (uint160 amount,uint48 expiration,uint48 nonce)",

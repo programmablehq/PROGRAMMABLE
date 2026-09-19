@@ -357,9 +357,11 @@ export function decodeFoundationLaunchSelectionsV1(input: {
   foundationRequire(/^0x(?:[0-9a-fA-F]{2})+$/.test(input.calldata) && input.calldata.length <= 2_097_154,
     "FOUNDATION_LAUNCH_CALLDATA_LIMIT", "Restore bounded canonical launch calldata.");
   const decoded = decodeFunctionData({ abi: foundationFactoryNativeAbi, data: input.calldata });
-  foundationRequire((decoded.functionName === "launch" || decoded.functionName === "launchWithEth"), "FOUNDATION_LAUNCH_CALLDATA", "The transaction does not call this foundation factory's launch entrypoint.");
+  foundationRequire((decoded.functionName === "launch" || decoded.functionName === "launchWithEth" || decoded.functionName === "launchWithEthRoute"), "FOUNDATION_LAUNCH_CALLDATA", "The transaction does not call this foundation factory's launch entrypoint.");
   const parameters = decoded.args[0];
-  const canonical = decoded.functionName === "launchWithEth"
+  const canonical = decoded.functionName === "launchWithEthRoute"
+    ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEthRoute", args: [parameters, decoded.args[1]] })
+    : decoded.functionName === "launchWithEth"
     ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [parameters, decoded.args[1]] })
     : encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launch", args: [parameters] });
   foundationRequire(sameHex(canonical, input.calldata),
