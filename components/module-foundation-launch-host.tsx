@@ -1,7 +1,7 @@
 "use client";
 
 import { foundationParseAmount } from "@/lib/module-foundation/price";
-import type { FoundationPoolKey } from "@/lib/module-foundation/route";
+import type { FoundationFundingHop } from "@/lib/module-foundation/atomic-launch";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -77,7 +77,7 @@ export function ModuleFoundationLaunchHost() {
     const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
     const composition = await response.json() as { error?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
-      moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; pool: FoundationPoolKey } | null };
+      moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; path: FoundationFundingHop[] } | null };
     if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
     const moduleAssetPins = parseFoundationAssetPinsV1(composition.moduleAssetPins);
     const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,

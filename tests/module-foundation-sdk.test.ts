@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decodeAbiParameters, decodeFunctionData, getAddress, parseAbi, parseAbiParameters, type Address } from "viem";
+import { decodeAbiParameters, decodeFunctionData, getAddress, parseAbi, parseAbiParameters, zeroAddress, type Address, type Hex } from "viem";
 import { Actions } from "@uniswap/v4-sdk";
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
 import { foundationParseAmount, planFoundationPrice } from "@/lib/module-foundation/price";
-import { buildFoundationExactInput, foundationPoolId, foundationPoolKey } from "@/lib/module-foundation/route";
+import { buildFoundationExactInput, buildFoundationNativeExactInput, foundationNativeTradePath, foundationPoolId, foundationPoolKey } from "@/lib/module-foundation/route";
+import { FOUNDATION_WETH } from "@/lib/module-foundation/native-funding";
+import type { AnyQuoteExternalRouteV1 } from "@/lib/module-engine/any-quote/types";
 
 const low = getAddress("0x1000000000000000000000000000000000000000");
 const high = getAddress("0xf000000000000000000000000000000000000000");
@@ -43,6 +45,37 @@ describe("foundation starting position", () => {
 });
 
 describe("official foundation route", () => {
+  for (const side of ["buy", "sell"] as const) {
+    it(`uses official native wrapping commands for a WETH-quoted ${side}`, () => {
+      const pool = { token: low, quote: FOUNDATION_WETH, hook, poolId: foundationPoolId(foundationPoolKey({ token: low, quote: FOUNDATION_WETH, hook })) };
+      const route = buildFoundationNativeExactInput({ pool, owner: user, recipient, side, amountIn: 10_000n, minimumOutput: 250n, deadline: 1_100n, now: 1_000n });
+      expect(route.commands).toBe(side === "buy" ? "0x0b10" : "0x100c");
+      expect(route.transaction.value).toBe(side === "buy" ? 10_000n : 0n);
+      expect(side === "buy" ? route.currencyIn : route.currencyOut).toBe(zeroAddress);
+      expect(side === "buy" ? route.approval : route.approval?.token).toBe(side === "buy" ? null : low);
+    });
+
+    it(`joins an ETH route to the actual Foundation pool for ${side}`, () => {
+      const pool = { token: low, quote: high, hook, poolId: foundationPoolId(foundationPoolKey({ token: low, quote: high, hook })) };
+      const key = { currency0: zeroAddress, currency1: high, fee: 3000, tickSpacing: 60, hooks: zeroAddress };
+      const route: AnyQuoteExternalRouteV1 = { provider: "uniswap-trading-api", chainId: 4663,
+        tokenIn: side === "buy" ? FOUNDATION_WETH : high, tokenOut: side === "buy" ? high : FOUNDATION_WETH,
+        amountIn: "10000", amountOut: "1000", validUntil: "1100", evidenceHash: `0x${"00".repeat(32)}` as Hex,
+        checkpoint: { number: "1", hash: `0x${"00".repeat(32)}` as Hex, timestamp: "1000" },
+        hops: [{ protocol: "V4", tokenIn: side === "buy" ? zeroAddress : high, tokenOut: side === "buy" ? high : zeroAddress,
+          key, poolId: foundationPoolId(key), hookData: "0x" }] };
+      const path = foundationNativeTradePath(pool, side, route);
+      const launchHop = side === "buy" ? path.at(-1)! : path[0];
+      expect(launchHop.tickSpacing).toBe(60);
+      expect(launchHop.fee).toBe(0);
+      expect(launchHop.hooks).toBe(hook);
+      const built = buildFoundationNativeExactInput({ pool, owner: user, recipient, side, amountIn: 10_000n,
+        minimumOutput: 250n, deadline: 1_300n, now: 1_000n, externalRoute: route });
+      expect(built.commands).toBe("0x10");
+      expect(() => buildFoundationNativeExactInput({ pool, owner: user, recipient, side, amountIn: 10_000n,
+        minimumOutput: 250n, deadline: 1_300n, now: 1_100n, externalRoute: route })).toThrow("current ETH route");
+    });
+  }
   for (const side of ["buy", "sell"] as const) for (const tokenLow of [true, false]) {
     it(`binds ${side} input and recipient with empty hook data, tokenLow=${tokenLow}`, () => {
       const identity = { token: tokenLow ? low : high, quote: tokenLow ? high : low, hook };

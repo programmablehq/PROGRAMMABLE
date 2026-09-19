@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { decodeEventLog, formatUnits, getAddress, type Address, type Hex } from "viem";
+import { decodeEventLog, formatUnits, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
 import { ModuleFoundationMarket } from "./module-foundation-market";
 import { ModuleFoundationActions, type FoundationActionDescriptor, type FoundationActionReview } from "./module-foundation-actions";
@@ -19,6 +19,8 @@ import { foundationParseAmount } from "@/lib/module-foundation/price";
 import { foundationStepSummary } from "@/lib/module-foundation/wallet";
 import { foundationLedgerAbi } from "@/lib/module-foundation/abi";
 import { FOUNDATION_INFRASTRUCTURE } from "@/lib/module-foundation/constants";
+import { FOUNDATION_WETH } from "@/lib/module-foundation/native-funding";
+import type { AnyQuoteReadinessV1 } from "@/lib/module-engine/any-quote/types";
 import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationTradeDraft,
   type FoundationTradeReview, type FoundationTransactionResult, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
 import styles from "./module-foundation-ui.module.css";
@@ -80,19 +82,30 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
     if (details.ledger.modules.length > 0 && (!modules?.selections || !modules.context || modules.error)) {
       throw new Error("Wait for this pool's original module sources and asset bindings to be verified before trading.");
     }
+    const amountIn = foundationParseAmount(draft.amount, 18, false);
+    let externalRoute;
+    if (getAddress(details.quote.address) !== FOUNDATION_WETH) {
+      const response = await fetch("/api/module-foundation/eth-route", { method: "POST", credentials: "same-origin", redirect: "error",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quoteAsset: details.quote.address,
+          ...(draft.side === "buy" ? { probeEthAmount: amountIn.toString() } : {}) }) });
+      const readiness = await response.json() as AnyQuoteReadinessV1;
+      if (!response.ok || readiness.status !== "compatible") throw new Error("An executable ETH route is currently unavailable for this pool. Try again when liquidity is available.");
+      externalRoute = readiness.routes[draft.side];
+    }
+    session.assertCurrent(account, context);
     const sequence = await prepareFoundationTrade({ client: session.client, binding: current, account, pool: details.pool,
-      side: draft.side, amountIn: foundationParseAmount(draft.amount, draft.side === "buy" ? details.quote.decimals : 18, false), slippageBps: draft.slippageBps,
+      side: draft.side, amountIn, slippageBps: draft.slippageBps, nativeEth: true, externalRoute,
       ...(details.ledger.modules.length > 0 ? { moduleReview: { catalog: await session.resolveCatalog(),
         selections: modules!.selections!, context: modules!.context } } : {}) });
     const fees = await simulateFoundationTradeFees({ client: session.client, binding: current, pool: details.pool,
       steps: sequence.steps, checkpoint: sequence.checkpoint });
     session.assertCurrent(account, context);
-    const outputDecimals = draft.side === "buy" ? 18 : details.quote.decimals;
+    const outputDecimals = 18;
     const review: FoundationTradeReview = { id: crypto.randomUUID(), contextKey: context, account, chainId: 4663, side: draft.side,
       expiresAt: Number(sequence.expiresAt), simulationBlock: sequence.checkpoint.blockNumber.toString(), inputAmount: draft.amount,
       outputAmount: formatUnits(sequence.amountOut, outputDecimals), minimumOutput: formatUnits(sequence.minimumOutput, outputDecimals),
       platformFeeAmount: formatUnits(fees.platformQuote, details.quote.decimals), creatorFeeAmount: formatUnits(fees.creatorQuote, details.quote.decimals),
-      lpFeeAmount: "0", platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
+      ...(externalRoute ? {} : { lpFeeAmount: "0" }), platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
       universalRouter: FOUNDATION_INFRASTRUCTURE.universalRouter.address, transactions: sequence.steps.map(foundationStepSummary) };
     trades.current.set(review, sequence); return review;
   }
@@ -134,7 +147,8 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
         creditedAmount: formatUnits(budget.credited, quote.decimals), paidAmount: formatUnits(budget.claimed, quote.decimals), asOfBlock: details.checkpoint.blockNumber.toString() } };
   });
   return <><FoundationSessionStatus session={session} /><ModuleFoundationMarket key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
-    coin={coin} quote={quote} pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} creatorFeeBps={details.creatorFeeBps}
+    coin={coin} quote={quote} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true }}
+    pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} creatorFeeBps={details.creatorFeeBps}
     walletAction={session.walletAction} submissionBlocked={session.submissionBlocked} onPrepareTrade={prepareTrade}
     onConfirmTrade={async review => { const sequence = trades.current.get(review); if (!sequence) throw new Error("Review this trade again.");
       session.assertCurrent(sequence.account, review.contextKey); return verifiedResult(await session.execute(sequence)); }}
