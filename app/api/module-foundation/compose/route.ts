@@ -22,7 +22,7 @@ import { parseFoundationStartPrice } from "@/lib/module-foundation/start-price";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 90;
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 
 /** Read-only composition from admitted source. Request JSON cannot supply review or runtime authority. */
@@ -41,7 +41,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       "initialBuy", "additionalLiquidity", "modules"], "foundation.compose.draft") as unknown as FoundationLaunchDraft;
     const account = getAddress(body.account);
     if (!/^0x[0-9a-fA-F]{64}$/.test(body.tokenSalt)) throw new Error("The launch salt is invalid.");
-    const availability = parseFoundationAvailability(await readFoundationAvailabilityResponse());
+    // The authority can spend 50 seconds checking runtime and finality. Match the
+    // availability route's deadline and leave time for the remaining launch reads.
+    const availability = parseFoundationAvailability(await readFoundationAvailabilityResponse(fetch, 55_000));
     const binding = availability.binding;
     if (!availability.available || !binding || binding.releaseDigest !== body.releaseDigest) throw new Error("The reviewed launch version is unavailable. Review again.");
     const catalog = bindFoundationCatalogV1(availability.catalog.document, availability.catalog.authority);

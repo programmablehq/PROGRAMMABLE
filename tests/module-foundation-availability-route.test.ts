@@ -53,7 +53,7 @@ it("returns a current verified response after the old deadline and closes a stal
   expect(abortedAt).toBeLessThan(maxDuration * 1000);
 });
 
-it("retains the shorter default for composition and discovery callers", async () => {
+it("retains the shorter default for callers without an explicit deadline", async () => {
   const fetcher = vi.fn((_url: URL, init: RequestInit) => new Promise<Response>((resolve, reject) => {
     const timer = setTimeout(() => resolve(Response.json(availableFixture())), 13_000);
     init.signal!.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal!.reason); }, { once: true });

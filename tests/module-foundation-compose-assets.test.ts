@@ -3,7 +3,7 @@ import { decodeAbiParameters, encodeAbiParameters, getAddress, keccak256, toHex,
 import type { OpenConfigSchema } from "@/packages/classic-modules/src/open-config.mjs";
 import type { OpenSourcePackage } from "@/packages/classic-modules/src/open-packages.mjs";
 import type { ModuleEngineConfigurationArgument } from "@/lib/module-engine/catalog";
-import { POST } from "@/app/api/module-foundation/compose/route";
+import { POST, maxDuration } from "@/app/api/module-foundation/compose/route";
 import { FOUNDATION_AVAILABILITY_SCHEMA } from "@/lib/module-foundation/availability";
 import { FOUNDATION_CATALOG_SCHEMA_V1, type FoundationCatalogEntryV1 } from "@/lib/module-foundation/catalog";
 import { foundationMetadataParameters, type FoundationMetadata } from "@/lib/module-foundation/abi";
@@ -143,6 +143,48 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation compose BFF asset bindings", () => {
+  it("prepares after a slow authority response and closes a stalled read before the route expires", async () => {
+    vi.useRealTimers(); vi.useFakeTimers(); vi.setSystemTime(now * 1000);
+    vi.stubEnv("PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL", "https://foundation-authority.example");
+    const actual = await vi.importActual<typeof import("@/lib/server/module-foundation/availability")>("@/lib/server/module-foundation/availability");
+    mocks.availability.mockImplementation(actual.readFoundationAvailabilityResponse);
+    // Keep the real helper and abort behavior, with only the timer scheduler replaced.
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(milliseconds => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), milliseconds);
+      return controller.signal;
+    });
+    try {
+      vi.stubGlobal("fetch", vi.fn((_url: URL, init: RequestInit) => new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(Response.json(accepted())), 13_000);
+        init.signal!.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal!.reason); }, { once: true });
+      })));
+      const delayed = POST(request(body()));
+      await vi.advanceTimersByTimeAsync(13_000);
+      const response = await delayed;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ releaseDigest, modules: [] });
+      expect(predictions()).toHaveLength(1);
+
+      mocks.readContract.mockClear(); mocks.infrastructure.mockClear();
+      let settled = false, abortedAt: number | undefined;
+      const startedAt = Date.now();
+      vi.stubGlobal("fetch", vi.fn((_url: URL, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener("abort", () => { abortedAt = Date.now() - startedAt; reject(init.signal!.reason); }, { once: true });
+      })));
+      const stalled = POST(request(body())).then(result => { settled = true; return result; });
+      await vi.advanceTimersByTimeAsync(54_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await stalled).status).toBe(400);
+      expect(abortedAt).toBeLessThan(maxDuration * 1000);
+      expect(mocks.infrastructure).not.toHaveBeenCalled();
+      expect(predictions()).toHaveLength(0);
+    } finally {
+      vi.clearAllTimers(); timeout.mockRestore(); vi.unstubAllGlobals(); vi.unstubAllEnvs();
+    }
+  });
+
   it("rejects an old quote-denominated form before any launch preparation", async () => {
     const old = body();
     const requestBody = { ...old, launchFlow: undefined };
