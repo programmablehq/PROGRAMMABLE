@@ -14,9 +14,9 @@ Every launched coin records the revisions and configuration it selected. A new s
 
 ## Earn from use
 
-You earn rewards when creators use your eligible module in a coin that trades. Our Module Mode fee policy reserves **0.20% (20 bps) in total for module authors**, shared among the eligible module families used by that coin. Multiple components from one family share the same reward allocation. Existing coins keep their original fee model, as explained in [Fees and revenue](../economics.md#module-mode).
+Rewards follow the host and fee split recorded at launch. Foundation modules can receive a configured share of the creator fee. Earlier Native and Engine versions use their own author-fee policy. Read [Fees and revenue](../economics.md#module-mode) and the selected release instead of assuming one allocation applies to every host.
 
-Publishing a module makes it available for use. Earnings start when a coin using it generates trading fees. Claim your earnings to the reward wallet registered with your module.
+Publishing a module makes it available for use. Earnings start when a coin using it generates fees allocated to that module. Claims follow the deployed module's recipient and withdrawal rules.
 
 ## Custom projects
 

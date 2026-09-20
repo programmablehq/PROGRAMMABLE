@@ -1,8 +1,10 @@
 ---
-description: Identify Module Mode coins independently of their selected modules
+description: Versioned indexing for earlier Native and Engine launches
 ---
 
-# Index Module Mode launches
+# Native and Engine indexing
+
+For Foundation coins, use [Index Foundation launches](https://programmable.market/docs/developers/foundation-indexing). This page retains the earlier Native and Engine source interfaces for existing coins. Do not apply these event formats or fee policies to Foundation.
 
 Index the launch contract, then attach the selected module configuration to that launch. Module names, categories and frontend controls are not part of coin identity. A coin with no modules uses the same source interface as a coin with modules.
 

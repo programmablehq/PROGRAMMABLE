@@ -8,7 +8,7 @@ Choose Module Mode for a coin with optional modules, or Custom Launch for your o
 
 ## Module Mode
 
-Open the [Module Mode builder](https://programmable.market/launch/modules). Configure the coin, creator fees, initial buy and any modules. The builder checks the selected configuration before wallet review. After launch, open the coin's controls from its page or your profile. The [Module Mode guide](../models/module-mode.md) describes configuration and management.
+Open the [Foundation builder](https://programmable.market/launch/modules/foundation). Configure the coin, quote token, creator fee, optional initial buy and any available modules. The standard launch supplies token liquidity automatically, with no separate quote deposit required. The ETH-funded flow creates the coin and completes any supported initial buy in one transaction. The [Module Mode guide](../models/module-mode.md) explains the wallet confirmation, costs and controls.
 
 ## Custom Launch
 
@@ -22,7 +22,7 @@ Follow [Launch through the API](../developers/custom-launch-quickstart.md). It c
 
 Check capabilities before choosing the implementation. The MultiRole economic verifier recognizes the exact Native20 reference contracts and supported constructor configuration. Other source or economic mechanisms can return `evidence_required`; follow the stated requirement before expecting a wallet handoff.
 
-## Fees and funding
+## Custom fees and funding
 
 Robinhood Native20 charges **20 bps (0.20%)** of gross native ETH per successful buy or sell for Programmable, rounded up to the next wei. Creator fees and pool fees are additional. The platform recipient is fixed at `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`.
 
@@ -32,13 +32,13 @@ Record launch capital and gas separately. For V4 profile 4.1, include its atomic
 
 An ordinary Uniswap v4 pool needs a funded liquidity position. Initializing the pool does not add liquidity, and volume cannot create initial liquidity from nothing. A custom reserve or settlement model must be implemented by the project's contracts and covered by the selected API's verification.
 
-## API key and wallet
+## Custom API key and wallet
 
 Create or reuse a key in the [API-key manager](https://programmable.market/developers/api-keys). It needs the intended chain grant, controller binding, `custom-launch:create` and `custom-launch:read`. Store the value as `PROGRAMMABLE_API_KEY` in an encrypted secret store.
 
 The API key authorizes API operations. The controller wallet separately reviews, signs and sends the transaction. Check the network, destination, calldata, value and expiry before sending.
 
-## Follow the result
+## Follow the Custom Launch result
 
 Save the exact request, idempotency key and returned launch ID. Use that ID for status reads. Retry the same request with unchanged bytes; a timeout is not a reason to create another launch.
 

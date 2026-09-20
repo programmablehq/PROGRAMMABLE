@@ -31,6 +31,8 @@ The current standalone CLI is **1.0.0-development.8** and retains the existing s
 
 ## Describe the actual runtime
 
+Choose the host interface explicitly. Foundation uses [IFoundationModuleV1](https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/src/module-foundation/IFoundationModuleV1.sol), with descriptors, swap callbacks and module actions. Read the selected release's capabilities and [Foundation integration contract](foundation-indexing.md) before targeting it. The Native and Engine interfaces below are separate hosts; their starter code does not establish Foundation compatibility.
+
 The package declares each component's actual runtime, source path and entrypoint, then the host capabilities and interfaces it needs. Use the existing versioned namespaces; a module does not have to fit a business category or an example. Additional inert requirements can use versioned `extensions` and pinned documentation. The source package schema and its resource limits still apply.
 
 Read `review.profiles` and `review.limits` in authenticated context before choosing an implementation interface. A matching profile can reuse existing review infrastructure. If the idea needs another interface, submit that requirement with its source; do not disguise it as a supported profile. The platform must establish an executable review plan and any host integration before making it available.
@@ -100,9 +102,11 @@ After acceptance, the author's `modules:read` key can download the exact plan, a
 
 A coin records the module revisions and configuration selected at launch. Later catalog changes do not alter that record. Management actions may change only the state permitted by the deployed contracts.
 
-Indexer integration depends on the launch source version, not module names or categories. A new module using an existing source version keeps the same launch event and identity format. Read [Index Module Mode launches](https://programmable.market/docs/developers/module-mode-indexing) before adding an engine or changing an identity interface.
+Indexer integration depends on the launch source version, not module names or categories. A new module using an existing source version keeps the same launch event and identity format. Read [Foundation indexing](foundation-indexing.md) or the [Native and Engine adapters](module-mode-indexing.md) before changing a host or identity interface.
 
 ## Contributor rewards
+
+Foundation charges 30 bps for Programmable plus the configured creator fee. Module instances can receive the `creatorShareBps` allocation recorded for them at launch. This allocation divides the creator budget; it does not add a fixed author fee or reduce the platform fee. The ledger credits each instance separately. An active module action can withdraw that instance's budget under the deployed module's rules.
 
 Fee rules follow the launch source version. Native V2 and the Engine V1 quote trading profile charge 10 bps without eligible families, or 30 bps with them: 10 bps for Programmable and 20 bps shared equally among distinct admitted families. Creator fees are additional. Engine quote fees are charged on gross quote input for a buy and gross quote output for a sell; author claims cover the ETH actually received after conversion. Non-trading operations have no swap-fee basis.
 
@@ -111,6 +115,10 @@ Native V1 retains its original 20-bps rule: 10/10 with eligible families, or the
 Module funding, creator fees and earned author claims remain separate. Changing future creator recipients does not move already earned claims, the module author's reward wallet or a fixed refund beneficiary.
 
 ## Recover transactions and claims
+
+For Foundation, resolve the original factory with [release discovery](foundation-indexing.md#resolve-the-launch-source), read `launchOf(token)` and verify its ledger. Read creator credits and claims through the [Foundation ledger ABI](https://github.com/programmablehq/PROGRAMMABLE/blob/production/lib/module-foundation/abi.ts). `claimCreator()` pays the bound creator in the quote token; module budgets use their own authorized actions. Reconcile the canonical receipt before repeating a launch or claim.
+
+The following clients and `claimable` interface apply to earlier Native and Engine coins.
 
 Keep the chain, account, token address, exact release identity and transaction hash. After a timeout, check the wallet's submitted transaction and canonical receipt before starting another action. The existing operation recovery client reconciles Native and Engine transactions against their original release, calldata, value and receipt. A saved browser record cannot authorize a new send; a mined receipt is still separate from finalized indexing.
 

@@ -18,7 +18,7 @@ Our [Dune dashboard](https://dune.com/programmablehq/analytics) shows creator ea
 
 ## Module Mode
 
-You can choose a creator fee of up to **10%**. Your fee is separate from the shares for Programmable and module authors. The [fee guide](../economics.md#module-mode) shows the split, and the launch screen shows the fees for your coin before you confirm.
+Foundation lets you choose a creator fee of **0%, or 1% to 10% in 1% increments**, separate from Programmable's **0.30%**. If selected modules receive a share of your fee, your earnings are the remainder after that allocation. Fees accrue in the pool's quote token. The [fee guide](../economics.md#module-mode) covers Foundation and earlier versions; the launch screen shows your coin's split before you confirm.
 
 Module authors earn their own rewards when their modules are used. If you build modules, see [Reusable modules](templates.md) for how to publish them and receive rewards.
 
