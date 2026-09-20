@@ -43,6 +43,7 @@ export interface ModuleFoundationBuilderProps {
   walletAction?: FoundationWalletAction;
   initialDraft?: Partial<FoundationLaunchDraft>;
   suggestedInitialBuy?: string;
+  launchProgress?: string;
   /** Host-owned durable wallet operation guard, including uncertain submissions. */
   submissionBlocked?: string;
 }
@@ -62,7 +63,7 @@ function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes
     initialBuy: initial?.initialBuy ?? "", additionalLiquidity: "0", modules: initial?.modules ?? EMPTY_MODULES };
 }
 
-export function ModuleFoundationBuilder({ availability, factoryVersion, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, submissionBlocked }: ModuleFoundationBuilderProps) {
+export function ModuleFoundationBuilder({ availability, factoryVersion, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, launchProgress, submissionBlocked }: ModuleFoundationBuilderProps) {
   const [draft, setDraft] = useState<EditableDraft>(() => initialForm(initialDraft, quoteAssets, availability.chainId));
   const [buyEdited, setBuyEdited] = useState(initialDraft?.initialBuy !== undefined);
   const initialBuy = buyEdited ? draft.initialBuy : suggestedInitialBuy ?? "";
@@ -258,7 +259,7 @@ export function ModuleFoundationBuilder({ availability, factoryVersion, contextK
     requestAnimationFrame(() => document.getElementById("foundation-name")?.focus());
   }
 
-  const actionLabel = walletAction?.label ?? (phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Preparing launch…" : phase === "signing" ? "Confirm in your wallet…" : "Create Launch");
+  const actionLabel = walletAction?.label ?? (phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Preparing launch…" : phase === "signing" ? launchProgress || "Opening coin…" : "Create Launch");
   return <div className={`${styles.page} ${styles.builderPage}`}>
     <div className={styles.topline}>{onBack ? <button type="button" className={styles.backButton} disabled={busy} onClick={onBack}><ArrowLeftIcon size={16} aria-hidden="true" /> All launch modes</button> : <span className={styles.eyebrow}>Module Mode</span>}<span className={styles.network}>{availability.chainName}</span></div>
     <header className={styles.pageHeading}><h1>Create a coin</h1></header>

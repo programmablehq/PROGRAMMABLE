@@ -9,7 +9,7 @@ import { useLiveDataRefresh } from "@/components/use-live-data-refresh";
 import { useRobinhoodPresentation } from "@/components/use-robinhood-presentation";
 import { readRobinhoodProfileResponse } from "@/lib/profile/robinhood-profile";
 import { isRobinhoodModuleLaunch, ROBINHOOD_PROFILE_PAGE_SIZE, type RobinhoodProfileLaunchList } from "@/lib/robinhood-launches";
-import { coinAge, coinTicker } from "@/lib/robinhood-presentation";
+import { coinAge, coinTicker, coinValuation } from "@/lib/robinhood-presentation";
 import styles from "./robinhood-profile-launches.module.css";
 
 const snapshots = new Map<string, { data: RobinhoodProfileLaunchList; savedAt: number }>();
@@ -94,6 +94,7 @@ function RobinhoodAccountLaunches({ account }: { account: string }) {
     {items.length ? <ul className={styles.list} aria-busy={loading}>
       {items.map((launch) => {
         const detail = details.get(launch.tokenAddress.toLowerCase());
+        const valuation = coinValuation(detail?.market);
         const hasAsset = !launch.launchProjection || launch.launchProjection.primaryComponentId !== null;
         return <li key={launch.launchId}>
           <Link className={styles.row} href={`/token/${launch.tokenAddress}`} prefetch={false}>
@@ -101,7 +102,7 @@ function RobinhoodAccountLaunches({ account }: { account: string }) {
               fallbackImageUrl={isRobinhoodModuleLaunch(launch) ? MODULE_TOKEN_FALLBACK_IMAGE : undefined} />
             <span className={styles.identity}><strong>{launch.name?.trim() || (launch.launchProjection ? "Unnamed contract" : "Unnamed token")}</strong>{hasAsset ? <small>{coinTicker(launch.symbol)}</small> : null}<small>{isRobinhoodModuleLaunch(launch) ? "Module" : "Custom"}</small></span>
             <span className={styles.metrics}>
-              {hasAsset && detail?.market?.marketCapUsd != null ? <><small>Market cap</small><AnimatedMarketCap metric={{ kind: "usd", value: detail.market.marketCapUsd }} replayKey={`profile:4663:${launch.tokenAddress.toLowerCase()}`} /></> : null}
+              {hasAsset && valuation.value !== null ? <><small title={valuation.label === "FDV" ? "Fully diluted valuation" : undefined}>{valuation.label}</small><AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`profile:4663:${launch.tokenAddress.toLowerCase()}`} /></> : null}
               {launch.launchedAt ? <time dateTime={launch.launchedAt}>{coinAge(launch.launchedAt, now)}</time> : null}
             </span>
           </Link>

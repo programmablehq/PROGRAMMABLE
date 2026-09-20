@@ -146,7 +146,7 @@ export function ModuleFoundationLaunchHost() {
       router.push(tokenUrl);
       return { ...outcome.result, tokenUrl, metadataStatus: "stored", verificationStatus: "verified", operationComplete: true,
         pool: foundationPoolPresentation(verified.details), positions: foundationPositionPresentation(verified.details),
-        message: "The coin metadata, launch pool and liquidity positions were verified in the confirmed transaction." };
+        message: "Your coin is ready." };
     } catch {
       return { ...outcome.result, operationComplete: true, verificationStatus: "pending", metadataStatus: "pending",
         message: "The launch transaction is confirmed. Its coin and position details need another readback. Keep this transaction; do not launch it again." };
@@ -161,9 +161,9 @@ export function ModuleFoundationLaunchHost() {
     uploads.current.set(`${account.toLowerCase()}:${result.uri}`, input.image.sha256);
     return { url: result.uri, sha256: input.image.sha256 };
   }
-  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
+  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} showProgress={false} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
-    catalog={catalog} quoteAssets={quotes} suggestedInitialBuy={suggestedInitialBuy} onResolveQuote={resolveQuote} onUploadImage={upload}
+    catalog={catalog} quoteAssets={quotes} suggestedInitialBuy={suggestedInitialBuy} launchProgress={session.progress} onResolveQuote={resolveQuote} onUploadImage={upload}
     onPrepareLaunch={prepare} onConfirmLaunch={async review => { const sequence = prepared.current.get(review);
       if (!sequence) throw new Error("Prepare this launch again with your current wallet."); session.assertCurrent(sequence.account, review.contextKey);
       const outcome = await session.execute(sequence); setCompletedDraft(draftKey);

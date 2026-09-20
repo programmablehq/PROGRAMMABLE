@@ -118,8 +118,23 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     const submitted = renderToStaticMarkup(<ModuleFoundationTransactionResult result={{ status: "submitted", transactionHash: hash, explorerUrl: "https://explorer.example/tx/fixture", metadataStatus: "stored", tokenUrl: "/coin/fixture" }} />);
     expect(submitted).toContain("Transaction submitted");
     expect(submitted).not.toContain("Transaction confirmed");
-    expect(submitted).not.toContain("View coin");
+    expect(submitted).not.toContain("View Coin");
     expect(submitted).toContain("index confirmation pending");
+  });
+  it("opens the verified coin with a compact success state and retains its transaction", () => {
+    const result = { status: "confirmed" as const, verificationStatus: "verified" as const, transactionHash: hash,
+      explorerUrl: `https://robinhoodchain.blockscout.com/tx/${hash}`, tokenUrl: `/modules/${address}` };
+    const html = renderToStaticMarkup(<ModuleFoundationTransactionResult result={result} />);
+    expect(html).toContain("Coin created");
+    expect(html).toContain("Opening your coin…");
+    expect(html).toContain("View Coin");
+    expect(html).toContain(`href="/modules/${address}"`);
+    expect(html).toContain(hash);
+    const unverified = renderToStaticMarkup(<ModuleFoundationTransactionResult result={{ ...result, verificationStatus: "pending" }} />);
+    expect(unverified).not.toContain("Coin created");
+    expect(unverified).not.toContain("View Coin");
+    const unsafe = renderToStaticMarkup(<ModuleFoundationTransactionResult result={{ ...result, tokenUrl: "javascript:alert(1)" }} />);
+    expect(unsafe).not.toContain("View Coin");
   });
   it("keeps the coin draft editable while an unresolved wallet operation blocks submission", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions}
@@ -142,5 +157,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     for (const label of ["Unsafe script", "Private credential", "Plain HTTP"]) expect(html).not.toContain(label);
     const unsafeImage = renderToStaticMarkup(<ModuleFoundationMarket {...props} coin={{ ...coin, imageURI: "data:image/svg+xml,unsafe" }} />);
     expect(unsafeImage).not.toContain("data:image");
+    expect(unsafeImage).toContain(FOUNDATION_DEFAULT_IMAGE.url);
+    expect(unsafeImage).toContain('aria-label="Copy coin address"');
   });
 });

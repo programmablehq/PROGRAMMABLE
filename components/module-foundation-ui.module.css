@@ -253,8 +253,15 @@
 .tradeHeader h1 { font-size: 30px; font-weight: 500; letter-spacing: -0.03em; line-height: 36px; margin: 0; }
 .tradeHeader p { color: var(--mf-muted); font-size: 14px; line-height: 20px; margin: 0; }
 .marketLayout { align-items: start; display: grid; gap: 32px; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
-.marketAbout { grid-column: 1; grid-row: 1; min-width: 0; }
-.marketLayout > .mainColumn { grid-column: 2; grid-row: 1; }
+.marketChart { grid-column: 1; grid-row: 1; min-width: 0; }
+.marketAbout { grid-column: 1; grid-row: 2; min-width: 0; }
+.marketLayout > .mainColumn { grid-column: 2; grid-row: 1 / span 2; }
+.coinAddress { margin: -8px 0 24px; max-width: 100%; }
+.coinAddress .addressGroup { max-width: 100%; }
+.coinAddress .address { overflow-wrap: anywhere; }
+.marketMetrics { display: flex; flex-wrap: wrap; gap: 16px 32px; margin: 0 0 16px; }
+.marketMetrics dt { color: var(--mf-muted); font-size: 14px; line-height: 20px; }
+.marketMetrics dd { font-size: 24px; font-weight: 500; line-height: 32px; margin: 4px 0 0; }
 .marketAbout > p { color: var(--mf-muted); font-size: 16px; line-height: 24px; margin: 0 0 24px; max-width: 60ch; }
 .tradePanel { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 16px; min-width: 0; padding: 24px; }
 .sideButtons { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 24px; }
@@ -288,7 +295,7 @@
   .form, .reviewPanel, .resultPanel { padding: 24px; }
   .previewContent { padding: 16px; }
   .marketLayout { grid-template-columns: 1fr; }
-  .marketAbout, .marketLayout > .mainColumn { grid-column: auto; grid-row: auto; }
+  .marketChart, .marketAbout, .marketLayout > .mainColumn { grid-column: auto; grid-row: auto; }
   .tradePanel { max-width: 600px; width: 100%; }
 }
 @media (max-width: 760px) {
