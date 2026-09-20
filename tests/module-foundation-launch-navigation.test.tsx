@@ -1,21 +1,25 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { keccak256, toHex, type PublicClient } from "viem";
 import type { ModuleFoundationBuilderProps } from "@/components/module-foundation-builder";
 import type { FoundationLaunchDraft } from "@/lib/module-foundation/ui-types";
+import type { FoundationResolution } from "@/lib/module-foundation/result-store";
 import { FOUNDATION_DEFAULT_IMAGE } from "@/lib/module-foundation/default-image";
 import { foundationV2Fixture, v2Now } from "./module-foundation-v2-fixture";
 
 const fixture = vi.hoisted(() => ({ session: {} as Record<string, unknown>, builder: null as ModuleFoundationBuilderProps | null,
-  push: vi.fn(), prepare: vi.fn(), verify: vi.fn() }));
+  push: vi.fn(), prepare: vi.fn(), verify: vi.fn(), availability: vi.fn(), discover: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: fixture.push }) }));
 vi.mock("@/components/module-foundation-session", () => ({ useFoundationSession: () => fixture.session, FoundationSessionStatus: () => null }));
 vi.mock("@/components/module-foundation-builder", () => ({ ModuleFoundationBuilder: (props: ModuleFoundationBuilderProps) => { fixture.builder = props; return null; } }));
 vi.mock("@/components/module-mode-wallet-state", () => ({ uploadModuleModeImage: vi.fn() }));
 vi.mock("@/lib/module-foundation/client", async original => ({ ...await original<typeof import("@/lib/module-foundation/client")>(), prepareFoundationLaunch: fixture.prepare }));
 vi.mock("@/lib/module-foundation/readback", () => ({ verifyFoundationLaunchReceipt: fixture.verify }));
+vi.mock("@/lib/module-foundation/availability", () => ({ fetchFoundationAvailability: fixture.availability }));
+vi.mock("@/lib/module-foundation/discovery", () => ({ discoverFoundationLaunch: fixture.discover }));
 vi.mock("@/lib/module-foundation/ui-readback", () => ({ foundationLaunchPositionPresentation: () => [], foundationPoolPresentation: () => ({}), foundationPositionPresentation: () => [] }));
-import { ModuleFoundationLaunchHost } from "@/components/module-foundation-launch-host";
+import { ModuleFoundationLaunchHost, verifiedSavedFoundationLaunchUrl } from "@/components/module-foundation-launch-host";
 import { foundationMetadata } from "@/lib/module-foundation/client";
 
 beforeEach(() => { vi.clearAllMocks(); vi.spyOn(Date, "now").mockReturnValue(v2Now); });
@@ -45,6 +49,8 @@ async function prepareHost() {
 
 describe("launch completion navigation", () => {
   it("opens the verified coin chart in the current tab after the single execution", async () => {
+    const setItem = vi.fn();
+    vi.stubGlobal("sessionStorage", { setItem });
     const { f, prepared } = await prepareHost();
     expect(fixture.push).not.toHaveBeenCalled();
     expect(fixture.prepare.mock.calls[0][0].metadata.imageURI).toBe(FOUNDATION_DEFAULT_IMAGE.url);
@@ -53,6 +59,7 @@ describe("launch completion navigation", () => {
     const result = await fixture.builder!.onConfirmLaunch(prepared);
     expect(fixture.session.execute).toHaveBeenCalledOnce();
     expect(fixture.push).toHaveBeenCalledExactlyOnceWith(`/modules/${f.token}?transaction=${f.transactionHash}`);
+    expect(setItem).toHaveBeenCalledWith(`programmable:foundation-launch-opened:v1:${f.account.toLowerCase()}`, f.transactionHash.toLowerCase());
     expect(result.verificationStatus).toBe("verified");
   });
 
@@ -74,5 +81,63 @@ describe("launch completion navigation", () => {
     await fixture.builder!.onConfirmLaunch(prepared);
     expect(fixture.verify).not.toHaveBeenCalled();
     expect(fixture.push).not.toHaveBeenCalled();
+  });
+});
+
+function savedLaunch() {
+  const f = foundationV2Fixture(false, true), transaction = f.steps[0].transaction;
+  const saved: FoundationResolution = { schemaVersion: "programmable.foundation.resolution.v1", account: f.account,
+    operationId: "11111111-1111-4111-8111-111111111111", releaseDigest: f.binding.releaseDigest,
+    calldataHash: keccak256(transaction.data), to: transaction.to, value: toHex(transaction.value), nonce: 1,
+    startBlock: f.checkpoint.blockNumber.toString(), createdAt: v2Now, transactionHash: f.transactionHash,
+    status: "success", blockNumber: f.checkpoint.blockNumber.toString(), blockHash: f.checkpoint.blockHash,
+    resolvedAt: v2Now, metadata: { stepKind: "launch", operationKind: "launch", token: f.token } };
+  const discovered = { token: f.token, transactionHash: f.transactionHash, transaction, checkpoint: f.checkpoint };
+  fixture.availability.mockResolvedValue({ available: true, binding: f.binding });
+  fixture.discover.mockResolvedValue(discovered);
+  return { f, saved, discovered, client: {} as PublicClient };
+}
+
+describe("restoring a completed launch after reload", () => {
+  it("uses the token's retained release and exact canonical creation transaction", async () => {
+    const { f, saved, client } = savedLaunch(), controller = new AbortController();
+    await expect(verifiedSavedFoundationLaunchUrl(client, saved, controller.signal)).resolves.toBe(`/modules/${f.token}?transaction=${f.transactionHash}`);
+    expect(fixture.availability).toHaveBeenCalledExactlyOnceWith(controller.signal, f.token);
+    expect(fixture.discover).toHaveBeenCalledExactlyOnceWith({ client, binding: f.binding, token: f.token,
+      transactionHash: f.transactionHash, signal: controller.signal });
+  });
+
+  it("does not turn an approval or reverted receipt into a completed launch", async () => {
+    const { saved, client } = savedLaunch();
+    await expect(verifiedSavedFoundationLaunchUrl(client, { ...saved, status: "reverted" })).rejects.toThrow("not a completed");
+    await expect(verifiedSavedFoundationLaunchUrl(client, { ...saved, metadata: { ...saved.metadata!, stepKind: "approve" } })).rejects.toThrow("not a completed");
+    expect(fixture.discover).not.toHaveBeenCalled();
+  });
+
+  it("refuses a different release before reading the candidate launch", async () => {
+    const { saved, client } = savedLaunch();
+    await expect(verifiedSavedFoundationLaunchUrl(client, { ...saved, releaseDigest: `0x${"99".repeat(32)}` })).rejects.toThrow("release");
+    expect(fixture.discover).not.toHaveBeenCalled();
+  });
+
+  it("refuses changed sender, calldata, value, token or canonical block evidence", async () => {
+    const { saved, discovered, client } = savedLaunch();
+    for (const changed of [
+      { ...saved, account: "0x1000000000000000000000000000000000000000" as const },
+      { ...saved, calldataHash: `0x${"99".repeat(32)}` as const },
+      { ...saved, value: toHex(BigInt(saved.value) + 1n) },
+      { ...saved, blockNumber: (BigInt(saved.blockNumber) + 1n).toString() },
+      { ...saved, blockHash: `0x${"99".repeat(32)}` as const },
+    ]) await expect(verifiedSavedFoundationLaunchUrl(client, changed)).rejects.toThrow("does not match");
+    fixture.discover.mockResolvedValueOnce({ ...discovered, token: "0x1000000000000000000000000000000000000000" });
+    await expect(verifiedSavedFoundationLaunchUrl(client, saved)).rejects.toThrow("does not match");
+  });
+
+  it("does not navigate with an aborted or unavailable readback", async () => {
+    const { saved, client } = savedLaunch(), controller = new AbortController();
+    controller.abort();
+    await expect(verifiedSavedFoundationLaunchUrl(client, saved, controller.signal)).rejects.toThrow("does not match");
+    fixture.discover.mockRejectedValueOnce(new Error("Canonical receipt unavailable"));
+    await expect(verifiedSavedFoundationLaunchUrl(client, saved)).rejects.toThrow("Canonical receipt unavailable");
   });
 });

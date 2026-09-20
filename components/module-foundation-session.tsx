@@ -179,12 +179,19 @@ export function useFoundationSession(token?: Address) {
     retryAvailability: () => setRefresh(value => value + 1) };
 }
 
-export function FoundationSessionStatus({ session, editingNewLaunch = false, showProgress = true }: { session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean; showProgress?: boolean }) {
+export function FoundationSessionStatus({ session, editingNewLaunch = false, showProgress = true, hideSuccessfulLaunch = false, hideSuccessfulTrade = false }: {
+  session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean; showProgress?: boolean;
+  hideSuccessfulLaunch?: boolean; hideSuccessfulTrade?: boolean;
+}) {
   const [hash, setHash] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const recovery = session.pending !== "null";
-  const resolved = session.resolution;
+  const saved = session.resolution;
+  const hideResolved = !recovery && saved?.status === "success"
+    && ((hideSuccessfulLaunch && saved.metadata?.stepKind === "launch")
+      || (hideSuccessfulTrade && (saved.metadata?.stepKind === "buy" || saved.metadata?.stepKind === "sell")));
+  const resolved = hideResolved ? null : saved;
   if (!showProgress && session.progress) return null;
-  if (!session.progress && !recovery && session.resolutionState === "null" && !message) return null;
+  if (!session.progress && !recovery && (session.resolutionState === "null" || hideResolved) && !message) return null;
   return <div className={`${styles.page} ${styles.sessionStatus}`}>
     {showProgress && session.progress ? <p role="status">{session.progress}</p> : null}
     {!session.progress && resolved ? <details className={styles.savedResult} open={!editingNewLaunch} aria-label="Saved transaction result"><summary>{editingNewLaunch
