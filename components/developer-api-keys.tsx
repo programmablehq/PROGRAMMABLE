@@ -3,6 +3,7 @@
 import { Disclosure } from "@/components/disclosure";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -123,6 +124,7 @@ type DeveloperApiKeysProps = Readonly<{
 type DeveloperApiKeysViewProps = Readonly<{
   moduleBuilder?: boolean;
   initialGuideOpen?: boolean;
+  navigationQuery?: string;
   account: `0x${string}` | null;
   authReady: boolean;
   connecting: boolean;
@@ -828,6 +830,7 @@ export function DeveloperApiKeys({
   launchContractSetup,
   moduleAgentSetupText,
 }: DeveloperApiKeysProps) {
+  const searchParams = useSearchParams();
   const {
     sessionReady: authReady,
     connecting,
@@ -852,7 +855,8 @@ export function DeveloperApiKeys({
       getAccessToken={getAccessToken}
       getIdentityToken={getIdentityToken}
       initialSection={initialSection}
-      initialGuideOpen={initialGuideOpen}
+      initialGuideOpen={searchParams ? searchParams.get("guide") === "custom-hook" : initialGuideOpen}
+      navigationQuery={searchParams?.toString()}
       agentSetupText={agentSetupText}
       launchContractSetup={launchContractSetup}
       moduleAgentSetupText={moduleAgentSetupText}
@@ -869,6 +873,7 @@ export function DeveloperApiKeys({
 
 export function DeveloperApiKeysView({
   initialGuideOpen = false,
+  navigationQuery,
   account,
   authReady,
   connecting,
@@ -1081,12 +1086,6 @@ export function DeveloperApiKeysView({
   }, [mutationResult]);
 
   useEffect(() => {
-    if (!initialGuideOpen || initialSection !== "keys") return;
-    const update = window.setTimeout(() => setActiveSection("keys"), 0);
-    return () => window.clearTimeout(update);
-  }, [initialGuideOpen, initialSection]);
-
-  useEffect(() => {
     if (confirmingRevokeId) confirmRevokeRef.current?.focus();
   }, [confirmingRevokeId]);
 
@@ -1117,25 +1116,22 @@ export function DeveloperApiKeysView({
   }, [authReady]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("start") === "custom") {
-      const update = window.setTimeout(() => {
-        setActiveSection("launch");
-        setStatusMessage("Opening Robinhood Custom launch.");
-      }, 0);
-      return () => window.clearTimeout(update);
-    }
-    const candidate = url.searchParams.get("launchId");
-    const chainId = url.searchParams.get("chainId");
-    if (!candidate || !launchRequestIdPattern.test(candidate)) return;
+    const searchParams = new URLSearchParams(navigationQuery ?? window.location.search);
+    const candidate = searchParams.get("launchId");
+    const chainId = searchParams.get("chainId");
+    const launchId = candidate && launchRequestIdPattern.test(candidate) ? candidate : null;
+    const section = searchParams.get("start") === "custom" ? "launch"
+      : launchId || searchParams.get("view") === "history" ? "history" : "keys";
     const update = window.setTimeout(() => {
-      setInitialLaunchId(candidate);
+      setActiveSection(section);
+      setInitialLaunchId(launchId);
       setInitialLaunchChainId(chainId === "1" ? null : "4663");
-      setActiveSection("history");
-      setStatusMessage("Opening the requested launch handoff.");
+      if (section === "keys" && searchParams.get("guide") === "custom-hook") {
+        window.requestAnimationFrame(() => { if (guideRef.current) guideRef.current.open = true; });
+      }
     }, 0);
     return () => window.clearTimeout(update);
-  }, []);
+  }, [navigationQuery]);
 
   const createApiKey = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
