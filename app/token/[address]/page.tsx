@@ -66,7 +66,7 @@ export default async function TokenPage({
   if (resolved.chainId === 4663) {
     return <TokenRouteChainSync key={4663} chainId={4663}>
       {isRobinhoodFoundationLaunch(resolved.token)
-        ? <ModuleFoundationMarketHost token={getAddress(address)} />
+        ? <ModuleFoundationMarketHost token={getAddress(address)} initialName={resolved.token.name?.trim() || "Unnamed token"} />
         : <RobinhoodTokenView address={address} token={resolved.token} status={resolved.status} />}
     </TokenRouteChainSync>;
   }

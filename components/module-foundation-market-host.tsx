@@ -27,7 +27,7 @@ import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
 import styles from "./module-foundation-ui.module.css";
 
-export function ModuleFoundationMarketHost({ token, transactionHash }: { token: Address; transactionHash?: Hex }) {
+export function ModuleFoundationMarketHost({ token, transactionHash, initialName }: { token: Address; transactionHash?: Hex; initialName?: string }) {
   const session = useFoundationSession(token);
   const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(token)}`);
   const market = presentation.items.find(item => item.tokenAddress.toLowerCase() === token.toLowerCase())?.market;
@@ -133,7 +133,7 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}><div className={styles.pageHeading}><h1>Coin</h1>
+  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}><div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
     <p role="status">{error || session.availability.reason || "Loading coin…"}</p></div>
     {error ? <button type="button" className={styles.secondaryButton} onClick={() => setRefreshKey(value => value + 1)}>Read pool again</button> : null}</div></>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
