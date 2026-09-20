@@ -27,7 +27,9 @@ export function isViewChainId(value: unknown): value is ViewChainId {
 }
 
 export function parseViewChainId(value: unknown): ViewChainId {
-  return tryParseViewChainId(value) ?? DEFAULT_VIEW_CHAIN_ID;
+  // Public product views currently support Robinhood only, including old saved preferences.
+  const chainId = tryParseViewChainId(value);
+  return chainId === 4663 ? chainId : DEFAULT_VIEW_CHAIN_ID;
 }
 
 export function serializeViewChainCookie(viewChainId: ViewChainId): string {

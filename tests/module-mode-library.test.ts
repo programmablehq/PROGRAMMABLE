@@ -5,6 +5,12 @@ import { AGENT_KEY_SCHEMA, AGENT_SCOPES, buildAgentConnection, buildAgentInstruc
 import { apiKeyRotationVersion, apiKeyMutationPath, parseApiKeyMutationResult } from "../components/developer-api-keys";
 
 describe("module discovery and agent connections", () => {
+  it("advertises only Robinhood custom launches and paused module authoring", () => {
+    expect(PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch).not.toHaveProperty("ethereum");
+    expect(PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.robinhood.chainId).toBe(4663);
+    expect(PROGRAMMABLE_AGENT_ENTRY.workflows.moduleContribution.available).toBe(false);
+    expect(buildAgentInstructions()).not.toContain("submit-module");
+  });
   it("discovers presentation entries without source bindings and preserves their caller data", () => {
     const entry = {
       id: "any-quote", title: "Any Quote", summary: "Choose a quote token", status: "available" as const,
@@ -41,10 +47,10 @@ describe("module discovery and agent connections", () => {
     expect(JSON.stringify(PROGRAMMABLE_AGENT_ENTRY)).not.toContain(secret);
     expect(() => buildAgentConnection("bad", { scopes: AGENT_SCOPES })).toThrow();
   });
-  it("uses combined rotation only with its live capability and keeps legacy readers closed", () => {
+  it("keeps combined rotation closed even when an older backend advertises it", () => {
     const capabilities = { restrictedIssuance: true, preservingRotation: true, preservingModuleRotation: true };
     expect(apiKeyRotationVersion(AGENT_SCOPES, capabilities)).toBeNull();
-    expect(apiKeyRotationVersion(AGENT_SCOPES, { ...capabilities, unifiedKeys: true })).toBe("agent");
+    expect(apiKeyRotationVersion(AGENT_SCOPES, { ...capabilities, unifiedKeys: true })).toBeNull();
     expect(apiKeyMutationPath({ version: "agent", kind: "issue", credentialId: null })).toBe("/api/developer/agent-keys");
     expect(parseApiKeyMutationResult({ schemaVersion: AGENT_KEY_SCHEMA }, 201)).toBeNull();
   });

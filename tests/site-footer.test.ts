@@ -46,8 +46,8 @@ describe("Site footer", () => {
     expect(footerSource).toContain('label: "X"');
   });
 
-  it("offers module and hook building beside one analytics destination", () => {
-    expect(footerSource).toContain('href: "/developers/modules"');
+  it("offers hook building without module API contribution links", () => {
+    expect(footerSource).not.toContain('href: "/developers/modules"');
     expect(footerSource).toContain('href: "/developers/hooks"');
     expect(footerSource).toContain('href: "/analytics"');
     expect(footerSource).not.toContain('href: "https://dune.com/programmablehq/analytics"');

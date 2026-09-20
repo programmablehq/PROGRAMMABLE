@@ -197,186 +197,41 @@ test("a late login failure cannot replace a restored authenticated session with 
   await expectMethods(page, ["login", "linkWallet"]);
 });
 
-test("an open module launch tab cannot undo another tab's browsing network choice", async ({ page }) => {
+test("old Ethereum preferences and setter calls stay on Robinhood without wallet requests", async ({ page }) => {
   await open(page);
-  const moduleTab = await page.context().newPage();
-  const errors = browserErrors.get(page)!;
-  moduleTab.on("pageerror", (error) => errors.push(error.message));
-  moduleTab.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-  await moduleTab.route("**/*", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.origin === origin) return route.continue();
-    errors.push(`Unexpected external request from module browsing fixture: ${url.origin}`);
-    await route.abort();
+  await page.evaluate(() => {
+    localStorage.setItem("programmable:view-chain:v2", "1");
+    document.cookie = "programmable-view-chain-v2=1; Path=/";
   });
-  try {
-    await moduleTab.goto(origin + "/launch/modules");
-    await expect(moduleTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    await page.bringToFront();
-    await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
-    await page.getByRole("button", { name: "Read browsing publications", exact: true }).click();
-    const publications = JSON.parse(await page.getByLabel("Browsing preference publications", { exact: true }).innerText()) as { announced: string; readableCookie: string | null }[];
-    // Even the earliest possible cross-tab reader must see the new preference.
-    expect(publications.at(-1)).toEqual({ announced: "1", readableCookie: "1" });
-    await moduleTab.bringToFront();
-    await expect(moduleTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-    await moduleTab.getByRole("button", { name: "Read saved browsing chain", exact: true }).click();
-    await expect(moduleTab.getByLabel("Saved browsing chain", { exact: true })).toHaveText("1");
-    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-    await moduleTab.getByLabel("Name (required)", { exact: true }).fill("Cross tab coin");
-    await moduleTab.getByLabel("Symbol (required)", { exact: true }).fill("CROSS");
-    await moduleTab.getByRole("textbox", { name: "Initial buy (ETH)", exact: true }).fill("0.01");
-    await moduleTab.getByRole("button", { name: "Continue module fixture", exact: true }).click();
-    await expect(moduleTab.getByLabel("Module continue calls", { exact: true })).toHaveText("1");
-    await expect(moduleTab.getByRole("button", { name: "Continue module fixture", exact: true })).toBeEnabled();
-    await moduleTab.getByRole("button", { name: "Continue module fixture", exact: true }).click();
-    await expect(moduleTab.getByLabel("Module continue calls", { exact: true })).toHaveText("2");
-    await expect(moduleTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-    await expect(moduleTab.getByLabel("Module wallet step", { exact: true })).toHaveText("prepare");
-
-    await page.getByRole("button", { name: "Browse Robinhood", exact: true }).click();
-    await expect(moduleTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    // An explicit token route still synchronizes once when it is entered.
-    await moduleTab.goto(origin + "/token/ethereum");
-    await expect(moduleTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-    await page.getByRole("button", { name: "Browse Robinhood", exact: true }).click();
-    await expect(moduleTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    await moduleTab.getByRole("button", { name: "Read saved browsing chain", exact: true }).click();
-    await expect(moduleTab.getByLabel("Saved browsing chain", { exact: true })).toHaveText("4663");
-    // Browsing preferences never ask the wallet to switch its signing network.
-    await expectMethods(page, []);
-    await expectMethods(moduleTab, []);
-    await expect(page.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1237");
-    await scenario(moduleTab, "unsupported-network");
-    await expect(moduleTab.getByLabel("Module wallet step", { exact: true })).toHaveText("switch");
-  } finally {
-    await moduleTab.close();
-  }
+  await page.reload();
+  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
+  await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
+  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
+  expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=4663");
+  expect(await page.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBe("4663");
+  await expectMethods(page, []);
 });
 
-test("the cookie remains usable when a new preference cannot replace existing browser storage", async ({ page }) => {
+test("Robinhood stays selected when preference storage is blocked", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
-  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
   await page.evaluate(() => window.__viewChainScheduling.blockPreferenceWrites());
-  await page.getByRole("button", { name: "Browse Robinhood", exact: true }).click();
+  await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
   await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
   expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=4663");
   expect(await page.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBeNull();
   await expectMethods(page, []);
 });
 
-test("a receiving tab uses the published preference while its cookie view is still old", async ({ page }) => {
-  await open(page);
-  await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
-  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-  await page.evaluate(() => window.__viewChainScheduling.freezeCookieReads());
-  const routeTab = await page.context().newPage();
-  const errors = browserErrors.get(page)!;
-  routeTab.on("pageerror", (error) => errors.push(error.message));
-  routeTab.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-  try {
-    await routeTab.goto(origin + "/launch/modules?holdRouteEntry=1");
-    await expect.poll(() => routeTab.evaluate(() => window.__viewChainScheduling.pendingEntries())).toBe(1);
-    await routeTab.evaluate(() => window.__viewChainScheduling.releaseEntries());
-    // A real cross-tab event has arrived, but this renderer's cookie cache has
-    // not caught up. The event's backing storage already has the new value.
-    await expect.poll(() => page.evaluate(() => window.__viewChainScheduling.receivedPreferences())).toContain("4663");
-    expect(await page.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBe("4663");
-    expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=1");
-    await expect(routeTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    await page.evaluate(() => window.__viewChainScheduling.releaseCookieReads());
-    expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=4663");
-    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    await expect(routeTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-    await expectMethods(page, []);
-    await expectMethods(routeTab, []);
-  } finally {
-    await page.evaluate(() => window.__viewChainScheduling.releaseCookieReads());
-    await routeTab.close();
-  }
-});
-
-for (const phase of ["route", "provider"] as const) {
-  test(`a delayed ${phase} passive effect cannot replace a choice made after the first render`, async ({ page }) => {
+for (const path of ["/launch/modules", "/token/ethereum", "/explore/robinhood"] as const) {
+  test(`${path}: legacy route entry keeps public browsing on Robinhood`, async ({ page }) => {
     await open(page);
-    const browse = (name: string) => page.getByRole("button", { name, exact: true }).click();
-    if (phase === "route") await browse("Browse Ethereum");
-    const delayedTab = await page.context().newPage();
-    const errors = browserErrors.get(page)!;
-    delayedTab.on("pageerror", (error) => errors.push(error.message));
-    delayedTab.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-    try {
-      await delayedTab.goto(origin + (phase === "route" ? "/launch/modules" : "/profile") + `?holdViewChainEffect=${phase}`);
-      await expect.poll(() => delayedTab.evaluate(() => window.__viewChainScheduling.pendingPassiveEffects())).toBe(1);
-      await expect(delayedTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText(phase === "route" ? "1" : "4663");
-      if (phase === "route") await browse("Browse Robinhood");
-      await browse("Browse Ethereum");
-      await expect.poll(() => delayedTab.evaluate(() => window.__viewChainScheduling.pendingStorageEvents())).toBeGreaterThan(0);
-      expect(await delayedTab.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=1");
-      await delayedTab.evaluate(() => window.__viewChainScheduling.releasePassiveEffects());
-      if (phase === "route") {
-        await expect.poll(() => delayedTab.evaluate(() => window.__viewChainScheduling.pendingEntries())).toBe(1);
-        await delayedTab.evaluate(() => window.__viewChainScheduling.releaseEntries());
-      }
-      expect(await delayedTab.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBe("1");
-      await delayedTab.evaluate(() => window.__viewChainScheduling.releaseStorageEvents());
-      await expect(delayedTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-      await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
-      await expectMethods(page, []);
-      await expectMethods(delayedTab, []);
-    } finally {
-      await delayedTab.close();
-    }
+    await page.goto(origin + path + "?holdRouteEntry=1");
+    await expect.poll(() => page.evaluate(() => window.__viewChainScheduling.pendingEntries())).toBe(1);
+    await page.evaluate(() => window.__viewChainScheduling.releaseEntries());
+    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
+    await expectMethods(page, []);
+    await expect(page.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1237");
   });
-}
-
-for (const [path, routeChain] of [["/launch/modules", 4663], ["/token/ethereum", 1], ["/explore/robinhood", 4663]] as const) {
-  for (const selection of ["one newer choice", "a newer choice returning to the initial value", "no newer choice"] as const) {
-    test(`${path}: deferred route entry respects ${selection} before storage events arrive`, async ({ page }) => {
-      await open(page);
-      const otherChain = routeChain === 1 ? 4663 : 1;
-      const browse = (chain: number) => page.getByRole("button", { name: chain === 1 ? "Browse Ethereum" : "Browse Robinhood", exact: true }).click();
-      const initialChain = selection === "one newer choice" ? routeChain : otherChain;
-      await browse(initialChain);
-      const routeTab = await page.context().newPage();
-      const errors = browserErrors.get(page)!;
-      routeTab.on("pageerror", (error) => errors.push(error.message));
-      routeTab.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-      await routeTab.route("**/*", async (route) => {
-        const url = new URL(route.request().url());
-        if (url.origin === origin) return route.continue();
-        errors.push(`Unexpected external request from route fixture: ${url.origin}`);
-        await route.abort();
-      });
-      try {
-        await routeTab.goto(origin + path + "?holdRouteEntry=1");
-        await expect.poll(() => routeTab.evaluate(() => window.__viewChainScheduling.pendingEntries())).toBe(1);
-        await expect(routeTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText(String(initialChain));
-        if (selection === "a newer choice returning to the initial value") await browse(routeChain);
-        if (selection !== "no newer choice") {
-          await browse(otherChain);
-          await expect.poll(() => routeTab.evaluate(() => window.__viewChainScheduling.pendingStorageEvents())).toBeGreaterThan(0);
-          // The shared cookie is current while the receiving tab has not handled
-          // any storage event. Returning to the same number must also cancel entry.
-          expect(await routeTab.evaluate(() => document.cookie)).toContain(`programmable-view-chain-v2=${otherChain}`);
-        }
-        await routeTab.evaluate(() => window.__viewChainScheduling.releaseEntries());
-        const expected = selection === "no newer choice" ? routeChain : otherChain;
-        expect(await routeTab.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBe(String(expected));
-        await routeTab.evaluate(() => window.__viewChainScheduling.releaseStorageEvents());
-        await expect(routeTab.getByLabel("Selected browsing chain", { exact: true })).toHaveText(String(expected));
-        await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText(String(expected));
-        await expectMethods(page, []);
-        await expectMethods(routeTab, []);
-        await expect(routeTab.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1237");
-      } finally {
-        await routeTab.close();
-      }
-    });
-  }
 }
 
 test("a denied clipboard offers the address for manual copy without asking to reconnect", async ({ page }, testInfo) => {

@@ -263,7 +263,7 @@ describe("Robinhood Custom launch website flow", () => {
       'url.searchParams.get("start") === "custom"',
     );
     expect(apiKeysSource).toContain(
-      'url.searchParams.get("chainId") === "4663"',
+      'url.searchParams.set("chainId", "4663")',
     );
     expect(apiKeysSource).toContain('setActiveSection("launch")');
     expect(apiKeysSource.match(/<RobinhoodFeePolicyDisclosure \/>/gu))
@@ -279,7 +279,8 @@ describe("Robinhood Custom launch website flow", () => {
     expect(developerApiKeysInitialSection({
       start: "custom",
       chainId: "1",
-    })).toBe("keys");
+    })).toBe("launch");
+    expect(developerApiKeysInitialSection({ start: "custom" })).toBe("launch");
     expect(developerApiKeysInitialSection({ chainId: "4663" })).toBe("keys");
   });
 });

@@ -176,9 +176,6 @@ export const PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT = [
   "Launch history can include requests from other API keys and linked wallets in the same account. The key is not isolated to one project or controller wallet’s history.",
   "Respect the key’s saved chain restriction. Current chain access is checked for each request; do not infer access from a scope name or from an absent chain list.",
 ].join("\n\n");
-export const PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1 = buildAgentInstructions({
-  intent: "Build and submit a reusable Module Mode source package for the user's idea",
-});
 
 function hasStandardScopes(scopes: readonly string[]) {
   return scopes.length === fixedScopes.length
@@ -213,10 +210,6 @@ export function apiKeyIssueVersion(access: ApiKeyAccess, capabilities: ApiKeyCap
 }
 
 export function apiKeyRotationVersion(scopes: readonly string[], capabilities: ApiKeyCapabilities | null): "v1" | "v2" | "agent" | null {
-  if (apiKeyPurpose(scopes) === "all") return capabilities?.unifiedKeys ? "agent" : null;
-  if (apiKeyPurpose(scopes) === "module-contributions") {
-    return capabilities?.preservingModuleRotation ? "v1" : null;
-  }
   if (!hasStandardScopes(scopes) && !hasReadOnlyScopes(scopes)) return null;
   if (capabilities?.preservingRotation) return "v2";
   return null;
@@ -257,19 +250,11 @@ export function apiKeyPurpose(scopes: unknown): ApiKeyPurpose | null {
 export function apiKeyPurposeLabel(scopes: unknown): string {
   const purpose = apiKeyPurpose(scopes);
   if (purpose === "all") return "Launches + modules";
-  if (purpose === "custom-launches") return "Custom launches";
+  if (purpose === "custom-launches") return "Custom hooks";
   if (purpose === "module-contributions") return "Modules";
   if (Array.isArray(scopes) && scopes.length === 1
-    && fixedScopes.includes(scopes[0])) return scopes[0] === "custom-launch:read" ? "Launches · read only" : "Custom launches";
+    && fixedScopes.includes(scopes[0])) return scopes[0] === "custom-launch:read" ? "Custom hooks · read only" : "Custom hooks";
   return "Other permissions";
-}
-
-export function moduleContributionKeysAvailable(value: unknown): boolean {
-  if (!isRecord(value) || (value.schemaVersion !== schemaVersion && value.schemaVersion !== schemaVersionV2)) return false;
-  const capability = value.moduleContributions;
-  return isRecord(capability)
-    && capability.apiKeyIssuance === true
-    && capability.submissions === true;
 }
 
 function validMetadataScopes(value: unknown): value is string[] {
@@ -465,19 +450,6 @@ export function ApiKeyAccessChoice({ value, onChange, available, disabled }: Rea
     <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value as ApiKeyAccess)}>
       <option value="prepare-and-read">Create and read</option>
       <option value="read-only" disabled={!available}>Read only{!available ? " · unavailable" : ""}</option>
-    </select>
-  </label>;
-}
-
-export function ApiKeyPurposeChoice({ value, onChange, moduleContributionsAvailable, unifiedAvailable = false, checking, disabled }: Readonly<{
-  value: ApiKeyPurpose; onChange: (value: ApiKeyPurpose) => void;
-  moduleContributionsAvailable: boolean; unifiedAvailable?: boolean; checking: boolean; disabled: boolean;
-}>) {
-  return <label className={styles.accessField}><span>Access</span>
-    <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value as ApiKeyPurpose)}>
-      <option value="all" disabled={!unifiedAvailable}>Launches + modules{!unifiedAvailable ? checking ? " · checking" : " · unavailable" : ""}</option>
-      <option value="custom-launches">Custom launches</option>
-      <option value="module-contributions" disabled={!moduleContributionsAvailable}>Modules{!moduleContributionsAvailable ? " · unavailable" : ""}</option>
     </select>
   </label>;
 }
@@ -854,7 +826,6 @@ function ExpirySelect({
 }
 
 export function DeveloperApiKeys({
-  moduleBuilder = false,
   hookBuilder = false,
   initialSection = "keys",
   agentSetupText,
@@ -875,7 +846,7 @@ export function DeveloperApiKeys({
   } = useWallet();
   const account = wallet?.account ?? null;
   const sessionKey = authReady ? (account ?? "disconnected") : "loading";
-  const viewKey = `${sessionKey}:${moduleBuilder ? "module" : hookBuilder ? "hook" : "keys"}`;
+  const viewKey = `${sessionKey}:${hookBuilder ? "hook" : "keys"}`;
 
   return (
     <DeveloperApiKeysView
@@ -886,7 +857,6 @@ export function DeveloperApiKeys({
       getAccessToken={getAccessToken}
       getIdentityToken={getIdentityToken}
       initialSection={initialSection}
-      moduleBuilder={moduleBuilder}
       hookBuilder={hookBuilder}
       agentSetupText={agentSetupText}
       launchContractSetup={launchContractSetup}
@@ -930,7 +900,6 @@ function CustomHookBuilderFrame({ enabled, children }: {
 }
 
 export function DeveloperApiKeysView({
-  moduleBuilder = false,
   hookBuilder = false,
   account,
   authReady,
@@ -945,7 +914,7 @@ export function DeveloperApiKeysView({
   sendUniversalLaunchWalletAction,
   signCustomLaunchFundingAuthorization,
 }: DeveloperApiKeysViewProps) {
-  const builderKind: BuilderKind | null = moduleBuilder ? "module" : hookBuilder ? "hook" : null;
+  const builderKind: BuilderKind | null = hookBuilder ? "hook" : null;
   const hydrated = useSyncExternalStore(subscribeToHydration, readHydrated, readServerHydrated);
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [listState, setListState] = useState<ListState>(() =>
@@ -953,10 +922,8 @@ export function DeveloperApiKeysView({
   );
   const [listError, setListError] = useState("");
   const [label, setLabel] = useState("");
-  const [purpose, setPurpose] = useState<ApiKeyPurpose>(moduleBuilder ? "module-contributions" : hookBuilder ? "custom-launches" : "all");
   const [access, setAccess] = useState<ApiKeyAccess>("prepare-and-read");
   const [capabilities, setCapabilities] = useState<ApiKeyCapabilities | null>(null);
-  const [moduleContributionsAvailable, setModuleContributionsAvailable] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState<ExpiryDays>(90);
   const [labelError, setLabelError] = useState("");
   const [mutationState, setMutationState] = useState<ApiKeyMutationState>({
@@ -988,7 +955,7 @@ export function DeveloperApiKeysView({
     builderKind ? "keys" : initialSection,
   );
   const [initialLaunchId, setInitialLaunchId] = useState<string | null>(null);
-  const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | null>(null);
+  const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | null>("4663");
   const [refreshingKeys, setRefreshingKeys] = useState(false);
   const [keyPage, setKeyPage] = useState(1);
   const [walletSessionTimedOut, setWalletSessionTimedOut] = useState(false);
@@ -1003,8 +970,7 @@ export function DeveloperApiKeysView({
   const [pendingMutationAttempt, setPendingMutationAttempt] = useState<ApiKeyMutationAttempt | null>(null);
   const capabilityReadGenerationRef = useRef(0);
   const canIssueReadOnly = Boolean(capabilities?.restrictedIssuance && capabilities.preservingRotation);
-  const selectedScopes = purpose === "all" ? AGENT_SCOPES : purpose === "module-contributions" ? moduleScopes
-    : access === "read-only" ? readOnlyScopes : fixedScopes;
+  const selectedScopes = access === "read-only" ? readOnlyScopes : fixedScopes;
   const keyItemRefs = useRef(new Map<string, HTMLLIElement>());
   const apiKeyReadGenerationRef = useRef(0);
   const keyPageCount = Math.max(
@@ -1017,7 +983,8 @@ export function DeveloperApiKeysView({
     activeKeyPage * API_KEY_PAGE_SIZE,
   );
   const builderKey = builderKind ? apiKeyForBuilder(apiKeys, builderKind) : undefined;
-  const activeKey = apiKeys.find((key) => keyStatus(key) === "Active");
+  const activeKey = apiKeys.find((key) => keyStatus(key) === "Active"
+    && key.scopes.some((scope) => fixedScopes.includes(scope as typeof fixedScopes[number])));
   const KeyWorkspace = builderKey ? Disclosure : "div";
 
   const getAuthHeaders = useCallback(
@@ -1072,14 +1039,12 @@ export function DeveloperApiKeysView({
           : response ? readApiError(response, body, "Unable to load API keys.") : "Unable to load API keys.");
         if (readGeneration !== apiKeyReadGenerationRef.current) return;
         setApiKeys((current) => mergeApiKeySummaries(current, parsed));
-        setModuleContributionsAvailable(moduleContributionKeysAvailable(body));
         setListState("ready");
         if (mode === "refresh") setStatusMessage("API keys refreshed.");
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError")
           return;
         if (readGeneration !== apiKeyReadGenerationRef.current) return;
-        setModuleContributionsAvailable(false);
         setListError(
           error instanceof Error ? error.message : "Unable to load API keys.",
         );
@@ -1181,10 +1146,7 @@ export function DeveloperApiKeysView({
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (
-      url.searchParams.get("start") === "custom"
-      && url.searchParams.get("chainId") === "4663"
-    ) {
+    if (url.searchParams.get("start") === "custom") {
       const update = window.setTimeout(() => {
         setActiveSection("launch");
         setStatusMessage("Opening Robinhood Custom launch.");
@@ -1192,11 +1154,11 @@ export function DeveloperApiKeysView({
       return () => window.clearTimeout(update);
     }
     const candidate = url.searchParams.get("launchId");
-    if (!candidate || !launchRequestIdPattern.test(candidate)) return;
     const chainId = url.searchParams.get("chainId");
+    if (!candidate || !launchRequestIdPattern.test(candidate)) return;
     const update = window.setTimeout(() => {
       setInitialLaunchId(candidate);
-      setInitialLaunchChainId(chainId === "4663" ? "4663" : null);
+      setInitialLaunchChainId(chainId === "1" ? null : "4663");
       setActiveSection("history");
       setStatusMessage("Opening the requested launch handoff.");
     }, 0);
@@ -1214,11 +1176,6 @@ export function DeveloperApiKeysView({
     if (mutationResult?.result.secretState === "delivered-once") {
       setStatusMessage("Save the visible API key before creating another.");
       revealRef.current?.focus();
-      return;
-    }
-    if (purpose === "module-contributions" && !moduleContributionsAvailable
-      && pendingMutationAttempt?.kind !== "issue") {
-      setCreateError("Module contributions are not available right now. Refresh your keys to check again.");
       return;
     }
 
@@ -1239,8 +1196,7 @@ export function DeveloperApiKeysView({
     setKeyCopyState("idle");
     setSetupCopyState("idle");
     const version = pendingMutationAttempt?.kind === "issue" ? pendingMutationAttempt.version
-      : purpose === "all" ? capabilities?.unifiedKeys ? "agent" : null
-        : purpose === "module-contributions" ? "v1" : apiKeyIssueVersion(access, capabilities);
+      : apiKeyIssueVersion(access, capabilities);
     if (!version) {
       setCreateError("This access is unavailable. Refresh your keys and try again.");
       return;
@@ -1251,7 +1207,6 @@ export function DeveloperApiKeysView({
       schemaVersion: version === "agent" ? AGENT_KEY_SCHEMA : version === "v2" ? schemaVersionV2 : schemaVersion,
       walletAddress: account,
       ...(version === "v2" ? { scopes: selectedScopes } : {}),
-      ...(purpose === "module-contributions" ? { purpose } : {}),
     });
     let attempt: ApiKeyMutationAttempt;
     try {
@@ -1392,14 +1347,14 @@ export function DeveloperApiKeysView({
       url.searchParams.set("chainId", "4663");
       url.searchParams.delete("launchId");
       setInitialLaunchId(null);
-      setInitialLaunchChainId(null);
+      setInitialLaunchChainId("4663");
     } else {
       url.searchParams.delete("start");
       if (section === "keys") {
         url.searchParams.delete("launchId");
         url.searchParams.delete("chainId");
         setInitialLaunchId(null);
-        setInitialLaunchChainId(null);
+        setInitialLaunchChainId("4663");
       } else if (!url.searchParams.has("launchId")) {
         url.searchParams.delete("chainId");
       }
@@ -1530,7 +1485,6 @@ export function DeveloperApiKeysView({
       ));
       setListState("ready");
       setMutationResult({ operation: "rotate", result: parsed });
-      setPurpose(apiKeyPurpose(parsed.apiKey.scopes) ?? "custom-launches");
       setAccess(hasReadOnlyScopes(parsed.apiKey.scopes) ? "read-only" : "prepare-and-read");
       setKeyPage(1);
       setConfirmingRotateId(null);
@@ -1607,7 +1561,7 @@ export function DeveloperApiKeysView({
   };
 
   return (
-    <div className={`${styles.page} ${moduleBuilder ? styles.builderPage : ""} ${hookBuilder ? hookStyles.page : ""} page-width`}>
+    <div className={`${styles.page} ${hookBuilder ? hookStyles.page : ""} page-width`}>
       <p
         className={styles.visuallyHidden}
         role="status"
@@ -1622,20 +1576,18 @@ export function DeveloperApiKeysView({
           <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.9} />
           <span>Back</span>
         </Link>
-        <Link className={styles.textLink} href={hookBuilder ? "/developers/api-keys?view=history" : "/profile?section=submissions#profile-modules-title"}>{hookBuilder ? "Your launches" : "Submissions"} <ArrowRight size={16} aria-hidden="true" /></Link>
+        <Link className={styles.textLink} href="/developers/api-keys?view=history">Your launches <ArrowRight size={16} aria-hidden="true" /></Link>
       </nav>
 
       <CustomHookBuilderFrame enabled={hookBuilder}>
       <header className={`${styles.hero} ${hookBuilder ? hookStyles.heading : ""}`}>
         <div className={styles.heroCopy}>
-          <h1>{activeSection === "keys" ? moduleBuilder ? "Build a module" : hookBuilder ? "Build a custom hook" : "API keys" : activeSection === "launch" ? "Launch a hook" : "Your launches"}</h1>
+          <h1>{activeSection === "keys" ? hookBuilder ? "Build a custom hook" : "API keys" : activeSection === "launch" ? "Launch a hook" : "Your launches"}</h1>
           <p className={styles.intro}>
             {activeSection === "keys"
-              ? moduleBuilder
-                ? "A module is an attachment that gives a coin a new ability. Give your AI builder an idea and an API key to build and submit it."
-                : hookBuilder
-                  ? "A hook is the code behind a coin’s trading rules. Build custom fees, rewards, or another idea with your AI builder."
-                  : "Give your AI builder access to launch requests and module submissions."
+              ? hookBuilder
+                ? "A hook is the code behind a coin’s trading rules. Build custom fees, rewards, or another idea with your AI builder."
+                : "Create and manage API keys for custom hooks on Robinhood."
               : activeSection === "launch"
                 ? "Upload the launch file from your builder."
                 : "Track progress and complete your wallet steps."}
@@ -1895,24 +1847,9 @@ export function DeveloperApiKeysView({
                           <ChevronDown size={16} aria-hidden="true" />
                         </summary>
                       <div className={styles.connectionOptionsBody}>
-                        <ApiKeyPurposeChoice
-                          value={purpose}
-                          onChange={(value) => {
-                            setPurpose(value);
-                            setCreateError("");
-                            setSetupCopyState("idle");
-                          }}
-                          moduleContributionsAvailable={moduleContributionsAvailable}
-                          unifiedAvailable={capabilities?.unifiedKeys === true}
-                          checking={listState === "loading"}
-                          disabled={mutationState.kind !== "idle"
-                            || mutationResult?.result.secretState === "delivered-once" || pendingMutationAttempt !== null}
-                        />
-                        {purpose === "custom-launches" ? (
-                          <ApiKeyAccessChoice value={access} onChange={setAccess} available={canIssueReadOnly}
-                            disabled={mutationState.kind !== "idle" || pendingMutationAttempt !== null
-                              || mutationResult?.result.secretState === "delivered-once"} />
-                        ) : null}
+                        <ApiKeyAccessChoice value={access} onChange={setAccess} available={canIssueReadOnly}
+                          disabled={mutationState.kind !== "idle" || pendingMutationAttempt !== null
+                            || mutationResult?.result.secretState === "delivered-once"} />
                         <ExpirySelect
                           value={expiresInDays}
                           disabled={pendingMutationAttempt !== null}
@@ -1929,9 +1866,7 @@ export function DeveloperApiKeysView({
                         mutationState.kind !== "idle"
                         || pendingMutationAttempt?.kind === "rotate"
                         || mutationResult?.result.secretState === "delivered-once"
-                        || (purpose === "all" && !capabilities?.unifiedKeys && pendingMutationAttempt?.kind !== "issue")
-                        || (purpose === "module-contributions" && !moduleContributionsAvailable && pendingMutationAttempt?.kind !== "issue")
-                        || (purpose === "custom-launches" && access === "read-only" && !canIssueReadOnly && !pendingMutationAttempt)
+                        || (access === "read-only" && !canIssueReadOnly && !pendingMutationAttempt)
                       }
                       type="submit"
                       aria-busy={mutationState.kind === "issue"}
@@ -1946,9 +1881,7 @@ export function DeveloperApiKeysView({
                   </div>
 
                   {listState !== "loading" && pendingMutationAttempt?.kind !== "issue" && (
-                    (purpose === "all" && !capabilities?.unifiedKeys)
-                    || (purpose === "module-contributions" && !moduleContributionsAvailable)
-                    || (purpose === "custom-launches" && access === "read-only" && !canIssueReadOnly)
+                    access === "read-only" && !canIssueReadOnly
                   ) ? (
                     <p className={styles.securityNote}>This access is unavailable. Open access and expiry to choose another option, or refresh your keys.</p>
                   ) : null}
@@ -2082,6 +2015,7 @@ export function DeveloperApiKeysView({
                       const confirmingRevoke = confirmingRevokeId === apiKey.id;
                       const confirmingRotate = confirmingRotateId === apiKey.id;
                       const revoking = revokingId === apiKey.id;
+                      const customAccess = apiKey.scopes.some((scope) => fixedScopes.includes(scope as typeof fixedScopes[number]));
                       const rotating = mutationState.kind === "rotate"
                         && mutationState.credentialId === apiKey.id;
                       const rotationSupported = apiKeyRotationVersion(apiKey.scopes, capabilities) !== null
@@ -2114,7 +2048,7 @@ export function DeveloperApiKeysView({
                             </div>
                             <span className={styles.keyPurpose}>{apiKeyPurposeLabel(apiKey.scopes)}</span>
                             {status === "Active" && !rotationSupported ? (
-                              <p className={styles.securityNote}>Rotation is unavailable until this key&apos;s restrictions can be preserved.</p>
+                              <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module API access is paused." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
                             ) : null}
                           </div>
 
@@ -2241,7 +2175,7 @@ export function DeveloperApiKeysView({
                             </div>
                           ) : status === "Active" ? (
                             <div className={styles.keyActions}>
-                              <button className={`${styles.secondaryButton} ${styles.iconButton}`} type="button" aria-label={`Copy instructions for ${apiKey.label}`} title="Copy instructions" onClick={() => void copyAgentSetup(apiKey.scopes)}><Copy size={16} aria-hidden="true" /></button>
+                              {customAccess ? <button className={`${styles.secondaryButton} ${styles.iconButton}`} type="button" aria-label={`Copy instructions for ${apiKey.label}`} title="Copy instructions" onClick={() => void copyAgentSetup(apiKey.scopes)}><Copy size={16} aria-hidden="true" /></button> : null}
                               <button
                                 className={styles.secondaryButton}
                                 disabled={mutationBusy || !rotationSupported}
@@ -2312,9 +2246,8 @@ export function DeveloperApiKeysView({
           {setupCopyState === "copied" ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
           Copy instructions
         </button> : null}
-        {builderKind !== "module" ? <Link href="/developers/modules">Build a module <ArrowRight size={16} aria-hidden="true" /></Link> : null}
         {builderKind !== "hook" ? <Link href="/developers/hooks">Build a custom hook <ArrowRight size={16} aria-hidden="true" /></Link> : null}
-        {builderKind ? <Link href={moduleBuilder ? "/developer-reference/module-mode" : "/developer-reference/custom-launch"}>Developer docs <ArrowRight size={16} aria-hidden="true" /></Link> : null}
+        {builderKind ? <Link href="/developer-reference/custom-launch">Developer docs <ArrowRight size={16} aria-hidden="true" /></Link> : null}
         <a href="/agents.md" target="_blank" rel="noreferrer">Agent guide <ExternalLink size={14} aria-hidden="true" /></a>
       </nav>
       {setupCopyState === "error" ? <p className={styles.inlineError} role="alert">Copy failed. Open the agent guide to read the instructions.</p> : null}

@@ -789,8 +789,8 @@ const privyConfig = {
       createOnLogin: "users-without-wallets",
     },
   },
-  supportedChains: [appChain, robinhoodChain],
-  defaultChain: appChain,
+  supportedChains: [robinhoodChain],
+  defaultChain: robinhoodChain,
 } satisfies PrivyClientConfig;
 
 function shortenAddress(address: string) {

@@ -12,7 +12,7 @@ export async function createSiteHeaderServer() {
     const Context = createContext(null);
     export function Fixture({children, selector}) {
       const [wallet, setWallet] = useState({account:'0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', chainId:'0x1'});
-      const [viewChainId, setViewChainId] = useState(1);
+      const [viewChainId, setViewChainId] = useState(4663);
       const [pending, setPending] = useState(false);
       const [disconnecting, setDisconnecting] = useState(false);
       const [hydrating, setHydrating] = useState(false);
@@ -65,7 +65,7 @@ export async function createSiteHeaderServer() {
   `;
   const bundled = await build({
     stdin: {
-      contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {ExploreChainSelector} from './components/explore-chain-selector'; import {SiteHeader} from './components/site-navigation'; import {Fixture} from 'fixture-state'; import './app/globals.css'; import './app/programmable-experience.css'; import './app/interface.css'; import './app/webde-final-ui.css'; createRoot(document.getElementById('root')).render(<Fixture selector={<ExploreChainSelector/>}><SiteHeader/></Fixture>);`,
+      contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {SiteHeader} from './components/site-navigation'; import {Fixture} from 'fixture-state'; import './app/globals.css'; import './app/programmable-experience.css'; import './app/interface.css'; import './app/webde-final-ui.css'; createRoot(document.getElementById('root')).render(<Fixture><SiteHeader/></Fixture>);`,
       loader: "tsx", resolveDir: root,
     },
     bundle: true, format: "esm", platform: "browser", write: false,

@@ -240,25 +240,17 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
     if (request.method !== "POST") return errorResponse(405, "method_not_allowed", "POST");
     try {
       requireJsonRequest(request);
-      const normalizedCredentialId = credentialId === undefined
-        ? undefined : requireBrowserCredentialId(credentialId);
+      if (credentialId !== undefined) requireBrowserCredentialId(credentialId);
       const record = exactBrowserRecord(await readBrowserJson(request),
         ["schemaVersion", "walletAddress", "label", "expiresInDays"],
         ["schemaVersion", "walletAddress", "label"]);
       const parsed = parseMutationFields(record, AGENT_KEY_SCHEMA);
-      const idempotencyKey = requireIdempotencyKey(request);
+      requireIdempotencyKey(request);
       const principal = await input.authenticator.authenticate(request);
-      const walletAddress = requireLinkedWallet(principal, parsed.walletAddress);
-      // Admission belongs to the backend so committed retries remain retrievable.
-      const { response: backend, readOptions } = await callBackend(request, principal, walletAddress, "POST",
-        normalizedCredentialId === undefined ? "/v1/wallet-admin/agent-keys"
-          : `/v1/wallet-admin/agent-keys/${encodeURIComponent(normalizedCredentialId)}/rotate`,
-        { schemaVersion: AGENT_KEY_SCHEMA, label: parsed.label, expiresInDays: parsed.expiresInDays },
-        idempotencyKey);
-      if (!backend.ok) throw await mappedBackendError(backend, readOptions);
-      const result = parseApiKeyMutationResult(await readBoundedBackendJson(backend, readOptions),
-        backend.status, normalizedCredentialId, "all", AGENT_KEY_SCHEMA);
-      return jsonResponse(backend.status, { schemaVersion: AGENT_KEY_SCHEMA, ...result });
+      requireLinkedWallet(principal, parsed.walletAddress);
+      // Unified credentials include module-submission authority. This public
+      // manager now issues Custom Hook credentials only.
+      throw new BrowserRequestErrorV1(403, "custom_hook_api_keys_only");
     } catch (error) { return mappedError(error); }
   };
 
@@ -290,8 +282,8 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
           schemaVersion: API_KEY_CAPABILITIES_SCHEMA_V2,
           restrictedIssuance: record.restrictedIssuance,
           preservingRotation: record.preservingRotation,
-          preservingModuleRotation: record.preservingModuleRotation === true,
-          unifiedKeys: record.unifiedKeys === true,
+          preservingModuleRotation: false,
+          unifiedKeys: false,
         });
       } catch (error) {
         return mappedError(error);
@@ -321,7 +313,7 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
           schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V2,
           apiKeys,
           ...(record.moduleContributions === undefined ? {} : {
-            moduleContributions: parseModuleContributions(record.moduleContributions),
+            moduleContributions: moduleContributionsUnavailable(),
           }),
         });
       } catch (error) { return mappedError(error); }
@@ -352,7 +344,7 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
           schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
           apiKeys,
           ...(record.moduleContributions === undefined ? {} : {
-            moduleContributions: parseModuleContributions(record.moduleContributions),
+            moduleContributions: moduleContributionsUnavailable(),
           }),
         });
       } catch (error) {
@@ -371,6 +363,9 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
         const idempotencyKey = requireIdempotencyKey(request);
         const principal = await input.authenticator.authenticate(request);
         const walletAddress = requireLinkedWallet(principal, parsed.walletAddress);
+        if (parsed.purpose !== "custom-launches") {
+          throw new BrowserRequestErrorV1(403, "custom_hook_api_keys_only");
+        }
         // The backend checks fresh admission after exact completed replay.
         // A separate availability read here would suppress committed retries.
         const { response: backend, readOptions } = await callBackend(
@@ -383,9 +378,6 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
             schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
             label: parsed.label,
             expiresInDays: parsed.expiresInDays,
-            ...(parsed.purpose === "module-contributions"
-              ? { scopes: [...MODULE_SCOPES] }
-              : {}),
           }),
           idempotencyKey,
         );
@@ -429,6 +421,7 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
             schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
             label: parsed.label,
             expiresInDays: parsed.expiresInDays,
+            scopes: [...CURRENT_SCOPES],
           }),
           idempotencyKey,
         );
@@ -437,6 +430,7 @@ export function createDeveloperApiKeyBridgeV1(input: Readonly<{
           await readBoundedBackendJson(backend, readOptions),
           backend.status,
           normalizedCredentialId,
+          "custom-launches",
         );
         return jsonResponse(backend.status, {
           schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
@@ -578,14 +572,8 @@ function parseMutationFields(
   return Object.freeze({ walletAddress, label, expiresInDays });
 }
 
-function parseModuleContributions(value: JsonValue | undefined) {
-  const record = value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-  return Object.freeze({
-    apiKeyIssuance: record.apiKeyIssuance === true,
-    submissions: record.submissions === true,
-  });
+function moduleContributionsUnavailable() {
+  return Object.freeze({ apiKeyIssuance: false, submissions: false });
 }
 
 function requireIdempotencyKey(request: Request) {
@@ -737,6 +725,9 @@ function parseApiKeyMutationResult(
   const supportedPair = [CURRENT_SCOPES, MODULE_SCOPES].some((pair) =>
     apiKey.scopes.length === pair.length && pair.every((scope) => apiKey.scopes.includes(scope)));
   if (schemaVersion === CUSTOM_LAUNCH_API_SCHEMA_V1 && !supportedPair) throw new BackendContractErrorV1();
+  if (schemaVersion === CUSTOM_LAUNCH_API_SCHEMA_V2
+    && !sameScopes(apiKey.scopes, CURRENT_SCOPES)
+    && !sameScopes(apiKey.scopes, ["custom-launch:read"])) throw new BackendContractErrorV1();
   if (schemaVersion === AGENT_KEY_SCHEMA && !sameScopes(apiKey.scopes, AGENT_SCOPES)) throw new BackendContractErrorV1();
   if (expectedPurpose !== undefined) {
     const expectedScopes = expectedPurpose === "all" ? AGENT_SCOPES : expectedPurpose === "module-contributions"
@@ -975,7 +966,9 @@ function errorResponse(
     schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
     error: Object.freeze({
       code,
-      message: publicMessage ?? (status >= 500
+      message: publicMessage ?? (code === "custom_hook_api_keys_only"
+        ? "API keys are available for Custom Hooks only."
+        : status >= 500
         ? "The API key service is temporarily unavailable."
         : "The request could not be completed."),
       requestId: responseRequestId,

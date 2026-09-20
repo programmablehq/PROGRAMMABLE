@@ -10,7 +10,7 @@ import { LinkIcon } from "@phosphor-icons/react/dist/ssr/Link";
 import { ShieldCheckIcon } from "@phosphor-icons/react/dist/ssr/ShieldCheck";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr/SlidersHorizontal";
 import { WavesIcon } from "@phosphor-icons/react/dist/ssr/Waves";
-import { ArrowRight, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
 import { feeBreakdown, type ModuleModeFeePolicy } from "@/lib/module-mode/builder";
 import { MODULE_CATEGORIES, MODULE_LIBRARY_PAGE_SIZE, moduleAuthorLabel, moduleCategory, moduleDiscovery, searchModuleLibrary, type ModuleCategoryId, type ModuleLibraryEntry } from "@/lib/module-mode/library";
 import styles from "@/components/module-library.module.css";
@@ -98,13 +98,12 @@ export function ModuleLibrary<Entry extends ModuleLibraryEntry>({ catalog, selec
     </div>
     {results.length === 0 ? <div className={styles.empty}>
       <strong>{hasFilters ? "No matching modules" : "No modules available yet"}</strong>
-      <div>{hasFilters ? <button type="button" onClick={reset}><X size={16} aria-hidden="true" />Clear filters</button> : null}<Link href="/developers/modules">Build a module<ArrowRight size={16} aria-hidden="true" /></Link></div>
+      {hasFilters ? <button type="button" onClick={reset}><X size={16} aria-hidden="true" />Clear filters</button> : null}
     </div> : null}
     {pages > 1 ? <nav className={styles.pagination} aria-label="Module library pages">
       <button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous modules"><ChevronLeft size={18} /></button>
       <span>Page {currentPage} of {pages}</span>
       <button type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)} aria-label="Next modules"><ChevronRight size={18} /></button>
     </nav> : null}
-    {results.length > 0 ? <Link className={styles.contribute} href="/developers/modules"><Plus size={18} aria-hidden="true" /><span>Create a module</span><ArrowRight size={16} aria-hidden="true" /></Link> : null}
   </div>;
 }

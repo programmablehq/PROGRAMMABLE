@@ -34,7 +34,7 @@ describe("API keys session restoration", () => {
     },
   );
 
-  it("keeps module issuance pending until the authenticated key list confirms availability", () => {
+  it("shows only Custom Hook issuance while the wallet key list loads", () => {
     const getAccessToken = vi.fn(async () => null);
     const getIdentityToken = vi.fn(async () => null);
     vi.mocked(useWallet).mockReturnValue({
@@ -49,11 +49,12 @@ describe("API keys session restoration", () => {
     } as unknown as ReturnType<typeof useWallet>);
 
     const html = renderToStaticMarkup(<DeveloperApiKeys />);
-    expect(html).toContain("Custom launches");
-    expect(html).toContain("Modules · unavailable");
-    expect(html).toContain("Launches + modules · checking");
-    expect(html).toMatch(/<option[^>]*value="module-contributions"[^>]*disabled=""/u);
-    expect(html).toMatch(/<option[^>]*value="all"[^>]*disabled=""[^>]*selected=""/u);
+    expect(html).toContain("Custom hooks");
+    expect(html).toContain("Robinhood");
+    expect(html).not.toContain("Modules ·");
+    expect(html).not.toContain("Launches + modules");
+    expect(html).not.toContain('value="module-contributions"');
+    expect(html).not.toContain('value="all"');
     expect(getAccessToken).not.toHaveBeenCalled();
     expect(getIdentityToken).not.toHaveBeenCalled();
   });

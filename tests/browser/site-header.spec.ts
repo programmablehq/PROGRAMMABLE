@@ -62,35 +62,13 @@ test("keeps network selection out of the global header",async ({page})=>{
   await expect(page.getByRole("button",{name:walletName,exact:true})).toBeVisible();
 });
 
-test("Explore exposes an icon-only Ethereum trigger and Robinhood choice",async ({page})=>{
-  const trigger=page.getByRole("button",{name:"Explore chain: Ethereum",exact:true});
-  await expect(trigger).toHaveText("");
-  await trigger.click();
-  const listbox=page.getByRole("listbox",{name:"Explore chains",exact:true});
-  await expect(listbox.getByRole("option")).toHaveCount(1);
-  const robinhoodOption=listbox.getByRole("option",{name:"Switch Explore to Robinhood",exact:true});
-  await expect(robinhoodOption).not.toHaveAttribute("aria-disabled");
-  await expect(listbox).not.toContainText("Base");
-  await page.keyboard.press("ArrowDown");
-  await expect(robinhoodOption).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page.getByTestId("view-chain")).toHaveText("4663");
-  await expect(page.getByTestId("requests")).toBeEmpty();
-  await expect(listbox).toHaveCount(0);
-  await expect(page.getByRole("button",{name:"Explore chain: Robinhood",exact:true})).toBeFocused();
-});
-
-test("Explore chain menu closes outside and stays inside the mobile viewport",async ({page})=>{
-  await page.setViewportSize({width:390,height:844});
-  const trigger=page.getByRole("button",{name:"Explore chain: Ethereum",exact:true});
-  await trigger.click();
-  const listbox=page.getByRole("listbox",{name:"Explore chains",exact:true});
-  const box=await listbox.boundingBox();
-  expect(box?.x).toBeGreaterThanOrEqual(0);
-  expect((box?.x??0)+(box?.width??0)).toBeLessThanOrEqual(390);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
-  await page.getByRole("heading",{name:"Header interaction fixture",exact:true}).click();
-  await expect(listbox).toHaveCount(0);
+test("network choices stay absent on desktop and mobile", async ({ page }) => {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("button", { name: /Explore chain:/ })).toHaveCount(0);
+    await expect(page.getByRole("listbox", { name: "Explore chains", exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
 });
 
 test("anonymous Connect wallet closes navigation before opening login",async ({page})=>{
@@ -125,7 +103,7 @@ test("keyboard navigation opens instantly and returns focus without trapping the
   await expect(trigger).toBeFocused();
   await expect(navigation).not.toBeVisible();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Explore chain: Ethereum", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Reject network switch", exact: true })).toBeFocused();
 });
 
 test("sticky navigation stays readable and opening its menu preserves the scroll position", async ({ page }) => {

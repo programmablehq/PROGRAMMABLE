@@ -2,7 +2,6 @@
 
 import { Search } from "lucide-react";
 
-import { ExploreChainSelector } from "@/components/explore-chain-selector";
 import { ExploreFilters } from "@/components/explore-filters";
 import styles from "@/components/index-reset-view.module.css";
 
@@ -39,8 +38,6 @@ export function ExploreIndexResetView({
                 disabled
               />
             </div>
-
-            <ExploreChainSelector chainId={1} />
 
             <ExploreFilters disabled />
           </div>

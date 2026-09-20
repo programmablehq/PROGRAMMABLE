@@ -84,7 +84,7 @@ describe("Module selection presentation", () => {
   it("does not offer a filter reset when no catalog exists", () => {
     const html = renderToStaticMarkup(<ModuleLibrary catalog={[]} selectedIds={[]} {...actions} />);
     expect(html).toContain("No modules available yet");
-    expect(html).toContain('href="/developers/modules"');
+    expect(html).not.toContain('href="/developers/modules"');
     expect(html).not.toContain("Clear filters");
   });
 

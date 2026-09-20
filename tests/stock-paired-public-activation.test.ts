@@ -41,7 +41,8 @@ describe("Stock-Paired launch closure", () => {
       createElement(ViewChainProvider, null, await LaunchPage()),
     );
 
-    expect(html).toContain('data-launch-model-option="classic"');
+    expect(html).toContain('data-launch-model-option="modules"');
+    expect(html).not.toContain('data-launch-model-option="classic"');
     expect(html).not.toContain('data-launch-model-option="stock-paired"');
     expect(html).not.toContain("<strong>Stock-Paired</strong>");
   });

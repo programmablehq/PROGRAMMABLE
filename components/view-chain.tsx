@@ -16,6 +16,7 @@ import {
   VIEW_CHAIN_COOKIE_NAME,
   VIEW_CHAIN_STORAGE_KEY,
   serializeViewChainCookie,
+  parseViewChainId,
   tryParseViewChainId,
   type ViewChainId,
 } from "@/lib/view-chain";
@@ -73,7 +74,8 @@ function readStoredViewChain(): ViewChainId | null {
 function readBrowserViewChain(): ViewChainId | null {
   // Storage events and their backing value share one publication source.
   // Another renderer's cookie cache may still contain the previous choice.
-  return readStoredViewChain() ?? readViewChainCookie();
+  const saved = readStoredViewChain() ?? readViewChainCookie();
+  return saved === null ? null : parseViewChainId(saved);
 }
 
 function storeViewChainValue(key: string, value: string) {
@@ -121,7 +123,7 @@ export function ViewChainProvider({
 }>) {
   const getViewChainSnapshot = useCallback(
     (): ViewChainId | null =>
-      readBrowserViewChain() ?? initialViewChainId,
+      readBrowserViewChain() ?? parseViewChainId(initialViewChainId),
     [initialViewChainId],
   );
   const getServerSnapshot = useCallback((): ViewChainId | null => null, []);
@@ -131,7 +133,7 @@ export function ViewChainProvider({
     getServerSnapshot,
   );
   const hydrated = resolvedViewChainId !== null;
-  const viewChainId = resolvedViewChainId ?? initialViewChainId;
+  const viewChainId = parseViewChainId(resolvedViewChainId ?? initialViewChainId);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -152,7 +154,7 @@ export function ViewChainProvider({
     const revision = window.crypto.randomUUID();
     document.cookie = `${VIEW_CHAIN_REVISION_COOKIE_NAME}=${revision}; Path=/; SameSite=Lax`;
     storeViewChainValue(VIEW_CHAIN_REVISION_STORAGE_KEY, revision);
-    persistViewChain(nextViewChainId);
+    persistViewChain(parseViewChainId(nextViewChainId));
   }, []);
 
   const value = useMemo(

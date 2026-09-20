@@ -272,7 +272,7 @@
 
   .toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 44px 44px auto;
+    grid-template-columns: minmax(0, 1fr) 44px auto;
   }
 
   .search {
