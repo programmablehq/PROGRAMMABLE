@@ -30,7 +30,7 @@ function sourceConfiguration(t, engineRelease,
   for (const file of ["config/envio-classic-v4-catalog-release.v1.json", "config/module-mode/robinhood.preview.json",
     "config/module-engine/robinhood.json", "config/module-mode/historical-releases.json",
     "config/module-engine/historical-releases.json", "config/module-engine/index-releases.json",
-    "config/module-engine/catalog.json", "config/module-engine/review-release.json", "contracts/deployments/robinhood-custom-launch-v1.json"]) {
+    "config/module-foundation/index-releases.json", "config/module-engine/catalog.json", "config/module-engine/review-release.json", "contracts/deployments/robinhood-custom-launch-v1.json"]) {
     const target = join(root, file);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, file === "config/module-engine/robinhood.json" && engineRelease !== undefined ? JSON.stringify(engineRelease)
@@ -38,6 +38,24 @@ function sourceConfiguration(t, engineRelease,
   }
   return root;
 }
+
+test("Foundation technical inventory requires complete accepted evidence and an exact factory generation", async t => {
+  const release = JSON.parse(readFileSync("config/module-foundation/index-releases.json", "utf8")).releases[0];
+  assert.ok(release);
+  for (const change of [
+    value => { value.binding.factoryVersion = "v4"; },
+    value => { value.binding.lpCustodyId = HASH(1); },
+    value => { value.evidence.decisionDigest = HASH(0); },
+    value => { value.binding.factory.runtimeCodeHash = HASH(0); },
+  ]) {
+    const root = sourceConfiguration(t), changed = structuredClone(release); change(changed);
+    writeFileSync(join(root, "config/module-foundation/index-releases.json"), JSON.stringify({ schemaVersion: "programmable.module-foundation.index-releases.v1", releases: [changed] }));
+    await assert.rejects(readIndexedWebsiteSourceExpectations(root), /Foundation/);
+  }
+  const root = sourceConfiguration(t);
+  writeFileSync(join(root, "config/module-foundation/index-releases.json"), JSON.stringify({ schemaVersion: "programmable.module-foundation.index-releases.v1", releases: [release, release] }));
+  await assert.rejects(readIndexedWebsiteSourceExpectations(root), /duplicates/);
+});
 
 for (const [label, fixturePath] of [
   ["Any Quote", "tests/fixtures/module-engine-any-quote-index.json"],
@@ -103,7 +121,8 @@ test("an empty technical index list retains public source expectations and ignor
   const currentAndHistorical = [JSON.parse(readFileSync("config/module-mode/robinhood.preview.json", "utf8")),
     JSON.parse(readFileSync("config/module-engine/robinhood.json", "utf8")),
     ...JSON.parse(readFileSync("config/module-mode/historical-releases.json", "utf8")).releases.map(entry => entry.release),
-    ...JSON.parse(readFileSync("config/module-engine/historical-releases.json", "utf8")).releases.map(entry => entry.release)];
+    ...JSON.parse(readFileSync("config/module-engine/historical-releases.json", "utf8")).releases.map(entry => entry.release),
+    ...JSON.parse(readFileSync("config/module-foundation/index-releases.json", "utf8")).releases.map(entry => entry.binding)];
   assert.deepEqual(expectations.robinhood.modules.map(source => source.releaseDigest), currentAndHistorical.map(source => source.releaseDigest));
   await assert.rejects(runIndexedWebsiteReadSmoke(input({ sourceExpectations: expectations,
     fetchImpl: engineSourceObservation(release).fetchImpl })), /Robinhood module release binding/u);
@@ -574,7 +593,9 @@ test("current Ethereum sources, finalized module sources and stale observations 
         spec.body.sourceEvidence.modules.push(source);
         spec.body.items.push({ ...robinhoodItem(), blockNumber, tokenAddress: ADDRESS(101 + index), launchId: HASH(101 + index),
           sourceKind: source.source, sourceAddress: source.sourceAddress, sourceReleaseDigest: source.releaseDigest,
-          routerAddress: null, stampHash: null, verificationDigest: HASH(2222) });
+          routerAddress: null, stampHash: null, verificationDigest: HASH(2222),
+          ...(source.source === "module-foundation-v1" ? { factoryVersion: source.factoryVersion, poolId: HASH(101 + index),
+            hookAddress: ADDRESS(5000), poolManager: ADDRESS(5500), quoteAsset: ADDRESS(6000), feeLedgerAddress: ADDRESS(7000), metadataHash: HASH(8000), compositionHash: HASH(9000), decimals: 18 } : {}) });
       }
       spec.body.page.totalItems = spec.body.items.length;
     }

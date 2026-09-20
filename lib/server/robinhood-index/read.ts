@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { DEFAULT_EXPLORE_FILTERS, type RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
 import { isVisibleRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
-import type { RobinhoodCoinMarket, RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import { coinValuation, type RobinhoodCoinMarket, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import type { RobinhoodProfilePageSize } from "@/lib/robinhood-launches";
 import { launchList, moduleModeSnapshots, profileLaunchList, snapshotLaunches } from "./model";
 import { indexStore } from "./store";
@@ -17,13 +17,17 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
     const snapshot = await readSnapshot();
     const visible = snapshotLaunches(snapshot).filter((token) => isVisibleRobinhoodToken(token.tokenAddress));
     const markets = await readRobinhoodMarkets(visible).catch(() => new Map<string, RobinhoodCoinMarket>());
-    const caps = new Map(Array.from(markets).flatMap(([address, market]) => market.marketCapUsd === null ? [] : [[address, market.marketCapUsd] as const]));
+    const caps = new Map(Array.from(markets).flatMap(([address, market]) => {
+      const value = coinValuation(market).value;
+      return value === null ? [] : [[address, value] as const];
+    }));
     const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize);
     // Ranking and card values use the same full-catalog market observation.
     return { ...list, sourceEvidence: snapshot ? {
       router: { source: "canonical-launch-stamp-router", sourceAddress: snapshot.routerAddress, binding: snapshot.binding,
         startBlock: snapshot.startBlock, cursor: snapshot.cursor, finalizedBlock: snapshot.finalizedBlock, updatedAt: snapshot.updatedAt },
       modules: moduleModeSnapshots(snapshot).map(source => ({ source: source.sourceKind, sourceAddress: source.sourceAddress,
+        ...(source.factoryVersion ? { factoryVersion: source.factoryVersion } : {}),
         releaseDigest: source.releaseDigest, startBlock: source.startBlock, cursor: source.cursor,
         finalizedBlock: source.finalizedBlock, updatedAt: source.updatedAt })),
       launchProjections: snapshot.launchProjections ? { sourceUrl: snapshot.launchProjections.sourceUrl,

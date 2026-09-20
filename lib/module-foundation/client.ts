@@ -1,4 +1,4 @@
-import { foundationFactoryNativeAbi } from "./abi";
+import { foundationCreatorFeeFields, foundationCreatorFeeRates, type FoundationCreatorFees } from "./creator-fees";
 import { assertFoundationAtomicEth, assertFoundationLaunchCall, encodeFoundationFundingPath, type FoundationEthFunding } from "./atomic-launch";
 import {
   createPublicClient, decodeFunctionResult, encodeAbiParameters, encodeFunctionData, erc20Abi,
@@ -9,10 +9,10 @@ import { assertFoundationNativeBalance, assertFoundationWrapRuntime, foundationW
 import { robinhoodChain, ROBINHOOD_MULTICALL3_ADDRESS, ROBINHOOD_MULTICALL3_RUNTIME_CODE_HASH } from "@/lib/chains";
 import { hasUnsafeDisplayCharacters, isValidTokenSymbol, MAX_METADATA_URL_BYTES, MAX_TOKEN_DESCRIPTION_BYTES, MAX_TOKEN_NAME_BYTES, utf8ByteLength } from "@/lib/metadata-policy";
 import { moduleTokenMetadata, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
-import { foundationFactoryV2Abi, foundationHookAbi, foundationLedgerAbi, foundationMetadataParameters, foundationPermit2Abi, foundationQuoterAbi, foundationTokenAbi,
+import { encodeFoundationLaunchEntry, foundationFactoryV2Abi, foundationHookAbi, foundationHookV2Abi, foundationLedgerAbi, foundationMetadataParameters, foundationPermit2Abi, foundationQuoterAbi, foundationTokenAbi,
   type FoundationContractModule, type FoundationLaunchParameters, type FoundationLaunchRecord, type FoundationMetadata } from "./abi";
-import { FOUNDATION_ABI_ID, FOUNDATION_CHAIN_ID, foundationCreatorFeeBps, FOUNDATION_INFRASTRUCTURE,
-  FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_ZERO_HASH, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
+import { FOUNDATION_ABI_ID, FOUNDATION_CHAIN_ID, FOUNDATION_INFRASTRUCTURE,
+  FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_ZERO_HASH, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_FACTORY_V3_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
 import { foundationParseAmount, planFoundationPrice } from "./price";
 import { parseFoundationStartPrice, planFoundationStartPrice, type FoundationStartPrice } from "./start-price";
 import { buildFoundationExactInput, buildFoundationNativeExactInput, foundationNativeTradePath, foundationPoolId, foundationPoolKey, type FoundationPool } from "./route";
@@ -23,7 +23,7 @@ import { refreshFoundationAssetsV1, type FoundationAssetPinV1 } from "./assets";
 import type { FoundationCatalogV1 } from "./catalog";
 import type { FoundationModuleSelection } from "./ui-types";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
-import { assertFoundationV2Result, decodeFoundationLaunchResult, foundationFactoryAbiFor, foundationFactoryVersion, readFoundationLaunchRecord, readFoundationV2Positions,
+import { assertFoundationV2Result, decodeFoundationLaunchResult, foundationFactoryAbiFor, foundationFactoryVersion, readFoundationHookPrediction, readFoundationLaunchRecord, readFoundationV2Positions,
   foundationV2PositionCalls, foundationV2PositionSpecs, verifyFoundationV2PositionData, type FoundationDeploymentBinding } from "./protocol";
 export type { FoundationDeploymentBinding } from "./protocol";
 
@@ -82,8 +82,8 @@ export async function assertFoundationInfrastructure(client: PublicClient, bindi
     if (!code || code === "0x" || keccak256(code).toLowerCase() !== pin.runtimeCodeHash.toLowerCase()) throw new Error(`The ${role} runtime does not match this release.`);
   }));
   const version = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "VERSION_ID", blockNumber: block.number });
-  if (version.toLowerCase() !== (factoryVersion === "v2" ? FOUNDATION_FACTORY_V2_ID : FOUNDATION_ABI_ID).toLowerCase()) throw new Error("This factory uses a different reviewed factory version.");
-  if (factoryVersion === "v2") {
+  if (version.toLowerCase() !== (factoryVersion === "v3" ? FOUNDATION_FACTORY_V3_ID : factoryVersion === "v2" ? FOUNDATION_FACTORY_V2_ID : FOUNDATION_ABI_ID).toLowerCase()) throw new Error("This factory uses a different reviewed factory version.");
+  if (factoryVersion !== "v1") {
     const [moduleAbi, custody, recipient, roundingRecipient, fee] = await Promise.all([
       client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "MODULE_ABI_ID", blockNumber: block.number }),
       client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "LP_CUSTODY_ID", blockNumber: block.number }),
@@ -127,24 +127,35 @@ export async function assertFoundationPool(client: PublicClient, binding: Founda
     || BigInt(record.ledger) === 0n || (record.factoryVersion === "v1" && BigInt(record.baseVault) === 0n) || record.basePositionId === 0n) {
     throw new Error("This pool is not a launch from the selected foundation release.");
   }
-  const [initializer, token, quote, ledger, poolId, key, creatorFeeBps, creator] = await Promise.all([
+  const [initializer, token, quote, ledger, poolId, key, creatorFees, creator] = await Promise.all([
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "initializer", blockNumber }),
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "token", blockNumber }),
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "quote", blockNumber }),
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "ledger", blockNumber }),
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "poolId", blockNumber }),
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "poolKey", blockNumber }),
-    client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "creatorFeeBps", blockNumber }),
+    readFoundationCreatorFees(client, binding, pool.hook, blockNumber),
     client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "creator", blockNumber }),
   ]);
   if (getAddress(initializer) !== getAddress(binding.factory.address) || getAddress(token) !== getAddress(pool.token)
     || getAddress(quote) !== getAddress(pool.quote) || getAddress(ledger) !== getAddress(record.ledger)
     || poolId !== pool.poolId || foundationPoolId(key) !== poolId
     || foundationPoolId(foundationPoolKey(pool)) !== poolId) throw new Error("The registered pool's onchain identity is inconsistent.");
-  foundationCreatorFeeBps(creatorFeeBps);
-  const positions = record.factoryVersion === "v2" ? await readFoundationV2Positions(client, record, pool.quote,
+  const positions = record.factoryVersion !== "v1" ? await readFoundationV2Positions(client, record, pool.quote,
     await client.readContract({ address: pool.hook, abi: foundationHookAbi, functionName: "initialTick", blockNumber }), blockNumber) : undefined;
-  return { record, key, creatorFeeBps, creator, positions };
+  return { record, key, ...creatorFees, creator, positions };
+}
+
+/** Immutable hook getters must match the factory's admitted version. */
+export async function readFoundationCreatorFees(client: PublicClient, binding: FoundationDeploymentBinding, hook: Address, blockNumber: bigint): Promise<FoundationCreatorFees> {
+  if (foundationFactoryVersion(binding) === "v3") {
+    const [creatorBuyFeeBps, creatorSellFeeBps] = await Promise.all([
+      client.readContract({ address: hook, abi: foundationHookV2Abi, functionName: "creatorBuyFeeBps", blockNumber }),
+      client.readContract({ address: hook, abi: foundationHookV2Abi, functionName: "creatorSellFeeBps", blockNumber }),
+    ]);
+    return foundationCreatorFeeFields({ creatorBuyFeeBps, creatorSellFeeBps });
+  }
+  return foundationCreatorFeeFields({ creatorFeeBps: await client.readContract({ address: hook, abi: foundationHookAbi, functionName: "creatorFeeBps", blockNumber }) });
 }
 
 export function foundationMetadata(input: { name: string; symbol: string; description: string; imageURI: string; socialLinks: ModuleSocialLinks;
@@ -247,7 +258,7 @@ export async function simulateFoundationV2Launch(input: {
   steps: readonly FoundationPreparedStep[]; checkpoint: FoundationCheckpoint; checks: readonly FoundationBalanceCheck[];
   expected: { token: Address; hook: Address; poolId: Hex }; price: ReturnType<typeof planFoundationPrice>;
 }) {
-  if (foundationFactoryVersion(input.binding) !== "v2") throw new Error("V2 NFT checks require an exact V2 source binding.");
+  if (foundationFactoryVersion(input.binding) === "v1") throw new Error("DEAD NFT checks require a V2 or V3 source binding.");
   const launch = input.steps.at(-1);
   const launchCall = launch ? assertFoundationLaunchCall(input.binding, launch.transaction, input.parameters) : null;
   if (!launch || launch.kind !== "launch" || getAddress(launch.transaction.to) !== getAddress(input.binding.factory.address)
@@ -260,7 +271,7 @@ export async function simulateFoundationV2Launch(input: {
     functionName: "balanceOf", args: [input.binding.factory.address], blockNumber: input.checkpoint.blockNumber });
   const decode = (simulation: Awaited<ReturnType<typeof simulateFoundationSequence>>) => {
     const result = decodeFoundationLaunchResult(input.binding, simulation.results.at(-1)!.data);
-    if (result.factoryVersion !== "v2") throw new Error("The launch result has a different factory version.");
+    if (result.factoryVersion === "v1" || result.factoryVersion !== foundationFactoryVersion(input.binding)) throw new Error("The launch result has a different factory version.");
     assertFoundationV2Result(result, input.parameters);
     if (getAddress(result.token) !== getAddress(input.expected.token) || getAddress(result.hook) !== getAddress(input.expected.hook)
       || result.poolId !== input.expected.poolId || result.baseTokenPrincipal !== input.price.base.principal
@@ -288,9 +299,9 @@ export async function simulateFoundationV2Launch(input: {
   return { result, simulation, positions };
 }
 
-export async function prepareFoundationLaunch(input: {
+export async function prepareFoundationLaunch(input: FoundationCreatorFees & {
   client: PublicClient; binding: FoundationDeploymentBinding; account: Address; metadata: FoundationMetadata; quote: Address;
-  startPrice: FoundationStartPrice; initialBuy: string; additionalLiquidity: string; creatorFeeBps: number;
+  startPrice: FoundationStartPrice; initialBuy: string; additionalLiquidity: string;
   modules: readonly FoundationContractModule[]; tokenSalt: Hex; slippageBps: number; signal?: AbortSignal; ethFunding?: FoundationEthFunding;
 }) {
   const { client, binding } = input, account = getAddress(input.account), factoryAbi = foundationFactoryAbiFor(binding);
@@ -320,25 +331,27 @@ export async function prepareFoundationLaunch(input: {
     || (moduleAssetPins.length > 0 && input.modules.length === 0)) throw new Error("Only additional module assets can be bound to this launch.");
   if (moduleAssetPins.length) await refreshFoundationAssetsV1({ client, pins: moduleAssetPins, checkpoint });
   const price = planFoundationStartPrice({ token, quote, startPrice, additionalQuoteRaw: additionalQuoteAmount });
+  const rates = foundationCreatorFeeRates(input);
+  const creatorFees: FoundationCreatorFees = foundationFactoryVersion(binding) === "v3" ? rates : { creatorFeeBps: rates.creatorBuyFeeBps };
+  if (foundationFactoryVersion(binding) !== "v3" && rates.creatorBuyFeeBps !== rates.creatorSellFeeBps) throw new Error("Independent buy and sell creator fees require the V3 launch contract.");
   const p: FoundationLaunchParameters = { metadata: input.metadata, quote: quote.address, quoteDecimals: quote.decimals,
-    initialTick: price.initialTick, creatorFeeBps: foundationCreatorFeeBps(input.creatorFeeBps),
+    initialTick: price.initialTick, ...creatorFees,
     additionalQuoteAmount, initialBuyQuoteAmount, initialBuyMinimumTokenAmount: initialBuyQuoteAmount > 0n ? 1n : 0n,
     deadline: checkpoint.timestamp + 300n, tokenSalt: input.tokenSalt, hookSalt: FOUNDATION_ZERO_HASH, modules: input.modules };
-  const initCodeHash = await client.readContract({ address: binding.factory.address, abi: factoryAbi, functionName: "hookInitCodeHash",
-    args: [account, token, p], blockNumber: checkpoint.blockNumber });
+  const initCodeHash = await readFoundationHookPrediction(client, binding, account, token, p, "hookInitCodeHash", checkpoint.blockNumber);
   const hook = await mineFoundationHook(binding.hookDeployer.address, initCodeHash, input.signal);
   p.hookSalt = hook.salt;
   const key = foundationPoolKey({ token, quote: quote.address, hook: hook.address }), poolId = foundationPoolId(key);
   const approvals = ethFunding ? [] : await erc20Approvals(client, { account, token: quote.address, spender: binding.factory.address, amount: funding, blockNumber: checkpoint.blockNumber });
   const launchStep = (): FoundationPreparedStep => ({ label: "Launch coin and pool", kind: "launch", gasUsed: 0n,
     transaction: { from: account, to: binding.factory.address, value: ethFunding?.maximumEth ?? 0n, data: ethFunding
-      ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEthRoute", args: [p, encodeFoundationFundingPath(ethFunding.path)] })
-      : encodeFunctionData({ abi: factoryAbi, functionName: "launch", args: [p] }) },
-    effect: foundationFactoryVersion(binding) === "v2"
+      ? encodeFoundationLaunchEntry(p, { functionName: "launchWithEthRoute", fundingPath: encodeFoundationFundingPath(ethFunding.path) })
+      : encodeFoundationLaunchEntry(p, { functionName: "launch" }) },
+    effect: foundationFactoryVersion(binding) !== "v1"
       ? `Create the coin and mint the base LP NFT and any optional LP NFT directly to DEAD. Their principal and any LP-position proceeds are irretrievable. Spend at most ${funding} raw quote units; return unused quote.`
       : `Create the coin, bind the pool and positions, and spend at most ${funding} raw quote units.`, amount: funding });
   const checks = (): FoundationBalanceCheck[] => [
-    foundationFactoryVersion(binding) === "v2" ? { token: quote.address, account, minimumDelta: ethFunding ? 0n : -funding }
+    foundationFactoryVersion(binding) !== "v1" ? { token: quote.address, account, minimumDelta: ethFunding ? 0n : -funding }
       : { token: quote.address, account, delta: -initialBuyQuoteAmount - (price.creator?.principal ?? 0n) },
     { token, account, newToken: true, minimumDelta: p.initialBuyMinimumTokenAmount },
     ...moduleAssetPins.map(([asset]) => ({ token: asset, account, minimumDelta: 0n })),
@@ -353,7 +366,7 @@ export async function prepareFoundationLaunch(input: {
       result = decodeFoundationLaunchResult(binding, simulation.results.at(-1)!.data);
     }
   }
-  if (foundationFactoryVersion(binding) === "v2") {
+  if (foundationFactoryVersion(binding) !== "v1") {
     const checked = await simulateFoundationV2Launch({ client, binding, parameters: p, steps: [...nativeFunding, ...approvals, launchStep()], checkpoint,
       checks: checks(), expected: { token, hook: hook.address, poolId }, price });
     result = checked.result; simulation = checked.simulation;

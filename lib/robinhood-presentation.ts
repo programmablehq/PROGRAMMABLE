@@ -2,6 +2,12 @@ export type RobinhoodCoinMarket = Readonly<{
   poolId: string;
   priceUsd: number | null;
   marketCapUsd: number | null;
+  /** Total-supply valuation is distinct from circulating market cap. */
+  fdvUsd?: number | null;
+  valuationKind?: "market-cap" | "fdv";
+  source?: "dexscreener" | "uniswap-v4";
+  blockNumber?: string;
+  blockHash?: string;
   liquidityUsd: number | null;
   volume24hUsd: number | null;
   change24hPercent: number | null;
@@ -50,6 +56,14 @@ const compactDollars = new Intl.NumberFormat("en-US", {
 const priceDollars = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumSignificantDigits: 4,
 });
+
+/** Preserve the distinction between provider market cap and total-supply FDV. */
+export function coinValuation(market: RobinhoodCoinMarket | null | undefined): { label: "Market cap" | "FDV"; value: number | null } {
+  const valid = (value: number | null | undefined): value is number => value != null && Number.isFinite(value) && value >= 0;
+  if (valid(market?.marketCapUsd)) return { label: "Market cap", value: market.marketCapUsd };
+  if (valid(market?.fdvUsd)) return { label: "FDV", value: market.fdvUsd };
+  return { label: market?.valuationKind === "fdv" ? "FDV" : "Market cap", value: null };
+}
 
 export function coinDollars(value: number | null | undefined, price = false) {
   if (value == null || !Number.isFinite(value) || value < 0) return "—";

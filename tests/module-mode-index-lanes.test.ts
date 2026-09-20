@@ -4,10 +4,11 @@ import { parseSnapshot, type RobinhoodSnapshot } from "../lib/server/robinhood-i
 import type { IndexSource, ModuleModeIndexSource } from "../lib/server/robinhood-index/sync";
 import { a, h } from "./fixtures/module-mode-evidence";
 
-const mocks = vi.hoisted(() => ({ store: vi.fn(), custom: vi.fn(), module: vi.fn(), projection: vi.fn() }));
+const mocks = vi.hoisted(() => ({ store: vi.fn(), custom: vi.fn(), module: vi.fn(), foundation: vi.fn(), projection: vi.fn() }));
 vi.mock("../lib/server/robinhood-index/store", () => ({ indexStore: mocks.store }));
 vi.mock("../lib/server/robinhood-index/source", () => ({ robinhoodSource: mocks.custom }));
 vi.mock("../lib/server/robinhood-index/module-source", () => ({ configuredModuleModeSources: mocks.module }));
+vi.mock("../lib/server/robinhood-index/foundation-source", () => ({ configuredFoundationSources: mocks.foundation }));
 // Keep these Module-lane assertions independent of the real public projection
 // feed; projection storage and provenance are exercised in their dedicated suite.
 vi.mock("../lib/server/robinhood-index/launch-projection-source", () => ({
@@ -30,6 +31,7 @@ function fixture() {
     finalized: point(100), block: async n => point(Number(n)), launches: async () => [] };
   mocks.store.mockReturnValue(store); mocks.custom.mockResolvedValue(custom);
   mocks.projection.mockResolvedValue({ status: "ready", indexed: 0, nextCursor: null });
+  mocks.foundation.mockResolvedValue({ lanes: [], unavailableSources: [] });
   mocks.module.mockResolvedValue({ lanes: [{ releaseDigest: nativeSource.releaseDigest, source: async () => nativeSource }], unavailableSources: [] });
   return { read: () => saved, write, remove: () => { saved = null; } };
 }
@@ -64,7 +66,7 @@ describe("Independent canonical Robinhood index lanes", () => {
   it("reports the disabled Module lane and rejects unauthenticated or overridden jobs", async () => {
     fixture(); mocks.module.mockResolvedValue({ lanes: [], unavailableSources: [] });
     const response = await GET(request()); expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ custom: { status: "ready" }, moduleMode: { status: "disabled" } });
+    expect(await response.json()).toMatchObject({ custom: { status: "ready" }, moduleMode: { status: "disabled" }, foundation: "disabled" });
     mocks.store.mockClear();
     expect((await GET(new Request("https://programmable.market/api/ops/robinhood-index"))).status).toBe(401);
     expect((await GET(new Request("https://programmable.market/api/ops/robinhood-index?source=module", request()))).status).toBe(400);

@@ -1,3 +1,4 @@
+import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
 import { readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
 import { assertFoundationAtomicEth } from "@/lib/module-foundation/atomic-launch";
 import { foundationParseAmount } from "@/lib/module-foundation/price";
@@ -37,8 +38,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       ["account", "releaseDigest", "tokenSalt", "draft", "launchFlow"], "foundation.compose") as unknown as {
       account: string; releaseDigest: Hex; tokenSalt: Hex; draft: FoundationLaunchDraft; launchFlow: string };
     if (body.launchFlow !== "single-eth-v1") throw new Error("Refresh the page to use the current launch flow. Keep your coin details before refreshing.");
-    const draft = moduleRecord(body.draft, ["name", "symbol", "description", "image", "socialLinks", "quoteAsset", "creatorFeeBps",
+    const feeKeys = body.draft && typeof body.draft === "object" && Object.hasOwn(body.draft, "creatorFeeBps")
+      ? ["creatorFeeBps"] : ["creatorBuyFeeBps", "creatorSellFeeBps"];
+    const draft = moduleRecord(body.draft, ["name", "symbol", "description", "image", "socialLinks", "quoteAsset", ...feeKeys,
       "initialBuy", "additionalLiquidity", "modules"], "foundation.compose.draft") as unknown as FoundationLaunchDraft;
+    const creatorFees = foundationCreatorFeeFields(draft);
+    const feeRates = foundationCreatorFeeRates(creatorFees);
     const account = getAddress(body.account);
     if (!/^0x[0-9a-fA-F]{64}$/.test(body.tokenSalt)) throw new Error("The launch salt is invalid.");
     // The authority can spend 50 seconds checking runtime and finality. Match the
@@ -46,6 +51,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const availability = parseFoundationAvailability(await readFoundationAvailabilityResponse(fetch, 55_000));
     const binding = availability.binding;
     if (!availability.available || !binding || binding.releaseDigest !== body.releaseDigest) throw new Error("The reviewed launch version is unavailable. Review again.");
+    if (binding.factoryVersion !== "v3" && feeRates.creatorBuyFeeBps !== feeRates.creatorSellFeeBps) throw new Error("Independent buy and sell fees are not live yet.");
     const catalog = bindFoundationCatalogV1(availability.catalog.document, availability.catalog.authority);
     foundationRequire(Array.isArray(draft.modules) && draft.modules.length <= 8,
       "FOUNDATION_MODULE_LIMIT", "Choose at most eight modules for this host adapter.");
@@ -102,7 +108,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     }
     const composition = composeFoundationUiSelectionsV1({ catalog,
-      selections: draft.modules, creatorFeeBps: draft.creatorFeeBps, chainId: FOUNDATION_CHAIN_ID, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1,
+      selections: draft.modules, ...creatorFees, chainId: FOUNDATION_CHAIN_ID, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1,
       context: finalContext });
     if (!composition.ok) return NextResponse.json({ error: "The selected modules cannot be composed.", diagnostics: composition.diagnostics }, { status: 422, headers });
     return NextResponse.json({ releaseDigest: binding.releaseDigest, token, metadata, moduleAssetPins, modules: composition.modules,

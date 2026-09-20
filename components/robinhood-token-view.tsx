@@ -11,8 +11,8 @@ import { TokenLaunchModules } from "@/components/token-launch-modules";
 import { LaunchProjectionDetails } from "@/components/launch-projection-details";
 import { LaunchProjectionTrade } from "@/components/launch-projection-trade";
 import { useRobinhoodPresentation } from "@/components/use-robinhood-presentation";
-import { isRobinhoodModuleLaunch, robinhoodModuleManageHref, type RobinhoodLaunch } from "@/lib/robinhood-launches";
-import { coinDollars, coinTicker } from "@/lib/robinhood-presentation";
+import { isRobinhoodFoundationLaunch, isRobinhoodModuleLaunch, robinhoodModuleManageHref, type RobinhoodLaunch } from "@/lib/robinhood-launches";
+import { coinDollars, coinTicker, coinValuation } from "@/lib/robinhood-presentation";
 import styles from "./robinhood-token-view.module.css";
 
 const EXPLORER = "https://robinhoodchain.blockscout.com";
@@ -25,6 +25,7 @@ export function RobinhoodTokenView({ address, token, status }: {
   const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(address)}`, token !== null);
   const details = presentation.items.find((item) => item.tokenAddress.toLowerCase() === address.toLowerCase());
   const market = details?.market;
+  const valuation = coinValuation(market);
   const hasAsset = !token?.launchProjection || token.launchProjection.primaryComponentId !== null;
   const name = token?.name?.trim() || (token?.launchProjection ? "Unnamed contract" : "Unnamed token");
   const change = market?.change24hPercent;
@@ -80,16 +81,13 @@ export function RobinhoodTokenView({ address, token, status }: {
 
         <section className={styles.launchContext} aria-label="Programmable launch">
           <div>
-            <p className={styles.origin}>Programmable · {moduleLaunch ? "Module" : "Custom"}</p>
+            <p className={styles.contractAddress}><span>CA</span><code>{address}</code></p>
           </div>
           <div className={styles.launchActions}>
             {hasAsset ? <Link className={styles.secondaryButton} href={`/swap?token=${address}&chain=4663`} aria-label={`Swap ${coinTicker(token.symbol)}`}>Swap <ArrowRight aria-hidden="true" size={16} /></Link> : null}
             {manageHref ? <Link className={styles.secondaryButton} href={manageHref} prefetch={false} aria-label="Manage coin">Manage <ArrowRight aria-hidden="true" size={16} /></Link> : null}
           </div>
         </section>
-        {moduleLaunch ? <TokenLaunchModules launch={moduleLaunch} /> : null}
-        {token.launchProjection ? <LaunchProjectionDetails projection={token.launchProjection} /> : null}
-        {token.launchProjection ? <LaunchProjectionTrade key={token.launchProjection.launchId} projection={token.launchProjection} /> : null}
         {token && status !== "ready" ? <p className={styles.notice} role="status">{status === "syncing"
           ? `New launches are still being checked. This ${hasAsset ? "coin" : "launch"} comes from the verified launch index.`
           : "Showing the last verified launch record. Index updates are temporarily unavailable."}</p> : null}
@@ -97,8 +95,8 @@ export function RobinhoodTokenView({ address, token, status }: {
             {hasAsset ? <>
             <dl className={styles.metrics}>
               <Metric label="Price" value={coinDollars(market?.priceUsd, true)} />
-              <Metric label="Market cap" value={market?.marketCapUsd != null && Number.isFinite(market.marketCapUsd) && market.marketCapUsd >= 0
-                ? <AnimatedMarketCap metric={{ kind: "usd", value: market.marketCapUsd }} replayKey={`4663:${address.toLowerCase()}:${market.poolId.toLowerCase()}:market-cap`} />
+              <Metric label={valuation.label} value={market && valuation.value !== null
+                ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`4663:${address.toLowerCase()}:${market.poolId.toLowerCase()}:${valuation.label}`} />
                 : "—"} />
               <Metric label="Liquidity" value={coinDollars(market?.liquidityUsd)} />
               <Metric label="24h volume" value={coinDollars(market?.volume24hUsd)} />
@@ -109,8 +107,11 @@ export function RobinhoodTokenView({ address, token, status }: {
                 </dd>
               </div>
             </dl>
-            {token.poolId ? <RobinhoodChart poolId={token.poolId} name={name} /> : <p className={styles.notice}>No trading market is verified for this coin.</p>}
+            {token.poolId ? <RobinhoodChart poolId={token.poolId} name={name} market={market} /> : <p className={styles.notice}>No trading market is verified for this coin.</p>}
             </> : <p className={styles.notice}>No primary asset is declared for this launch.</p>}
+        {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}
+        {token.launchProjection ? <LaunchProjectionDetails projection={token.launchProjection} /> : null}
+        {token.launchProjection ? <LaunchProjectionTrade key={token.launchProjection.launchId} projection={token.launchProjection} /> : null}
           </section>
       </> : <section className={styles.empty}>
         <h1>Token details</h1>

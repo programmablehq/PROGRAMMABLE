@@ -1,3 +1,4 @@
+import { foundationCreatorFeeFields, foundationCreatorFeeRates, foundationCreatorFeesEqual } from "./creator-fees";
 import { assertFoundationLaunchCall } from "./atomic-launch";
 import {
   BaseError, ContractFunctionRevertedError, decodeEventLog, decodeFunctionResult, encodeAbiParameters,
@@ -5,7 +6,7 @@ import {
   type Address, type Hex, type PublicClient, type TransactionReceipt,
 } from "viem";
 import {
-  foundationFactoryV2Abi, foundationHookAbi, foundationMetadataParameters, foundationTokenAbi,
+  foundationFactoryV2Abi, foundationFactoryV3Abi, foundationHookAbi, foundationMetadataParameters, foundationTokenAbi,
   type FoundationLaunchParameters, type FoundationLaunchResult, type FoundationLaunchResultV2,
 } from "./abi";
 import {
@@ -81,6 +82,7 @@ const descriptorParameters = parseAbiParameters("(bytes32 moduleId,uint16 abiVer
 const selectionsParameters = parseAbiParameters("bytes32,(address factory,bytes32 factoryCodeHash,bytes32 moduleCodeHash,bytes32 descriptorHash,bytes configuration,uint16 creatorShareBps)[]");
 const launchTopic = toEventSelector("FoundationLaunched(address,address,bytes32,address,address,address,address,uint256,uint256,bytes32,bytes32,uint256,uint256)");
 const launchTopicV2 = toEventSelector(foundationFactoryV2Abi.find(item => item.type === "event")!);
+const launchTopicV3 = toEventSelector(foundationFactoryV3Abi.find(item => item.type === "event")!);
 const transferTopic = toEventSelector("Transfer(address,address,uint256)");
 const swapTopic = toEventSelector("FoundationSwap(bytes32,address,bool,bool,uint256,uint256,uint256,int128,int128)");
 
@@ -207,7 +209,7 @@ export async function readFoundationPoolDetails(input: {
     creatorReceived, creatorCredited, creatorClaimed, moduleClaimedTotal, creatorShareBps, outstandingBacking,
     unallocatedCreatorDust, claimBacking, modules] = await Promise.all([
     vault ? readPosition(client, record.basePositionId, pool, blockNumber, baseTicks, vault) : Promise.resolve(provenance.positions!.base),
-    record.factoryVersion === "v2" ? Promise.resolve(provenance.positions!.creator)
+    record.factoryVersion !== "v1" ? Promise.resolve(provenance.positions!.creator)
       : record.creatorPositionId === 0n ? Promise.resolve(null) : readPosition(client, record.creatorPositionId, pool, blockNumber, creatorTicks),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "poolManager", blockNumber }),
     client.readContract({ address: ledger, abi: foundationReadbackAbi, functionName: "hook", blockNumber }),
@@ -263,7 +265,7 @@ export async function readFoundationPoolDetails(input: {
       || vaultId !== record.basePositionId || !sameAddress(vaultBeneficiary, provenance.creator)))) {
     throw new Error("The quote ledger or permanent vault has a foreign binding.");
   }
-  if (record.factoryVersion === "v2" && vaultTokenBalance < record.baseTokenRounding) throw new Error("The permanent V2 rounding inventory is missing.");
+  if (record.factoryVersion !== "v1" && vaultTokenBalance < record.baseTokenRounding) throw new Error("The permanent V2 rounding inventory is missing.");
   const platform = budget(platformReceived, platformClaimed), creator = budget(creatorCredited, creatorClaimed);
   const moduleCredits = modules.reduce((sum, module) => sum + module.credited, 0n);
   const moduleClaims = modules.reduce((sum, module) => sum + module.claimed, 0n);
@@ -276,14 +278,14 @@ export async function readFoundationPoolDetails(input: {
   await assertCanonical(client, checkpoint);
   return {
     evidence: "canonical-readback" as const, checkpoint, binding, record, pool, key: provenance.key,
-    creator: getAddress(provenance.creator), creatorFeeBps: provenance.creatorFeeBps, compositionHash, initialTick,
+    creator: getAddress(provenance.creator), ...foundationCreatorFeeFields(provenance), compositionHash, initialTick,
     token: { address: token, ...metadata, decimals, totalSupply, originalSupply: FOUNDATION_SUPPLY, metadataHash, balance: tokenBalance },
     quote, market: { sqrtPriceX96: slot0[0], tick: slot0[1], protocolFee: slot0[2], lpFee: slot0[3], activeLiquidity },
     positions: { base: record.factoryVersion === "v1"
       ? { ...basePosition, custody: "permanent-vault-v1" as const, vault: getAddress(record.baseVault), beneficiary: getAddress(vaultBeneficiary!), roundingInventory: vaultTokenBalance }
       : { ...basePosition, custody: "dead-v1" as const, roundingInventoryRecipient: getAddress(record.roundingInventoryRecipient), roundingInventory: vaultTokenBalance,
         originalPrincipal: record.baseTokenPrincipal, originalRoundingInventory: record.baseTokenRounding },
-      creator: creatorPosition ? { ...creatorPosition, custody: record.factoryVersion === "v2" ? "dead-v1" as const : "wallet-owned-v1" as const } : null },
+      creator: creatorPosition ? { ...creatorPosition, custody: record.factoryVersion !== "v1" ? "dead-v1" as const : "wallet-owned-v1" as const } : null },
     ledger: { address: getAddress(ledger), quote: pool.quote, claimBacking, outstandingBacking, unallocatedCreatorDust,
       platform: { ...platform, received: platformReceived, beneficiary: FOUNDATION_PLATFORM_RECIPIENT, bps: FOUNDATION_PLATFORM_BPS },
       creator: { ...creator, received: creatorReceived, beneficiary: getAddress(provenance.creator), shareBps: creatorShareBps },
@@ -323,7 +325,7 @@ export async function verifyFoundationLaunchReceipt(input: {
     || transaction.transactionIndex !== receipt.transactionIndex) {
     throw new Error("The mined transaction does not match the expected factory launch.");
   }
-  if (foundationFactoryVersion(binding) === "v2") return verifyV2LaunchReceipt({ ...input, receipt });
+  if (foundationFactoryVersion(binding) !== "v1") return verifyV2LaunchReceipt({ ...input, receipt });
   const candidates = receipt.logs.filter(log => sameAddress(log.address, binding.factory.address) && log.topics[0]
     && sameHex(log.topics[0], launchTopic));
   if (candidates.length !== 1) throw new Error("The receipt must contain exactly one launch event emitted by the expected factory.");
@@ -346,7 +348,7 @@ export async function verifyFoundationLaunchReceipt(input: {
   }
   const details = await readFoundationPoolDetails({ client, binding, token: r.token, blockNumber: receipt.blockNumber });
   if (!sameHex(details.checkpoint.blockHash, receipt.blockHash) || !sameHex(details.token.metadataHash, event.metadataHash)
-    || !sameAddress(details.creator, planned.from) || details.initialTick !== p.initialTick || details.creatorFeeBps !== p.creatorFeeBps
+    || !sameAddress(details.creator, planned.from) || details.initialTick !== p.initialTick || !foundationCreatorFeesEqual(details, p)
     || !sameAddress(details.pool.quote, event.quote) || !sameAddress(details.record.hook, event.hook)
     || !sameAddress(details.record.ledger, event.ledger) || details.record.factoryVersion !== "v1" || !sameAddress(details.record.baseVault, event.baseVault)
     || !sameHex(details.record.poolId, event.poolId) || !sameHex(details.compositionHash, event.compositionHash)
@@ -362,15 +364,19 @@ async function verifyV2LaunchReceipt(input: {
   client: PublicClient; binding: FoundationDeploymentBinding; transactionHash: Hex; expected: FoundationExpectedLaunch; receipt: TransactionReceipt;
 }) {
   const { client, binding, transactionHash, expected, receipt } = input, p = expected.parameters;
+  const factoryVersion = foundationFactoryVersion(binding);
+  if (factoryVersion === "v1") throw new Error("A V1 source cannot verify a DEAD custody launch.");
   if (!("basePositionOwner" in expected.result)) throw new Error("A V1 vault result cannot be read as a V2 launch.");
   assertFoundationV2Result(expected.result, p);
   const validLog = (log: TransactionReceipt["logs"][number]) => !log.removed && log.blockNumber === receipt.blockNumber
     && !!log.blockHash && sameHex(log.blockHash, receipt.blockHash) && !!log.transactionHash && sameHex(log.transactionHash, transactionHash)
     && log.transactionIndex === receipt.transactionIndex && log.logIndex !== null;
-  const candidates = receipt.logs.filter(log => sameAddress(log.address, binding.factory.address) && log.topics[0] && sameHex(log.topics[0], launchTopicV2));
+  const candidates = receipt.logs.filter(log => sameAddress(log.address, binding.factory.address) && log.topics[0] && sameHex(log.topics[0], factoryVersion === "v3" ? launchTopicV3 : launchTopicV2));
   if (candidates.length !== 1 || !validLog(candidates[0])) throw new Error("The receipt must contain one canonical V2 launch event from the expected factory.");
   const log = candidates[0];
-  const event = decodeEventLog({ abi: foundationFactoryV2Abi, eventName: "FoundationLaunchedV2", data: log.data, topics: log.topics, strict: true }).args;
+  const event = factoryVersion === "v3"
+    ? decodeEventLog({ abi: foundationFactoryV3Abi, eventName: "FoundationLaunchedV3", data: log.data, topics: log.topics, strict: true }).args
+    : decodeEventLog({ abi: foundationFactoryV2Abi, eventName: "FoundationLaunchedV2", data: log.data, topics: log.topics, strict: true }).args;
   const r = event.result;
   assertFoundationV2Result(r, p);
   if (!sameAddress(event.token, expected.result.token) || !sameAddress(event.creator, expected.transaction.from)
@@ -392,9 +398,9 @@ async function verifyV2LaunchReceipt(input: {
       || !sameAddress(transfers[0].event.to, FOUNDATION_DEAD_ADDRESS)) throw new Error("Each V2 launch NFT must be minted directly from zero to DEAD in this receipt.");
   }
   const details = await readFoundationPoolDetails({ client, binding, token: r.token, blockNumber: receipt.blockNumber });
-  if (details.record.factoryVersion !== "v2" || !sameHex(details.checkpoint.blockHash, receipt.blockHash)
+  if (details.record.factoryVersion === "v1" || details.record.factoryVersion !== factoryVersion || !sameHex(details.checkpoint.blockHash, receipt.blockHash)
     || !sameAddress(details.creator, expected.transaction.from) || !sameAddress(details.pool.quote, p.quote)
-    || details.initialTick !== p.initialTick || details.creatorFeeBps !== p.creatorFeeBps
+    || details.initialTick !== p.initialTick || !foundationCreatorFeesEqual(details, p)
     || !sameHex(details.token.metadataHash, event.metadataHash) || !sameHex(details.compositionHash, event.compositionHash)
     || !sameHex(encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launchOf", result: details.record }),
       encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launchOf", result: r }))) {
@@ -402,7 +408,7 @@ async function verifyV2LaunchReceipt(input: {
   }
   return { evidence: "canonical-receipt" as const, transactionHash, checkpoint: details.checkpoint,
     transactionIndex: receipt.transactionIndex, logIndex: log.logIndex,
-    event: { ...event, ...r, factoryVersion: "v2" as const }, details };
+    event: { ...event, ...r, factoryVersion }, details };
 }
 
 /** Real cumulative ledger deltas in ephemeral state; available swap logs additionally identify actual gross amounts. */
@@ -417,7 +423,8 @@ export async function simulateFoundationTradeFees(input: {
   if (steps.some(step => !sameAddress(step.transaction.from, account))) throw new Error("A fee simulation must have one payer.");
   const observed = await assertFoundationInfrastructure(client, binding, checkpoint.blockNumber);
   if (!sameHex(observed.blockHash, checkpoint.blockHash)) throw new Error("The simulation checkpoint is no longer canonical.");
-  const { record, creatorFeeBps } = await assertFoundationPool(client, binding, pool, checkpoint.blockNumber);
+  const provenance = await assertFoundationPool(client, binding, pool, checkpoint.blockNumber);
+  const { record } = provenance, rates = foundationCreatorFeeRates(provenance);
   const counters = ["platformReceived", "creatorReceived"] as const;
   const reads = counters.map(functionName => ({ to: record.ledger, data: encodeFunctionData({ abi: foundationReadbackAbi, functionName }) }));
   const [buy, sell] = await Promise.all([true, false].map(direction => client.readContract({ address: pool.hook,
@@ -442,7 +449,7 @@ export async function simulateFoundationTradeFees(input: {
     const event = decodeEventLog({ abi: foundationReadbackAbi, eventName: "FoundationSwap", data: log.data, topics: log.topics, strict: true }).args;
     if (!sameHex(event.poolId, pool.poolId)) throw new Error("The simulated fee event belongs to a foreign pool.");
     const side = event.buy ? "buy" : "sell";
-    const fees = foundationFeesFromGross(event.grossQuote, creatorFeeBps, carries[side]);
+    const fees = foundationFeesFromGross(event.grossQuote, event.buy ? rates.creatorBuyFeeBps : rates.creatorSellFeeBps, carries[side]);
     if (!fees.positiveNet || fees.platformQuote !== event.platformQuote || fees.creatorQuote !== event.creatorQuote) {
       throw new Error("The simulated swap fees disagree with the bound carry arithmetic.");
     }
@@ -458,7 +465,7 @@ export async function simulateFoundationTradeFees(input: {
   await assertCanonical(client, checkpoint);
   return { evidence: "simulated-ledger-delta" as const, checkpoint, pool, ledger: record.ledger,
     quote: pool.quote, platformRecipient: FOUNDATION_PLATFORM_RECIPIENT, platformBps: FOUNDATION_PLATFORM_BPS,
-    creatorFeeBps, platformQuote, creatorQuote, totalQuote: platformQuote + creatorQuote,
+    ...foundationCreatorFeeFields(provenance), platformQuote, creatorQuote, totalQuote: platformQuote + creatorQuote,
     grossQuote: swaps.length > 0 ? swaps.reduce((sum, swap) => sum + swap.grossQuote, 0n) : null,
     grossEvidence: swaps.length > 0 ? "canonical-hook-swap-events" as const : null, swaps,
     nextCarry: logsComplete ? carries : null };

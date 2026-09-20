@@ -1,5 +1,6 @@
 "use client";
 
+import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
 import { foundationParseAmount } from "@/lib/module-foundation/price";
 import type { FoundationFundingHop } from "@/lib/module-foundation/atomic-launch";
 
@@ -15,6 +16,7 @@ import { FOUNDATION_HOST_ADAPTER_ID_V1 } from "@/lib/module-foundation/manifest"
 import { parseFoundationAssetPinsV1 } from "@/lib/module-foundation/assets";
 import { foundationMetadata, prepareFoundationLaunch, readFoundationQuote } from "@/lib/module-foundation/client";
 import { isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
+import { readFoundationSuggestedBuy } from "@/lib/module-foundation/first-buy";
 import { FOUNDATION_WETH, foundationSupportsEth } from "@/lib/module-foundation/native-funding";
 import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalog";
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
@@ -29,6 +31,7 @@ import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type Fo
 export function ModuleFoundationLaunchHost() {
   const router = useRouter(), session = useFoundationSession();
   const [completedDraft, setCompletedDraft] = useState<string | null>(null);
+  const [suggestedInitialBuy, setSuggestedInitialBuy] = useState<string>();
   const draftKey = `${session.contextKey}:${session.resultGeneration}`;
   const [quoteState, setQuoteState] = useState<{ context: string; assets: FoundationQuoteAsset[] }>({ context: "", assets: [] });
   const quotes = quoteState.context === session.contextKey ? quoteState.assets : [];
@@ -38,6 +41,14 @@ export function ModuleFoundationLaunchHost() {
     catalog: bindFoundationCatalogV1(session.envelope.catalog.document, session.envelope.catalog.authority),
     chainId: 4663, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1,
   }) : [], [session.envelope]);
+
+  useEffect(() => {
+    let active = true;
+    void readFoundationSuggestedBuy(session.client).then(amount => {
+      if (active) setSuggestedInitialBuy(amount);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [session.client]);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +84,9 @@ export function ModuleFoundationLaunchHost() {
     }
     if (!isFoundationDefaultImage(draft.image) && uploads.current.get(`${account.toLowerCase()}:${draft.image.url}`) !== draft.image.sha256) throw new Error("Choose and upload the exact coin image for this wallet before preparing.");
     const binding = await session.resolveAuthority();
+    const creatorFees = foundationCreatorFeeFields(draft);
+    const feeRates = foundationCreatorFeeRates(creatorFees);
+    if (binding.factoryVersion !== "v3" && feeRates.creatorBuyFeeBps !== feeRates.creatorSellFeeBps) throw new Error("Independent buy and sell fees are not live yet.");
     const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
     const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
@@ -90,7 +104,7 @@ export function ModuleFoundationLaunchHost() {
     const sequence = await prepareFoundationLaunch({ client: session.client, binding, account, tokenSalt,
       metadata, quote: draft.quoteAsset,
       startPrice: composition.startPrice, initialBuy: ethFunding ? formatUnits(ethFunding.quoteAmount, composition.startPrice.decimals) : "0", additionalLiquidity: "0", ethFunding,
-      creatorFeeBps: draft.creatorFeeBps, modules: composition.modules, slippageBps: 100 });
+      ...creatorFees, modules: composition.modules, slippageBps: 100 });
     session.assertCurrent(account, context);
     if (sequence.steps.length !== 1 || sequence.steps[0].kind !== "launch") throw new Error("This launch could not be prepared as one transaction.");
     if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
@@ -99,8 +113,8 @@ export function ModuleFoundationLaunchHost() {
     const positions = foundationLaunchPositionPresentation(sequence, account);
     const custody = (() => {
       if (sequence.result.factoryVersion === "v1") return { factoryVersion: "v1" as const };
-      if (binding.factoryVersion !== "v2") throw new Error("The launch liquidity version changed. Review again.");
-      return { factoryVersion: "v2" as const, lpCustodyId: binding.lpCustodyId,
+      if (binding.factoryVersion !== sequence.result.factoryVersion) throw new Error("The launch liquidity version changed. Review again.");
+      return { factoryVersion: sequence.result.factoryVersion, lpCustodyId: binding.lpCustodyId,
         roundingInventory: { recipient: sequence.result.roundingInventoryRecipient,
           tokenAmount: formatUnits(sequence.result.baseTokenRounding, 18), unrecoverable: true as const },
         quoteFunding: { maximum: formatUnits(sequence.parameters.initialBuyQuoteAmount + sequence.parameters.additionalQuoteAmount, quote.decimals),
@@ -113,11 +127,11 @@ export function ModuleFoundationLaunchHost() {
       pool: { ...sequence.poolKey, poolId: sequence.result.poolId, poolManager: FOUNDATION_INFRASTRUCTURE.poolManager.address },
       positions, ...custody,
       platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
-      creatorFeeBps: draft.creatorFeeBps, initialBuy: draft.initialBuy,
+      ...foundationCreatorFeeFields(sequence.parameters), initialBuy: draft.initialBuy,
       minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
-      additionalLiquidity: formatUnits(sequence.result.factoryVersion === "v2" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
+      additionalLiquidity: formatUnits(sequence.result.factoryVersion !== "v1" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
       actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
-      transactions: sequence.steps.map(foundationStepSummary), notes: ["The initial buy is optional. No creator quote is required for the permanent base position.",
+      transactions: sequence.steps.map(foundationStepSummary), notes: ["The coin launch and first buy use one transaction.",
         "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };
     prepared.current.set(review, sequence); return review;
   }
@@ -132,7 +146,7 @@ export function ModuleFoundationLaunchHost() {
       router.push(tokenUrl);
       return { ...outcome.result, tokenUrl, metadataStatus: "stored", verificationStatus: "verified", operationComplete: true,
         pool: foundationPoolPresentation(verified.details), positions: foundationPositionPresentation(verified.details),
-        message: "The coin metadata, launch pool and liquidity positions were verified in the confirmed transaction." };
+        message: "Your coin is ready." };
     } catch {
       return { ...outcome.result, operationComplete: true, verificationStatus: "pending", metadataStatus: "pending",
         message: "The launch transaction is confirmed. Its coin and position details need another readback. Keep this transaction; do not launch it again." };
@@ -147,9 +161,9 @@ export function ModuleFoundationLaunchHost() {
     uploads.current.set(`${account.toLowerCase()}:${result.uri}`, input.image.sha256);
     return { url: result.uri, sha256: input.image.sha256 };
   }
-  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
+  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} showProgress={false} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
-    catalog={catalog} quoteAssets={quotes} onResolveQuote={resolveQuote} onUploadImage={upload}
+    catalog={catalog} quoteAssets={quotes} suggestedInitialBuy={suggestedInitialBuy} launchProgress={session.progress} onResolveQuote={resolveQuote} onUploadImage={upload}
     onPrepareLaunch={prepare} onConfirmLaunch={async review => { const sequence = prepared.current.get(review);
       if (!sequence) throw new Error("Prepare this launch again with your current wallet."); session.assertCurrent(sequence.account, review.contextKey);
       const outcome = await session.execute(sequence); setCompletedDraft(draftKey);

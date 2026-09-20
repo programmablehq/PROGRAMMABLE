@@ -1,3 +1,4 @@
+import { foundationCreatorFeeFields, type FoundationCreatorFees } from "./creator-fees";
 import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from "viem";
 import {
   assertOpenConfigSchema, compileOpenConfig, type OpenAssetContext, type OpenConfigContext, type OpenConfigSchema, type OpenConfigValue,
@@ -195,7 +196,7 @@ function choiceForUi(input: Environment, value: FoundationModuleSelection): Foun
   return { packageId: entry.manifest.packageId, configuration, creatorShareBps };
 }
 
-export function composeFoundationUiSelectionsV1(input: Environment & { selections: readonly FoundationModuleSelection[]; creatorFeeBps: number }): FoundationCompositionV1 {
+export function composeFoundationUiSelectionsV1(input: Environment & FoundationCreatorFees & { selections: readonly FoundationModuleSelection[] }): FoundationCompositionV1 {
   try {
     assertBoundFoundationCatalogV1(input.catalog);
     foundationRequire(Array.isArray(input.selections) && input.selections.length <= 8, "FOUNDATION_MODULE_LIMIT", "Select at most eight modules.");
@@ -232,10 +233,10 @@ export function presentFoundationCatalogV1(input: Environment): readonly Foundat
 }
 
 /** Trusted, same-block observations after canonical factory/pool verification by the caller's chain reader. */
-export interface FoundationActionReadbackV1 {
+export type FoundationActionReadbackV1 = FoundationCreatorFees & {
   chainId: number; hostAdapterId: string; releaseDigest: Hex; sourceVerificationDigest: Hex;
   host: Address; poolId: Hex; token: Address; quote: Address; creator: Address; ledger: Address;
-  creatorFeeBps: number; compositionHash: Hex; blockNumber: string; blockHash: Hex; blockTimestamp: number;
+  compositionHash: Hex; blockNumber: string; blockHash: Hex; blockTimestamp: number;
   moduleIndex: number; moduleCount: number;
   module: { instance: Address; codeHash: Hex; observedCodeHash: Hex; configurationHash: Hex; descriptor: FoundationModuleDescriptorV1 };
   moduleContext: { host: Address; poolId: Hex; token: Address; quote: Address; creator: Address; ledger: Address };
@@ -265,7 +266,7 @@ export function bindFoundationActionContextV1(input: Environment & {
   foundationRequire(r.chainId === input.chainId && r.hostAdapterId === input.hostAdapterId && typeof r.blockNumber === "string"
     && r.blockNumber.length <= 78 && /^(?:0|[1-9][0-9]*)$/.test(r.blockNumber),
     "FOUNDATION_ACTION_CHAIN_BINDING", "The action readback belongs to another chain or host adapter.");
-  const composition = composeFoundationUiSelectionsV1({ ...input, creatorFeeBps: r.creatorFeeBps });
+  const composition = composeFoundationUiSelectionsV1({ ...input, ...foundationCreatorFeeFields(r) });
   foundationRequire(composition.ok, "FOUNDATION_ACTION_COMPOSITION_INVALID", composition.diagnostics[0]?.message ?? "Restore the original admitted module composition.");
   foundationRequire(r.moduleCount === composition.modules.length && moduleInteger(r.moduleIndex, "foundation.moduleIndex", 7) < r.moduleCount
     && r.compositionHash === composition.compositionHash, "FOUNDATION_ACTION_COMPOSITION_MISMATCH", "The supplied selections do not match this pool's immutable module composition.");

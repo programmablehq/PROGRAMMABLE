@@ -1,4 +1,5 @@
 import { encodeAbiParameters, keccak256, type Hex } from "viem";
+import { foundationCreatorFeeRates, type FoundationCreatorFees } from "./creator-fees";
 import type { OpenConfigContext, OpenConfigValue } from "@/packages/classic-modules/src/open-config.mjs";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleHash, moduleInteger, moduleRecord } from "@/lib/module-mode/release";
@@ -25,9 +26,9 @@ export const FOUNDATION_HOST_ADAPTER_V1: FoundationHostAdapterV1 = Object.freeze
 export interface FoundationModuleChoiceV1 {
   packageId: Hex; configuration: OpenConfigValue; creatorShareBps: number;
 }
-export interface FoundationCompositionInputV1 {
+export type FoundationCompositionInputV1 = FoundationCreatorFees & {
   catalog: FoundationCatalogV1; selections: readonly FoundationModuleChoiceV1[];
-  hostAdapterId: string; chainId: number; creatorFeeBps: number;
+  hostAdapterId: string; chainId: number;
   context?: OpenConfigContext;
   /** Only registered, trusted application adapters. Never accept this from contributor or launch-request JSON. */
   hostAdapters?: readonly FoundationHostAdapterV1[];
@@ -61,8 +62,8 @@ export function composeFoundationModulesV1(input: FoundationCompositionInputV1):
     assertBoundFoundationCatalogV1(input.catalog);
     foundationVersionedName(input.hostAdapterId, "/hostAdapterId");
     foundationRequire(moduleInteger(input.chainId, "foundation.chainId") > 0, "FOUNDATION_CHAIN_ID", "Choose an explicit chain ID.");
-    const creatorFee = moduleInteger(input.creatorFeeBps, "foundation.creatorFeeBps", 1000);
-    foundationRequire(creatorFee % 100 === 0, "FOUNDATION_CREATOR_FEE", "Creator fee must be 0% or a whole percentage from 1% through 10%.", "/creatorFeeBps");
+    try { foundationCreatorFeeRates(input); }
+    catch { foundationRequire(false, "FOUNDATION_CREATOR_FEE", "Buy and sell creator fees must each be 0% or a whole percentage from 1% through 10%.", "/creatorFees"); }
     const found = (input.hostAdapters ?? [FOUNDATION_HOST_ADAPTER_V1]).find(item => item.id === input.hostAdapterId);
     foundationRequire(found, "FOUNDATION_HOST_ADAPTER_UNAVAILABLE",
       `The application has no transaction and conformance adapter for ${input.hostAdapterId}. Register a versioned host adapter to evaluate this capability.`, "/hostAdapterId");

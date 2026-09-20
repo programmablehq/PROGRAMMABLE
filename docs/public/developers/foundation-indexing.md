@@ -18,10 +18,11 @@ Use the [factory and token ABIs](https://github.com/programmablehq/PROGRAMMABLE/
 
 | Factory version | Launch event | Record |
 | --- | --- | --- |
+| V3 | `FoundationLaunchedV3` | `launchOf(token)` returns `LaunchResultV2`; creator buy and sell fees are separate |
 | V2 | `FoundationLaunchedV2` | `launchOf(token)` returns `LaunchResultV2` |
 | V1 | `FoundationLaunched` | `launchOf(token)` returns the original result with `baseVault` |
 
-The SDK source kind is `module-foundation-v1` for both factory versions. Store `factoryVersion` separately. The Native V1 JSON contract at `/api/module-mode/indexer/v1` does not describe Foundation.
+The SDK source kind is `module-foundation-v1` for these factory versions. A version is available for new launches only when the verified discovery response selects it. Store `factoryVersion` separately. The Native V1 JSON contract at `/api/module-mode/indexer/v1` does not describe Foundation.
 
 ## Discover and verify coins
 
@@ -31,7 +32,7 @@ The SDK source kind is `module-foundation-v1` for both factory versions. Store `
 4. Verify the token metadata commitment, selected module instances and liquidity custody. Preserve the receipt and block coordinates needed to reproduce these checks.
 5. Commit complete ranges with their checkpoints. Recheck block hashes on restart; roll back and replay affected records after a reorganization.
 
-The V2 event contains indexed `token`, `creator` and `poolId`, followed by `hook`, `ledger`, `quote`, `metadataHash`, `compositionHash`, `custodyId`, `initialBuyQuoteAmount` and the complete `LaunchResultV2`. Use the event's creator, verified against the hook. The transaction sender or a router is not a universal creator or trader identity.
+The V2 and V3 events contain indexed `token`, `creator` and `poolId`, followed by `hook`, `ledger`, `quote`, `metadataHash`, `compositionHash`, `custodyId`, `initialBuyQuoteAmount` and the complete `LaunchResultV2`. Use the event's creator, verified against the hook. The transaction sender or a router is not a universal creator or trader identity.
 
 The reference `readFoundationLaunchIndex` accepts windows of at most 5,000 blocks and pages of 1 to 100 entries. Traverse every returned cursor, then continue with the next window. Split dense or provider-limited ranges. The direct-transaction helper `discoverFoundationLaunch` also reconstructs launch parameters and module selections; internal factory calls need separate trace evidence.
 
@@ -46,7 +47,7 @@ Keep a checkpoint per factory and release digest. Preserve raw integer amounts. 
 
 ## Read the pool and trades
 
-Read the complete PoolKey. Foundation V2 uses the sorted token and quote addresses, `fee: 0`, `tickSpacing: 60` and the launch's hook. Recompute the pool ID from the ABI-encoded PoolKey and check it against the factory and PoolManager. A v4 pool is identified by its PoolManager and pool ID, not a separate pair contract.
+Read the complete PoolKey. Foundation V2 and V3 use the sorted token and quote addresses, `fee: 0`, `tickSpacing: 60` and the launch's hook. Recompute the pool ID from the ABI-encoded PoolKey and check it against the factory and PoolManager. A v4 pool is identified by its PoolManager and pool ID, not a separate pair contract.
 
 Read prices and liquidity through the bound Uniswap `StateView`. Decode token ordering and decimals before converting the quote price. A quote token may be any asset accepted by the release; do not replace its address with ETH or infer it from its ticker. The ETH launch option uses the bound wrapped ETH token in the Foundation pool.
 
@@ -68,9 +69,11 @@ event FoundationSwap(
 );
 ```
 
+Read `creatorBuyFeeBps()` and `creatorSellFeeBps()` from a V3 hook. V1 and V2 hooks expose `creatorFeeBps()` for both directions. Each creator rate is fixed at launch, from 0 to 1,000 basis points in steps of 100. Add the fixed 30-basis-point platform fee for the selected direction; module shares divide the creator fee rather than add another fee. Use the verified factory version to select these getters.
+
 `router` identifies the caller, not the end trader. Deduplicate by log position and reconcile multiple swaps within the same receipt in execution order. Hook fees are additional to the PoolKey's LP fee; `fee: 0` does not mean a free trade. Read actual fee amounts and ledger credits rather than estimating them from a rounded percentage. Claims withdraw previously accrued fees and must not count as new volume or revenue.
 
-V2 launch position NFTs belong to `0x000000000000000000000000000000000000dEaD`. Verify the recorded position IDs, owners, approvals and liquidity against the bound PositionManager. The optional creator-funded position can be absent. V1 uses different custody; never apply V2's owner rule to a V1 record.
+V2 and V3 launch position NFTs belong to `0x000000000000000000000000000000000000dEaD`. Verify the recorded position IDs, owners, approvals and liquidity against the bound PositionManager. The optional creator-funded position can be absent. V1 uses different custody; never apply V2's owner rule to a V1 record.
 
 ## Keep modules extensible
 

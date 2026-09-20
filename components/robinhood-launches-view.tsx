@@ -12,7 +12,7 @@ import { useRouteViewChain, type ViewChainId } from "@/components/view-chain";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { rememberRobinhoodTokenPresentations } from "@/components/robinhood-presentation-cache";
-import { coinAge, coinTicker, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import { coinAge, coinTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, ROBINHOOD_EXPLORE_PAGE_SIZE, sameRobinhoodExploreRequest, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
 import { isRobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projection-v1";
@@ -344,6 +344,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
           <ul className={styles.list} id={listId} aria-label={`${chainName} launches`} aria-busy={pending || loading}>
             {items.map((launch, index) => {
               const details = presentations.get(launch.tokenAddress.toLowerCase());
+              const valuation = coinValuation(details?.market);
               const hasAsset = !launch.launchProjection || launch.launchProjection.primaryComponentId !== null;
               return (
               <li key={launch.tokenAddress.toLowerCase()} className={styles.item}>
@@ -363,10 +364,10 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                     <span className={styles.mode}>{launch.category === "classic" ? "Classic" : isRobinhoodModuleLaunch(launch) ? "Module" : "Custom"}</span>
                   </div>
                   <div className={styles.cardFooter}>
-                    {hasAsset && (chainId === 4663 || details?.market?.marketCapUsd != null) ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
-                      <span>Market cap</span>
-                      {details?.market?.marketCapUsd != null && Number.isFinite(details.market.marketCapUsd) && details.market.marketCapUsd >= 0
-                        ? <AnimatedMarketCap metric={{ kind: "usd", value: details.market.marketCapUsd }} replayKey={`${chainId}:${launch.tokenAddress.toLowerCase()}:${details.market.poolId.toLowerCase()}:market-cap`} />
+                    {hasAsset && (chainId === 4663 || valuation.value !== null) ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
+                      <span title={valuation.label === "FDV" ? "Fully diluted valuation" : undefined}>{valuation.label}</span>
+                      {details?.market && valuation.value !== null
+                        ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`${chainId}:${launch.tokenAddress.toLowerCase()}:${details.market.poolId.toLowerCase()}:${valuation.label}`} />
                         : <strong>—</strong>}
                     </div> : null}
                     {launch.launchedAt ? <time className={styles.launched} dateTime={launch.launchedAt} title={`Launched ${new Date(launch.launchedAt).toUTCString()}`}>{coinAge(launch.launchedAt, now)}</time> : null}

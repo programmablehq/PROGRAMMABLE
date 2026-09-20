@@ -1,9 +1,14 @@
-import { parseAbi, parseAbiParameters, type Address, type Hex } from "viem";
+import { encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, type Address, type Hex } from "viem";
+import { foundationCreatorFeeRates, type FoundationCreatorFees } from "./creator-fees";
+import type { FoundationPoolKey } from "./route";
 
 export interface FoundationMetadata { name: string; symbol: string; description: string; imageURI: string; website: string; socialData: Hex }
 export interface FoundationContractModule { factory: Address; factoryCodeHash: Hex; moduleCodeHash: Hex; descriptorHash: Hex; configuration: Hex; creatorShareBps: number }
-export interface FoundationLaunchParameters {
-  metadata: FoundationMetadata; quote: Address; quoteDecimals: number; initialTick: number; creatorFeeBps: number;
+export type FoundationLaunchParameters = FoundationLaunchParametersCommon & FoundationCreatorFees;
+export type FoundationLaunchParametersV3 = FoundationLaunchParametersCommon & { creatorBuyFeeBps: number; creatorSellFeeBps: number; creatorFeeBps?: never };
+export type FoundationLaunchParametersLegacy = FoundationLaunchParametersCommon & { creatorFeeBps: number; creatorBuyFeeBps?: never; creatorSellFeeBps?: never };
+interface FoundationLaunchParametersCommon {
+  metadata: FoundationMetadata; quote: Address; quoteDecimals: number; initialTick: number;
   additionalQuoteAmount: bigint; initialBuyQuoteAmount: bigint; initialBuyMinimumTokenAmount: bigint;
   deadline: bigint; tokenSalt: Hex; hookSalt: Hex; modules: readonly FoundationContractModule[];
 }
@@ -19,10 +24,11 @@ export interface FoundationLaunchResultV2 {
   baseTokenPrincipal: bigint; baseTokenRounding: bigint; creatorQuotePrincipal: bigint; actualQuoteRefund: bigint;
 }
 export type FoundationLaunchRecord = (FoundationLaunchResult & { factoryVersion: "v1" })
-  | (FoundationLaunchResultV2 & { factoryVersion: "v2" });
+  | (FoundationLaunchResultV2 & { factoryVersion: "v2" | "v3" });
 
 export const foundationMetadataParameters = parseAbiParameters("(string name,string symbol,string description,string imageURI,string website,bytes socialData)");
 export const foundationLaunchParameters = parseAbiParameters("((string name,string symbol,string description,string imageURI,string website,bytes socialData) metadata,address quote,uint8 quoteDecimals,int24 initialTick,uint16 creatorFeeBps,uint128 additionalQuoteAmount,uint128 initialBuyQuoteAmount,uint128 initialBuyMinimumTokenAmount,uint64 deadline,bytes32 tokenSalt,bytes32 hookSalt,(address factory,bytes32 factoryCodeHash,bytes32 moduleCodeHash,bytes32 descriptorHash,bytes configuration,uint16 creatorShareBps)[] modules)");
+export const foundationLaunchParametersV3 = parseAbiParameters("((string name,string symbol,string description,string imageURI,string website,bytes socialData) metadata,address quote,uint8 quoteDecimals,int24 initialTick,uint16 creatorBuyFeeBps,uint16 creatorSellFeeBps,uint128 additionalQuoteAmount,uint128 initialBuyQuoteAmount,uint128 initialBuyMinimumTokenAmount,uint64 deadline,bytes32 tokenSalt,bytes32 hookSalt,(address factory,bytes32 factoryCodeHash,bytes32 moduleCodeHash,bytes32 descriptorHash,bytes configuration,uint16 creatorShareBps)[] modules)");
 
 export const foundationFactoryAbi = parseAbi([
   "struct Metadata { string name; string symbol; string description; string imageURI; string website; bytes socialData; }",
@@ -66,6 +72,30 @@ export const foundationFactoryV2Abi = parseAbi([
   "event FoundationLaunchedV2(address indexed token,address indexed creator,bytes32 indexed poolId,address hook,address ledger,address quote,bytes32 metadataHash,bytes32 compositionHash,bytes32 custodyId,uint256 initialBuyQuoteAmount,LaunchResultV2 result)",
 ]);
 
+export const foundationFactoryV3Abi = parseAbi([
+  "struct Metadata { string name; string symbol; string description; string imageURI; string website; bytes socialData; }",
+  "struct ModuleSelection { address factory; bytes32 factoryCodeHash; bytes32 moduleCodeHash; bytes32 descriptorHash; bytes configuration; uint16 creatorShareBps; }",
+  "struct LaunchParams { Metadata metadata; address quote; uint8 quoteDecimals; int24 initialTick; uint16 creatorBuyFeeBps; uint16 creatorSellFeeBps; uint128 additionalQuoteAmount; uint128 initialBuyQuoteAmount; uint128 initialBuyMinimumTokenAmount; uint64 deadline; bytes32 tokenSalt; bytes32 hookSalt; ModuleSelection[] modules; }",
+  "struct LaunchResultV2 { address token; address hook; address ledger; bytes32 poolId; address basePositionOwner; address creatorPositionOwner; address roundingInventoryRecipient; uint256 basePositionId; uint256 creatorPositionId; uint256 initialBuyTokenAmount; uint128 baseTokenPrincipal; uint128 baseTokenRounding; uint128 creatorQuotePrincipal; uint256 actualQuoteRefund; }",
+  "function launch(LaunchParams p) returns (LaunchResultV2 result)",
+  "function launchOf(address token) view returns (LaunchResultV2 result)",
+  "function predictTokenAddress(address creator,bytes32 tokenSalt,Metadata metadata) view returns (address)",
+  "function hookInitCodeHash(address creator,address predictedToken,LaunchParams p) view returns (bytes32)",
+  "function predictHookAddress(address creator,address predictedToken,LaunchParams p) view returns (address)",
+  "function hookDeployer() view returns (address)",
+  "function VERSION_ID() view returns (bytes32)",
+  "function MODULE_ABI_ID() view returns (bytes32)",
+  "function LP_CUSTODY_ID() view returns (bytes32)",
+  "function LP_RECIPIENT() view returns (address)",
+  "function ROUNDING_INVENTORY_RECIPIENT() view returns (address)",
+  "function LP_FEE() view returns (uint24)",
+  "function poolManager() view returns (address)",
+  "function positionManager() view returns (address)",
+  "function universalRouter() view returns (address)",
+  "function permit2() view returns (address)",
+  "event FoundationLaunchedV3(address indexed token,address indexed creator,bytes32 indexed poolId,address hook,address ledger,address quote,bytes32 metadataHash,bytes32 compositionHash,bytes32 custodyId,uint256 initialBuyQuoteAmount,LaunchResultV2 result)",
+]);
+
 export const foundationFactoryNativeAbi = [...foundationFactoryV2Abi, ...parseAbi([
   "struct Metadata { string name; string symbol; string description; string imageURI; string website; bytes socialData; }",
   "struct ModuleSelection { address factory; bytes32 factoryCodeHash; bytes32 moduleCodeHash; bytes32 descriptorHash; bytes configuration; uint16 creatorShareBps; }",
@@ -79,11 +109,33 @@ export const foundationFactoryNativeAbi = [...foundationFactoryV2Abi, ...parseAb
   "function wrappedEthCodeHash() view returns (bytes32)",
 ])] as const;
 
+export const foundationFactoryV3NativeAbi = [...foundationFactoryV3Abi, ...parseAbi([
+  "struct Metadata { string name; string symbol; string description; string imageURI; string website; bytes socialData; }",
+  "struct ModuleSelection { address factory; bytes32 factoryCodeHash; bytes32 moduleCodeHash; bytes32 descriptorHash; bytes configuration; uint16 creatorShareBps; }",
+  "struct LaunchParams { Metadata metadata; address quote; uint8 quoteDecimals; int24 initialTick; uint16 creatorBuyFeeBps; uint16 creatorSellFeeBps; uint128 additionalQuoteAmount; uint128 initialBuyQuoteAmount; uint128 initialBuyMinimumTokenAmount; uint64 deadline; bytes32 tokenSalt; bytes32 hookSalt; ModuleSelection[] modules; }",
+  "struct LaunchResultV2 { address token; address hook; address ledger; bytes32 poolId; address basePositionOwner; address creatorPositionOwner; address roundingInventoryRecipient; uint256 basePositionId; uint256 creatorPositionId; uint256 initialBuyTokenAmount; uint128 baseTokenPrincipal; uint128 baseTokenRounding; uint128 creatorQuotePrincipal; uint256 actualQuoteRefund; }",
+  "function launchWithEthRoute(LaunchParams p,bytes fundingPath) payable returns (LaunchResultV2 result)",
+  "function NATIVE_FUNDING_ID() view returns (bytes32)",
+  "function wrappedEth() view returns (address)",
+  "function wrappedEthCodeHash() view returns (bytes32)",
+])] as const;
+
 export const foundationHookAbi = parseAbi([
   "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
   "function initializer() view returns (address)", "function token() view returns (address)",
   "function quote() view returns (address)", "function creator() view returns (address)",
   "function creatorFeeBps() view returns (uint16)", "function ledger() view returns (address)",
+  "function poolId() view returns (bytes32)", "function poolKey() view returns (PoolKey)",
+  "function initialTick() view returns (int24)",
+  "function feeCarry(bool buy) view returns (uint16 platform,uint16 creator)",
+  "function moduleCount() view returns (uint256)",
+]);
+
+export const foundationHookV2Abi = parseAbi([
+  "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
+  "function initializer() view returns (address)", "function token() view returns (address)",
+  "function quote() view returns (address)", "function creator() view returns (address)",
+  "function creatorBuyFeeBps() view returns (uint16)", "function creatorSellFeeBps() view returns (uint16)", "function ledger() view returns (address)",
   "function poolId() view returns (bytes32)", "function poolKey() view returns (PoolKey)",
   "function initialTick() view returns (int24)",
   "function feeCarry(bool buy) view returns (uint16 platform,uint16 creator)",
@@ -117,3 +169,25 @@ export const foundationLedgerAbi = parseAbi([
   "function claimPlatform() returns (uint256 amount)", "function claimCreator() returns (uint256 amount)",
   "event QuoteClaimed(address indexed beneficiary,uint8 indexed budget,uint256 amount)",
 ]);
+
+export type FoundationLaunchEntry = { functionName: "launch" }
+  | { functionName: "launchWithEthRoute"; fundingPath: Hex }
+  | { functionName: "launchWithEth"; fundingPool: FoundationPoolKey };
+
+/** A single, typed choice of the canonical tuple; no packed or inferred fee values. */
+export function encodeFoundationLaunchEntry(p: FoundationLaunchParameters, entry: FoundationLaunchEntry): Hex {
+  foundationCreatorFeeRates(p);
+  if (p.creatorFeeBps === undefined) {
+    if (entry.functionName === "launchWithEthRoute") return encodeFunctionData({ abi: foundationFactoryV3NativeAbi, functionName: entry.functionName, args: [p, entry.fundingPath] });
+    if (entry.functionName === "launchWithEth") throw new Error("V3 native launches require the ETH route entrypoint.");
+    return encodeFunctionData({ abi: foundationFactoryV3Abi, functionName: "launch", args: [p] });
+  }
+  if (entry.functionName === "launchWithEthRoute") return encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: entry.functionName, args: [p, entry.fundingPath] });
+  if (entry.functionName === "launchWithEth") return encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: entry.functionName, args: [p, entry.fundingPool] });
+  return encodeFunctionData({ abi: foundationFactoryAbi, functionName: "launch", args: [p] });
+}
+
+export function encodeFoundationParameters(p: FoundationLaunchParameters): Hex {
+  foundationCreatorFeeRates(p);
+  return p.creatorFeeBps === undefined ? encodeAbiParameters(foundationLaunchParametersV3, [p]) : encodeAbiParameters(foundationLaunchParameters, [p]);
+}

@@ -11,12 +11,15 @@ export type RobinhoodLaunch = Readonly<{
   poolManager: string | null;
   poolId: string | null;
   stampHash: string | null;
-  sourceKind?: "module-native-v1" | "module-native-v2" | "module-engine-v1" | "multi-role-v2" | "custom-launch-plan-v1";
+  sourceKind?: "module-native-v1" | "module-native-v2" | "module-engine-v1" | "module-foundation-v1" | "multi-role-v2" | "custom-launch-plan-v1";
   /** Additive normalized provenance; absent on historical rows. */
   launchProjection?: LaunchProjectionV1;
   primaryAssetAddress?: string | null;
   sourceAddress?: string;
   sourceReleaseDigest?: string;
+  factoryVersion?: "v1" | "v2" | "v3";
+  metadataHash?: string;
+  compositionHash?: string;
   recipeHash?: string;
   runtime?: string;
   launchKey?: string;
@@ -96,8 +99,8 @@ export type RobinhoodNativeModuleLaunch = RobinhoodLaunch & Readonly<{
   moduleFamilyIds: readonly string[];
 }>;
 
-export function isRobinhoodModuleSourceKind(value: unknown): value is "module-native-v1" | "module-native-v2" | "module-engine-v1" {
-  return value === "module-native-v1" || value === "module-native-v2" || value === "module-engine-v1";
+export function isRobinhoodModuleSourceKind(value: unknown): value is RobinhoodModuleLaunch["sourceKind"] {
+  return value === "module-native-v1" || value === "module-native-v2" || value === "module-engine-v1" || value === "module-foundation-v1";
 }
 
 /**
@@ -142,7 +145,32 @@ export type RobinhoodEngineLaunch = RobinhoodLaunch & Readonly<{
   economicsPolicyId: string; protocolFeeBps: 10 | 30; authorPoolFeeBps: 0 | 20; platformFeeBps: 10 | 30; feeEligibleFamilyIds: readonly string[];
   modulePackageIds: readonly string[]; moduleFamilyIds: readonly string[]; primaryMarket: RobinhoodEnginePrimaryMarket | null;
 }>;
-export type RobinhoodModuleLaunch = RobinhoodNativeModuleLaunch | RobinhoodEngineLaunch;
+/** Foundation's canonical pool id supplies the saved row id; it is never a Router launch stamp. */
+export type RobinhoodFoundationLaunch = RobinhoodLaunch & Readonly<{
+  sourceKind: "module-foundation-v1"; routerAddress: null; stampHash: null;
+  sourceAddress: string; sourceReleaseDigest: string; factoryVersion: "v1" | "v2" | "v3";
+  hookAddress: string; poolManager: string; poolId: string; quoteAsset: string;
+  feeLedgerAddress: string; metadataHash: string; compositionHash: string;
+}>;
+export type RobinhoodModuleLaunch = RobinhoodNativeModuleLaunch | RobinhoodEngineLaunch | RobinhoodFoundationLaunch;
+
+/** Structural validation only. The background source verifies release, factory, event and finality. */
+export function isRobinhoodFoundationLaunch(value: unknown): value is RobinhoodFoundationLaunch {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  const address = (item: unknown): item is string => typeof item === "string" && /^0x(?!0{40}$)[\da-f]{40}$/i.test(item);
+  const hash = (item: unknown): item is string => typeof item === "string" && /^0x(?!0{64}$)[\da-f]{64}$/i.test(item);
+  return row.sourceKind === "module-foundation-v1" && row.routerAddress === null && row.stampHash === null
+    && ["v1", "v2", "v3"].includes(String(row.factoryVersion))
+    && [row.sourceAddress, row.tokenAddress, row.hookAddress, row.creator, row.poolManager, row.quoteAsset, row.feeLedgerAddress].every(address)
+    && [row.launchId, row.sourceReleaseDigest, row.poolId, row.metadataHash, row.compositionHash, row.transactionHash, row.blockHash].every(hash)
+    && String(row.launchId).toLowerCase() === String(row.poolId).toLowerCase()
+    && String(row.tokenAddress).toLowerCase() !== String(row.quoteAsset).toLowerCase()
+    && typeof row.blockNumber === "string" && /^(0|[1-9][0-9]*)$/.test(row.blockNumber)
+    && Number.isSafeInteger(row.logIndex) && Number(row.logIndex) >= 0
+    && row.decimals === 18 && [row.name, row.symbol].every(item => item === null || typeof item === "string" && item.length <= 128)
+    && (row.launchedAt === null || typeof row.launchedAt === "string" && Number.isFinite(Date.parse(row.launchedAt)));
+}
 
 /** Structural validation only, after independent source and finality verification by the saved index. */
 export function isRobinhoodEngineLaunch(value: unknown): value is RobinhoodEngineLaunch {
@@ -185,7 +213,7 @@ export function isRobinhoodEngineLaunch(value: unknown): value is RobinhoodEngin
 }
 
 export function isRobinhoodModuleLaunch(value: unknown): value is RobinhoodModuleLaunch {
-  return isRobinhoodNativeModuleLaunch(value) || isRobinhoodEngineLaunch(value);
+  return isRobinhoodNativeModuleLaunch(value) || isRobinhoodEngineLaunch(value) || isRobinhoodFoundationLaunch(value);
 }
 
 export function robinhoodLaunchDescription(launch: RobinhoodLaunch): string {
@@ -195,5 +223,6 @@ export function robinhoodLaunchDescription(launch: RobinhoodLaunch): string {
 }
 
 export function robinhoodModuleManageHref(launch: RobinhoodLaunch): string | null {
+  if (isRobinhoodFoundationLaunch(launch)) return `/modules/${launch.tokenAddress.toLowerCase()}`;
   return isRobinhoodModuleLaunch(launch) ? `/launch/modules/manage/${launch.tokenAddress.toLowerCase()}?${launch.sourceKind === "module-engine-v1" ? "sourceKind=module-engine-v1&" : ""}releaseDigest=${launch.sourceReleaseDigest.toLowerCase()}` : null;
 }

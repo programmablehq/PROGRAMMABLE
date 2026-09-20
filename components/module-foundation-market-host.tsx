@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { decodeEventLog, formatUnits, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
 import { ModuleFoundationMarket } from "./module-foundation-market";
+import { FoundationAddress } from "./module-foundation-review";
 import { ModuleFoundationActions, type FoundationActionDescriptor, type FoundationActionReview } from "./module-foundation-actions";
 import { FoundationSessionStatus, useFoundationSession, type FoundationExecutionResult } from "./module-foundation-session";
 import { prepareFoundationClaim, prepareFoundationModuleAction, prepareFoundationTrade } from "@/lib/module-foundation/client";
@@ -23,10 +25,14 @@ import { FOUNDATION_WETH } from "@/lib/module-foundation/native-funding";
 import type { AnyQuoteReadinessV1 } from "@/lib/module-engine/any-quote/types";
 import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationTradeDraft,
   type FoundationTradeReview, type FoundationTransactionResult, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees";
+import { useRobinhoodPresentation } from "./use-robinhood-presentation";
 import styles from "./module-foundation-ui.module.css";
 
-export function ModuleFoundationMarketHost({ token, transactionHash }: { token: Address; transactionHash?: Hex }) {
+export function ModuleFoundationMarketHost({ token, transactionHash, initialName }: { token: Address; transactionHash?: Hex; initialName?: string }) {
   const session = useFoundationSession(token);
+  const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(token)}`);
+  const market = presentation.items.find(item => item.tokenAddress.toLowerCase() === token.toLowerCase())?.market;
   const [readback, setReadback] = useState<{ context: string; details: FoundationPoolDetails } | null>(null);
   const [error, setError] = useState(""); const [refreshKey, setRefreshKey] = useState(0);
   const trades = useRef(new WeakMap<FoundationTradeReview, Awaited<ReturnType<typeof prepareFoundationTrade>>>());
@@ -129,8 +135,11 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}><div className={styles.pageHeading}><h1>Module Mode coin</h1>
-    <p role="status">{error || session.availability.reason || "Reading the coin metadata and pool from its verified release…"}</p></div>
+  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}>
+    <div className={styles.topLine}><Link className={styles.textButton} href="/explore/robinhood">Explore</Link><span className={styles.chainBadge}>Robinhood Chain</span></div>
+    <div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
+    <p role="status">{error || session.availability.reason || "Loading coin…"}</p></div>
+    <div className={styles.coinAddress}><FoundationAddress value={token} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${token}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
     {error ? <button type="button" className={styles.secondaryButton} onClick={() => setRefreshKey(value => value + 1)}>Read pool again</button> : null}</div></>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
     supported: true, ...(details.quote.balance === null ? {} : { balance: formatUnits(details.quote.balance, details.quote.decimals) }) };
@@ -147,8 +156,8 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
         creditedAmount: formatUnits(budget.credited, quote.decimals), paidAmount: formatUnits(budget.claimed, quote.decimals), asOfBlock: details.checkpoint.blockNumber.toString() } };
   });
   return <><FoundationSessionStatus session={session} /><ModuleFoundationMarket key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
-    coin={coin} quote={quote} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true }}
-    pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} creatorFeeBps={details.creatorFeeBps}
+    coin={coin} quote={quote} market={market} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true }}
+    pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} {...foundationCreatorFeeFields(details)}
     walletAction={session.walletAction} submissionBlocked={session.submissionBlocked} onPrepareTrade={prepareTrade}
     onConfirmTrade={async review => { const sequence = trades.current.get(review); if (!sequence) throw new Error("Review this trade again.");
       session.assertCurrent(sequence.account, review.contextKey); return verifiedResult(await session.execute(sequence)); }}

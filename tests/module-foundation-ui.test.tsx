@@ -5,6 +5,7 @@ import { ModuleFoundationBuilder } from "@/components/module-foundation-builder"
 import { ModuleFoundationMarket } from "@/components/module-foundation-market";
 import { FoundationFeeDisclosure, ModuleFoundationLaunchReview, ModuleFoundationTransactionResult } from "@/components/module-foundation-review";
 import { FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { FOUNDATION_DEFAULT_IMAGE } from "@/lib/module-foundation/default-image";
 import { FOUNDATION_DEAD_ADDRESS, FOUNDATION_LP_CUSTODY_DEAD_ID } from "@/lib/module-foundation/constants";
 
 const address = "0x1111111111111111111111111111111111111111" as const;
@@ -25,8 +26,8 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(foundationDecimalError("123456789012345678901234567890.123456789012345678", 18)).toBeNull();
   });
   it("keeps 30 bps additive even at zero creator fee and refuses changed fee recipient or stale review", () => {
-    for (const value of [0, 100, 999, 1_000]) expect(isFoundationCreatorFee(value)).toBe(true);
-    for (const value of [-1, 1, 30, 99, 1_001, 100.5]) expect(isFoundationCreatorFee(value)).toBe(false);
+    for (const value of [0, 100, 900, 1_000]) expect(isFoundationCreatorFee(value)).toBe(true);
+    for (const value of [-1, 1, 30, 99, 999, 1_001, 100.5]) expect(isFoundationCreatorFee(value)).toBe(false);
     const review = { contextKey: "wallet:release", expiresAt: 200, platformFeeBps: 30 as const, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT };
     expect(foundationReviewError(review, "wallet:release", 100_000)).toBeNull();
     expect(foundationReviewError(review, "other:release", 100_000)).toContain("changed");
@@ -37,6 +38,20 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).toContain("0.3%");
     expect(html).toContain("Uniswap LP and protocol fees are separate");
   });
+  it("shows independent rates and direction-specific totals", () => {
+    const fees = { creatorBuyFeeBps: 100, creatorSellFeeBps: 300 };
+    const html = renderToStaticMarkup(<FoundationFeeDisclosure {...fees} quoteSymbol="ETH" />);
+    expect(html).toContain("Creator buy fee");
+    expect(html).toContain("Creator sell fee");
+    expect(html).toContain("1.3%");
+    expect(html).toContain("3.3%");
+    const buy = renderToStaticMarkup(<FoundationFeeDisclosure {...fees} side="buy" quoteSymbol="ETH" />);
+    const sell = renderToStaticMarkup(<FoundationFeeDisclosure {...fees} side="sell" quoteSymbol="ETH" />);
+    expect(buy).toContain("1.3%");
+    expect(buy).not.toContain("3.3%");
+    expect(sell).toContain("3.3%");
+    expect(sell).not.toContain("1.3%");
+  });
   it("validates descriptor binding, requirements and conflicts without business module enums", () => {
     expect(foundationSelectionErrors([], [])).toEqual([]);
     expect(foundationSelectionErrors([selected], [descriptor])).toEqual([]);
@@ -46,13 +61,20 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(foundationSelectionErrors([{ ...selected, configuration: { recipient: "bad-address" } }], [descriptor])[0]).toContain("valid address");
   });
   it("offers a base coin without an editable starting valuation", () => {
-    const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    for (const label of ["Description", "X / Twitter", "Initial buy", "Create Launch"]) expect(html).toContain(label);
+    const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} suggestedInitialBuy="0.001167" onResolveQuote={vi.fn()} {...actions} />);
+    for (const label of ["Ticker", "Add More Links", "Creator fees", "Stocks or Meme Coins", "First buy", "Create Launch"]) expect(html).toContain(label);
     expect(html).not.toContain('name="startValuationQuote"');
     expect(html).not.toContain("Starting valuation");
     expect(html).not.toContain("foundation-valuation");
-    expect(html).toContain("Enter 0 to launch without buying");
-    expect(html).toContain("Your coin works with no additional modules");
+    expect(html).toContain('value="0.001167"');
+    for (const removed of ["One wallet confirmation", "Minimum 1 wei", "Gas is separate", "Up to 8 MB", "JPG, PNG"]) expect(html).not.toContain(removed);
+    expect(html).toContain(FOUNDATION_DEFAULT_IMAGE.url);
+    expect(html).toContain("(Platform Fee 0.3%)");
+    expect(html).toContain('name="creatorBuyFeeBps"');
+    expect(html).toContain('name="creatorSellFeeBps"');
+    expect(html).not.toContain("Optional");
+    expect(html).not.toContain("foundation-modules-heading");
+    expect(html).not.toContain("Platform fee recipient");
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);
   });
@@ -60,9 +82,8 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} factoryVersion="v2" contextKey="fixture" catalog={[]} quoteAssets={[{ ...quote, supportsNativeEth: true }]} initialDraft={{ additionalLiquidity: "2" }} {...actions} />);
     expect(html).not.toContain("Add creator liquidity");
     expect(html).not.toContain('name="additionalLiquidity"');
-    expect(html).toContain("ETH · Ethereum");
-    expect(html).toContain("Launch and buy share one wallet confirmation");
-    expect(html).toContain("Enter 0 to launch without buying");
+    expect(html).toContain("Classic");
+    expect(html).toContain("Creator fees");
   });
   it("shows exact V2 principal, refund and token rounding separately from fee claims before the wallet action", () => {
     const review: FoundationLaunchReview = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
@@ -87,7 +108,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   });
   it("leaves unavailable launch and direct trading unavailable without a source deployment binding", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "unavailable", reason: "Deployment is not bound." }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    expect(html).toContain("Deployment is not bound.");
+    expect(html).toContain("Launching is temporarily unavailable.");
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
     const market = renderToStaticMarkup(<ModuleFoundationMarket availability={{ ...availability, status: "unavailable" }} contextKey="fixture" coin={{ address, name: "UI fixture", symbol: "UI", description: "Local UI fixture.", decimals: 18 }} quote={quote} pool={{ poolId: hash, currency0: address, currency1: address, fee: 3000, tickSpacing: 60, hooks: address, poolManager: address }} creatorFeeBps={0} onPrepareTrade={vi.fn()} onConfirmTrade={vi.fn()} />);
     expect(market).toContain("Universal Router");
@@ -97,8 +118,23 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     const submitted = renderToStaticMarkup(<ModuleFoundationTransactionResult result={{ status: "submitted", transactionHash: hash, explorerUrl: "https://explorer.example/tx/fixture", metadataStatus: "stored", tokenUrl: "/coin/fixture" }} />);
     expect(submitted).toContain("Transaction submitted");
     expect(submitted).not.toContain("Transaction confirmed");
-    expect(submitted).not.toContain("View coin");
+    expect(submitted).not.toContain("View Coin");
     expect(submitted).toContain("index confirmation pending");
+  });
+  it("opens the verified coin with a compact success state and retains its transaction", () => {
+    const result = { status: "confirmed" as const, verificationStatus: "verified" as const, transactionHash: hash,
+      explorerUrl: `https://robinhoodchain.blockscout.com/tx/${hash}`, tokenUrl: `/modules/${address}` };
+    const html = renderToStaticMarkup(<ModuleFoundationTransactionResult result={result} />);
+    expect(html).toContain("Coin created");
+    expect(html).toContain("Opening your coin…");
+    expect(html).toContain("View Coin");
+    expect(html).toContain(`href="/modules/${address}"`);
+    expect(html).toContain(hash);
+    const unverified = renderToStaticMarkup(<ModuleFoundationTransactionResult result={{ ...result, verificationStatus: "pending" }} />);
+    expect(unverified).not.toContain("Coin created");
+    expect(unverified).not.toContain("View Coin");
+    const unsafe = renderToStaticMarkup(<ModuleFoundationTransactionResult result={{ ...result, tokenUrl: "javascript:alert(1)" }} />);
+    expect(unsafe).not.toContain("View Coin");
   });
   it("keeps the coin draft editable while an unresolved wallet operation blocks submission", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions}
@@ -121,5 +157,9 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     for (const label of ["Unsafe script", "Private credential", "Plain HTTP"]) expect(html).not.toContain(label);
     const unsafeImage = renderToStaticMarkup(<ModuleFoundationMarket {...props} coin={{ ...coin, imageURI: "data:image/svg+xml,unsafe" }} />);
     expect(unsafeImage).not.toContain("data:image");
+    expect(unsafeImage).toContain(FOUNDATION_DEFAULT_IMAGE.url);
+    expect(unsafeImage).toContain('aria-label="Copy coin address"');
+    expect(html).toContain(`href="https://robinhoodchain.blockscout.com/token/${address}"`);
+    expect(html).toContain('href="/explore/robinhood"');
   });
 });

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { isAddress } from "viem";
+import { getAddress, isAddress } from "viem";
 
 import { TokenIndexResetView } from "@/components/token-index-reset-view";
 import { RobinhoodTokenView } from "@/components/robinhood-token-view";
+import { ModuleFoundationMarketHost } from "@/components/module-foundation-market-host";
 import { EthereumTokenView } from "@/components/ethereum-token-view";
 import { TokenRouteChainSync } from "@/components/token-route-chain-sync";
 import { resolveTokenPage } from "@/lib/server/token-page";
 import { genericTokenDetailMetadata } from "@/lib/token-detail-metadata";
 import { tokenDetailPageChainId } from "@/lib/token-page-chain";
-import { robinhoodLaunchDescription } from "@/lib/robinhood-launches";
+import { isRobinhoodFoundationLaunch, robinhoodLaunchDescription } from "@/lib/robinhood-launches";
 
 type TokenPageSearchParams = Promise<
   Record<string, string | string[] | undefined>
@@ -64,7 +65,9 @@ export default async function TokenPage({
   if (resolved === null) notFound();
   if (resolved.chainId === 4663) {
     return <TokenRouteChainSync key={4663} chainId={4663}>
-      <RobinhoodTokenView address={address} token={resolved.token} status={resolved.status} />
+      {isRobinhoodFoundationLaunch(resolved.token)
+        ? <ModuleFoundationMarketHost token={getAddress(address)} initialName={resolved.token.name?.trim() || "Unnamed token"} />
+        : <RobinhoodTokenView address={address} token={resolved.token} status={resolved.status} />}
     </TokenRouteChainSync>;
   }
   if (resolved.chainId === 1) {

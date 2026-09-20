@@ -116,9 +116,10 @@ export function useFoundationSession(token?: Address) {
       for (let index = 0; index < sequence.steps.length; index++) {
         assertCurrent(sequence.account, expectedContext);
         const step = sequence.steps[index];
-        if (mounted.current) setProgress(`Step ${index + 1} of ${sequence.steps.length}: ${step.label}`);
+        if (mounted.current) setProgress(sequence.kind === "launch" ? "Confirm in your wallet…" : `Step ${index + 1} of ${sequence.steps.length}: ${step.label}`);
         const preparation = bindFoundationWalletStep({ client, sequence, index, resolveAuthority, resolveCatalog });
         const hash = await submitFoundationWalletStep(preparation, sendModuleModeTransaction);
+        if (mounted.current) setProgress(sequence.kind === "launch" ? "Creating your coin…" : "Waiting for confirmation…");
         const outcome: FoundationExecutionResult = { sequence, stepIndex: index,
           result: { status: "submitted", transactionHash: hash, explorerUrl: `${ROBINHOOD_BLOCK_EXPLORER_URL}/tx/${hash}`,
             operationComplete: false, stepLabel: step.label,
@@ -178,13 +179,14 @@ export function useFoundationSession(token?: Address) {
     retryAvailability: () => setRefresh(value => value + 1) };
 }
 
-export function FoundationSessionStatus({ session, editingNewLaunch = false }: { session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean }) {
+export function FoundationSessionStatus({ session, editingNewLaunch = false, showProgress = true }: { session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean; showProgress?: boolean }) {
   const [hash, setHash] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const recovery = session.pending !== "null";
   const resolved = session.resolution;
+  if (!showProgress && session.progress) return null;
   if (!session.progress && !recovery && session.resolutionState === "null" && !message) return null;
   return <div className={`${styles.page} ${styles.sessionStatus}`}>
-    {session.progress ? <p role="status">{session.progress}</p> : null}
+    {showProgress && session.progress ? <p role="status">{session.progress}</p> : null}
     {!session.progress && resolved ? <details className={styles.savedResult} open={!editingNewLaunch} aria-label="Saved transaction result"><summary>{editingNewLaunch
       ? resolved.status === "success" ? "Previous transaction confirmed" : "Previous transaction reverted"
       : resolved.status === "success" ? "Your transaction is confirmed" : "Your transaction reverted"}</summary>
@@ -197,7 +199,7 @@ export function FoundationSessionStatus({ session, editingNewLaunch = false }: {
           : "The request did not complete. Network gas may have been charged."}</p>
       <p><a href={`${ROBINHOOD_BLOCK_EXPLORER_URL}/tx/${resolved.transactionHash}`} target="_blank" rel="noreferrer">View transaction</a>
         {resolved.status === "success" && resolved.metadata?.stepKind === "launch" && resolved.metadata.token
-          ? <> · <a href={`/modules/${resolved.metadata.token}?transaction=${resolved.transactionHash}`}>View coin details</a></> : null}</p>
+          ? <> · <a href={`/modules/${resolved.metadata.token}?transaction=${resolved.transactionHash}`}>View Coin</a></> : null}</p>
       {!recovery ? <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => {
         setBusy(true); setMessage(""); void session.acknowledgeResult(resolved.operationId, !editingNewLaunch)
           .catch(error => setMessage(error instanceof Error ? error.message : "The saved result could not be acknowledged."))
