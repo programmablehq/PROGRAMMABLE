@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
 
+const onchain = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("@/lib/server/robinhood-market", () => ({ readRobinhoodOnchainMarkets: onchain.read }));
 const storage = vi.hoisted(() => ({ list: vi.fn(), token: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
@@ -84,7 +86,7 @@ function sourceFetch(metadata: unknown = feed(), market: unknown = { pairs: [pai
   });
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); onchain.read.mockResolvedValue(new Map()); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("Robinhood optional coin presentation", () => {
@@ -211,6 +213,25 @@ describe("Robinhood catalog market observations", () => {
   it("accepts a successful response with no indexed pair as unknown market data", async () => {
     vi.stubGlobal("fetch", sourceFetch(feed(), { pairs: null }));
     expect(await readRobinhoodMarkets([TOKEN])).toEqual(new Map());
+  });
+
+  it("fills a provider-missing exact pool from the independent onchain observation", async () => {
+    vi.stubGlobal("fetch", sourceFetch(feed(), { pairs: null }));
+    const value = { poolId: TOKEN.poolId, source: "uniswap-v4", valuationKind: "fdv", priceUsd: 0.01,
+      marketCapUsd: null, fdvUsd: 10_000_000, liquidityUsd: null, volume24hUsd: null, change24hPercent: null,
+      observedAt: new Date().toISOString(), sourceUrl: "https://robinhoodchain.blockscout.com/block/123" };
+    onchain.read.mockResolvedValue(new Map([[TOKEN.tokenAddress, value]]));
+    const result = await readRobinhoodMarkets([TOKEN]);
+    expect(result.get(TOKEN.tokenAddress)).toEqual(value);
+    expect(onchain.read).toHaveBeenCalledWith([expect.objectContaining({ tokenAddress: TOKEN.tokenAddress,
+      transactionHash: TOKEN.transactionHash, poolManager: TOKEN.poolManager, blockHash: TOKEN.blockHash })]);
+  });
+
+  it("does not replace an exact provider market cap with a total-supply valuation", async () => {
+    vi.stubGlobal("fetch", sourceFetch());
+    const result = await readRobinhoodMarkets([TOKEN]);
+    expect(result.get(TOKEN.tokenAddress)).toMatchObject({ source: "dexscreener", marketCapUsd: 3_000_000, fdvUsd: 8_000_000, valuationKind: "market-cap" });
+    expect(onchain.read).not.toHaveBeenCalled();
   });
 
   it("batches the full catalog beyond the visible page with bounded concurrency and exact pool joins", async () => {

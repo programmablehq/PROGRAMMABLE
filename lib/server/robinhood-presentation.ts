@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { readRobinhoodOnchainMarkets, type RobinhoodMarketIdentity } from "./robinhood-market";
 import { isRobinhoodModuleSourceKind, type RobinhoodLaunch } from "@/lib/robinhood-launches";
 import { ROBINHOOD_MARKET_MAX_AGE_MS, type RobinhoodCoinMarket, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import { PROGRAMMABLE_MAIN_TOKEN_PRESENTATION } from "@/lib/programmable-main-token-presentation";
@@ -41,7 +42,7 @@ const HASH = /^0x[\da-f]{64}$/i;
 type JsonObject = Record<string, unknown>;
 type Metadata = Pick<RobinhoodCoinPresentation, "imageUrl" | "description" | "links">;
 type MetadataBinding = Readonly<{ launch: JsonObject; metadata: Metadata }>;
-type MarketToken = Pick<RobinhoodLaunch, "tokenAddress" | "poolId">;
+type MarketToken = RobinhoodMarketIdentity;
 type VerifiedMarketToken = MarketToken & { poolId: string };
 const object = (value: unknown): value is JsonObject =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -229,9 +230,9 @@ async function readMarkets(tokens: readonly VerifiedMarketToken[]): Promise<Map<
     }
   }
   await Promise.all(Array.from({ length: Math.min(4, batches.length) }, worker));
-  // Reject an incomplete refresh so the cache retains the last complete observation.
-  // The reader still expires it after three minutes; token membership is independent.
-  if (failed || nextBatch < batches.length) throw new Error("Market observation unavailable");
+  // A provider outage may still have an independently verified onchain observation.
+  // All returned observations retain their own age; token membership is independent.
+  const incompleteDexObservation = failed || nextBatch < batches.length;
   const byIdentity = new Map<string, { pair: JsonObject; observedAt: string } | null>();
   for (const { pair, observedAt } of pairs) {
     if (!object(pair) || pair.chainId !== "robinhood" || pair.dexId !== "uniswap"
@@ -251,6 +252,10 @@ async function readMarkets(tokens: readonly VerifiedMarketToken[]): Promise<Map<
       poolId: token.poolId,
       priceUsd: numeric(pair.priceUsd),
       marketCapUsd: numeric(pair.marketCap),
+      fdvUsd: numeric(pair.fdv),
+      source: "dexscreener",
+      ...(numeric(pair.marketCap) !== null ? { valuationKind: "market-cap" }
+        : numeric(pair.fdv) !== null ? { valuationKind: "fdv" } : {}),
       liquidityUsd: object(pair.liquidity) ? numeric(pair.liquidity.usd) : null,
       volume24hUsd: object(pair.volume) ? numeric(pair.volume.h24) : null,
       change24hPercent: object(pair.priceChange) ? numeric(pair.priceChange.h24, true) : null,
@@ -258,6 +263,15 @@ async function readMarkets(tokens: readonly VerifiedMarketToken[]): Promise<Map<
       sourceUrl: `https://dexscreener.com/robinhood/${token.poolId.toLowerCase()}`,
     });
   }
+  const missing = tokens.filter(token => {
+    const market = markets.get(token.tokenAddress.toLowerCase());
+    return !market || market.priceUsd === null || (market.marketCapUsd === null && market.fdvUsd == null);
+  });
+  if (missing.length) {
+    const onchain = await readRobinhoodOnchainMarkets(missing).catch(() => new Map<string, RobinhoodCoinMarket>());
+    for (const [identity, observation] of onchain) markets.set(identity, observation);
+  }
+  if (incompleteDexObservation && markets.size === 0) throw new Error("Market observation unavailable");
   return markets;
 }
 
@@ -269,14 +283,16 @@ const cachedModuleMetadata = unstable_cache(async (tokens: readonly RobinhoodLau
 
 // A shared full-catalog observation makes sorting independent of the current page.
 const cachedMarkets = unstable_cache(async (tokens: readonly VerifiedMarketToken[]) =>
-  Array.from(await readMarkets(tokens)), ["robinhood-coin-markets-v2"], { revalidate: 60 });
+  Array.from(await readMarkets(tokens)), ["robinhood-coin-markets-v3"], { revalidate: 60 });
 
 export async function readRobinhoodMarkets(tokens: readonly MarketToken[]): Promise<Map<string, RobinhoodCoinMarket>> {
   if (tokens.length === 0) return new Map();
   if (tokens.length > MAX_MARKET_TOKENS || tokens.some((token) => !ADDRESS.test(token.tokenAddress) || (token.poolId !== null && !HASH.test(token.poolId)))) {
     throw new Error("Invalid market request");
   }
-  const identities = tokens.flatMap((token) => token.poolId === null ? [] : [{ tokenAddress: token.tokenAddress.toLowerCase(), poolId: token.poolId.toLowerCase() }])
+  const identities = tokens.flatMap((token) => token.poolId === null ? [] : [{ tokenAddress: token.tokenAddress.toLowerCase(), poolId: token.poolId.toLowerCase(),
+    poolManager: token.poolManager, hookAddress: token.hookAddress, transactionHash: token.transactionHash,
+    blockNumber: token.blockNumber, blockHash: token.blockHash }])
     .toSorted((a, b) => a.tokenAddress.localeCompare(b.tokenAddress));
   if (identities.length === 0) return new Map();
   const entries = await cachedMarkets(identities);
