@@ -114,8 +114,6 @@ export const foundationFactoryV3NativeAbi = [...foundationFactoryV3Abi, ...parse
   "struct ModuleSelection { address factory; bytes32 factoryCodeHash; bytes32 moduleCodeHash; bytes32 descriptorHash; bytes configuration; uint16 creatorShareBps; }",
   "struct LaunchParams { Metadata metadata; address quote; uint8 quoteDecimals; int24 initialTick; uint16 creatorBuyFeeBps; uint16 creatorSellFeeBps; uint128 additionalQuoteAmount; uint128 initialBuyQuoteAmount; uint128 initialBuyMinimumTokenAmount; uint64 deadline; bytes32 tokenSalt; bytes32 hookSalt; ModuleSelection[] modules; }",
   "struct LaunchResultV2 { address token; address hook; address ledger; bytes32 poolId; address basePositionOwner; address creatorPositionOwner; address roundingInventoryRecipient; uint256 basePositionId; uint256 creatorPositionId; uint256 initialBuyTokenAmount; uint128 baseTokenPrincipal; uint128 baseTokenRounding; uint128 creatorQuotePrincipal; uint256 actualQuoteRefund; }",
-  "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
-  "function launchWithEth(LaunchParams p,PoolKey fundingPool) payable returns (LaunchResultV2 result)",
   "function launchWithEthRoute(LaunchParams p,bytes fundingPath) payable returns (LaunchResultV2 result)",
   "function NATIVE_FUNDING_ID() view returns (bytes32)",
   "function wrappedEth() view returns (address)",
@@ -181,7 +179,7 @@ export function encodeFoundationLaunchEntry(p: FoundationLaunchParameters, entry
   foundationCreatorFeeRates(p);
   if (p.creatorFeeBps === undefined) {
     if (entry.functionName === "launchWithEthRoute") return encodeFunctionData({ abi: foundationFactoryV3NativeAbi, functionName: entry.functionName, args: [p, entry.fundingPath] });
-    if (entry.functionName === "launchWithEth") return encodeFunctionData({ abi: foundationFactoryV3NativeAbi, functionName: entry.functionName, args: [p, entry.fundingPool] });
+    if (entry.functionName === "launchWithEth") throw new Error("V3 native launches require the ETH route entrypoint.");
     return encodeFunctionData({ abi: foundationFactoryV3Abi, functionName: "launch", args: [p] });
   }
   if (entry.functionName === "launchWithEthRoute") return encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: entry.functionName, args: [p, entry.fundingPath] });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encodeAbiParameters, encodeEventTopics, encodeFunctionResult, getAbiItem, type Hex } from "viem";
 import { encodeFoundationLaunchEntry, foundationFactoryV2Abi, foundationFactoryV3Abi, foundationFactoryV3NativeAbi, foundationHookV2Abi } from "@/lib/module-foundation/abi";
 import { assertFoundationInfrastructure, readFoundationCreatorFees, simulateFoundationV2Launch } from "@/lib/module-foundation/client";
-import { assertFoundationLaunchCall, decodeFoundationLaunchCall, encodeFoundationFundingPath } from "@/lib/module-foundation/atomic-launch";
+import { assertFoundationLaunchCall, decodeFoundationLaunchCall, encodeFoundationFundingPath, FOUNDATION_NO_FUNDING_POOL } from "@/lib/module-foundation/atomic-launch";
 import { FOUNDATION_FACTORY_V2_ID } from "@/lib/module-foundation/constants";
 import { foundationCreatorFeeFields, foundationCreatorFeeRates, type FoundationCreatorFees } from "@/lib/module-foundation/creator-fees";
 import { discoverFoundationLaunch, readFoundationLaunchIndex } from "@/lib/module-foundation/discovery";
@@ -81,6 +81,7 @@ describe("V3 canonical readback, native funding and fees", () => {
   });
   it("keeps one native-funded call with distinct rates and zero caller quote debit", async () => {
     const f = foundationV3Fixture(0, 1000, true), transaction = f.steps[0].transaction;
+    expect(() => encodeFoundationLaunchEntry(f.parameters, { functionName: "launchWithEth", fundingPool: FOUNDATION_NO_FUNDING_POOL })).toThrow("ETH route entrypoint");
     transaction.value = f.parameters.initialBuyQuoteAmount;
     transaction.data = encodeFoundationLaunchEntry(f.parameters, { functionName: "launchWithEthRoute", fundingPath: encodeFoundationFundingPath([]) });
     f.state.quoteDeltaAdjustment = f.parameters.initialBuyQuoteAmount;
