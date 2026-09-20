@@ -102,13 +102,15 @@ export function buildCustomV4Swap(descriptor: CustomV4SwapDescriptor, request: C
   const amounts = customV4SwapAmounts(amountOut, request);
   const input = request.buy ? CUSTOM_V4_NATIVE : request.token, output = request.buy ? request.token : CUSTOM_V4_NATIVE;
   const planner = new V4Planner();
+  // Use the tuple of the pinned Robinhood 2.1.1 router; slippage remains bounded
+  // by amountOutMinimum, with its additional hop-price floor left neutral.
   planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [{ poolKey: descriptor.poolKey, zeroForOne: request.buy,
-    amountIn: request.amountIn, amountOutMinimum: amounts.amountOutMinimum, hookData: "0x" }], URVersion.V2_0);
-  planner.addAction(Actions.SETTLE_ALL, [input, request.amountIn], URVersion.V2_0);
-  planner.addAction(Actions.TAKE_ALL, [output, amounts.amountOutMinimum], URVersion.V2_0);
+    amountIn: request.amountIn, amountOutMinimum: amounts.amountOutMinimum, minHopPriceX36: "0", hookData: "0x" }], URVersion.V2_1_1);
+  planner.addAction(Actions.SETTLE_ALL, [input, request.amountIn], URVersion.V2_1_1);
+  planner.addAction(Actions.TAKE_ALL, [output, amounts.amountOutMinimum], URVersion.V2_1_1);
   const route = new RoutePlanner();
-  route.addCommand(CommandType.V4_SWAP, [planner.finalize()], false, UniversalRouterVersion.V2_0);
-  if (request.buy) route.addCommand(CommandType.SWEEP, [CUSTOM_V4_NATIVE, SENDER, 0], false, UniversalRouterVersion.V2_0);
+  route.addCommand(CommandType.V4_SWAP, [planner.finalize()], false, UniversalRouterVersion.V2_1_1);
+  if (request.buy) route.addCommand(CommandType.SWEEP, [CUSTOM_V4_NATIVE, SENDER, 0], false, UniversalRouterVersion.V2_1_1);
   return { kind: "swap", chainId: "4663", from: request.owner, to: getAddress(ROUTED_TRADE_CONTRACTS_V1.universalRouter.address),
     data: encodeFunctionData({ abi: ROUTED_TRADE_ROUTER_ABI_V1, functionName: "execute", args: [route.commands as Hex, route.inputs as Hex[], BigInt(request.deadline)] }),
     value: request.buy ? request.amountIn : "0", gasLimit: "1" };
