@@ -365,7 +365,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                   </div>
                   <div className={styles.cardFooter}>
                     {hasAsset && (chainId === 4663 || valuation.value !== null) ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
-                      <span title={valuation.label === "FDV" ? "Fully diluted valuation" : undefined}>{valuation.label}</span>
+                      <span title={valuation.title}>{valuation.label}</span>
                       {details?.market && valuation.value !== null
                         ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`${chainId}:${launch.tokenAddress.toLowerCase()}:${details.market.poolId.toLowerCase()}:${valuation.label}`} />
                         : <strong>—</strong>}

@@ -107,11 +107,11 @@ describe("canonical Robinhood onchain market fallback", () => {
 
 describe("valuation display selection", () => {
   const market = (value: Partial<RobinhoodCoinMarket>) => value as RobinhoodCoinMarket;
-  it("prefers an actual market cap and labels an FDV fallback honestly", () => {
-    expect(coinValuation(market({ marketCapUsd: 12, fdvUsd: 30 }))).toEqual({ label: "Market cap", value: 12 });
-    expect(coinValuation(market({ marketCapUsd: null, fdvUsd: 30 }))).toEqual({ label: "FDV", value: 30 });
-    expect(coinValuation(market({ marketCapUsd: NaN, fdvUsd: 0 }))).toEqual({ label: "FDV", value: 0 });
-    expect(coinValuation(market({ marketCapUsd: Infinity, fdvUsd: -1 }))).toEqual({ label: "Market cap", value: null });
-    expect(coinValuation(null)).toEqual({ label: "Market cap", value: null });
+  it("uses one Market Cap label and preserves the basis of a total-supply fallback", () => {
+    expect(coinValuation(market({ marketCapUsd: 12, fdvUsd: 30 }))).toEqual({ label: "Market Cap", value: 12 });
+    expect(coinValuation(market({ marketCapUsd: null, fdvUsd: 30 }))).toEqual({ label: "Market Cap", value: 30, title: "Based on total token supply" });
+    expect(coinValuation(market({ marketCapUsd: NaN, fdvUsd: 0 }))).toEqual({ label: "Market Cap", value: 0, title: "Based on total token supply" });
+    expect(coinValuation(market({ marketCapUsd: Infinity, fdvUsd: -1 }))).toEqual({ label: "Market Cap", value: null });
+    expect(coinValuation(null)).toEqual({ label: "Market Cap", value: null });
   });
 });
