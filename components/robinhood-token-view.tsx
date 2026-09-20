@@ -81,16 +81,13 @@ export function RobinhoodTokenView({ address, token, status }: {
 
         <section className={styles.launchContext} aria-label="Programmable launch">
           <div>
-            <p className={styles.origin}>Programmable · {moduleLaunch ? "Module" : "Custom"}</p>
+            <p className={styles.contractAddress}><span>CA</span><code>{address}</code></p>
           </div>
           <div className={styles.launchActions}>
             {hasAsset ? <Link className={styles.secondaryButton} href={`/swap?token=${address}&chain=4663`} aria-label={`Swap ${coinTicker(token.symbol)}`}>Swap <ArrowRight aria-hidden="true" size={16} /></Link> : null}
             {manageHref ? <Link className={styles.secondaryButton} href={manageHref} prefetch={false} aria-label="Manage coin">Manage <ArrowRight aria-hidden="true" size={16} /></Link> : null}
           </div>
         </section>
-        {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}
-        {token.launchProjection ? <LaunchProjectionDetails projection={token.launchProjection} /> : null}
-        {token.launchProjection ? <LaunchProjectionTrade key={token.launchProjection.launchId} projection={token.launchProjection} /> : null}
         {token && status !== "ready" ? <p className={styles.notice} role="status">{status === "syncing"
           ? `New launches are still being checked. This ${hasAsset ? "coin" : "launch"} comes from the verified launch index.`
           : "Showing the last verified launch record. Index updates are temporarily unavailable."}</p> : null}
@@ -112,6 +109,9 @@ export function RobinhoodTokenView({ address, token, status }: {
             </dl>
             {token.poolId ? <RobinhoodChart poolId={token.poolId} name={name} market={market} /> : <p className={styles.notice}>No trading market is verified for this coin.</p>}
             </> : <p className={styles.notice}>No primary asset is declared for this launch.</p>}
+        {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}
+        {token.launchProjection ? <LaunchProjectionDetails projection={token.launchProjection} /> : null}
+        {token.launchProjection ? <LaunchProjectionTrade key={token.launchProjection.launchId} projection={token.launchProjection} /> : null}
           </section>
       </> : <section className={styles.empty}>
         <h1>Token details</h1>

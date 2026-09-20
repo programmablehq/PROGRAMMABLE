@@ -133,8 +133,8 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}><div className={styles.pageHeading}><h1>Module Mode coin</h1>
-    <p role="status">{error || session.availability.reason || "Reading the coin metadata and pool from its verified release…"}</p></div>
+  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}><div className={styles.pageHeading}><h1>Coin</h1>
+    <p role="status">{error || session.availability.reason || "Loading coin…"}</p></div>
     {error ? <button type="button" className={styles.secondaryButton} onClick={() => setRefreshKey(value => value + 1)}>Read pool again</button> : null}</div></>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
     supported: true, ...(details.quote.balance === null ? {} : { balance: formatUnits(details.quote.balance, details.quote.decimals) }) };

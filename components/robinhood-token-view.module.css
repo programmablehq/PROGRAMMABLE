@@ -92,6 +92,9 @@
 
 .launchContext { align-items: center; background: var(--webde-surface-raised); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; margin-top: 24px; padding: 16px; }
 .launchContext > div { min-width: 0; }
+.contractAddress { align-items: center; display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.contractAddress span { color: var(--webde-muted); font-size: 12px; }
+.contractAddress code { font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .origin { color: var(--webde-ink); font-size: 14px; font-weight: 550; line-height: 20px; margin: 0; }
 .launchDetails { color: var(--webde-muted); display: flex; flex-wrap: wrap; font-size: 14px; gap: 4px 16px; line-height: 20px; margin: 4px 0 0; }
 .launchDetails a { align-items: center; color: inherit; display: inline-flex; min-height: 24px; text-decoration: underline; text-underline-offset: 4px; }

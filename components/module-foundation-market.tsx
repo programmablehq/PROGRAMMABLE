@@ -140,8 +140,10 @@ export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
         {result && error ? <p className={styles.error} role="alert">{error}</p> : null}
       </div>
       <div className={styles.marketAbout}>{coin.description ? <p>{coin.description}</p> : null}<FoundationPoolDetails pool={pool} positions={positions} />
+        {feeLedger || moduleActions ? <details className={styles.details}><summary>Manage coin</summary><div className={styles.detailsBody}>
         {feeLedger ? <section className={styles.feeLedger}><h2>Fees in {quote.symbol}</h2><dl className={styles.rows}><div><dt>Platform credited</dt><dd>{feeLedger.platformCredited} {quote.symbol}</dd></div><div><dt>Platform paid out</dt><dd>{feeLedger.platformPaid} {quote.symbol}</dd></div><div><dt>Creator credited</dt><dd>{feeLedger.creatorCredited} {quote.symbol}</dd></div><div><dt>Creator paid out</dt><dd>{feeLedger.creatorPaid} {quote.symbol}</dd></div></dl><p className={styles.help}>Read at block {feeLedger.asOfBlock}. A fee credit is not a completed payout.</p></section> : null}
         {moduleActions}
+        </div></details> : null}
       </div>
     </div>
   </div>;
