@@ -122,6 +122,9 @@
 .change[data-direction="up"] { color: #9dddbe; }
 .change[data-direction="down"] { color: #f6a1ac; }
 
+.tradingLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); align-items: start; gap: 24px; margin-top: 24px; }
+.tradingLayout > * { min-width: 0; }
+
 .chart {
   background: var(--webde-surface);
   border: 1px solid var(--webde-line);
@@ -158,6 +161,10 @@
   .launchDetails a:hover { color: var(--webde-ink); }
 }
 .secondaryButton:active { transform: translateY(1px); }
+
+@media (max-width: 1000px) {
+  .tradingLayout { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 900px) {
   .header { flex-wrap: wrap; gap: 16px; }

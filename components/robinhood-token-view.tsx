@@ -9,7 +9,7 @@ import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { TokenLaunchModules } from "@/components/token-launch-modules";
 import { LaunchProjectionDetails } from "@/components/launch-projection-details";
-import { LaunchProjectionTrade } from "@/components/launch-projection-trade";
+import { SwapPanel } from "@/components/swap-panel";
 import { useRobinhoodPresentation } from "@/components/use-robinhood-presentation";
 import { isRobinhoodFoundationLaunch, isRobinhoodModuleLaunch, robinhoodModuleManageHref, type RobinhoodLaunch } from "@/lib/robinhood-launches";
 import { coinDollars, coinTicker, coinValuation } from "@/lib/robinhood-presentation";
@@ -84,7 +84,6 @@ export function RobinhoodTokenView({ address, token, status }: {
             <p className={styles.contractAddress}><span>CA</span><code>{address}</code></p>
           </div>
           <div className={styles.launchActions}>
-            {hasAsset ? <Link className={styles.secondaryButton} href={`/swap?token=${address}&chain=4663`} aria-label={`Swap ${coinTicker(token.symbol)}`}>Swap <ArrowRight aria-hidden="true" size={16} /></Link> : null}
             {manageHref ? <Link className={styles.secondaryButton} href={manageHref} prefetch={false} aria-label="Manage coin">Manage <ArrowRight aria-hidden="true" size={16} /></Link> : null}
           </div>
         </section>
@@ -107,11 +106,13 @@ export function RobinhoodTokenView({ address, token, status }: {
                 </dd>
               </div>
             </dl>
-            {token.poolId ? <RobinhoodChart poolId={token.poolId} name={name} market={market} /> : <p className={styles.notice}>No trading market is verified for this coin.</p>}
+            <div className={styles.tradingLayout}>
+              {token.poolId ? <RobinhoodChart poolId={token.poolId} name={name} market={market} /> : <div className={styles.chart}><p className={styles.chartState}>No trading market is verified for this coin.</p></div>}
+              <SwapPanel key={`4663:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={4663} tokenSymbol={token.symbol ?? undefined} />
+            </div>
             </> : <p className={styles.notice}>No primary asset is declared for this launch.</p>}
         {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}
         {token.launchProjection ? <LaunchProjectionDetails projection={token.launchProjection} /> : null}
-        {token.launchProjection ? <LaunchProjectionTrade key={token.launchProjection.launchId} projection={token.launchProjection} /> : null}
           </section>
       </> : <section className={styles.empty}>
         <h1>Token details</h1>

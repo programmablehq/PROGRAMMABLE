@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SwapPanel } from "@/components/swap-panel";
+import { TokenPoolChart } from "@/components/robinhood-chart";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
@@ -44,7 +46,10 @@ export function EthereumTokenView({ address, token, status, updatedAt }: {
       {status !== "ready" ? <p className={styles.notice} role="status">{status === "partial" ? "This token is verified. Some Ethereum launches are temporarily unavailable." : "Showing this token from the last verified index."}
         {updatedAt ? <> Updated <time dateTime={updatedAt} title={new Date(updatedAt).toUTCString()}>{new Date(updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })} UTC</time>.</> : null}
       </p> : null}
-      <p className={styles.notice}>Live market data and trading are not available on this page.</p>
+      <div className={styles.tradingLayout}>
+        <TokenPoolChart poolId={token.poolId} name={token.name || "Token"} chainId={1} />
+        <SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={token.symbol} />
+      </div>
     </article> : <section className={styles.empty}>
       <h1>{status === "ready" ? "Launch not found" : "Token details are temporarily unavailable"}</h1>
       <p>{status === "ready" ? "This address is not in the verified Ethereum launch index." : "The Ethereum launch index could not confirm this address. Try again shortly."}</p>
