@@ -300,6 +300,15 @@ describe("Robinhood presentation HTTP boundary", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("does not add a CDN cache lifetime to a single-token market observation", async () => {
+    vi.stubGlobal("fetch", sourceFetch());
+    storage.token.mockResolvedValue({ token: TOKEN, status: "ready" });
+    const response = await GET(new Request(`${endpoint}?token=${TOKEN.tokenAddress}`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect((await response.json()).items[0].market.priceUsd).toBe(0.003);
+  });
+
   it("reuses the selected page presentation without a second provider observation", async () => {
     vi.stubGlobal("fetch", sourceFetch());
     storage.list.mockResolvedValue({ items: [TOKEN], presentations: [{ tokenAddress: TOKEN.tokenAddress, market: null }] });
