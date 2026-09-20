@@ -5,6 +5,7 @@ import { ModuleFoundationBuilder } from "@/components/module-foundation-builder"
 import { ModuleFoundationMarket } from "@/components/module-foundation-market";
 import { FoundationFeeDisclosure, ModuleFoundationLaunchReview, ModuleFoundationTransactionResult } from "@/components/module-foundation-review";
 import { FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { FOUNDATION_DEFAULT_IMAGE } from "@/lib/module-foundation/default-image";
 import { FOUNDATION_DEAD_ADDRESS, FOUNDATION_LP_CUSTODY_DEAD_ID } from "@/lib/module-foundation/constants";
 
 const address = "0x1111111111111111111111111111111111111111" as const;
@@ -25,8 +26,8 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(foundationDecimalError("123456789012345678901234567890.123456789012345678", 18)).toBeNull();
   });
   it("keeps 30 bps additive even at zero creator fee and refuses changed fee recipient or stale review", () => {
-    for (const value of [0, 100, 999, 1_000]) expect(isFoundationCreatorFee(value)).toBe(true);
-    for (const value of [-1, 1, 30, 99, 1_001, 100.5]) expect(isFoundationCreatorFee(value)).toBe(false);
+    for (const value of [0, 100, 900, 1_000]) expect(isFoundationCreatorFee(value)).toBe(true);
+    for (const value of [-1, 1, 30, 99, 999, 1_001, 100.5]) expect(isFoundationCreatorFee(value)).toBe(false);
     const review = { contextKey: "wallet:release", expiresAt: 200, platformFeeBps: 30 as const, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT };
     expect(foundationReviewError(review, "wallet:release", 100_000)).toBeNull();
     expect(foundationReviewError(review, "other:release", 100_000)).toContain("changed");
@@ -36,6 +37,20 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).toContain(FOUNDATION_PLATFORM_FEE_RECIPIENT);
     expect(html).toContain("0.3%");
     expect(html).toContain("Uniswap LP and protocol fees are separate");
+  });
+  it("shows independent rates and direction-specific totals", () => {
+    const fees = { creatorBuyFeeBps: 100, creatorSellFeeBps: 300 };
+    const html = renderToStaticMarkup(<FoundationFeeDisclosure {...fees} quoteSymbol="ETH" />);
+    expect(html).toContain("Creator buy fee");
+    expect(html).toContain("Creator sell fee");
+    expect(html).toContain("1.3%");
+    expect(html).toContain("3.3%");
+    const buy = renderToStaticMarkup(<FoundationFeeDisclosure {...fees} side="buy" quoteSymbol="ETH" />);
+    const sell = renderToStaticMarkup(<FoundationFeeDisclosure {...fees} side="sell" quoteSymbol="ETH" />);
+    expect(buy).toContain("1.3%");
+    expect(buy).not.toContain("3.3%");
+    expect(sell).toContain("3.3%");
+    expect(sell).not.toContain("1.3%");
   });
   it("validates descriptor binding, requirements and conflicts without business module enums", () => {
     expect(foundationSelectionErrors([], [])).toEqual([]);
@@ -53,6 +68,10 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).not.toContain("foundation-valuation");
     expect(html).toContain('value="0.001167"');
     for (const removed of ["One wallet confirmation", "Minimum 1 wei", "Gas is separate", "Up to 8 MB", "JPG, PNG"]) expect(html).not.toContain(removed);
+    expect(html).toContain(FOUNDATION_DEFAULT_IMAGE.url);
+    expect(html).toContain("(Platform Fee 0.3%)");
+    expect(html).toContain('name="creatorBuyFeeBps"');
+    expect(html).toContain('name="creatorSellFeeBps"');
     expect(html).not.toContain("Optional");
     expect(html).not.toContain("foundation-modules-heading");
     expect(html).not.toContain("Platform fee recipient");

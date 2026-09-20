@@ -1,5 +1,6 @@
 "use client";
 
+import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
 import { foundationParseAmount } from "@/lib/module-foundation/price";
 import type { FoundationFundingHop } from "@/lib/module-foundation/atomic-launch";
 
@@ -83,6 +84,9 @@ export function ModuleFoundationLaunchHost() {
     }
     if (!isFoundationDefaultImage(draft.image) && uploads.current.get(`${account.toLowerCase()}:${draft.image.url}`) !== draft.image.sha256) throw new Error("Choose and upload the exact coin image for this wallet before preparing.");
     const binding = await session.resolveAuthority();
+    const creatorFees = foundationCreatorFeeFields(draft);
+    const feeRates = foundationCreatorFeeRates(creatorFees);
+    if (binding.factoryVersion !== "v3" && feeRates.creatorBuyFeeBps !== feeRates.creatorSellFeeBps) throw new Error("Independent buy and sell fees are not live yet.");
     const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
     const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
@@ -100,7 +104,7 @@ export function ModuleFoundationLaunchHost() {
     const sequence = await prepareFoundationLaunch({ client: session.client, binding, account, tokenSalt,
       metadata, quote: draft.quoteAsset,
       startPrice: composition.startPrice, initialBuy: ethFunding ? formatUnits(ethFunding.quoteAmount, composition.startPrice.decimals) : "0", additionalLiquidity: "0", ethFunding,
-      creatorFeeBps: draft.creatorFeeBps, modules: composition.modules, slippageBps: 100 });
+      ...creatorFees, modules: composition.modules, slippageBps: 100 });
     session.assertCurrent(account, context);
     if (sequence.steps.length !== 1 || sequence.steps[0].kind !== "launch") throw new Error("This launch could not be prepared as one transaction.");
     if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
@@ -109,8 +113,8 @@ export function ModuleFoundationLaunchHost() {
     const positions = foundationLaunchPositionPresentation(sequence, account);
     const custody = (() => {
       if (sequence.result.factoryVersion === "v1") return { factoryVersion: "v1" as const };
-      if (binding.factoryVersion !== "v2") throw new Error("The launch liquidity version changed. Review again.");
-      return { factoryVersion: "v2" as const, lpCustodyId: binding.lpCustodyId,
+      if (binding.factoryVersion !== sequence.result.factoryVersion) throw new Error("The launch liquidity version changed. Review again.");
+      return { factoryVersion: sequence.result.factoryVersion, lpCustodyId: binding.lpCustodyId,
         roundingInventory: { recipient: sequence.result.roundingInventoryRecipient,
           tokenAmount: formatUnits(sequence.result.baseTokenRounding, 18), unrecoverable: true as const },
         quoteFunding: { maximum: formatUnits(sequence.parameters.initialBuyQuoteAmount + sequence.parameters.additionalQuoteAmount, quote.decimals),
@@ -123,9 +127,9 @@ export function ModuleFoundationLaunchHost() {
       pool: { ...sequence.poolKey, poolId: sequence.result.poolId, poolManager: FOUNDATION_INFRASTRUCTURE.poolManager.address },
       positions, ...custody,
       platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
-      creatorFeeBps: draft.creatorFeeBps, initialBuy: draft.initialBuy,
+      ...foundationCreatorFeeFields(sequence.parameters), initialBuy: draft.initialBuy,
       minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
-      additionalLiquidity: formatUnits(sequence.result.factoryVersion === "v2" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
+      additionalLiquidity: formatUnits(sequence.result.factoryVersion !== "v1" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
       actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
       transactions: sequence.steps.map(foundationStepSummary), notes: ["The coin launch and first buy use one transaction.",
         "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };

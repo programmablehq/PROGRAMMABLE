@@ -23,6 +23,7 @@ import { FOUNDATION_WETH } from "@/lib/module-foundation/native-funding";
 import type { AnyQuoteReadinessV1 } from "@/lib/module-engine/any-quote/types";
 import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationTradeDraft,
   type FoundationTradeReview, type FoundationTransactionResult, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees";
 import styles from "./module-foundation-ui.module.css";
 
 export function ModuleFoundationMarketHost({ token, transactionHash }: { token: Address; transactionHash?: Hex }) {
@@ -148,7 +149,7 @@ export function ModuleFoundationMarketHost({ token, transactionHash }: { token: 
   });
   return <><FoundationSessionStatus session={session} /><ModuleFoundationMarket key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
     coin={coin} quote={quote} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true }}
-    pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} creatorFeeBps={details.creatorFeeBps}
+    pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} {...foundationCreatorFeeFields(details)}
     walletAction={session.walletAction} submissionBlocked={session.submissionBlocked} onPrepareTrade={prepareTrade}
     onConfirmTrade={async review => { const sequence = trades.current.get(review); if (!sequence) throw new Error("Review this trade again.");
       session.assertCurrent(sequence.account, review.contextKey); return verifiedResult(await session.execute(sequence)); }}

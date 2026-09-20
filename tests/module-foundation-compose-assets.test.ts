@@ -4,7 +4,8 @@ import type { OpenConfigSchema } from "@/packages/classic-modules/src/open-confi
 import type { OpenSourcePackage } from "@/packages/classic-modules/src/open-packages.mjs";
 import type { ModuleEngineConfigurationArgument } from "@/lib/module-engine/catalog";
 import { POST, maxDuration } from "@/app/api/module-foundation/compose/route";
-import { FOUNDATION_AVAILABILITY_SCHEMA } from "@/lib/module-foundation/availability";
+import { FOUNDATION_AVAILABILITY_SCHEMA, FOUNDATION_AVAILABILITY_SCHEMA_V3 } from "@/lib/module-foundation/availability";
+import { FOUNDATION_LP_CUSTODY_DEAD_ID } from "@/lib/module-foundation/constants";
 import { FOUNDATION_CATALOG_SCHEMA_V1, type FoundationCatalogEntryV1 } from "@/lib/module-foundation/catalog";
 import { foundationMetadataParameters, type FoundationMetadata } from "@/lib/module-foundation/abi";
 import { foundationMetadata } from "@/lib/module-foundation/client";
@@ -183,6 +184,40 @@ describe("Foundation compose BFF asset bindings", () => {
     } finally {
       vi.clearAllTimers(); timeout.mockRestore(); vi.unstubAllGlobals(); vi.unstubAllEnvs();
     }
+  });
+
+  it("composes independent buy and sell fees only for a verified V3 release", async () => {
+    const input = body();
+    const draft: Partial<FoundationLaunchDraft> = { ...input.draft };
+    delete draft.creatorFeeBps;
+    const directional = { ...input, draft: { ...draft, creatorBuyFeeBps: 100, creatorSellFeeBps: 300 } };
+    const old = await POST(request(directional));
+    expect(old.status).toBe(400);
+    expect(await old.json()).toMatchObject({ error: expect.stringContaining("not live yet") });
+    expect(mocks.infrastructure).not.toHaveBeenCalled();
+
+    const release = accepted();
+    mocks.availability.mockResolvedValue({ ...release, schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V3,
+      binding: { ...release.binding, factoryVersion: "v3", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID },
+      evidence: { ...release.evidence, sourcePath: `/v1/modules/foundation/source/release/${releaseDigest}` } });
+    const response = await POST(request(directional));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ releaseDigest, modules: [] });
+    expect(predictions()).toHaveLength(1);
+  });
+
+  it.each([
+    { creatorBuyFeeBps: 100 },
+    { creatorBuyFeeBps: 100, creatorSellFeeBps: 300, creatorFeeBps: 100 },
+    { creatorBuyFeeBps: 99, creatorSellFeeBps: 300 },
+  ])("rejects invalid directional fee input before RPC: %j", async fees => {
+    const input = body();
+    const draft: Partial<FoundationLaunchDraft> = { ...input.draft };
+    delete draft.creatorFeeBps;
+    const response = await POST(request({ ...input, draft: { ...draft, ...fees } }));
+    expect(response.status).toBe(400);
+    expect(mocks.availability).not.toHaveBeenCalled();
+    expect(mocks.infrastructure).not.toHaveBeenCalled();
   });
 
   it("rejects an old quote-denominated form before any launch preparation", async () => {

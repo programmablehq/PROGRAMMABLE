@@ -43,6 +43,8 @@
 .pairChoices svg { flex-shrink: 0; }
 .customPair { min-width: 0; }
 .customPair .saved { min-height: 20px; }
+.creatorFees { margin-bottom: 0; }
+.feeFields { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .feeControls { display: flex; align-items: stretch; gap: 4px; }
 .feeControls > button { align-items: center; background: #1f1f1f; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-ink); cursor: pointer; display: flex; flex: 0 0 44px; justify-content: center; min-height: 48px; }
 .feeControls > button:disabled { cursor: default; opacity: .45; }
@@ -85,6 +87,11 @@
 }
 @media (max-width: 420px) {
   .builderPage .form { padding: 16px; }
+  .pairChoices { flex-direction: column; }
+  .feeFields { gap: 12px; }
+  .feeControls { gap: 2px; }
+  .builderPage .feeControls input { padding-left: 4px; padding-right: 20px; }
+  .feeControls > div > span { right: 6px; }
   .pairChoices > button { gap: 8px; padding: 12px; }
   .builderPage .quoteInput { flex-wrap: nowrap; }
   .builderPage .quoteInput button { width: auto; }

@@ -14,12 +14,13 @@ import { sha256, type Address, type Hex } from "viem";
 import { prepareTokenImage, isProgrammableTokenImageUrl } from "@/lib/token-image";
 import { validateModuleSocialLinks, type ModuleSocialKind, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
 import { foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationAvailability, type FoundationConfigurationField, type FoundationImage, type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection, type FoundationQuoteAsset, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
+import { foundationCreatorFeesEqual, type FoundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
 import { FOUNDATION_DEFAULT_IMAGE, isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
 import { normalizeFoundationSocialInput, normalizeFoundationSocialInputs } from "@/lib/module-foundation/social-input";
 import { ModuleFoundationTransactionResult } from "./module-foundation-review";
 import styles from "./module-foundation-ui.module.css";
 
-type EditableDraft = Omit<FoundationLaunchDraft, "image" | "quoteAsset"> & { quoteAsset: string; image: FoundationImage | null };
+type EditableDraft = Omit<FoundationLaunchDraft, "image" | "quoteAsset" | "creatorFeeBps" | "creatorBuyFeeBps" | "creatorSellFeeBps"> & FoundationCreatorFeeRates & { quoteAsset: string; image: FoundationImage | null };
 type LocalImage = { blob: Blob; preview: string; sha256: Hex };
 type Phase = "editing" | "uploading" | "preparing" | "signing" | "result";
 type Errors = Record<string, string>;
@@ -27,7 +28,7 @@ type Errors = Record<string, string>;
 export interface ModuleFoundationBuilderProps {
   availability: FoundationAvailability;
   /** Custody of the currently verified launch factory; unknown while availability loads. */
-  factoryVersion?: "v1" | "v2";
+  factoryVersion?: "v1" | "v2" | "v3";
   /** Changes whenever the authenticated wallet, chain or source release changes. */
   contextKey: string;
   catalog: readonly FoundationModuleDescriptor[];
@@ -57,11 +58,11 @@ function cleanError(error: unknown) {
 function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes: readonly FoundationQuoteAsset[], chainId: number): EditableDraft {
   const quote = quotes.find(asset => asset.chainId === chainId && asset.supported && asset.supportsNativeEth);
   return { name: initial?.name ?? "", symbol: initial?.symbol ?? "", description: initial?.description ?? "", image: initial?.image ?? null,
-    socialLinks: initial?.socialLinks ?? {}, quoteAsset: initial?.quoteAsset ?? quote?.address ?? "", creatorFeeBps: initial?.creatorFeeBps ?? 0,
+    socialLinks: initial?.socialLinks ?? {}, quoteAsset: initial?.quoteAsset ?? quote?.address ?? "", creatorBuyFeeBps: initial?.creatorBuyFeeBps ?? initial?.creatorFeeBps ?? 0, creatorSellFeeBps: initial?.creatorSellFeeBps ?? initial?.creatorFeeBps ?? 0,
     initialBuy: initial?.initialBuy ?? "", additionalLiquidity: "0", modules: initial?.modules ?? EMPTY_MODULES };
 }
 
-export function ModuleFoundationBuilder({ availability, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, submissionBlocked }: ModuleFoundationBuilderProps) {
+export function ModuleFoundationBuilder({ availability, factoryVersion, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, submissionBlocked }: ModuleFoundationBuilderProps) {
   const [draft, setDraft] = useState<EditableDraft>(() => initialForm(initialDraft, quoteAssets, availability.chainId));
   const [buyEdited, setBuyEdited] = useState(initialDraft?.initialBuy !== undefined);
   const initialBuy = buyEdited ? draft.initialBuy : suggestedInitialBuy ?? "";
@@ -170,7 +171,10 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     if (new TextEncoder().encode(draft.description.trim()).length > 280) next.description = "Use a description of up to 280 bytes.";
     if (draft.image && !isFoundationDefaultImage(draft.image) && !isProgrammableTokenImageUrl(draft.image.url)) next.image = "Choose an image to save with this launch.";
     if (!quote?.supported || quote.chainId !== availability.chainId) next.quoteAsset = quote?.reason ?? (customQuote ? "Check the token address before launching." : "ETH is still loading. Try again in a moment.");
-    if (!isFoundationCreatorFee(draft.creatorFeeBps)) next.creatorFeeBps = "Choose 0% or a creator fee from 1% to 10%.";
+    for (const key of ["creatorBuyFeeBps", "creatorSellFeeBps"] as const) {
+      if (!isFoundationCreatorFee(draft[key])) next[key] = "Choose a whole percentage from 0% to 10%.";
+    }
+    if (factoryVersion !== "v3" && draft.creatorBuyFeeBps !== draft.creatorSellFeeBps) next.creatorSellFeeBps = "Independent buy and sell fees are not live yet.";
     const buyError = foundationDecimalError(initialBuy, 18, false);
     if (buyError) next.initialBuy = buyError;
     if (modulesError.length) next.modules = modulesError.join(" ");
@@ -220,7 +224,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       if (!prepared) { setPhase("editing"); return; }
       const invalid = foundationReviewError(prepared, context);
       if (invalid) throw new Error(invalid);
-      if (prepared.quote.address.toLowerCase() !== quote!.address.toLowerCase() || prepared.chainId !== availability.chainId || prepared.creatorFeeBps !== draft.creatorFeeBps || prepared.transactions.length === 0) throw new Error("Your coin settings changed. Create the launch again.");
+      if (prepared.quote.address.toLowerCase() !== quote!.address.toLowerCase() || prepared.chainId !== availability.chainId || !foundationCreatorFeesEqual(prepared, draft) || prepared.transactions.length === 0) throw new Error("Your coin settings changed. Create the launch again.");
       assertCurrent();
       setPhase("signing");
       const receipt = await onConfirmLaunch(prepared);
@@ -292,10 +296,14 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
                 <p id="foundation-quote-help" className={quote?.supported ? styles.saved : styles.help}>{quote?.supported ? <><CheckIcon size={14} aria-hidden="true" />{quote.name} · {quoteSymbol}</> : errors.quoteAsset ? null : quote?.reason ?? "Paste a token contract address on Robinhood Chain."}</p>
                 {quoteLookup?.address === draft.quoteAsset && quoteLookup.contextKey === contextKey && quoteLookup.status === "error" ? <p className={styles.error} role="alert">{quoteLookup.message}</p> : null}
               </Field></div> : errors.quoteAsset ? <p id="foundation-quote-error" className={styles.error}>{errors.quoteAsset}</p> : null}
-              <div className={styles.twoFields}>
-                <Field label={<>Creator fees <span>(Platform Fee 0.3%)</span></>} id="foundation-creator-fee" error={errors.creatorFeeBps}><div className={styles.feeControls}><button type="button" aria-label="Decrease creator fee" disabled={draft.creatorFeeBps === 0} onClick={() => update("creatorFeeBps", draft.creatorFeeBps < 200 ? 0 : draft.creatorFeeBps - 100)}><MinusIcon size={16} aria-hidden="true" /></button><div><input id="foundation-creator-fee" name="creatorFeeBps" type="number" min={0} max={10} step={1} value={draft.creatorFeeBps / 100} aria-invalid={Boolean(errors.creatorFeeBps) || undefined} aria-describedby={errors.creatorFeeBps ? "foundation-creator-fee-error" : undefined} onChange={event => update("creatorFeeBps", Math.round(Number(event.target.value) * 100))} /><span>%</span></div><button type="button" aria-label="Increase creator fee" disabled={draft.creatorFeeBps >= 1000} onClick={() => update("creatorFeeBps", Math.min(1000, Math.max(100, draft.creatorFeeBps + 100)))}><PlusIcon size={16} aria-hidden="true" /></button></div></Field>
-                <Field label="First buy" id="foundation-initial-buy" error={errors.initialBuy}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" required value={initialBuy} placeholder="ETH amount" aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={errors.initialBuy ? "foundation-initial-buy-error" : undefined} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
+              <div className={styles.creatorFees} role="group" aria-labelledby="foundation-creator-fees-heading">
+                <h3 id="foundation-creator-fees-heading" className={styles.marketLabel}>Creator fees <span className={styles.muted}>(Platform Fee 0.3%)</span></h3>
+                <div className={styles.feeFields}>{(["Buy", "Sell"] as const).map(side => {
+                  const key = side === "Buy" ? "creatorBuyFeeBps" : "creatorSellFeeBps";
+                  return <CreatorFeeField key={key} side={side} value={draft[key]} error={errors[key]} onChange={value => update(key, value)} />;
+                })}</div>
               </div>
+              <Field label="First buy" id="foundation-initial-buy" error={errors.initialBuy}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" required value={initialBuy} placeholder="ETH amount" aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={errors.initialBuy ? "foundation-initial-buy-error" : undefined} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
             </section>
             {catalog.length || draft.modules.length ? <section className={styles.formSection} aria-labelledby="foundation-modules-heading"><div className={styles.sectionHeading}><div className={styles.sectionTitle}><h2 id="foundation-modules-heading">Modules</h2>{draft.modules.length ? <span className={styles.muted}>{draft.modules.length} selected</span> : null}</div></div>
               {catalog.length ? <div className={styles.catalog}>{catalog.map(descriptor => {
@@ -320,6 +328,15 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
 
 function Field({ label, id, error, hint, children }: { label: React.ReactNode; id: string; error?: string; hint?: string; children: React.ReactNode }) {
   return <div className={styles.field}><label htmlFor={id}>{label}</label>{children}{hint ? <p id={`${id}-help`} className={styles.help}>{hint}</p> : null}{error ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}</div>;
+}
+
+function CreatorFeeField({ side, value, error, onChange }: { side: "Buy" | "Sell"; value: number; error?: string; onChange: (value: number) => void }) {
+  const id = `foundation-creator-${side.toLowerCase()}-fee`;
+  return <Field label={side} id={id} error={error}><div className={styles.feeControls}>
+    <button type="button" aria-label={`Decrease ${side.toLowerCase()} creator fee`} disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 100))}><MinusIcon size={16} aria-hidden="true" /></button>
+    <div><input id={id} name={side === "Buy" ? "creatorBuyFeeBps" : "creatorSellFeeBps"} type="number" min={0} max={10} step={1} value={value / 100} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => onChange(Number(event.target.value) * 100)} /><span>%</span></div>
+    <button type="button" aria-label={`Increase ${side.toLowerCase()} creator fee`} disabled={value >= 1000} onClick={() => onChange(Math.min(1000, value + 100))}><PlusIcon size={16} aria-hidden="true" /></button>
+  </div></Field>;
 }
 
 function SocialField({ kind, value, error, onChange }: { kind: ModuleSocialKind; value: string; error?: string; onChange: (value: string) => void }) {

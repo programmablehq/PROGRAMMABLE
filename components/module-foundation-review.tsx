@@ -6,6 +6,7 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import type { FoundationLaunchReview, FoundationPoolIdentity, FoundationPositionIdentity, FoundationTransactionResult, FoundationTransactionSummary } from "@/lib/module-foundation/ui-types";
 import { FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationPublicUrl, foundationReviewError } from "@/lib/module-foundation/ui-types";
+import { foundationCreatorFeeFields, foundationCreatorFeeRates, type FoundationCreatorFees } from "@/lib/module-foundation/creator-fees";
 import styles from "./module-foundation-ui.module.css";
 
 export function FoundationAddress({ value, label }: { value: string; label: string }) {
@@ -71,14 +72,20 @@ export function FoundationTransactionSteps({ transactions }: { transactions: rea
   </section>;
 }
 
-export function FoundationFeeDisclosure({ creatorFeeBps, quoteSymbol }: { creatorFeeBps: number; quoteSymbol: string }) {
+export function FoundationFeeDisclosure(props: FoundationCreatorFees & { quoteSymbol: string; side?: "buy" | "sell" }) {
+  const { quoteSymbol, side } = props;
+  const rates = foundationCreatorFeeRates(props);
+  const selectedFee = side === "sell" ? rates.creatorSellFeeBps : rates.creatorBuyFeeBps;
+  const split = !side && rates.creatorBuyFeeBps !== rates.creatorSellFeeBps;
   return <div className={styles.feeDisclosure}>
     <dl className={styles.rows}>
       <div><dt>Programmable platform fee</dt><dd>0.3% <span className={styles.muted}>fixed</span></dd></div>
-      <div><dt>Creator fee</dt><dd>{creatorFeeBps / 100}%</dd></div>
-      <div className={styles.totalRow}><dt>Combined swap fees</dt><dd>{(creatorFeeBps + 30) / 100}%</dd></div>
+      <div><dt>{split ? "Creator buy fee" : "Creator fee"}</dt><dd>{selectedFee / 100}%</dd></div>
+      {split ? <div><dt>Creator sell fee</dt><dd>{rates.creatorSellFeeBps / 100}%</dd></div> : null}
+      <div className={styles.totalRow}><dt>{split ? "Combined buy fees" : "Combined swap fees"}</dt><dd>{(selectedFee + 30) / 100}%</dd></div>
+      {split ? <div className={styles.totalRow}><dt>Combined sell fees</dt><dd>{(rates.creatorSellFeeBps + 30) / 100}%</dd></div> : null}
     </dl>
-    <p className={styles.help}>Charged on every buy and sell in this launch pool, in {quoteSymbol}. Uniswap LP and protocol fees are separate.</p>
+    <p className={styles.help}>Charged in {quoteSymbol} on {side ? `${side} trades` : "buys and sells"} in this launch pool. Uniswap LP and protocol fees are separate.</p>
     <details className={styles.transactionDetails}><summary>Platform fee recipient</summary><FoundationAddress value={FOUNDATION_PLATFORM_FEE_RECIPIENT} label="platform fee recipient" /><p className={styles.help}>This additional 0.3% cannot be removed, redirected or used by optional modules.</p></details>
   </div>;
 }
@@ -103,7 +110,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
       {/[1-9]/.test(review.additionalLiquidity) ? <div><dt>Additional creator liquidity</dt><dd>{review.additionalLiquidity} {review.quote.symbol}</dd></div> : null}
       <div><dt>Launch wallet</dt><dd><FoundationAddress value={review.account} label="launch wallet" /></dd></div>
     </dl>
-    {review.factoryVersion === "v2" ? <section className={styles.position} aria-labelledby="foundation-custody-title">
+    {(review.factoryVersion === "v2" || review.factoryVersion === "v3") ? <section className={styles.position} aria-labelledby="foundation-custody-title">
       <h3 id="foundation-custody-title">Launch liquidity is permanent</h3>
       <p>The base LP NFT and any additional LP NFT shown in this review go directly to the burn address. The liquidity stays in the pool. You cannot withdraw it, transfer its NFT or collect proceeds belonging to that position.</p>
       <dl className={styles.rows}>
@@ -117,7 +124,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
         <p className={styles.help}>The launch also sends {review.roundingInventory.tokenAmount} {symbol} left over from position rounding to this address. These coins cannot be recovered; the token&apos;s total supply stays unchanged.</p>
       </details>
     </section> : null}
-    <FoundationFeeDisclosure creatorFeeBps={review.creatorFeeBps} quoteSymbol={review.quote.symbol} />
+    <FoundationFeeDisclosure {...foundationCreatorFeeFields(review)} quoteSymbol={review.quote.symbol} />
     <details className={styles.details}><summary>Coin and metadata</summary><div className={styles.detailsBody}><dl className={styles.rows}>
       <div><dt>Coin address</dt><dd><FoundationAddress value={review.tokenAddress} label="coin address" /></dd></div>
       <div><dt>Metadata hash</dt><dd><FoundationAddress value={review.metadataHash} label="metadata hash" /></dd></div>

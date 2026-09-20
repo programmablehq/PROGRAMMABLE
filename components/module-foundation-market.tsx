@@ -8,9 +8,10 @@ import type { Address } from "viem";
 import { foundationDecimalError, foundationPublicUrl, foundationReviewError, type FoundationAvailability, type FoundationPoolIdentity, type FoundationPositionIdentity, type FoundationQuoteAsset, type FoundationTradeDraft, type FoundationTradeReview, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { FoundationAddress, FoundationFeeDisclosure, FoundationPoolDetails, FoundationTransactionSteps, ModuleFoundationTransactionResult } from "./module-foundation-review";
 import { RobinhoodChart } from "./robinhood-chart";
+import { foundationCreatorFeeFields, foundationCreatorFeeRates, type FoundationCreatorFees } from "@/lib/module-foundation/creator-fees";
 import styles from "./module-foundation-ui.module.css";
 
-export interface ModuleFoundationMarketProps {
+export type ModuleFoundationMarketProps = FoundationCreatorFees & {
   availability: FoundationAvailability;
   contextKey: string;
   coin: { address: Address; name: string; symbol: string; description: string; decimals: number; balance?: string; imageURI?: string; socialLinks?: readonly { label: string; url: string }[] };
@@ -19,7 +20,6 @@ export interface ModuleFoundationMarketProps {
   tradeAsset?: FoundationQuoteAsset;
   pool: FoundationPoolIdentity;
   positions?: readonly FoundationPositionIdentity[];
-  creatorFeeBps: number;
   walletAction?: FoundationWalletAction;
   submissionBlocked?: string;
   onPrepareTrade: (draft: FoundationTradeDraft) => Promise<FoundationTradeReview | null>;
@@ -35,7 +35,9 @@ function humanError(caught: unknown) {
   return message.length <= 320 ? message : "The trade could not complete. Check its status before trying again.";
 }
 
-export function ModuleFoundationMarket({ availability, contextKey, coin, quote, tradeAsset = quote, pool, positions = [], creatorFeeBps, walletAction, submissionBlocked, onPrepareTrade, onConfirmTrade, onRefreshResult, moduleActions, feeLedger }: ModuleFoundationMarketProps) {
+export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
+  const { availability, contextKey, coin, quote, tradeAsset = quote, pool, positions = [], walletAction, submissionBlocked, onPrepareTrade, onConfirmTrade, onRefreshResult, moduleActions, feeLedger } = props;
+  const fees = foundationCreatorFeeRates(props);
   const [draft, setDraft] = useState<FoundationTradeDraft>({ side: "buy", amount: "", slippageBps: 100 });
   const [review, setReview] = useState<FoundationTradeReview | null>(null);
   const [result, setResult] = useState<FoundationTransactionResult | null>(null);
@@ -58,6 +60,7 @@ export function ModuleFoundationMarket({ availability, contextKey, coin, quote, 
     return () => clearInterval(timer);
   }, [review]);
 
+  const creatorFeeBps = (review?.side ?? draft.side) === "buy" ? fees.creatorBuyFeeBps : fees.creatorSellFeeBps;
   const inputAsset = draft.side === "buy" ? tradeAsset : coin;
   const outputSymbol = draft.side === "buy" ? coin.symbol : tradeAsset.symbol;
   const invalidReview = review ? foundationReviewError(review, contextKey, now) : null;
@@ -118,7 +121,7 @@ export function ModuleFoundationMarket({ availability, contextKey, coin, quote, 
             <div className={styles.sideButtons} aria-label="Trade direction">{(["buy", "sell"] as const).map(side => <button type="button" key={side} aria-pressed={draft.side === side} disabled={Boolean(busy)} onClick={() => { setDraft(current => ({ ...current, side, amount: "" })); setAmountError(""); setError(""); }}>{side === "buy" ? "Buy" : "Sell"}</button>)}</div>
             <div className={styles.field}><label htmlFor="foundation-trade-amount">{draft.side === "buy" ? "Buy with" : "Sell amount"}</label><div className={styles.amountInput}><input ref={input} id="foundation-trade-amount" name="amount" inputMode="decimal" autoComplete="off" placeholder="0" value={draft.amount} disabled={Boolean(busy)} aria-invalid={Boolean(amountError) || undefined} aria-describedby="foundation-trade-amount-help foundation-trade-amount-error" onChange={event => { setDraft(current => ({ ...current, amount: event.target.value })); setAmountError(""); setError(""); }} /><span>{inputAsset.symbol}</span></div><p id="foundation-trade-amount-help" className={styles.help}>{inputAsset.balance !== undefined ? `Balance: ${inputAsset.balance} ${inputAsset.symbol}` : `Enter the amount of ${inputAsset.symbol} to spend.`}</p><p id="foundation-trade-amount-error" className={styles.error}>{amountError}</p></div>
             <div className={styles.field}><label htmlFor="foundation-trade-slippage">Slippage limit</label><select id="foundation-trade-slippage" value={draft.slippageBps} disabled={Boolean(busy)} onChange={event => setDraft(current => ({ ...current, slippageBps: Number(event.target.value) }))}><option value={50}>0.5%</option><option value={100}>1%</option><option value={200}>2%</option></select></div>
-            <FoundationFeeDisclosure creatorFeeBps={creatorFeeBps} quoteSymbol={quote.symbol} />
+            <FoundationFeeDisclosure {...foundationCreatorFeeFields(props)} side={draft.side} quoteSymbol={quote.symbol} />
             {unavailable ? <p className={styles.error} role="status">{availability.reason ?? quote.reason ?? "Trading is temporarily unavailable. Try again after the current route is verified."}</p> : null}
             <p className={styles.error} role="alert">{error || submissionBlocked || ""}</p>
             <button type="submit" className={styles.primaryButton} disabled={blocked || walletAction?.busy} aria-busy={busy === "prepare" || walletAction?.busy}>{busy === "prepare" ? "Simulating trade…" : walletAction?.label ?? `Review ${draft.side}`}</button><p className={styles.help}>Swap through Uniswap’s Universal Router. Network gas is separate.</p>
