@@ -13,6 +13,7 @@ import { RobinhoodTokenView } from "@/components/robinhood-token-view";
 import { a, h } from "./fixtures/module-mode-evidence";
 
 vi.mock("@/components/use-robinhood-presentation", () => ({ useRobinhoodPresentation: () => ({ items: [], loading: false }) }));
+vi.mock("@/components/wallet-provider", () => ({ useWallet: () => ({ wallet: null, authenticated: false, sessionReady: true }) }));
 const fixture = (market = false) => evidence.cases[market ? 1 : 0];
 function normalized(market = false) { const f = fixture(market); return normalizeModuleEngineLaunchV1(f.range.launches[0].evidence, bindActiveModuleEngineRelease(f.release)); }
 function lane(market = false): ModuleModeSnapshot {

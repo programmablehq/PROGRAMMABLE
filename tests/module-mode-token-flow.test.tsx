@@ -10,6 +10,7 @@ import { launchList, profileLaunchList, snapshotLaunches, type RobinhoodSnapshot
 import { a, h, moduleEvidenceFixture } from "./fixtures/module-mode-evidence";
 
 vi.mock("../components/use-robinhood-presentation", () => ({ useRobinhoodPresentation: () => ({ items: [], loading: false }) }));
+vi.mock("../components/wallet-provider", () => ({ useWallet: () => ({ wallet: null, authenticated: false, sessionReady: true }) }));
 const now = Date.parse("2026-09-06T00:00:00.000Z");
 function moduleRow(count = 2) {
   const f = moduleEvidenceFixture(0, count);
