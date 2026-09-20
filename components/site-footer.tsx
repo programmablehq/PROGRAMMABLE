@@ -14,7 +14,7 @@ const productLinks = [
 ];
 
 const resourceLinks = [
-  { href: "/developers/hooks", label: "Build a custom hook" },
+  { href: "/developers/api-keys?guide=custom-hook", label: "Build a custom hook" },
   {
     href: "/analytics",
     label: "Analytics",
@@ -38,7 +38,6 @@ const resourceLinks = [
 
 const informationLinks = [
   { href: "/privacy", label: "Privacy & settings" },
-  { href: "/agents.md", label: "Agent guide" },
 ];
 
 export function SiteFooter() {

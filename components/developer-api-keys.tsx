@@ -11,29 +11,25 @@ import {
   useSyncExternalStore,
   type FormEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Braces,
   Check,
   Copy,
   ChevronDown,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
 } from "lucide-react";
 
 import styles from "@/components/developer-api-keys.module.css";
-import hookStyles from "@/components/custom-hook-builder.module.css";
 import { AGENT_KEY_SCHEMA, AGENT_SCOPES, buildAgentConnection, buildAgentInstructions } from "@/lib/agent-connection";
 import { DeveloperUniversalLaunchHistory } from "@/components/developer-universal-launch-history";
 import type { LaunchContractSetupV1 } from "@/lib/server/custom-launch/launch-contract-setup-v1";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import { DeveloperLaunchHistory } from "@/components/developer-launch-history";
-import { BuilderIdeaPrompt, BuilderSetupSteps, type BuilderKind } from "@/components/module-contribution-entry";
+import type { BuilderKind } from "@/components/module-contribution-entry";
 import {
   DeveloperRobinhoodLaunch,
   RobinhoodFeePolicyDisclosure,
@@ -118,7 +114,7 @@ const readServerHydrated = () => false;
 type ApiKeyLoadMode = "initial" | "refresh" | "mutation";
 type DeveloperApiKeysProps = Readonly<{
   moduleBuilder?: boolean;
-  hookBuilder?: boolean;
+  initialGuideOpen?: boolean;
   initialSection?: ActiveSection;
   agentSetupText?: string;
   launchContractSetup?: LaunchContractSetupV1;
@@ -126,7 +122,7 @@ type DeveloperApiKeysProps = Readonly<{
 }>;
 type DeveloperApiKeysViewProps = Readonly<{
   moduleBuilder?: boolean;
-  hookBuilder?: boolean;
+  initialGuideOpen?: boolean;
   account: `0x${string}` | null;
   authReady: boolean;
   connecting: boolean;
@@ -826,7 +822,7 @@ function ExpirySelect({
 }
 
 export function DeveloperApiKeys({
-  hookBuilder = false,
+  initialGuideOpen = false,
   initialSection = "keys",
   agentSetupText,
   launchContractSetup,
@@ -846,18 +842,17 @@ export function DeveloperApiKeys({
   } = useWallet();
   const account = wallet?.account ?? null;
   const sessionKey = authReady ? (account ?? "disconnected") : "loading";
-  const viewKey = `${sessionKey}:${hookBuilder ? "hook" : "keys"}`;
 
   return (
     <DeveloperApiKeysView
-      key={viewKey}
+      key={sessionKey}
       account={account}
       authReady={authReady}
       connecting={connecting}
       getAccessToken={getAccessToken}
       getIdentityToken={getIdentityToken}
       initialSection={initialSection}
-      hookBuilder={hookBuilder}
+      initialGuideOpen={initialGuideOpen}
       agentSetupText={agentSetupText}
       launchContractSetup={launchContractSetup}
       moduleAgentSetupText={moduleAgentSetupText}
@@ -872,35 +867,8 @@ export function DeveloperApiKeys({
   );
 }
 
-function CustomHookBuilderFrame({ enabled, children }: {
-  enabled: boolean;
-  children: ReactNode;
-}) {
-  if (!enabled) return <>{children}</>;
-
-  return (
-    <div className={hookStyles.layout}>
-      <div className={hookStyles.formPanel}>{children}</div>
-      <aside className={hookStyles.previewPanel} aria-label="About custom hooks">
-        <div className={hookStyles.hookCard}>
-          <span className={hookStyles.hookIcon}><Braces size={30} aria-hidden="true" /></span>
-          <h2>Custom hook</h2>
-          <p>A coin with your own trading rules.</p>
-          <dl className={hookStyles.hookDetails}>
-            <div><dt>Fees</dt><dd>Set your own logic</dd></div>
-            <div><dt>Rewards</dt><dd>Choose how they work</dd></div>
-            <div><dt>Pool</dt><dd>Define its behavior</dd></div>
-          </dl>
-          <p className={hookStyles.reviewNote}>Your builder checks what your idea needs before submitting it for review.</p>
-        </div>
-        <Link className={hookStyles.docsLink} href="/developer-reference/custom-launch">How custom hooks work <ArrowRight size={16} aria-hidden="true" /></Link>
-      </aside>
-    </div>
-  );
-}
-
 export function DeveloperApiKeysView({
-  hookBuilder = false,
+  initialGuideOpen = false,
   account,
   authReady,
   connecting,
@@ -914,7 +882,6 @@ export function DeveloperApiKeysView({
   sendUniversalLaunchWalletAction,
   signCustomLaunchFundingAuthorization,
 }: DeveloperApiKeysViewProps) {
-  const builderKind: BuilderKind | null = hookBuilder ? "hook" : null;
   const hydrated = useSyncExternalStore(subscribeToHydration, readHydrated, readServerHydrated);
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [listState, setListState] = useState<ListState>(() =>
@@ -936,6 +903,8 @@ export function DeveloperApiKeysView({
     "idle",
   );
   const [connectionCopyState, setConnectionCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [setupFallbackText, setSetupFallbackText] = useState("");
+  const guideRef = useRef<HTMLDetailsElement>(null);
   const [setupCopyState, setSetupCopyState] = useState<
     "idle" | "copied" | "error"
   >(
@@ -952,7 +921,7 @@ export function DeveloperApiKeysView({
   const [rotateError, setRotateError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [activeSection, setActiveSection] = useState<ActiveSection>(
-    builderKind ? "keys" : initialSection,
+    initialSection,
   );
   const [initialLaunchId, setInitialLaunchId] = useState<string | null>(null);
   const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | null>("4663");
@@ -962,7 +931,6 @@ export function DeveloperApiKeysView({
   const labelRef = useRef<HTMLInputElement>(null);
   const revealRef = useRef<HTMLDivElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
-  const builderIdeaRef = useRef<HTMLTextAreaElement>(null);
   const returnKeyActionFocusRef = useRef<Readonly<{ credentialId: string; action: "rotate" | "revoke" }> | null>(null);
   const confirmRevokeRef = useRef<HTMLButtonElement>(null);
   const confirmRotateRef = useRef<HTMLButtonElement>(null);
@@ -982,10 +950,8 @@ export function DeveloperApiKeysView({
     (activeKeyPage - 1) * API_KEY_PAGE_SIZE,
     activeKeyPage * API_KEY_PAGE_SIZE,
   );
-  const builderKey = builderKind ? apiKeyForBuilder(apiKeys, builderKind) : undefined;
   const activeKey = apiKeys.find((key) => keyStatus(key) === "Active"
     && key.scopes.some((scope) => fixedScopes.includes(scope as typeof fixedScopes[number])));
-  const KeyWorkspace = builderKey ? Disclosure : "div";
 
   const getAuthHeaders = useCallback(
     async (json = false) => {
@@ -1113,6 +1079,12 @@ export function DeveloperApiKeysView({
   useEffect(() => {
     if (mutationResult) revealRef.current?.focus();
   }, [mutationResult]);
+
+  useEffect(() => {
+    if (!initialGuideOpen || initialSection !== "keys") return;
+    const update = window.setTimeout(() => setActiveSection("keys"), 0);
+    return () => window.clearTimeout(update);
+  }, [initialGuideOpen, initialSection]);
 
   useEffect(() => {
     if (confirmingRevokeId) confirmRevokeRef.current?.focus();
@@ -1304,13 +1276,16 @@ export function DeveloperApiKeysView({
   };
 
   const copyAgentSetup = async (scopes?: readonly string[]) => {
+    const instructions = [buildAgentInstructions({ scopes, wallet: account ?? undefined }), launchContractSetup?.text].filter(Boolean).join("\n\n");
     try {
-      await copyToClipboard([buildAgentInstructions({ scopes, wallet: account ?? undefined }), launchContractSetup?.text].filter(Boolean).join("\n\n"));
+      await copyToClipboard(instructions);
       setSetupCopyState("copied");
       setStatusMessage("Agent instructions copied. These instructions contain no API key.");
     } catch {
       setSetupCopyState("error");
-      setStatusMessage("Instructions could not be copied.");
+      setSetupFallbackText(instructions);
+      if (guideRef.current) guideRef.current.open = true;
+      setStatusMessage("Instructions could not be copied. Select them in the build guide.");
     }
   };
 
@@ -1329,8 +1304,6 @@ export function DeveloperApiKeysView({
         const workspace = row?.closest<HTMLDetailsElement>("details");
         if (workspace) workspace.open = true;
         window.requestAnimationFrame(() => row?.focus());
-      } else if (builderKey) {
-        builderIdeaRef.current?.focus();
       } else {
         createButtonRef.current?.focus();
       }
@@ -1561,7 +1534,7 @@ export function DeveloperApiKeysView({
   };
 
   return (
-    <div className={`${styles.page} ${hookBuilder ? hookStyles.page : ""} page-width`}>
+    <div className={`${styles.page} page-width`}>
       <p
         className={styles.visuallyHidden}
         role="status"
@@ -1571,23 +1544,19 @@ export function DeveloperApiKeysView({
         {statusMessage}
       </p>
 
-      <nav className={styles.topNavigation} aria-label="Builder navigation">
-        <Link className={`${styles.backLink} ${hookBuilder ? hookStyles.backLink : ""}`} href="/launch">
+      <nav className={styles.topNavigation} aria-label="Page navigation">
+        <Link className={styles.backLink} href="/">
           <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.9} />
-          <span>Back</span>
+          <span>Home</span>
         </Link>
-        <Link className={styles.textLink} href="/developers/api-keys?view=history">Your launches <ArrowRight size={16} aria-hidden="true" /></Link>
       </nav>
 
-      <CustomHookBuilderFrame enabled={hookBuilder}>
-      <header className={`${styles.hero} ${hookBuilder ? hookStyles.heading : ""}`}>
+      <header className={styles.hero}>
         <div className={styles.heroCopy}>
-          <h1>{activeSection === "keys" ? hookBuilder ? "Build a custom hook" : "API keys" : activeSection === "launch" ? "Launch a hook" : "Your launches"}</h1>
+          <h1>{activeSection === "keys" ? "API keys" : activeSection === "launch" ? "Launch a hook" : "Your launches"}</h1>
           <p className={styles.intro}>
             {activeSection === "keys"
-              ? hookBuilder
-                ? "A hook is the code behind a coin’s trading rules. Build custom fees, rewards, or another idea with your AI builder."
-                : "Create and manage API keys for custom hooks on Robinhood."
+              ? "Create and manage API keys for custom hooks on Robinhood."
               : activeSection === "launch"
                 ? "Upload the launch file from your builder."
                 : "Track progress and complete your wallet steps."}
@@ -1595,9 +1564,7 @@ export function DeveloperApiKeysView({
         </div>
       </header>
 
-      {builderKind ? <BuilderSetupSteps keyReady={Boolean(builderKey)} /> : null}
-
-      {!builderKind ? <nav
+      <nav
         className={styles.sectionSwitch}
         aria-label="Developer access view"
       >
@@ -1625,7 +1592,31 @@ export function DeveloperApiKeysView({
         >
           History
         </button>
-      </nav> : null}
+      </nav>
+
+      {activeSection === "keys" ? (
+        <Disclosure ref={guideRef} className={styles.buildGuide} id="custom-hook-guide" open={initialGuideOpen}
+          data-manifest-digest={launchContractSetup?.manifestDigest}>
+          <summary>Build a custom hook <ChevronDown size={16} aria-hidden="true" /></summary>
+          <div className={styles.buildGuideBody}>
+            <p>A hook defines your coin’s trading rules. Use a coding assistant or your own code to build it.</p>
+            <ol className={styles.buildSteps}>
+              <li><strong>Create an API key</strong><span>Connect your wallet and create a key below, or use one you already saved.</span></li>
+              <li><strong>Describe your idea</strong><span>Give the instructions to your builder, then explain what your hook should do. Keep your API key in its secure settings.</span></li>
+              <li><strong>Review and launch</strong><span>Your builder submits the project and gives you a link here for review and any wallet confirmations.</span></li>
+            </ol>
+            <button className={styles.secondaryButton} type="button" onClick={() => void copyAgentSetup(activeKey?.scopes)}>
+              {setupCopyState === "copied" ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+              {setupCopyState === "copied" ? "Copied" : "Copy builder instructions"}
+            </button>
+            <p className={styles.guideNote}>The instructions contain no API key. Your wallet confirms transactions.</p>
+            {setupCopyState === "error" ? <>
+              <p className={styles.inlineError} role="alert">Copy failed. Select the instructions below and copy them manually.</p>
+              <pre className={styles.instructionFallback} tabIndex={0}>{setupFallbackText}</pre>
+            </> : null}
+          </div>
+        </Disclosure>
+      ) : null}
 
       {activeSection === "launch" ? (
         <RobinhoodFeePolicyDisclosure />
@@ -1663,7 +1654,7 @@ export function DeveloperApiKeysView({
             <h2 id="connect-title">Connect your wallet</h2>
             <p>
               {activeSection === "keys"
-                ? builderKind ? "Create an API key or continue with one you already saved." : "Create and manage keys for this account."
+                ? "Create and manage keys for this account."
                 : activeSection === "launch"
                   ? "Continue your hook launch with this wallet."
                   : "See launches linked to this wallet."}
@@ -1678,14 +1669,6 @@ export function DeveloperApiKeysView({
           >
             <span>Connect wallet</span>
           </button>
-        </section>
-      ) : builderKind && listState === "loading" ? (
-        <section className={styles.walletGate} aria-busy="true" aria-label="Loading your API keys">
-          <div className={styles.walletGateCopy} aria-hidden="true">
-            <span className={styles.walletGateTitle} />
-            <span className={styles.walletGateLine} />
-          </div>
-          <span className={styles.visuallyHidden} role="status">Loading your API keys</span>
         </section>
       ) : (
         <>
@@ -1724,16 +1707,16 @@ export function DeveloperApiKeysView({
               {mutationResult.result.secretState === "delivered-once" ? (
                 <>
                   <p className={styles.revealWarning}>
-                    {builderKind ? "Save this key in your AI builder’s secure setup, then copy your idea prompt below. The key is shown once." : "Copy the key and setup instructions for your builder. Save them privately; the key is shown once."}
+                    Copy the key and setup instructions for your builder. Save them privately; the key is shown once.
                     {mutationResult.operation === "rotate" ? " The previous key is revoked." : ""}
                   </p>
                   <div className={styles.secretRow}>
                     <code>{mutationResult.result.apiKeySecret}</code>
                     <div className={styles.secretActions}>
-                      {!builderKind ? <button className={styles.primaryButton} type="button" onClick={() => void copyConnection()}>
+                      <button className={styles.primaryButton} type="button" onClick={() => void copyConnection()}>
                         {connectionCopyState === "copied" ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
                         {connectionCopyState === "copied" ? "Copied" : "Copy key + setup"}
-                      </button> : null}
+                      </button>
                       <button
                         className={styles.secondaryButton}
                         type="button"
@@ -1777,30 +1760,16 @@ export function DeveloperApiKeysView({
             </div>
           ) : null}
 
-          {activeSection === "keys" && builderKind && builderKey && account ? (
-            <BuilderIdeaPrompt
-              key={builderKey.id}
-              kind={builderKind}
-              keyLabel={builderKey.label}
-              scopes={builderKey.scopes}
-              wallet={account}
-              ideaRef={builderIdeaRef}
-            />
-          ) : null}
-
           {activeSection === "keys" ? (
-            <KeyWorkspace className={styles.workspace}>
-              {builderKey ? <summary className={styles.keySettingsSummary}>Manage API keys <ChevronDown size={16} aria-hidden="true" /></summary> : null}
+            <div className={styles.workspace}>
               <section
                 className={`${styles.panel} ${styles.createPanel}`}
                 aria-labelledby="create-key-title"
                 aria-busy={mutationState.kind === "issue"}
               >
                 <div className={styles.panelHeading}>
-                  <h2 id="create-key-title">{builderKind && !builderKey ? "Create your API key" : "New key"}</h2>
+                  <h2 id="create-key-title">New key</h2>
                 </div>
-
-                {builderKind && !builderKey ? <p className={styles.securityNote}>Your builder uses this key to prepare and submit your project. Wallet transactions still need your confirmation.</p> : null}
 
                 <form className={styles.createForm} onSubmit={createApiKey}>
                   <div className={styles.formFields}>
@@ -1898,7 +1867,7 @@ export function DeveloperApiKeysView({
                 </form>
               </section>
 
-              {!builderKind || apiKeys.length > 0 || listState !== "ready" || listError ? <section
+              <section
                 className={`${styles.panel} ${styles.listPanel}`}
                 aria-labelledby="api-keys-title"
                 aria-busy={
@@ -2207,8 +2176,8 @@ export function DeveloperApiKeysView({
                     {listError}
                   </p>
                 ) : null}
-              </section> : null}
-            </KeyWorkspace>
+              </section>
+            </div>
           ) : activeSection === "launch" ? (
             <DeveloperRobinhoodLaunch
               onOpenLaunch={openRobinhoodLaunchHistory}
@@ -2234,23 +2203,9 @@ export function DeveloperApiKeysView({
         </>
       )}
 
-      </CustomHookBuilderFrame>
-
-      {launchContractSetup ? <details className={styles.connectionOptions} data-manifest-digest={launchContractSetup.manifestDigest}>
-        <summary>Custom Launch Plan instructions</summary>
-        <div className={styles.connectionOptionsBody}><p>Manifest <code style={{ overflowWrap: "anywhere" }}>{launchContractSetup.manifestDigest}</code></p>
-          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxWidth: "100%" }}>{launchContractSetup.text}</pre></div>
-      </details> : null}
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        {!builderKind && activeKey ? <button className={styles.guideAction} type="button" onClick={() => void copyAgentSetup(activeKey.scopes)}>
-          {setupCopyState === "copied" ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
-          Copy instructions
-        </button> : null}
-        {builderKind !== "hook" ? <Link href="/developers/hooks">Build a custom hook <ArrowRight size={16} aria-hidden="true" /></Link> : null}
-        {builderKind ? <Link href="/developer-reference/custom-launch">Developer docs <ArrowRight size={16} aria-hidden="true" /></Link> : null}
-        <a href="/agents.md" target="_blank" rel="noreferrer">Agent guide <ExternalLink size={14} aria-hidden="true" /></a>
+        <Link href="/developer-reference/custom-launch">Developer docs <ArrowRight size={16} aria-hidden="true" /></Link>
       </nav>
-      {setupCopyState === "error" ? <p className={styles.inlineError} role="alert">Copy failed. Open the agent guide to read the instructions.</p> : null}
 
     </div>
   );

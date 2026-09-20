@@ -48,11 +48,12 @@ describe("Site footer", () => {
 
   it("offers hook building without module API contribution links", () => {
     expect(footerSource).not.toContain('href: "/developers/modules"');
-    expect(footerSource).toContain('href: "/developers/hooks"');
+    expect(footerSource).toContain('href: "/developers/api-keys?guide=custom-hook"');
+    expect(footerSource).not.toContain('href: "/developers/hooks"');
     expect(footerSource).toContain('href: "/analytics"');
     expect(footerSource).not.toContain('href: "https://dune.com/programmablehq/analytics"');
     expect(footerSource).toContain('href: "/privacy"');
-    expect(footerSource).toContain('href: "/agents.md"');
+    expect(footerSource).not.toContain('href: "/agents.md"');
   });
 
   it("stacks evenly aligned link groups on narrow screens", () => {
