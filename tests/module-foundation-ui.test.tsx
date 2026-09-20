@@ -46,17 +46,16 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(foundationSelectionErrors([{ ...selected, configuration: { recipient: "bad-address" } }], [descriptor])[0]).toContain("valid address");
   });
   it("offers a base coin without an editable starting valuation", () => {
-    const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    for (const label of ["Description", "X / Twitter", "First buy", "Create Launch"]) expect(html).toContain(label);
+    const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} suggestedInitialBuy="0.001167" onResolveQuote={vi.fn()} {...actions} />);
+    for (const label of ["Ticker", "Add More Links", "Creator fees", "Stocks or Meme Coins", "First buy", "Create Launch"]) expect(html).toContain(label);
     expect(html).not.toContain('name="startValuationQuote"');
     expect(html).not.toContain("Starting valuation");
     expect(html).not.toContain("foundation-valuation");
-    expect(html).toContain('value="0.000000000000000001"');
-    expect(html).toContain("Minimum 1 wei");
+    expect(html).toContain('value="0.001167"');
+    for (const removed of ["One wallet confirmation", "Minimum 1 wei", "Gas is separate", "Up to 8 MB", "JPG, PNG"]) expect(html).not.toContain(removed);
     expect(html).not.toContain("Optional");
     expect(html).not.toContain("foundation-modules-heading");
     expect(html).not.toContain("Platform fee recipient");
-    expect(html).not.toContain("Creator fee");
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);
   });
@@ -65,8 +64,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).not.toContain("Add creator liquidity");
     expect(html).not.toContain('name="additionalLiquidity"');
     expect(html).toContain("Classic");
-    expect(html).toContain("One wallet confirmation");
-    expect(html).toContain("Minimum 1 wei");
+    expect(html).toContain("Creator fees");
   });
   it("shows exact V2 principal, refund and token rounding separately from fee claims before the wallet action", () => {
     const review: FoundationLaunchReview = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,

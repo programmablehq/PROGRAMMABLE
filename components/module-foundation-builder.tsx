@@ -9,11 +9,12 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CurrencyEthIcon } from "@phosphor-icons/react/dist/csr/CurrencyEth";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { sha256, type Address, type Hex } from "viem";
 import { prepareTokenImage, isProgrammableTokenImageUrl } from "@/lib/token-image";
 import { validateModuleSocialLinks, type ModuleSocialKind, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
-import { foundationDecimalError, foundationReviewError, foundationSelectionErrors, type FoundationAvailability, type FoundationConfigurationField, type FoundationImage, type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection, type FoundationQuoteAsset, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
+import { foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationAvailability, type FoundationConfigurationField, type FoundationImage, type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection, type FoundationQuoteAsset, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { FOUNDATION_DEFAULT_IMAGE, isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
 import { ModuleFoundationTransactionResult } from "./module-foundation-review";
 import styles from "./module-foundation-ui.module.css";
@@ -40,14 +41,13 @@ export interface ModuleFoundationBuilderProps {
   onRetryAvailability?: () => void;
   walletAction?: FoundationWalletAction;
   initialDraft?: Partial<FoundationLaunchDraft>;
+  suggestedInitialBuy?: string;
   /** Host-owned durable wallet operation guard, including uncertain submissions. */
   submissionBlocked?: string;
 }
 
 const SOCIAL_LABELS: Record<ModuleSocialKind, string> = { website: "Website", twitter: "X / Twitter", telegram: "Telegram", discord: "Discord", github: "GitHub", gitbook: "Docs" };
 const EMPTY_MODULES: FoundationModuleSelection[] = [];
-// One wei is the smallest native ETH input. Other assets still need an executable route.
-const MINIMUM_ETH_BUY = "0.000000000000000001";
 
 function cleanError(error: unknown) {
   const message = error instanceof Error ? error.message : "This step could not complete. Please try again.";
@@ -57,12 +57,14 @@ function cleanError(error: unknown) {
 function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes: readonly FoundationQuoteAsset[], chainId: number): EditableDraft {
   const quote = quotes.find(asset => asset.chainId === chainId && asset.supported && asset.supportsNativeEth);
   return { name: initial?.name ?? "", symbol: initial?.symbol ?? "", description: initial?.description ?? "", image: initial?.image ?? null,
-    socialLinks: initial?.socialLinks ?? {}, quoteAsset: initial?.quoteAsset ?? quote?.address ?? "", creatorFeeBps: 0,
-    initialBuy: initial?.initialBuy ?? MINIMUM_ETH_BUY, additionalLiquidity: "0", modules: initial?.modules ?? EMPTY_MODULES };
+    socialLinks: initial?.socialLinks ?? {}, quoteAsset: initial?.quoteAsset ?? quote?.address ?? "", creatorFeeBps: initial?.creatorFeeBps ?? 0,
+    initialBuy: initial?.initialBuy ?? "", additionalLiquidity: "0", modules: initial?.modules ?? EMPTY_MODULES };
 }
 
-export function ModuleFoundationBuilder({ availability, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, submissionBlocked }: ModuleFoundationBuilderProps) {
+export function ModuleFoundationBuilder({ availability, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, submissionBlocked }: ModuleFoundationBuilderProps) {
   const [draft, setDraft] = useState<EditableDraft>(() => initialForm(initialDraft, quoteAssets, availability.chainId));
+  const [buyEdited, setBuyEdited] = useState(initialDraft?.initialBuy !== undefined);
+  const initialBuy = buyEdited ? draft.initialBuy : suggestedInitialBuy ?? "";
   const [localImage, setLocalImage] = useState<LocalImage | null>(null);
   const [imagePreparing, setImagePreparing] = useState(false);
   const [imageError, setImageError] = useState("");
@@ -101,6 +103,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
   const locked = busy || phase === "result";
 
   function update<K extends keyof EditableDraft>(key: K, value: EditableDraft[K]) {
+    if (key === "initialBuy") setBuyEdited(true);
     generation.current += 1;
     setDraft(current => ({ ...current, [key]: value }));
     setErrors(current => { const next = { ...current }; delete next[key]; return next; });
@@ -118,8 +121,6 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     setCustomQuote(custom);
     setQuoteLookup(null);
     update("quoteAsset", "");
-    if (custom && draft.initialBuy === MINIMUM_ETH_BUY) update("initialBuy", "");
-    if (!custom && !draft.initialBuy) update("initialBuy", MINIMUM_ETH_BUY);
   }
 
   async function chooseImage(file: File | undefined) {
@@ -169,7 +170,8 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     if (new TextEncoder().encode(draft.description.trim()).length > 280) next.description = "Use a description of up to 280 bytes.";
     if (draft.image && !isFoundationDefaultImage(draft.image) && !isProgrammableTokenImageUrl(draft.image.url)) next.image = "Choose an image to save with this launch.";
     if (!quote?.supported || quote.chainId !== availability.chainId) next.quoteAsset = quote?.reason ?? (customQuote ? "Check the token address before launching." : "ETH is still loading. Try again in a moment.");
-    const buyError = foundationDecimalError(draft.initialBuy, 18, false);
+    if (!isFoundationCreatorFee(draft.creatorFeeBps)) next.creatorFeeBps = "Choose 0% or a creator fee from 1% to 10%.";
+    const buyError = foundationDecimalError(initialBuy, 18, false);
     if (buyError) next.initialBuy = buyError;
     if (modulesError.length) next.modules = modulesError.join(" ");
     const socials = validateModuleSocialLinks(draft.socialLinks);
@@ -213,7 +215,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       savedImage ??= FOUNDATION_DEFAULT_IMAGE;
       assertCurrent(); setPhase("preparing");
       const prepared = await onPrepareLaunch({ ...draft, name: draft.name.trim(), symbol: draft.symbol.trim().toUpperCase(), description: draft.description.trim(), quoteAsset: quote!.address,
-        socialLinks: checked.links, image: savedImage, additionalLiquidity: "0" });
+        socialLinks: checked.links, image: savedImage, initialBuy, additionalLiquidity: "0" });
       assertCurrent();
       if (!prepared) { setPhase("editing"); return; }
       const invalid = foundationReviewError(prepared, context);
@@ -265,32 +267,35 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
             <section className={styles.formSection} aria-labelledby="foundation-coin-heading">
               <h2 id="foundation-coin-heading" className={styles.srOnly}>Coin details</h2>
               <div className={styles.imageRow}>
-                <button type="button" className={styles.imageButton} onClick={() => imageInput.current?.click()} aria-label={imageSource ? "Change coin image" : "Choose coin image"} data-invalid={Boolean(errors.image || imageError) || undefined} aria-describedby="foundation-image-help foundation-image-error" disabled={locked || imagePreparing}>
+                <button type="button" className={styles.imageButton} onClick={() => imageInput.current?.click()} aria-label={imageSource ? "Change coin image" : "Choose coin image"} data-invalid={Boolean(errors.image || imageError) || undefined} aria-describedby={errors.image || imageError ? "foundation-image-error" : undefined} disabled={locked || imagePreparing}>
                   {imageSource ? <Image src={imageSource} alt="Selected coin artwork" width={96} height={96} unoptimized onError={() => setImageError("The image could not load. Choose another image.")} /> : <ImageIcon size={28} aria-hidden="true" />}
                 </button>
-                <div className={styles.imageCopy}><button type="button" className={styles.secondaryButton} onClick={() => imageInput.current?.click()} disabled={locked || imagePreparing}>{imagePreparing ? "Preparing image…" : imageSource ? "Change image" : "Add image"}</button><p id="foundation-image-help" className={styles.help}>JPG, PNG or WebP · Up to 8 MB</p></div>
+                <div className={styles.imageCopy}><button type="button" className={styles.secondaryButton} onClick={() => imageInput.current?.click()} disabled={locked || imagePreparing}>{imagePreparing ? "Preparing image…" : imageSource ? "Change image" : "Add image"}</button></div>
                 {imageSource ? <button type="button" className={styles.iconButton} aria-label="Remove coin image" disabled={locked || imagePreparing} onClick={() => { setLocalImage(null); update("image", null); setImageError(""); }}><XIcon size={18} aria-hidden="true" /></button> : null}
                 <input ref={imageInput} className={styles.srOnly} type="file" tabIndex={-1} aria-label="Coin image file" accept="image/jpeg,image/png,image/webp" disabled={locked || imagePreparing} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void chooseImage(file); }} />
               </div>
               <p className={styles.error} id="foundation-image-error">{errors.image || imageError || ""}</p>
-              <div className={styles.nameFields}><Field label="Name" id="foundation-name" error={errors.name}><input id="foundation-name" name="name" autoComplete="off" maxLength={48} value={draft.name} placeholder="Coin name" aria-invalid={Boolean(errors.name) || undefined} aria-describedby={errors.name ? "foundation-name-error" : undefined} onChange={event => update("name", event.target.value)} /></Field><Field label="Symbol" id="foundation-symbol" error={errors.symbol}><input id="foundation-symbol" name="symbol" autoComplete="off" spellCheck={false} maxLength={12} value={draft.symbol} placeholder="COIN" aria-invalid={Boolean(errors.symbol) || undefined} aria-describedby={errors.symbol ? "foundation-symbol-error" : undefined} onChange={event => update("symbol", event.target.value.toUpperCase())} /></Field></div>
+              <div className={styles.nameFields}><Field label="Name" id="foundation-name" error={errors.name}><input id="foundation-name" name="name" autoComplete="off" maxLength={48} value={draft.name} placeholder="Coin name" aria-invalid={Boolean(errors.name) || undefined} aria-describedby={errors.name ? "foundation-name-error" : undefined} onChange={event => update("name", event.target.value)} /></Field><Field label="Ticker" id="foundation-symbol" error={errors.symbol}><input id="foundation-symbol" name="symbol" autoComplete="off" spellCheck={false} maxLength={12} value={draft.symbol} placeholder="COIN" aria-invalid={Boolean(errors.symbol) || undefined} aria-describedby={errors.symbol ? "foundation-symbol-error" : undefined} onChange={event => update("symbol", event.target.value.toUpperCase())} /></Field></div>
               <Field label="Description" id="foundation-description" error={errors.description}><textarea id="foundation-description" name="description" maxLength={280} rows={2} value={draft.description} placeholder="A few words about your coin" aria-invalid={Boolean(errors.description) || undefined} aria-describedby={errors.description ? "foundation-description-error" : undefined} onChange={event => update("description", event.target.value)} /></Field>
               <div className={styles.twoFields}>{(["website", "twitter"] as const).map(key => <SocialField key={key} kind={key} value={draft.socialLinks[key] ?? ""} onChange={value => updateSocial(key, value)} error={errors[`social-${key}`]} />)}</div>
-              <details className={styles.socialDetails}><summary>More links <CaretDownIcon size={14} aria-hidden="true" /></summary><div className={styles.twoFields}>{(["telegram", "discord", "github", "gitbook"] as const).map(key => <SocialField key={key} kind={key} value={draft.socialLinks[key] ?? ""} onChange={value => updateSocial(key, value)} error={errors[`social-${key}`]} />)}</div></details>
+              <details className={styles.socialDetails}><summary>Add More Links <CaretDownIcon size={14} aria-hidden="true" /></summary><div className={styles.twoFields}>{(["telegram", "discord", "github", "gitbook"] as const).map(key => <SocialField key={key} kind={key} value={draft.socialLinks[key] ?? ""} onChange={value => updateSocial(key, value)} error={errors[`social-${key}`]} />)}</div></details>
               {errors["social-socialLinks"] ? <p className={styles.error}>{errors["social-socialLinks"]}</p> : null}
             </section>
             <section className={styles.formSection} aria-labelledby="foundation-market-heading">
               <h2 id="foundation-market-heading" className={styles.marketLabel}>Pair with</h2>
               <div className={styles.pairChoices} role="group" aria-labelledby="foundation-market-heading">
                 <button id={!customQuote ? "foundation-quote" : undefined} type="button" aria-pressed={!customQuote} aria-describedby={!customQuote && errors.quoteAsset ? "foundation-quote-error" : undefined} data-invalid={!customQuote && Boolean(errors.quoteAsset) || undefined} onClick={() => chooseMarket(false)}><CurrencyEthIcon size={22} aria-hidden="true" /><span>Classic <small>ETH</small></span>{!customQuote ? <CheckIcon size={16} aria-hidden="true" /> : null}</button>
-                {onResolveQuote ? <button type="button" aria-pressed={customQuote} aria-controls="foundation-custom-pair" aria-expanded={customQuote} onClick={() => chooseMarket(true)}><PlusIcon size={20} aria-hidden="true" /><span>Other</span>{customQuote ? <CheckIcon size={16} aria-hidden="true" /> : null}</button> : null}
+                {onResolveQuote ? <button type="button" aria-pressed={customQuote} aria-controls="foundation-custom-pair" aria-expanded={customQuote} onClick={() => chooseMarket(true)}><PlusIcon size={20} aria-hidden="true" /><span>Other <small>(Stocks or Meme Coins)</small></span>{customQuote ? <CheckIcon size={16} aria-hidden="true" /> : null}</button> : null}
               </div>
               {customQuote ? <div id="foundation-custom-pair" className={styles.customPair}><Field label="Token address" id="foundation-quote" error={errors.quoteAsset}>
                 <div className={styles.quoteInput}><input id="foundation-quote" name="quoteAsset" autoComplete="off" spellCheck={false} placeholder="0x…" value={draft.quoteAsset} aria-invalid={Boolean(errors.quoteAsset) || undefined} aria-describedby={`foundation-quote-help${errors.quoteAsset ? " foundation-quote-error" : ""}`} onChange={event => { quoteGeneration.current += 1; update("quoteAsset", event.target.value); }} /><button type="button" className={styles.secondaryButton} onClick={() => void resolveQuote()} disabled={locked || (quoteLookup?.status === "checking" && quoteLookup.contextKey === contextKey)}>{quoteLookup?.status === "checking" && quoteLookup.contextKey === contextKey ? "Checking…" : "Check"}</button></div>
                 <p id="foundation-quote-help" className={quote?.supported ? styles.saved : styles.help}>{quote?.supported ? <><CheckIcon size={14} aria-hidden="true" />{quote.name} · {quoteSymbol}</> : errors.quoteAsset ? null : quote?.reason ?? "Paste a token contract address on Robinhood Chain."}</p>
                 {quoteLookup?.address === draft.quoteAsset && quoteLookup.contextKey === contextKey && quoteLookup.status === "error" ? <p className={styles.error} role="alert">{quoteLookup.message}</p> : null}
               </Field></div> : errors.quoteAsset ? <p id="foundation-quote-error" className={styles.error}>{errors.quoteAsset}</p> : null}
-              <Field label="First buy" id="foundation-initial-buy" error={errors.initialBuy} hint={customQuote ? "Minimum depends on the token’s trading route." : "Minimum 1 wei. Gas is separate."}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" required value={draft.initialBuy} placeholder="ETH amount" aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={`foundation-initial-buy-help${errors.initialBuy ? " foundation-initial-buy-error" : ""}`} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
+              <div className={styles.twoFields}>
+                <Field label="Creator fees" id="foundation-creator-fee" error={errors.creatorFeeBps}><div className={styles.feeControls}><button type="button" aria-label="Decrease creator fee" disabled={draft.creatorFeeBps === 0} onClick={() => update("creatorFeeBps", draft.creatorFeeBps < 200 ? 0 : draft.creatorFeeBps - 100)}><MinusIcon size={16} aria-hidden="true" /></button><div><input id="foundation-creator-fee" name="creatorFeeBps" type="number" min={0} max={10} step={1} value={draft.creatorFeeBps / 100} aria-invalid={Boolean(errors.creatorFeeBps) || undefined} aria-describedby={errors.creatorFeeBps ? "foundation-creator-fee-error" : undefined} onChange={event => update("creatorFeeBps", Math.round(Number(event.target.value) * 100))} /><span>%</span></div><button type="button" aria-label="Increase creator fee" disabled={draft.creatorFeeBps >= 1000} onClick={() => update("creatorFeeBps", Math.min(1000, Math.max(100, draft.creatorFeeBps + 100)))}><PlusIcon size={16} aria-hidden="true" /></button></div></Field>
+                <Field label="First buy" id="foundation-initial-buy" error={errors.initialBuy}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" required value={initialBuy} placeholder="ETH amount" aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={errors.initialBuy ? "foundation-initial-buy-error" : undefined} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
+              </div>
             </section>
             {catalog.length || draft.modules.length ? <section className={styles.formSection} aria-labelledby="foundation-modules-heading"><div className={styles.sectionHeading}><div className={styles.sectionTitle}><h2 id="foundation-modules-heading">Modules</h2>{draft.modules.length ? <span className={styles.muted}>{draft.modules.length} selected</span> : null}</div></div>
               {catalog.length ? <div className={styles.catalog}>{catalog.map(descriptor => {
@@ -300,7 +305,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
               {errors.modules ? <p className={styles.error} role="alert">{errors.modules}</p> : null}
             </section> : null}
           </fieldset>
-          <div className={styles.formFooter}><div className={styles.launchFee}><span>Platform fee <small>per trade</small></span><strong>0.3%</strong></div><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button><p className={styles.help}>One wallet confirmation.</p></div>
+          <div className={styles.formFooter}><div className={styles.launchFee}><span>Platform fee <small>per trade</small></span><strong>0.3%</strong></div><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button></div>
         </form>}
       </div>
       <aside className={styles.preview} aria-label="Coin preview">
