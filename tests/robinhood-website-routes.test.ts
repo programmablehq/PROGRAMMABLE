@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IndexStore } from "@/lib/server/robinhood-index/store";
+import type { ModuleModeIndexSource } from "@/lib/server/robinhood-index/sync";
 import type { ModuleModeUnavailableSource } from "@/lib/server/robinhood-index/module-source";
 
 const mocks = vi.hoisted(() => ({
@@ -114,7 +115,9 @@ describe("Robinhood website HTTP boundaries", () => {
   });
   it("reports a missing Foundation inventory without suppressing independent Module progress", async () => {
     mocks.source.mockRejectedValue(new Error("Custom unavailable"));
-    const source = { sourceKind: "module-native-v2" };
+    const source: ModuleModeIndexSource = { sourceKind: "module-native-v2", sourceAddress: `0x${"1".repeat(40)}`,
+      releaseDigest: `0x${"2".repeat(64)}`, startBlock: 1n, finalized: { number: "10", hash: `0x${"3".repeat(64)}` },
+      block: async number => ({ number: number.toString(), hash: `0x${"3".repeat(64)}` }), launches: async () => [] };
     mocks.moduleSources.mockResolvedValue({ lanes: [{ releaseDigest: "modules", source: vi.fn(async () => source) }], unavailableSources: [] });
     mocks.foundationSources.mockRejectedValue(new Error("Foundation authority unavailable"));
     mocks.moduleSync.mockResolvedValue({ status: "ready" });
