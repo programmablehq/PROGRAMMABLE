@@ -17,6 +17,8 @@ const metadataData = encodeFunctionData({ abi: uerc20ReadAbi, functionName: "met
 const creatorData = encodeFunctionData({ abi: uerc20ReadAbi, functionName: "creator" });
 const metadataHashData = encodeFunctionData({ abi: foundationTokenAbi, functionName: "metadataHash" });
 const foundation = isRobinhoodFoundationLaunch;
+const nameData = encodeFunctionData({ abi: foundationTokenAbi, functionName: "name" });
+const symbolData = encodeFunctionData({ abi: foundationTokenAbi, functionName: "symbol" });
 
 async function responseJson(response: Response): Promise<unknown> {
   if (!response.ok || response.redirected || !response.body
@@ -47,10 +49,16 @@ export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]
   const batches = Array.from({ length: Math.ceil(native.length / 20) }, (_, index) => native.slice(index * 20, (index + 1) * 20));
   const signal = AbortSignal.timeout(5_000);
   const results = await Promise.allSettled(batches.map(async batch => {
+    const offsets: number[] = [];
+    let nextId = 1;
     const calls = [{ jsonrpc: "2.0", id: 0, method: "eth_chainId", params: [] as unknown[] },
-      ...batch.flatMap((token, index) => [metadataData, foundation(token) ? metadataHashData : creatorData].map((data, field) => ({
-        jsonrpc: "2.0", id: index * 2 + field + 1, method: "eth_call", params: [{ to: token.tokenAddress, data }, "latest"],
-      })))];
+      ...batch.flatMap(token => {
+        offsets.push(nextId);
+        const selectors = [metadataData, foundation(token) ? metadataHashData : creatorData,
+          ...(foundation(token) && (!token.name || !token.symbol) ? [nameData, symbolData] : [])];
+        return selectors.map(data => ({ jsonrpc: "2.0", id: nextId++, method: "eth_call",
+          params: [{ to: token.tokenAddress, data }, "latest"] }));
+      })];
     const raw = await responseJson(await fetch(ROBINHOOD_MAINNET_RPC_URL, {
       method: "POST", redirect: "error", cache: "no-store", signal,
       headers: { accept: "application/json", "content-type": "application/json" }, body: JSON.stringify(calls),
@@ -65,15 +73,25 @@ export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]
     if (replies.get(0)?.result !== "0x1237" || replies.get(0)?.error) throw new Error("Token metadata chain mismatch");
     return batch.flatMap((token, index): [string, Metadata][] => {
       try {
-        const metadata = replies.get(index * 2 + 1);
-        const identity = replies.get(index * 2 + 2);
+        const offset = offsets[index];
+        const metadata = replies.get(offset);
+        const identity = replies.get(offset + 1);
         if (metadata?.error || identity?.error || typeof metadata?.result !== "string" || typeof identity?.result !== "string") return [];
         const [description, website, image, extraData] = decodeFunctionResult({ abi: uerc20ReadAbi, functionName: "metadata", data: metadata.result as Hex });
         if (foundation(token)) {
           const committed = token.metadataHash;
           const current = decodeFunctionResult({ abi: foundationTokenAbi, functionName: "metadataHash", data: identity.result as Hex });
-          if (typeof committed !== "string" || committed.toLowerCase() !== current.toLowerCase() || !token.name || !token.symbol
-            || keccak256(encodeAbiParameters(foundationMetadataParameters, [{ name: token.name, symbol: token.symbol,
+          let name = token.name, symbol = token.symbol;
+          if (!name || !symbol) {
+            const nameReply = replies.get(offset + 2), symbolReply = replies.get(offset + 3);
+            if (nameReply?.error || symbolReply?.error || typeof nameReply?.result !== "string" || typeof symbolReply?.result !== "string") return [];
+            const currentName = decodeFunctionResult({ abi: foundationTokenAbi, functionName: "name", data: nameReply.result as Hex });
+            const currentSymbol = decodeFunctionResult({ abi: foundationTokenAbi, functionName: "symbol", data: symbolReply.result as Hex });
+            if ((name !== null && name !== currentName) || (symbol !== null && symbol !== currentSymbol)) return [];
+            name = currentName; symbol = currentSymbol;
+          }
+          if (typeof committed !== "string" || committed.toLowerCase() !== current.toLowerCase() || !name || !symbol
+            || keccak256(encodeAbiParameters(foundationMetadataParameters, [{ name, symbol,
               description, imageURI: image, website, socialData: extraData }])).toLowerCase() !== committed.toLowerCase()) return [];
         } else {
           const creator = decodeFunctionResult({ abi: uerc20ReadAbi, functionName: "creator", data: identity.result as Hex });

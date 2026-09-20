@@ -103,6 +103,16 @@ describe("Foundation token presentation", () => {
     expect(request[2].params[0].data).toBe(encodeFunctionData({ abi: foundationTokenAbi, functionName: "metadataHash" }));
   });
 
+  it("recovers committed presentation when a launch was indexed during a name/symbol read outage", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json([
+      ...response(),
+      { jsonrpc: "2.0", id: 3, result: encodeFunctionResult({ abi: foundationTokenAbi, functionName: "name", result: metadata.name }) },
+      { jsonrpc: "2.0", id: 4, result: encodeFunctionResult({ abi: foundationTokenAbi, functionName: "symbol", result: metadata.symbol }) },
+    ])));
+    const saved = { ...launch("v3"), name: null, symbol: null };
+    expect((await readModuleTokenMetadata([saved])).get(saved.tokenAddress)?.imageUrl).toBe(MODULE_DEFAULT_TOKEN_IMAGE);
+  });
+
   it("rejects changed metadata or a hash that differs from the saved launch", async () => {
     for (const value of [response(true), response(false, hash("9"))]) {
       vi.stubGlobal("fetch", vi.fn(async () => Response.json(value)));
