@@ -75,23 +75,18 @@ describe("versioned API key bridge", () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    fetchBackend.mockReset();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     authenticate.mockResolvedValue({
       privyUserId: "did:privy:local-fixture", privySessionId: "fixture", wallets: [WALLET],
     });
   });
 
-  it("issues a combined key through the new closed, signed contract", async () => {
-    fetchBackend.mockResolvedValueOnce(json({ ...mutation(AGENT_SCOPES), schemaVersion: AGENT_KEY_SCHEMA }, 201));
+  it("blocks combined key issuance before any backend request", async () => {
     const response = await bridge().createAgent(post({ schemaVersion: AGENT_KEY_SCHEMA, walletAddress: WALLET, label: "My agent" }));
-    expect(response.status).toBe(201);
-    expect((await response.json()).apiKey.scopes).toEqual(AGENT_SCOPES);
-    const [url, init] = fetchBackend.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe("/v1/wallet-admin/agent-keys");
-    expect(JSON.parse(String(init.body))).toEqual({ schemaVersion: AGENT_KEY_SCHEMA, label: "My agent", expiresInDays: 90 });
-    expect(new Headers(init.headers).get("idempotency-key")).toBe(IDEMPOTENCY_OPERATION_ID);
-    expect(new Headers(init.headers).get("x-programmable-bff-assertion-version")).toBe("2");
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe("custom_hook_api_keys_only");
+    expect(fetchBackend).not.toHaveBeenCalled();
   });
 
   it.each([{ scopes: AGENT_SCOPES }, { purpose: "all" }, { schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1 }, { walletAddress: "0x2222222222222222222222222222222222222222" }])("rejects injected agent rights, schema or unlinked wallets: %j", async (extra) => {
@@ -100,21 +95,11 @@ describe("versioned API key bridge", () => {
     expect(fetchBackend).not.toHaveBeenCalled();
   });
 
-  it.each([READ, BOTH, [...AGENT_SCOPES, "admin:write"], [...AGENT_SCOPES, "modules:read"]])("does not reveal a combined secret with mismatched scopes: %j", async (...scopes) => {
-    fetchBackend.mockResolvedValueOnce(json({ ...mutation(scopes), schemaVersion: AGENT_KEY_SCHEMA }, 201));
-    const response = await bridge().createAgent(post({ schemaVersion: AGENT_KEY_SCHEMA, walletAddress: WALLET, label: "My agent" }));
-    expect(response.status).toBe(503);
-    expect(await response.text()).not.toContain(SECRET);
-  });
-
-  it("preserves combined rotation and completed retries without secret recovery", async () => {
-    fetchBackend.mockResolvedValueOnce(json({ schemaVersion: AGENT_KEY_SCHEMA, apiKey: summary(AGENT_SCOPES), secretState: "already-delivered", rotatedCredentialId: SOURCE_ID }));
+  it("blocks combined key rotation without revoking the existing key", async () => {
     const response = await bridge().rotateAgent(post({ schemaVersion: AGENT_KEY_SCHEMA, walletAddress: WALLET, label: "My agent" }), SOURCE_ID);
-    expect(response.status).toBe(200);
-    const result = await response.json();
-    expect(result).not.toHaveProperty("apiKeySecret");
-    expect(result.apiKey.scopes).toEqual(AGENT_SCOPES);
-    expect(String(fetchBackend.mock.calls[0][0])).toContain(`/agent-keys/${SOURCE_ID}/rotate`);
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain(SECRET);
+    expect(fetchBackend).not.toHaveBeenCalled();
   });
 
   const v2List = (extra: Record<string, unknown> = {}) => ({
@@ -165,7 +150,7 @@ describe("versioned API key bridge", () => {
     fetchBackend.mockResolvedValueOnce(json({ ...value, moduleContributions: { apiKeyIssuance: true, submissions: true, secret: "omit" } }));
     const response = await bridge().listV2(listRequest());
     const output = await response.json();
-    expect(output.moduleContributions).toEqual({ apiKeyIssuance: true, submissions: true });
+    expect(output.moduleContributions).toEqual({ apiKeyIssuance: false, submissions: false });
     expect(output.apiKeys[0].scopes).toEqual(["custom-launch:read", "future:read"]);
     expect(JSON.stringify(output)).not.toContain("must-not-cross");
   });
@@ -182,7 +167,7 @@ describe("versioned API key bridge", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({
       schemaVersion: API_KEY_CAPABILITIES_SCHEMA_V2,
-      restrictedIssuance: ready, preservingRotation: ready, preservingModuleRotation: !ready, unifiedKeys: false,
+      restrictedIssuance: ready, preservingRotation: ready, preservingModuleRotation: false, unifiedKeys: false,
     });
     const [url, init] = fetchBackend.mock.calls[0] as [URL, RequestInit];
     expect(url.pathname).toBe("/v2/wallet-admin/api-keys/capabilities");
@@ -307,6 +292,13 @@ describe("versioned API key bridge", () => {
     });
     expect(new Headers(init.headers).get("idempotency-key")).toBe(IDEMPOTENCY_OPERATION_ID);
     expect(fetchBackend).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose non-Custom scopes from a V2 rotation response", async () => {
+    fetchBackend.mockResolvedValueOnce(json(mutation(AGENT_SCOPES, { rotatedCredentialId: SOURCE_ID }), 201));
+    const response = await bridge().rotateV2(post(rotationBody()), SOURCE_ID);
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain(SECRET);
   });
 
   it("rejects browser-selected rotation scopes and a replacement reusing the source ID", async () => {

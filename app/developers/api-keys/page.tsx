@@ -7,9 +7,9 @@ import { V4_API_PROFILE_VERSION } from "@/lib/custom-launch/v4-api-discovery";
 import { readLaunchContractSetupV1 } from "@/lib/server/custom-launch/launch-contract-setup-v1";
 
 export const metadata: Metadata = {
-  title: "API keys · Programmable",
+  title: "Programmable",
   description:
-    "Create and manage API keys for custom hooks and module submissions.",
+    "Create and manage API keys for custom hooks on Robinhood.",
   alternates: {
     canonical: "/developers/api-keys",
   },
@@ -27,7 +27,6 @@ export default async function DeveloperApiKeysPage({
   return (
     <DeveloperApiKeys
       initialSection={developerApiKeysInitialSection(resolvedSearchParams)}
-      moduleBuilder={resolvedSearchParams.purpose === "modules"}
       agentSetupText={buildProgrammableAgentSetupTextV1(V4_API_PROFILE_VERSION)}
       launchContractSetup={launchContractSetup ?? undefined}
     />

@@ -76,6 +76,7 @@ describe("developer API key same-origin bridge", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    fetchBackend.mockReset();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     authenticate.mockResolvedValue({
       privyUserId: "did:privy:test-user",
@@ -233,73 +234,16 @@ describe("developer API key same-origin bridge", () => {
     expect(await response.json()).toEqual({
       schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
       apiKeys: [],
-      moduleContributions: { apiKeyIssuance: true, submissions: false },
+      moduleContributions: { apiKeyIssuance: false, submissions: false },
     });
   });
 
-  it("forwards only the exact module scope pair for authoritative backend admission", async () => {
-    fetchBackend.mockResolvedValueOnce(backendJson({
-      apiKey: summary({ scopes: MODULE_SCOPES }),
-      secretState: "delivered-once",
-      apiKeySecret: API_KEY_SECRET,
-    }, 201));
+  it("blocks module credential issuance without calling the backend", async () => {
     const response = await bridge().create(createRequest({ purpose: "module-contributions" }));
-    expect(response.status).toBe(201);
-    const body = await response.json();
-    expect(body.apiKey.scopes).toEqual(MODULE_SCOPES);
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe("custom_hook_api_keys_only");
     expect(authenticate).toHaveBeenCalledTimes(1);
-    expect(fetchBackend).toHaveBeenCalledTimes(1);
-    const [url, issueInit] = fetchBackend.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe("/v1/wallet-admin/api-keys");
-    expect(issueInit.method).toBe("POST");
-    expect(JSON.parse(String(issueInit.body))).toEqual({
-      schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
-      label: "Contribution agent",
-      expiresInDays: 90,
-      scopes: MODULE_SCOPES,
-    });
-    expect(new Headers(issueInit.headers).get("idempotency-key")).toBe(IDEMPOTENCY_ID);
-    expect(new Headers(issueInit.headers).get("x-programmable-wallet-address")).toBe(WALLET);
-  });
-
-  it("replays a committed Module issue after capabilities disable without a pre-admission read", async () => {
-    let available = true;
-    let committed = false;
-    let originalBody: string | null = null;
-    fetchBackend.mockImplementation(async (_url: URL, init: RequestInit) => {
-      if (init.method === "GET") return backendJson({ apiKeys: [], moduleContributions: { apiKeyIssuance: available, submissions: available } });
-      expect(init.method).toBe("POST");
-      expect(new Headers(init.headers).get("idempotency-key")).toBe(IDEMPOTENCY_ID);
-      const bytes = String(init.body);
-      if (committed) {
-        expect(bytes).toBe(originalBody);
-        return backendJson({ apiKey: summary({ scopes: MODULE_SCOPES }), secretState: "already-delivered" });
-      }
-      expect(available).toBe(true);
-      originalBody = bytes;
-      committed = true;
-      return backendJson({ apiKey: summary({ scopes: MODULE_SCOPES }), secretState: "delivered-once", apiKeySecret: API_KEY_SECRET }, 201);
-    });
-    expect((await bridge().create(createRequest({ purpose: "module-contributions" }))).status).toBe(201);
-    available = false;
-    const replay = await bridge().create(createRequest({ purpose: "module-contributions" }));
-    expect(replay.status).toBe(200);
-    expect(await replay.json()).toEqual({ schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
-      apiKey: summary({ scopes: MODULE_SCOPES }), secretState: "already-delivered" });
-    expect(fetchBackend.mock.calls.map(([, init]) => init.method)).toEqual(["POST", "POST"]);
-  });
-
-  it("preserves authoritative backend rejection of fresh Module issuance while unavailable", async () => {
-    fetchBackend.mockResolvedValueOnce(backendJson({
-      error: { code: "MODULE_SUBMISSIONS_UNAVAILABLE", message: "Module contributions are not available right now.",
-        requestId: CREDENTIAL_ID, internalDetails: "must-not-cross" },
-    }, 503));
-    const response = await bridge().create(createRequest({ purpose: "module-contributions" }));
-    expect(response.status).toBe(503);
-    expect((await response.json()).error).toEqual({ code: "MODULE_SUBMISSIONS_UNAVAILABLE",
-      message: "Module contributions are not available right now.", requestId: CREDENTIAL_ID });
-    expect(fetchBackend).toHaveBeenCalledTimes(1);
-    expect(fetchBackend.mock.calls[0]?.[1].method).toBe("POST");
+    expect(fetchBackend).not.toHaveBeenCalled();
   });
 
   it("keeps an explicit launch purpose on the existing backend request contract", async () => {
@@ -324,7 +268,7 @@ describe("developer API key same-origin bridge", () => {
     expect(response.status).toBe(503);
   });
 
-  it.each(["custom-launches", "module-contributions"])(
+  it.each(["custom-launches"])(
     "does not reveal a key issued for a different purpose than %s",
     async (purpose) => {
       fetchBackend.mockResolvedValueOnce(backendJson({
@@ -367,18 +311,14 @@ describe("developer API key same-origin bridge", () => {
     expect(fetchBackend).not.toHaveBeenCalled();
   });
 
-  it("passes through a module rotation without sending any scope or purpose change", async () => {
-    fetchBackend.mockResolvedValueOnce(backendJson({
-      apiKey: summary({ id: "028f3e2a-7b4c-7d5e-8f90-123456789abc", scopes: MODULE_SCOPES }),
-      secretState: "already-delivered",
-      rotatedCredentialId: CREDENTIAL_ID,
-    }));
+  it("pins legacy rotations to Custom Hook scopes before backend mutation", async () => {
+    fetchBackend.mockImplementation(async (_url: URL, init: RequestInit) => {
+      expect(JSON.parse(String(init.body)).scopes).toEqual(["custom-launch:create", "custom-launch:read"]);
+      return backendJson({ error: { code: "API_KEY_SCOPE_CHANGE_FORBIDDEN", message: "The key's permissions cannot change.", requestId: CREDENTIAL_ID } }, 400);
+    });
     const response = await bridge().rotate(createRequest(), CREDENTIAL_ID);
-    expect(response.status).toBe(200);
-    expect((await response.json()).apiKey.scopes).toEqual(MODULE_SCOPES);
-    const [, init] = fetchBackend.mock.calls[0] as [URL, RequestInit];
-    expect(JSON.parse(String(init.body))).not.toHaveProperty("scopes");
-    expect(JSON.parse(String(init.body))).not.toHaveProperty("purpose");
+    expect(response.status).toBe(400);
+    expect(await response.text()).not.toContain(API_KEY_SECRET);
   });
 
   it.each([
@@ -578,6 +518,7 @@ describe("developer API key same-origin bridge", () => {
       schemaVersion: CUSTOM_LAUNCH_API_SCHEMA_V1,
       label: "Launch agent",
       expiresInDays: 90,
+      scopes: ["custom-launch:create", "custom-launch:read"],
     }));
     expect(new Headers(init.headers).get("idempotency-key")).toBe(
       IDEMPOTENCY_ID,

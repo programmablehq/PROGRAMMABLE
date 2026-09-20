@@ -12,25 +12,20 @@ import {
   ApiKeyAccessChoice,
   apiKeyIssueVersion,
   apiKeyRotationVersion,
-  apiKeyMutationPath,
   parseApiKeyCapabilities,
   parseApiKeyChainRestriction,
   parseApiKeyList,
-  ApiKeyPurposeChoice,
-  PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1,
-  PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT,
   applyApiKeyMutationResult,
   apiKeyPurpose,
   apiKeyPurposeLabel,
   apiKeyLifetimeDays,
   mergeApiKeySummaries,
-  moduleContributionKeysAvailable,
   parseApiKeyMutationResult,
-  parseApiKeyMutationResultForAttempt,
   prepareApiKeyMutationAttempt,
   shouldRetainApiKeyMutationAttempt,
   type ApiKeySummary,
 } from "../components/developer-api-keys";
+import { buildAgentInstructions } from "../lib/agent-connection";
 import { BuilderIdeaPrompt, BuilderSetupSteps } from "../components/module-contribution-entry";
 import {
   launchPollingRetryAfterMs,
@@ -337,7 +332,7 @@ describe("developer API key interface", () => {
   });
 
   it("keeps the first view compact and focused on key management", () => {
-    expect(apiKeysSource).toContain('activeSection === "keys" ? moduleBuilder ? "Build a module" : hookBuilder ? "Build a custom hook" : "API keys"');
+    expect(apiKeysSource).toContain('activeSection === "keys" ? hookBuilder ? "Build a custom hook" : "API keys"');
     expect(apiKeysSource).toContain('aria-label="Developer access view"');
     expect(apiKeysSource).toContain('aria-pressed={activeSection === "keys"}');
     expect(apiKeysSource).toContain('aria-pressed={activeSection === "history"}');
@@ -472,7 +467,7 @@ describe("developer API key interface", () => {
     expect(apiKeyForBuilder([unified], "hook")).toBe(unified);
   });
 
-  it.each(["module", "hook"] as const)("explains the %s builder before asking for a key", (kind) => {
+  it.each(["hook"] as const)("explains the %s builder before asking for a key", (kind) => {
     const getToken = vi.fn(async () => null);
     const walletAction = vi.fn(async (): Promise<`0x${string}`> => {
       throw new Error("Onboarding must not perform wallet actions");
@@ -484,7 +479,6 @@ describe("developer API key interface", () => {
       getAccessToken: getToken,
       getIdentityToken: getToken,
       initialSection: "keys" as const,
-      moduleBuilder: kind === "module",
       hookBuilder: kind === "hook",
       openWallet: vi.fn(),
       sendCustomLaunchWalletAction: walletAction,
@@ -492,8 +486,8 @@ describe("developer API key interface", () => {
       signCustomLaunchFundingAuthorization: walletAction,
     };
     const html = renderToStaticMarkup(createElement(DeveloperApiKeysView, props));
-    expect(html).toContain(kind === "module" ? "Build a module" : "Build a custom hook");
-    expect(html).toContain(kind === "module" ? "an attachment" : "trading rules");
+    expect(html).toContain("Build a custom hook");
+    expect(html).toContain("trading rules");
     expect(html.indexOf("Builder setup")).toBeLessThan(html.indexOf("Connect your wallet"));
     expect(html).toContain("continue with one you already saved");
     expect(html).not.toContain("Developer access view");
@@ -545,7 +539,7 @@ describe("developer API key interface", () => {
       expect(parseApiKeyList({ ...response, apiKeys: [apiKey("invalid", { scopes })] })).toBeNull();
     }
     expect(parseApiKeyList({ ...response, apiKeys: [keys[0], keys[0]] })).toBeNull();
-    expect(apiKeyPurposeLabel(["custom-launch:read"])).toBe("Launches · read only");
+    expect(apiKeyPurposeLabel(["custom-launch:read"])).toBe("Custom hooks · read only");
   });
 
   it("enables restricted issuance only with both capabilities and rotation only with preservation", () => {
@@ -564,99 +558,12 @@ describe("developer API key interface", () => {
     expect(parseApiKeyCapabilities({ schemaVersion: "programmable.api-key-capabilities.v2", restrictedIssuance: "true", preservingRotation: true })).toBeNull();
   });
 
-  it("routes only the exact Module pair through its independent preserving V1 capability", () => {
-    const moduleOnly = { restrictedIssuance: false, preservingRotation: false, preservingModuleRotation: true };
-    const scopes = ["modules:submit", "modules:read"];
-    expect(apiKeyRotationVersion(scopes, moduleOnly)).toBe("v1");
-    expect(apiKeyRotationVersion([...scopes].reverse(), moduleOnly)).toBe("v1");
-    expect(apiKeyRotationVersion(["custom-launch:read"], moduleOnly)).toBeNull();
-    for (const unsupported of [["modules:read"], ["modules:submit", "modules:submit"], [...scopes, "modules:approve"]]) {
-      expect(apiKeyRotationVersion(unsupported, moduleOnly)).toBeNull();
+  it("never rotates module or combined keys even if an older backend advertises them", () => {
+    const capabilities = { restrictedIssuance: true, preservingRotation: true, preservingModuleRotation: true, unifiedKeys: true };
+    for (const scopes of [["modules:submit", "modules:read"], ["custom-launch:create", "custom-launch:read", "modules:submit", "modules:read"]]) {
+      expect(apiKeyRotationVersion(scopes, capabilities)).toBeNull();
     }
-    const oldFlags = { schemaVersion: "programmable.api-key-capabilities.v2", restrictedIssuance: true, preservingRotation: true };
-    const old = parseApiKeyCapabilities(oldFlags);
-    expect(old?.preservingModuleRotation).toBe(false);
-    expect(apiKeyRotationVersion(scopes, old)).toBeNull();
-    expect(apiKeyRotationVersion(["custom-launch:read"], old)).toBe("v2");
-    for (const preservingModuleRotation of [null, "true", 1, {}, []]) {
-      expect(parseApiKeyCapabilities({ ...oldFlags, preservingModuleRotation })).toBeNull();
-    }
-    const attempt = { version: apiKeyRotationVersion(scopes, moduleOnly)!, kind: "rotate" as const, credentialId: "module-source" };
-    expect(apiKeyMutationPath(attempt)).toBe("/api/developer/api-keys/module-source/rotate");
-    const replacement = { schemaVersion: "programmable.custom-launch-api.v1", apiKey: apiKey("replacement", { scopes }),
-      secretState: "already-delivered", rotatedCredentialId: "module-source" };
-    expect(parseApiKeyMutationResult(replacement, 200, "module-source", undefined, { version: attempt.version, scopes })).not.toBeNull();
-    expect(parseApiKeyMutationResult({ ...replacement, apiKey: apiKey("replacement") }, 200, "module-source", undefined,
-      { version: attempt.version, scopes })).toBeNull();
-  });
-
-  it("binds retry version, exact body and selected scopes and validates V2 response rights", () => {
-    const input = { kind: "issue" as const, credentialId: null, version: "v2" as const,
-      body: JSON.stringify({ scopes: ["custom-launch:read"] }), expectedScopes: ["custom-launch:read"] };
-    const attempt = prepareApiKeyMutationAttempt(null, input, () => "fixture-exact-read-only-operation");
-    expect(prepareApiKeyMutationAttempt(attempt, input, () => "not-used")).toBe(attempt);
-    expect(apiKeyMutationPath(attempt)).toBe("/api/developer/api-keys/v2");
-    for (const changed of [{ ...input, version: "v1" as const }, { ...input, body: JSON.stringify({ scopes: ["custom-launch:create", "custom-launch:read"] }) }]) {
-      expect(() => prepareApiKeyMutationAttempt(attempt, changed, () => "new-operation")).toThrow();
-    }
-    const expected = { version: "v2" as const, scopes: ["custom-launch:read"] };
-    const value = { schemaVersion: "programmable.custom-launch-api.v2", apiKey: apiKey("reader", { scopes: expected.scopes }), secretState: "already-delivered" };
-    expect(parseApiKeyMutationResult(value, 200, undefined, undefined, expected)).not.toBeNull();
-    expect(parseApiKeyMutationResult({ ...value, apiKey: apiKey("reader") }, 200, undefined, undefined, expected)).toBeNull();
-    expect(parseApiKeyMutationResult({ ...value, schemaVersion: "programmable.custom-launch-api.v1" }, 200, undefined, undefined, expected)).toBeNull();
-  });
-
-  it.each([
-    { version: "v1" as const, originalScopes: ["modules:submit", "modules:read"], currentScopes: ["custom-launch:create", "custom-launch:read"] },
-    { version: "v2" as const, originalScopes: ["custom-launch:read"], currentScopes: ["custom-launch:create", "custom-launch:read"] },
-  ])("keeps the original $version rotation response expectation after a lost response and changed-source refresh", ({ version, originalScopes, currentScopes }) => {
-    const mutableScopes = [...originalScopes];
-    const source = apiKey("rotation-source", { scopes: mutableScopes });
-    const input = { kind: "rotate" as const, credentialId: source.id, version,
-      body: JSON.stringify({ schemaVersion: `programmable.custom-launch-api.${version}`, label: source.label,
-        expiresInDays: 90, walletAddress: "0x1111111111111111111111111111111111111111" }),
-      expectedScopes: source.scopes };
-    const attempt = prepareApiKeyMutationAttempt(null, input, () => "original-rotation-operation");
-    expect(Object.isFrozen(attempt.expectedScopes)).toBe(true);
-    expect(attempt.expectedScopes).not.toBe(mutableScopes);
-    mutableScopes.splice(0, mutableScopes.length, ...currentScopes);
-    expect(attempt.expectedScopes).toEqual(originalScopes);
-    expect(shouldRetainApiKeyMutationAttempt(503, null)).toBe(true);
-
-    const refreshed = parseApiKeyList({ schemaVersion: "programmable.custom-launch-api.v1",
-      apiKeys: [apiKey(source.id, { scopes: currentScopes })] })!;
-    const refreshedSource = mergeApiKeySummaries([source], refreshed)[0];
-    const retry = prepareApiKeyMutationAttempt(attempt, { ...input, expectedScopes: refreshedSource.scopes }, () => "must-not-be-used");
-    expect(retry).toBe(attempt);
-    expect(apiKeyMutationPath(retry)).toBe(`/api/developer/api-keys${version === "v2" ? "/v2" : ""}/${source.id}/rotate`);
-    expect(retry.body).toBe(input.body);
-    expect(retry.idempotencyKey).toBe("original-rotation-operation");
-
-    const replay = { schemaVersion: `programmable.custom-launch-api.${version}`, secretState: "already-delivered",
-      apiKey: apiKey("replacement", { scopes: originalScopes }), rotatedCredentialId: source.id };
-    expect(parseApiKeyMutationResultForAttempt(replay, 200, retry)).toMatchObject({
-      apiKey: { scopes: originalScopes }, secretState: "already-delivered", rotatedCredentialId: source.id,
-    });
-    const changedReply = { ...replay, apiKey: apiKey("replacement", { scopes: currentScopes }) };
-    expect(parseApiKeyMutationResultForAttempt(changedReply, 200, retry)).toBeNull();
-    for (const changed of [{ ...input, credentialId: "different-source" },
-      { ...input, body: input.body.replace("0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222") }]) {
-      expect(() => prepareApiKeyMutationAttempt(attempt, changed, () => "must-not-be-used")).toThrow();
-    }
-
-    const fresh = prepareApiKeyMutationAttempt(null, { ...input, expectedScopes: refreshedSource.scopes }, () => "new-rotation-operation");
-    expect(fresh.expectedScopes).toEqual(currentScopes);
-    expect(parseApiKeyMutationResultForAttempt(replay, 200, fresh)).toBeNull();
-    expect(parseApiKeyMutationResultForAttempt(changedReply, 200, fresh)).not.toBeNull();
-  });
-
-  it("retains module availability in V2 and gives read-only agents read instructions", () => {
-    expect(moduleContributionKeysAvailable({ schemaVersion: "programmable.custom-launch-api.v2", moduleContributions: { apiKeyIssuance: true, submissions: true } })).toBe(true);
-    expect(PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT).toContain("only to read launch history and status");
-    expect(PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT).toContain("cannot prepare or submit launches");
-    expect(PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT).toContain("$PROGRAMMABLE_API_KEY");
-    expect(PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT).not.toContain("status --watch");
-    expect(PROGRAMMABLE_READ_ONLY_AGENT_SETUP_TEXT).not.toContain("pm_live_");
+    expect(apiKeyRotationVersion(["custom-launch:read"], capabilities)).toBe("v2");
   });
 
   it("renders accessible access options and truthful saved/legacy/missing chain restrictions", () => {
@@ -720,58 +627,17 @@ describe("developer API key interface", () => {
     expect(parseApiKeyMutationResult(rotated, 200, "old", "custom-launches")).toBeNull();
   });
 
-  it("requires explicit issuance and submission availability without guessing from existing keys", () => {
-    const base = { schemaVersion: "programmable.custom-launch-api.v1", apiKeys: [] };
-    expect(moduleContributionKeysAvailable({
-      ...base, moduleContributions: { apiKeyIssuance: true, submissions: true },
-    })).toBe(true);
-    for (const moduleContributions of [
-      undefined, null, {},
-      { apiKeyIssuance: false, submissions: true },
-      { apiKeyIssuance: true, submissions: false },
-      { apiKeyIssuance: "true", submissions: true },
-    ]) {
-      expect(moduleContributionKeysAvailable({ ...base, moduleContributions })).toBe(false);
-    }
-    expect(moduleContributionKeysAvailable({
-      ...base, apiKeys: [apiKey("module", { scopes: ["modules:submit", "modules:read"] })],
-    })).toBe(false);
-    expect(moduleContributionKeysAvailable({
-      moduleContributions: { apiKeyIssuance: true, submissions: true },
-    })).toBe(false);
-  });
-
-  it("renders a native purpose choice with the module option pending until available", () => {
-    const onChange = vi.fn();
-    const pending = renderToStaticMarkup(createElement(ApiKeyPurposeChoice, {
-      value: "custom-launches", onChange, moduleContributionsAvailable: false,
-      checking: false, disabled: false,
-    }));
-    expect(pending).toContain("<span>Access</span>");
-    expect(pending).toMatch(/<option[^>]*value="custom-launches"[^>]*selected=""/u);
-    expect(pending).toMatch(/<option[^>]*value="module-contributions"[^>]*disabled=""/u);
-    expect(pending).toContain("Modules · unavailable");
-    const available = renderToStaticMarkup(createElement(ApiKeyPurposeChoice, {
-      value: "module-contributions", onChange, moduleContributionsAvailable: true, unifiedAvailable: true,
-      checking: false, disabled: false,
-    }));
-    expect(available).not.toContain('disabled=""');
-    expect(available).toMatch(/<option[^>]*value="module-contributions"[^>]*selected=""/u);
-    expect(available).toContain("Launches + modules");
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("gives module agents the authenticated prerequisites and direct source workflow without secrets", () => {
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("PROGRAMMABLE_API_KEY");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("PROGRAMMABLE_MODULES_API_KEY is a compatible alias");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("GET /v1/modules/context");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("identity.defaultRewardWallet");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("call submit-module");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("no fixed idea categories");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).toContain("Wallet signing remains a separate action");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).not.toContain("Obtain the reward wallet from the user");
-    expect(PROGRAMMABLE_MODULE_AGENT_SETUP_TEXT_V1).not.toMatch(/pm_live_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{43}/u);
-    expect(apiKeysSource).toContain('setPurpose(apiKeyPurpose(parsed.apiKey.scopes) ?? "custom-launches")');
+  it("offers only Custom Hook access and copies Robinhood setup without module submission steps", () => {
+    expect(apiKeysSource).not.toContain("ApiKeyPurposeChoice");
+    expect(apiKeysSource).not.toContain('href="/developers/modules"');
+    expect(apiKeysSource).not.toContain('setPurpose(');
+    const instructions = buildAgentInstructions({ scopes: ["custom-launch:create", "custom-launch:read"] });
+    expect(instructions).toContain("Robinhood Chain (4663)");
+    expect(instructions).toContain("PROGRAMMABLE_API_KEY");
+    expect(instructions).toContain("Wallet signing remains a separate action");
+    expect(instructions).not.toContain("submit-module");
+    expect(instructions).not.toContain("/v1/modules/");
+    expect(instructions).not.toContain("Ethereum");
   });
 
   it("preserves wallet authority and one-time secret handling", () => {
@@ -1836,7 +1702,7 @@ describe("developer launch history interface", () => {
     expect(apiKeysSource).toContain('searchParams.get("launchId")');
     expect(apiKeysSource).toContain('searchParams.get("chainId")');
     expect(apiKeysSource).toContain(
-      'setInitialLaunchChainId(chainId === "4663" ? "4663" : null)',
+      'setInitialLaunchChainId(chainId === "1" ? null : "4663")',
     );
     expect(apiKeysSource).toContain(
       "initialLaunchChainId={initialLaunchChainId}",

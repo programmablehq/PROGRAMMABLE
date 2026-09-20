@@ -36,7 +36,6 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
     customLaunch: {
       scopes: ["custom-launch:create", "custom-launch:read"],
       guide: "https://programmable.market/developer-reference/custom-launch",
-      ethereum: { chainId: 1, capabilities: "https://api.programmable.market/v3/capabilities", openApi: "https://programmable.market/openapi/custom-launch-v3.json" },
       robinhood: { chainId: 4663, capabilities: "https://api.programmable.market/v4/chains/4663/capabilities", readiness: "https://api.programmable.market/v4/chains/4663/readiness", openApi: "https://programmable.market/openapi/custom-launch-v4.json" },
     },
     multiRoleProject: {
@@ -50,6 +49,7 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
       economicAdmission: "Read this historical version's current capabilities and exact source claims. New open plans use the separate Custom Launch Plan contract; optional claim adapters never define that plan's launch eligibility.",
     },
     moduleContribution: {
+      available: false,
       scopes: ["modules:submit", "modules:read"],
       guide: "https://programmable.market/developers/module-mode-api-v1.md",
       developerGuide: "https://programmable.market/developer-reference/module-mode",
@@ -98,18 +98,14 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
 
 export function buildAgentInstructions(input?: { scopes?: readonly string[]; wallet?: string; intent?: string }) {
   return [
-    "Use Programmable to build and launch coins, contribute reusable modules, and read launch or review status.",
-    `Start by reading ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}. They cover the product, API workflows, current capability endpoints, website actions, contribution requirements and error recovery. Follow their links for the selected task.`,
-    "Read the API key from PROGRAMMABLE_API_KEY in the environment or your secret store. Send it only in the Authorization header to https://api.programmable.market. Documentation and capability reads are public. Never print the key or put it in a URL, logs or committed files.",
-    input?.scopes ? `This connection was issued with: ${input.scopes.join(", ")}. Check current API authorization on each operation; a guide does not add permissions to a key.` : "Use the key's actual permissions. Older launch-only and module-only keys retain their original access.",
+    "Use this Programmable API key to build custom hooks and read launch status on Robinhood Chain (4663).",
+    `Read ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}, then use the current Robinhood Custom Launch Plan contract and capabilities.`,
+    "Read the API key from PROGRAMMABLE_API_KEY in the environment or your secret store. Send it only in the Authorization header to https://api.programmable.market. Never print the key or put it in a URL, logs or committed files.",
+    input?.scopes ? `This connection was issued with: ${input.scopes.join(", ")}. Check current API authorization on each operation; documentation does not add permissions to a key.` : "Use the key's actual permissions. Read-only keys cannot create launch requests.",
     "Launch history can include requests from other keys and linked wallets in the same account. The key is not isolated to one project; its saved chain restrictions still apply.",
-    input?.wallet ? `The wallet recorded when this connection was created is ${input.wallet}. For module submissions, read the key's current authenticated context before building; do not infer authorization from this copied address.` : "For module submissions, read the key's authenticated context before building to obtain its author wallet.",
-    input?.intent ? `Requested workflow: ${input.intent.trim()}${/[.!?]$/.test(input.intent.trim()) ? "" : "."}` : "Choose the workflow from the user's request: a configurable coin, a complete custom project, a reusable module, or an existing coin's controls.",
-    "For a module, read public GET /v1/modules/capabilities and run the verified current CLI's module-context command against https://api.programmable.market. It reads GET /v1/modules/context with this key. Before uploading, require moduleContributions.submissions from public capabilities and authorization.canSubmit from keyed context. Context intake.available reports the same intake readiness; refresh discovery if those intake readings disagree. Use identity.author as author and identity.defaultRewardWallet as rewardWallet unless the user already specified another payout wallet. Do not ask again for values supplied by the context. Generate a familySalt once and keep it for revisions; choose routine package metadata yourself.",
-    "The root reviewAvailable, approved and available flags in /v1/modules/capabilities remain false for compatibility. They do not block source intake or mean this account needs approval. Read actual review readiness from /v1/modules/review-capabilities or context.review; it is separate from upload eligibility.",
-    "Read all module prerequisites and current review coverage before coding. Source intake has no fixed idea categories. Declare the actual runtime, host requirements and external dependencies for unfamiliar architectures; do not change the idea merely to fit a starter. Resolve missing product decisions such as the actual asset, chain, funding, settlement or exit behavior together at the start, only when they cannot be derived from the request. An unavailable review adapter does not by itself prevent source submission.",
-    "When asked to build and submit a module, complete the source package, run the checks needed for its behavior, prepare the exact request, and call submit-module. Save the request bytes, idempotency key and returned submissionId. The receipt remains draft_received and unreviewed after later review work. Read review-status-module for current review.state and review.nextAction, then report the result and any pending platform action. The CLI accepts PROGRAMMABLE_API_KEY; PROGRAMMABLE_MODULES_API_KEY is a compatible alias, and two different values are an error.",
-    "Use live capabilities before a write, preserve exact request bytes and idempotency keys on retries, and distinguish submission, review, deployment and public availability. Wallet signing remains a separate action.",
+    input?.wallet ? `The controller wallet selected for this connection is ${input.wallet}. Verify it against the launch request before preparing wallet actions.` : "Use the controller wallet selected by the user for the launch request.",
+    input?.intent ? `Requested workflow: ${input.intent.trim()}${/[.!?]$/.test(input.intent.trim()) ? "" : "."}` : "Build the custom hook for the user's idea and prepare its launch on Robinhood.",
+    "Read live capabilities before a write, preserve exact request bytes and idempotency keys on retries, and distinguish submission, review, deployment and public availability. Wallet signing remains a separate action.",
   ].join("\n\n");
 }
 

@@ -3,7 +3,6 @@ export function developerApiKeysInitialSection(
 ) {
   if (searchParams.view === "history") return "history" as const;
   return searchParams.start === "custom"
-    && searchParams.chainId === "4663"
     ? "launch" as const
     : "keys" as const;
 }
