@@ -5,7 +5,7 @@ import { parseEthereumExploreQuery } from "@/lib/ethereum-explore";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/market-data/envio-classic-v3-catalog.server", () => ({ readEnvioClassicV3CatalogV1: vi.fn() }));
 vi.mock("@/lib/alchemy/router-custom-public.server", () => ({ readWebsiteRouterCustomIdentitySnapshotV1: vi.fn() }));
-import { readEthereumLaunches } from "@/lib/server/ethereum-explore";
+import { readEthereumLaunches, readEthereumToken } from "@/lib/server/ethereum-explore";
 const hex = (n: number, size: number) => `0x${n.toString(16).padStart(size, "0")}` as `0x${string}`;
 function entry(n: number): CanonicalTokenExploreEntry {
   return canonicalTokenExploreEntryV1({ id: `1:${hex(n,40)}`, name: `Coin ${n}`, symbol: `C${n}`, tokenAddress: hex(n,40),
@@ -42,6 +42,38 @@ describe("Ethereum verified Explore adapter", () => {
   });
   it("rejects cross-source duplicate identities instead of silently selecting a record", async () => {
     await expect(readEthereumLaunches(1,"",{sort:"newest"},10,{classic:source([entry(1)]),custom:source([entry(1)])})).rejects.toThrow("Conflicting Ethereum launch identities");
+  });
+  it("recovers a verified token after a cold source read fails", async () => {
+    const classic = vi.fn().mockRejectedValueOnce(new Error("temporary source timeout"))
+      .mockImplementation(source([entry(1)]));
+    const result = await readEthereumToken(entry(1).tokenAddress, { classic, custom: source([]) });
+    expect(result.status).toBe("ready");
+    expect(result.token?.tokenAddress).toBe(entry(1).tokenAddress);
+    expect(classic).toHaveBeenCalledTimes(2);
+  });
+  it("bounds recovery and keeps a persistently missing source unavailable", async () => {
+    const classic = vi.fn(unavailable);
+    const result = await readEthereumToken(entry(1).tokenAddress, { classic, custom: source([]) });
+    expect(result.status).toBe("partial");
+    expect(result.token).toBeNull();
+    expect(classic).toHaveBeenCalledTimes(2);
+  });
+  it("does not delay an existing identity or retry a complete missing-token result", async () => {
+    const classic = vi.fn(source([entry(1)]));
+    expect((await readEthereumToken(entry(1).tokenAddress, { classic, custom: unavailable })).token?.tokenAddress).toBe(entry(1).tokenAddress);
+    expect(classic).toHaveBeenCalledTimes(1);
+    classic.mockClear();
+    const missing = await readEthereumToken(entry(2).tokenAddress, { classic, custom: source([]) });
+    expect(missing.status).toBe("ready");
+    expect(missing.token).toBeNull();
+    expect(classic).toHaveBeenCalledTimes(1);
+  });
+  it("does not recover by selecting between conflicting token identities", async () => {
+    const classic = vi.fn(source([entry(1)]));
+    const result = await readEthereumToken(entry(1).tokenAddress, { classic, custom: source([entry(1)]) });
+    expect(result.status).toBe("unavailable");
+    expect(result.token).toBeNull();
+    expect(classic).toHaveBeenCalledTimes(1);
   });
   it("restricts Ethereum filters to supported data and rejects ambiguous parameters", () => {
     expect(parseEthereumExploreQuery(new URLSearchParams("mode=classic&sort=oldest&pageSize=10"))?.filters).toEqual({mode:"classic",sort:"oldest"});
