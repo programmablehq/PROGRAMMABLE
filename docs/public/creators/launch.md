@@ -1,5 +1,5 @@
 ---
-description: Configure a Module Mode coin or launch a project through the Custom Launch API
+description: Launch a Module Mode coin or a project through the Custom Launch API
 ---
 
 # Launch a project
@@ -8,7 +8,7 @@ Choose Module Mode for a coin with optional modules, or Custom Launch for your o
 
 ## Module Mode
 
-Open the [Foundation builder](https://programmable.market/launch/modules/foundation). Configure the coin, quote token, creator fee, optional initial buy and any available modules. The standard launch supplies token liquidity automatically, with no separate quote deposit required. The ETH-funded flow creates the coin and completes any supported initial buy in one transaction. The [Module Mode guide](../models/module-mode.md) explains the wallet confirmation, costs and controls.
+Open the [coin builder](https://programmable.market/launch/modules/foundation). Enter the coin details, choose a pairing and creator fees, and set the first buy. Add compatible modules if you need them. The standard launch supplies token liquidity automatically, with no separate quote deposit required. The ETH-funded flow creates the coin and completes the first buy in one transaction. After confirmation, the website opens the coin page. The [Module Mode guide](../models/module-mode.md) explains the costs and controls.
 
 ## Custom Launch
 
