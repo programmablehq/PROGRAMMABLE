@@ -3,7 +3,10 @@
   "private": true,
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test logic.test.mjs",
+    "dev": "npm run build && node serve.mjs",
+    "test": "node --test logic.test.mjs module-mode.test.mjs",
     "check": "npm test && npm run build"
-  }
+  },
+  "dependencies": { "viem": "2.55.5" },
+  "devDependencies": { "esbuild": "0.28.1" }
 }
