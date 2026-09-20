@@ -279,7 +279,7 @@ const cachedMetadata = unstable_cache(async (tokens: readonly RobinhoodLaunch[])
   Array.from(await readMetadata(tokens)), ["robinhood-coin-metadata-v2"], { revalidate: 60 });
 
 const cachedModuleMetadata = unstable_cache(async (tokens: readonly RobinhoodLaunch[]) =>
-  Array.from(await readModuleTokenMetadata(tokens)), ["robinhood-module-metadata-v1"], { revalidate: 60 });
+  Array.from(await readModuleTokenMetadata(tokens)), ["robinhood-module-metadata-v2"], { revalidate: 60 });
 
 // A shared full-catalog observation makes sorting independent of the current page.
 const cachedMarkets = unstable_cache(async (tokens: readonly VerifiedMarketToken[]) =>

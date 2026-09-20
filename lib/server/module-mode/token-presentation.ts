@@ -1,11 +1,12 @@
 import "server-only";
 
-import { decodeFunctionResult, encodeFunctionData, type Hex } from "viem";
+import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, keccak256, type Hex } from "viem";
 import { ROBINHOOD_MAINNET_RPC_URL } from "@/lib/chains";
+import { foundationMetadataParameters, foundationTokenAbi } from "@/lib/module-foundation/abi";
 import { uerc20ReadAbi } from "@/lib/onchain/abis";
 import { buildTokenLinks } from "@/lib/onchain/metadata";
 import { hasUnsafeDisplayCharacters, MAX_TOKEN_DESCRIPTION_BYTES, utf8ByteLength } from "@/lib/metadata-policy";
-import { isRobinhoodModuleLaunch, type RobinhoodLaunch } from "@/lib/robinhood-launches";
+import { isRobinhoodFoundationLaunch, isRobinhoodModuleLaunch, type RobinhoodLaunch } from "@/lib/robinhood-launches";
 import type { RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import { safePublicImageUrl } from "@/lib/safe-public-image-url";
 
@@ -14,6 +15,8 @@ const MAX_RESPONSE_BYTES = 1_000_000;
 const labels = { website: "Website", x: "X", telegram: "Telegram", discord: "Discord", github: "GitHub", gitbook: "GitBook" };
 const metadataData = encodeFunctionData({ abi: uerc20ReadAbi, functionName: "metadata" });
 const creatorData = encodeFunctionData({ abi: uerc20ReadAbi, functionName: "creator" });
+const metadataHashData = encodeFunctionData({ abi: foundationTokenAbi, functionName: "metadataHash" });
+const foundation = isRobinhoodFoundationLaunch;
 
 async function responseJson(response: Response): Promise<unknown> {
   if (!response.ok || response.redirected || !response.body
@@ -45,7 +48,7 @@ export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]
   const signal = AbortSignal.timeout(5_000);
   const results = await Promise.allSettled(batches.map(async batch => {
     const calls = [{ jsonrpc: "2.0", id: 0, method: "eth_chainId", params: [] as unknown[] },
-      ...batch.flatMap((token, index) => [metadataData, creatorData].map((data, field) => ({
+      ...batch.flatMap((token, index) => [metadataData, foundation(token) ? metadataHashData : creatorData].map((data, field) => ({
         jsonrpc: "2.0", id: index * 2 + field + 1, method: "eth_call", params: [{ to: token.tokenAddress, data }, "latest"],
       })))];
     const raw = await responseJson(await fetch(ROBINHOOD_MAINNET_RPC_URL, {
@@ -65,13 +68,21 @@ export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]
         const metadata = replies.get(index * 2 + 1);
         const identity = replies.get(index * 2 + 2);
         if (metadata?.error || identity?.error || typeof metadata?.result !== "string" || typeof identity?.result !== "string") return [];
-        const creator = decodeFunctionResult({ abi: uerc20ReadAbi, functionName: "creator", data: identity.result as Hex });
-        if (creator.toLowerCase() !== token.sourceAddress.toLowerCase()) return [];
         const [description, website, image, extraData] = decodeFunctionResult({ abi: uerc20ReadAbi, functionName: "metadata", data: metadata.result as Hex });
+        if (foundation(token)) {
+          const committed = token.metadataHash;
+          const current = decodeFunctionResult({ abi: foundationTokenAbi, functionName: "metadataHash", data: identity.result as Hex });
+          if (typeof committed !== "string" || committed.toLowerCase() !== current.toLowerCase() || !token.name || !token.symbol
+            || keccak256(encodeAbiParameters(foundationMetadataParameters, [{ name: token.name, symbol: token.symbol,
+              description, imageURI: image, website, socialData: extraData }])).toLowerCase() !== committed.toLowerCase()) return [];
+        } else {
+          const creator = decodeFunctionResult({ abi: uerc20ReadAbi, functionName: "creator", data: identity.result as Hex });
+          if (creator.toLowerCase() !== token.sourceAddress.toLowerCase()) return [];
+        }
         return [[token.tokenAddress.toLowerCase(), {
           imageUrl: safePublicImageUrl(image) ?? null,
           description: description && utf8ByteLength(description) <= MAX_TOKEN_DESCRIPTION_BYTES && !hasUnsafeDisplayCharacters(description) ? description : null,
-          links: buildTokenLinks(website, extraData).map(link => ({ label: labels[link.kind], url: link.url })),
+          links: buildTokenLinks(website, extraData).map(link => ({ label: foundation(token) && link.kind === "gitbook" ? "Docs" : labels[link.kind], url: link.url })),
         }]];
       } catch { return []; }
     });

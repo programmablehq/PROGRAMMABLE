@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { encodeFunctionResult, stringToHex } from "viem";
+import { encodeAbiParameters, encodeFunctionData, encodeFunctionResult, keccak256, stringToHex } from "viem";
+import { foundationMetadataParameters, foundationTokenAbi } from "@/lib/module-foundation/abi";
+import { MODULE_DEFAULT_TOKEN_IMAGE } from "@/lib/module-mode/token-metadata";
 import { uerc20ReadAbi } from "@/lib/onchain/abis";
 import type { RobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 
@@ -62,5 +64,49 @@ describe("Native module token presentation", () => {
     fetcher.mockClear();
     expect((await readModuleTokenMetadata([{ ...token, sourceKind: undefined }])).size).toBe(0);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("Foundation token presentation", () => {
+  const metadata = { name: "Coin", symbol: "COIN", description: "A coin description", imageURI: MODULE_DEFAULT_TOKEN_IMAGE,
+    website: "https://programmable.market/", socialData: stringToHex(JSON.stringify({ v: 1, x: "https://x.com/programmable", gitbook: "https://docs.programmable.market/" })) };
+  const metadataHash = keccak256(encodeAbiParameters(foundationMetadataParameters, [metadata]));
+  function launch(factoryVersion: "v1" | "v2" | "v3") {
+    return { sourceKind: "module-foundation-v1", sourceAddress: token.sourceAddress, sourceReleaseDigest: token.sourceReleaseDigest,
+      factoryVersion, launchId: token.poolId, tokenAddress: token.tokenAddress, creator: token.creator, hookAddress: token.hookAddress,
+      poolManager: token.poolManager, poolId: token.poolId, quoteAsset: address("9"), feeLedgerAddress: address("8"),
+      metadataHash, compositionHash: hash("4"), routerAddress: null, stampHash: null, transactionHash: token.transactionHash,
+      blockNumber: token.blockNumber, blockHash: token.blockHash, logIndex: token.logIndex, launchedAt: token.launchedAt,
+      name: metadata.name, symbol: metadata.symbol, decimals: 18 } as unknown as RobinhoodModuleLaunch;
+  }
+  function response(changed = false, currentHash = metadataHash) {
+    return [
+      { jsonrpc: "2.0", id: 0, result: "0x1237" },
+      { jsonrpc: "2.0", id: 1, result: encodeFunctionResult({ abi: foundationTokenAbi, functionName: "metadata", result: [
+        metadata.description, metadata.website, changed ? "https://example.com/changed.png" : metadata.imageURI, metadata.socialData,
+      ] }) },
+      { jsonrpc: "2.0", id: 2, result: encodeFunctionResult({ abi: foundationTokenAbi, functionName: "metadataHash", result: currentHash }) },
+    ];
+  }
+
+  it.each(["v1", "v2", "v3"] as const)("shows the committed default artwork, website, X and Docs for %s", async version => {
+    const fetcher = vi.fn(async () => Response.json(response()));
+    vi.stubGlobal("fetch", fetcher);
+    const saved = launch(version);
+    expect((await readModuleTokenMetadata([saved])).get(saved.tokenAddress)).toEqual({
+      imageUrl: MODULE_DEFAULT_TOKEN_IMAGE, description: metadata.description,
+      links: [{ label: "Website", url: metadata.website }, { label: "X", url: "https://x.com/programmable" },
+        { label: "Docs", url: "https://docs.programmable.market/" }],
+    });
+    const request = JSON.parse((fetcher.mock.calls[0] as unknown as [unknown, RequestInit])[1].body as string);
+    expect(request[2].params[0].data).toBe(encodeFunctionData({ abi: foundationTokenAbi, functionName: "metadataHash" }));
+  });
+
+  it("rejects changed metadata or a hash that differs from the saved launch", async () => {
+    for (const value of [response(true), response(false, hash("9"))]) {
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json(value)));
+      expect((await readModuleTokenMetadata([launch("v3")])).size).toBe(0);
+    }
   });
 });
