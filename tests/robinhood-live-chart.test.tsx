@@ -19,7 +19,8 @@ describe("Robinhood first party live chart", () => {
     expect(html).toContain("Live price");
     expect(html).toContain("$0.00042");
     expect(html).toContain("1 price observation collected during this visit");
-    expect(html).toContain("Prices observed during this visit");
+    expect(html).not.toContain("Prices observed during this visit");
+    expect(html).not.toContain("<figcaption");
     expect(html).toContain("<circle");
     expect(html).not.toContain("<path");
     expect(html).not.toContain("<iframe");

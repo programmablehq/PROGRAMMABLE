@@ -10,7 +10,7 @@ const feed = parseAbi(["function latestRoundData() view returns (uint80,int256,u
 function provider(quote: Address, answer = 2500n * 10n ** 8n, updatedAt = now - 100n, stamp = now) {
   return vi.fn<TradeRpcV1>(async (method, params) => {
     if (method === "eth_chainId") return "0x1237";
-    if (method === "eth_getBlockByNumber") return { number: "0x7b", hash, timestamp: toHex(stamp) };
+    if (method === "eth_getBlockByNumber") return { number: params[0] === "latest" ? "0x8b" : "0x7b", hash, timestamp: toHex(stamp) };
     expect(params.at(-1)).toEqual({ blockHash: hash, requireCanonical: true });
     if (method === "eth_getCode") { expect(params[0]).toBe(quote); return "0x6001"; }
     if (method !== "eth_call") throw new Error(`Unexpected ${method}`);

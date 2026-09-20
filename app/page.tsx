@@ -8,7 +8,7 @@ const pageSocialImage =
   "https://programmable.market/og/programmable-landing-preview-v2-1200x630.jpg";
 
 export const metadata: Metadata = {
-  title: "Programmable · Custom Uniswap v4 hooks",
+  title: "Programmable",
   description: pageDescription,
   openGraph: {
     type: "website",

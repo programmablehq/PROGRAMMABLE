@@ -41,7 +41,7 @@ function request(): LaunchPlanTradeRequestV1 {
 function fixtureRpc(options: { revert?: boolean; missingFee?: boolean; underpaid?: boolean; overspent?: boolean; contractWallet?: boolean } = {}): TradeRpcV1 {
   return vi.fn(async (method, params) => {
     if (method === "eth_chainId") return "0x1237";
-    if (method === "eth_getBlockByNumber") return { number: "0x2a", hash, timestamp: toHex(now) };
+    if (method === "eth_getBlockByNumber") return { number: params[0] === "latest" ? "0x3a" : params[0], hash, timestamp: toHex(now) };
     if (method === "eth_getCode") return String(params[0]).toLowerCase() === controller && !options.contractWallet ? "0x" : runtime;
     if (method === "eth_estimateGas") return "0x186a0";
     if (method === "eth_getBalance") return "0x100000000000000000";
@@ -206,7 +206,7 @@ describe("generic vNext routed swap", () => {
     expect(() => validateLaunchPlanTradePreparationV1(tampered, projection(), request(), now)).toThrow();
   });
   it("accepts only independently configured dRPC and Alchemy domains", () => {
-    expect(() => productionTradeRpcsV1({ ROBINHOOD_V4_RPC_PRIMARY_URL: "https://drpc.org.attacker.invalid/key", ROBINHOOD_V4_RPC_SECONDARY_URL: "https://rpc.alchemy.com/key" })).toThrow(/adapter/);
+    expect(() => productionTradeRpcsV1({ ROBINHOOD_V4_RPC_PRIMARY_URL: "https://drpc.org.attacker.invalid/key", ROBINHOOD_V4_RPC_SECONDARY_URL: "https://rpc.alchemy.com/key" })).toThrowError(expect.objectContaining({ code: "TRADE_PROVIDER_CONFIGURATION_PENDING" }));
     expect(() => productionTradeRpcsV1({ ROBINHOOD_V4_RPC_PRIMARY_URL: "https://lb.drpc.org/key", ROBINHOOD_V4_RPC_SECONDARY_URL: "https://lb.drpc.org/other" })).toThrow();
     const configuration = { ROBINHOOD_V4_RPC_PRIMARY_URL: "https://lb.drpc.live/robinhood/fixturecredentialonly", ROBINHOOD_V4_RPC_SECONDARY_URL: "https://robinhood-mainnet.g.alchemy.com/v2/fixturecredentialonly" };
     const fetcher = vi.fn();

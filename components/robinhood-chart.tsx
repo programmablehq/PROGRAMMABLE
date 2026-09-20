@@ -64,7 +64,6 @@ export function robinhoodLivePriceStatus(last: RobinhoodLivePrice | undefined, n
 function LivePriceChart({ name, points, now, market }: Readonly<{
   name: string; points: readonly RobinhoodLivePrice[]; now: number; market: ChartMarket | null;
 }>) {
-  const first = points[0];
   const last = points.at(-1);
   const geometry = robinhoodLivePriceGeometry(points);
   const status = robinhoodLivePriceStatus(last, now, market);
@@ -91,10 +90,6 @@ function LivePriceChart({ name, points, now, market }: Readonly<{
         {points.length === 1 ? <p className={liveStyles.firstPoint}>The chart grows with each price update.</p> : null}
       </> : <p className={liveStyles.empty}>Live price is unavailable.</p>}
     </div>
-    <figcaption className={liveStyles.caption}>
-      <span>Prices observed during this visit</span>
-      {last ? <span>{points.length > 1 ? `${chartTime.format(first.time)} – ` : ""}{chartTime.format(last.time)} UTC</span> : null}
-    </figcaption>
   </figure>;
 }
 

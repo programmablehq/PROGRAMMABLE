@@ -125,10 +125,10 @@ test("invalid CA is incompatible, while provider failure remains inconclusive", 
 });
 test("agreed chain quantities serialize canonically before checkpoint and runtime checks", async () => {
   const methods = [];
-  const rpc = async method => {
+  const rpc = async (method, params) => {
     methods.push(method);
     if (method === "eth_chainId") return "0x1237";
-    if (method === "eth_getBlockByNumber") return { number: "0x1", hash: HASH, timestamp: "0x64" };
+    if (method === "eth_getBlockByNumber") return { number: params[0] === "latest" ? "0x11" : "0x1", hash: HASH, timestamp: "0x64" };
     throw new Error("runtime unavailable");
   };
   const result = await a.assessAnyQuoteAssetV1({ quoteAsset: QUOTE }, { now: 100n, rpcs: [rpc, rpc] });

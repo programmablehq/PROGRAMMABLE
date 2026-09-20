@@ -15,7 +15,7 @@
   justify-content: space-between;
 }
 
-.label, .status, .caption, .firstPoint, .empty {
+.label, .status, .firstPoint, .empty {
   color: var(--webde-muted);
   font-size: 14px;
   line-height: 20px;
@@ -32,8 +32,6 @@
 .point { fill: var(--webde-ink); }
 .firstPoint { inset: auto 16px 24px; position: absolute; text-align: center; }
 .empty { align-items: center; display: flex; height: 100%; justify-content: center; text-align: center; }
-.caption { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; padding-top: 16px; }
-.caption span:last-child { font-variant-numeric: tabular-nums; }
 
 @media (max-width: 700px) {
   .figure { padding: 16px; }

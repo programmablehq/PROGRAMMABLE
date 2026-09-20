@@ -22,14 +22,38 @@ export interface FoundationExecutionResult {
   sequence: FoundationPreparedSequence;
   stepIndex: number;
 }
+
+/** Newly launched coins can reach the page before both providers observe their registration. */
+export async function loadFoundationSessionAvailability(signal: AbortSignal, token?: Address): Promise<FoundationAvailabilityEnvelope> {
+  const attempts = token ? 4 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    signal.throwIfAborted();
+    try {
+      const value = await fetchFoundationAvailability(signal, token);
+      signal.throwIfAborted();
+      if (value.available || attempt === attempts - 1) return value;
+    } catch (error) {
+      signal.throwIfAborted();
+      if (attempt === attempts - 1) throw error;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); reject(signal.reason); };
+      const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 2_000);
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+    });
+  }
+  throw new Error("Coin availability could not be checked.");
+}
+
 export function useFoundationSession(token?: Address) {
   const walletContext = useWallet();
   const { wallet, authenticated, sessionReady, authReady, connecting, openingWallet, switchingNetwork, disconnecting, openWallet, switchNetwork, sendModuleModeTransaction } = walletContext;
   const client = useMemo(() => createFoundationClient(), []);
   const targetKey = token?.toLowerCase() ?? "launch";
   const [envelopeState, setEnvelopeState] = useState<{ targetKey: string; refresh: number; value: FoundationAvailabilityEnvelope | null } | null>(null);
-  const envelope = envelopeState?.targetKey === targetKey ? envelopeState.value : null;
   const [refresh, setRefresh] = useState(0);
+  const envelope = envelopeState?.targetKey === targetKey && (!token || envelopeState.refresh === refresh) ? envelopeState.value : null;
   const availabilityError = envelopeState?.targetKey === targetKey && envelopeState.refresh === refresh && envelopeState.value === null;
   const [progress, setProgress] = useState("");
   const [resultGeneration, setResultGeneration] = useState(0);
@@ -69,7 +93,7 @@ export function useFoundationSession(token?: Address) {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     const controller = new AbortController();
-    void fetchFoundationAvailability(controller.signal, token).then(value => {
+    void loadFoundationSessionAvailability(controller.signal, token).then(value => {
       if (!controller.signal.aborted) setEnvelopeState({ targetKey, refresh, value });
     }).catch(() => { if (!controller.signal.aborted) setEnvelopeState({ targetKey, refresh, value: null }); });
     return () => controller.abort();
