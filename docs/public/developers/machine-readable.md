@@ -6,6 +6,8 @@ description: Module interfaces, launch API contracts and release discovery
 
 ## Module Mode
 
+For Foundation launch indexing, start with [Foundation discovery](https://programmable.market/api/module-foundation) and the [Foundation integration guide](foundation-indexing.md). It links the factory, token, hook and module ABIs used by the verifier. Resolve an existing coin's release with `GET /api/module-foundation?token={checksummedTokenAddress}`. The Native V1 indexer contract below belongs to the earlier Native source and must not be used to decode Foundation events.
+
 Read [agent discovery](https://programmable.market/api/agent) for the current contribution workflow and CLI manifest. Before building, use the authenticated `GET /v1/modules/context` at `https://api.programmable.market`, or the current CLI's `module-context` command. It provides the key-bound author, default reward wallet, prerequisites, open source-intake contract and separate review coverage. The [module API guide](https://programmable.market/developers/module-mode-api-v1.md) defines the complete preparation, submission and review flow. The [indexer JSON contract](https://programmable.market/api/module-mode/indexer/v1) publishes the native source ABI and identity rules; the [indexing guide](module-mode-indexing.md) explains the verification procedure. Read the current release from [Module Mode availability](https://programmable.market/api/module-mode).
 
 ## Custom Launch APIs

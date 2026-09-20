@@ -8,9 +8,9 @@ A launch moves through configuration, transaction preparation, wallet execution 
 
 ## Module Mode
 
-The builder reads the active engine and module catalog, validates the selected configuration and prepares the launch transaction. The native launcher creates the coin and records its identity, engine, creator and module configuration. The coin's runtime applies its bonding curve and selected module behavior.
+The builder reads the active release and module catalog, validates the configuration and prepares the launch transaction. Foundation creates the coin, its hook and its Uniswap v4 pool, records the selected modules and supplies the initial token liquidity. An optional initial buy runs in the same transaction. The pool remains the trading venue as the coin grows.
 
-An indexer verifies the canonical launcher events and getters against the published engine release. It does not require a Custom Launch stamp for a Module Mode coin. The [Module Mode indexing guide](developers/module-mode-indexing.md) defines this source contract.
+An indexer verifies the factory events and contract reads against the published release. Foundation does not require a Custom Launch stamp. The [Foundation indexing guide](developers/foundation-indexing.md) defines the source contract; [earlier Native and Engine launches](developers/module-mode-indexing.md) retain their own adapters.
 
 ## Custom Launch
 

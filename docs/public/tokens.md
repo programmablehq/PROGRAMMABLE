@@ -8,13 +8,13 @@ Programmable offers Module Mode and Custom Launches on Robinhood Chain. Module M
 
 | Model | Configuration | Market and execution | Starting point |
 | --- | --- | --- | --- |
-| Module Mode | Coin details, creator fees and optional reusable modules | Native ETH bonding curve under the selected engine | [Module builder](https://programmable.market/launch/modules) |
+| Module Mode | Coin details, quote token, creator fees and optional compatible modules | A Foundation Uniswap v4 pool from launch | [Foundation builder](https://programmable.market/launch/modules/foundation) |
 | Custom Launch | Your token, hook, dependencies and deployment plan | The market and settlement path supported by the chosen API profile | [API quickstart](developers/custom-launch-quickstart.md) |
 | Classic on Ethereum | Fixed supply token with selected buy and sell fees | An ETH pool on Uniswap v4 | [Classic reference](models/classic.md) |
 
 ## Module Mode
 
-Module Mode supplies the base coin, bonding curve and launch identity. You choose its settings and any compatible modules. The builder reads the current catalog, validates the configuration and shows the costs before wallet confirmation. Each coin records the module versions it uses; a later catalog update does not silently replace them.
+Foundation supplies the base coin, initial token liquidity and Uniswap v4 pool. You choose its settings and any available compatible modules. The builder reads the current release and catalog, validates the configuration and shows the costs before wallet confirmation. Each coin records the module versions it uses; a later catalog update does not replace them. There is no later bonding-curve migration.
 
 Read [Module Mode](models/module-mode.md) for launching and managing a coin. Developers can use [Build a module](developers/module-mode.md) to contribute reusable behavior.
 

@@ -18,7 +18,17 @@ If the creator sets their fee to 0%, they earn no creator fees from those trades
 
 ## Module Mode
 
-Coin creators choose their own trading fee, up to **10%**, and keep that fee. Native V2 and the Engine V1 quote trading profile add **0.10% (10 bps)** for Programmable. When a coin uses eligible module families, the total becomes **0.30% (30 bps)**, divided as follows:
+### Foundation
+
+Foundation charges **0.30% (30 bps)** for Programmable on each buy and sell. The creator chooses **0%, or 1% to 10% in 1% increments**, added separately. Fees accrue in the pool's quote token. Foundation's initial pool has a 0% LP fee; connecting pools in a route can charge their own fees.
+
+Selected modules can receive a configured share of the creator fee. Those shares come from the creator's amount and leave the platform's 0.30% unchanged. Read the launch's recorded split rather than assuming a fixed author fee or an equal division between modules.
+
+For example, a **1% creator fee** gives a **1.30% combined Foundation fee**. On a gross trade amount of **1 ETH** in an ETH-denominated quote, **0.003 ETH** belongs to Programmable and **0.01 ETH** belongs to the creator budget, including any recorded module shares. Gas and fees charged by other pools in the route are separate.
+
+### Earlier Native and Engine coins
+
+Existing coins keep the model they launched with. Native V2 and the Engine V1 quote trading profile add **0.10% (10 bps)** for Programmable. When a coin uses eligible module families, the total platform and author fee becomes **0.30% (30 bps)**, divided as follows:
 
 | Recipient | Share of each trade |
 | --- | --- |

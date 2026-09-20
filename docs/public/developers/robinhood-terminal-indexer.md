@@ -4,7 +4,7 @@ description: Verify and index Programmable Custom launch provenance on Robinhood
 
 # Index Programmable Custom on Robinhood
 
-For Module Mode coins, use the separate [Module Mode indexing reference](module-mode-indexing.md). It verifies the native launcher and preserves selected modules as configuration. Both sources use chain and token address for coin identity.
+For Foundation coins, use [Foundation indexing](foundation-indexing.md). Earlier Module Mode coins use the [Native and Engine adapters](module-mode-indexing.md). These sources preserve selected modules as configuration and use chain and token address for coin identity.
 
 Robinhood Custom Launches have two provenance interfaces. Separate token and hook contracts use V4 with Router V1. Shared-role projects use MultiRole V2 with Router V2. Select the source by the published route and Router protocol, then apply its own metadata and verification contract.
 

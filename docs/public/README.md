@@ -14,7 +14,7 @@ The purpose is to make token behavior part of the product. A coin can have rules
 
 | Launch path | Use it for |
 | --- | --- |
-| [Module Mode](models/module-mode.md) | A coin with a bonding curve, creator fees and optional modules selected in the builder. |
+| [Module Mode](models/module-mode.md) | A coin with a Uniswap v4 pool, creator fees and optional compatible modules. |
 | [Custom Launch](models/custom.md) | A token, hook or application with its own source code and deployment structure, submitted through the API. |
 | [Classic on Ethereum](models/classic.md) | The fixed supply Ethereum model with configurable buy and sell fees. |
 

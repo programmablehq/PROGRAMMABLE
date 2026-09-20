@@ -60,4 +60,4 @@ Use meaningful alt text when an image carries information and empty alt text whe
 
 ## Ownership
 
-The canonical public documentation source lives in the `0xprogrammable/programmable` repository under `docs/public`. Changes are reviewed through the production branch and GitBook publishes the synced result. When product state changes, update the evidence and the explanatory copy together.
+The canonical public documentation source lives in the `programmablehq/PROGRAMMABLE` repository under `docs/public`. Changes are reviewed through the production branch and GitBook publishes the synced result. When product state changes, update the evidence and the explanatory copy together.

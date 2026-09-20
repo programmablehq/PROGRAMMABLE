@@ -12,6 +12,7 @@ Use the Custom Launch API to deploy your own token and hook project, the module 
 | Read exact fields, versions and error codes | [Custom Launch API reference](custom-launch.md) |
 | Build and submit a reusable module | [Module contribution](module-mode.md) |
 | Index coins in a terminal, explorer or wallet | [Choose an indexing source](indexing.md) |
+| Integrate Foundation coins and their modules | [Foundation indexing](foundation-indexing.md) |
 | Find schemas, ABIs and client releases | [Machine-readable reference](machine-readable.md) |
 
 ## Choose the network and contract layout
