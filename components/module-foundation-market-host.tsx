@@ -155,9 +155,11 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
   if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><div className={styles.page}>
     <div className={styles.topLine}><Link className={styles.textButton} href="/explore/robinhood">Explore</Link><span className={styles.chainBadge}>Robinhood Chain</span></div>
     <div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
-    <p role="status">{error || session.availability.reason || "Loading coin…"}</p></div>
+    <p role="status">{error || session.availability.status === "unavailable" ? "This coin could not be loaded. Try again." : "Loading coin…"}</p></div>
     <div className={styles.coinAddress}><FoundationAddress value={token} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${token}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
-    {error ? <button type="button" className={styles.secondaryButton} onClick={() => setRefreshKey(value => value + 1)}>Read pool again</button> : null}</div></>;
+    {error || session.availability.status === "unavailable" ? <button type="button" className={styles.secondaryButton} onClick={() => {
+      setError(""); session.retryAvailability(); setRefreshKey(value => value + 1);
+    }}>Retry</button> : null}</div></>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
     supported: true, ...(details.quote.balance === null ? {} : { balance: formatUnits(details.quote.balance, details.quote.decimals) }) };
   const coin = { address: token, name: details.token.name, symbol: details.token.symbol, description: details.token.description, decimals: 18,

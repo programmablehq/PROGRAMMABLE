@@ -205,7 +205,7 @@ function fixture(pools, options = {}) {
       if (result !== undefined) return result;
     }
     if (method === "eth_chainId") return "0x1237";
-    if (method === "eth_getBlockByNumber") return { number: toHex(options.height ?? HEIGHT), hash: HASH, timestamp: toHex(NOW) };
+    if (method === "eth_getBlockByNumber") return { number: toHex((options.height ?? HEIGHT) + (params[0] === "latest" ? 16n : 0n)), hash: HASH, timestamp: toHex(NOW) };
     if (method === "eth_getCode") return fixtureCode.get(params[0].toLowerCase()) ?? "0x600055";
     if (method === "eth_getLogs") return filterLogs(records, params[0]);
     if (method !== "eth_call") throw Error("Unexpected fixture RPC method");
@@ -549,7 +549,7 @@ function operatorCandidateFixture(stage = "initial", other = "matching") {
       return Response.json({ jsonrpc: "2.0", id: request.id, error: failure }, { status: provider === 1 && other === "outage" ? 503 : 200 });
     }
   }) }));
-  return { ...f, deep, rejectedBy, options: { ...f.options, rpcs: anyQuoteReadinessRpcs(providers, { number: toHex(HEIGHT) }, a) } };
+  return { ...f, deep, rejectedBy, options: { ...f.options, checkpointBlockNumber: HEIGHT, rpcs: anyQuoteReadinessRpcs(providers, { number: toHex(HEIGHT) }, a) } };
 }
 
 test("the stock operator wire and SDK bridge can discard only an agreed reverted candidate", async () => {

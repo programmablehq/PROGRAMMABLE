@@ -1,6 +1,6 @@
 import "server-only";
 import { decodeFunctionResult, encodeFunctionData, keccak256, parseAbi, toHex, type Abi, type Address, type Hex } from "viem";
-import { agreedTradeRpcV1, productionTradeRpcsV1, tradeBlockV1, TradeRpcExecutionRevertedV1, type TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
+import { agreedTradeRpcV1, productionTradeRpcsV1, readTradeCheckpointV1, tradeBlockV1, TradeRpcExecutionRevertedV1, type TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 import {
   ANY_QUOTE_INFRASTRUCTURE as INFRA, ANY_QUOTE_NATIVE, ANY_QUOTE_WETH, ANY_QUOTE_USDG,
   AnyQuoteErrorV1, anyQuoteAddressV1, anyQuoteSameAddressV1, anyQuoteUintV1,
@@ -42,6 +42,8 @@ export type AnyQuoteReadinessOptionsV1 = {
    * selection; neither provider's failure selects the other automatically. */
   routeDiscovery?: "uniswap-trading-api" | "pool-index";
   rpcs?: readonly [TradeRpcV1, TradeRpcV1];
+  /** Existing operator preparations retain their already-bound checkpoint. Never a public request field. */
+  checkpointBlockNumber?: bigint;
   fetchImpl?: typeof fetch;
   now?: bigint;
   timeoutMs?: number;
@@ -82,9 +84,9 @@ async function context(options: AnyQuoteReadinessOptionsV1, verifyAmmInfrastruct
   const agreed = agreedTradeRpcV1(rpcs, { preserveExecutionReverts: true });
   const chainId = await agreed("eth_chainId", [], value => quantity(value).toString());
   if (chainId !== "4663") throw new AnyQuoteErrorV1("PROVIDER_CHAIN_MISMATCH");
-  const heads = await Promise.all(rpcs.map(async rpc => tradeBlockV1(await rpc("eth_getBlockByNumber", ["latest", false]))));
-  const height = min(...heads.map(h => BigInt(h.number)));
-  const checkpoint = await agreed("eth_getBlockByNumber", [toHex(height), false], tradeBlockV1);
+  const checkpoint = options.checkpointBlockNumber === undefined ? await readTradeCheckpointV1(rpcs)
+    : await agreed("eth_getBlockByNumber", [toHex(options.checkpointBlockNumber), false], tradeBlockV1);
+  if (options.checkpointBlockNumber !== undefined && BigInt(checkpoint.number) !== options.checkpointBlockNumber) throw new AnyQuoteErrorV1("PROVIDER_CHECKPOINT_CHANGED");
   if (BigInt(checkpoint.timestamp) > now + 10n || now - BigInt(checkpoint.timestamp) > 60n) throw new AnyQuoteErrorV1("PROVIDER_CHECKPOINT_STALE");
   const block = { blockHash: checkpoint.hash, requireCanonical: true };
   // Repeated quote sizes and both directions share immutable reads only within this checkpoint.

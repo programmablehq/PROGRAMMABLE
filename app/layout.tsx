@@ -33,7 +33,8 @@ const socialImageUrl = new URL(
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
-  title: "Programmable · Custom Uniswap v4 hooks",
+  // Browser tabs keep the product name; Open Graph and Twitter titles remain page-specific.
+  title: { default: "Programmable", template: "Programmable" },
   description: siteDescription,
   applicationName: "Programmable",
   alternates: {

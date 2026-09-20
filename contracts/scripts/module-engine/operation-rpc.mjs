@@ -447,7 +447,7 @@ export async function materializeAnyQuoteOperation(plan, stepIndex, providers, b
   }
   const template = { status: 'available', manifest: plan.bundle.manifest, manifestHash: plan.bundle.review.command.hostManifestHash, reviewDigest: plan.bundle.review.decisionDigest };
   const common = { client, identity: plan.identity, template, account: plan.owner }, rpcs = anyQuoteReadinessRpcs(providers, block, api);
-  const dependencies = { client, options: { rpcs } }; let envelope;
+  const dependencies = { client, options: { rpcs, checkpointBlockNumber: BigInt(block.number) } }; let envelope;
   if (step.kind === 'any-quote-launch') {
     const preview = await api.readAnyQuoteIdentityLaunchPreviewV1({ ...step.intent, identity: plan.identity, template }, dependencies);
     envelope = await api.prepareAnyQuoteLifecycleLaunchV1({ ...common, input: { ...step.intent, anyQuotePreparation: preview } });

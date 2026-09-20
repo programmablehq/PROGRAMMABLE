@@ -7,9 +7,9 @@ vi.mock("server-only", () => ({}));
 const token = `0x${"12".repeat(20)}`;
 const block = { number: "0x64", hash: `0x${"34".repeat(32)}`, timestamp: "0x100" };
 function provider(decimals: number, chain = "0x1237") {
-  return vi.fn(async (method: string) => {
+  return vi.fn(async (method: string, params: readonly unknown[]) => {
     if (method === "eth_chainId") return chain;
-    if (method === "eth_getBlockByNumber") return block;
+    if (method === "eth_getBlockByNumber") return { ...block, number: params[0] === "latest" ? block.number : params[0] };
     if (method === "eth_call") return toHex(decimals, { size: 32 });
     throw new Error("Unexpected RPC method");
   }) as unknown as TradeRpcV1;
@@ -19,6 +19,7 @@ describe("projected swap token units", () => {
   it("reads actual token decimals at the same canonical block on both providers", async () => {
     const a = provider(6), b = provider(6);
     expect(await readRobinhoodSwapDecimals(token, [a, b])).toBe(6);
+    for (const rpc of [a, b]) expect(rpc).toHaveBeenCalledWith("eth_getBlockByNumber", ["0x54", false]);
     for (const rpc of [a, b]) expect(rpc).toHaveBeenCalledWith("eth_call", [
       { to: token, data: "0x313ce567" }, { blockHash: block.hash, requireCanonical: true },
     ]);

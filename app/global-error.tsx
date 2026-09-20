@@ -13,6 +13,7 @@ export default function GlobalError({
 }: GlobalErrorProps) {
   return (
     <html lang="en" data-theme="dark">
+      <head><title>Programmable</title></head>
       <body className={styles.globalBody}>
         <main
           className={styles.globalPage}

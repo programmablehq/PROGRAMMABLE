@@ -152,6 +152,17 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
     expect(actions.onConfirmLaunch).not.toHaveBeenCalled();
   });
+  it("does not label its active wallet request as a previous operation needing recovery", () => {
+    const blocked = "Complete the open wallet request before continuing.";
+    const render = (launchProgress?: string) => renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions}
+      submissionBlocked={blocked} launchProgress={launchProgress} />);
+    const active = render("Confirm in your wallet…");
+    expect(active).not.toContain("A wallet operation needs checking");
+    expect(active).not.toContain(blocked);
+    expect(active.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
+    expect(render()).toContain("A wallet operation needs checking");
+    expect(render()).toContain(blocked);
+  });
   it("renders host-supplied public metadata and omits unsafe image or social URLs", () => {
     const props = { availability, contextKey: "fixture", quote, pool: { poolId: hash, currency0: address, currency1: address, fee: 3000, tickSpacing: 60, hooks: address, poolManager: address }, creatorFeeBps: 0, onPrepareTrade: vi.fn(), onConfirmTrade: vi.fn() };
     const coin = { address, name: "UI fixture", symbol: "UI", description: "Local UI fixture.", decimals: 18, imageURI: "https://assets.example.com/coin.webp", socialLinks: [{ label: "Website", url: "https://coin.example.com/about" }, { label: "Unsafe script", url: "javascript:alert(1)" }, { label: "Private credential", url: "https://user:secret@coin.example.com" }, { label: "Plain HTTP", url: "http://coin.example.com" }] };

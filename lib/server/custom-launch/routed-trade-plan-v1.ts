@@ -8,7 +8,7 @@ import { buildLaunchPlanRoutedSwapV1, buildLaunchPlanTradeApprovalV1, launchPlan
   type LaunchPlanTradePreparationV1, type LaunchPlanTradeTransactionV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 import { indexStore } from "@/lib/server/robinhood-index/store";
 import { snapshotLaunches } from "@/lib/server/robinhood-index/model";
-import { agreedTradeRpcV1, bytesV1, pendingTradeV1, productionTradeRpcsV1, quantityV1, successfulTradeFramesV1,
+import { agreedTradeRpcV1, bytesV1, pendingTradeV1, productionTradeRpcsV1, quantityV1, readTradeCheckpointV1, successfulTradeFramesV1,
   tradeBlockV1, tradePostStateV1, tradeTraceV1, type TradeRpcV1 } from "./routed-trade-rpc-v1";
 import { immutablePoolFeeRequiredAddressesV1, proveImmutablePoolFeeRuntimeV1,
   type ImmutablePoolFeeMarketV1 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v1";
@@ -40,10 +40,7 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
   const rpcs = dependencies.rpcs ?? productionTradeRpcsV1(), rpc = agreedTradeRpcV1(rpcs);
   const chain = await rpc("eth_chainId", [], value => quantityV1(value).toString());
   if (chain !== "4663") return pendingTradeV1("TRADE_CHAIN_MISMATCH");
-  const latest = await Promise.allSettled(rpcs.map(async read => tradeBlockV1(await read("eth_getBlockByNumber", ["latest", false]))));
-  if (latest[0].status !== "fulfilled" || latest[1].status !== "fulfilled") return pendingTradeV1();
-  const height = BigInt(latest[0].value.number) < BigInt(latest[1].value.number) ? latest[0].value.number : latest[1].value.number;
-  const tag = toHex(BigInt(height)), block = await rpc("eth_getBlockByNumber", [tag, false], tradeBlockV1);
+  const block = await readTradeCheckpointV1(rpcs), tag = toHex(BigInt(block.number));
   if (BigInt(block.timestamp) > now || BigInt(block.timestamp) + 60n < now) return pendingTradeV1("TRADE_CHECKPOINT_STALE");
   const reference = { blockHash: block.hash, requireCanonical: true };
   const runtimeBindings: { address: Address; runtimeCodeHash: Hex }[] = [];

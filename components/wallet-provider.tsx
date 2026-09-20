@@ -2806,10 +2806,15 @@ function PrivyWalletBridge({
       return await runWithBrowserWalletRequestLock({ sessionSubject, account, chainId: "4663",
         requestSubject: JSON.stringify(["launch-plan-trade-wallet-v1", review.binding]), assertCurrentSession,
         execute: async () => {
-          const fresh = await prepareLaunchPlanTradeWalletV1(provider, account, input); assertCurrentSession();
-          if (fresh.binding !== review.binding || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The exact trade changed. Refresh the review.");
-          walletRequestAttempted = true;
-          return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
+          try {
+            const fresh = await prepareLaunchPlanTradeWalletV1(provider, account, input); assertCurrentSession();
+            if (fresh.binding !== review.binding || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The exact trade changed. Refresh the review.");
+            walletRequestAttempted = true;
+            return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
+          } catch (caught) {
+            if (!walletRequestAttempted) throw new WalletRequestNotSubmittedError(getWalletTransactionErrorMessage(caught));
+            throw caught;
+          }
         } });
     } catch (caught) {
       throw Object.assign(new Error(getWalletTransactionErrorMessage(caught)), {
@@ -2845,16 +2850,21 @@ function PrivyWalletBridge({
       return await runWithBrowserWalletRequestLock({ sessionSubject, account, chainId: "4663",
         requestSubject: JSON.stringify(["custom-v4-swap", input.reviewed.binding]), assertCurrentSession,
         execute: async () => {
-          const fresh = await prepareCustomV4SwapWallet(provider, account, input);
-          assertCurrentSession();
-          if (fresh.binding !== input.reviewed!.binding || BigInt(fresh.maxGasCostWei) > BigInt(input.reviewed!.maxGasCostWei)) {
-            throw new Error("The swap or gas cost changed. Get a new quote.");
+          try {
+            const fresh = await prepareCustomV4SwapWallet(provider, account, input);
+            assertCurrentSession();
+            if (fresh.binding !== input.reviewed!.binding || BigInt(fresh.maxGasCostWei) > BigInt(input.reviewed!.maxGasCostWei)) {
+              throw new Error("The swap or gas cost changed. Get a new quote.");
+            }
+            await assertExternalWalletAuthorityCurrent({ expectedAccount: account, expectedChainId: robinhoodChainHex,
+              networkName: robinhoodChain.name, request: method => provider.request({ method }) });
+            assertCurrentSession();
+            walletRequestAttempted = true;
+            return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
+          } catch (caught) {
+            if (!walletRequestAttempted) throw new WalletRequestNotSubmittedError(getWalletTransactionErrorMessage(caught));
+            throw caught;
           }
-          await assertExternalWalletAuthorityCurrent({ expectedAccount: account, expectedChainId: robinhoodChainHex,
-            networkName: robinhoodChain.name, request: method => provider.request({ method }) });
-          assertCurrentSession();
-          walletRequestAttempted = true;
-          return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
         } });
     } catch (caught) {
       throw Object.assign(new Error(getWalletTransactionErrorMessage(caught)), {

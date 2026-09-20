@@ -7,7 +7,7 @@ export class TradeRpcExecutionRevertedV1 extends Error {
   constructor(readonly data: Hex) { super("The simulated call reverted."); this.name = "TradeRpcExecutionRevertedV1"; }
 }
 export type TradeRpcV1 = (method: string, params: readonly unknown[]) => Promise<unknown>;
-export const pendingTradeV1 = (code = "TRADE_ANALYSIS_PENDING"): never => { throw new LaunchPlanTradeErrorV1(code, "The exact trade could not be verified across independent providers. Try again when its execution adapter is available.", 503); };
+export const pendingTradeV1 = (code = "TRADE_ANALYSIS_PENDING"): never => { throw new LaunchPlanTradeErrorV1(code, "Swap is temporarily unavailable. Please try again.", 503); };
 export const objectV1 = (v: unknown): Record<string, unknown> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : pendingTradeV1();
 export const bytesV1 = (v: unknown): Hex => typeof v === "string" && /^0x(?:[0-9a-f]{2})*$/i.test(v) ? v.toLowerCase() as Hex : pendingTradeV1();
 export const quantityV1 = (v: unknown): bigint => typeof v === "string" && /^0x[0-9a-f]{1,64}$/i.test(v) ? BigInt(v) : pendingTradeV1();
@@ -79,6 +79,18 @@ export function tradeBlockV1(value: unknown) {
   const b = objectV1(value), hash = bytesV1(b.hash);
   if (hash.length !== 66) return pendingTradeV1();
   return { number: quantityV1(b.number).toString(), hash, timestamp: quantityV1(b.timestamp).toString() };
+}
+
+/** Robinhood's newest sequencer blocks can reach RPC nodes at different times.
+ * Read a recent common block behind that propagation window. Callers still
+ * enforce freshness, pin every state read and recheck its canonical hash. */
+export async function readTradeCheckpointV1(rpcs: readonly [TradeRpcV1, TradeRpcV1]) {
+  const tips = await Promise.all(rpcs.map(async read => tradeBlockV1(await read("eth_getBlockByNumber", ["latest", false]))));
+  const common = tips.reduce((number, block) => BigInt(block.number) < number ? BigInt(block.number) : number, BigInt(tips[0]!.number));
+  const height = common > 16n ? common - 16n : 0n;
+  const block = await agreedTradeRpcV1(rpcs)("eth_getBlockByNumber", [toHex(height), false], tradeBlockV1);
+  if (BigInt(block.number) !== height) return pendingTradeV1("TRADE_CHECKPOINT_CHANGED");
+  return block;
 }
 export interface TradeTraceV1 { type: string; from: Address; to: Address | null; input: Hex; output: Hex; value: string; gasUsed: string; failed: boolean; calls: readonly TradeTraceV1[] }
 export function tradeTraceV1(value: unknown): TradeTraceV1 {

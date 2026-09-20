@@ -6,7 +6,7 @@ import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-l
 import { isRobinhoodProjectedLaunch, projectionAddress, projectionHash, projectionObject, resolveProjectionAddress } from "@/lib/custom-launch/launch-projection-v1";
 import { LaunchPlanTradeErrorV1, ROUTED_TRADE_CONTRACTS_V1, ROUTED_TRADE_PERMIT2_ABI_V1,
   ROUTED_TRADE_TOKEN_ABI_V1, type LaunchPlanTradeTransactionV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
-import { agreedTradeRpcV1, bytesV1, objectV1, pendingTradeV1, productionTradeRpcsV1, quantityV1, successfulTradeFramesV1,
+import { agreedTradeRpcV1, bytesV1, objectV1, pendingTradeV1, productionTradeRpcsV1, quantityV1, readTradeCheckpointV1, successfulTradeFramesV1,
   tradeBlockV1, tradePostStateV1, tradeTraceV1, type TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 import { readRobinhoodToken } from "@/lib/server/robinhood-index/read";
 import { buildCustomV4Swap, buildCustomV4SwapApproval, CUSTOM_V4_NATIVE, CUSTOM_V4_SWAP_DESCRIPTOR, CUSTOM_V4_SWAP_RESPONSE,
@@ -147,9 +147,7 @@ export async function prepareCustomV4Swap(input: unknown, dependencies: {
   if (!launch || !same(launch.tokenAddress, request.token)) return pendingTradeV1("SWAP_LAUNCH_NOT_INDEXED");
   const rpcs = dependencies.rpcs ?? productionTradeRpcsV1(), rpc = agreedTradeRpcV1(rpcs);
   const descriptor = await readCustomV4SwapDescriptor(launch, dependencies.rpcs ? { rpcs } : {});
-  const latest = await Promise.all(rpcs.map(async read => tradeBlockV1(await read("eth_getBlockByNumber", ["latest", false]))));
-  const height = BigInt(latest[0]!.number) < BigInt(latest[1]!.number) ? latest[0]!.number : latest[1]!.number;
-  const tag = toHex(BigInt(height)), block = await rpc("eth_getBlockByNumber", [tag, false], tradeBlockV1);
+  const block = await readTradeCheckpointV1(rpcs), tag = toHex(BigInt(block.number));
   const checkpointNow = dependencies.now?.() ?? BigInt(Math.floor(Date.now() / 1000));
   if (BigInt(block.timestamp) > checkpointNow || BigInt(block.timestamp) + 60n < checkpointNow) return pendingTradeV1("SWAP_CHECKPOINT_STALE");
   const reference = { blockHash: block.hash, requireCanonical: true };

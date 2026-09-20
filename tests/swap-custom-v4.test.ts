@@ -37,7 +37,7 @@ function fixtureRpc(options: Options = {}): TradeRpcV1 {
   const output = options.outputAmount ?? 50000n;
   return async (method, params) => {
     if (method === "eth_chainId") return "0x1237";
-    if (method === "eth_getBlockByNumber") return { number: params[0] === "0x2a" ? "0x2a" : options.finalityPending && params[0] === "finalized" ? "0x20" : "0x64", hash, timestamp: toHex(now) };
+    if (method === "eth_getBlockByNumber") return { number: String(params[0]).startsWith("0x") ? params[0] : options.finalityPending && params[0] === "finalized" ? "0x20" : "0x64", hash, timestamp: toHex(now) };
     if (method === "eth_getTransactionReceipt") return { status: "0x1", transactionHash: txHash, blockHash: hash, blockNumber: "0x2a", logs: options.poolOriginMissing ? [] : [{
       address: infra.poolManager.address, transactionHash: txHash, blockHash: hash, blockNumber: "0x2a", logIndex: "0x3", removed: false,
       topics: encodeEventTopics({ abi: INITIALIZE, eventName: "Initialize", args: { id: customV4PoolId(poolKey), currency0: CUSTOM_V4_NATIVE, currency1: token } }),

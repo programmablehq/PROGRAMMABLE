@@ -38,7 +38,11 @@ async function alphaBounds(path: string, threshold = 16) {
 }
 
 describe("Programmable branding assets", () => {
-  it("keeps product routes branded and gives Docs pages descriptive titles", () => {
+  it("keeps browser tabs uniformly branded and preserves descriptive social titles", () => {
+    expect(read("app/layout.tsx")).toContain(
+      'title: { default: "Programmable", template: "Programmable" }',
+    );
+    expect(read("app/page.tsx")).toContain('title: "Programmable",');
     const metadataSources = [
       [
         "app/layout.tsx",
@@ -54,9 +58,8 @@ describe("Programmable branding assets", () => {
     }
 
     const combinedSources = metadataSources.map(([path]) => read(path)).join("\n");
-    expect(read("app/docs/layout.tsx")).toContain(
-      'title: "Documentation · Programmable"',
-    );
+    // A nested layout title would replace the inherited browser-tab template.
+    expect(read("app/docs/layout.tsx")).not.toMatch(/\btitle\s*:/);
     expect(read("app/docs/developers/page.tsx")).toContain(
       'title: "Developer integration · Programmable"',
     );
