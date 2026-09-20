@@ -6,7 +6,6 @@ import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CurrencyEthIcon } from "@phosphor-icons/react/dist/csr/CurrencyEth";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
@@ -16,6 +15,7 @@ import { prepareTokenImage, isProgrammableTokenImageUrl } from "@/lib/token-imag
 import { validateModuleSocialLinks, type ModuleSocialKind, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
 import { foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationAvailability, type FoundationConfigurationField, type FoundationImage, type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection, type FoundationQuoteAsset, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { FOUNDATION_DEFAULT_IMAGE, isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
+import { normalizeFoundationSocialInput, normalizeFoundationSocialInputs } from "@/lib/module-foundation/social-input";
 import { ModuleFoundationTransactionResult } from "./module-foundation-review";
 import styles from "./module-foundation-ui.module.css";
 
@@ -174,7 +174,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     const buyError = foundationDecimalError(initialBuy, 18, false);
     if (buyError) next.initialBuy = buyError;
     if (modulesError.length) next.modules = modulesError.join(" ");
-    const socials = validateModuleSocialLinks(draft.socialLinks);
+    const socials = validateModuleSocialLinks(normalizeFoundationSocialInputs(draft.socialLinks));
     if (!socials.ok) for (const issue of socials.issues) next[`social-${issue.path.split("/").at(-1)}`] = issue.message.replace(/GitBook/g, "Docs");
     return { errors: next, links: socials.ok ? socials.links : {} };
   }
@@ -284,7 +284,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
             <section className={styles.formSection} aria-labelledby="foundation-market-heading">
               <h2 id="foundation-market-heading" className={styles.marketLabel}>Pair with</h2>
               <div className={styles.pairChoices} role="group" aria-labelledby="foundation-market-heading">
-                <button id={!customQuote ? "foundation-quote" : undefined} type="button" aria-pressed={!customQuote} aria-describedby={!customQuote && errors.quoteAsset ? "foundation-quote-error" : undefined} data-invalid={!customQuote && Boolean(errors.quoteAsset) || undefined} onClick={() => chooseMarket(false)}><CurrencyEthIcon size={22} aria-hidden="true" /><span>Classic <small>ETH</small></span>{!customQuote ? <CheckIcon size={16} aria-hidden="true" /> : null}</button>
+                <button id={!customQuote ? "foundation-quote" : undefined} type="button" aria-pressed={!customQuote} aria-describedby={!customQuote && errors.quoteAsset ? "foundation-quote-error" : undefined} data-invalid={!customQuote && Boolean(errors.quoteAsset) || undefined} onClick={() => chooseMarket(false)}><svg className={styles.ethereumMark} width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 5.5 12.2 12 9.25l6.5 2.95L12 2Z" /><path d="m5.5 13.35 6.5 3.7 6.5-3.7L12 22 5.5 13.35Z" /><path d="m12 9.25-6.5 2.95L12 15.9l6.5-3.7L12 9.25Z" /></svg><span>Classic</span>{!customQuote ? <CheckIcon size={16} aria-hidden="true" /> : null}</button>
                 {onResolveQuote ? <button type="button" aria-pressed={customQuote} aria-controls="foundation-custom-pair" aria-expanded={customQuote} onClick={() => chooseMarket(true)}><PlusIcon size={20} aria-hidden="true" /><span>Other <small>(Stocks or Meme Coins)</small></span>{customQuote ? <CheckIcon size={16} aria-hidden="true" /> : null}</button> : null}
               </div>
               {customQuote ? <div id="foundation-custom-pair" className={styles.customPair}><Field label="Token address" id="foundation-quote" error={errors.quoteAsset}>
@@ -293,7 +293,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
                 {quoteLookup?.address === draft.quoteAsset && quoteLookup.contextKey === contextKey && quoteLookup.status === "error" ? <p className={styles.error} role="alert">{quoteLookup.message}</p> : null}
               </Field></div> : errors.quoteAsset ? <p id="foundation-quote-error" className={styles.error}>{errors.quoteAsset}</p> : null}
               <div className={styles.twoFields}>
-                <Field label="Creator fees" id="foundation-creator-fee" error={errors.creatorFeeBps}><div className={styles.feeControls}><button type="button" aria-label="Decrease creator fee" disabled={draft.creatorFeeBps === 0} onClick={() => update("creatorFeeBps", draft.creatorFeeBps < 200 ? 0 : draft.creatorFeeBps - 100)}><MinusIcon size={16} aria-hidden="true" /></button><div><input id="foundation-creator-fee" name="creatorFeeBps" type="number" min={0} max={10} step={1} value={draft.creatorFeeBps / 100} aria-invalid={Boolean(errors.creatorFeeBps) || undefined} aria-describedby={errors.creatorFeeBps ? "foundation-creator-fee-error" : undefined} onChange={event => update("creatorFeeBps", Math.round(Number(event.target.value) * 100))} /><span>%</span></div><button type="button" aria-label="Increase creator fee" disabled={draft.creatorFeeBps >= 1000} onClick={() => update("creatorFeeBps", Math.min(1000, Math.max(100, draft.creatorFeeBps + 100)))}><PlusIcon size={16} aria-hidden="true" /></button></div></Field>
+                <Field label={<>Creator fees <span>(Platform Fee 0.3%)</span></>} id="foundation-creator-fee" error={errors.creatorFeeBps}><div className={styles.feeControls}><button type="button" aria-label="Decrease creator fee" disabled={draft.creatorFeeBps === 0} onClick={() => update("creatorFeeBps", draft.creatorFeeBps < 200 ? 0 : draft.creatorFeeBps - 100)}><MinusIcon size={16} aria-hidden="true" /></button><div><input id="foundation-creator-fee" name="creatorFeeBps" type="number" min={0} max={10} step={1} value={draft.creatorFeeBps / 100} aria-invalid={Boolean(errors.creatorFeeBps) || undefined} aria-describedby={errors.creatorFeeBps ? "foundation-creator-fee-error" : undefined} onChange={event => update("creatorFeeBps", Math.round(Number(event.target.value) * 100))} /><span>%</span></div><button type="button" aria-label="Increase creator fee" disabled={draft.creatorFeeBps >= 1000} onClick={() => update("creatorFeeBps", Math.min(1000, Math.max(100, draft.creatorFeeBps + 100)))}><PlusIcon size={16} aria-hidden="true" /></button></div></Field>
                 <Field label="First buy" id="foundation-initial-buy" error={errors.initialBuy}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" required value={initialBuy} placeholder="ETH amount" aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={errors.initialBuy ? "foundation-initial-buy-error" : undefined} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
               </div>
             </section>
@@ -305,7 +305,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
               {errors.modules ? <p className={styles.error} role="alert">{errors.modules}</p> : null}
             </section> : null}
           </fieldset>
-          <div className={styles.formFooter}><div className={styles.launchFee}><span>Platform fee <small>per trade</small></span><strong>0.3%</strong></div><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button></div>
+          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button></div>
         </form>}
       </div>
       <aside className={styles.preview} aria-label="Coin preview">
@@ -318,13 +318,13 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
   </div>;
 }
 
-function Field({ label, id, error, hint, children }: { label: string; id: string; error?: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, id, error, hint, children }: { label: React.ReactNode; id: string; error?: string; hint?: string; children: React.ReactNode }) {
   return <div className={styles.field}><label htmlFor={id}>{label}</label>{children}{hint ? <p id={`${id}-help`} className={styles.help}>{hint}</p> : null}{error ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}</div>;
 }
 
 function SocialField({ kind, value, error, onChange }: { kind: ModuleSocialKind; value: string; error?: string; onChange: (value: string) => void }) {
   const id = `foundation-social-${kind}`;
-  return <Field label={SOCIAL_LABELS[kind]} id={id} error={error}><input id={id} name={kind} type="url" autoComplete="off" spellCheck={false} value={value} placeholder={kind === "twitter" ? "https://x.com/…" : "https://…"} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => onChange(event.target.value)} /></Field>;
+  return <Field label={SOCIAL_LABELS[kind]} id={id} error={error}><input id={id} name={kind} type={kind === "twitter" ? "text" : "url"} autoComplete="off" autoCapitalize="none" spellCheck={false} value={value} placeholder={kind === "twitter" ? "@username" : kind === "website" ? "example.com" : "https://…"} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => onChange(event.target.value)} onBlur={() => { const normalized = normalizeFoundationSocialInput(kind, value); if (normalized !== value) onChange(normalized); }} /></Field>;
 }
 
 function ModuleField({ field, id, value, showErrors, onChange }: { field: FoundationConfigurationField; id: string; value: string | boolean | undefined; showErrors?: boolean; onChange: (value: string | boolean) => void }) {
