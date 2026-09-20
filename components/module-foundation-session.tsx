@@ -95,7 +95,8 @@ export function useFoundationSession(token?: Address) {
     return bindFoundationCatalogV1(current.catalog.document, current.catalog.authority);
   }
   const walletStep = moduleModeWalletStep(walletSnapshot);
-  const walletBusy = !authReady || connecting || openingWallet || switchingNetwork || disconnecting;
+  // A coin page may defer wallet loading until Connect is pressed.
+  const walletBusy = connecting || openingWallet || switchingNetwork || disconnecting || (walletStep !== "connect" && !authReady);
   const walletAction: FoundationWalletAction | undefined = walletStep === "prepare" ? undefined : {
     label: walletStep === "connect" ? "Connect wallet" : "Switch to Robinhood Chain", busy: walletBusy,
     onClick: walletStep === "connect" ? openWallet : () => switchModuleModeNetwork(switchNetwork),

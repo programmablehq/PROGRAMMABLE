@@ -1,7 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { FoundationSessionStatus, type useFoundationSession } from "@/components/module-foundation-session";
+import { FoundationSessionStatus, useFoundationSession } from "@/components/module-foundation-session";
+import { useWallet } from "@/components/wallet-provider";
 import type { FoundationResolution } from "@/lib/module-foundation/result-store";
 
 vi.mock("@/components/wallet-provider", () => ({ useWallet: vi.fn() }));
@@ -51,4 +52,15 @@ describe("compact completed-launch status", () => {
   it("preserves active wallet progress", () => {
     expect(render({ progress: "Waiting for confirmation…" })).toContain("Waiting for confirmation…");
   });
+});
+
+function WalletAction() {
+  const { walletAction } = useFoundationSession("0x2CCE608219d32eA1Eb6c7EA4d04a0eACd1F08da9");
+  return <button disabled={walletAction?.busy}>{walletAction?.label}</button>;
+}
+
+it("allows Connect to initialize the deferred wallet on a coin page", () => {
+  vi.mocked(useWallet).mockReturnValue({ wallet: null, authenticated: false, sessionReady: false, authReady: false,
+    connecting: false, openingWallet: false, switchingNetwork: false, disconnecting: false, openWallet: vi.fn() } as ReturnType<typeof useWallet>);
+  expect(renderToStaticMarkup(<WalletAction />)).toBe("<button>Connect wallet</button>");
 });
