@@ -117,7 +117,7 @@ export function ModuleFoundationLaunchHost() {
       minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
       additionalLiquidity: formatUnits(sequence.result.factoryVersion === "v2" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
       actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
-      transactions: sequence.steps.map(foundationStepSummary), notes: ["The initial buy is optional. No creator quote is required for the permanent base position.",
+      transactions: sequence.steps.map(foundationStepSummary), notes: ["The coin launch and first buy use one transaction.",
         "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };
     prepared.current.set(review, sequence); return review;
   }

@@ -47,12 +47,16 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   });
   it("offers a base coin without an editable starting valuation", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    for (const label of ["Description", "X / Twitter", "Initial buy", "Create Launch"]) expect(html).toContain(label);
+    for (const label of ["Description", "X / Twitter", "First buy", "Create Launch"]) expect(html).toContain(label);
     expect(html).not.toContain('name="startValuationQuote"');
     expect(html).not.toContain("Starting valuation");
     expect(html).not.toContain("foundation-valuation");
-    expect(html).toContain("Enter 0 to launch without buying");
-    expect(html).toContain("Your coin works with no additional modules");
+    expect(html).toContain('value="0.000000000000000001"');
+    expect(html).toContain("Minimum 1 wei");
+    expect(html).not.toContain("Optional");
+    expect(html).not.toContain("foundation-modules-heading");
+    expect(html).not.toContain("Platform fee recipient");
+    expect(html).not.toContain("Creator fee");
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);
   });
@@ -60,9 +64,9 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} factoryVersion="v2" contextKey="fixture" catalog={[]} quoteAssets={[{ ...quote, supportsNativeEth: true }]} initialDraft={{ additionalLiquidity: "2" }} {...actions} />);
     expect(html).not.toContain("Add creator liquidity");
     expect(html).not.toContain('name="additionalLiquidity"');
-    expect(html).toContain("ETH · Ethereum");
-    expect(html).toContain("Launch and buy share one wallet confirmation");
-    expect(html).toContain("Enter 0 to launch without buying");
+    expect(html).toContain("Classic");
+    expect(html).toContain("One wallet confirmation");
+    expect(html).toContain("Minimum 1 wei");
   });
   it("shows exact V2 principal, refund and token rounding separately from fee claims before the wallet action", () => {
     const review: FoundationLaunchReview = { factoryVersion: "v2", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
@@ -87,7 +91,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   });
   it("leaves unavailable launch and direct trading unavailable without a source deployment binding", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "unavailable", reason: "Deployment is not bound." }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
-    expect(html).toContain("Deployment is not bound.");
+    expect(html).toContain("Launching is temporarily unavailable.");
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
     const market = renderToStaticMarkup(<ModuleFoundationMarket availability={{ ...availability, status: "unavailable" }} contextKey="fixture" coin={{ address, name: "UI fixture", symbol: "UI", description: "Local UI fixture.", decimals: 18 }} quote={quote} pool={{ poolId: hash, currency0: address, currency1: address, fee: 3000, tickSpacing: 60, hooks: address, poolManager: address }} creatorFeeBps={0} onPrepareTrade={vi.fn()} onConfirmTrade={vi.fn()} />);
     expect(market).toContain("Universal Router");
