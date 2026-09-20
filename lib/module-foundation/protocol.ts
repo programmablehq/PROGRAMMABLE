@@ -1,12 +1,12 @@
 import { decodeFunctionResult, encodeFunctionData, encodeFunctionResult, getAddress, parseAbi, type Address, type Hex, type PublicClient } from "viem";
-import { foundationFactoryAbi, foundationFactoryV2Abi, type FoundationLaunchParameters, type FoundationLaunchRecord, type FoundationLaunchResultV2 } from "./abi";
+import { foundationFactoryAbi, foundationFactoryV2Abi, foundationFactoryV3Abi, foundationFactoryNativeAbi, foundationFactoryV3NativeAbi, type FoundationLaunchParameters, type FoundationLaunchRecord, type FoundationLaunchResultV2 } from "./abi";
 import { FOUNDATION_DEAD_ADDRESS, FOUNDATION_INFRASTRUCTURE, FOUNDATION_LP_CUSTODY_DEAD_ID, FOUNDATION_SUPPLY } from "./constants";
 import { FOUNDATION_MAX_TICK, FOUNDATION_MIN_TICK } from "./price";
 import { foundationPoolId } from "./route";
 
-export type FoundationFactoryVersion = "v1" | "v2";
+export type FoundationFactoryVersion = "v1" | "v2" | "v3";
 export type FoundationFactoryIdentity = { factoryVersion?: "v1"; lpCustodyId?: never }
-  | { factoryVersion: "v2"; lpCustodyId: Hex };
+  | { factoryVersion: "v2" | "v3"; lpCustodyId: Hex };
 export type FoundationDeploymentBinding = FoundationFactoryIdentity & {
   releaseDigest: Hex; sourceCommit: string; startBlock: bigint;
   factory: { address: Address; runtimeCodeHash: Hex };
@@ -29,17 +29,37 @@ export function foundationFactoryVersion(binding: FoundationDeploymentBinding): 
     if (binding.lpCustodyId !== undefined) throw new Error("A V1 source cannot claim V2 LP custody.");
     return "v1";
   }
-  if (binding.factoryVersion !== "v2" || binding.lpCustodyId?.toLowerCase() !== FOUNDATION_LP_CUSTODY_DEAD_ID.toLowerCase()) {
+  if ((binding.factoryVersion !== "v2" && binding.factoryVersion !== "v3") || binding.lpCustodyId?.toLowerCase() !== FOUNDATION_LP_CUSTODY_DEAD_ID.toLowerCase()) {
     throw new Error("The foundation factory or LP custody version is unsupported.");
   }
-  return "v2";
+  return binding.factoryVersion;
 }
 
 export function foundationFactoryAbiFor(binding: FoundationDeploymentBinding) {
-  return foundationFactoryVersion(binding) === "v2" ? foundationFactoryV2Abi : foundationFactoryAbi;
+  const version = foundationFactoryVersion(binding);
+  return version === "v3" ? foundationFactoryV3Abi : version === "v2" ? foundationFactoryV2Abi : foundationFactoryAbi;
+}
+
+export function foundationFactoryNativeAbiFor(binding: FoundationDeploymentBinding) {
+  return foundationFactoryVersion(binding) === "v3" ? foundationFactoryV3NativeAbi : foundationFactoryNativeAbi;
+}
+
+export async function readFoundationHookPrediction(client: PublicClient, binding: FoundationDeploymentBinding, creator: Address,
+  token: Address, parameters: FoundationLaunchParameters, functionName: "hookInitCodeHash" | "predictHookAddress", blockNumber: bigint): Promise<Hex> {
+  const version = foundationFactoryVersion(binding);
+  if (version === "v3") {
+    if (parameters.creatorFeeBps !== undefined) throw new Error("V3 requires explicit buy and sell fees.");
+    return client.readContract({ address: binding.factory.address, abi: foundationFactoryV3Abi, functionName, args: [creator, token, parameters], blockNumber });
+  }
+  if (parameters.creatorFeeBps === undefined) throw new Error("Legacy launch bytes require their original creator fee.");
+  return client.readContract({ address: binding.factory.address, abi: foundationFactoryAbi, functionName, args: [creator, token, parameters], blockNumber });
 }
 
 export async function readFoundationLaunchRecord(client: PublicClient, binding: FoundationDeploymentBinding, token: Address, blockNumber: bigint): Promise<FoundationLaunchRecord> {
+  if (foundationFactoryVersion(binding) === "v3") {
+    const result = await client.readContract({ address: binding.factory.address, abi: foundationFactoryV3Abi, functionName: "launchOf", args: [token], blockNumber });
+    return { ...result, factoryVersion: "v3" };
+  }
   if (foundationFactoryVersion(binding) === "v2") {
     const result = await client.readContract({ address: binding.factory.address, abi: foundationFactoryV2Abi, functionName: "launchOf", args: [token], blockNumber });
     return { ...result, factoryVersion: "v2" };
@@ -49,6 +69,11 @@ export async function readFoundationLaunchRecord(client: PublicClient, binding: 
 }
 
 export function decodeFoundationLaunchResult(binding: FoundationDeploymentBinding, data: Hex): FoundationLaunchRecord {
+  if (foundationFactoryVersion(binding) === "v3") {
+    const result = decodeFunctionResult({ abi: foundationFactoryV3Abi, functionName: "launch", data });
+    if (encodeFunctionResult({ abi: foundationFactoryV3Abi, functionName: "launch", result }).toLowerCase() !== data.toLowerCase()) throw new Error("The V3 launch result is not canonical ABI data.");
+    return { ...result, factoryVersion: "v3" };
+  }
   if (foundationFactoryVersion(binding) === "v2") {
     const result = decodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launch", data });
     if (encodeFunctionResult({ abi: foundationFactoryV2Abi, functionName: "launch", result }).toLowerCase() !== data.toLowerCase()) throw new Error("The V2 launch result is not canonical ABI data.");

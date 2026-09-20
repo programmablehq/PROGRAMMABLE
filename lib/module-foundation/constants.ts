@@ -9,6 +9,7 @@ export const FOUNDATION_PLATFORM_BPS = 30 as const;
 export const FOUNDATION_PLATFORM_RECIPIENT = getAddress("0xD88539d3c4C460136a733A3Fd60cf6BF269079da");
 export const FOUNDATION_ABI_ID = keccak256(stringToHex("programmable.module-foundation.v1"));
 export const FOUNDATION_FACTORY_V2_ID = keccak256(stringToHex("programmable.module-foundation.factory.v2"));
+export const FOUNDATION_FACTORY_V3_ID = keccak256(stringToHex("programmable.module-foundation.factory.v3"));
 export const FOUNDATION_LP_CUSTODY_DEAD_ID = keccak256(stringToHex("programmable.module-foundation.launch-nfts.dead.v1"));
 export const FOUNDATION_DEAD_ADDRESS = getAddress("0x000000000000000000000000000000000000dEaD");
 export const FOUNDATION_INT128_MAX = (1n << 127n) - 1n;
@@ -21,9 +22,4 @@ export const FOUNDATION_INFRASTRUCTURE = Object.fromEntries(
   }),
 ) as Record<"poolManager" | "positionManager" | "universalRouter" | "permit2" | "v4Quoter" | "stateView", { address: `0x${string}`; runtimeCodeHash: Hex }>;
 
-export function foundationCreatorFeeBps(value: number): number {
-  if (!Number.isInteger(value) || (value !== 0 && (value < 100 || value > 1_000))) {
-    throw new Error("Creator fees must be zero or between 1% and 10%.");
-  }
-  return value;
-}
+export { foundationCreatorFeeBps } from "./creator-fees";

@@ -5,8 +5,9 @@ import { bindFoundationCatalogV1, FOUNDATION_CATALOG_SCHEMA_V1, type FoundationC
 
 export const FOUNDATION_AVAILABILITY_SCHEMA = "programmable.module-foundation.availability.v1";
 export const FOUNDATION_AVAILABILITY_SCHEMA_V2 = "programmable.module-foundation.availability.v2";
+export const FOUNDATION_AVAILABILITY_SCHEMA_V3 = "programmable.module-foundation.availability.v3";
 export interface FoundationAvailabilityEnvelope {
-  schemaVersion: typeof FOUNDATION_AVAILABILITY_SCHEMA | typeof FOUNDATION_AVAILABILITY_SCHEMA_V2;
+  schemaVersion: typeof FOUNDATION_AVAILABILITY_SCHEMA | typeof FOUNDATION_AVAILABILITY_SCHEMA_V2 | typeof FOUNDATION_AVAILABILITY_SCHEMA_V3;
   available: boolean;
   reason: string | null;
   binding: FoundationDeploymentBinding | null;
@@ -40,7 +41,7 @@ function tokenAddress(value: unknown): Address {
 /** Parse only the trusted same-origin response; this is not an independent acceptance decision. */
 export function parseFoundationAvailability(value: unknown, now = Date.now()): FoundationAvailabilityEnvelope {
   const r = record(value);
-  if (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V2) throw new Error("The release response is unsupported.");
+  if (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V2 && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V3) throw new Error("The release response is unsupported.");
   const token = r.token === undefined ? undefined : tokenAddress(r.token).toLowerCase() as Address;
   if (r.token !== undefined && r.token !== token) throw new Error("The token authority response is not canonical.");
   if (r.available !== true) return { ...unavailableFoundation(r.schemaVersion), ...(token ? { token } : {}) };
@@ -49,15 +50,16 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
     || typeof b.startBlock !== "string" || !/^[1-9][0-9]{0,19}$/.test(b.startBlock)
     || typeof evidence.checkedAt !== "string" || !Number.isFinite(Date.parse(evidence.checkedAt))
     || Math.abs(now - Date.parse(evidence.checkedAt)) > 120_000
-    || evidence.sourcePath !== (r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V2
+    || evidence.sourcePath !== (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA
       ? `/v1/modules/foundation/source/release/${hash(b.releaseDigest).toLowerCase()}` : "/v1/modules/foundation/source")) throw new Error("Current verified release evidence is unavailable.");
   for (const field of ["artifactDigest", "decisionDigest", "sourceManifestHash", "deploymentEvidenceDigest", "runtimeVerificationDigest", "finalityEvidenceDigest", "blockHash"]) hash(evidence[field]);
   const pins = { releaseDigest: hash(b.releaseDigest), sourceCommit: b.sourceCommit,
     startBlock: BigInt(b.startBlock), factory: pin(b.factory), hookDeployer: pin(b.hookDeployer) };
   let binding: FoundationDeploymentBinding;
-  if (r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V2) {
-    if (b.factoryVersion !== "v2") throw new Error("The V2 release has no exact factory version.");
-    binding = { ...pins, factoryVersion: "v2", lpCustodyId: hash(b.lpCustodyId) };
+  if (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA) {
+    const factoryVersion = r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V3 ? "v3" : "v2";
+    if (b.factoryVersion !== factoryVersion) throw new Error("The release has no exact factory version.");
+    binding = { ...pins, factoryVersion, lpCustodyId: hash(b.lpCustodyId) };
   } else {
     if ((b.factoryVersion !== undefined && b.factoryVersion !== "v1") || b.lpCustodyId !== undefined) throw new Error("A V1 response cannot authorize V2 custody.");
     binding = { ...pins, ...(b.factoryVersion === "v1" ? { factoryVersion: "v1" as const } : {}) };

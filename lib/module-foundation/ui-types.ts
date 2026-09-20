@@ -1,5 +1,8 @@
 import type { Address, Hex } from "viem";
 import type { ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
+import type { FoundationCreatorFees } from "./creator-fees";
+export { isFoundationCreatorFee, foundationCreatorFeeRates, foundationCreatorFeeFields } from "./creator-fees";
+export type { FoundationCreatorFees, FoundationCreatorFeeRates } from "./creator-fees";
 
 export const FOUNDATION_PLATFORM_FEE_BPS = 30 as const;
 export const FOUNDATION_PLATFORM_FEE_RECIPIENT = "0xD88539d3c4C460136a733A3Fd60cf6BF269079da" as const;
@@ -65,14 +68,13 @@ export interface FoundationModuleSelection {
   configuration: FoundationConfiguration;
 }
 
-export interface FoundationLaunchDraft {
+export type FoundationLaunchDraft = FoundationCreatorFees & {
   name: string;
   symbol: string;
   description: string;
   image: FoundationImage;
   socialLinks: ModuleSocialLinks;
   quoteAsset: Address;
-  creatorFeeBps: number;
   /** Native ETH spending ceiling in the single-eth-v1 launch form. */
   initialBuy: string;
   additionalLiquidity: string;
@@ -128,7 +130,6 @@ interface FoundationLaunchReviewCommon {
   positions: readonly FoundationPositionIdentity[];
   platformFeeBps: typeof FOUNDATION_PLATFORM_FEE_BPS;
   platformFeeRecipient: typeof FOUNDATION_PLATFORM_FEE_RECIPIENT;
-  creatorFeeBps: number;
   initialBuy: string;
   minimumInitialTokens: string;
   additionalLiquidity: string;
@@ -152,9 +153,9 @@ export interface FoundationQuoteFundingReview {
   /** Exact quote returned, including unused funding and any extra quote received during construction. */
   refund: string;
 }
-export type FoundationLaunchReview = FoundationLaunchReviewCommon & (
+export type FoundationLaunchReview = FoundationLaunchReviewCommon & FoundationCreatorFees & (
   { factoryVersion?: "v1"; lpCustodyId?: never; roundingInventory?: FoundationRoundingInventoryReview; quoteFunding?: FoundationQuoteFundingReview }
-  | { factoryVersion: "v2"; lpCustodyId: Hex; roundingInventory: FoundationRoundingInventoryReview & { unrecoverable: true }; quoteFunding: FoundationQuoteFundingReview }
+  | { factoryVersion: "v2" | "v3"; lpCustodyId: Hex; roundingInventory: FoundationRoundingInventoryReview & { unrecoverable: true }; quoteFunding: FoundationQuoteFundingReview }
 );
 
 export interface FoundationTransactionResult {
@@ -205,10 +206,6 @@ export interface FoundationTradeReview {
   platformFeeRecipient: typeof FOUNDATION_PLATFORM_FEE_RECIPIENT;
   universalRouter: Address;
   transactions: readonly FoundationTransactionSummary[];
-}
-
-export function isFoundationCreatorFee(value: number): boolean {
-  return Number.isInteger(value) && (value === 0 || (value >= 100 && value <= 1_000));
 }
 
 export function foundationDecimalError(value: string, decimals: number, allowZero = true): string | null {

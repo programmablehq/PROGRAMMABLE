@@ -1,6 +1,7 @@
-import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, parseAbiParameters, stringToHex, zeroAddress, type Address, type Hex, type PublicClient } from "viem";
-import { foundationFactoryNativeAbi, foundationLaunchParameters, type FoundationLaunchParameters } from "./abi";
-import { foundationFactoryAbiFor, foundationFactoryVersion, type FoundationDeploymentBinding } from "./protocol";
+import { foundationCreatorFeeRates } from "./creator-fees";
+import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, stringToHex, zeroAddress, type Address, type Hex, type PublicClient } from "viem";
+import { encodeFoundationLaunchEntry, encodeFoundationParameters, type FoundationLaunchParameters } from "./abi";
+import { foundationFactoryAbiFor, foundationFactoryNativeAbiFor, foundationFactoryVersion, type FoundationDeploymentBinding } from "./protocol";
 import { FOUNDATION_WETH, FOUNDATION_WETH_CODE_HASH } from "./native-funding";
 import type { FoundationPoolKey } from "./route";
 
@@ -32,11 +33,12 @@ export function assertFoundationFundingPath(quote: Address, path: readonly Found
 
 export async function assertFoundationAtomicEth(client: PublicClient, binding: FoundationDeploymentBinding, blockNumber: bigint) {
   try {
-    if (foundationFactoryVersion(binding) !== "v2") throw new Error("version");
+    if (foundationFactoryVersion(binding) === "v1") throw new Error("version");
+    const abi = foundationFactoryNativeAbiFor(binding);
     const [id, weth, hash, code] = await Promise.all([
-      client.readContract({ address: binding.factory.address, abi: foundationFactoryNativeAbi, functionName: "NATIVE_FUNDING_ID", blockNumber }),
-      client.readContract({ address: binding.factory.address, abi: foundationFactoryNativeAbi, functionName: "wrappedEth", blockNumber }),
-      client.readContract({ address: binding.factory.address, abi: foundationFactoryNativeAbi, functionName: "wrappedEthCodeHash", blockNumber }),
+      client.readContract({ address: binding.factory.address, abi, functionName: "NATIVE_FUNDING_ID", blockNumber }),
+      client.readContract({ address: binding.factory.address, abi, functionName: "wrappedEth", blockNumber }),
+      client.readContract({ address: binding.factory.address, abi, functionName: "wrappedEthCodeHash", blockNumber }),
       client.getCode({ address: FOUNDATION_WETH, blockNumber }),
     ]);
     if (id !== FOUNDATION_NATIVE_FUNDING_ID || getAddress(weth) !== FOUNDATION_WETH || hash !== FOUNDATION_WETH_CODE_HASH
@@ -46,7 +48,7 @@ export async function assertFoundationAtomicEth(client: PublicClient, binding: F
 
 /** Exact calldata and value, shared by simulation, discovery and receipt verification. */
 function decodeCall(binding: FoundationDeploymentBinding, transaction: { data: Hex; value: bigint }) {
-  const abi = foundationFactoryVersion(binding) === "v2" ? foundationFactoryNativeAbi : foundationFactoryAbiFor(binding);
+  const abi = foundationFactoryVersion(binding) !== "v1" ? foundationFactoryNativeAbiFor(binding) : foundationFactoryAbiFor(binding);
   const decoded = decodeFunctionData({ abi, data: transaction.data });
   let parameters: FoundationLaunchParameters;
   let native = false;
@@ -54,16 +56,16 @@ function decodeCall(binding: FoundationDeploymentBinding, transaction: { data: H
   if (decoded.functionName === "launch") {
     if (transaction.value !== 0n) throw new Error("An ERC20 launch cannot accept ETH.");
     parameters = decoded.args[0];
-    encoded = encodeFunctionData({ abi, functionName: "launch", args: [parameters] });
-  } else if (decoded.functionName === "launchWithEthRoute" && foundationFactoryVersion(binding) === "v2") {
+    encoded = encodeFoundationLaunchEntry(parameters, { functionName: "launch" });
+  } else if (decoded.functionName === "launchWithEthRoute" && foundationFactoryVersion(binding) !== "v1") {
     parameters = decoded.args[0]; native = true;
     const path = decodeAbiParameters(fundingPathParameters, decoded.args[1])[0], amount = parameters.initialBuyQuoteAmount + parameters.additionalQuoteAmount;
     if (encodeFoundationFundingPath(path).toLowerCase() !== decoded.args[1].toLowerCase()) throw new Error("The funding path is not canonical.");
     if (transaction.value < 0n || transaction.value > (1n << 127n) - 1n || (amount > 0n && transaction.value === 0n)) throw new Error("Invalid ETH funding budget.");
     if (amount > 0n) assertFoundationFundingPath(parameters.quote, path);
     if (getAddress(parameters.quote) === FOUNDATION_WETH && transaction.value < amount) throw new Error("Insufficient ETH funding.");
-    encoded = encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEthRoute", args: [parameters, decoded.args[1]] });
-  } else if (decoded.functionName === "launchWithEth" && foundationFactoryVersion(binding) === "v2") {
+    encoded = encodeFoundationLaunchEntry(parameters, { functionName: "launchWithEthRoute", fundingPath: decoded.args[1] });
+  } else if (decoded.functionName === "launchWithEth" && foundationFactoryVersion(binding) !== "v1") {
     // Preserve canonical decoding of launches made by the previous, immutable factory.
     parameters = decoded.args[0]; native = true;
     const pool = decoded.args[1], amount = parameters.initialBuyQuoteAmount + parameters.additionalQuoteAmount;
@@ -73,8 +75,9 @@ function decodeCall(binding: FoundationDeploymentBinding, transaction: { data: H
     } else if (amount > 0n && (BigInt(pool.currency0) >= BigInt(pool.currency1)
       || ![pool.currency0, pool.currency1].some(a => getAddress(a) === FOUNDATION_WETH)
       || ![pool.currency0, pool.currency1].some(a => getAddress(a) === getAddress(parameters.quote)))) throw new Error("The funding pool uses another asset.");
-    encoded = encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [parameters, pool] });
+    encoded = encodeFoundationLaunchEntry(parameters, { functionName: "launchWithEth", fundingPool: pool });
   } else throw new Error("The transaction does not call foundation launch.");
+  foundationCreatorFeeRates(parameters);
   if (encoded.toLowerCase() !== transaction.data.toLowerCase()) throw new Error("The launch calldata is not canonical.");
   return { parameters, native };
 }
@@ -86,7 +89,9 @@ export function decodeFoundationLaunchCall(binding: FoundationDeploymentBinding,
 
 export function assertFoundationLaunchCall(binding: FoundationDeploymentBinding, transaction: { data: Hex; value: bigint }, expected: FoundationLaunchParameters) {
   const call = decodeFoundationLaunchCall(binding, transaction);
-  if (encodeAbiParameters(foundationLaunchParameters, [call.parameters]).toLowerCase() !== encodeAbiParameters(foundationLaunchParameters, [expected]).toLowerCase()) {
+  if ((foundationFactoryVersion(binding) === "v3") !== (expected.creatorFeeBps === undefined)) throw new Error("The creator fee fields do not match the selected factory version.");
+  foundationCreatorFeeRates(expected);
+  if (encodeFoundationParameters(call.parameters).toLowerCase() !== encodeFoundationParameters(expected).toLowerCase()) {
     throw new Error("The launch calldata differs from the coin settings.");
   }
   return call;

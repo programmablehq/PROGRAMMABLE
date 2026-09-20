@@ -1,3 +1,4 @@
+import { foundationCreatorFeeFields, type FoundationCreatorFees } from "./creator-fees";
 import {
   decodeAbiParameters, decodeFunctionData, encodeFunctionData, getAddress, keccak256, parseAbi,
   type AbiParameter, type Address, type Hex, type PublicClient,
@@ -6,7 +7,7 @@ import type { OpenConfigContext, OpenConfigSchema, OpenConfigValue } from "@/pac
 import type { ModuleEngineConfigurationArgument, ModuleEngineConfigurationComponent } from "@/lib/module-engine/catalog";
 import { nativeJson } from "@/lib/module-mode/native-catalog";
 import { moduleAddress, moduleHash, moduleInteger } from "@/lib/module-mode/release";
-import { foundationFactoryNativeAbi, foundationTokenAbi } from "./abi";
+import { foundationFactoryNativeAbi, foundationFactoryV3NativeAbi, foundationTokenAbi, encodeFoundationLaunchEntry } from "./abi";
 import { readFoundationModulePackages } from "./metadata";
 import {
   assertFoundationInfrastructure, assertFoundationPool, readFoundationPoolAssetPins, readFoundationQuote, simulateFoundationSequence,
@@ -51,12 +52,12 @@ export interface FoundationActionRuntimeInputV1 {
   /** Application-owned resolved accounts/assets/components; a package cannot supply a resolver. */
   context?: OpenConfigContext;
 }
-export interface FoundationActionRuntimeV1 {
+export type FoundationActionRuntimeV1 = FoundationCreatorFees & {
   checkpoint: FoundationCheckpoint; instances: readonly FoundationActionContextV1[];
   /** Original configuration assets are derived from base assets and the token's immutable pin metadata. */
   configurationContext: OpenConfigContext; moduleAssetPins: readonly FoundationAssetPinV1[];
   /** Digest of the completed RPC observations, not a substitute for source review or release authority. */
-  sourceVerificationDigest: Hex; creatorFeeBps: number; compositionHash: Hex;
+  sourceVerificationDigest: Hex; compositionHash: Hex;
 }
 
 const sameAddress = (a: Address, b: Address) => getAddress(a) === getAddress(b);
@@ -75,8 +76,8 @@ function jsonObservation(value: unknown): unknown {
 function runtimeEnvironment(catalog: FoundationCatalogV1, context?: OpenConfigContext) {
   return { catalog, chainId: FOUNDATION_CHAIN_ID, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1, context };
 }
-function assertOriginalComposition(input: FoundationActionRuntimeInputV1, creatorFeeBps: number) {
-  const composition = composeFoundationUiSelectionsV1({ ...runtimeEnvironment(input.catalog, input.context), selections: input.selections, creatorFeeBps });
+function assertOriginalComposition(input: FoundationActionRuntimeInputV1, creatorFees: FoundationCreatorFees) {
+  const composition = composeFoundationUiSelectionsV1({ ...runtimeEnvironment(input.catalog, input.context), selections: input.selections, ...foundationCreatorFeeFields(creatorFees) });
   foundationRequire(composition.ok, "FOUNDATION_ACTION_COMPOSITION_INVALID", composition.diagnostics[0]?.message ?? "Restore the original admitted module selections.");
   return composition;
 }
@@ -122,7 +123,7 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
   "FOUNDATION_ACTION_PACKAGE_IDENTITIES", "The original ordered source package identities must match the token's immutable metadata.");
   const configurationContext = originalAssetContext(input, provenance.creator, quote.decimals, moduleAssetPins);
   input.context = configurationContext;
-  const composition = assertOriginalComposition(input, provenance.creatorFeeBps);
+  const composition = assertOriginalComposition(input, provenance);
   const [count, compositionHash, hostCodeHash] = await Promise.all([
     client.readContract({ address: pool.hook, abi: foundationActionRuntimeAbiV1, functionName: "moduleCount", blockNumber: checkpoint.blockNumber }),
     client.readContract({ address: pool.hook, abi: foundationActionRuntimeAbiV1, functionName: "compositionHash", blockNumber: checkpoint.blockNumber }),
@@ -157,7 +158,7 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
   foundationRequire(endBlock.hash === checkpoint.blockHash, "FOUNDATION_ACTION_CHECKPOINT_CHANGED", "Chain state changed while reading the module composition. Refresh it.");
   const sourceVerificationDigest = foundationDataDigest("programmable.module-foundation.action-rpc-observations.v1", jsonObservation({
     chainId: FOUNDATION_CHAIN_ID, binding, checkpoint, pool, registeredLaunch: provenance.record, creator: provenance.creator,
-    creatorFeeBps: provenance.creatorFeeBps, hostCodeHash, compositionHash, modules: observed, moduleAssetPins, configurationContext, quote,
+    ...foundationCreatorFeeFields(provenance), hostCodeHash, compositionHash, modules: observed, moduleAssetPins, configurationContext, quote,
     modulePackageIds: modulePackageIds ?? [], sourceMetadataHash: keccak256(metadata[3]),
   }));
   const instances = observed.map(item => {
@@ -165,13 +166,13 @@ export async function readFoundationActionRuntimeV1(raw: FoundationActionRuntime
     return bindFoundationActionContextV1({ ...runtimeEnvironment(input.catalog, input.context), selections: input.selections, readback: {
       chainId: FOUNDATION_CHAIN_ID, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1, releaseDigest: entry.release!.releaseDigest,
       sourceVerificationDigest, host: pool.hook, token: pool.token, quote: pool.quote, poolId: pool.poolId,
-      creator: provenance.creator, ledger: provenance.record.ledger, creatorFeeBps: provenance.creatorFeeBps, compositionHash,
+      creator: provenance.creator, ledger: provenance.record.ledger, ...foundationCreatorFeeFields(provenance), compositionHash,
       blockNumber: checkpoint.blockNumber.toString(), blockHash: checkpoint.blockHash, blockTimestamp: Number(checkpoint.timestamp),
       moduleIndex: item.moduleIndex, moduleCount: Number(count), module: { ...item.module, observedCodeHash: item.observedCodeHash },
       moduleContext: item.moduleContext,
     } });
   });
-  return freeze({ checkpoint, instances, sourceVerificationDigest, creatorFeeBps: provenance.creatorFeeBps, compositionHash, configurationContext, moduleAssetPins });
+  return freeze({ checkpoint, instances, sourceVerificationDigest, ...foundationCreatorFeeFields(provenance), compositionHash, configurationContext, moduleAssetPins });
 }
 
 /** Executed only by application code. A source role remains subject to the module's own authorization in simulation. */
@@ -345,8 +346,8 @@ function decodeConfiguration(schema: OpenConfigSchema, mapping: readonly ModuleE
   return value;
 }
 
-export interface FoundationDecodedLaunchSelectionsV1 {
-  selections: readonly FoundationModuleSelection[]; creatorFeeBps: number; quote: Address; quoteDecimals: number;
+export type FoundationDecodedLaunchSelectionsV1 = FoundationCreatorFees & {
+  selections: readonly FoundationModuleSelection[]; quote: Address; quoteDecimals: number;
   compositionHash: Hex; calldataHash: Hex; transactionVerified: false;
 }
 /** Restore exact admitted version/digest/configuration from calldata; the caller must separately establish transaction provenance. */
@@ -356,14 +357,15 @@ export function decodeFoundationLaunchSelectionsV1(input: {
   assertBoundFoundationCatalogV1(input.catalog);
   foundationRequire(/^0x(?:[0-9a-fA-F]{2})+$/.test(input.calldata) && input.calldata.length <= 2_097_154,
     "FOUNDATION_LAUNCH_CALLDATA_LIMIT", "Restore bounded canonical launch calldata.");
-  const decoded = decodeFunctionData({ abi: foundationFactoryNativeAbi, data: input.calldata });
+  const decoded = decodeFunctionData({ abi: [...foundationFactoryNativeAbi, ...foundationFactoryV3NativeAbi], data: input.calldata });
   foundationRequire((decoded.functionName === "launch" || decoded.functionName === "launchWithEth" || decoded.functionName === "launchWithEthRoute"), "FOUNDATION_LAUNCH_CALLDATA", "The transaction does not call this foundation factory's launch entrypoint.");
   const parameters = decoded.args[0];
+  const creatorFees = foundationCreatorFeeFields(parameters);
   const canonical = decoded.functionName === "launchWithEthRoute"
-    ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEthRoute", args: [parameters, decoded.args[1]] })
+    ? encodeFoundationLaunchEntry(parameters, { functionName: "launchWithEthRoute", fundingPath: decoded.args[1] })
     : decoded.functionName === "launchWithEth"
-    ? encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launchWithEth", args: [parameters, decoded.args[1]] })
-    : encodeFunctionData({ abi: foundationFactoryNativeAbi, functionName: "launch", args: [parameters] });
+    ? encodeFoundationLaunchEntry(parameters, { functionName: "launchWithEth", fundingPool: decoded.args[1] })
+    : encodeFoundationLaunchEntry(parameters, { functionName: "launch" });
   foundationRequire(sameHex(canonical, input.calldata),
     "FOUNDATION_LAUNCH_CALLDATA_NONCANONICAL", "The supplied launch bytes are not canonical ABI calldata.");
   foundationRequire(parameters.modules.length <= 8 && (!input.packageIds || input.packageIds.length === parameters.modules.length),
@@ -393,9 +395,9 @@ export function decodeFoundationLaunchSelectionsV1(input: {
     } else foundationRequire(selected.creatorShareBps === 0, "FOUNDATION_CREATOR_BUDGET_UNAUTHORIZED", "Original creator share exceeds this source's resource rights.");
     return { id: entry.manifest.packageId, version: entry.manifest.sourceDescriptor.version, digest: entry.manifestHash, configuration };
   });
-  const composition = composeFoundationUiSelectionsV1({ ...runtimeEnvironment(input.catalog, context), selections, creatorFeeBps: parameters.creatorFeeBps });
+  const composition = composeFoundationUiSelectionsV1({ ...runtimeEnvironment(input.catalog, context), selections, ...creatorFees });
   foundationRequire(composition.ok && sameHex(composition.compositionHash, hashFoundationCompositionV1(parameters.modules)),
     "FOUNDATION_ACTION_COMPOSITION_MISMATCH", composition.diagnostics[0]?.message ?? "The reconstructed UI selections do not match the launch bytes.");
-  return freeze({ selections, creatorFeeBps: parameters.creatorFeeBps, quote: parameters.quote, quoteDecimals: parameters.quoteDecimals,
+  return freeze({ selections, ...creatorFees, quote: parameters.quote, quoteDecimals: parameters.quoteDecimals,
     compositionHash: composition.compositionHash, calldataHash: keccak256(input.calldata), transactionVerified: false });
 }
