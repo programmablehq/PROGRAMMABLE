@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAddress, type Address } from "viem";
-import { fetchFoundationAvailability, parseFoundationAvailability, FOUNDATION_AVAILABILITY_SCHEMA, FOUNDATION_AVAILABILITY_SCHEMA_V2 } from "@/lib/module-foundation/availability";
+import { fetchFoundationAvailability, parseFoundationAvailability, FOUNDATION_AVAILABILITY_SCHEMA, FOUNDATION_AVAILABILITY_SCHEMA_V2, FOUNDATION_AVAILABILITY_SCHEMA_V3 } from "@/lib/module-foundation/availability";
 import { FOUNDATION_LP_CUSTODY_DEAD_ID } from "@/lib/module-foundation/constants";
 import { FOUNDATION_CATALOG_SCHEMA_V1 } from "@/lib/module-foundation/catalog";
 
@@ -32,6 +32,13 @@ describe("V2 same-origin authority transport boundary", () => {
     expect(() => parseFoundationAvailability({ ...source, schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA })).toThrow();
     expect(() => parseFoundationAvailability({ ...source, binding: { ...source.binding, factoryVersion: undefined } })).toThrow("version");
     expect(() => parseFoundationAvailability({ ...source, binding: { ...source.binding, lpCustodyId: `0x${"2".repeat(64)}` } })).toThrow("custody");
+  });
+  it("requires an exact V3 schema and source binding for directional-fee launches", () => {
+    const source = envelope();
+    const binding = { ...source.binding, factoryVersion: "v3" };
+    expect(parseFoundationAvailability({ ...source, schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V3, binding }).binding?.factoryVersion).toBe("v3");
+    expect(() => parseFoundationAvailability({ ...source, binding })).toThrow("version");
+    expect(() => parseFoundationAvailability({ ...source, schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V3 })).toThrow("version");
   });
   it("preserves the original structurally validated V1 source response", () => {
     const source = envelope();
