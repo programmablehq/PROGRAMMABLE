@@ -61,6 +61,6 @@ function WalletAction() {
 
 it("allows Connect to initialize the deferred wallet on a coin page", () => {
   vi.mocked(useWallet).mockReturnValue({ wallet: null, authenticated: false, sessionReady: false, authReady: false,
-    connecting: false, openingWallet: false, switchingNetwork: false, disconnecting: false, openWallet: vi.fn() } as ReturnType<typeof useWallet>);
+    connecting: false, openingWallet: false, switchingNetwork: false, disconnecting: false, openWallet: vi.fn() } as unknown as ReturnType<typeof useWallet>);
   expect(renderToStaticMarkup(<WalletAction />)).toBe("<button>Connect wallet</button>");
 });
