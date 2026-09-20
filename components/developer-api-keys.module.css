@@ -226,7 +226,8 @@
 
 @media (max-width: 600px) { .hero h1 { font-size: 28px; line-height: 36px; } .intro { min-height: 40px; } }
 
-.buildGuide { border: 1px solid var(--api-line); border-radius: 12px; margin-bottom: 24px; min-width: 0; scroll-margin-top: calc(var(--header-height) + 24px); }
+.buildGuide {
+  scroll-margin-top: calc(var(--header-height, 88px) + 24px); border: 1px solid var(--api-line); border-radius: 12px; margin-bottom: 24px; min-width: 0; scroll-margin-top: calc(var(--header-height) + 24px); }
 .buildGuide > summary { align-items: center; color: var(--webde-ink); cursor: pointer; display: flex; font-size: 14px; gap: 16px; justify-content: space-between; line-height: 20px; list-style: none; min-height: 48px; padding: 12px 16px; }
 .buildGuide > summary svg { flex: none; }
 .buildGuide[open]:not([data-disclosure-closing]) > summary svg { transform: rotate(180deg); }

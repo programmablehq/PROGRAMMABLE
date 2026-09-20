@@ -1127,7 +1127,13 @@ export function DeveloperApiKeysView({
       setInitialLaunchId(launchId);
       setInitialLaunchChainId(chainId === "1" ? null : "4663");
       if (section === "keys" && searchParams.get("guide") === "custom-hook") {
-        window.requestAnimationFrame(() => { if (guideRef.current) guideRef.current.open = true; });
+        window.requestAnimationFrame(() => {
+          const guide = guideRef.current;
+          if (!guide) return;
+          guide.open = true;
+          guide.scrollIntoView({ block: "start" });
+          guide.querySelector("summary")?.focus({ preventScroll: true });
+        });
       }
     }, 0);
     return () => window.clearTimeout(update);
