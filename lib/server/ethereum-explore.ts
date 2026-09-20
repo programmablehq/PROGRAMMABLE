@@ -91,11 +91,19 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   };
 }
 
-export async function readEthereumToken(address: string) {
+export async function readEthereumToken(address: string, dependencies?: Dependencies) {
   try {
-    const catalog = await readEthereumExploreCatalog();
+    let catalog = await readEthereumExploreCatalog(dependencies);
+    const findToken = () => catalog.entries.find(entry => entry.tokenAddress.toLowerCase() === address.toLowerCase()) ?? null;
+    let token = findToken();
+    // A cold page has its own reader cache. Give a temporarily missing source
+    // one bounded recovery read before treating its verified token as unavailable.
+    if (!token && (catalog.status === "partial" || catalog.status === "unavailable")) {
+      catalog = await readEthereumExploreCatalog(dependencies);
+      token = findToken();
+    }
     return { chainId: catalog.chainId, status: catalog.status, sources: catalog.sources, updatedAt: catalog.updatedAt,
-      token: catalog.entries.find(entry => entry.tokenAddress.toLowerCase() === address.toLowerCase()) ?? null };
+      token };
   } catch {
     return { chainId: 1 as const, status: "unavailable" as const, updatedAt: null, token: null };
   }
