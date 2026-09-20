@@ -263,6 +263,24 @@
 .marketMetrics dt { color: var(--mf-muted); font-size: 14px; line-height: 20px; }
 .marketMetrics dd { font-size: 24px; font-weight: 500; line-height: 32px; margin: 4px 0 0; }
 .marketAbout > p { color: var(--mf-muted); font-size: 16px; line-height: 24px; margin: 0 0 24px; max-width: 60ch; }
+.marketPage { --mf-focus: #fff; }
+.marketPage .tradePanel .field input { background: #1f1f1f; font-size: 24px; font-variant-numeric: tabular-nums; line-height: 32px; min-height: 64px; }
+.marketPage .tradePanel .field input:focus-visible { border-color: #fff; box-shadow: inset 0 0 0 1px #fff; outline: none; }
+.tradeAmountLabel { align-items: center; display: flex; justify-content: space-between; margin-top: -8px; }
+.tradeAmountLabel > label { margin: 0; }
+.tradeMax { background: transparent; border: 0; color: var(--mf-ink); cursor: pointer; font: inherit; font-size: 14px; min-height: 44px; min-width: 44px; padding: 8px; }
+.tradeBalance { color: var(--mf-muted); font-size: 12px; line-height: 20px; margin: 8px 0 0; min-height: 20px; overflow-wrap: anywhere; }
+.tradeSettings { color: var(--mf-muted); font-size: 14px; line-height: 20px; margin-top: 8px; }
+.tradeSettings > summary { align-items: center; cursor: pointer; display: flex; justify-content: space-between; list-style: none; min-height: 44px; }
+.tradeSettings > summary::-webkit-details-marker { display: none; }
+.tradeSettings > summary > span { color: var(--mf-ink); font-variant-numeric: tabular-nums; }
+.tradeSlippage { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); padding: 0 0 8px; }
+.tradeSlippage > button { background: transparent; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-muted); cursor: pointer; font: inherit; min-height: 44px; }
+.tradeSlippage > button[aria-pressed="true"] { background: #fff; border-color: #fff; color: #181818; }
+.tradeMax:disabled, .tradeSlippage > button:disabled { cursor: default; opacity: .45; }
+.tradeResult { align-items: center; color: var(--mf-muted); display: flex; flex-wrap: wrap; font-size: 14px; gap: 0 8px; line-height: 20px; margin-top: 16px; }
+.tradeResult > a { align-items: center; display: inline-flex; justify-content: center; min-height: 44px; min-width: 44px; }
+.tradeResult > .textButton { font-size: 14px; padding-left: 0; }
 .tradePanel { background: var(--mf-surface); border: 1px solid var(--mf-line); border-radius: 16px; min-width: 0; padding: 24px; }
 .sideButtons { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 24px; }
 .sideButtons button { background: transparent; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-muted); cursor: pointer; font: inherit; font-size: 16px; font-weight: 500; line-height: 24px; min-height: 48px; padding: 8px 12px; }

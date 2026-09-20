@@ -117,7 +117,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).toContain("Launching is temporarily unavailable.");
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
     const market = renderToStaticMarkup(<ModuleFoundationMarket availability={{ ...availability, status: "unavailable" }} contextKey="fixture" coin={{ address, name: "UI fixture", symbol: "UI", description: "Local UI fixture.", decimals: 18 }} quote={quote} pool={{ poolId: hash, currency0: address, currency1: address, fee: 3000, tickSpacing: 60, hooks: address, poolManager: address }} creatorFeeBps={0} onPrepareTrade={vi.fn()} onConfirmTrade={vi.fn()} />);
-    expect(market).toContain("Universal Router");
+    expect(market).toContain("Trading is temporarily unavailable");
     expect(market.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
   });
   it("does not promote submitted transaction, fee credit or metadata storage into confirmation", () => {
