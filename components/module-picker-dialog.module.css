@@ -5,6 +5,11 @@
 .dialog[data-closing]::backdrop { transition-duration: 140ms; }
 .surface { background: #181818; border: 1px solid #494746; border-radius: 24px; display: flex; flex-direction: column; max-height: calc(100dvh - 48px); min-height: min(480px, calc(100dvh - 48px)); overflow: hidden; }
 .librarySurface { height: min(640px, calc(100dvh - 48px)); }
+.compact { width: 480px; }
+.compact .surface { min-height: 0; border-radius: 16px; }
+.compact .done { background: #fff; border-color: #fff; border-radius: 8px; color: #181818; font-size: 16px; font-weight: 600; }
+.compact :is(button, a, input, select, textarea, summary):focus-visible { outline-color: #fff; }
+@media (hover: hover) and (pointer: fine) { .compact .done:not(:disabled):hover { background: #e7e7e7; border-color: #e7e7e7; } }
 .header { align-items: flex-start; display: flex; flex-shrink: 0; gap: 16px; padding: 24px 24px 16px; }
 .header > div { flex: 1; min-width: 0; padding-block: 8px; }
 .header h2 { font-size: 24px; font-weight: 500; letter-spacing: -.025em; line-height: 1.25; margin: 0; overflow-wrap: anywhere; }

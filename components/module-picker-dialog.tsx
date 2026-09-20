@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useLayoutEffect, useId, useRef, type ReactNode } from "react";
 import styles from "./module-picker-dialog.module.css";
 
-export function ModulePickerDialog({ title, description, children, onClose, onDone, doneDisabled = false, footer, animateOpen = false, variant }: {
+export function ModulePickerDialog({ title, description, children, onClose, onDone, doneDisabled = false, doneLabel = "Done", showDone = true, footer, animateOpen = false, variant }: {
   title: string;
   description?: string;
   children: ReactNode;
@@ -12,8 +12,10 @@ export function ModulePickerDialog({ title, description, children, onClose, onDo
   onClose: () => void;
   onDone?: () => void;
   doneDisabled?: boolean;
+  doneLabel?: string;
+  showDone?: boolean;
   animateOpen?: boolean;
-  variant?: "library";
+  variant?: "library" | "compact";
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -80,7 +82,7 @@ export function ModulePickerDialog({ title, description, children, onClose, onDo
     };
   }, [animateOpen]);
 
-  return <dialog ref={dialog} className={styles.dialog} aria-labelledby={`${id}-title`} aria-describedby={description ? `${id}-description` : undefined}
+  return <dialog ref={dialog} className={`${styles.dialog}${variant === "compact" ? ` ${styles.compact}` : ""}`} aria-labelledby={`${id}-title`} aria-describedby={description ? `${id}-description` : undefined}
     onCancel={event => { event.preventDefault(); close(false); }}
     onKeyDown={event => {
       if (event.key !== "Tab") return;
@@ -98,7 +100,7 @@ export function ModulePickerDialog({ title, description, children, onClose, onDo
         <button type="button" className={styles.close} onClick={event => close(event.detail > 0)} aria-label="Close modules"><X size={20} aria-hidden="true" /></button>
       </header>
       <div className={styles.content}>{children}</div>
-      <footer className={styles.footer}>{footer}<button type="button" className={styles.done} disabled={doneDisabled} onClick={event => onDone ? onDone() : close(event.detail > 0)}>Done</button></footer>
+      {showDone || footer ? <footer className={styles.footer}>{footer}{showDone ? <button type="button" className={styles.done} disabled={doneDisabled} onClick={event => onDone ? onDone() : close(event.detail > 0)}>{doneLabel}</button> : null}</footer> : null}
     </div>
   </dialog>;
 }
