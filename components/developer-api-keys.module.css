@@ -35,7 +35,6 @@
 .topNavigation { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 16px; }
 .hero { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; margin-bottom: 24px; }
 .heroCopy { min-width: 0; }
-.page.builderPage { max-width: 880px; }
 .hero h1 { color: var(--webde-ink); font-size: 32px; font-weight: 500; letter-spacing: -0.035em; line-height: 40px; margin: 0; text-wrap: balance; }
 .intro { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 8px 0 0; max-width: 64ch; min-height: 20px; text-wrap: pretty; }
 
@@ -226,10 +225,20 @@
 @media (forced-colors: active) { .primaryButton, .secondaryButton, .dangerButton, .keyList, .mutationConfirmation, .createPanel, .keyReveal, .walletGate, .sectionSwitch button, .expiryTrigger, .expiryMenu, .expiryOption, .connectionOptions { border: 1px solid CanvasText; } .keyStatus::before { forced-color-adjust: none; } }
 
 @media (max-width: 600px) { .hero h1 { font-size: 28px; line-height: 36px; } .intro { min-height: 40px; } }
-.workspace:is(details) { display: block; }
-.workspace:is(details) > section + section { margin-top: 32px; }
-.keySettingsSummary { align-items: center; border: 1px solid var(--api-line); border-radius: 12px; cursor: pointer; display: flex; font-size: 14px; gap: 16px; justify-content: space-between; list-style: none; min-height: 48px; padding: 12px 16px; }
-.keySettingsSummary::-webkit-details-marker { display: none; }
-.keySettingsSummary:focus-visible { outline: 2px solid #e786b2; outline-offset: 3px; }
-.workspace[open] > .keySettingsSummary { margin-bottom: 16px; }
-.workspace[open]:not([data-disclosure-closing]) > .keySettingsSummary svg { transform: rotate(180deg); }
+
+.buildGuide {
+  scroll-margin-top: calc(var(--header-height, 88px) + 24px); border: 1px solid var(--api-line); border-radius: 12px; margin-bottom: 24px; min-width: 0; scroll-margin-top: calc(var(--header-height) + 24px); }
+.buildGuide > summary { align-items: center; color: var(--webde-ink); cursor: pointer; display: flex; font-size: 14px; gap: 16px; justify-content: space-between; line-height: 20px; list-style: none; min-height: 48px; padding: 12px 16px; }
+.buildGuide > summary svg { flex: none; }
+.buildGuide[open]:not([data-disclosure-closing]) > summary svg { transform: rotate(180deg); }
+.buildGuideBody { padding: 8px 16px 24px; }
+.buildGuideBody > p { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 0; max-width: 68ch; text-wrap: pretty; }
+.buildSteps { display: grid; gap: 24px; list-style: decimal; margin: 24px 0; padding-left: 24px; }
+.buildSteps li { color: var(--webde-muted); font-size: 14px; line-height: 20px; padding-left: 8px; }
+.buildSteps strong { color: var(--webde-ink); display: block; font-weight: 500; margin-bottom: 4px; }
+.buildSteps span { display: block; max-width: 64ch; text-wrap: pretty; }
+.buildGuideBody .guideNote { margin-top: 12px; }
+.instructionFallback { border: 1px solid var(--api-line); border-radius: 8px; color: var(--webde-muted); font-size: 12px; line-height: 20px; max-height: 320px; overflow: auto; overflow-wrap: anywhere; padding: 16px; white-space: pre-wrap; }
+.instructionFallback:focus-visible { outline: 2px solid var(--api-accent); outline-offset: 3px; }
+@media (max-width: 600px) { .buildGuideBody > button { width: 100%; } }
+@media (forced-colors: active) { .buildGuide { border-color: CanvasText; } }

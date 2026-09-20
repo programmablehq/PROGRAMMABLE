@@ -62,15 +62,6 @@ describe("Custom Launch API documentation", () => {
       expect(source).toMatch(/prepared[\s\S]{0,240}(?:no wallet transaction|walletTransaction[^\n]{0,80}(?:null|both null))/i);
       expect(source).toMatch(/authorized[\s\S]{0,240}(?:walletTransaction|wallet transaction)/i);
     }
-    expect(createGuide).toContain(
-      "pack -> validate --remote -> submit -> server decision -> status --watch --until authorized -> wallet -> status --watch --until finalized",
-    );
-    expect(createGuide).toContain("/openapi/custom-launch-v3.json");
-    expect(createGuide).toContain("awaiting_funding_authorization");
-    expect(createGuide).toContain("EIP-3009 funding signature");
-    expect(createGuide).toContain("fresh, separate review");
-    expect(createGuide).not.toContain("integration-pending");
-    expect(createGuide).toContain("Never sign or broadcast automatically");
     for (const source of [gitBookGuide, websiteGuide, rawGuide, developerDocsMarkdown]) {
       expect(source).toMatch(/action_required[\s\S]{0,300}not a wallet/i);
       expect(source).not.toMatch(/platform review (?:supplies|provides)/i);
@@ -163,7 +154,6 @@ describe("Custom Launch API documentation", () => {
       expect(source).toContain("programmable-launch");
       expect(source).toMatch(/do not (?:copy test-only hashes|enter\s+derived hashes by hand)/i);
     }
-    expect(createGuide).toContain("/openapi/custom-launch-v3.json");
     expect(createGuide).not.toMatch(/Hookbuilder-Skill|Hook Builder packages/);
   });
 
@@ -203,9 +193,12 @@ describe("Custom Launch API documentation", () => {
     expect(gitBookGuide).toContain("programmable-launch submit ./launch.json");
   });
 
-  it("keeps the website agent prompt on the current public CLI release", () => {
-    expect(createGuide).toContain("public CLI 3.3.9 state machine");
-    expect(createGuide).not.toContain("public CLI 3.1.0 flow");
+  it("sends custom builders to the canonical in-page instructions", () => {
+    expect(createGuide).toContain('href="/developers/api-keys?guide=custom-hook"');
+    expect(createGuide).toContain('href="/launch/modules/foundation"');
+    expect(createGuide).not.toContain("BUILD_PROMPT");
+    expect(createGuide).not.toContain("clipboard");
+    expect(createGuide).not.toContain('href="/agents.md"');
   });
 
   it("publishes capabilities, side-effect-free preflight and separate truth axes", () => {
@@ -249,7 +242,6 @@ describe("Custom Launch API documentation", () => {
       expect(source).toMatch(/V2[\s\S]{0,200}(?:read-only|read only|write fence)/i);
       expect(source).toMatch(/Public V3/i);
     }
-    expect(createGuide).toMatch(/submit only (?:the|those) byte-identical/i);
     for (const source of [gitBookGuide, websiteGuide, rawGuide, developerDocsMarkdown]) {
       expect(source).toContain("Retry-After");
       expect(source).toMatch(/V3[^\n]{0,120}(?:public|live)/i);

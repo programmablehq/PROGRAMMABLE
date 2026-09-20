@@ -27,6 +27,7 @@ export default async function DeveloperApiKeysPage({
   return (
     <DeveloperApiKeys
       initialSection={developerApiKeysInitialSection(resolvedSearchParams)}
+      initialGuideOpen={resolvedSearchParams.guide === "custom-hook"}
       agentSetupText={buildProgrammableAgentSetupTextV1(V4_API_PROFILE_VERSION)}
       launchContractSetup={launchContractSetup ?? undefined}
     />

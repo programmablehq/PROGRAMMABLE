@@ -62,7 +62,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   });
   it("offers a base coin without an editable starting valuation", () => {
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={availability} contextKey="fixture" catalog={[]} quoteAssets={[quote]} suggestedInitialBuy="0.001167" onResolveQuote={vi.fn()} {...actions} />);
-    for (const label of ["Ticker", "Add More Links", "Creator fees", "Stocks or Meme Coins", "First buy", "Create Launch"]) expect(html).toContain(label);
+    for (const label of ["Ticker", "Add More Links", "Creator fees", "Add module", "First buy", "Create Launch"]) expect(html).toContain(label);
     expect(html).not.toContain('name="startValuationQuote"');
     expect(html).not.toContain("Starting valuation");
     expect(html).not.toContain("foundation-valuation");
@@ -76,6 +76,8 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(html).not.toContain('name="creatorSellFeeBps"');
     expect(html).not.toContain("Optional");
     expect(html).not.toContain("foundation-modules-heading");
+    expect(html).toContain("Paired with ETH");
+    expect(html).not.toContain("Token address");
     expect(html).not.toContain("Platform fee recipient");
     expect(html).not.toContain("5000");
     expect(html).not.toMatch(/Buyback|Rewards|Leverage/);

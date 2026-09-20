@@ -332,14 +332,14 @@ describe("developer API key interface", () => {
   });
 
   it("keeps the first view compact and focused on key management", () => {
-    expect(apiKeysSource).toContain('activeSection === "keys" ? hookBuilder ? "Build a custom hook" : "API keys"');
+    expect(apiKeysSource).toContain('activeSection === "keys" ? "API keys"');
     expect(apiKeysSource).toContain('aria-label="Developer access view"');
     expect(apiKeysSource).toContain('aria-pressed={activeSection === "keys"}');
     expect(apiKeysSource).toContain('aria-pressed={activeSection === "history"}');
     expect(apiKeysSource).toContain('activeSection === "keys" ?');
     expect(apiKeysSource).not.toContain("Before anything reaches your wallet");
-    expect(apiKeysSource).toContain('href="/launch"');
-    expect(apiKeysSource).toContain("<span>Back</span>");
+    expect(apiKeysSource).toContain('href="/"');
+    expect(apiKeysSource).toContain("<span>Home</span>");
     expect(apiKeysSource).not.toContain("Back to profile");
     expect(apiKeysSource).toContain("const API_KEY_PAGE_SIZE = 3");
     expect(apiKeysSource).toContain("visibleApiKeys.map");
@@ -360,7 +360,11 @@ describe("developer API key interface", () => {
     expect(apiKeysStyles).toContain("--api-key-row-min-height");
     expect(apiKeysStyles).not.toContain("grid-template-rows: repeat(");
     expect(apiKeysSource).not.toContain('aria-labelledby="agent-setup-title"');
-    expect(apiKeysSource).toContain('href="/agents.md"');
+    expect(apiKeysSource).not.toContain('href="/agents.md"');
+    expect(apiKeysSource).not.toContain('href="/developers/hooks"');
+    expect(apiKeysSource).toContain('id="custom-hook-guide"');
+    expect(apiKeysSource).toContain("key={sessionKey}");
+    expect(apiKeysSource).not.toContain("key={viewKey}");
     expect(apiKeysSource.indexOf('aria-label="API key pages"')).toBeLessThan(
       apiKeysSource.indexOf('className={styles.keyList}'),
     );
@@ -404,7 +408,7 @@ describe("developer API key interface", () => {
       account: "0x0000000000000000000000000000000000000001" as const },
     { state: "disconnected wallet", authReady: true, account: null },
     { state: "loading wallet session", authReady: false, account: null },
-  ])("keeps guides accessible without offering key setup prematurely for $state", ({ authReady, account }) => {
+  ])("offers secret-free builder instructions before key setup for $state", ({ authReady, account }) => {
     const getToken = vi.fn(async () => null);
     const walletAction = vi.fn(async (): Promise<`0x${string}`> => {
       throw new Error("Setup must not request a wallet action");
@@ -422,8 +426,9 @@ describe("developer API key interface", () => {
       signCustomLaunchFundingAuthorization: walletAction,
     }));
 
-    expect(html).not.toContain("Copy instructions");
-    expect(html).toContain('href="/agents.md"');
+    expect(html).toContain("Copy builder instructions");
+    expect(html).toContain('id="custom-hook-guide"');
+    expect(html).not.toContain('href="/agents.md"');
     expect(html).not.toContain("Set up your agent");
     expect(html).not.toContain("Manage access for");
     expect(html).not.toContain(">Copy key</button>");
@@ -447,6 +452,8 @@ describe("developer API key interface", () => {
     expect(copySetup).toContain("buildAgentInstructions({ scopes, wallet:");
     expect(copySetup).not.toContain("mutationResult");
     expect(copySetup).not.toContain("apiKeySecret");
+    expect(copySetup).toContain("setSetupFallbackText(instructions)");
+    expect(copySetup).toContain("guideRef.current.open = true");
   });
 
   it("continues with an active key that has the required builder scopes", () => {
@@ -467,7 +474,7 @@ describe("developer API key interface", () => {
     expect(apiKeyForBuilder([unified], "hook")).toBe(unified);
   });
 
-  it.each(["hook"] as const)("explains the %s builder before asking for a key", (kind) => {
+  it("opens the builder guide on the same key page before asking for a wallet", () => {
     const getToken = vi.fn(async () => null);
     const walletAction = vi.fn(async (): Promise<`0x${string}`> => {
       throw new Error("Onboarding must not perform wallet actions");
@@ -479,7 +486,7 @@ describe("developer API key interface", () => {
       getAccessToken: getToken,
       getIdentityToken: getToken,
       initialSection: "keys" as const,
-      hookBuilder: kind === "hook",
+      initialGuideOpen: true,
       openWallet: vi.fn(),
       sendCustomLaunchWalletAction: walletAction,
       sendCustomLaunchWalletActionV4: walletAction,
@@ -488,17 +495,19 @@ describe("developer API key interface", () => {
     const html = renderToStaticMarkup(createElement(DeveloperApiKeysView, props));
     expect(html).toContain("Build a custom hook");
     expect(html).toContain("trading rules");
-    expect(html.indexOf("Builder setup")).toBeLessThan(html.indexOf("Connect your wallet"));
-    expect(html).toContain("continue with one you already saved");
-    expect(html).not.toContain("Developer access view");
+    expect(html).toMatch(/<details[^>]*id="custom-hook-guide"[^>]*open=""/u);
+    expect(html.indexOf("Build a custom hook")).toBeLessThan(html.indexOf("Connect your wallet"));
+    expect(html).toContain("or use one you already saved");
+    expect(html).toContain("Developer access view");
+    expect(html).toContain("<h1>API keys</h1>");
     expect(html).not.toContain("Copy prompt");
     expect(html).not.toContain("<textarea");
     const loading = renderToStaticMarkup(createElement(DeveloperApiKeysView, {
       ...props,
       account: "0x0000000000000000000000000000000000000001",
     }));
-    expect(loading).toContain("Loading your API keys");
-    expect(loading).not.toContain("Create your API key");
+    expect(loading).toContain("Copy builder instructions");
+    expect(loading).not.toContain("api-key-mutation-result-title");
     expect(getToken).not.toHaveBeenCalled();
     expect(walletAction).not.toHaveBeenCalled();
   });

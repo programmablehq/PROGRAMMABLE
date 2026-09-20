@@ -38,28 +38,20 @@
 
 .trigger:focus-visible,
 .closeButton:focus-visible,
-.copyButton:focus-visible,
-.links a:focus-visible,
-.promptBox pre:focus-visible {
+.links a:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
 .dialog {
-  -webkit-backdrop-filter: blur(30px) saturate(1.08);
-  backdrop-filter: blur(30px) saturate(1.08);
-  background: var(--liquid-glass-surface-background-strong);
-  border: 1px solid var(--liquid-glass-border-strong);
-  border-radius: 28px;
-  box-shadow:
-    inset 0 1px 0 var(--liquid-glass-highlight),
-    0 0 0 1px color-mix(in srgb, var(--liquid-glass-border) 52%, transparent),
-    0 28px 90px rgb(1 1 3 / 0.5);
-  color: var(--text);
+  background: #151515;
+  border: 1px solid #30302e;
+  border-radius: 16px;
+  color: #f5f3ef;
   height: auto;
   margin: auto;
-  max-height: min(760px, calc(100dvh - 32px));
-  max-width: 760px;
+  max-height: calc(100dvh - 32px);
+  max-width: 640px;
   min-width: 0;
   overflow: hidden;
   padding: 0;
@@ -72,8 +64,6 @@
 }
 
 .dialog::backdrop {
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
   background: rgb(1 1 3 / 0.72);
 }
 
@@ -106,9 +96,9 @@
 
 .closeButton {
   align-items: center;
-  background: var(--liquid-glass-control-background);
-  border: 1px solid var(--liquid-glass-border);
-  border-radius: 14px;
+  background: #181818;
+  border: 1px solid #30302e;
+  border-radius: 12px;
   color: var(--text-soft);
   display: inline-flex;
   height: 44px;
@@ -122,12 +112,11 @@
 }
 
 .closeButton:hover {
-  background: var(--liquid-glass-control-background-hover);
+  background: #272727;
   color: var(--text);
 }
 
-.closeButton:active,
-.copyButton:active {
+.closeButton:active {
   scale: 0.96;
 }
 
@@ -148,7 +137,7 @@
   text-wrap: pretty;
 }
 
-.steps {
+.choices {
   display: grid;
   gap: 32px;
   list-style: none;
@@ -156,28 +145,12 @@
   padding: 0;
 }
 
-.steps > li {
-  align-items: start;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 32px minmax(0, 1fr);
+.choices > li + li {
+  border-top: 1px solid #30302e;
+  padding-top: 24px;
 }
 
-.stepNumber {
-  align-items: center;
-  background: var(--liquid-glass-inner-background);
-  border-radius: 10px;
-  color: var(--accent-strong);
-  display: inline-flex;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  height: 32px;
-  justify-content: center;
-  width: 32px;
-}
-
-.steps h3 {
+.choices h3 {
   font-size: 18px;
   font-weight: 620;
   letter-spacing: -0.02em;
@@ -186,7 +159,7 @@
   text-wrap: balance;
 }
 
-.steps p {
+.choices p {
   color: var(--text-soft);
   font-size: 15px;
   line-height: 1.55;
@@ -194,62 +167,6 @@
   max-width: 65ch;
   overflow-wrap: break-word;
   text-wrap: pretty;
-}
-
-.steps strong {
-  color: var(--text);
-  font-weight: 620;
-}
-
-.promptBox {
-  background: var(--liquid-glass-inner-background);
-  border-radius: 18px;
-  margin-top: 16px;
-  padding: 16px;
-}
-
-.promptBox pre {
-  color: var(--text);
-  font-family: var(--font-plex-mono), "SFMono-Regular", Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.55;
-  margin: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-.copyButton {
-  align-items: center;
-  background: var(--liquid-glass-control-background);
-  border: 1px solid var(--liquid-glass-border);
-  border-radius: 12px;
-  color: var(--text);
-  display: inline-flex;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 620;
-  gap: 8px;
-  margin-top: 16px;
-  min-height: 44px;
-  padding: 8px 12px;
-  transition:
-    background-color 140ms var(--ease-out),
-    border-color 140ms var(--ease-out),
-    scale 140ms var(--ease-out);
-}
-
-.copyButton:hover {
-  background: var(--liquid-glass-control-background-hover);
-  border-color: var(--liquid-glass-border-strong);
-}
-
-.copyStatus {
-  color: var(--text-soft);
-  font-size: 13px !important;
-  line-height: 1.45 !important;
-  min-height: 19px;
-  margin-top: 8px !important;
 }
 
 .links {
@@ -286,7 +203,7 @@
   }
 
   .dialog {
-    border-radius: 22px;
+    border-radius: 16px;
     max-height: calc(100dvh - 16px);
     width: calc(100% - 16px);
   }
@@ -306,18 +223,9 @@
     scrollbar-gutter: auto;
   }
 
-  .steps {
+  .choices {
     gap: 24px;
     margin-top: 24px;
-  }
-
-  .steps > li {
-    gap: 12px;
-  }
-
-  .promptBox {
-    border-radius: 16px;
-    padding: 12px;
   }
 
   .links {
@@ -329,7 +237,7 @@
 
 @media (max-width: 340px) {
   .dialog {
-    border-radius: 18px;
+    border-radius: 12px;
     max-height: calc(100dvh - 8px);
     width: calc(100% - 8px);
   }
@@ -338,30 +246,18 @@
   .content {
     padding-inline: 12px;
   }
-
-  .steps > li {
-    grid-template-columns: 28px minmax(0, 1fr);
-  }
-
-  .stepNumber {
-    border-radius: 8px;
-    height: 28px;
-    width: 28px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .trigger,
-  .closeButton,
-  .copyButton {
+  .closeButton {
     transition-duration: 0.01ms;
   }
 }
 
 @media (forced-colors: active) {
   .dialog,
-  .closeButton,
-  .copyButton {
+  .closeButton {
     border: 1px solid CanvasText;
   }
 }

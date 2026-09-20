@@ -23,11 +23,11 @@ describe("API keys session restoration", () => {
 
       const html = renderToStaticMarkup(<DeveloperApiKeys />);
       if (sessionReady) {
-        expect(html).toContain("Connect your wallet");
+        expect(html).toContain('id="connect-title"');
         expect(html).not.toContain("Loading wallet session");
       } else {
         expect(html).toContain("Loading wallet session");
-        expect(html).not.toContain("Connect your wallet");
+        expect(html).not.toContain('id="connect-title"');
         expect(html).not.toContain("Opening wallet");
       }
       expect(getAccessToken).not.toHaveBeenCalled();

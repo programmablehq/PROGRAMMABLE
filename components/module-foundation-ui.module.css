@@ -34,6 +34,30 @@
 .builderPage .socialDetails > summary::-webkit-details-marker { display: none; }
 .builderPage .socialDetails[open] > summary > svg { transform: rotate(180deg); }
 .marketLabel { font-size: 14px; font-weight: 500; line-height: 20px; margin: 0 0 12px; }
+.moduleSectionHeading { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 8px; min-height: 44px; }
+.moduleSectionHeading .marketLabel { margin: 0; }
+.addModuleButton { align-items: center; background: transparent; border: 0; border-radius: 8px; color: var(--mf-ink); cursor: pointer; display: inline-flex; font: inherit; font-size: 14px; font-weight: 500; gap: 8px; min-height: 44px; padding: 8px 0 8px 12px; }
+.classicPair { align-items: center; color: var(--mf-ink); display: flex; font-size: 14px; gap: 12px; line-height: 20px; margin-bottom: 24px; min-height: 48px; }
+.classicPair > svg { flex: 0 0 22px; }
+.attachedModule { align-items: center; background: #1f1f1f; border: 1px solid var(--mf-control-line); border-radius: 8px; display: flex; gap: 12px; margin-bottom: 24px; padding: 8px 8px 8px 16px; }
+.attachedModule > svg { flex: 0 0 24px; }
+.attachedModule .iconButton { flex: 0 0 44px; }
+.moduleEdit { background: transparent; border: 0; border-radius: 4px; color: var(--mf-ink); cursor: pointer; display: grid; flex: 1; font: inherit; gap: 4px; min-height: 48px; min-width: 0; padding: 4px 0; text-align: left; }
+.moduleEdit strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.moduleEdit span { color: var(--mf-muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.moduleBadge { background: #272727; border-radius: 8px; color: var(--mf-ink); padding: 4px 8px; }
+.previewModules { color: var(--mf-muted); display: grid; font-size: 12px; gap: 8px; line-height: 16px; margin-top: 16px; }
+.previewModules:empty { display: none; }
+.previewModules > span { align-items: center; display: flex; gap: 8px; }
+.moduleOption { align-items: center; background: #1f1f1f; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-ink); cursor: pointer; display: flex; font: inherit; gap: 16px; padding: 16px; text-align: left; width: 100%; }
+.moduleOption > svg { flex-shrink: 0; }
+.moduleOption > span { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.moduleOption strong { font-size: 16px; font-weight: 500; line-height: 24px; }
+.moduleOption small { color: var(--mf-muted); font-size: 14px; line-height: 20px; text-wrap: pretty; }
+.pairConfiguration .field { margin-bottom: 0; }
+.pairConfiguration input { font-family: inherit; font-size: 16px; }
+.pairConfiguration :is(.saved, .help, .error) { min-height: 40px; padding-top: 8px; }
+@media (hover: hover) { .moduleOption:hover { background: #272727; } .moduleEdit:hover strong, .addModuleButton:hover { text-decoration: underline; text-underline-offset: 4px; } }
 .pairChoices { display: flex; gap: 8px; margin-bottom: 24px; }
 .pairChoices > button { align-items: center; background: transparent; border: 1px solid var(--mf-control-line); border-radius: 8px; color: var(--mf-muted); cursor: pointer; display: flex; flex: 1; font: inherit; gap: 12px; min-height: 56px; min-width: 0; padding: 12px 16px; text-align: left; }
 .pairChoices > button[aria-pressed="true"] { background: #272727; border-color: #b7b7b3; color: var(--mf-ink); }

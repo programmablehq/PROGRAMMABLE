@@ -31,7 +31,7 @@ const desktopNavItems = [
 ];
 
 const menuNavItems = [
-  { href: "/launch/modules", label: "Modules" },
+  { href: "/launch/modules/foundation", label: "Modules" },
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/profile", label: "Profile" },
   { href: "/docs", label: "Docs" },

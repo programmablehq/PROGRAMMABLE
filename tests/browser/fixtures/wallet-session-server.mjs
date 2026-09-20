@@ -95,7 +95,7 @@ export async function createWalletSessionServer() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({
         loader: "tsx", resolveDir: root,
         contents: args.path === "next/navigation"
-          ? `export const usePathname=()=>window.location.pathname; const router={prefetch:()=>{},push:(url)=>window.history.pushState(null,'',url),replace:(url)=>window.history.replaceState(null,'',url)}; export const useRouter=()=>router;`
+          ? `export const useSearchParams=()=>new URLSearchParams(window.location.search); export const usePathname=()=>window.location.pathname; const router={prefetch:()=>{},push:(url)=>window.history.pushState(null,'',url),replace:(url)=>window.history.replaceState(null,'',url)}; export const useRouter=()=>router;`
           : args.path === "next/link"
             ? `import React from 'react'; export default function Link({prefetch,...props}) { return <a {...props}/>; }`
             : `import React from 'react'; export default function Image({priority,fill,...props}) { return <img {...props}/>; }`,

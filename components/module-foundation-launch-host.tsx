@@ -229,5 +229,5 @@ export function ModuleFoundationLaunchHost() {
       launching.current = true;
       try { const outcome = await session.execute(sequence); setCompletedDraft(draftKey); return await resultFrom(outcome); }
       finally { launching.current = false; } }} onRefreshResult={async result => resultFrom(await session.refreshResult(result))}
-    walletAction={session.walletAction} submissionBlocked={session.preparationBlocked} onBack={() => router.push("/launch")} onRetryAvailability={session.retryAvailability} /></>;
+    walletAction={session.walletAction} submissionBlocked={session.preparationBlocked} onBack={() => router.push("/")} onRetryAvailability={session.retryAvailability} /></>;
 }
