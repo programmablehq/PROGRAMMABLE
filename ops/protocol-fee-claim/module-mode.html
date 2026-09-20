@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="color-scheme" content="light" />
+    <title>Programmable</title>
+    <link rel="icon" type="image/png" href="./assets/programmable-loop-mark-64.png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./module-mode.css" />
+  </head>
+  <body>
+    <main class="shell module-claim">
+      <header class="header">
+        <div class="brand"><img src="./assets/programmable-loop-mark-64.png" alt="" width="32" height="32" /><span>Programmable</span></div>
+        <div class="network">Robinhood Chain</div>
+      </header>
+      <nav class="claim-nav" aria-label="Fee-Bereich">
+        <a href="./">Ethereum</a><a href="./module-mode.html" aria-current="page">Module Mode</a>
+      </nav>
+      <section class="content" aria-labelledby="claim-title">
+        <div class="hero">
+          <p class="eyebrow">Module Mode</p>
+          <h1 id="claim-title">Alle Fees claimen.</h1>
+          <p class="intro">Die Platform Fees aller Foundation Launches.</p>
+        </div>
+        <div class="module-totals" aria-label="Offene Gebühren">
+          <p data-mm-count>Gebühren werden geladen…</p>
+          <ul data-mm-assets aria-label="Auszahlung nach Währung"></ul>
+        </div>
+        <button class="primary" type="button" data-mm-action><strong data-mm-label>Wallet verbinden</strong></button>
+        <p class="status" role="status" aria-live="polite" data-mm-status>Launches werden geladen…</p>
+        <p class="error" role="alert" data-mm-error hidden></p>
+        <a class="transaction-link" data-mm-transaction target="_blank" rel="noopener noreferrer" hidden>Transaktion ansehen</a>
+        <div class="claim-tools"><span data-mm-wallet>Wallet nicht verbunden</span><button type="button" data-mm-refresh>Aktualisieren</button></div>
+        <p class="payout-line">Auszahlung an <a data-mm-recipient target="_blank" rel="noopener noreferrer"></a></p>
+        <details class="details">
+          <summary>Details</summary>
+          <div class="details-body">
+            <p data-mm-launches></p>
+            <p>Die Gebühren werden in den jeweiligen Pair Tokens ausgezahlt. Die bestätigte Transaktion bündelt alle angezeigten offenen Konten. Die verbundene Wallet bezahlt nur die Netzwerkgebühr.</p>
+          </div>
+        </details>
+        <div class="claim-recovery" data-mm-resolve hidden>
+          <p>Falls du die Anfrage in deiner Wallet abgelehnt hast und keine Transaktion gesendet wurde:</p>
+          <button type="button" data-mm-cancelled>Keine Transaktion gesendet</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./module-mode.js"></script>
+  </body>
+</html>

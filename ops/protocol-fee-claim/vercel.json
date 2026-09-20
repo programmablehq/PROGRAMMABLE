@@ -2,6 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/module-mode/releases", "destination": "https://raw.githubusercontent.com/programmablehq/PROGRAMMABLE/production/config/module-foundation/index-releases.json" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
