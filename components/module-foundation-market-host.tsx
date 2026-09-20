@@ -27,6 +27,7 @@ import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type Fo
   type FoundationTradeReview, type FoundationTransactionResult, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
 import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees";
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
+import { maximumSwapInput } from "./swap-amount";
 import styles from "./module-foundation-ui.module.css";
 
 export function ModuleFoundationMarketHost({ token, transactionHash, initialName }: { token: Address; transactionHash?: Hex; initialName?: string }) {
@@ -34,6 +35,7 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
   const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(token)}`);
   const market = presentation.items.find(item => item.tokenAddress.toLowerCase() === token.toLowerCase())?.market;
   const [readback, setReadback] = useState<{ context: string; details: FoundationPoolDetails } | null>(null);
+  const [nativeFunds, setNativeFunds] = useState<{ context: string; balance: string; maximum: string } | null>(null);
   const [error, setError] = useState(""); const [refreshKey, setRefreshKey] = useState(0);
   const trades = useRef(new WeakMap<FoundationTradeReview, Awaited<ReturnType<typeof prepareFoundationTrade>>>());
   const claims = useRef(new WeakMap<FoundationActionReview, Awaited<ReturnType<typeof prepareFoundationClaim>> | Awaited<ReturnType<typeof prepareFoundationModuleAction>>>());
@@ -42,10 +44,20 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
   const [recoveryHash, setRecoveryHash] = useState(transactionHash ?? "");
   const [selectedHash, setSelectedHash] = useState(transactionHash);
   const details = readback?.context === session.contextKey ? readback.details : null;
+  const funds = nativeFunds?.context === session.contextKey ? nativeFunds : null;
   const binding = session.envelope?.binding;
   const catalog = useMemo(() => session.envelope ? bindFoundationCatalogV1(session.envelope.catalog.document, session.envelope.catalog.authority) : null, [session.envelope]);
   const moduleKey = `${session.contextKey}:${token}:${details?.checkpoint.blockHash ?? "loading"}`;
   const modules = moduleState?.key === moduleKey ? moduleState : null;
+  useEffect(() => {
+    if (!session.account) return;
+    let active = true;
+    void Promise.all([session.client.getBalance({ address: session.account }), session.client.getGasPrice()]).then(([balance, gasPrice]) => {
+      if (active) setNativeFunds({ context: session.contextKey, balance: formatUnits(balance, 18),
+        maximum: formatUnits(maximumSwapInput({ side: "buy", chainId: 4663, nativeBalanceWei: balance, tokenBalanceRaw: 0n, gasPriceWei: gasPrice }), 18) });
+    }).catch(() => { if (active) setNativeFunds(null); });
+    return () => { active = false; };
+  }, [session.client, session.account, session.contextKey, refreshKey]);
   useEffect(() => {
     if (!binding || !session.envelope?.available) return;
     let active = true;
@@ -84,6 +96,11 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
   async function prepareTrade(draft: FoundationTradeDraft): Promise<FoundationTradeReview> {
     if (!session.account || !details) throw new Error("Connect your wallet and load the verified pool first.");
     const account = session.account, context = session.contextKey; session.assertCurrent(account, context);
+    if (session.preparationBlocked) throw new Error(session.preparationBlocked);
+    // The Buy/Sell action acknowledges the exact completed result before preparing a new trade.
+    // Pending and unreadable operations remain blocked by the session and wallet lock.
+    if (session.resolution) await session.acknowledgeResult(session.resolution.operationId, false);
+    session.assertCurrent(account, context);
     const current = await session.resolveAuthority();
     if (details.ledger.modules.length > 0 && (!modules?.selections || !modules.context || modules.error)) {
       throw new Error("Wait for this pool's original module sources and asset bindings to be verified before trading.");
@@ -135,7 +152,7 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}>
+  if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><div className={styles.page}>
     <div className={styles.topLine}><Link className={styles.textButton} href="/explore/robinhood">Explore</Link><span className={styles.chainBadge}>Robinhood Chain</span></div>
     <div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
     <p role="status">{error || session.availability.reason || "Loading coin…"}</p></div>
@@ -155,10 +172,10 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
       payout: { asset: quote, recipient: budget.beneficiary, claimableAmount: formatUnits(budget.withdrawable, quote.decimals),
         creditedAmount: formatUnits(budget.credited, quote.decimals), paidAmount: formatUnits(budget.claimed, quote.decimals), asOfBlock: details.checkpoint.blockNumber.toString() } };
   });
-  return <><FoundationSessionStatus session={session} /><ModuleFoundationMarket key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
-    coin={coin} quote={quote} market={market} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true }}
+  return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><ModuleFoundationMarket key={`${session.contextKey}:${session.resultGeneration}`} availability={session.availability} contextKey={session.contextKey}
+    coin={coin} quote={quote} market={market} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true, balance: funds?.balance }} maximumBuyAmount={funds?.maximum}
     pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} {...foundationCreatorFeeFields(details)}
-    walletAction={session.walletAction} submissionBlocked={session.submissionBlocked} onPrepareTrade={prepareTrade}
+    walletAction={session.walletAction} submissionBlocked={session.preparationBlocked} onPrepareTrade={prepareTrade}
     onConfirmTrade={async review => { const sequence = trades.current.get(review); if (!sequence) throw new Error("Review this trade again.");
       session.assertCurrent(sequence.account, review.contextKey); return verifiedResult(await session.execute(sequence)); }}
     onRefreshResult={async result => verifiedResult(await session.refreshResult(result))}

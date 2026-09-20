@@ -10,6 +10,7 @@ import { parseLaunchProjectionV1, resolveProjectionAddress } from "@/lib/custom-
 import type { LaunchPlanTradeWalletInputV1, LaunchPlanTradeWalletReviewV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import type { PreparedModuleModeTransaction } from "@/components/module-mode-wallet-state";
 import type { CustomV4SwapWalletInput, CustomV4SwapWalletReview } from "./custom-v4";
+import { parseDiscoverableMarketTradeCapabilityV1 } from "@/lib/custom-launch/trade-capability-v1";
 import { SWAP_TOKEN_SCHEMA, SwapUnavailableError, type SwapChainId, type SwapReceipt, type SwapReview, type SwapSide, type SwapTokenDescriptor } from "./types";
 import { beginPendingSwap, clearPendingSwap, getPendingSwap, recordPendingSwapHash, subscribePendingSwap, type PendingSwap } from "./pending";
 
@@ -78,6 +79,18 @@ export function parseSwapTokenDescriptor(value: unknown, expected: { address: st
       && ["classic", "deep", "stock-paired"].includes(route.launchModel), "The Ethereum market is invalid.");
     return row;
   }
+  if (route.kind === "custom-market") {
+    requireValue(row.chainId === 1 && /^sha256:[0-9a-f]{64}$/.test(route.projectId) && object(route.capability), "The Ethereum market is invalid.");
+    const capability = parseDiscoverableMarketTradeCapabilityV1({ value: route.capability, chainId: "1", marketId: route.marketId,
+      baseAssetId: route.capability.baseAssetId, quoteAssetId: route.capability.quoteAssetId });
+    requireValue(capability, "The Ethereum market capability is invalid.");
+    const baseIsCurrency0 = capability.poolKey.currency0AssetId === capability.baseAssetId;
+    const base = baseIsCurrency0 ? capability.poolKey.currency0 : capability.poolKey.currency1;
+    const quote = baseIsCurrency0 ? capability.poolKey.currency1 : capability.poolKey.currency0;
+    requireValue(same(base.value, token.address) && quote.value === "0x0000000000000000000000000000000000000000"
+      && capability.supportedSides.includes("base-to-quote") && capability.supportedSides.includes("quote-to-base"), "This market has no verified ETH swap route for this coin.");
+    return { ...row, route: { ...route, capability } };
+  }
   requireValue(route.kind === "custom-v4" && row.chainId === 4663 && object(route.descriptor), "The swap adapter is unavailable.");
   return row;
 }
@@ -109,7 +122,7 @@ function display(input: PrepareSwapInput, fields: Pick<SwapReview, "kind" | "amo
 export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletActions): Promise<SwapReview> {
   requireValue(input.descriptor.status === "ready", input.descriptor.status === "unavailable" ? input.descriptor.reason : "The swap route is unavailable.");
   requireValue(isAddress(input.owner) && ["buy", "sell"].includes(input.side) && input.amountIn > 0n && input.amountIn < (1n << 127n), "Enter an amount greater than zero.");
-  const slippageBps = input.slippageBps ?? 100;
+  const slippageBps = input.slippageBps ?? 300;
   requireValue(Number.isInteger(slippageBps) && slippageBps >= 1 && slippageBps <= 1000, "Use slippage between 0.01% and 10%.");
   requireValue(!getPendingSwap(input.owner, input.descriptor.chainId), "Check the previous swap in your wallet before sending another.");
   const route = input.descriptor.route, account = getAddress(input.owner), token = input.descriptor.token.address;
@@ -218,6 +231,38 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
       ...(preparation.status === "ready" ? {} : { approvalLabel: `Approve ${input.descriptor.token.symbol}` }) }), {
       transaction: { ...tx, preparedBlock: preparation.quote.blockNumber },
       submit: async actions => { const hash = await actions.sendLaunchPlanTradeWalletAction({ action: "send", projection, request, reviewed }); requireValue(typeof hash === "string", "The wallet did not return a transaction hash."); return hash; },
+    });
+  }
+  if (route.kind === "custom-market") {
+    const descriptor = parseSwapTokenDescriptor(input.descriptor, { address: token, chainId: 1 });
+    requireValue(descriptor.status === "ready" && descriptor.route.kind === "custom-market", "The Ethereum market changed.");
+    const capability = descriptor.route.capability, api = await import("@/lib/custom-launch/trade-v1");
+    api.customTradePoolKeyV1(capability);
+    requireValue(slippageBps <= capability.slippagePolicy.maximumSlippageBps, "The selected slippage exceeds this market’s limit.");
+    // Leave room between the browser clock and the latest mined block while
+    // retaining the market's verified maximum deadline horizon.
+    const deadlineWindow = Math.max(1, Math.min(240, Math.floor(capability.deadlinePolicy.maximumHorizonSeconds * 0.8)));
+    const request = api.parseCustomMarketTradeRequestV1({ schemaVersion: api.CUSTOM_TRADE_REQUEST_SCHEMA_V1,
+      projectId: descriptor.route.projectId, marketId: descriptor.route.marketId, tradeCapabilityBindingHash: capability.tradeCapabilityBindingHash,
+      chainId: 1, owner: account, recipient: account, side: input.side === "buy" ? "quote-to-base" : "base-to-quote",
+      amountIn: input.amountIn.toString(), slippageBps, deadline: (now() + BigInt(deadlineWindow)).toString() });
+    const fetchPrepared = async () => api.validateCustomMarketTradePreparationV1({
+      value: await jsonResponse(await fetch("/api/custom-launch/v2/trade/prepare", { method: "POST", cache: "no-store", credentials: "same-origin",
+        redirect: "error", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) })),
+      request, capability, nowSeconds: Number(now()),
+    });
+    const prepared = await fetchPrepared(), tx = prepared.transaction;
+    const validUntil = BigInt(prepared.quote.validUntil), deadline = BigInt(request.deadline);
+    return seal(display(input, { kind: prepared.status === "ready" ? "swap" : "approval", amountOut: BigInt(prepared.quote.amountOut),
+      minimumOutput: BigInt(prepared.quote.amountOutMinimum), expiresAt: validUntil < deadline ? validUntil : deadline,
+      gasEstimate: BigInt(tx.gasLimit ?? prepared.quote.gasEstimate), ...(prepared.status === "ready" ? {} : { approvalLabel: `Approve ${input.descriptor.token.symbol}` }) }), {
+      transaction: { from: account, to: tx.to, data: tx.data, value: tx.value, preparedBlock: prepared.quote.observedAtBlock },
+      refresh: async () => {
+        const latest = await fetchPrepared();
+        requireValue(latest.transaction.kind === tx.kind && latest.transaction.chainId === tx.chainId && same(latest.transaction.to, tx.to)
+          && latest.transaction.data === tx.data && latest.transaction.value === tx.value, "The swap quote changed. Try again.");
+      },
+      submit: actions => actions.sendTransaction(tx),
     });
   }
   const api = await import("@/lib/trade/client"), deadline = (now() + 300n).toString();

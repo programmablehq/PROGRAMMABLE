@@ -95,7 +95,8 @@ export function useFoundationSession(token?: Address) {
     return bindFoundationCatalogV1(current.catalog.document, current.catalog.authority);
   }
   const walletStep = moduleModeWalletStep(walletSnapshot);
-  const walletBusy = !authReady || connecting || openingWallet || switchingNetwork || disconnecting;
+  // A coin page may defer wallet loading until Connect is pressed.
+  const walletBusy = connecting || openingWallet || switchingNetwork || disconnecting || (walletStep !== "connect" && !authReady);
   const walletAction: FoundationWalletAction | undefined = walletStep === "prepare" ? undefined : {
     label: walletStep === "connect" ? "Connect wallet" : "Switch to Robinhood Chain", busy: walletBusy,
     onClick: walletStep === "connect" ? openWallet : () => switchModuleModeNetwork(switchNetwork),
@@ -179,12 +180,19 @@ export function useFoundationSession(token?: Address) {
     retryAvailability: () => setRefresh(value => value + 1) };
 }
 
-export function FoundationSessionStatus({ session, editingNewLaunch = false, showProgress = true }: { session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean; showProgress?: boolean }) {
+export function FoundationSessionStatus({ session, editingNewLaunch = false, showProgress = true, hideSuccessfulLaunch = false, hideSuccessfulTrade = false }: {
+  session: ReturnType<typeof useFoundationSession>; editingNewLaunch?: boolean; showProgress?: boolean;
+  hideSuccessfulLaunch?: boolean; hideSuccessfulTrade?: boolean;
+}) {
   const [hash, setHash] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const recovery = session.pending !== "null";
-  const resolved = session.resolution;
+  const saved = session.resolution;
+  const hideResolved = !recovery && saved?.status === "success"
+    && ((hideSuccessfulLaunch && saved.metadata?.stepKind === "launch")
+      || (hideSuccessfulTrade && (saved.metadata?.stepKind === "buy" || saved.metadata?.stepKind === "sell")));
+  const resolved = hideResolved ? null : saved;
   if (!showProgress && session.progress) return null;
-  if (!session.progress && !recovery && session.resolutionState === "null" && !message) return null;
+  if (!session.progress && !recovery && (session.resolutionState === "null" || hideResolved) && !message) return null;
   return <div className={`${styles.page} ${styles.sessionStatus}`}>
     {showProgress && session.progress ? <p role="status">{session.progress}</p> : null}
     {!session.progress && resolved ? <details className={styles.savedResult} open={!editingNewLaunch} aria-label="Saved transaction result"><summary>{editingNewLaunch

@@ -8,7 +8,7 @@ vi.mock("@/components/use-robinhood-presentation", () => ({ useRobinhoodPresenta
   tokenAddress: `0x${"22".repeat(20)}`, imageUrl: null, description: null, links: [],
   market: { poolId: `0x${"aa".repeat(32)}`, priceUsd: 2, marketCapUsd: 100, liquidityUsd: 30, volume24hUsd: 10, change24hPercent: 5 },
 }] }) }));
-vi.mock("@/components/launch-projection-trade", () => ({ LaunchProjectionTrade: () => null }));
+vi.mock("@/components/wallet-provider", () => ({ useWallet: () => ({ wallet: null, authenticated: false, sessionReady: true }) }));
 
 describe("launch pages without a primary asset", () => {
   it("keeps the verified identity and provenance without implying token metrics or a price chart", () => {

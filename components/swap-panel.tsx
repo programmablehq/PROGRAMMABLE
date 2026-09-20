@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownUp, ArrowUpRight, Check, LoaderCircle, RefreshCw, Settings2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, Check, LoaderCircle, RefreshCw, Settings2 } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatUnits, isAddress, type Hex } from "viem";
 import { useWallet, type WalletTradeBalances } from "@/components/wallet-provider";
 import type { SwapChainId, SwapReceipt, SwapReview, SwapSide, SwapTokenDescriptor } from "@/lib/swap/types";
-import type { PendingSwap } from "@/lib/swap/client";
+import type { PendingSwap, SwapWalletActions } from "@/lib/swap/client";
 import { walletChainIdsEqual } from "@/lib/wallet-chain-id";
 import { displaySwapAmount, maximumSwapInput, parseSwapAmount } from "./swap-amount";
+import { runSwapFlow } from "./swap-flow";
 import styles from "./swap-panel.module.css";
 
 type PendingView = { key: string; operation: PendingSwap | null; error?: string };
@@ -24,17 +25,20 @@ function message(error: unknown) {
 const explorer = (chainId: SwapChainId) => chainId === 4663 ? "https://robinhoodchain.blockscout.com" : "https://etherscan.io";
 const networkName = (chainId: SwapChainId) => chainId === 4663 ? "Robinhood" : "Ethereum";
 
-export function SwapPanel({ initialAddress = "", initialChainId = 4663 }: {
-  initialAddress?: string; initialChainId?: SwapChainId;
+export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded = false, tokenSymbol }: {
+  initialAddress?: string; initialChainId?: SwapChainId; embedded?: boolean; tokenSymbol?: string;
 }) {
+  const id = useId();
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const wallet = useWallet();
   const walletRef = useRef(wallet);
   useEffect(() => { walletRef.current = wallet; }, [wallet]);
   const [address, setAddress] = useState(initialAddress);
   const [chainId, setChainId] = useState<SwapChainId>(initialChainId);
-  const [side, setSide] = useState<SwapSide>("sell");
+  const [side, setSide] = useState<SwapSide>("buy");
   const [amount, setAmount] = useState("");
-  const [slippageBps, setSlippageBps] = useState(100);
+  const [slippageBps, setSlippageBps] = useState(300);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [asset, setAsset] = useState<{ key: string; descriptor?: SwapTokenDescriptor; error?: string } | null>(null);
   const [balances, setBalances] = useState<{ key: string; value?: WalletTradeBalances; error?: string } | null>(null);
@@ -43,7 +47,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663 }: {
   const [recoveryHash, setRecoveryHash] = useState("");
   const [revision, setRevision] = useState(0);
   const [lookupRevision, setLookupRevision] = useState(0);
-  const [busy, setBusy] = useState<"signing" | "confirming" | null>(null);
+  const [busy, setBusy] = useState<"preparing" | "signing" | "confirming" | null>(null);
   const [error, setError] = useState("");
   const [outcome, setOutcome] = useState<{ receipt: SwapReceipt; kind: "swap" | "approval" } | null>(null);
   const [submitted, setSubmitted] = useState<{ hash: Hex; chainId: SwapChainId } | null>(null);
@@ -76,7 +80,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663 }: {
   const quoteError = quotation?.key === quoteKey ? quotation.error : undefined;
   const canQuote = descriptor?.status === "ready" && connected && correctNetwork && parsed !== null && !insufficient && !pending && !pendingError && pendingLoaded;
   const quoting = canQuote && !review && !quoteError && !busy;
-  const ticker = descriptor?.token.symbol || "Coin";
+  const ticker = descriptor?.token.symbol || tokenSymbol || "Coin";
   const inputSymbol = side === "buy" ? "ETH" : ticker;
   const outputSymbol = side === "sell" ? "ETH" : ticker;
   const locked = Boolean(busy || pending);
@@ -183,20 +187,49 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663 }: {
       catch (caught) { setError(message(caught)); }
       return;
     }
-    if (!review || pending || pendingError || !pendingLoaded || insufficient) return;
+    if (!review || !descriptor || !owner || parsed === null || pending || pendingError || !pendingLoaded || insufficient) return;
     mutex.current = true; setBusy("signing"); setError(""); setOutcome(null);
     try {
-      const { submitSwap } = await import("@/lib/swap/client");
-      const result = await submitSwap(review, walletRef.current);
-      setSubmitted({ hash: result.hash, chainId }); setBusy("confirming");
-      acceptReceipt(await result.wait(), review.kind);
+      const { prepareSwap, submitSwap } = await import("@/lib/swap/client");
+      const assertCurrent = () => {
+        const current = walletRef.current;
+        if (!mounted.current || !current.authenticated || !current.sessionReady
+          || current.wallet?.account.toLowerCase() !== owner.toLowerCase()
+          || !walletChainIdsEqual(current.wallet.chainId, chainId)) {
+          throw new Error("Your wallet changed. Try again.");
+        }
+      };
+      // Recheck at the actual wallet boundary, including after an async quote refresh.
+      const actions: SwapWalletActions = {
+        sendTransaction: transaction => { assertCurrent(); return walletRef.current.sendTransaction(transaction); },
+        sendModuleModeTransaction: transaction => { assertCurrent(); return walletRef.current.sendModuleModeTransaction(transaction); },
+        sendCustomV4SwapWalletAction: value => { assertCurrent(); return walletRef.current.sendCustomV4SwapWalletAction(value); },
+        sendLaunchPlanTradeWalletAction: value => { assertCurrent(); return walletRef.current.sendLaunchPlanTradeWalletAction(value); },
+      };
+      const result = await runSwapFlow({
+        review, assertCurrent,
+        prepare: async () => {
+          setBusy("preparing"); setSubmitted(null);
+          const next = await prepareSwap({ descriptor, owner, side, amountIn: parsed, slippageBps }, actions);
+          if (mounted.current) setQuotation({ key: quoteKey, review: next });
+          return next;
+        },
+        submit: async value => {
+          setBusy("signing");
+          const submitted = await submitSwap(value, actions);
+          if (mounted.current) { setSubmitted({ hash: submitted.hash, chainId }); setBusy("confirming"); }
+          return submitted;
+        },
+      });
+      if (mounted.current) acceptReceipt(result.receipt, result.kind);
     } catch (caught) { setError(message(caught)); }
     finally { mutex.current = false; setBusy(null); }
   }
 
-  let action = "Swap";
+  let action = side === "buy" ? "Buy" : "Sell";
   if (!connected) action = walletBusy ? "Connecting…" : "Connect wallet";
   else if (!correctNetwork) action = wallet.switchingNetwork ? "Switching network…" : `Switch to ${networkName(chainId)}`;
+  else if (busy === "preparing") action = "Updating quote…";
   else if (busy === "signing") action = "Confirm in your wallet";
   else if (busy === "confirming") action = "Confirming…";
   else if (pending) action = "Check pending transaction";
@@ -207,98 +240,90 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663 }: {
   else if (parsed === null) action = "Check the amount";
   else if (insufficient) action = `Not enough ${inputSymbol}`;
   else if (quoting) action = "Getting quote…";
-  else if (review?.kind === "approval") action = `Approve ${inputSymbol}`;
   else if (quoteError) action = "Quote unavailable";
   const disabled = Boolean(busy || walletBusy || pending || pendingError || !pendingLoaded
     || (connected && correctNetwork && (!review || insufficient || descriptor?.status !== "ready")));
 
-  return <div className={styles.page}>
-    <section className={styles.card} aria-labelledby="swap-heading">
-      <header className={styles.heading}>
-        <h1 id="swap-heading">Swap</h1>
+  return <div className={embedded ? styles.embedded : styles.page}>
+    <section className={styles.card} aria-label={embedded ? `Trade ${ticker}` : "Swap"}>
+      {!embedded ? <header className={styles.heading}>
+        <h1>Swap</h1>
         <label className={styles.network}><span className="sr-only">Network</span>
           <select value={chainId} disabled={locked} onChange={event => edit(() => { setChainId(Number(event.target.value) as SwapChainId); setAmount(""); })}>
             <option value={4663}>Robinhood</option><option value={1}>Ethereum</option>
           </select>
         </label>
-      </header>
+      </header> : null}
       <form onSubmit={event => { event.preventDefault(); void act(); }}>
-        <label htmlFor="swap-token" className={styles.addressLabel}>Coin address</label>
-        <div className={styles.addressField}>
-          <input ref={addressRef} id="swap-token" value={address} onChange={event => edit(() => { setAddress(event.target.value); setAmount(""); })}
-            placeholder="Paste a contract address" disabled={locked} spellCheck={false} autoComplete="off" autoCapitalize="none" maxLength={100}
-            aria-invalid={Boolean(address.trim() && !validAddress)} aria-describedby="swap-coin-status" />
-          <button className={styles.paste} type="button" onClick={() => void paste()} disabled={locked}>Paste</button>
+        {!embedded ? <>
+          <label htmlFor={`${id}-token`} className={styles.addressLabel}>Coin address</label>
+          <div className={styles.addressField}>
+            <input ref={addressRef} id={`${id}-token`} value={address} onChange={event => edit(() => { setAddress(event.target.value); setAmount(""); })}
+              placeholder="Paste a contract address" disabled={locked} spellCheck={false} autoComplete="off" autoCapitalize="none" maxLength={100}
+              aria-invalid={Boolean(address.trim() && !validAddress)} aria-describedby={`${id}-coin-status`} />
+            <button className={styles.paste} type="button" onClick={() => void paste()} disabled={locked}>Paste</button>
+          </div>
+          <div id={`${id}-coin-status`} className={styles.identity} role="status">
+            {descriptor ? <><Check size={14} aria-hidden="true" /><strong title={descriptor.token.name}>{descriptor.token.name}</strong><span>{ticker}</span>
+              <Link href={`/token/${descriptor.token.address}?chain=${chainId}`} aria-label={`View ${ticker}`}><ArrowUpRight size={16} aria-hidden="true" /></Link></>
+              : address.trim() && !validAddress ? "Enter a complete token contract address."
+                : validAddress && !currentAsset ? <><LoaderCircle size={14} aria-hidden="true" className={styles.spin} />Finding your coin…</> : null}
+          </div>
+        </> : null}
+        <div className={styles.sides} role="group" aria-label="Trade direction">
+          {(["buy", "sell"] as const).map(value => <button key={value} type="button" aria-pressed={side === value} disabled={locked}
+            onClick={() => edit(() => { setSide(value); setAmount(""); })}>{value === "buy" ? "Buy" : "Sell"}</button>)}
         </div>
-        <div id="swap-coin-status" className={styles.identity} role="status">
-          {descriptor ? <><Check size={14} aria-hidden="true" /><strong title={descriptor.token.name}>{descriptor.token.name}</strong><span>{ticker}</span>
-            <Link href={`/token/${descriptor.token.address}?chain=${chainId}`} aria-label={`View ${ticker}`}><ArrowUpRight size={16} aria-hidden="true" /></Link></>
-            : address.trim() && !validAddress ? "Enter a complete token contract address."
-              : validAddress && !currentAsset ? <><LoaderCircle size={14} aria-hidden="true" className={styles.spin} />Finding your coin…</> : null}
-        </div>
-        <div className={styles.fields}>
-          <div className={styles.amountBox}>
-            <div className={styles.fieldTop}><label htmlFor="swap-amount">You pay</label>
-              <div className={styles.balance}>
-                {inputBalance !== null ? <span title={formatUnits(inputBalance, inputDecimals)}>Balance: {displaySwapAmount(inputBalance, inputDecimals, 4)}</span> : null}
-                <button type="button" className={styles.max} onClick={useMax} disabled={!balance || !descriptor || locked}>Max</button>
-              </div>
-            </div>
-            <div className={styles.amountRow}>
-              <input ref={inputRef} className={styles.amountInput} id="swap-amount" aria-label={`Amount of ${inputSymbol} to swap`} inputMode="decimal"
-                value={amount} onChange={event => edit(() => setAmount(event.target.value.replace(/,/g, ".")))} autoComplete="off" placeholder="0" disabled={locked}
-                maxLength={160} aria-invalid={Boolean(amount && (parsed === null || insufficient))} aria-describedby={displayError ? "swap-error" : undefined} />
-              <AssetBadge symbol={inputSymbol} native={side === "buy"} />
+        <div className={styles.amountBox}>
+          <div className={styles.fieldTop}><label htmlFor={`${id}-amount`}>Amount</label>
+            <div className={styles.balance}>
+              {inputBalance !== null ? <span title={formatUnits(inputBalance, inputDecimals)}>Balance: {displaySwapAmount(inputBalance, inputDecimals, 4)}</span> : null}
+              <button type="button" className={styles.max} onClick={useMax} disabled={!balance || !descriptor || locked}>Max</button>
             </div>
           </div>
-          <button type="button" className={styles.reverse} aria-label={side === "sell" ? "Buy this coin with ETH" : "Sell this coin for ETH"}
-            onClick={() => edit(() => { setSide(side === "sell" ? "buy" : "sell"); setAmount(""); })} disabled={locked}>
-            <ArrowDownUp size={18} aria-hidden="true" />
-          </button>
-          <div className={styles.amountBox}>
-            <div className={styles.fieldTop}><span id="swap-receive-label">You receive</span><span>Estimated</span></div>
-            <div className={styles.amountRow}>
-              <output className={styles.output} aria-labelledby="swap-receive-label" data-empty={review?.amountOut == null}
-                title={review?.amountOut != null ? formatUnits(review.amountOut, outputDecimals) : undefined}>
-                {quoting ? <LoaderCircle size={25} className={styles.spin} aria-label="Getting quote" />
-                  : review?.amountOut != null ? displaySwapAmount(review.amountOut, outputDecimals) : "—"}
-              </output>
-              <AssetBadge symbol={outputSymbol} native={side === "sell"} />
-            </div>
+          <div className={styles.amountRow}>
+            <input ref={inputRef} className={styles.amountInput} id={`${id}-amount`} aria-label={`Amount of ${inputSymbol} to ${side}`} inputMode="decimal"
+              value={amount} onChange={event => edit(() => setAmount(event.target.value.replace(/,/g, ".")))} autoComplete="off" placeholder="0" disabled={locked}
+              maxLength={160} aria-invalid={Boolean(amount && (parsed === null || insufficient))} aria-describedby={displayError ? `${id}-error` : undefined} />
+            <AssetBadge symbol={inputSymbol} native={side === "buy"} />
           </div>
         </div>
-        {review?.minimumOutput != null ? <dl className={styles.summary}>
-          <div><dt>Minimum received</dt><dd>{displaySwapAmount(review.minimumOutput, outputDecimals)} {outputSymbol}</dd></div>
-          {balance && review.gasEstimate > 0n ? <div><dt>Estimated network fee</dt><dd>{displaySwapAmount(review.gasEstimate * balance.gasPriceWei, 18)} ETH</dd></div> : null}
-        </dl> : null}
+        <div className={styles.estimate}>
+          <span id={`${id}-receive`}>You receive</span>
+          <output aria-labelledby={`${id}-receive`} data-empty={review?.amountOut == null}
+            title={review?.amountOut != null ? formatUnits(review.amountOut, outputDecimals) : undefined}>
+            {quoting ? <LoaderCircle size={14} className={styles.spin} aria-label="Getting quote" />
+              : review?.amountOut != null ? `≈ ${displaySwapAmount(review.amountOut, outputDecimals)} ${outputSymbol}` : "—"}
+          </output>
+        </div>
         <div className={styles.settingsRow}>
-          <button type="button" className={styles.settingsToggle} onClick={() => setSettingsOpen(!settingsOpen)} aria-expanded={settingsOpen} aria-controls="swap-slippage" disabled={locked}>
+          <button type="button" className={styles.settingsToggle} onClick={() => setSettingsOpen(!settingsOpen)} aria-expanded={settingsOpen} aria-controls={`${id}-slippage`} disabled={locked}>
             <Settings2 size={15} aria-hidden="true" />{slippageBps / 100}% slippage
           </button>
           <button type="button" className={styles.refresh} aria-label="Refresh quote and balance" disabled={locked || !validAddress || quoting}
             onClick={() => { setError(""); setRevision(value => value + 1); if (currentAsset?.error || descriptor?.status === "unavailable") setLookupRevision(value => value + 1); }}><RefreshCw size={16} aria-hidden="true" /></button>
         </div>
-        {settingsOpen ? <fieldset className={styles.slippage} id="swap-slippage" disabled={locked}>
-          <legend>Maximum price change</legend>
-          {[50, 100, 300].map(value => <button key={value} type="button" aria-pressed={slippageBps === value}
-            onClick={() => edit(() => setSlippageBps(value))}>{value / 100}%</button>)}
-        </fieldset> : null}
+        {settingsOpen ? <div id={`${id}-slippage`}>
+          <fieldset className={styles.slippage} disabled={locked}>
+            <legend>Slippage</legend>
+            {[50, 100, 300].map(value => <button key={value} type="button" aria-pressed={slippageBps === value}
+              onClick={() => edit(() => setSlippageBps(value))}>{value / 100}%</button>)}
+          </fieldset>
+          {review?.minimumOutput != null ? <dl className={styles.summary}>
+            <div><dt>Minimum received</dt><dd>{displaySwapAmount(review.minimumOutput, outputDecimals)} {outputSymbol}</dd></div>
+          </dl> : null}
+        </div> : null}
         <button className={styles.primary} type="submit" disabled={disabled}>
           {busy || quoting || walletBusy ? <LoaderCircle size={18} className={styles.spin} aria-hidden="true" /> : null}{action}
         </button>
       </form>
-      {review?.kind === "approval" && !pending ? <p className={styles.note}>
-        {review.approvalLabel || `Allow the router to use this amount of ${inputSymbol}.`} Your swap quote refreshes after approval.
-      </p> : null}
-      {side === "buy" && amount && balance && parsed !== null && parsed === maximumSwapInput({ side, chainId, ...balance, gasEstimate: review?.gasEstimate })
-        ? <p className={styles.note}>A little ETH stays in your wallet for the network fee.</p> : null}
-      {displayError ? <p id="swap-error" className={styles.error} role="alert">{displayError}</p> : null}
+      {displayError ? <p id={`${id}-error`} className={styles.error} role="alert">{displayError}</p> : null}
       {balanceError && !displayError ? <p className={styles.note} role="status">Balance unavailable. Refresh to try again.</p> : null}
       {descriptor?.status === "unavailable" && descriptor.manageHref ? <p className={styles.note}><Link href={descriptor.manageHref}>Open coin controls <ArrowUpRight size={13} aria-hidden="true" /></Link></p> : null}
       {pending ? <div className={styles.note} role="status">
         <p>{pending.hash ? "Your transaction is awaiting confirmation." : "Check your wallet activity before trying again."}</p>
-        {!pending.hash ? <><label htmlFor="swap-recovery-hash">Transaction hash</label><div className={styles.addressField}>
-          <input id="swap-recovery-hash" value={recoveryHash} onChange={event => setRecoveryHash(event.target.value)} placeholder="0x…" spellCheck={false} autoComplete="off" />
+        {!pending.hash ? <><label htmlFor={`${id}-recovery`}>Transaction hash</label><div className={styles.addressField}>
+          <input id={`${id}-recovery`} value={recoveryHash} onChange={event => setRecoveryHash(event.target.value)} placeholder="0x…" spellCheck={false} autoComplete="off" />
         </div></> : null}
         <div className={styles.pendingActions}>
           <button type="button" disabled={Boolean(busy)} onClick={() => void recover()}>Check confirmation</button>
@@ -307,7 +332,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663 }: {
       </div> : submitted ? <p className={styles.note} role="status">Transaction submitted. <a href={`${explorer(submitted.chainId)}/tx/${submitted.hash}`} target="_blank" rel="noreferrer">View transaction<span className="sr-only"> (opens in a new tab)</span></a></p> : null}
       {outcome ? <p className={outcome.receipt.status === "success" ? styles.success : styles.error} role="status">
         {outcome.receipt.status === "reverted" ? "The transaction reverted. Gas may still have been charged."
-          : outcome.kind === "approval" ? "Approval confirmed. Your swap quote is refreshing." : "Swap complete."}{" "}
+          : outcome.kind === "approval" ? "Approval confirmed." : "Trade complete."}{" "}
         <a href={`${explorer(outcome.receipt.chainId)}/tx/${outcome.receipt.hash}`} target="_blank" rel="noreferrer">View transaction<span className="sr-only"> (opens in a new tab)</span></a>
       </p> : null}
     </section>

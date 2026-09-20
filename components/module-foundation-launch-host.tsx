@@ -6,7 +6,7 @@ import type { FoundationFundingHop } from "@/lib/module-foundation/atomic-launch
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatUnits, getAddress, toHex, type Address, type Hex } from "viem";
+import { formatUnits, getAddress, keccak256, toHex, type Address, type Hex, type PublicClient } from "viem";
 import { ModuleFoundationBuilder } from "./module-foundation-builder";
 import { FoundationSessionStatus, useFoundationSession, type FoundationExecutionResult } from "./module-foundation-session";
 import { uploadModuleModeImage } from "./module-mode-wallet-state";
@@ -22,11 +22,47 @@ import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalo
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
 import type { FoundationContractModule } from "@/lib/module-foundation/abi";
 import { verifyFoundationLaunchReceipt } from "@/lib/module-foundation/readback";
+import { fetchFoundationAvailability } from "@/lib/module-foundation/availability";
+import { discoverFoundationLaunch } from "@/lib/module-foundation/discovery";
+import type { FoundationResolution } from "@/lib/module-foundation/result-store";
 import { foundationLaunchPositionPresentation, foundationPoolPresentation, foundationPositionPresentation } from "@/lib/module-foundation/ui-readback";
 import { foundationStepSummary } from "@/lib/module-foundation/wallet";
 import type { FoundationStartPrice } from "@/lib/module-foundation/start-price";
 import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationImage,
   type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationQuoteAsset, type FoundationTransactionResult } from "@/lib/module-foundation/ui-types";
+import styles from "./module-foundation-ui.module.css";
+
+const openedLaunchKey = (account: Address) => `programmable:foundation-launch-opened:v1:${account.toLowerCase()}`;
+const openedLaunches = new Map<string, string>();
+function launchWasOpened(account: Address, transactionHash: Hex) {
+  if (openedLaunches.get(account.toLowerCase()) === transactionHash.toLowerCase()) return true;
+  try { return sessionStorage.getItem(openedLaunchKey(account)) === transactionHash.toLowerCase(); }
+  catch { return false; }
+}
+function rememberOpenedLaunch(account: Address, transactionHash: Hex) {
+  // Display state only: this marker never acknowledges or authorizes a wallet operation.
+  openedLaunches.set(account.toLowerCase(), transactionHash.toLowerCase());
+  try { sessionStorage.setItem(openedLaunchKey(account), transactionHash.toLowerCase()); } catch { /* Navigation still works when storage is unavailable. */ }
+}
+
+/** A saved result is only a locator; recover its exact launch from current authority and canonical chain evidence. */
+export async function verifiedSavedFoundationLaunchUrl(client: PublicClient, saved: FoundationResolution, signal?: AbortSignal) {
+  if (saved.status !== "success" || saved.metadata?.stepKind !== "launch" || saved.metadata.operationKind !== "launch" || !saved.metadata.token) {
+    throw new Error("This result is not a completed coin launch.");
+  }
+  const token = getAddress(saved.metadata.token);
+  const authority = await fetchFoundationAvailability(signal, token);
+  if (!authority.available || !authority.binding || authority.binding.releaseDigest.toLowerCase() !== saved.releaseDigest.toLowerCase()
+    || getAddress(authority.binding.factory.address) !== getAddress(saved.to)) throw new Error("The saved launch release could not be verified.");
+  const found = await discoverFoundationLaunch({ client, binding: authority.binding, token, transactionHash: saved.transactionHash, signal });
+  if (signal?.aborted || getAddress(found.token) !== token || found.transactionHash.toLowerCase() !== saved.transactionHash.toLowerCase()
+    || getAddress(found.transaction.from) !== getAddress(saved.account) || getAddress(found.transaction.to) !== getAddress(saved.to)
+    || keccak256(found.transaction.data).toLowerCase() !== saved.calldataHash.toLowerCase() || found.transaction.value !== BigInt(saved.value)
+    || found.checkpoint.blockNumber !== BigInt(saved.blockNumber) || found.checkpoint.blockHash.toLowerCase() !== saved.blockHash.toLowerCase()) {
+    throw new Error("The saved result does not match this coin's launch.");
+  }
+  return `/modules/${token}?transaction=${found.transactionHash}`;
+}
 
 export function ModuleFoundationLaunchHost() {
   const router = useRouter(), session = useFoundationSession();
@@ -37,10 +73,29 @@ export function ModuleFoundationLaunchHost() {
   const quotes = quoteState.context === session.contextKey ? quoteState.assets : [];
   const uploads = useRef(new Map<string, Hex>());
   const prepared = useRef(new WeakMap<FoundationLaunchReview, Awaited<ReturnType<typeof prepareFoundationLaunch>>>());
+  const launching = useRef(false);
+  const [savedLaunchError, setSavedLaunchError] = useState<string | null>(null);
+  const [recoveryRetry, setRecoveryRetry] = useState(0);
   const catalog = useMemo(() => session.envelope ? presentFoundationCatalogV1({
     catalog: bindFoundationCatalogV1(session.envelope.catalog.document, session.envelope.catalog.authority),
     chainId: 4663, hostAdapterId: FOUNDATION_HOST_ADAPTER_ID_V1,
   }) : [], [session.envelope]);
+
+  useEffect(() => {
+    const saved = session.resolution;
+    if (launching.current || session.progress || session.pending !== "null" || !session.account || !saved
+      || saved.status !== "success" || saved.metadata?.stepKind !== "launch" || !saved.metadata.token
+      || getAddress(saved.account) !== getAddress(session.account) || launchWasOpened(saved.account, saved.transactionHash)) return;
+    const controller = new AbortController();
+    void verifiedSavedFoundationLaunchUrl(session.client, saved, controller.signal).then(url => {
+      if (controller.signal.aborted || launching.current) return;
+      router.replace(url);
+      rememberOpenedLaunch(saved.account, saved.transactionHash);
+    }).catch(() => {
+      if (!controller.signal.aborted) setSavedLaunchError(saved.operationId);
+    });
+    return () => controller.abort();
+  }, [session.account, session.client, session.pending, session.progress, session.resolution, recoveryRetry, router]);
 
   useEffect(() => {
     let active = true;
@@ -144,6 +199,7 @@ export function ModuleFoundationLaunchHost() {
         expected: { transaction: sequence.steps[outcome.stepIndex].transaction, parameters: sequence.parameters, result: sequence.result, metadataHash: sequence.metadataHash } });
       const tokenUrl = `/modules/${verified.details.token.address}?transaction=${outcome.result.transactionHash}`;
       router.push(tokenUrl);
+      rememberOpenedLaunch(sequence.account, outcome.result.transactionHash);
       return { ...outcome.result, tokenUrl, metadataStatus: "stored", verificationStatus: "verified", operationComplete: true,
         pool: foundationPoolPresentation(verified.details), positions: foundationPositionPresentation(verified.details),
         message: "Your coin is ready." };
@@ -161,12 +217,17 @@ export function ModuleFoundationLaunchHost() {
     uploads.current.set(`${account.toLowerCase()}:${result.uri}`, input.image.sha256);
     return { url: result.uri, sha256: input.image.sha256 };
   }
-  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} showProgress={false} /><ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
+  return <><FoundationSessionStatus session={session} editingNewLaunch={completedDraft !== draftKey} showProgress={false} hideSuccessfulLaunch />
+    {savedLaunchError && savedLaunchError === session.resolution?.operationId ? <div className={`${styles.page} ${styles.sessionStatus}`}>
+      <p role="alert">Your saved launch could not be opened yet.</p>
+      <button type="button" className={styles.secondaryButton} onClick={() => { setSavedLaunchError(null); setRecoveryRetry(value => value + 1); }}>Open coin</button>
+    </div> : null}<ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
     catalog={catalog} quoteAssets={quotes} suggestedInitialBuy={suggestedInitialBuy} launchProgress={session.progress} onResolveQuote={resolveQuote} onUploadImage={upload}
     onPrepareLaunch={prepare} onConfirmLaunch={async review => { const sequence = prepared.current.get(review);
       if (!sequence) throw new Error("Prepare this launch again with your current wallet."); session.assertCurrent(sequence.account, review.contextKey);
-      const outcome = await session.execute(sequence); setCompletedDraft(draftKey);
-      return resultFrom(outcome); }} onRefreshResult={async result => resultFrom(await session.refreshResult(result))}
+      launching.current = true;
+      try { const outcome = await session.execute(sequence); setCompletedDraft(draftKey); return await resultFrom(outcome); }
+      finally { launching.current = false; } }} onRefreshResult={async result => resultFrom(await session.refreshResult(result))}
     walletAction={session.walletAction} submissionBlocked={session.preparationBlocked} onBack={() => router.push("/launch")} onRetryAvailability={session.retryAvailability} /></>;
 }

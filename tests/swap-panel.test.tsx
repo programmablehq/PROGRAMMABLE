@@ -39,11 +39,24 @@ describe("swap initial state", () => {
       connecting: false, openingWallet: false, switchingNetwork: false, disconnecting: false } as ReturnType<typeof useWallet>);
     const html = renderToStaticMarkup(<SwapPanel />);
     expect(html).toContain("Connect wallet");
-    expect(html).toContain("Buy this coin with ETH");
+    expect(html).toContain('aria-pressed="true">Buy</button>');
+    expect(html).toContain("3% slippage");
     expect(html).toContain("Coin address");
     expect(html).not.toContain("Balance:");
     expect(html).not.toContain("Minimum received");
     expect(html).toMatch(/<output[^>]*data-empty="true"[^>]*>—<\/output>/);
+  });
+  it("embeds the fixed coin without another address or network selector", () => {
+    vi.mocked(useWallet).mockReturnValue({ wallet: null, authenticated: false, sessionReady: true } as ReturnType<typeof useWallet>);
+    const html = renderToStaticMarkup(<SwapPanel embedded initialAddress="0x1111111111111111111111111111111111111111" tokenSymbol="BLOB" />);
+    expect(html).toContain('aria-label="Trade BLOB"');
+    expect(html).toContain('aria-pressed="true">Buy</button>');
+    expect(html).toContain('aria-pressed="false">Sell</button>');
+    expect(html).toContain("Max");
+    expect(html).toContain("3% slippage");
+    expect(html).not.toContain("Coin address");
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain("Review");
   });
   it("keeps a token link tied to its explicit network", () => {
     vi.mocked(useWallet).mockReturnValue({ wallet: null, authenticated: false, sessionReady: true } as ReturnType<typeof useWallet>);

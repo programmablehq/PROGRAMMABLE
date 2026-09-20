@@ -6,7 +6,7 @@ import styles from "./robinhood-token-view.module.css";
 import liveStyles from "./robinhood-live-chart.module.css";
 
 type ChartMarket = RobinhoodCoinMarket & Readonly<{ source?: "dexscreener" | "uniswap-v4" }>;
-type ChartProps = Readonly<{ poolId: string; name: string; market?: ChartMarket | null }>;
+type ChartProps = Readonly<{ poolId: string; name: string; market?: ChartMarket | null; chainId?: 1 | 4663 }>;
 export type RobinhoodLivePrice = Readonly<{ time: number; price: number }>;
 
 const MAX_POINTS = 120;
@@ -98,7 +98,7 @@ function LivePriceChart({ name, points, now, market }: Readonly<{
   </figure>;
 }
 
-function PoolChart({ poolId, name, market }: ChartProps) {
+function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
   const [loadedPool, setLoadedPool] = useState<string | null>(null);
   const [failedPool, setFailedPool] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -128,7 +128,7 @@ function PoolChart({ poolId, name, market }: ChartProps) {
       <iframe
         key={poolId}
         title={`${name} price chart on DEX Screener`}
-        src={`https://dexscreener.com/robinhood/${poolId}?embed=1&loadChartSettings=0&trades=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15`}
+        src={`https://dexscreener.com/${chainId === 1 ? "ethereum" : "robinhood"}/${poolId}?embed=1&loadChartSettings=0&trades=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15`}
         onLoad={() => setLoadedPool(poolId)}
         onError={() => setFailedPool(poolId)}
         referrerPolicy="no-referrer"
@@ -138,9 +138,11 @@ function PoolChart({ poolId, name, market }: ChartProps) {
   </div>;
 }
 
-export function RobinhoodChart(props: ChartProps) {
+export function TokenPoolChart(props: ChartProps) {
   if (!/^0x[0-9a-f]{64}$/i.test(props.poolId)) return <div className={styles.chart}>
     <div className={styles.chartState} role="status">Chart unavailable.</div>
   </div>;
-  return <PoolChart key={props.poolId.toLowerCase()} {...props} />;
+  return <PoolChart key={`${props.chainId ?? 4663}:${props.poolId.toLowerCase()}`} {...props} />;
 }
+
+export { TokenPoolChart as RobinhoodChart };
