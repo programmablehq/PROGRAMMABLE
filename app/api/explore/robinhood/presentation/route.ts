@@ -34,7 +34,8 @@ export async function GET(request: Request) {
     ? (await readRobinhoodLaunches(listQuery.page, listQuery.q, listQuery.filters, listQuery.pageSize)).presentations
     : await readRobinhoodPresentations([(await readRobinhoodToken(token!)).token].filter((row) => row !== null));
   return Response.json({ items }, { headers: {
-    "cache-control": "public, max-age=0, s-maxage=60, stale-while-revalidate=60",
+    // Single-coin markets already have a bounded server cache; do not age them again at the CDN.
+    "cache-control": listQuery ? "public, max-age=0, s-maxage=60, stale-while-revalidate=60" : "no-store",
     "x-content-type-options": "nosniff",
   } });
 }

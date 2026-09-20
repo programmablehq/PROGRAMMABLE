@@ -187,6 +187,27 @@ function snapshotUpdatedAt(snapshot: RobinhoodSnapshot | null): string | null {
     Date.parse(source.updatedAt) < Date.parse(oldest) ? source.updatedAt : oldest, snapshot.updatedAt);
 }
 
+/** A coin keeps the freshness and progress of the source that actually contains its verified record. */
+export function tokenLaunchRecord(snapshot: RobinhoodSnapshot | null, address: string, now = Date.now()): {
+  status: RobinhoodLaunchList["status"]; updatedAt: string | null; token: RobinhoodLaunch | null;
+} {
+  const identity = address.toLowerCase();
+  const sources = snapshot ? [snapshot, ...moduleModeSnapshots(snapshot), ...(snapshot.launchProjections ? [snapshot.launchProjections] : [])] : [];
+  for (const source of sources) {
+    const token = source.items.find(row => row.tokenAddress.toLowerCase() === identity
+      || row.launchProjection?.components.some(component => component.expectedAddress.toLowerCase() === identity));
+    if (!token) continue;
+    const syncing = "nextCursor" in source ? Boolean(source.nextCursor)
+      : Boolean(source.pending || source.cursor?.number !== source.finalizedBlock);
+    return {
+      status: now - Date.parse(source.updatedAt) > 300_000 ? "stale" : syncing ? "syncing" : "ready",
+      updatedAt: source.updatedAt,
+      token,
+    };
+  }
+  return { status: snapshotStatus(snapshot, now), updatedAt: snapshotUpdatedAt(snapshot), token: null };
+}
+
 function asPending(value: unknown) {
   if (!isObject(value) || !checkpoint(value.block) || !Array.isArray(value.items) || value.items.length === 0) {
     throw new Error("Invalid pending block");

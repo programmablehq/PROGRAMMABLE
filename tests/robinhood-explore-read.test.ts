@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
+import type { RobinhoodLaunch, RobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
-import type { RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
+import type { LaunchProjectionSnapshot, ModuleModeSnapshot, RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), markets: vi.fn(), presentations: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
 vi.mock("@/lib/server/robinhood-index/store", () => ({ indexStore: () => ({ read: mocks.read }) }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: mocks.markets, readRobinhoodPresentations: mocks.presentations }));
-import { readRobinhoodLaunches } from "@/lib/server/robinhood-index/read";
+import { readRobinhoodLaunches, readRobinhoodToken } from "@/lib/server/robinhood-index/read";
 
 const hex = (value: number, length: number) => `0x${value.toString(16).padStart(length, "0")}`;
 function token(id: number): RobinhoodLaunch & { poolId: string } {
@@ -33,6 +33,44 @@ beforeEach(() => {
 });
 
 describe("Robinhood Explore read model", () => {
+  it("uses only the selected token's source freshness while retaining its stale and syncing states", async () => {
+    const routerRow = token(1);
+    const moduleRow: RobinhoodModuleLaunch = {
+      ...token(2), sourceKind: "module-foundation-v1", factoryVersion: "v2", routerAddress: null, stampHash: null,
+      sourceAddress: hex(10, 40), sourceReleaseDigest: hex(10, 64), hookAddress: hex(102, 40), poolManager: hex(3, 40),
+      quoteAsset: hex(0, 40), feeLedgerAddress: hex(11, 40), metadataHash: hex(12, 64), compositionHash: hex(13, 64),
+    };
+    const projectedRow = { ...token(3), sourceKind: "multi-role-v2" as const };
+    const fresh = new Date().toISOString(), stale = new Date(Date.now() - 300_001).toISOString();
+    const snapshot = { ...saved([routerRow]), updatedAt: stale };
+    const moduleSource: ModuleModeSnapshot = {
+      version: 1, chainId: 4663, sourceKind: "module-foundation-v1", factoryVersion: "v2",
+      sourceAddress: moduleRow.sourceAddress, releaseDigest: moduleRow.sourceReleaseDigest,
+      startBlock: "1", cursor: snapshot.cursor, checkpoints: [], finalizedBlock: "100", updatedAt: stale, items: [moduleRow],
+    };
+    const projectionSource: LaunchProjectionSnapshot = {
+      version: 1, sourceUrl: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections",
+      updatedAt: stale, nextCursor: null, items: [projectedRow],
+    };
+    snapshot.moduleModeSources = [moduleSource];
+    snapshot.launchProjections = projectionSource;
+    mocks.read.mockResolvedValue({ snapshot });
+    mocks.markets.mockResolvedValue(new Map());
+    for (const [source, row] of [[snapshot, routerRow], [moduleSource, moduleRow], [projectionSource, projectedRow]] as const) {
+      source.updatedAt = fresh;
+      expect(await readRobinhoodToken(row.tokenAddress)).toMatchObject({ status: "ready", updatedAt: fresh, token: row });
+      expect((await readRobinhoodLaunches()).status).toBe("stale");
+      if ("nextCursor" in source) source.nextCursor = "next-page";
+      else source.finalizedBlock = "101";
+      expect((await readRobinhoodToken(row.tokenAddress)).status).toBe("syncing");
+      source.updatedAt = stale;
+      expect(await readRobinhoodToken(row.tokenAddress)).toMatchObject({ status: "stale", updatedAt: stale, token: row });
+      if ("nextCursor" in source) source.nextCursor = null;
+      else source.finalizedBlock = "100";
+    }
+    expect(await readRobinhoodToken(hex(99, 40))).toMatchObject({ status: "stale", token: null });
+  });
+
   it("ranks the full visible catalog and presents only the selected page using the same prices", async () => {
     const rows = Array.from({ length: 60 }, (_, index) => token(index + 1));
     const hidden = { ...token(61), tokenAddress: "0x15fca474b23cafe775120b1fafbcff0e7a827af2" };

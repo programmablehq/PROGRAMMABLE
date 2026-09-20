@@ -5,7 +5,7 @@ import { isVisibleRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
 import { coinValuation, type RobinhoodCoinMarket, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import type { RobinhoodProfilePageSize } from "@/lib/robinhood-launches";
-import { launchList, moduleModeSnapshots, profileLaunchList, snapshotLaunches } from "./model";
+import { launchList, moduleModeSnapshots, profileLaunchList, snapshotLaunches, tokenLaunchRecord } from "./model";
 import { indexStore } from "./store";
 
 // A page reads the saved list only. Failures never fall through to an RPC.
@@ -38,14 +38,7 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
 
 export async function readRobinhoodToken(address: string) {
   try {
-    const snapshot = await readSnapshot();
-    const list = launchList(snapshot);
-    return {
-      status: list.status,
-      updatedAt: list.updatedAt,
-      token: snapshotLaunches(snapshot).find((row) => row.tokenAddress.toLowerCase() === address.toLowerCase()
-        || row.launchProjection?.components.some(component => component.expectedAddress.toLowerCase() === address.toLowerCase())) ?? null,
-    };
+    return tokenLaunchRecord(await readSnapshot(), address);
   } catch { return { status: "unavailable" as const, updatedAt: null, token: null }; }
 }
 
