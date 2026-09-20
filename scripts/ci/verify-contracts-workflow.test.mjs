@@ -58,7 +58,7 @@ test("contract test partitions and integrations consume only the complete build 
     assert.equal(step(job, "Verify the complete deterministic test partition").run,
       `node scripts/ci/contracts-ci.mjs test ${shard}`);
     assert.deepEqual(step(job, "Verify the complete deterministic test partition").env, {
-      ETHEREUM_RPC_URL: "https://ethereum-rpc.publicnode.com",
+      ETHEREUM_RPC_URL: "https://mainnet.gateway.tenderly.co",
       ETHEREUM_ARCHIVE_RPC_URL: "https://eth.drpc.org",
     });
   }
