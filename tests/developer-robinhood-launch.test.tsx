@@ -260,12 +260,12 @@ describe("Robinhood Custom launch website flow", () => {
     expect(launchEntrySource).toContain('data-launch-model-launchable="false"');
     expect(launchEntrySource).not.toContain("Live API");
     expect(apiKeysSource).toContain(
-      'url.searchParams.get("start") === "custom"',
+      'searchParams.get("start") === "custom"',
     );
     expect(apiKeysSource).toContain(
       'url.searchParams.set("chainId", "4663")',
     );
-    expect(apiKeysSource).toContain('setActiveSection("launch")');
+    expect(apiKeysSource).toContain("setActiveSection(section)");
     expect(apiKeysSource.match(/<RobinhoodFeePolicyDisclosure \/>/gu))
       .toHaveLength(1);
     expect(apiKeysSource.indexOf("<RobinhoodFeePolicyDisclosure />"))
