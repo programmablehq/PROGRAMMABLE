@@ -14,6 +14,7 @@ export type IndexSource = {
 
 export type ModuleModeIndexSource = Omit<IndexSource, "routerAddress" | "binding" | "launches"> & {
   sourceKind: RobinhoodModuleLaunch["sourceKind"];
+  factoryVersion?: "v1" | "v2" | "v3";
   sourceAddress: string;
   releaseDigest: string;
   launches(from: bigint, to: bigint, known: readonly RobinhoodLaunch[]): Promise<RobinhoodModuleLaunch[]>;
@@ -95,10 +96,11 @@ export async function syncModuleModeIndex(source: ModuleModeIndexSource, store: 
   }
   const initial: ModuleModeSnapshot = existing ?? {
     version: 1, sourceKind: source.sourceKind, chainId: 4663, sourceAddress: source.sourceAddress,
+    ...(source.factoryVersion ? { factoryVersion: source.factoryVersion } : {}),
     releaseDigest: source.releaseDigest, startBlock: source.startBlock.toString(), cursor: null, checkpoints: [],
     finalizedBlock: source.finalized.number, updatedAt: new Date((options.now ?? Date.now)()).toISOString(), items: [],
   };
-  if (!isRobinhoodModuleSourceKind(source.sourceKind) || source.sourceKind !== initial.sourceKind || initial.sourceAddress.toLowerCase() !== source.sourceAddress.toLowerCase()
+  if (!isRobinhoodModuleSourceKind(source.sourceKind) || source.sourceKind !== initial.sourceKind || source.factoryVersion !== initial.factoryVersion || initial.sourceAddress.toLowerCase() !== source.sourceAddress.toLowerCase()
     || initial.releaseDigest.toLowerCase() !== source.releaseDigest.toLowerCase()
     || initial.startBlock !== source.startBlock.toString()) throw new Error("Module Mode source changed; index migration required");
   return syncRange(source, {

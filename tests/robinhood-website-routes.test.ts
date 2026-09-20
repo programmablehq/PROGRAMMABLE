@@ -3,10 +3,11 @@ import type { IndexStore } from "@/lib/server/robinhood-index/store";
 import type { ModuleModeUnavailableSource } from "@/lib/server/robinhood-index/module-source";
 
 const mocks = vi.hoisted(() => ({
-  projectionSync: vi.fn(), projectionSource: vi.fn(), read: vi.fn(), source: vi.fn(), sync: vi.fn(), moduleSync: vi.fn(),
+  foundationSources: vi.fn(), projectionSync: vi.fn(), projectionSource: vi.fn(), read: vi.fn(), source: vi.fn(), sync: vi.fn(), moduleSync: vi.fn(),
   moduleSources: vi.fn<typeof import("@/lib/server/robinhood-index/module-source").configuredModuleModeSources>(),
   store: vi.fn<() => IndexStore>(), storeRead: vi.fn<IndexStore["read"]>(), storeWrite: vi.fn<IndexStore["write"]>(),
 }));
+vi.mock("@/lib/server/robinhood-index/foundation-source", () => ({ configuredFoundationSources: mocks.foundationSources }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodLaunches: mocks.read }));
 vi.mock("@/lib/server/robinhood-index/launch-projection-source", () => ({ launchProjectionSourceV1: mocks.projectionSource, syncLaunchProjectionIndex: mocks.projectionSync }));
 vi.mock("@/lib/server/robinhood-index/source", () => ({ robinhoodSource: mocks.source }));
@@ -20,6 +21,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.projectionSync.mockRejectedValue(new Error("Projection unavailable"));
   mocks.moduleSources.mockResolvedValue({ lanes: [], unavailableSources: [] });
+  mocks.foundationSources.mockResolvedValue({ lanes: [], unavailableSources: [] });
   mocks.storeRead.mockResolvedValue(null);
   mocks.store.mockReturnValue({ read: mocks.storeRead, write: mocks.storeWrite });
   vi.stubEnv("CRON_SECRET", "a".repeat(48));
@@ -86,12 +88,42 @@ describe("Robinhood website HTTP boundaries", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       error: "index_update_unavailable", custom: { status: "unavailable" }, launchProjections: { status: "unavailable" }, moduleMode: { status: moduleStatus },
-      moduleSources: {}, moduleUnavailableSources: unavailableSources,
+      moduleSources: {}, moduleUnavailableSources: unavailableSources, foundation: "disabled", foundationSources: {}, foundationUnavailableSources: [],
     });
     expect(mocks.moduleSources).toHaveBeenCalledOnce();
     expect(mocks.moduleSources).toHaveBeenCalledWith(undefined, expect.any(AbortSignal));
-    expect(mocks.storeRead).toHaveBeenCalledTimes(moduleStatus === "disabled" ? 1 : 0);
+    expect(mocks.storeRead).toHaveBeenCalledTimes(1);
     expect(mocks.moduleSync).not.toHaveBeenCalled();
     expect(mocks.storeWrite).not.toHaveBeenCalled();
   });
+  it("collects Foundation even when the older Module inventory is unavailable", async () => {
+    mocks.source.mockRejectedValue(new Error("Custom unavailable"));
+    mocks.moduleSources.mockRejectedValue(new Error("Module authority unavailable"));
+    const source = { sourceKind: "module-foundation-v1", factoryVersion: "v3" };
+    const sourceFactory = vi.fn(async () => source);
+    mocks.foundationSources.mockResolvedValue({ lanes: [{ releaseDigest: "foundation", source: sourceFactory }], unavailableSources: [] });
+    mocks.moduleSync.mockResolvedValue({ status: "ready", ranges: 1, launches: 2 });
+    const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", {
+      headers: { authorization: `Bearer ${"a".repeat(48)}` },
+    }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ moduleMode: { status: "unavailable" }, foundation: "ready",
+      foundationSources: { foundation: { status: "ready", launches: 2 } } });
+    expect(sourceFactory).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(mocks.moduleSync).toHaveBeenCalledWith(source, expect.anything(), expect.objectContaining({ rangeSize: 5_000n }));
+  });
+  it("reports a missing Foundation inventory without suppressing independent Module progress", async () => {
+    mocks.source.mockRejectedValue(new Error("Custom unavailable"));
+    const source = { sourceKind: "module-native-v2" };
+    mocks.moduleSources.mockResolvedValue({ lanes: [{ releaseDigest: "modules", source: vi.fn(async () => source) }], unavailableSources: [] });
+    mocks.foundationSources.mockRejectedValue(new Error("Foundation authority unavailable"));
+    mocks.moduleSync.mockResolvedValue({ status: "ready" });
+    const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", {
+      headers: { authorization: `Bearer ${"a".repeat(48)}` },
+    }));
+    expect(await response.json()).toMatchObject({ moduleMode: { status: "ready" }, foundation: "unavailable",
+      foundationUnavailableSources: ["FOUNDATION_RELEASE_INVENTORY_UNAVAILABLE"] });
+    expect(mocks.moduleSync).toHaveBeenCalledWith(source, expect.anything(), expect.not.objectContaining({ rangeSize: 5_000n }));
+  });
+
 });

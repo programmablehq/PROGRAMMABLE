@@ -34,6 +34,7 @@ export type LaunchProjectionSnapshot = {
 export type ModuleModeSnapshot = {
   version: 1;
   sourceKind: RobinhoodModuleLaunch["sourceKind"];
+  factoryVersion?: "v1" | "v2" | "v3";
   chainId: 4663;
   sourceAddress: string;
   releaseDigest: string;
@@ -134,6 +135,7 @@ export function parseSnapshot(value: unknown): RobinhoodSnapshot {
 
 export function parseModuleModeSnapshot(value: unknown): ModuleModeSnapshot {
   if (!isObject(value) || value.version !== 1 || !isRobinhoodModuleSourceKind(value.sourceKind) || value.chainId !== 4663
+    || (value.sourceKind === "module-foundation-v1" ? !["v1", "v2", "v3"].includes(String(value.factoryVersion)) : value.factoryVersion !== undefined)
     || !matches(value.sourceAddress, ADDRESS) || /^0x0{40}$/i.test(value.sourceAddress)
     || !matches(value.releaseDigest, HASH) || /^0x0{64}$/i.test(value.releaseDigest)
     || !matches(value.startBlock, BLOCK) || !matches(value.finalizedBlock, BLOCK) || !date(value.updatedAt)
@@ -143,6 +145,7 @@ export function parseModuleModeSnapshot(value: unknown): ModuleModeSnapshot {
   const identities = [new Set<string>(), new Set<string>(), new Set<string>(), new Set<string>()];
   for (const row of value.items) {
     if (!isObject(row) || !isRobinhoodModuleLaunch(row) || row.sourceKind !== value.sourceKind
+      || (row.sourceKind === "module-foundation-v1" && row.factoryVersion !== value.factoryVersion)
       || row.sourceAddress.toLowerCase() !== value.sourceAddress.toLowerCase()
       || row.sourceReleaseDigest.toLowerCase() !== value.releaseDigest.toLowerCase()
       || !matches(row.blockNumber, BLOCK) || value.cursor === null || BigInt(row.blockNumber) > BigInt(value.cursor.number)

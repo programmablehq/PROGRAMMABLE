@@ -249,6 +249,54 @@ describe("bounded canonical launch index", () => {
     expect(first.evidence).toBe("canonical-launch-index");
   });
 
+  it("verifies old events at a separate finalized state checkpoint without requesting pruned historical state", async () => {
+    const f = fixture();
+    f.getBlock.mockImplementation(async ({ blockNumber }) => {
+      const number = blockNumber ?? 300n;
+      return { number, hash: hash(number), timestamp: number * 10n };
+    });
+    const page = await readFoundationLaunchIndex({ client: f.client, binding, fromBlock: 1n, toBlock: 150n, verificationBlock: 300n });
+    expect(page.checkpoint.blockNumber).toBe(150n);
+    expect(page.verificationCheckpoint?.blockNumber).toBe(300n);
+    expect(f.readContract.mock.calls.every(([read]) => read.blockNumber === 300n)).toBe(true);
+    expect(f.getLogs).toHaveBeenCalledWith(expect.objectContaining({ fromBlock: 1n, toBlock: 150n }));
+  });
+
+  it("binds the extended cursor to both window and finalized verification checkpoint", async () => {
+    const f = fixture();
+    f.getBlock.mockImplementation(async ({ blockNumber }) => {
+      const number = blockNumber ?? 400n;
+      return { number, hash: hash(number), timestamp: number * 10n };
+    });
+    f.getLogs.mockResolvedValue([launchLog(), launchLog({ token: addr(12), blockNumber: 99n, transactionHash: hash(42) })]);
+    const input = { client: f.client, binding, fromBlock: 1n, toBlock: 150n, verificationBlock: 300n, pageSize: 1 };
+    const first = await readFoundationLaunchIndex(input);
+    expect((await readFoundationLaunchIndex({ ...input, cursor: first.nextCursor! })).entries[0].blockNumber).toBe(99n);
+    await expect(readFoundationLaunchIndex({ ...input, verificationBlock: 301n, cursor: first.nextCursor! })).rejects.toThrow("different verification checkpoint");
+    await expect(readFoundationLaunchIndex({ ...input, verificationBlock: undefined, cursor: first.nextCursor! })).rejects.toThrow("Invalid launch-history cursor");
+    await expect(readFoundationLaunchIndex({ ...input, toBlock: 149n, cursor: first.nextCursor! })).rejects.toThrow("cursor belongs");
+  });
+
+  it("rejects unfinalized verification state and changes to either pinned block", async () => {
+    const f = fixture();
+    f.getBlock.mockImplementation(async ({ blockNumber }) => {
+      const number = blockNumber ?? 300n;
+      return { number, hash: hash(number), timestamp: number * 10n };
+    });
+    const input = { client: f.client, binding, fromBlock: 1n, toBlock: 150n, verificationBlock: 300n };
+    await expect(readFoundationLaunchIndex({ ...input, verificationBlock: 301n })).rejects.toThrow("not finalized");
+    await expect(readFoundationLaunchIndex({ ...input, verificationBlock: 149n })).rejects.toThrow("precedes");
+    for (const changed of [150n, 300n]) {
+      let anchorReads = 0;
+      f.getBlock.mockImplementation(async ({ blockNumber }) => {
+        const number = blockNumber ?? 300n;
+        const changedHash = blockNumber === changed && (changed === 300n || ++anchorReads > 1);
+        return { number, hash: hash(changedHash ? number + 1n : number), timestamp: number * 10n };
+      });
+      await expect(readFoundationLaunchIndex(input)).rejects.toThrow("no longer canonical");
+    }
+  });
+
   it("passes an indexed token filter and returns a candidate usable by the verified discovery", async () => {
     const f = fixture();
     const page = await readFoundationLaunchIndex({ client: f.client, binding, token, ...window });

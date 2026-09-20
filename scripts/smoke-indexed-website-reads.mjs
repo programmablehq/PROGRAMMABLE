@@ -132,7 +132,7 @@ function validateSources(body, route, expectations, nowMs) {
       } else {
         check(expectations.robinhood.modules.some(expected => expected.source === source.source &&
           same(expected.sourceAddress, source.sourceAddress) && same(expected.releaseDigest, source.releaseDigest) &&
-          expected.startBlock === source.startBlock), "Robinhood module release binding");
+          expected.startBlock === source.startBlock && expected.factoryVersion === source.factoryVersion), "Robinhood module release binding");
       }
     }
     const projection = evidence.launchProjections;
@@ -220,6 +220,12 @@ function validateItem(item, body, route, expectations) {
     check(source && HASH.test(item.launchId ?? "") && HASH.test(item.blockHash ?? "") &&
       BigInt(item.blockNumber) >= BigInt(source.startBlock) && BigInt(item.blockNumber) <= BigInt(source.cursor.number), "Robinhood launch source");
     if (item.sourceKind === undefined) check(same(item.routerAddress, source.sourceAddress) && HASH.test(item.stampHash ?? ""), "Robinhood Router identity");
+    else if (item.sourceKind === "module-foundation-v1") check(item.routerAddress === null && item.stampHash === null
+      && item.factoryVersion === source.factoryVersion && ["v1", "v2", "v3"].includes(item.factoryVersion)
+      && same(item.launchId, item.poolId) && ADDRESS.test(item.hookAddress ?? "") && ADDRESS.test(item.poolManager ?? "")
+      && ADDRESS.test(item.quoteAsset ?? "") && ADDRESS.test(item.feeLedgerAddress ?? "")
+      && HASH.test(item.metadataHash ?? "") && HASH.test(item.compositionHash ?? "") && item.decimals === 18,
+      "Robinhood Foundation identity");
     else check(item.routerAddress === null && item.stampHash === null && HASH.test(item.verificationDigest ?? "") &&
       (item.primaryMarket == null || item.primaryMarket.chainId === 4663), "Robinhood module identity");
   }

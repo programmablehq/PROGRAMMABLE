@@ -3,6 +3,7 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { keccak256, stringToHex } from "viem";
 import { engineWire } from "../../contracts/scripts/module-engine/shared.mjs";
 
 import {
@@ -11,6 +12,7 @@ import {
 } from "./read-model-deploy-policy.mjs";
 
 export const INDEXED_WEBSITE_READ_MODE = "indexed-website-read";
+export const FOUNDATION_INDEX_RELEASES_SCHEMA = "programmable.module-foundation.index-releases.v1";
 export const MODULE_ENGINE_INDEX_RELEASES_SCHEMA = "programmable.module-engine.index-releases.v1";
 export const INDEXED_WEBSITE_ROUTES = Object.freeze([
   Object.freeze({ chainId: 1, slug: "ethereum", path: "/api/explore/ethereum" }),
@@ -36,6 +38,31 @@ function moduleSourceExpectation(release) {
     sourceAddress: sourceAddress.toLowerCase(), releaseDigest: release.releaseDigest.toLowerCase(), startBlock: release.startBlock });
 }
 
+function foundationSourceExpectations(value) {
+  const object = item => item && typeof item === "object" && !Array.isArray(item);
+  const keys = (item, expected) => object(item) && Object.keys(item).sort().join(",") === expected.sort().join(",");
+  if (!keys(value, ["schemaVersion", "releases"]) || value.schemaVersion !== FOUNDATION_INDEX_RELEASES_SCHEMA
+    || !Array.isArray(value.releases) || value.releases.length > 8) throw new Error("indexed website Foundation inventory is invalid");
+  return value.releases.map(release => {
+    const binding = release?.binding, evidence = release?.evidence, deployment = release?.deployment;
+    const version = binding?.factoryVersion;
+    if (!keys(release, ["binding", "evidence", "deployment"]) || !["v1", "v2", "v3"].includes(version)
+      || !keys(binding, ["factoryVersion", "releaseDigest", "sourceCommit", "startBlock", "factory", "hookDeployer", ...(version === "v1" ? [] : ["lpCustodyId"])])
+      || !HASH.test(binding.releaseDigest ?? "") || !/^[0-9a-f]{40}$/u.test(binding.sourceCommit ?? "")
+      || !/^[1-9][0-9]{0,19}$/u.test(binding.startBlock ?? "")
+      || ![binding.factory, binding.hookDeployer].every(pin => keys(pin, ["address", "runtimeCodeHash"])
+        && ADDRESS.test(pin.address ?? "") && HASH.test(pin.runtimeCodeHash ?? ""))
+      || binding.factory.address.toLowerCase() === binding.hookDeployer.address.toLowerCase()
+      || version !== "v1" && binding.lpCustodyId !== keccak256(stringToHex("programmable.module-foundation.launch-nfts.dead.v1"))
+      || !keys(evidence, ["artifactDigest", "decisionDigest", "sourceManifestHash"])
+      || !Object.values(evidence).every(digest => HASH.test(digest ?? ""))
+      || !keys(deployment, ["factoryTransactionHash", "hookDeployerTransactionHash"])
+      || !Object.values(deployment).every(digest => HASH.test(digest ?? ""))) throw new Error("indexed website Foundation release evidence is invalid");
+    return Object.freeze({ source: "module-foundation-v1", sourceVersion: "module-foundation-v1", factoryVersion: version,
+      sourceAddress: binding.factory.address.toLowerCase(), releaseDigest: binding.releaseDigest.toLowerCase(), startBlock: binding.startBlock });
+  });
+}
+
 // Reuse the source identities already reviewed with this checkout. This does
 // not replace the server readers' release, provenance or finality validation.
 export async function readIndexedWebsiteSourceExpectations(root = process.cwd()) {
@@ -54,6 +81,14 @@ export async function readIndexedWebsiteSourceExpectations(root = process.cwd())
     ...json("config/module-mode/historical-releases.json").releases.map(({ release }) => release),
     ...json("config/module-engine/historical-releases.json").releases.map(({ release }) => release),
   ].map(moduleSourceExpectation);
+  const foundationSources = foundationSourceExpectations(json("config/module-foundation/index-releases.json"));
+  for (const source of foundationSources) {
+    if (modules.some(existing => existing.releaseDigest === source.releaseDigest || existing.sourceAddress === source.sourceAddress)) {
+      throw new Error("indexed website Foundation release duplicates a configured source");
+    }
+    modules.push(source);
+  }
+  if (modules.length > MAX_MODULE_SOURCES) throw new Error("indexed website module source inventory exceeds its budget");
   const indexReleases = json("config/module-engine/index-releases.json");
   if (!indexReleases || typeof indexReleases !== "object" || Array.isArray(indexReleases) ||
     Object.keys(indexReleases).sort().join(",") !== "releases,schemaVersion" ||

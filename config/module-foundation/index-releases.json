@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "programmable.module-foundation.index-releases.v1",
+  "releases": [
+    {
+      "binding": {
+        "releaseDigest": "0x563e0942bb18e96ae536255023aaba5bf835b07be3c490ee0c34da4a3ab209bc",
+        "sourceCommit": "df3aa64b49e73924d01b7af59c48196a8c3d6f6a",
+        "startBlock": "64005092",
+        "factoryVersion": "v1",
+        "factory": {
+          "address": "0x32897c76e4e87d72f404f33f01e4ef2a76931286",
+          "runtimeCodeHash": "0x92d4b9bc48a4c0d9d4a7832edac6753b5a1d4c5caf1b1fec71bb192588c959fe"
+        },
+        "hookDeployer": {
+          "address": "0x6fabd2b1d39989247df7cbcc5427aadcab487cf4",
+          "runtimeCodeHash": "0xf480e7f7242d590d1656d6efec70cfe64470d02dc768cad3721d0937066a0152"
+        }
+      },
+      "evidence": {
+        "artifactDigest": "0xf3d4978b3210e6a7d0ea8c28a49e7ae9f4063963e01fc6906c16f1da873b48f8",
+        "decisionDigest": "0x87b1bb029ca0272ecd6213584a9fc8ee055a54e3db34efb4d92d5117a18a496a",
+        "sourceManifestHash": "0x0113e6f4eca57864b68969899128f231167b7d0d0373bc61a2d85466508df3d4"
+      },
+      "deployment": {
+        "factoryTransactionHash": "0x28dab95ac0ca0ae694b0a626560ed07ee7de8407bb5a68f7d5631cdc2f80eb7c",
+        "hookDeployerTransactionHash": "0xd39d58c9942474b702174705eafb3b3ca456c013c213492a49c684cf64cab2f6"
+      }
+    },
+    {
+      "binding": {
+        "releaseDigest": "0x1bde355898b9e5547d5f0c9c14e1b16d43fd71eea3d04724af7f6cbc6e976b7a",
+        "sourceCommit": "cc7e553f4317e5752a618f9672da5d34ab7d949a",
+        "startBlock": "66023586",
+        "factoryVersion": "v2",
+        "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+        "factory": {
+          "address": "0xc02a2bebecb60c8d2e9e0176a4438845eae66a5c",
+          "runtimeCodeHash": "0xb7d2e401f1201110f847c24e815ca9394d6ebc27f624e6271ad0ca04e8f15d60"
+        },
+        "hookDeployer": {
+          "address": "0x6fabd2b1d39989247df7cbcc5427aadcab487cf4",
+          "runtimeCodeHash": "0xf480e7f7242d590d1656d6efec70cfe64470d02dc768cad3721d0937066a0152"
+        }
+      },
+      "evidence": {
+        "artifactDigest": "0xba6590dcfa8147af057ab2745d5e8c0aee36b20f1cbddbc12f66ce6c57319c6b",
+        "decisionDigest": "0xa16139c848ac034153b58331b44b93aa18278596f26ff06a562ebf8d8b6279fc",
+        "sourceManifestHash": "0xbc782971cad6556acf972a938b937080e6cfba7a0ac66870175e70d04291e8c8"
+      },
+      "deployment": {
+        "factoryTransactionHash": "0xf4ecf1d114c919b805e8d848260f273d1e092b802655fb9d8c316e06afcb30f6",
+        "hookDeployerTransactionHash": "0xd39d58c9942474b702174705eafb3b3ca456c013c213492a49c684cf64cab2f6"
+      }
+    },
+    {
+      "binding": {
+        "releaseDigest": "0x82e8f8f17f699ec8a9e72a834e0616ebf367459bec54df0d040965f0dd1303c4",
+        "sourceCommit": "f5ae302cf7812b34c7e5445da15fb82fb0400d33",
+        "startBlock": "66969916",
+        "factoryVersion": "v2",
+        "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+        "factory": {
+          "address": "0x31bce40a6d28db69bf0b6cd0abc5d8f506626acc",
+          "runtimeCodeHash": "0xd5f27ea43b4f09b045992315af33489b67a418f0e4a04b2bff95de4bc48ccff7"
+        },
+        "hookDeployer": {
+          "address": "0x6fabd2b1d39989247df7cbcc5427aadcab487cf4",
+          "runtimeCodeHash": "0xf480e7f7242d590d1656d6efec70cfe64470d02dc768cad3721d0937066a0152"
+        }
+      },
+      "evidence": {
+        "artifactDigest": "0xda55902393152edeefe89946ab8b8ea029e6e70b7af51fc223bb18d7cc519f12",
+        "decisionDigest": "0x6559ee61681174aee79b45d0a7841f44ffd1524d479bfdf4434fd0dcb43ad498",
+        "sourceManifestHash": "0x3ab4e9b2e7c864cfd62199b8e7e3b88bcaa714dfbd075f8057637f2e7704f968"
+      },
+      "deployment": {
+        "factoryTransactionHash": "0xb7e2079cd8ad126aed726cc43b28b6e73046ac0bda768c05ca2f978e0b7cad81",
+        "hookDeployerTransactionHash": "0xd39d58c9942474b702174705eafb3b3ca456c013c213492a49c684cf64cab2f6"
+      }
+    },
+    {
+      "binding": {
+        "releaseDigest": "0x35e1c4276a2310b2aedb58b5f89cb8b3f5c537b92e471bcb72a33fb23e533cfd",
+        "sourceCommit": "8877b1bb946a5f64cce572e6114fc86cd0140b56",
+        "startBlock": "67353984",
+        "factoryVersion": "v2",
+        "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+        "factory": {
+          "address": "0x18cab14c69d0fe6df4a96256318b51c51c98da3f",
+          "runtimeCodeHash": "0x049a3b673e341750ff94b7ba71f9b9e4ab8f9ef2756cdc072769b1bc2083f706"
+        },
+        "hookDeployer": {
+          "address": "0x6fabd2b1d39989247df7cbcc5427aadcab487cf4",
+          "runtimeCodeHash": "0xf480e7f7242d590d1656d6efec70cfe64470d02dc768cad3721d0937066a0152"
+        }
+      },
+      "evidence": {
+        "artifactDigest": "0x87616e1c91149a5f7215ca41015ea72fb5a81c14849da08bec2398549546a4a1",
+        "decisionDigest": "0x1d0384e0edbe70e1c9baf39264c0d3c01e519310e76638d72237de7078c159ee",
+        "sourceManifestHash": "0x65c11c7df5cf9e55b5666081e973d54ab4bfe1ffc0868a8819cc13d5f1e78954"
+      },
+      "deployment": {
+        "factoryTransactionHash": "0xedb7cef9edcdfd1f250b775b6f1b776e05c79276ddc1a2ecd698016e145b8998",
+        "hookDeployerTransactionHash": "0xd39d58c9942474b702174705eafb3b3ca456c013c213492a49c684cf64cab2f6"
+      }
+    }
+  ]
+}

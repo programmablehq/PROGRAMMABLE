@@ -56,3 +56,32 @@ installation. Review identities are not imported into it. Before an additional
 backend source reaches the shared website index, its exact technical binding
 must be reviewed and included in the deployed website checkout. The unchanged
 runtime smoke still rejects any observed source outside those exact bindings.
+
+
+Foundation sources use the same saved Module lanes, bounded-range scheduler,
+reorg handling and conditional Blob writes. The backend's retained-release
+inventory identifies every factory generation; each lane obtains fresh
+release-specific acceptance before it scans. A missing inventory is reported
+as incomplete even if the active factory can be collected during a rollout.
+V1, V2 and V3 retain separate source digests, factory addresses and checkpoints.
+
+Each Foundation range contains at most 5,000 blocks and is verified by two
+independent providers configured through `ROBINHOOD_RPC_URL` and
+`ROBINHOOD_RPC_SECONDARY_URL`. Both must support state reads at the common
+finalized boundary. The SDK pins historical event windows separately from that
+finalized state checkpoint so old event history does not require historical
+contract state. Both hashes are checked again before storing rows. The job
+advances at most 48 ranges per source and pass, within its shared deadline;
+backfill must finish before the release is declared caught up.
+
+`config/module-foundation/index-releases.json` adds exact Foundation identities
+to the existing deployment smoke expectations. It records factory and deployer
+runtime pins and deployment transactions, plus accepted source artifact,
+decision and manifest digests. The four retained records come from the deployed
+backend registry at `edb0776110b3387989e0144fac9f0c86e837edd7`; the current and
+native-ETH V2 bindings were also matched to fresh public authority responses.
+These records do not grant runtime or finality approval. The background source
+still requires fresh per-release authority and independent provider evidence.
+Future factory releases require their own reviewed technical record before
+being introduced to the shared index; new tokens on an existing factory need
+no per-token configuration. Unknown source identities remain a smoke failure.
