@@ -68,7 +68,7 @@ export function ModuleFoundationLaunchHost() {
     if (session.account) session.assertCurrent(session.account, expectedContext);
     const asset: FoundationQuoteAsset = { address: quote.address, chainId: 4663, name: quote.name, symbol: quote.symbol,
       decimals: quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(quote), ...(quote.balance === null ? {} : { balance: formatUnits(quote.balance, quote.decimals) }) };
-    setQuoteState(current => ({ context: expectedContext, assets: [...(current.context === expectedContext ? current.assets.filter(item => item.address !== asset.address) : []), asset] }));
+    // The builder owns custom lookups and discards results from an older wallet context.
     return asset;
   }
   async function prepare(draft: FoundationLaunchDraft): Promise<FoundationLaunchReview> {
