@@ -60,7 +60,7 @@ export function ModuleFoundationLaunchCard() {
         Create a coin and add upgrades with modules.
       </span>
       <span className={launchExperience.modelAction} id="launch-model-modules-status">
-        Configure a coin<ArrowRight aria-hidden="true" size={16} />
+        Launch a Coin<ArrowRight aria-hidden="true" size={16} />
       </span>
     </span>
   </>;

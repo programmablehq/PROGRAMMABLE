@@ -22,6 +22,8 @@ If the creator sets their fee to 0%, they earn no creator fees from those trades
 
 Foundation charges **0.30% (30 bps)** for Programmable on each buy and sell. The creator chooses **0%, or 1% to 10% in 1% increments**, added separately. Fees accrue in the pool's quote token. Foundation's initial pool has a 0% LP fee; connecting pools in a route can charge their own fees.
 
+Use the creator rate recorded for the trade's direction. Releases with independent Buy and Sell settings can use different rates; earlier releases use one rate for both. The launch screen follows the selected release, and existing coins keep their original settings.
+
 Selected modules can receive a configured share of the creator fee. Those shares come from the creator's amount and leave the platform's 0.30% unchanged. Read the launch's recorded split rather than assuming a fixed author fee or an equal division between modules.
 
 For example, a **1% creator fee** gives a **1.30% combined Foundation fee**. On a gross trade amount of **1 ETH** in an ETH-denominated quote, **0.003 ETH** belongs to Programmable and **0.01 ETH** belongs to the creator budget, including any recorded module shares. Gas and fees charged by other pools in the route are separate.

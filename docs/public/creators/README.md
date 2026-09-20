@@ -6,9 +6,9 @@ description: Launch a coin, build a custom project or contribute a reusable modu
 
 Start with the launch path that matches your project. Module Mode lets you configure a coin in the website. Custom Launch uses your own source package and an API key. Both lead to a transaction that the launching wallet reviews and signs.
 
-## Configure a coin
+## Launch a coin
 
-Open the [Module Mode builder](https://programmable.market/launch/modules), enter the coin details, choose creator fees and add any compatible modules. The builder explains each module's inputs and shows the total fees and required funding before launch. After indexing, open the coin from Explore or your profile to use its supported management actions.
+Open the [coin builder](https://programmable.market/launch/modules/foundation), enter the coin details, choose creator fees and set the first buy. You can add compatible modules before launch. Confirm the transaction in your wallet to create the coin and open its page. Once indexed, the coin also appears in Explore and your profile.
 
 ## Launch custom contracts
 

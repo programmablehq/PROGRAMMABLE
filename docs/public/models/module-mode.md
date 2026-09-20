@@ -4,22 +4,22 @@ description: Launch a coin with a Uniswap v4 pool and optional compatible module
 
 # Module Mode
 
-Module Mode uses Foundation to create a coin and its Uniswap v4 pool on Robinhood Chain. You choose the coin details, quote token, creator fee and optional initial buy. Compatible modules can add behavior when they are available in the live catalog.
+Module Mode uses Foundation to create a coin and its Uniswap v4 pool on Robinhood Chain. You choose the coin details, pairing, creator fees and first buy. Compatible modules can add behavior when they are available in the catalog.
 
-Foundation supplies the initial liquidity from the new coin's token supply. A standard launch does not require a separate deposit of ETH or quote tokens into the pool. You pay network gas, any initial buy you choose and any additional funding required by selected modules. Trading starts in the Uniswap v4 pool and continues there without a later migration.
+Foundation supplies the initial liquidity from the new coin's token supply. A standard launch does not require a separate deposit of ETH or quote tokens into the pool. You pay network gas, the first buy and any additional funding required by selected modules. Trading starts in the Uniswap v4 pool and continues there without a later migration.
 
 ## Launch a coin
 
-1. Open the [Foundation builder](https://programmable.market/launch/modules/foundation) and connect your wallet.
-2. Enter the coin details, optional image and links, quote token, creator fee and initial buy.
+1. Open [Launch a Coin](https://programmable.market/launch/modules/foundation) and connect your wallet.
+2. Enter the name and ticker, add an image and links if you have them, then choose the pairing, creator fees and first buy.
 3. Add available compatible modules if you want them and complete their configuration.
 4. Review the fees and funding, create the launch and confirm the transaction in your wallet.
 
-The ETH-funded flow creates the coin, pool and optional initial buy in one transaction, with one wallet confirmation. The builder checks the selected versions, capabilities, configuration and funding route before preparing it. Gas estimates and quoted outputs can change before execution.
+The website requires a first buy and suggests a small starting amount. The ETH-funded flow creates the coin, pool and first buy in one transaction, with one wallet confirmation. The builder checks the configuration and funding route before preparing it. Gas estimates and quoted outputs can change before execution.
 
-An image is optional. If you launch without choosing one, the transaction records the Programmable logo as the token image. A selected image is used instead. Add a website, X or Telegram link directly; **Add more links** opens Discord, GitHub and GitBook fields. These links are stored in the token metadata and displayed on its Explore card and coin page.
+If you launch without choosing an image, the transaction records the Programmable logo as the token image. Add a website or X profile directly; **Add More Links** opens Telegram, Discord, GitHub and Docs fields. A website can be entered as a domain or full URL. X accepts a username, an @username or a profile link. These links are stored in the token metadata and displayed on its Explore card and coin page.
 
-After the transaction is confirmed, open the token or copy its contract address. Keep the transaction hash so you can verify the result if an interface or indexer is delayed.
+After the confirmed transaction is verified, the website opens the coin page. **View Coin** provides the same destination. The page shows the chart, full contract address and project links. You can copy the address directly. The coin appears among the newest launches in Explore and on its creator's profile once the index verifies it. Keep the transaction hash so you can recover the page if an interface or indexer is delayed.
 
 ## Configuration and compatibility
 
@@ -27,7 +27,7 @@ A module declares the fields it needs, their types and units, allowed values, de
 
 Modules can have state, receive a declared operating budget and expose management actions. The host defines which actions are available and which wallet may execute them. The active release determines the supported engine, quote asset and resource limits.
 
-Select a quote token by its contract address. Support is determined by the token's behavior and the route required for the chosen funding method, not by a list of tickers. An ETH initial buy needs a supported route with enough liquidity. Being an ERC-20 token alone does not guarantee that route exists.
+Under **Pair with**, **Classic** uses wrapped ETH in the pool. Choose **Other (Stocks or Meme Coins)** to enter another token's contract address. Support depends on the token's behavior and the required funding route. An ETH first buy needs a supported route with enough liquidity. Being an ERC-20 token alone does not guarantee that route exists.
 
 Compatible modules share one launch. Combinations that conflict or exceed the host's limits are rejected before launch. A module that needs a capability outside the current host requires a reviewed extension or a new engine release before it becomes available.
 
@@ -40,6 +40,8 @@ Each launch records the exact module versions and configuration it used. Publish
 ## Fees and contributor rewards
 
 Foundation charges **0.30% for Programmable** on buys and sells. Choose a creator fee of **0%, or 1% to 10% in 1% increments**, added separately. Selected modules can receive the share of the creator fee recorded at launch; they do not reduce the platform's 0.30% fee. For example, a 1% creator fee gives a 1.30% combined Foundation fee.
+
+The selected launch version determines whether Buy and Sell can use independent creator rates. Earlier versions use one rate for both. Each coin keeps the fee configuration it launched with.
 
 Fees accrue in the pool's quote token. The launch review shows the split before you confirm. Existing Native and Engine coins retain their original fee models, documented in [Fees and revenue](../economics.md#module-mode).
 
