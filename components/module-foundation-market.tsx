@@ -119,7 +119,7 @@ export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
   return <div className={styles.page}>
     <div className={styles.topline}><Link className={styles.backButton} href="/explore/robinhood"><ArrowLeftIcon size={16} aria-hidden="true" />Explore</Link><span className={styles.network}>{availability.chainName}</span></div>
     <header className={styles.pageHeading}><div className={styles.marketHeading}>{imageURI ? <Image src={imageURI} alt="" width={64} height={64} unoptimized referrerPolicy="no-referrer" onError={() => setFailedImage(imageURI)} /> : null}<div><h1>{coin.name}</h1><p>{coin.symbol} / {quote.symbol}</p></div></div>{socialLinks.length ? <nav className={styles.coinLinks} aria-label="Coin links">{socialLinks.map(link => <a key={`${link.label}:${link.url}`} href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${link.label} (opens in a new tab)`}>{link.label}<ArrowUpRightIcon size={16} aria-hidden="true" /></a>)}</nav> : null}</header>
-    <div className={styles.coinAddress}><FoundationAddress value={coin.address} label="coin address" /></div>
+    <div className={styles.coinAddress}><FoundationAddress value={coin.address} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${coin.address}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
     <div className={styles.marketLayout}>
       <div className={styles.marketChart}>
         <dl className={styles.marketMetrics}><div><dt>Price</dt><dd>{coinDollars(props.market?.priceUsd, true)}</dd></div><div><dt title={valuation.label === "FDV" ? "Fully diluted valuation" : undefined}>{valuation.label}</dt><dd>{coinDollars(valuation.value)}</dd></div></dl>

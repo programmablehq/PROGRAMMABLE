@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { decodeEventLog, formatUnits, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
 import { ModuleFoundationMarket } from "./module-foundation-market";
+import { FoundationAddress } from "./module-foundation-review";
 import { ModuleFoundationActions, type FoundationActionDescriptor, type FoundationActionReview } from "./module-foundation-actions";
 import { FoundationSessionStatus, useFoundationSession, type FoundationExecutionResult } from "./module-foundation-session";
 import { prepareFoundationClaim, prepareFoundationModuleAction, prepareFoundationTrade } from "@/lib/module-foundation/client";
@@ -133,8 +135,11 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}><div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
+  if (!details) return <><FoundationSessionStatus session={session} /><div className={styles.page}>
+    <div className={styles.topLine}><Link className={styles.textButton} href="/explore/robinhood">Explore</Link><span className={styles.chainBadge}>Robinhood Chain</span></div>
+    <div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
     <p role="status">{error || session.availability.reason || "Loading coin…"}</p></div>
+    <div className={styles.coinAddress}><FoundationAddress value={token} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${token}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
     {error ? <button type="button" className={styles.secondaryButton} onClick={() => setRefreshKey(value => value + 1)}>Read pool again</button> : null}</div></>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
     supported: true, ...(details.quote.balance === null ? {} : { balance: formatUnits(details.quote.balance, details.quote.decimals) }) };

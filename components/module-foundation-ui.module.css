@@ -256,7 +256,7 @@
 .marketChart { grid-column: 1; grid-row: 1; min-width: 0; }
 .marketAbout { grid-column: 1; grid-row: 2; min-width: 0; }
 .marketLayout > .mainColumn { grid-column: 2; grid-row: 1 / span 2; }
-.coinAddress { margin: -8px 0 24px; max-width: 100%; }
+.coinAddress { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -8px 0 24px; max-width: 100%; }
 .coinAddress .addressGroup { max-width: 100%; }
 .coinAddress .address { overflow-wrap: anywhere; }
 .marketMetrics { display: flex; flex-wrap: wrap; gap: 16px 32px; margin: 0 0 16px; }
