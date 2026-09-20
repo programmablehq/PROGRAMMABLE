@@ -55,7 +55,7 @@ test("complete Foundation verification fixes a public fork checkpoint and the co
   assert.deepEqual(forge.map(call => call.args), [
     ["fmt", "--check", "src/module-foundation", "test/module-foundation"],
     ["lint", "src/module-foundation"],
-    ["build", "src/module-foundation/FoundationFactoryV1.sol", "src/module-foundation/FoundationFactoryV2.sol", "--sizes"],
+    ["build", "src/module-foundation/FoundationFactoryV1.sol", "src/module-foundation/FoundationFactoryV2.sol", "src/module-foundation/FoundationFactoryV3Native.sol", "--sizes"],
     ["test", "--match-path", "test/module-foundation/*.t.sol", "-vv"],
   ]);
   for (const call of forge) assert.deepEqual({ profile: call.profile, rpc: call.rpc, block: call.block, override: call.override, src: call.src }, {
