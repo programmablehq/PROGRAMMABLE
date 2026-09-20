@@ -27,7 +27,7 @@ export function ModuleBuilderLoading() {
     </div>
     <div className={styles.layout}>
       <div className={styles.formPanel}>
-        <header className={styles.heading}><h1 ref={heading} id="module-loading-title">Create a coin</h1></header>
+        <header className={styles.heading}><h1 ref={heading} id="module-loading-title">Launch a Coin</h1></header>
         <p className={styles.liveRegion} role="status">Loading coin setup</p>
         <div className={loading.fields} aria-hidden="true">
           <div className={loading.pair}>{[0, 1].map(index => <div key={index}><span className={loading.label} /><span className={loading.control} /></div>)}</div>

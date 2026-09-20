@@ -70,8 +70,10 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     for (const removed of ["One wallet confirmation", "Minimum 1 wei", "Gas is separate", "Up to 8 MB", "JPG, PNG"]) expect(html).not.toContain(removed);
     expect(html).toContain(FOUNDATION_DEFAULT_IMAGE.url);
     expect(html).toContain("(Platform Fee 0.3%)");
-    expect(html).toContain('name="creatorBuyFeeBps"');
-    expect(html).toContain('name="creatorSellFeeBps"');
+    expect(html).toContain("Buy &amp; Sell");
+    expect(html).toContain('name="creatorFeeBps"');
+    expect(html).not.toContain('name="creatorBuyFeeBps"');
+    expect(html).not.toContain('name="creatorSellFeeBps"');
     expect(html).not.toContain("Optional");
     expect(html).not.toContain("foundation-modules-heading");
     expect(html).not.toContain("Platform fee recipient");
