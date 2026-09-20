@@ -8,6 +8,9 @@ import { isRobinhoodNativeModuleLaunch, isRobinhoodEngineLaunch, robinhoodModule
 import { isModuleEngineSharedQuoteRelease } from "@/lib/module-engine/profile";
 import { resolveProjectionAddress } from "@/lib/custom-launch/launch-projection-v1";
 import { readCustomV4SwapDescriptor } from "./custom-v4";
+import { readWebsiteRouterCustomIdentitySnapshotV1 } from "@/lib/alchemy/router-custom-public.server";
+import { resolveServerBoundRouterTradeAdapterV1 } from "@/lib/server/custom-launch/router-trade-descriptor-v1";
+import type { CanonicalTokenExploreEntry } from "@/lib/tokens";
 import { readRobinhoodSwapDecimals } from "./token-metadata";
 import { SWAP_TOKEN_SCHEMA, SwapUnavailableError, type SwapChainId, type SwapTokenDescriptor } from "@/lib/swap/types";
 
@@ -19,10 +22,13 @@ export interface SwapTokenDependencies {
   engine: typeof readModuleEngineAvailability;
   custom: typeof readCustomV4SwapDescriptor;
   decimals: typeof readRobinhoodSwapDecimals;
+  ethereumCustom: (row: CanonicalTokenExploreEntry) => Promise<ReturnType<typeof resolveServerBoundRouterTradeAdapterV1>>;
 }
 const readers: SwapTokenDependencies = {
   robinhood: readRobinhoodToken, ethereum: readEthereumToken,
   native: readModuleModeAvailability, engine: readModuleEngineAvailability, custom: readCustomV4SwapDescriptor, decimals: readRobinhoodSwapDecimals,
+  ethereumCustom: async row => resolveServerBoundRouterTradeAdapterV1(row, null)
+    ?? resolveServerBoundRouterTradeAdapterV1(row, await readWebsiteRouterCustomIdentitySnapshotV1()),
 };
 
 function tokenMetadata(row: { tokenAddress: string; name: string | null; symbol: string | null; decimals?: number | null; tokenDecimals?: number }) {
@@ -44,7 +50,22 @@ export async function resolveSwapToken(input: { address: string; chainId?: SwapC
     const result = await dependencies.ethereum(address);
     if (!result.token) throw new SwapUnavailableError(result.status === "unavailable" ? "Ethereum token details are temporarily unavailable. Try again." : "This token is not in the verified Ethereum launch index.", result.status === "unavailable" ? "INDEX_UNAVAILABLE" : "TOKEN_NOT_FOUND");
     const row = result.token, base = { schemaVersion: SWAP_TOKEN_SCHEMA, chainId: 1 as const, token: tokenMetadata(row), manageHref: null };
-    if (row.launchStampProvenance || row.launchModel === "custom-graph" || row.launchModel === "adaptive") return unavailable(base, "An ETH swap route is not available for this launch yet.");
+    if (row.launchStampProvenance) {
+      const adapter = await dependencies.ethereumCustom(row);
+      const market = adapter?.project.markets.find(item => item.marketId === adapter.market.marketId);
+      const capability = market?.tradeCapability;
+      if (adapter?.chainId === "1" && market && capability
+        && adapter.tokenAddress.toLowerCase() === base.token.address.toLowerCase()
+        && market.baseAsset.identity.value.toLowerCase() === base.token.address.toLowerCase()
+        && market.baseAsset.decimals === base.token.decimals && market.quoteAsset.identity.value.toLowerCase() === ZERO
+        && market.poolId.toLowerCase() === row.poolId?.toLowerCase()
+        && capability.poolKey.hooks.value.toLowerCase() === row.hookAddress?.toLowerCase()
+        && capability.supportedSides.includes("base-to-quote") && capability.supportedSides.includes("quote-to-base")) {
+        return { ...base, status: "ready", route: { kind: "custom-market", projectId: adapter.projectId, marketId: market.marketId, capability } };
+      }
+      return unavailable(base, "An ETH swap route is not available for this launch yet.");
+    }
+    if (row.launchModel === "custom-graph" || row.launchModel === "adaptive") return unavailable(base, "An ETH swap route is not available for this launch yet.");
     if (!row.hookAddress || !row.poolId) return unavailable(base, "No verified trading pool is available for this coin.");
     return { ...base, status: "ready", route: { kind: "classic", hook: getAddress(row.hookAddress), poolId: row.poolId,
       launchModel: row.launchModel === "deep" || row.launchModel === "stock-paired" ? row.launchModel : "classic",

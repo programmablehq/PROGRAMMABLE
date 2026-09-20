@@ -12,17 +12,22 @@ import { moduleEvidenceFixtureV2 } from "./fixtures/module-mode-evidence-v2";
 import anyQuote from "./fixtures/module-engine-any-quote-index.json";
 import anyQuoteEth from "./fixtures/module-engine-any-quote-eth-index.json";
 import genericEngine from "./fixtures/module-engine-index.json";
+import { shardRouterTradeEntry } from "./shard-router-trade-fixture";
+import { resolveServerBoundRouterTradeAdapterV1 } from "@/lib/server/custom-launch/router-trade-descriptor-v1";
+import { SHARD_ROUTER_TRADE_PROJECT_ID } from "@/lib/custom-launch/router-trade-adapters-v1";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodToken: vi.fn() }));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumToken: vi.fn() }));
 vi.mock("@/lib/server/swap/custom-v4", () => ({ readCustomV4SwapDescriptor: vi.fn() }));
+vi.mock("@/lib/alchemy/router-custom-public.server", () => ({ readWebsiteRouterCustomIdentitySnapshotV1: vi.fn() }));
 
 // Synthetic source fixtures exercise routing decisions only, never live execution.
 function dependencies(row: RobinhoodLaunch) {
   return {
     robinhood: vi.fn(async () => ({ token: row, status: "ready" })), ethereum: vi.fn(),
     native: vi.fn(), engine: vi.fn(), custom: vi.fn(async () => ({ launch: row })), decimals: vi.fn(async () => 18),
+    ethereumCustom: vi.fn(async entry => resolveServerBoundRouterTradeAdapterV1(entry, null)),
   } as unknown as SwapTokenDependencies;
 }
 function nativeFixture(v2 = false) {
@@ -107,5 +112,25 @@ describe("swap source resolution", () => {
     vi.mocked(f.deps.ethereum).mockResolvedValue({ status: "ready", token: { tokenAddress: a(300), name: "Decimal fixture", symbol: "DEC", tokenDecimals: 6, hookAddress: a(301), poolId: h(300), launchModel: "classic" } } as Awaited<ReturnType<SwapTokenDependencies["ethereum"]>>);
     expect(await resolveSwapToken({ address: a(300), chainId: 1 }, f.deps)).toMatchObject({ status: "ready", chainId: 1, token: { decimals: 6 }, route: { kind: "classic", hook: getAddress(a(301)), poolId: h(300) } });
     expect(f.deps.robinhood).not.toHaveBeenCalled();
+  });
+
+  it("uses the reviewed SHARD market and canonical project identity", async () => {
+    const { deps } = nativeFixture();
+    vi.mocked(deps.ethereum).mockResolvedValue({ chainId: 1, status: "ready", sources: { classic: "current", custom: "current" },
+      updatedAt: "2026-09-20T16:00:00.000Z", token: shardRouterTradeEntry });
+    expect(await resolveSwapToken({ address: shardRouterTradeEntry.tokenAddress, chainId: 1 }, deps)).toMatchObject({
+      status: "ready", route: { kind: "custom-market", projectId: SHARD_ROUTER_TRADE_PROJECT_ID, marketId: "shard-eth-v4",
+        capability: { poolKey: { poolId: shardRouterTradeEntry.poolId }, supportedSides: ["base-to-quote", "quote-to-base"] } },
+    });
+    expect(deps.custom).not.toHaveBeenCalled();
+  });
+
+  it("does not give an unreviewed or changed Ethereum Custom launch a swap route", async () => {
+    const { deps } = nativeFixture();
+    const changed = { ...shardRouterTradeEntry, launchStampProvenance: { ...shardRouterTradeEntry.launchStampProvenance!, stampHash: h(777) } };
+    vi.mocked(deps.ethereum).mockResolvedValue({ chainId: 1, status: "ready", sources: { classic: "current", custom: "current" },
+      updatedAt: "2026-09-20T16:00:00.000Z", token: changed });
+    expect(await resolveSwapToken({ address: changed.tokenAddress, chainId: 1 }, deps)).toMatchObject({ status: "unavailable", route: null });
+    expect(deps.custom).not.toHaveBeenCalled();
   });
 });
