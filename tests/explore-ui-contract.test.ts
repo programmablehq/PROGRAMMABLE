@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = process.cwd();
 
 describe("Explore UI contract", () => {
-  it("routes both chains to indexed launches and keeps the legacy reset explicit", () => {
+  it("routes public Explore to Robinhood and keeps the legacy reset explicit", () => {
     const page = readFileSync(join(root, "app/explore/[chain]/page.tsx"), "utf8");
     const entry = readFileSync(join(root, "app/explore/page.tsx"), "utf8");
     const resetView = readFileSync(
@@ -29,12 +29,10 @@ describe("Explore UI contract", () => {
     expect(resetView).toContain(
       "<Heading data-explore-heading>Explore</Heading>",
     );
-    expect(resetView).toContain("<ExploreChainSelector chainId={1} />");
-    expect(resetView.indexOf("<ExploreChainSelector chainId={1} />")).toBeGreaterThan(
+    expect(page).toContain("if (chainId === 1) redirect(exploreChainPath(4663))");
+    expect(resetView).not.toContain("<ExploreChainSelector");
+    expect(resetView.indexOf("<ExploreFilters disabled />")).toBeGreaterThan(
       resetView.indexOf("className={styles.disabledSearch}"),
-    );
-    expect(resetView.indexOf("<ExploreChainSelector chainId={1} />")).toBeLessThan(
-      resetView.indexOf("<ExploreFilters disabled />"),
     );
     expect(resetView).toContain("disabled");
     expect(resetView).toContain("Launch indexing is being rebuilt");

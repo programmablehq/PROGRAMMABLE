@@ -14,7 +14,6 @@ const productLinks = [
 ];
 
 const resourceLinks = [
-  { href: "/developers/modules", label: "Build a module" },
   { href: "/developers/hooks", label: "Build a custom hook" },
   {
     href: "/analytics",

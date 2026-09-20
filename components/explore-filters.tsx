@@ -57,7 +57,7 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
     <button className={styles.trigger} ref={triggerRef} type="button" disabled={disabled}
       aria-label={count ? `Filters, ${count} active` : "Filters"}
       aria-expanded={open} aria-controls={panelId} aria-haspopup="dialog"
-      title={disabled ? "Filters are unavailable while Ethereum indexing is rebuilt" : undefined}
+      title={disabled ? "Filters are currently unavailable" : undefined}
       data-active={count > 0}
       onClick={(event) => {
         if (open) close();

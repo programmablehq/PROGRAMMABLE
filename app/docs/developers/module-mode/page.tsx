@@ -6,7 +6,7 @@ import styles from "@/components/developer-docs.module.css";
 
 export const metadata: Metadata = {
   title: "Build a module · Programmable",
-  description: "Give your agent an idea and an API key to build, submit and track a reusable module.",
+  description: "Module interfaces, compatibility and transaction recovery. Module source submissions are currently paused.",
   alternates: { canonical: "/developer-reference/module-mode" },
 };
 const sections = [
@@ -18,12 +18,11 @@ const sections = [
   { id: "rewards", label: "Author rewards" },
   { id: "recovery", label: "Recover transactions" },
 ] as const;
-const cliDirectory = "/developers/module-mode-cli/v1.0.0-development.8";
 
 export default function ModuleModeDeveloperPage() {
   return <DocsShell currentPath="/docs/developers/module-mode" title="Build a module"
     kicker="Module Mode" parentHref="/docs/developers" parentLabel="Developers" sections={sections}
-    description="Start with an idea and an API key. Your agent builds the module and submits its source for review.">
+    description="Module interfaces and compatibility. Module source submissions are currently paused.">
     <p className={styles.bodyCopy}>
       Module Mode starts with a simple coin and adds optional programs. A contribution can provide
       its own logic, state and management actions, or propose a new market engine.
@@ -33,24 +32,10 @@ export default function ModuleModeDeveloperPage() {
       For terminal integration, read <Link href="/developer-reference/module-mode-indexing">Index Module Mode launches</Link>.</p>
     <section id="start">
       <h2>Get started</h2>
-      <ol className={styles.steps}>
-        <li>Connect your EVM wallet on <Link href="/developers/api-keys?purpose=modules">API keys</Link> and create a key with
-          <strong> Launches + modules</strong> access.</li>
-        <li>Save the key in your agent&apos;s <code>PROGRAMMABLE_API_KEY</code> secret environment.
-          Describe your idea and copy the prompt from the key page.</li>
-        <li>Your agent reads the <a href="/developers/module-mode-api-v1.md">API guide</a> and verifies the
-          <a href={`${cliDirectory}/manifest.json`}> current CLI</a>. Before building, it runs <code>module-context</code>
-          to obtain your author wallet, default reward wallet, permissions and prerequisites.</li>
-        <li>The agent builds and checks the module, prepares its exact source request, submits it, then keeps the returned ID.
-          Use <code> review-status-module</code> to follow its build, review feedback and next step.</li>
-      </ol>
-      <p className={styles.bodyCopy}>A GitHub repository or pull request is optional. The API receives the complete,
-        hash-bound source package directly.</p>
-      <p className={styles.bodyCopy}>Rewards default to the wallet linked to your key. Specify another payout address only
-        if you want to use one. The agent resolves any missing asset, funding or exit requirements before coding.</p>
-      <p className={styles.bodyCopy}>For an executable Engine contribution, download the source archive identified by the
-        <a href="/developers/module-mode-starters/engine-program/v0.1.0-development.1/manifest.json"> Engine starter manifest</a>,
-        verify its hash, then follow its README. The creator-attested settlement example has no approved revision or deployed host.</p>
+      <p className={styles.bodyCopy}>Module API-key issuance and source submissions are currently paused.
+        API keys are available for <Link href="/developers/api-keys">Custom Hook launches</Link>.</p>
+      <p className={styles.bodyCopy}>To launch a coin with the available modules, open
+        {" "}<Link href="/launch/modules">Module Mode</Link> and use your connected wallet.</p>
     </section>
     <section id="package">
       <h2>Your module package</h2>
@@ -85,23 +70,9 @@ export default function ModuleModeDeveloperPage() {
         {" "}for exact permissions, ABI, market and token limits. These source profiles do not imply an available catalog entry.</p>
     </section>
     <section id="api">
-      <h2>Submit and track</h2>
-      <p className={styles.bodyCopy}>Use <code>https://api.programmable.market</code> and read the live capabilities
-        before uploading. An absent or disabled capability means this deployment is not accepting contributions.</p>
-      <dl className={`${styles.dataList} ${styles.technicalData}`}>
-        <div><dt>Capabilities</dt><dd><code>GET /v1/modules/capabilities</code></dd></div>
-        <div><dt>Author and prerequisites</dt><dd><code>GET /v1/modules/context</code></dd></div>
-        <div><dt>Submit source</dt><dd><code>POST /v1/modules/submissions</code></dd></div>
-        <div><dt>Your submissions</dt><dd><code>GET /v1/modules/submissions</code></dd></div>
-        <div><dt>One submission</dt><dd><code>GET /v1/modules/submissions/:id</code></dd></div>
-        <div><dt>Review readiness</dt><dd><code>GET /v1/modules/review-capabilities</code></dd></div>
-        <div><dt>Build and review progress</dt><dd><code>GET /v1/modules/submissions/:id/review</code></dd></div>
-      </dl>
-      <p className={styles.bodyCopy}>Module keys carry <code>modules:submit</code> and <code>modules:read</code>.
-        Use one stable idempotency key for each exact request. If a connection fails, retry the same saved request
-        and key. Changed source becomes a new immutable revision.</p>
-      <p className={styles.bodyCopy}><a href="/developers/module-mode-api-v1.md">Read the complete API and CLI guide</a>
-        {" · "}<a href={`${cliDirectory}/programmable-module-mode-1.0.0-development.8.mjs`}>Standalone CLI</a></p>
+      <h2>Source submissions</h2>
+      <p className={styles.bodyCopy}>New submissions are paused. The reference below describes module
+        compatibility and existing releases; it is not an active API submission workflow.</p>
     </section>
     <section id="review">
       <h2>Review and availability</h2>
@@ -114,13 +85,6 @@ export default function ModuleModeDeveloperPage() {
         The review capability must be enabled before these private progress reads are available.</p>
       <p className={styles.bodyCopy}><code>awaiting_plan</code> means the platform must select or provide the review path.
         Keep the existing submission. Submit a new version only when its source needs to change.</p>
-      <p className={styles.bodyCopy}><code>status-module</code> keeps the historical intake receipt.
-        <code> review-status-module</code> reads current progress with your existing Module contributions key.
-        An <code>accepted</code> review is followed by registry admission and catalog activation.</p>
-      <p className={styles.bodyCopy}>Sign in with the key&apos;s author wallet to see your status and feedback in
-        {" "}<a href="/profile?section=submissions">Profile → Modules → Submissions</a>. A different reward wallet does not own this history.
-        Use <strong>Copy for agent</strong> to continue the submission. The prompt includes its identity and asks your agent to read the latest review with its existing key.
-        Your API key is not included. <strong>Published</strong> shows verified publications after admission and catalog activation.</p>
       <p className={styles.bodyCopy}>The Native and Engine Solidity build profiles each accept up to 4 MiB of packaged
         source, dependencies and documentation, and 16 KiB of encoded configuration. Engine review bounds execution to
         3,000,000 gas and initialization/operation data to 16 KiB each. Intake can store larger packages; a successful upload

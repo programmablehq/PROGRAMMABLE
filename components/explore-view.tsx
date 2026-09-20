@@ -27,7 +27,6 @@ import {
 
 import type { MarketCapMetric } from "@/components/animated-market-cap";
 import { DiscordBrandIcon, GitHubBrandIcon, XBrandIcon } from "@/components/brand-icons";
-import { ExploreChainSelector } from "@/components/explore-chain-selector";
 import { EXPLORE_PREVIEW_TOKENS } from "@/components/explore-preview-data";
 import {
   isInterfacePreviewHost,
@@ -4324,7 +4323,6 @@ export function ExploreView({
 
                   {!embedded ? (
                     <div className={styles.chainControl}>
-                      <ExploreChainSelector />
                     </div>
                   ) : null}
 

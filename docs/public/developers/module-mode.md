@@ -2,6 +2,8 @@
 description: Build, configure and submit a reusable Module Mode program through the API
 ---
 
+Module API-key issuance and source submissions are currently paused. API keys are available for [Custom Hook launches](custom-launch.md). To launch a coin with the available modules, use [Module Mode](https://programmable.market/launch/modules) with your connected wallet. The technical reference below describes existing interfaces and releases.
+
 # Build a module
 
 A Module Mode contribution is a reusable program with a versioned source package. Its configuration, required capabilities, funding and management actions are part of the package. The same package can be used by multiple coins with different configuration values.
@@ -18,7 +20,7 @@ Read review readiness separately from `/v1/modules/review-capabilities` (`review
 
 ## Connect an agent
 
-1. Connect the author's EVM wallet on [API keys](https://programmable.market/developers/api-keys?purpose=modules). Create a key with **Launches + modules** access or use an existing key with `modules:submit` and `modules:read`.
+1. Module contribution keys are currently unavailable. Do not create a Custom Hook key for module submissions.
 2. Save the key in the agent's private `PROGRAMMABLE_API_KEY` environment. Describe the idea and copy the module prompt. The prompt contains instructions; credentials belong in the agent's secure setup.
 3. The agent reads [discovery](https://programmable.market/api/agent), follows `workflows.moduleContribution`, and verifies the current CLI download against its manifest.
 4. Before building, it runs `module-context --api-origin https://api.programmable.market` with the verified CLI. The context returns the key's author wallet, default reward wallet, missing permissions, required inputs, intake limits and current review coverage.
@@ -94,7 +96,7 @@ Prepare and test the package locally, save the exact request and submit it with 
 
 The intake receipt is a historical record of the original upload. `status-module` and submission lists retain `draft_received`, `unreviewed`, `approved: false` and `available: false` even after the review advances. Read `review-status-module` or the separate review resource for the current `review.state` and `review.nextAction`; receipt flags do not describe account approval. `awaiting_plan` means the platform must select the build plan or establish missing review coverage. Keep the original submission while it waits for a plan. If the source changes, prepare a linked new version. Review acceptance is followed by registry admission, deployed-code verification and catalog activation. Availability is determined by the active release and catalog.
 
-Sign in with the API key's author wallet to see [Profile → Modules → Submissions](https://programmable.market/profile?section=submissions). A different reward wallet does not own the private history. Each entry shows its current review status and feedback. Use **Copy for agent** to continue that submission with your agent's existing key. The prompt asks it to read the latest review before acting and contains no API key. **Published** shows verified publications; review approval alone keeps the entry in submission history.
+The Profile page currently shows launched coins and rewards. Module publication and submission panels are hidden while contributions are paused.
 
 After acceptance, the author's `modules:read` key can download the exact plan, artifact and decision through the [HTTP build export](https://programmable.market/developers/module-mode-api-v1.md#export-an-accepted-build-over-http). The response is bounded to 3 MiB. The existing CLI has no export command and keeps its 1 MiB response limit. The export grants no publication authority: the existing authorized operator still performs the protected publication steps, and launch or management transactions require their existing wallet authority.
 

@@ -179,11 +179,11 @@ describe("unreleased launch model gating", () => {
 
     expect(html.match(/data-launch-model-option=/g)).toHaveLength(2);
     expect(html).toContain('<h1 class="sr-only">Launch</h1>');
-    expect(html).toContain('<legend class="sr-only">Launch chain</legend>');
-    expect(html).toContain('aria-label="Ethereum"');
-    expect(html).toContain('aria-label="Robinhood"');
+    expect(html).not.toContain('<legend class="sr-only">Launch chain</legend>');
+    expect(html).not.toContain('aria-label="Ethereum"');
+    expect(html).not.toContain('aria-label="Robinhood"');
     expect(html).not.toContain("Choose a chain");
-    expect(html).toMatch(/name="launch-chain"[^>]*checked=""[^>]*value="1"/);
+    expect(html).not.toContain('name="launch-chain"');
     expect(html).not.toContain('data-launch-model-option="prediction"');
     expect(html).toContain('data-launch-model-option="classic"');
     const classicCard = html.match(
@@ -254,7 +254,7 @@ describe("unreleased launch model gating", () => {
     expect(html).toContain("Launch a Coin");
     expect(html).not.toContain('id="launch-model-modules-status">Preview</small>');
     expect(html).not.toContain('data-launch-model-option="classic"');
-    expect(html).toMatch(/name="launch-chain"[^>]*checked=""[^>]*value="4663"/);
+    expect(html).not.toContain('name="launch-chain"');
     expect(html).not.toContain('data-launch-model-option="prediction"');
     expect(html).toContain('data-launch-model-option="custom"');
     expect(html).toContain('id="launch-model-custom-title"');

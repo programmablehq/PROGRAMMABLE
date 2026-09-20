@@ -24,7 +24,7 @@ describe("Explore index reset", () => {
     const selector = read("components/explore-chain-selector.tsx");
 
     expect(resetView).toContain("No token data is loaded");
-    expect(resetView).toContain("<ExploreChainSelector chainId={1} />");
+    expect(resetView).not.toContain("<ExploreChainSelector");
     expect(resetView).not.toContain("fetch(");
     expect(resetView).not.toContain("ExploreView");
     expect(resetView).not.toContain("setInterval");

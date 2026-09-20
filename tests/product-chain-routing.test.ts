@@ -44,7 +44,7 @@ describe("Explore chain routes", () => {
     expect(AppShell({ children: null, initialViewChainId: 1 }).props.initialViewChainId).toBe(1);
   });
 
-  it("ignores legacy automatically saved Ethereum but respects a new explicit choice", async () => {
+  it("normalizes legacy and current Ethereum preferences to Robinhood", async () => {
     const cookieJar = new Map([["programmable-view-chain", "1"]]);
     mocks.cookie.mockImplementation((name: string) => {
       const value = cookieJar.get(name);
@@ -56,24 +56,24 @@ describe("Explore chain routes", () => {
 
     cookieJar.set(VIEW_CHAIN_COOKIE_NAME, "1");
     await expect(ExplorePage({ searchParams: Promise.resolve({}) }))
-      .rejects.toThrow("REDIRECT:/explore/ethereum");
+      .rejects.toThrow("REDIRECT:/explore/robinhood");
   });
 
-  it("opens Robinhood on a fresh visit and retains a deliberate Ethereum selection", async () => {
+  it("opens Robinhood on both fresh and previously Ethereum visits", async () => {
     await expect(ExplorePage({ searchParams: Promise.resolve({}) }))
       .rejects.toThrow("REDIRECT:/explore/robinhood");
     mocks.cookie.mockReturnValue({ value: "1" });
     await expect(ExplorePage({ searchParams: Promise.resolve({}) }))
-      .rejects.toThrow("REDIRECT:/explore/ethereum");
+      .rejects.toThrow("REDIRECT:/explore/robinhood");
   });
 
-  it("preserves explicit legacy links independently of the saved preference", async () => {
+  it("redirects legacy Explore links to Robinhood independently of saved preferences", async () => {
     mocks.cookie.mockReturnValue({ value: "1" });
     await expect(ExplorePage({ searchParams: Promise.resolve({ chain: "4663" }) }))
       .rejects.toThrow("REDIRECT:/explore/robinhood");
     expect(mocks.cookie).not.toHaveBeenCalled();
     await expect(ExplorePage({ searchParams: Promise.resolve({ chain: "1" }) }))
-      .rejects.toThrow("REDIRECT:/explore/ethereum");
+      .rejects.toThrow("REDIRECT:/explore/robinhood");
   });
 
   it("rejects unsupported and repeated legacy chain parameters", async () => {
@@ -85,7 +85,6 @@ describe("Explore chain routes", () => {
 
   it.each([
     ["robinhood", 4663, "Robinhood"],
-    ["ethereum", 1, "Ethereum"],
   ] as const)("binds %s page, title and canonical to the same chain", async (slug, chainId, name) => {
     const props = { params: Promise.resolve({ chain: slug }) };
     expect(exploreChainIdFromSlug(slug)).toBe(chainId);
@@ -94,6 +93,12 @@ describe("Explore chain routes", () => {
       title: `Explore ${name} · Programmable`,
       alternates: { canonical: exploreChainPath(chainId) },
     });
+  });
+
+  it("redirects the retired Ethereum Explore page and metadata to Robinhood", async () => {
+    const props = { params: Promise.resolve({ chain: "ethereum" }) };
+    await expect(ExploreChainPage(props)).rejects.toThrow("REDIRECT:/explore/robinhood");
+    await expect(exploreMetadata(props)).rejects.toThrow("REDIRECT:/explore/robinhood");
   });
 
   it("does not interpret arbitrary path segments as a chain", async () => {

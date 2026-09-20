@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, Puzzle } from "lucide-react";
 
 import launchExperience from "@/components/launch-experience.module.css";
-import { ProfileChainSelector } from "@/components/profile-chain-selector";
 import { useViewChain, type ViewChainId } from "@/components/view-chain";
 import { resolveImplementedLaunchModel } from "@/lib/launch-model-gating";
 import type { LaunchModel } from "@/lib/launch";
@@ -159,7 +158,6 @@ function LaunchExperienceRuntime({
 
 export function LaunchModelPicker({
   chainId = DEFAULT_VIEW_CHAIN_ID,
-  onChangeChain,
   modelLoadError = "",
   onChoose,
   preparingModel = null,
@@ -224,14 +222,6 @@ export function LaunchModelPicker({
         className={`launch-model-heading ${launchExperience.pickerHeading}`}
       >
         <h1 className="sr-only">Launch</h1>
-        <ProfileChainSelector
-          className={launchExperience.chainChoice}
-          label="Launch chain"
-          name="launch-chain"
-          value={chainId}
-          onChange={onChangeChain}
-          disabled={preparingModel !== null}
-        />
       </header>
 
       <div

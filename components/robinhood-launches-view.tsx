@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
-import { ExploreChainSelector } from "@/components/explore-chain-selector";
 import { ExploreFilters } from "@/components/explore-filters";
 import { AnimatedMarketCap } from "@/components/animated-market-cap";
 import { ETHEREUM_EXPLORE_FILTERS, ETHEREUM_EXPLORE_MODES } from "@/lib/ethereum-explore";
@@ -317,7 +316,6 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
               </button>
             ) : null}
           </form>
-          <ExploreChainSelector chainId={chainId} />
           <ExploreFilters value={request} onApply={applyFilters} defaultValue={defaultFilters}
             modeOptions={chainId === 1 ? ETHEREUM_EXPLORE_MODES : undefined} marketCapAvailable={chainId === 4663} />
           <nav className={styles.pagination} aria-label="Launch pages">

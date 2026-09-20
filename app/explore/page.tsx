@@ -26,7 +26,7 @@ export default async function ExplorePage({ searchParams }: {
   if (query.chain !== undefined) {
     const chainId = tryParseViewChainId(query.chain);
     if (chainId === null) notFound();
-    redirect(exploreChainPath(chainId));
+    redirect(exploreChainPath(parseViewChainId(chainId)));
   }
   const requestCookies = await cookies();
   redirect(exploreChainPath(parseViewChainId(

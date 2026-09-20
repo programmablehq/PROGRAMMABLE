@@ -20,7 +20,7 @@ const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 describe("view chain", () => {
-  it("accepts only Ethereum and Robinhood and defaults invalid or missing state to Robinhood", () => {
+  it("preserves historical chain parsing but pins public preferences to Robinhood", () => {
     expect(DEFAULT_VIEW_CHAIN_ID).toBe(4663);
     expect(isViewChainId(1)).toBe(true);
     expect(isViewChainId(4663)).toBe(true);
@@ -29,6 +29,9 @@ describe("view chain", () => {
     expect(tryParseViewChainId("4663")).toBe(4663);
     expect(tryParseViewChainId("8453")).toBeNull();
     expect(tryParseViewChainId("11155111")).toBeNull();
+    expect(parseViewChainId("1")).toBe(4663);
+    expect(parseViewChainId(1)).toBe(4663);
+    expect(parseViewChainId("4663")).toBe(4663);
     expect(parseViewChainId(null)).toBe(4663);
     expect(parseViewChainId("invalid")).toBe(4663);
   });
@@ -89,7 +92,7 @@ describe("view chain", () => {
     expect(provider).toContain(
       "readStoredViewChain() ?? readViewChainCookie()",
     );
-    expect(provider).toContain("readBrowserViewChain() ?? initialViewChainId");
+    expect(provider).toContain("readBrowserViewChain() ?? parseViewChainId(initialViewChainId)");
     expect(provider).toContain('window.addEventListener("storage"');
     expect(provider).toContain("document.cookie = serializeViewChainCookie");
     expect(provider).not.toContain("useWallet");
@@ -128,34 +131,17 @@ describe("view chain", () => {
     expect(existsSync("app/token/layout.tsx")).toBe(false);
   });
 
-  it("scopes the truthful chain selector to Explore instead of the header", () => {
-    const navigation = read("components/site-navigation.tsx");
-    const explore = read("components/explore-index-reset-view.tsx");
-    const selector = read("components/explore-chain-selector.tsx");
-    const styles = read("components/explore-chain-selector.module.css");
-
-    expect(navigation).not.toContain("HeaderChainToggle");
-    expect(navigation).not.toContain("switchNetwork");
-    expect(explore).toContain("<ExploreChainSelector");
-    expect(selector).toContain('aria-haspopup="listbox"');
-    expect(selector).toContain('role="listbox"');
-    expect(selector).toContain('role="option"');
-    expect(selector).toContain('label: "Ethereum"');
-    expect(selector).toContain('label: "Robinhood"');
-    expect(selector).not.toContain('label: "Base"');
-    expect(selector).not.toContain("available: false");
-    expect(selector).toContain("alternateOptions.map");
-    expect(selector).not.toContain("probeAvailability");
-    expect(selector).not.toContain("fetch(");
-    expect(selector).not.toContain("/api/explore");
-    expect(selector).not.toContain("<span>{selected.label}</span>");
-    expect(selector).toContain("setViewChainId(option.viewChainId)");
-    expect(selector).not.toContain("useWallet");
-    expect(selector).not.toContain("switchNetwork");
-    expect(styles).toContain("/brand/networks/robinhood-feather-white.svg");
-    expect(styles).toMatch(
-      /\.trigger\s*\{[^}]*min-height:\s*44px;[^}]*width:\s*44px;/s,
-    );
-    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+  it("does not mount network selectors in public product views", () => {
+    for (const path of [
+      "components/site-navigation.tsx", "components/profile-entry.tsx", "components/profile-view.tsx",
+      "components/launch-entry.tsx", "components/explore-view.tsx",
+      "components/explore-index-reset-view.tsx", "components/robinhood-launches-view.tsx",
+    ]) {
+      const source = read(path);
+      expect(source).not.toContain("<ProfileChainSelector");
+      expect(source).not.toContain("<ExploreChainSelector");
+      expect(source).not.toContain("<HeaderChainToggle");
+    }
+    expect(read("components/profile-view.tsx")).not.toContain("<ProfileModules");
   });
 });

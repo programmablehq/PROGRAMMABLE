@@ -21,13 +21,11 @@ import {
 
 import { useWallet } from "@/components/wallet-provider";
 import type { ViewChainId } from "@/lib/view-chain";
-import { ProfileChainSelector } from "@/components/profile-chain-selector";
 import { ProfileLoadingSkeleton } from "@/components/profile-skeleton";
 export { ProfileLoadingSkeleton } from "@/components/profile-skeleton";
 import { RobinhoodProfileLaunches } from "@/components/robinhood-profile-launches";
 import { GenericLaunchClaims } from "@/components/generic-launch-claims";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
-import { ProfileModules } from "@/components/profile-modules";
 import {
   ProfileProjects,
   ProfileProjectsLoadingState,
@@ -1411,7 +1409,7 @@ export function formatBannerPositionStatus(position: {
   )}, ${formatBannerPositionValue("vertical", position.y)}.`;
 }
 
-export function ProfileView({ onchainData, viewChainId = 4663, onChangeChain }: ProfileViewProps = {}) {
+export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProps = {}) {
   const ethereumView = viewChainId === 1;
   const {
     wallet,
@@ -3454,7 +3452,6 @@ export function ProfileView({ onchainData, viewChainId = 4663, onChangeChain }: 
         connectedAccount={account}
         onConnect={openWallet}
         viewChainId={viewChainId}
-        onChangeChain={onChangeChain}
       />
     );
   }
@@ -3824,8 +3821,6 @@ export function ProfileView({ onchainData, viewChainId = 4663, onChangeChain }: 
         </div>
       </section>
 
-      <ProfileChainSelector value={viewChainId} onChange={onChangeChain} />
-
       {ethereumView ? <><ProfileProjects
         key={account?.toLowerCase() ?? "disconnected"}
         classicRewards={
@@ -3874,7 +3869,6 @@ export function ProfileView({ onchainData, viewChainId = 4663, onChangeChain }: 
         <RobinhoodProfileLaunches key={account.toLowerCase()} account={account} />
         <RobinhoodProfileRewards account={account} sendWallet={sendLaunchClaimWalletAction} />
       </>}
-      <ProfileModules key={`modules:${account.toLowerCase()}:${searchParams?.get("section") ?? "published"}`} account={account} ownProfile initialSection={searchParams?.get("section") === "submissions" ? "submissions" : "published"} />
     </div>
   );
 }
@@ -4680,7 +4674,6 @@ export function PublicCreatorProfile({
   connectedAccount,
   onConnect,
   viewChainId,
-  onChangeChain,
 }: {
   account: string;
   connectedAccount?: string;
@@ -4763,8 +4756,7 @@ export function PublicCreatorProfile({
         </div>
       </section>
 
-      <ProfileChainSelector value={viewChainId} onChange={onChangeChain} />
-      {viewChainId === 4663 ? <><RobinhoodProfileLaunches key={account.toLowerCase()} account={account} /><ProfileModules key={`modules:${account.toLowerCase()}`} account={account} /><RobinhoodProfileRewards account={account} /></> : scopedData.status === "loading" ? (
+      {viewChainId === 4663 ? <><RobinhoodProfileLaunches key={account.toLowerCase()} account={account} /><RobinhoodProfileRewards account={account} /></> : scopedData.status === "loading" ? (
         <ProfileProjectsLoadingState />
       ) : scopedData.status === "error" ? (
         <section
