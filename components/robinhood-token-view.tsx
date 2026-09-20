@@ -95,7 +95,7 @@ export function RobinhoodTokenView({ address, token, status }: {
             {hasAsset ? <>
             <dl className={styles.metrics}>
               <Metric label="Price" value={coinDollars(market?.priceUsd, true)} />
-              <Metric label={valuation.label} value={market && valuation.value !== null
+              <Metric label={valuation.label} title={valuation.title} value={market && valuation.value !== null
                 ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`4663:${address.toLowerCase()}:${market.poolId.toLowerCase()}:${valuation.label}`} />
                 : "—"} />
               <Metric label="Liquidity" value={coinDollars(market?.liquidityUsd)} />
@@ -123,6 +123,6 @@ export function RobinhoodTokenView({ address, token, status }: {
 }
 
 
-function Metric({ label, value }: { label: string; value: ReactNode }) {
-  return <div><dt>{label}</dt><dd title={typeof value === "string" ? value : undefined}>{value}</dd></div>;
+function Metric({ label, value, title }: { label: string; value: ReactNode; title?: string }) {
+  return <div><dt title={title}>{label}</dt><dd title={typeof value === "string" ? value : undefined}>{value}</dd></div>;
 }

@@ -102,7 +102,7 @@ function RobinhoodAccountLaunches({ account }: { account: string }) {
               fallbackImageUrl={isRobinhoodModuleLaunch(launch) ? MODULE_TOKEN_FALLBACK_IMAGE : undefined} />
             <span className={styles.identity}><strong>{launch.name?.trim() || (launch.launchProjection ? "Unnamed contract" : "Unnamed token")}</strong>{hasAsset ? <small>{coinTicker(launch.symbol)}</small> : null}<small>{isRobinhoodModuleLaunch(launch) ? "Module" : "Custom"}</small></span>
             <span className={styles.metrics}>
-              {hasAsset && valuation.value !== null ? <><small title={valuation.label === "FDV" ? "Fully diluted valuation" : undefined}>{valuation.label}</small><AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`profile:4663:${launch.tokenAddress.toLowerCase()}`} /></> : null}
+              {hasAsset && valuation.value !== null ? <><small title={valuation.title}>{valuation.label}</small><AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`profile:4663:${launch.tokenAddress.toLowerCase()}`} /></> : null}
               {launch.launchedAt ? <time dateTime={launch.launchedAt}>{coinAge(launch.launchedAt, now)}</time> : null}
             </span>
           </Link>

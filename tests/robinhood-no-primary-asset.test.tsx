@@ -22,7 +22,7 @@ describe("launch pages without a primary asset", () => {
     expect(html).toContain("No market is declared in this launch.");
     expect(html).toContain(`/address/${component}`);
     expect(html).toContain("Dev wallet");
-    expect(html).not.toMatch(/Ticker unavailable|<dt>Price<|Market cap|Liquidity|24h volume|24h change|price chart|for this coin/);
+    expect(html).not.toMatch(/Ticker unavailable|<dt>Price<|Market Cap|Liquidity|24h volume|24h change|price chart|for this coin/);
   });
 
   it("describes a syncing assetless record as a launch", () => {
@@ -41,7 +41,7 @@ describe("launch pages without a primary asset", () => {
     expect(html).toContain('aria-label="Unnamed contract market"');
     expect(html).toContain("Ticker unavailable");
     expect(html).toContain("<dt>Price</dt>");
-    expect(html).toContain("Market cap");
+    expect(html).toContain("Market Cap");
     expect(html).toContain("No trading market is verified for this coin.");
     expect(html).not.toContain("No primary asset is declared");
   });
@@ -50,7 +50,7 @@ describe("launch pages without a primary asset", () => {
     const token = { ...projectionToRobinhoodLaunch(projectionFixture(), nowIso), launchProjection: undefined, name: "Existing token", symbol: "EXIST", poolId: hash };
     const html = renderToStaticMarkup(<RobinhoodTokenView address={component} token={token} status="ready" />);
     expect(html).toContain("EXIST");
-    expect(html).toContain("Market cap");
+    expect(html).toContain("Market Cap");
     expect(html).toContain("Existing token price chart on DEX Screener");
     expect(html).not.toContain("No primary asset is declared");
   });

@@ -57,12 +57,12 @@ const priceDollars = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumSignificantDigits: 4,
 });
 
-/** Preserve the distinction between provider market cap and total-supply FDV. */
-export function coinValuation(market: RobinhoodCoinMarket | null | undefined): { label: "Market cap" | "FDV"; value: number | null } {
+/** Keep the valuation basis available under one consistent product label. */
+export function coinValuation(market: RobinhoodCoinMarket | null | undefined): { label: "Market Cap"; value: number | null; title?: string } {
   const valid = (value: number | null | undefined): value is number => value != null && Number.isFinite(value) && value >= 0;
-  if (valid(market?.marketCapUsd)) return { label: "Market cap", value: market.marketCapUsd };
-  if (valid(market?.fdvUsd)) return { label: "FDV", value: market.fdvUsd };
-  return { label: market?.valuationKind === "fdv" ? "FDV" : "Market cap", value: null };
+  if (valid(market?.marketCapUsd)) return { label: "Market Cap", value: market.marketCapUsd };
+  if (valid(market?.fdvUsd)) return { label: "Market Cap", value: market.fdvUsd, title: "Based on total token supply" };
+  return { label: "Market Cap", value: null };
 }
 
 export function coinDollars(value: number | null | undefined, price = false) {

@@ -122,7 +122,7 @@ export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
     <div className={styles.coinAddress}><FoundationAddress value={coin.address} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${coin.address}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
     <div className={styles.marketLayout}>
       <div className={styles.marketChart}>
-        <dl className={styles.marketMetrics}><div><dt>Price</dt><dd>{coinDollars(props.market?.priceUsd, true)}</dd></div><div><dt title={valuation.label === "FDV" ? "Fully diluted valuation" : undefined}>{valuation.label}</dt><dd>{coinDollars(valuation.value)}</dd></div></dl>
+        <dl className={styles.marketMetrics}><div><dt>Price</dt><dd>{coinDollars(props.market?.priceUsd, true)}</dd></div><div><dt title={valuation.title}>{valuation.label}</dt><dd>{coinDollars(valuation.value)}</dd></div></dl>
         <RobinhoodChart poolId={pool.poolId} name={coin.name} market={props.market} />
       </div>
       <div className={styles.mainColumn}>

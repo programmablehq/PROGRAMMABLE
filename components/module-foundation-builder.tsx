@@ -262,8 +262,8 @@ export function ModuleFoundationBuilder({ availability, factoryVersion, contextK
   const actionLabel = walletAction?.label ?? (phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Preparing launch…" : phase === "signing" ? launchProgress || "Opening coin…" : "Create Launch");
   return <div className={`${styles.page} ${styles.builderPage}`}>
     <div className={styles.topline}>{onBack ? <button type="button" className={styles.backButton} disabled={busy} onClick={onBack}><ArrowLeftIcon size={16} aria-hidden="true" /> All launch modes</button> : <span className={styles.eyebrow}>Module Mode</span>}<span className={styles.network}>{availability.chainName}</span></div>
-    <header className={styles.pageHeading}><h1>Create a coin</h1></header>
-    {unavailable ? <div className={styles.launchStatus} role="status"><span>{availability.status === "checking" ? "Checking availability…" : "Launching is temporarily unavailable."}</span>{availability.status === "unavailable" && onRetryAvailability ? <button type="button" className={styles.textButton} onClick={onRetryAvailability}>Retry</button> : null}</div> : null}
+    <header className={styles.pageHeading}><h1>Launch a Coin</h1></header>
+    {availability.status === "unavailable" ? <div className={styles.launchStatus} role="status"><span>Launching is temporarily unavailable.</span>{onRetryAvailability ? <button type="button" className={styles.textButton} onClick={onRetryAvailability}>Retry</button> : null}</div> : null}
     {submissionBlocked ? <div className={styles.availability} role="status"><strong>A wallet operation needs checking</strong><p>{submissionBlocked}</p></div> : null}
     <div className={styles.layout}>
       <div className={styles.mainColumn}>

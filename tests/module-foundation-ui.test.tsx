@@ -107,6 +107,10 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     expect(render({ ...review, factoryVersion: "v1", lpCustodyId: undefined, quoteFunding: undefined, roundingInventory: undefined })).not.toContain("Launch liquidity is permanent");
   });
   it("leaves unavailable launch and direct trading unavailable without a source deployment binding", () => {
+    const checking = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "checking" }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
+    expect(checking).toContain("Launch a Coin");
+    expect(checking).not.toContain("Checking availability");
+    expect(checking.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "unavailable", reason: "Deployment is not bound." }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
     expect(html).toContain("Launching is temporarily unavailable.");
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
