@@ -2,6 +2,14 @@
 useDefault = true
 
 [[allowlists]]
+description = "Completed launch regression pins the public ASACASC coin address"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^tests/module-foundation-launch-status\.test\.tsx$''']
+regexes = ['''^token:\s*"0x2CCE608219d32eA1Eb6c7EA4d04a0eACd1F08da9"$''']
+
+[[allowlists]]
 description = "Foundation V2 local evidence pins the public FoundationTokenV1 source SHA-256"
 targetRules = ["generic-api-key"]
 condition = "AND"

@@ -22,6 +22,8 @@ const anyQuoteIndexFixtures = [
 ];
 const anyQuoteEthBasis = "contracts/scripts/module-engine/any-quote-eth-basis.mjs";
 const visibilityTest = "tests/robinhood-website-index.test.ts";
+const completedLaunchTest = "tests/module-foundation-launch-status.test.tsx";
+const completedLaunchCoin = "0x2CCE608219d32eA1Eb6c7EA4d04a0eACd1F08da9";
 const anyQuoteCanary = "0xb36271399c031ce270e0d1eed5f26dcd08367119";
 const pairTokenPackage = "public/developers/modules/0xa51c62d66f474e63d68e35e5d9596612ed226811799a9f8fd8489ac85091f2bd";
 const pairTokenPublicPaths = [`${pairTokenPackage}/manifest.json`, `${pairTokenPackage}/source.json`];
@@ -97,6 +99,17 @@ function assertFiles(findings, paths, count = paths.length) {
   assert.equal(findings.length, count);
   assert.deepEqual([...new Set(findings.map(({ File }) => File))].sort(), [...paths].sort());
 }
+
+test("accepts only the exact public coin field in the completed launch regression", (t) => {
+  assert.deepEqual(scan(t, { [completedLaunchTest]: `metadata: { token: "${completedLaunchCoin}" }` }, { raw: true }), []);
+  assertFiles(scan(t, { [completedLaunchTest]: `metadata: { token: "${completedLaunchCoin}", apiKey: "${completedLaunchCoin}" }` }, { raw: true }), [completedLaunchTest]);
+  assertFiles(scan(t, { [completedLaunchTest]: `metadata: { token: "0x${material.slice(0, 40)}" }` }, { raw: true }), [completedLaunchTest]);
+});
+
+test("keeps the completed launch coin detectable in unlisted paths", (t) => {
+  const paths = [completedLaunchTest.replace(".test.", "-next.test."), `${completedLaunchTest}.backup`];
+  assertFiles(scan(t, Object.fromEntries(paths.map(path => [path, `metadata: { token: "${completedLaunchCoin}" }`])), { raw: true }), paths);
+});
 
 const foundationEvidencePath = "contracts/security/module-foundation-v2/local-checks.json";
 const foundationTokenSourcePath = "src/module-foundation/FoundationTokenV1.sol";
