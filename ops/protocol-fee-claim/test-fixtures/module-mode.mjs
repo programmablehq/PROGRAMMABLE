@@ -28,11 +28,12 @@ const snapshot = () => ({ claims: paid || state === "empty" ? [] : [{ ledger, qu
     { address: ledger, symbol: "WETH", decimals: 18, amount: 3107294174684n },
   ], launchCount: 9, scannedAt: Date.now(), block: { number: 68060540n, hash, timestamp: 0n } });
 mountModuleMode({
-  storage, clients: [{ waitForTransactionReceipt: async () => ({ status: "success" }) }], findProvider: () => provider,
+  storage, clients: [{ waitForTransactionReceipt: async () => ({ status: "success", transactionHash: hash }) }], findProvider: () => provider,
   api: {
     releases: async () => [],
     scan: async () => { if (state === "error") throw new Error("Die Netzwerkdaten sind nicht aktuell. Bitte erneut versuchen."); return snapshot(); },
-    prepare: async ({ snapshot: current }) => ({ snapshot: current, transaction: { ...buildClaimTransaction(account, current.claims), chainId: "0x1237" } }),
+    prepare: async ({ snapshot: current }) => ({ snapshot: current, transaction: { ...buildClaimTransaction(account, current.claims), chainId: "0x1237", nonce: "0x0" } }),
+    findMined: async () => paid ? hash : null,
     confirm: async () => ({ status: "success", transactionHash: hash }),
   },
 });

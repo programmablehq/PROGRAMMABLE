@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, multicall3Abi, parseAbiParameters } from "viem";
 import { CHAIN_ID, TREASURY, MULTICALL, MULTICALL_HASH, MANAGER, MANAGER_HASH, LEDGER_ABI, CLAIM_DATA,
-  buildClaimTransaction, parseReleases, validateLedger, verifySimulation, verifyClaimReceipt, confirmClaim } from "./module-mode-core.mjs";
+  buildClaimTransaction, parseReleases, validateLedger, verifySimulation, verifyClaimReceipt, confirmClaim, findMinedClaimHash } from "./module-mode-core.mjs";
 
 const address = n => "0x" + n.toString(16).padStart(40, "0");
 const hash = n => "0x" + n.toString(16).padStart(64, "0");
@@ -98,15 +98,45 @@ test("actual positive payouts may differ from the earlier scan", () => {
   assert.equal(verifyClaimReceipt(receipt({ amount: 30n }), buildClaimTransaction(account, claims), claims), true);
 });
 test("a mined failure can be reconciled only against the exact original transaction", async () => {
-  const transaction = buildClaimTransaction(account, claims);
+  const transaction = { ...buildClaimTransaction(account, claims), nonce: "0x5" };
   const prepared = { transaction, snapshot: { claims } };
-  const mined = { ...transaction, input: transaction.data, value: 0n };
+  const mined = { ...transaction, hash: hash(900), nonce: 5, input: transaction.data, value: 0n };
   const reverted = receipt({ status: "reverted", logs: [] });
   const client = { getChainId: async () => CHAIN_ID, getBlock: async () => ({ hash: reverted.blockHash }),
     getTransaction: async () => mined, getTransactionReceipt: async () => reverted };
   assert.equal((await confirmClaim([client, client], hash(900), prepared)).status, "reverted");
   mined.input = "0x";
   await assert.rejects(confirmClaim([client, client], hash(900), prepared));
+});
+test("accelerated claims and cancellations stay bound to the sender and exact nonce", async () => {
+  const transaction = { ...buildClaimTransaction(account, claims), nonce: "0x5" };
+  const prepared = { transaction, snapshot: { claims } };
+  const mined = { ...transaction, hash: hash(900), nonce: 5, input: transaction.data, value: 0n };
+  let finalReceipt = receipt();
+  const client = { getChainId: async () => CHAIN_ID, getBlock: async () => ({ hash: finalReceipt.blockHash }),
+    getTransaction: async () => mined, getTransactionReceipt: async () => finalReceipt };
+  assert.equal((await confirmClaim([client, client], hash(900), prepared)).status, "success");
+  mined.nonce = 4;
+  await assert.rejects(confirmClaim([client, client], hash(900), prepared, { allowReplacement: true }));
+  mined.nonce = 5; mined.to = account; mined.input = "0x";
+  finalReceipt = receipt({ to: account, logs: [] });
+  assert.equal((await confirmClaim([client, client], hash(900), prepared, { allowReplacement: true })).outcome, "replaced");
+  mined.from = address(101);
+  await assert.rejects(confirmClaim([client, client], hash(900), prepared, { allowReplacement: true }));
+});
+test("reload finds the mined same-nonce transaction without knowing its replacement hash", async () => {
+  const prepared = { transaction: { from: account, nonce: "0x5" }, snapshot: { block: { number: "100" } } };
+  const client = {
+    getBlockNumber: async () => 1000n,
+    getTransactionCount: async ({ blockNumber }) => blockNumber < 345n ? 5 : 6,
+    getBlock: async ({ blockNumber }) => {
+      assert.equal(blockNumber, 345n);
+      return { transactions: [{ from: address(101), nonce: 5, hash: hash(901) }, { from: account, nonce: 5, hash: hash(900) }] };
+    },
+  };
+  assert.equal(await findMinedClaimHash([client], prepared), hash(900));
+  client.getTransactionCount = async () => 5;
+  assert.equal(await findMinedClaimHash([client], prepared), null);
 });
 test("chain and deployment pins match the product source", async () => {
   const chainSource = await readFile(new URL("../../lib/chains.ts", import.meta.url), "utf8");

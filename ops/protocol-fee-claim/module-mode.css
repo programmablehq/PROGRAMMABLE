@@ -16,6 +16,7 @@ a:focus-visible, .claim-tools button:focus-visible { outline: 2px solid var(--pi
 .module-totals strong { font-family: "Geist Mono", monospace; font-size: 16px; font-weight: 500; line-height: 24px; overflow-wrap: anywhere; max-width: 100%; }
 .module-claim .primary { min-height: 56px; padding: 16px; }
 .module-claim .primary strong { font-size: 16px; }
+.module-claim .error { margin: 16px 0; font-size: 14px; line-height: 20px; }
 .claim-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--ink-soft); font-size: 14px; }
 .claim-tools button, .claim-recovery button { background: transparent; border: 0; color: var(--pink-dark); min-height: 44px; padding: 8px; font-size: 14px; cursor: pointer; }
 .payout-line { color: var(--ink-soft); text-align: center; font-size: 14px; line-height: 20px; margin: 16px 0 24px; }

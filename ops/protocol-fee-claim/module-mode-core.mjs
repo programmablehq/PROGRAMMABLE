@@ -266,19 +266,46 @@ export function verifyClaimReceipt(receipt, transaction, claims) {
   return true;
 }
 
-export async function confirmClaim(clients, hash, prepared) {
+/** Recover a mined replacement after reload using the sender's exact prepared nonce. */
+export async function findMinedClaimHash(clients, prepared) {
+  const client = clients[0], address = prepared.transaction.from;
+  const nonce = Number(BigInt(prepared.transaction.nonce));
+  need(Number.isSafeInteger(nonce) && nonce >= 0, "Die gespeicherte Transaktion ist unvollständig.");
+  let left = BigInt(prepared.snapshot.block.number), right = await client.getBlockNumber({ cacheTime: 0 });
+  if (await client.getTransactionCount({ address, blockNumber: right }) <= nonce) return null;
+  need(left <= right && await client.getTransactionCount({ address, blockNumber: left }) <= nonce,
+    "Die gespeicherte Transaktion konnte nicht eindeutig zugeordnet werden.");
+  while (left < right) {
+    const middle = (left + right) / 2n;
+    if (await client.getTransactionCount({ address, blockNumber: middle }) > nonce) right = middle;
+    else left = middle + 1n;
+  }
+  const block = await client.getBlock({ blockNumber: left, includeTransactions: true });
+  const matches = block.transactions.filter(transaction => same(transaction.from, address) && transaction.nonce === nonce);
+  need(matches.length === 1 && HASH.test(matches[0].hash), "Die bestätigte Wallet-Transaktion ist noch nicht verfügbar.");
+  return matches[0].hash;
+}
+
+export async function confirmClaim(clients, hash, prepared, { allowReplacement = false } = {}) {
   need((await Promise.all(clients.map(client => client.getChainId()))).every(chain => chain === CHAIN_ID),
     "Die Bestätigung gehört nicht zu Robinhood Chain.");
-  const [transaction, ...receipts] = await Promise.all([
-    clients[0].getTransaction({ hash }), ...clients.map(client => client.getTransactionReceipt({ hash })),
+  const [transactions, receipts] = await Promise.all([
+    Promise.all(clients.map(client => client.getTransaction({ hash }))),
+    Promise.all(clients.map(client => client.getTransactionReceipt({ hash }))),
   ]);
-  need(same(transaction.from, prepared.transaction.from) && same(transaction.to, MULTICALL) &&
-    same(transaction.input, prepared.transaction.data) && transaction.value === 0n,
-  "Die bestätigte Transaktion stimmt nicht mit dem Sammelclaim überein.");
-  need(receipts.every(receipt => same(receipt.blockHash, receipts[0].blockHash) && same(receipt.transactionHash, hash)),
+  const transaction = transactions[0], expectedNonce = Number(BigInt(prepared.transaction.nonce));
+  need(Number.isSafeInteger(expectedNonce) && transactions.every(item => same(item.hash, hash) &&
+    same(item.from, prepared.transaction.from) && item.nonce === expectedNonce &&
+    same(item.to, transaction.to) && same(item.input, transaction.input) && item.value === transaction.value),
+  "Die bestätigte Transaktion stimmt nicht mit der gespeicherten Wallet-Anfrage überein.");
+  const exactClaim = same(transaction.to, MULTICALL) && same(transaction.input, prepared.transaction.data) && transaction.value === 0n;
+  need(exactClaim || allowReplacement, "Die bestätigte Transaktion stimmt nicht mit dem Sammelclaim überein.");
+  need(receipts.every(receipt => same(receipt.blockHash, receipts[0].blockHash) && same(receipt.transactionHash, hash) &&
+    receipt.blockNumber === receipts[0].blockNumber && receipt.status === receipts[0].status),
     "Die Bestätigung ist noch nicht auf beiden Verbindungen verfügbar.");
   const blocks = await Promise.all(clients.map(client => client.getBlock({ blockNumber: receipts[0].blockNumber })));
   need(blocks.every(block => same(block.hash, receipts[0].blockHash)), "Die Bestätigung ist noch nicht kanonisch.");
+  if (!exactClaim) return { ...receipts[0], outcome: "replaced" };
   if (receipts.every(receipt => receipt.status === "reverted")) return receipts[0];
   receipts.forEach(receipt => verifyClaimReceipt(receipt, prepared.transaction, prepared.snapshot.claims));
   return receipts[0];

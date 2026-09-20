@@ -1,6 +1,6 @@
 import { formatUnits, getAddress } from "viem";
 import { CHAIN_ID, TREASURY, MULTICALL, CLAIM_DATA, createClients, parseReleases, scanFees, prepareClaim,
-  confirmClaim, jsonStringify } from "./module-mode-core.mjs";
+  confirmClaim, findMinedClaimHash, jsonStringify } from "./module-mode-core.mjs";
 import { decodeFunctionData, multicall3Abi } from "viem";
 
 const JOURNAL_KEY = "programmable.foundation.platform-claim.v1";
@@ -39,6 +39,7 @@ export function restoreJournal(storage) {
     const claims = saved.prepared?.snapshot?.claims;
     if (saved.version !== 1 || !Number.isSafeInteger(saved.startedAt) || !transaction ||
       !same(transaction.to, MULTICALL) || transaction.value !== "0x0" || Number(transaction.chainId) !== CHAIN_ID ||
+      !/^0x[0-9a-f]+$/i.test(transaction.nonce) || !Number.isSafeInteger(Number(BigInt(transaction.nonce))) ||
       !Array.isArray(claims) || claims.length < 1 || claims.length > 128 ||
       (saved.hash !== null && !/^0x[0-9a-f]{64}$/i.test(saved.hash))) throw new Error();
     getAddress(transaction.from);
@@ -59,7 +60,7 @@ export function restoreJournal(storage) {
 
 export function mountModuleMode(overrides = {}) {
   const clients = overrides.clients ?? createClients();
-  const api = { scan: scanFees, prepare: prepareClaim, confirm: confirmClaim,
+  const api = { scan: scanFees, prepare: prepareClaim, confirm: confirmClaim, findMined: findMinedClaimHash,
     // Claims use the complete canonical factory history, independently of launch availability.
     releases: async () => parseReleases(await json("/module-mode/releases")), ...overrides.api };
   const storage = overrides.storage ?? localStorage;
@@ -124,19 +125,40 @@ export function mountModuleMode(overrides = {}) {
     storage.setItem(JOURNAL_KEY, jsonStringify(saved));
     journal = saved;
   }
+  function clearJournal(expected) {
+    const current = restoreJournal(storage);
+    if (jsonStringify(current) !== jsonStringify(expected)) {
+      journal = current;
+      throw new Error("Der Claim wurde in einem anderen Tab aktualisiert. Bitte die Transaktion prüfen.");
+    }
+    storage.removeItem(JOURNAL_KEY); journal = null;
+  }
+  async function claimLock(action) {
+    if (!navigator.locks) throw new Error("Bitte einen aktuellen Browser verwenden.");
+    return navigator.locks.request(LOCK_KEY, { ifAvailable: true }, async lock => {
+      if (!lock) throw new Error("Der Claim ist bereits in einem anderen Tab geöffnet.");
+      journal = restoreJournal(storage);
+      return action();
+    });
+  }
   async function recover() {
+    if (!journal) return scan();
+    const minedHash = await api.findMined(clients, journal.prepared);
+    if (minedHash && !same(minedHash, journal.hash)) persist({ ...journal, hash: minedHash });
     if (!journal?.hash) {
       status.textContent = "Bitte die offene Anfrage in deiner Wallet prüfen.";
       $("[data-mm-resolve]").hidden = false;
       return;
     }
-    const receipt = await api.confirm(clients, journal.hash, journal.prepared);
+    const pending = journal;
+    const receipt = await api.confirm(clients, pending.hash, pending.prepared, { allowReplacement: true });
     const link = $("[data-mm-transaction]");
     link.href = "https://robinhoodchain.blockscout.com/tx/" + receipt.transactionHash; link.hidden = false;
     await scan(receipt.blockNumber ?? 0n);
-    storage.removeItem(JOURNAL_KEY); journal = null;
+    clearJournal(pending);
     $("[data-mm-resolve]").hidden = true;
-    status.textContent = receipt.status === "reverted" ? "Der Claim wurde zurückgesetzt. Die aktuellen Gebühren sind wieder geladen." :
+    status.textContent = receipt.outcome === "replaced" ? "Die Wallet hat den Claim ersetzt oder abgebrochen. Die Gebühren sind neu geladen." :
+      receipt.status === "reverted" ? "Der Claim wurde zurückgesetzt. Die aktuellen Gebühren sind wieder geladen." :
       "Alle ausgewählten Fees wurden an die Treasury ausgezahlt.";
   }
   async function send() {
@@ -156,7 +178,7 @@ export function mountModuleMode(overrides = {}) {
     try { hash = await provider.request({ method: "eth_sendTransaction", params: [prepared.transaction] }); }
     catch (cause) {
       if ([4001, 4100, -32602].includes(cause?.code)) {
-        storage.removeItem(JOURNAL_KEY); journal = null;
+        clearJournal(saved);
         throw new Error(cause.code === 4001 ? "Claim abgebrochen. Deine Gebühren bleiben verfügbar." : "Die Wallet hat den Claim nicht angenommen. Bitte erneut verbinden.");
       }
       throw new Error("Die Wallet hat noch keine eindeutige Antwort geliefert. Bitte die offene Anfrage prüfen.");
@@ -164,21 +186,29 @@ export function mountModuleMode(overrides = {}) {
     if (!/^0x[0-9a-f]{64}$/i.test(hash)) throw new Error("Die Wallet-Antwort konnte nicht zugeordnet werden. Bitte deine Wallet prüfen.");
     persist({ ...saved, hash });
     status.textContent = "Auszahlung wird bestätigt…";
-    await clients[0].waitForTransactionReceipt({ hash, confirmations: 2, timeout: 60000 });
+    const receipt = await clients[0].waitForTransactionReceipt({ hash, confirmations: 2, timeout: 60000 });
+    if (receipt.transactionHash && !same(receipt.transactionHash, hash)) {
+      await api.confirm(clients, receipt.transactionHash, prepared, { allowReplacement: true });
+      persist({ ...saved, hash: receipt.transactionHash });
+    }
     await recover();
   }
   async function withBusy(action) {
     if (busy) return;
     busy = true; error(); render();
     try { await action(); } catch (cause) {
+      status.textContent = "";
       error(cause.name === "TimeoutError" ? "Das Laden dauert gerade zu lange. Bitte erneut versuchen." :
         cause.shortMessage ?? cause.message ?? "Bitte erneut versuchen.");
       if (!snapshot && !journal) { count.textContent = "Gebühren noch nicht verfügbar"; status.textContent = "Bitte aktualisieren."; }
     }
-    finally { busy = false; render(); }
+    finally {
+      try { journal = restoreJournal(storage); } catch (cause) { initialError = cause.message; error(initialError); }
+      busy = false; render();
+    }
   }
   button.addEventListener("click", () => withBusy(async () => {
-    if (journal) return recover();
+    if (journal) return claimLock(recover);
     if (!provider) {
       const next = (overrides.findProvider ?? findProvider)();
       if (!next?.request) throw new Error("Bitte diese Seite in einem Browser mit deiner Wallet öffnen.");
@@ -200,10 +230,7 @@ export function mountModuleMode(overrides = {}) {
       await syncWallet(); return;
     }
     if (!snapshot?.claims.length) return scan();
-    if (!navigator.locks) throw new Error("Bitte einen aktuellen Browser verwenden.");
-    return navigator.locks.request(LOCK_KEY, { ifAvailable: true }, async lock => {
-      if (!lock) throw new Error("Der Claim ist bereits in einem anderen Tab geöffnet.");
-      journal = restoreJournal(storage);
+    return claimLock(async () => {
       if (journal) return recover();
       await send();
     });
@@ -211,9 +238,12 @@ export function mountModuleMode(overrides = {}) {
   refreshButton.addEventListener("click", () => withBusy(scan));
   $("[data-mm-cancelled]").addEventListener("click", () => {
     if (busy || journal?.hash) return;
+    const pending = journal;
     // Explicit owner acknowledgement, never a timed automatic unlock of an uncertain send.
-    storage.removeItem(JOURNAL_KEY); journal = null;
-    $("[data-mm-resolve]").hidden = true; error(); status.textContent = "Gebühren bleiben verfügbar."; render();
+    withBusy(() => claimLock(async () => {
+      clearJournal(pending);
+      $("[data-mm-resolve]").hidden = true; error(); status.textContent = "Gebühren bleiben verfügbar.";
+    }));
   });
   window.addEventListener("storage", event => {
     if (event.key !== JOURNAL_KEY || busy) return;
@@ -226,5 +256,5 @@ export function mountModuleMode(overrides = {}) {
   if (initialError) error(initialError);
   const existing = (overrides.findProvider ?? findProvider)();
   if (existing?.request) { bind(existing); syncWallet().catch(() => {}); }
-  return { ready: withBusy(async () => { if (journal) await recover(); else await scan(); }) };
+  return { ready: withBusy(async () => { if (journal) await claimLock(recover); else await scan(); }) };
 }
