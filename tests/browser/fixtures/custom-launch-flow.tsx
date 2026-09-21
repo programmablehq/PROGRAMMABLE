@@ -3,7 +3,8 @@ import { DeveloperUniversalLaunchHistory } from "../../../components/developer-u
 import { beginLaunchSendV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "../../../lib/custom-launch/launch-send-journal-v1";
 import { canonicalBrowserSha256V2 as digest } from "../../../lib/custom-launch/browser-authority-v2";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "../../../lib/custom-launch/wallet-handoff-plan-v1";
-import { bindStep, component, controller, hash, projectionFixture, recordFixture } from "../../fixtures/universal-launch-v1";
+import type { LaunchWalletStepV1 } from "../../../lib/custom-launch/launch-plan-v1";
+import { bindStep, component, controller, hash, projectionFixture, recordFixture, stamp } from "../../fixtures/universal-launch-v1";
 import styles from "../../../components/developer-api-keys.module.css";
 import "../../../app/globals.css";
 import "../../../app/interface.css";
@@ -23,7 +24,13 @@ let record = { ...base, plan, planHash, rawRequestSha256: planHash, updatedAt: n
   steps: [bindStep({ ...base.steps[0], transaction: { ...base.steps[0].transaction, deadline: plan.budgets.deadline } })] };
 const control = {
   mode, indexed: false, proofCalls: 0, navigated: "", sends: () => Number(localStorage.getItem("fixture:launch-sends") ?? 0),
-  finalize: () => { record = { ...record, status: "final", steps: record.steps.map(step => ({ ...step, status: "final", transactionHash: hash })), updatedAt: new Date().toISOString() }; },
+  finalize: () => {
+    const steps: LaunchWalletStepV1[] = record.steps.map(step => ({ ...step, status: "final", transactionHash: hash }));
+    if (!steps.some(step => step.actionIds.includes("platform:stampPlanV1"))) steps.push(bindStep({ ...record.steps[0],
+      stepId: "stamp", actionIds: ["platform:stampPlanV1"], status: "final", transactionHash: hash,
+      transaction: { ...record.steps[0].transaction, to: stamp, nonce: "8" } }));
+    record = { ...record, status: "final", steps, updatedAt: new Date().toISOString() };
+  },
   setIndexed: () => { control.indexed = true; },
 };
 declare global { interface Window { __customLaunchFixture: typeof control } }
