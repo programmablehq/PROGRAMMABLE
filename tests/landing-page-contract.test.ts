@@ -59,7 +59,7 @@ describe("landing page contract", () => {
     expect(landing).toContain("const duration = 2.8");
     expect(landing).toContain('<h1 id="landing-title">Programmable</h1>');
     expect(landing).toContain("Infrastructure for customizable tokens.");
-    expect(landing).toContain('href="/launch/modules/foundation"');
+    expect(landing).toContain('href="/launch"');
     expect(landing).not.toContain("Custom hook guide");
     expect(landing).not.toContain("Pair another token");
     expect(landing).toContain('id="intro"');

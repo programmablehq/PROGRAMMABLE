@@ -52,7 +52,7 @@ describe("Explore toolbar and loading structure", () => {
     expect(html).not.toContain("Page 1 of");
     expect(html).not.toContain(">Previous<");
     expect(html).not.toContain(">Next<");
-    expect(html.match(/<li /g)).toHaveLength(8);
+    expect(html.match(/<li /g)).toHaveLength(6);
     expect(html).toContain('aria-label="Robinhood launches" aria-busy="true"');
   });
 });

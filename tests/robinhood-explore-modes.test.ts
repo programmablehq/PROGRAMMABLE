@@ -42,9 +42,9 @@ describe("Explore source filters and card pagination", () => {
     for (let page = 1; page <= first.page.totalPages; page++) {
       const result = launchList(saved, page, "", now, { sort: "newest", mode }, undefined, ROBINHOOD_EXPLORE_PAGE_SIZE);
       expect(result.items[0]).toEqual(pinned);
-      expect(result.items.length).toBeLessThanOrEqual(8);
-      expect(result.page).toMatchObject({ number: page, size: 8, totalItems: expected.length + 1,
-        totalPages: Math.ceil(expected.length / 7), hasMore: page < first.page.totalPages });
+      expect(result.items.length).toBeLessThanOrEqual(6);
+      expect(result.page).toMatchObject({ number: page, size: 6, totalItems: expected.length + 1,
+        totalPages: Math.ceil(expected.length / 5), hasMore: page < first.page.totalPages });
       collected.push(...result.items.slice(1));
     }
     expect(collected).toEqual(expected);
@@ -114,9 +114,10 @@ describe("Explore source filters and card pagination", () => {
 });
 
 describe("Explore query compatibility", () => {
-  it("defaults existing API requests to fifty and accepts eight or ten", () => {
+  it("defaults existing API requests to fifty and accepts six, eight or ten", () => {
     expect(parseRobinhoodExploreQuery(new URLSearchParams())).toEqual({ page: 1, pageSize: 50, q: "", filters: { sort: "newest", mode: "all" } });
     expect(parseRobinhoodExploreQuery(new URLSearchParams("sort=activity"))?.filters.sort).toBe("activity");
+    expect(parseRobinhoodExploreQuery(new URLSearchParams("pageSize=6"))?.pageSize).toBe(6);
     expect(parseRobinhoodExploreQuery(new URLSearchParams("pageSize=8"))?.pageSize).toBe(8);
     expect(parseRobinhoodExploreQuery(new URLSearchParams("page=2&pageSize=10&mode=module&sort=newest&q=coin")))
       .toEqual({ page: 2, pageSize: 10, q: "coin", filters: { sort: "newest", mode: "module" } });

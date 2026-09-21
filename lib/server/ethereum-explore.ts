@@ -60,7 +60,7 @@ export async function readEthereumExploreCatalog(dependencies: Dependencies = re
   return { chainId: 1 as const, status, sources, sourceEvidence, updatedAt, entries };
 }
 
-export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 8 | 10 | 50 = 10, dependencies?: Dependencies) {
+export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 10, dependencies?: Dependencies) {
   const catalog = await readEthereumExploreCatalog(dependencies);
   const q = query.normalize("NFC").trim().replace(/^\$/, "").toLowerCase();
   const visible = publicExploreCatalogEntriesV1(catalog.entries).filter((entry): entry is CanonicalTokenExploreEntry => entry.exploreKind === "token" && isPublicExploreIdentityV1(entry));

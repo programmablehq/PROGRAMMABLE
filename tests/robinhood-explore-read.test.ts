@@ -124,13 +124,13 @@ describe("Robinhood Explore read model", () => {
     expect(result.presentations.map((item) => item.market)).toEqual([null, null]);
   });
 
-  it("presents the selected eight-card page while the legacy default remains fifty", async () => {
+  it("presents the selected six-card page while the legacy default remains fifty", async () => {
     const rows = Array.from({ length: 12 }, (_, index) => token(index + 1));
     mocks.read.mockResolvedValue({ snapshot: saved(rows) });
     mocks.markets.mockResolvedValue(new Map());
-    const result = await readRobinhoodLaunches(2, "", { sort: "newest" }, 8);
-    expect(result.items).toEqual(rows.slice(0, 4).toReversed());
-    expect(result.page).toEqual({ number: 2, size: 8, totalItems: 12, totalPages: 2, hasMore: false });
+    const result = await readRobinhoodLaunches(2, "", { sort: "newest" }, 6);
+    expect(result.items).toEqual(rows.slice(0, 6).toReversed());
+    expect(result.page).toEqual({ number: 2, size: 6, totalItems: 12, totalPages: 2, hasMore: false });
     expect(mocks.presentations).toHaveBeenCalledWith(result.items, new Map());
   });
 
