@@ -9,6 +9,7 @@ type ExactSourceVerificationBundleV2 = JsonObject;
 
 /** Additive wire domains. MultiRole V2 is never parsed or rehashed as this version. */
 export const CUSTOM_LAUNCH_PLAN_VERSION_V1 = "programmable.custom-launch-plan.v1" as const;
+export const CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1 = "programmable.custom-launch-policy.provenance.v1" as const;
 export const CUSTOM_LAUNCH_PLAN_ROUTE_V1 = "custom-launch-plan:create:v1" as const;
 export const CUSTOM_LAUNCH_PLAN_RECEIPT_VERSION_V1 = "programmable.custom-launch-plan-admission.v1" as const;
 export const LAUNCH_PROJECTION_VERSION_V1 = "programmable.launch-projection.v1" as const;
@@ -149,6 +150,7 @@ export interface LaunchClaimDescriptorV1 {
 export interface CustomLaunchPlanV1 {
   readonly schemaVersion: typeof CUSTOM_LAUNCH_PLAN_VERSION_V1;
   readonly manifestDigest: Sha256Digest;
+  readonly admissionPolicy?: typeof CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1;
   readonly chainId: string;
   readonly controller: LaunchControllerV1;
   readonly executor: LaunchExecutorV1;
