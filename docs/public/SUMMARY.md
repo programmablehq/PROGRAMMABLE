@@ -4,11 +4,12 @@
 
 ## Launch
 
-- [Launch a coin](creators/launch.md)
 - [Module Mode](models/module-mode.md)
-- [Custom hooks](models/custom.md)
+  - [Launch a coin](creators/launch.md)
+- [Custom Launch](models/custom.md)
 - [Fees and revenue](economics.md)
   - [Creator earnings](creators/earnings.md)
+- [V4 token](v4-token.md)
 
 ## Developers
 
@@ -22,12 +23,9 @@
   - [Custom launches on Robinhood](developers/robinhood-terminal-indexer.md)
 - [Verify a launch](developers/verify.md)
 - [API reference](developers/machine-readable.md)
-
-## Reference
-
-- [V4 token](v4-token.md)
-- [Launch stamps](launch-stamps.md)
-- [Verification and risk](trust.md)
-- [Service status](status.md)
-- [Classic on Ethereum](models/classic.md)
-- [Official links](reference/official-links.md)
+  - [Launch stamps](launch-stamps.md)
+  - [Fees by contract version](reference/fee-versions.md)
+    - [Classic on Ethereum](models/classic.md)
+  - [Verification and risk](trust.md)
+  - [Service status](status.md)
+  - [Official links](reference/official-links.md)

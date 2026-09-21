@@ -1,29 +1,24 @@
----
-description: Launch a token and hook project with your own source code
----
+# Custom Launch
 
-# Custom hooks
+Custom Launch is for projects that need their own contracts. You bring the source code for your token, Uniswap v4 hook and any supporting contracts your project uses.
 
-Custom Launch is for projects that need their own token, hook or supporting contracts. A Uniswap v4 hook is a contract that runs at specified points in a pool operation, such as before or after a swap. Its code defines the behavior.
+A hook runs code during pool operations, such as before or after a trade. It can define fee rules or other behavior. Your contracts determine what the project does.
 
-## Prepare the project
+## How it works
 
-Choose the API profile for your network and contract layout before building. On Robinhood Chain, separate token and hook contracts use V4; a contract that implements both roles uses MultiRole V2. Each profile has its own source, funding and verification requirements.
+1. Build the project and prepare its source code and launch settings.
+2. Use an API key to send the project to Programmable. The API checks the request and returns the required next steps.
+3. Review and confirm the prepared transactions in your wallet.
+4. Follow the launch status until confirmation and indexing are complete.
 
-The API checks your exact source package and deployment plan. A supported layout does not mean every implementation can be accepted automatically. The response identifies missing evidence or an unsupported requirement.
-
-Follow the [Custom Launch quickstart](../developers/custom-launch-quickstart.md) to package, check and submit a project.
-
-## Confirm the launch
-
-An API key grants access to preparation and status requests. It cannot sign for your wallet. When the API authorizes a transaction, the controller wallet reviews and signs it. Track the transaction through finality before treating the launch as complete.
-
-If a request times out, retry the same bytes with the same idempotency key. Changed source or configuration requires a new request.
+Available launch paths depend on the current API capabilities and the contracts in your project. The [Custom Launch quickstart](../developers/custom-launch-quickstart.md) covers access, preparation and the wallet handoff. An API key cannot sign for your wallet.
 
 ## Fees and liquidity
 
-Robinhood Native20 charges **0.20% for Programmable** per successful buy or sell. Creator and pool fees are separate. A creator fee of 0% produces no creator earnings from those trades.
+Your contracts define the project's fees, recipients and liquidity model. An ordinary Uniswap pool needs a funded liquidity position. Projects with their own reserve or settlement logic must provide the assets and mechanisms that design needs.
 
-An ordinary pool needs a funded liquidity position. Initializing a pool does not add liquidity. Projects with their own reserve or settlement model must implement it and provide the evidence required by the selected API.
+[Fees and revenue](../economics.md#custom-launches) explains how Programmable's platform fees relate to project and pool fees.
 
-[Fees and revenue](../economics.md) explains the fee models. A launch stamp records where the project came from; it does not establish liquidity, trading support or an external audit.
+## After launch
+
+The launch record identifies the project's contracts so the website and other apps can discover them. Trading support depends on the project's market and available routes. A launch record establishes origin; it is not an audit of your contracts.

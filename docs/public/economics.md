@@ -1,56 +1,43 @@
----
-description: Trading fees, creator earnings and platform revenue
----
-
 # Fees and revenue
 
-Trading fees depend on the contract a coin launched with. Creator fees and module rewards belong to their recipients. Programmable's platform fee is accounted for separately. Network gas, liquidity deposits and module funding are not trading fees.
+Programmable earns a platform fee on trades covered by its fee contracts. A creator fee goes to the recipients chosen by the project. Gas pays the network. These are separate charges.
 
 ## Module Mode
 
-### Foundation
+The current coin builder uses Foundation. Its platform fee is **0.30% on each buy and sell through the launch pool**. You can add a creator fee of **0% to 10% in whole percentage points**. Selected modules may receive part of the creator fee; they do not change the platform's 0.30%.
 
-Foundation charges **0.30% for Programmable** on each buy and sell. The creator chooses **0%, or 1% to 10% in 1% increments**, added separately. Fees accrue in the pool's quote token.
+Both fees are calculated in the asset paired with the coin. For a **1 WETH** trade (wrapped ETH) with a **1% creator fee**:
 
-Modules can receive a share of the creator fee recorded at launch. That allocation divides the creator's amount and does not change the platform's 0.30%.
+| Recipient | Amount |
+| --- | --- |
+| Programmable | 0.003 WETH |
+| Creator and any selected module recipients | 0.01 WETH |
 
-For a **1 ETH** trade with a **1% creator fee**, **0.003 ETH** belongs to Programmable and **0.01 ETH** goes to the creator and any selected module recipients. The combined Foundation fee is **1.30%**. Foundation's initial pool has a 0% LP fee; other pools used by a trade route may charge their own fees.
+The combined Foundation fee is **1.30%**. The initial pool has no additional LP fee. Other pools used along a trade route may charge their own fees.
 
-Use the creator rate recorded for the trade's direction. Some deployed releases support different buy and sell rates; earlier ones use a shared rate. Existing coins keep their settings.
-
-### Earlier Native and Engine coins
-
-| Version | Without eligible modules | With eligible modules |
-| --- | --- | --- |
-| Native V2 and Engine V1 quote trading | 0.10% to Programmable | 0.10% to Programmable and 0.20% total to module authors |
-| Native V1 | 0.20% to Programmable | 0.10% to Programmable and 0.10% total to module authors |
-
-Creator and pool fees are additional. Author rewards are divided equally between distinct eligible module families. Repeated instances do not create more shares. Escrow deposits, settlement requests and refunds do not generate trading fees.
+These percentages apply to trades, not an allocation of the coin's token supply. [Creator earnings](creators/earnings.md) explains how recipients collect their fees.
 
 ## Custom launches
 
-Robinhood Native20 charges **0.20% (20 bps)** of gross native ETH per successful buy or sell. Creator and pool fees are separate. On a **1 ETH** trade, Programmable earns **0.002 ETH**. A creator who selects 0% earns no creator fees from that trade.
+Custom fees depend on the project's contracts and recorded fee settings. Creator fees, platform fees and liquidity-provider fees can follow different rules. Check the configuration for the coin and trading route you use.
 
-Custom fee behavior depends on the verified contract and API profile. Use the coin's recorded fee configuration for the rate and where it applies.
-
-## Ethereum launches
-
-Classic includes Programmable's **0.10%** within the selected fee. A 1% fee leaves 0.90% for the creator. Ethereum Custom contracts with a verified platform-fee path charge 0.10% for Programmable in addition to project fees.
+Existing launch contracts retain their original fees. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
 
 ## Platform revenue
 
-Programmable allocates **50% of platform fee revenue to V4 buybacks and burns** and **50% to the treasury**. Creator fees and module rewards are excluded. The policy is to process buybacks and burns daily; completed transactions are recorded in the analytics.
+Programmable's revenue policy allocates its platform fees as follows:
 
-V4 tokens collected as fees from Programmable's V4/ETH liquidity position are also burned. These are separate from tokens bought with platform revenue. The [V4 token page](v4-token.md) explains the token and its liquidity.
-
-## Accounting
-
-The [Dune dashboard](https://dune.com/programmablehq/analytics) reports launches, earned fees and burns and refreshes every 24 hours.
-
-| Metric | Meaning |
+| Use | Share |
 | --- | --- |
-| Custom Launches | Confirmed launches through Programmable |
-| Custom Creator Rewards | Fees earned by coin creators |
-| Custom Protocol Revenue | Fees earned by Programmable |
+| Buy V4 and burn the purchased tokens | 50% |
+| Programmable treasury | 50% |
 
-Earned fees include unclaimed balances. Claims withdraw those balances and are not new revenue. Gas and liquidity deposits are excluded. The dashboard's queries identify the contracts and transactions covered.
+Creator fees and module rewards are excluded. The policy calls for daily buybacks and burns; completed transactions show what has actually been processed.
+
+V4 received as fees from Programmable's own V4/ETH liquidity position is also burned. This is separate from buying V4 with platform revenue. The [V4 token page](v4-token.md) explains the token and its liquidity.
+
+## Check the records
+
+The [Dune dashboard](https://dune.com/programmablehq/analytics) reports the launches, fees and burns covered by its queries. It refreshes every 24 hours and links completed burns to their transactions.
+
+Earned fees can still be unclaimed. Withdrawing them is not new revenue. Gas, liquidity deposits and funds reserved for module behavior are excluded from platform fee revenue.
