@@ -18,6 +18,8 @@ trap cleanup EXIT
 
 curl --fail --silent --show-error --location \
   --proto '=https' --tlsv1.2 \
+  --retry 3 --retry-delay 2 --retry-max-time 60 \
+  --connect-timeout 10 --max-time 60 \
   "$gitleaks_url" \
   --output "$scan_dir/$gitleaks_archive"
 printf '%s  %s\n' "$gitleaks_sha256" "$scan_dir/$gitleaks_archive" \
