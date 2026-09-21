@@ -325,10 +325,7 @@ function DesktopNavigation() {
         return (
           <Link
             key={item.href}
-            className={[
-              current ? "active" : "",
-              item.href === "/launch/modules/foundation" ? styles.launchLink : "",
-            ].filter(Boolean).join(" ") || undefined}
+            className={current ? "active" : undefined}
             href={item.href}
             prefetch={false}
             aria-current={current ? "page" : undefined}

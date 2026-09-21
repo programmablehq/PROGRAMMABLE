@@ -14,7 +14,7 @@ const hash = ref("Hex32");
 const block = ref("CanonicalUint256");
 const checkpoint = nullable(object({ number: block, hash }));
 const sourceStatus = { enum: ["current", "last-known-good", "unavailable"] };
-const page = object({ number: { type: "integer", minimum: 1 }, size: { enum: [10, 50] },
+const page = object({ number: { type: "integer", minimum: 1 }, size: { enum: [8, 10, 50] },
   totalItems: integer, totalPages: integer, hasMore: { type: "boolean" },
   matchingItems: { ...integer, description: "Query and filter matches. Present when the persistent pin does not match, so it is not counted as a search result." },
 }, ["number", "size", "totalItems", "totalPages", "hasMore"]);
@@ -96,7 +96,7 @@ const statusPage = (name: string, statuses: readonly string[]) => ({ allOf: [ref
 const parameters = (chain: "ethereum" | "robinhood") => [
   { name: "page", in: "query", schema: { type: "integer", minimum: 1, maximum: 999999, default: 1 },
     description: "A positive decimal page number, at most six digits. The reader clamps it to the available pages." },
-  { name: "pageSize", in: "query", schema: { type: "integer", enum: [10, 50], default: chain === "ethereum" ? 10 : 50 } },
+  { name: "pageSize", in: "query", schema: { type: "integer", enum: [8, 10, 50], default: chain === "ethereum" ? 10 : 50 } },
   { name: "q", in: "query", schema: { type: "string", maxLength: 128, default: "" }, description: "Search text, at most 128 UTF-16 code units." },
   { name: "sort", in: "query", schema: { type: "string", enum: chain === "ethereum" ? ["newest", "oldest"] : LAUNCH_SORT_OPTIONS.map(option => option.value),
     default: chain === "ethereum" ? "newest" : DEFAULT_EXPLORE_FILTERS.sort } },

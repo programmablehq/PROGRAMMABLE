@@ -11,6 +11,7 @@ import { walletChainIdsEqual } from "@/lib/wallet-chain-id";
 import { displaySwapAmount, maximumSwapInput, parseSwapAmount } from "./swap-amount";
 import { runSwapFlow } from "./swap-flow";
 import { TradeWalletButton } from "./responsive-trade-panel";
+import { TradeAssetBadge } from "./trade-asset-badge";
 import styles from "./swap-panel.module.css";
 
 type PendingView = { key: string; operation: PendingSwap | null; error?: string };
@@ -289,7 +290,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
             <input ref={inputRef} className={styles.amountInput} id={`${id}-amount`} aria-label={`Amount of ${inputSymbol} to ${side}`} inputMode="decimal"
               value={amount} onChange={event => edit(() => setAmount(event.target.value.replace(/,/g, ".")))} autoComplete="off" placeholder="0" disabled={locked}
               maxLength={160} aria-invalid={Boolean(amount && (parsed === null || insufficient))} aria-describedby={displayError ? `${id}-error` : undefined} />
-            <AssetBadge symbol={inputSymbol} native={side === "buy"} />
+            <TradeAssetBadge symbol={inputSymbol} native={side === "buy"} />
           </div>
         </div>
         <div className={styles.estimate}>
@@ -340,10 +341,4 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
       </p> : null}
     </section>
   </div>;
-}
-
-function AssetBadge({ symbol, native }: { symbol: string; native: boolean }) {
-  return <span className={styles.asset} title={symbol}><span className={`${styles.assetIcon} ${native ? styles.eth : ""}`} aria-hidden="true">
-    {native ? <svg width="14" height="20" viewBox="0 0 16 24" fill="currentColor"><path d="M8 0 0 12l8 5 8-5L8 0ZM0 14l8 10 8-10-8 5-8-5Z" /></svg> : symbol.slice(0, 1)}
-  </span><span>{symbol}</span></span>;
 }

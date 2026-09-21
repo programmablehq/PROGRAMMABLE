@@ -14,8 +14,8 @@ export function parseEthereumExploreQuery(query: URLSearchParams) {
   const sort = query.get("sort") ?? "newest";
   const mode = query.get("mode") ?? "all";
   if ([...query.keys()].some(key => !["page", "pageSize", "q", "sort", "mode"].includes(key) || query.getAll(key).length !== 1)
-    || !/^[1-9]\d{0,5}$/.test(page) || !["10", "50"].includes(pageSize) || q.length > 128
+    || !/^[1-9]\d{0,5}$/.test(page) || !["8", "10", "50"].includes(pageSize) || q.length > 128
     || !["newest", "oldest"].includes(sort) || !ETHEREUM_EXPLORE_MODES.some(option => option.value === mode)) return null;
-  return { page: Number(page), pageSize: Number(pageSize) as 10 | 50, q,
+  return { page: Number(page), pageSize: Number(pageSize) as 8 | 10 | 50, q,
     filters: { sort, mode } as RobinhoodExploreFilters };
 }

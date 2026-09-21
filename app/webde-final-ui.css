@@ -281,25 +281,7 @@ body:has([data-docs-shell]) .site-header::before {
 
 .desktop-nav a::after,
 .desktop-nav a.active::after {
-  background: var(--webde-ink);
-  border-radius: 999px;
-  bottom: 4px;
-  content: "";
-  display: block;
-  height: 2px;
-  inset-inline-start: 50%;
-  opacity: 0;
-  position: absolute;
-  transform: translateX(-50%);
-  transition:
-    opacity 160ms ease,
-    width 180ms var(--webde-ease);
-  width: 0;
-}
-
-.desktop-nav a.active::after {
-  opacity: 1;
-  width: 18px;
+  display: none;
 }
 
 .header-actions {

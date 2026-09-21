@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RobinhoodLaunch, RobinhoodModuleLaunch } from "@/lib/robinhood-launches";
-import { parseRobinhoodExploreQuery } from "@/lib/robinhood-explore-filters";
+import { parseRobinhoodExploreQuery, ROBINHOOD_EXPLORE_PAGE_SIZE } from "@/lib/robinhood-explore-filters";
 import { isPinnedRobinhoodToken, PINNED_ROBINHOOD_TOKEN } from "@/lib/robinhood-explore-policy";
 import { launchList, parseSnapshot, profileLaunchList, type RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
 
@@ -37,14 +37,14 @@ describe("Explore source filters and card pagination", () => {
   it.each(["all", "module", "custom"] as const)("paginates all %s matches with the main token on every page", mode => {
     const { saved, pinned, customs, modules } = catalog();
     const expected = (mode === "module" ? modules : mode === "custom" ? customs : [...customs, ...modules]).toReversed();
-    const first = launchList(saved, 1, "", now, { sort: "newest", mode }, undefined, 10);
+    const first = launchList(saved, 1, "", now, { sort: "newest", mode }, undefined, ROBINHOOD_EXPLORE_PAGE_SIZE);
     const collected: RobinhoodLaunch[] = [];
     for (let page = 1; page <= first.page.totalPages; page++) {
-      const result = launchList(saved, page, "", now, { sort: "newest", mode }, undefined, 10);
+      const result = launchList(saved, page, "", now, { sort: "newest", mode }, undefined, ROBINHOOD_EXPLORE_PAGE_SIZE);
       expect(result.items[0]).toEqual(pinned);
-      expect(result.items.length).toBeLessThanOrEqual(10);
-      expect(result.page).toMatchObject({ number: page, size: 10, totalItems: expected.length + 1,
-        totalPages: Math.ceil(expected.length / 9), hasMore: page < first.page.totalPages });
+      expect(result.items.length).toBeLessThanOrEqual(8);
+      expect(result.page).toMatchObject({ number: page, size: 8, totalItems: expected.length + 1,
+        totalPages: Math.ceil(expected.length / 7), hasMore: page < first.page.totalPages });
       collected.push(...result.items.slice(1));
     }
     expect(collected).toEqual(expected);
@@ -114,9 +114,10 @@ describe("Explore source filters and card pagination", () => {
 });
 
 describe("Explore query compatibility", () => {
-  it("defaults existing API requests to fifty and lets the website request ten", () => {
+  it("defaults existing API requests to fifty and accepts eight or ten", () => {
     expect(parseRobinhoodExploreQuery(new URLSearchParams())).toEqual({ page: 1, pageSize: 50, q: "", filters: { sort: "newest", mode: "all" } });
     expect(parseRobinhoodExploreQuery(new URLSearchParams("sort=activity"))?.filters.sort).toBe("activity");
+    expect(parseRobinhoodExploreQuery(new URLSearchParams("pageSize=8"))?.pageSize).toBe(8);
     expect(parseRobinhoodExploreQuery(new URLSearchParams("page=2&pageSize=10&mode=module&sort=newest&q=coin")))
       .toEqual({ page: 2, pageSize: 10, q: "coin", filters: { sort: "newest", mode: "module" } });
   });

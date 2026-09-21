@@ -1,4 +1,4 @@
-.page {
+.page, .marketScope {
   --mf-surface: var(--webde-surface, #181818);
   --mf-control: #272727;
   --mf-line: var(--webde-line, #323232);
@@ -8,6 +8,8 @@
   --mf-control-line: #707070;
   color: var(--mf-ink);
   font-family: inherit;
+}
+.page {
   margin: 0 auto;
   max-width: 1200px;
   padding: 24px 24px 80px;
@@ -414,3 +416,7 @@
 .launchProperties { margin-top: 8px; max-width: 100%; width: fit-content; }
 .launchProperties > div { gap: 8px; justify-content: flex-start; }
 .launchProperties dt, .launchProperties dd { font-size: 14px; line-height: 22px; }
+
+.marketScope { --mf-focus: #fff; }
+.marketExtras { margin-top: 24px; }
+.marketScope :is(button, a, summary, select):focus-visible { outline: 2px solid var(--mf-focus); outline-offset: 3px; }

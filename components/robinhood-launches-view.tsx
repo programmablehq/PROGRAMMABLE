@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Pin, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { ExploreFilters } from "@/components/explore-filters";
-import { LaunchPairModules } from "@/components/launch-pair-modules";
 import type { LaunchPresentationSource } from "@/lib/launch-presentation-details";
 import { AnimatedMarketCap } from "@/components/animated-market-cap";
 import { ETHEREUM_EXPLORE_FILTERS, ETHEREUM_EXPLORE_MODES } from "@/lib/ethereum-explore";
@@ -292,7 +291,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
   return (
     <div className={`${styles.page} page-width`}>
       <header className={styles.heading}>
-        <Heading data-explore-heading id={headingId}>Explore</Heading>
+        <Heading data-explore-heading id={headingId} tabIndex={-1}>Explore</Heading>
       </header>
 
       <section className={styles.body} aria-labelledby={headingId}>
@@ -369,14 +368,12 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                   />
                   <div className={styles.identity}>
                     <div className={styles.nameRow}>
-                      {isPinnedRobinhoodToken(launch.tokenAddress, chainId) ? <span className={styles.pinned} title="Pinned"><Pin size={13} aria-hidden="true" /><span className="sr-only">Pinned: </span></span> : null}
                       <strong className={styles.name} title={launch.name?.trim() || (launch.launchProjection ? "Unnamed contract" : "Unnamed token")}>{launch.name?.trim() || (launch.launchProjection ? "Unnamed contract" : "Unnamed token")}</strong>
                     </div>
                     {hasAsset ? <span className={styles.symbol} title={launch.symbol || undefined}>{coinTicker(launch.symbol)}</span> : null}
                     <span className={styles.mode}>{launch.category === "classic" ? "Classic" : isRobinhoodModuleLaunch(launch) ? "Module" : "Custom"}</span>
                   </div>
                   </div>
-                  <LaunchPairModules launch={launch} chainId={chainId} market={details?.market} className={styles.pairModules} />
                   <div className={styles.cardFooter}>
                     {hasAsset && (chainId === 4663 || valuation.value !== null) ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
                       <span title={valuation.title}>{valuation.label}</span>

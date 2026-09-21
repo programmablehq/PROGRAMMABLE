@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, type CSSProperties, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 
 import { LandingExploreGate } from "@/components/landing-explore-gate";
 import styles from "@/components/landing-page.module.css";
@@ -36,8 +34,30 @@ function heroStarStyle(index: number): HeroStarStyle {
   };
 }
 
+function scrollToExplore(behavior: ScrollBehavior, moveFocus = false) {
+  const chapter = document.getElementById("explore");
+  const header = document.querySelector<HTMLElement>(".header-inner");
+  if (chapter) chapter.dataset.visible = "true";
+  const target = chapter?.querySelector<HTMLElement>("[data-explore-heading]") ?? chapter;
+  if (!target) return;
+
+  const headerHeight = header?.getBoundingClientRect().height ?? 0;
+  const breathingRoom = window.innerWidth <= 960 ? 16 : 24;
+  const top = window.scrollY + target.getBoundingClientRect().top - headerHeight - breathingRoom;
+  if (moveFocus) target.focus({ preventScroll: true });
+  window.scrollTo({ behavior, left: 0, top });
+}
+
 export function LandingPage() {
   const pageRef = useRef<HTMLElement>(null);
+
+  function exploreCoins(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (window.location.hash !== "#explore") window.history.pushState(null, "", "#explore");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scrollToExplore(reducedMotion ? "instant" : "smooth", true);
+  }
 
   useLayoutEffect(() => {
     const alignLandingHash = () => {
@@ -48,21 +68,7 @@ export function LandingPage() {
 
       if (window.location.hash !== "#explore") return;
 
-      const chapter = document.getElementById("explore");
-      const header = document.querySelector<HTMLElement>(".header-inner");
-      if (chapter) chapter.dataset.visible = "true";
-      const target = chapter?.querySelector<HTMLElement>("[data-explore-heading]") ?? chapter;
-      if (!target) return;
-
-      const headerHeight = header?.getBoundingClientRect().height ?? 0;
-      const breathingRoom = window.innerWidth <= 960 ? 16 : 24;
-      const top =
-        window.scrollY +
-        target.getBoundingClientRect().top -
-        headerHeight -
-        breathingRoom;
-
-      window.scrollTo({ behavior: "auto", left: 0, top });
+      scrollToExplore("instant");
     };
 
     alignLandingHash();
@@ -155,27 +161,15 @@ export function LandingPage() {
             priority
           />
           <h1 id="landing-title">Programmable</h1>
-          <p>Launch a coin. Choose its modules.</p>
+          <p>Infrastructure for customizable tokens.</p>
           <div className={styles.heroActions}>
             <Link className={styles.launchButton} href="/launch/modules/foundation" prefetch={false}>
-              Launch a coin <ArrowRightIcon size={18} aria-hidden="true" />
-            </Link>
-            <Link className={styles.developerLink} href="/developers/api-keys?guide=custom-hook" prefetch={false}>
-              Custom hook guide
+              Launch a coin
             </Link>
           </div>
-          <section className={styles.pairExample} aria-labelledby="landing-pair-title">
-            <h2 id="landing-pair-title">Pair another token</h2>
-            <div className={styles.pairIllustration}>
-              <span>Your coin</span>
-              <ArrowsLeftRightIcon size={20} aria-label="paired with" />
-              <span>Selected token</span>
-            </div>
-            <p>Choose what your coin trades against at launch. ETH is the default.</p>
-          </section>
         </div>
 
-        <a className={styles.scrollCue} href="#explore">
+        <a className={styles.scrollCue} href="#explore" onClick={exploreCoins}>
           <span>Explore coins</span>
           <span aria-hidden="true">↓</span>
         </a>

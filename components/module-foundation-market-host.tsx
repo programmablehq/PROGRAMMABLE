@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { decodeEventLog, formatUnits, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
 import { ModuleFoundationMarket } from "./module-foundation-market";
-import { RobinhoodChart } from "./robinhood-chart";
-import { RobinhoodCoinArtwork, MODULE_TOKEN_FALLBACK_IMAGE } from "./robinhood-coin-artwork";
-import { ResponsiveTradePanel } from "./responsive-trade-panel";
-import { LaunchPairModules } from "./launch-pair-modules";
-import { FoundationAddress } from "./module-foundation-review";
+import { RobinhoodMarketView } from "./robinhood-market-view";
+import { MODULE_TOKEN_FALLBACK_IMAGE } from "./robinhood-coin-artwork";
 import { ModuleFoundationActions, type FoundationActionDescriptor, type FoundationActionReview } from "./module-foundation-actions";
 import { FoundationSessionStatus, useFoundationSession, type FoundationExecutionResult } from "./module-foundation-session";
 import { prepareFoundationClaim, prepareFoundationModuleAction, prepareFoundationTrade } from "@/lib/module-foundation/client";
@@ -32,9 +28,10 @@ import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type Fo
 import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees";
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
 import { maximumSwapInput } from "./swap-amount";
-import { coinDollars, coinValuation, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import type { RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
 import styles from "./module-foundation-ui.module.css";
+import tradeStyles from "./swap-panel.module.css";
 
 export function ModuleFoundationMarketHost({ token, transactionHash, initialName, initialLaunch, initialPresentation }: {
   token: Address; transactionHash?: Hex; initialName?: string; initialLaunch?: RobinhoodLaunch;
@@ -44,6 +41,7 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
   const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(token)}`, true, initialPresentation);
   const coinPresentation = presentation.items.find(item => item.tokenAddress.toLowerCase() === token.toLowerCase());
   const market = coinPresentation?.market;
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [token]);
   const [readback, setReadback] = useState<{ context: string; details: FoundationPoolDetails } | null>(null);
   const [nativeFunds, setNativeFunds] = useState<{ context: string; balance: string; maximum: string } | null>(null);
   const [error, setError] = useState(""); const [refreshKey, setRefreshKey] = useState(0);
@@ -160,29 +158,21 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><div className={`${styles.page} ${styles.marketPage}`}>
-    <div className={styles.topline}><Link className={styles.backButton} href="/explore/robinhood">Explore</Link><span className={styles.network}>Robinhood Chain</span></div>
-    <div className={styles.pageHeading}><div className={styles.marketHeading}><RobinhoodCoinArtwork className={styles.marketArtwork} imageUrl={coinPresentation?.imageUrl} fallbackImageUrl={MODULE_TOKEN_FALLBACK_IMAGE} eager />
-      <div><h1>{initialName || "Coin"}</h1>{initialLaunch?.symbol ? <p>{initialLaunch.symbol}</p> : null}
-        {initialLaunch ? <LaunchPairModules launch={initialLaunch} chainId={4663} market={market} className={styles.launchProperties} /> : null}
-      </div></div></div>
-    <div className={styles.coinAddress}><FoundationAddress value={token} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${token}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
-    <div className={styles.marketLayout}>
-      <div className={styles.marketChart}>
-        <dl className={styles.marketMetrics}><div><dt>Price</dt><dd>{presentation.loading && !market ? "Loading…" : coinDollars(market?.priceUsd, true)}</dd></div><div><dt>Market Cap</dt><dd>{presentation.loading && !market ? "Loading…" : coinDollars(coinValuation(market).value)}</dd></div></dl>
-        {initialLaunch?.poolId ? <RobinhoodChart poolId={initialLaunch.poolId} name={initialName || "Coin"} market={market} /> : null}
-      </div>
-      <div className={styles.mainColumn}><ResponsiveTradePanel symbol={initialLaunch?.symbol ?? undefined}><section className={styles.tradePanel} aria-label="Trade loading">
-        <p role="status">{error || session.availability.status === "unavailable" ? "Trading is temporarily unavailable." : "Loading trade…"}</p>
+  if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} />
+    <RobinhoodMarketView address={token} name={initialName || "Coin"} symbol={initialLaunch?.symbol} creator={initialLaunch?.creator}
+      launch={initialLaunch} presentation={coinPresentation} loading={presentation.loading} delayed={presentation.delayed}
+      fallbackImageUrl={MODULE_TOKEN_FALLBACK_IMAGE}
+      trade={<div className={`${styles.marketScope} ${tradeStyles.embedded}`}><section className={tradeStyles.card} aria-label="Trade loading">
+        <p className={tradeStyles.note} role="status">{error || session.availability.status === "unavailable" ? "Trading is temporarily unavailable." : "Loading trade…"}</p>
         {error || session.availability.status === "unavailable" ? <button type="button" className={styles.secondaryButton} onClick={() => {
           setError(""); session.retryAvailability(); setRefreshKey(value => value + 1);
         }}>Retry</button> : null}
-      </section></ResponsiveTradePanel></div>
-    </div></div></>;
+      </section></div>} />
+  </>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
     supported: true, ...(details.quote.balance === null ? {} : { balance: formatUnits(details.quote.balance, details.quote.decimals) }) };
   const coin = { address: token, name: details.token.name, symbol: details.token.symbol, description: details.token.description, decimals: 18,
-    imageURI: details.token.imageURI, socialLinks: foundationMetadataLinks(details),
+    imageURI: details.token.imageURI, creator: details.creator, socialLinks: foundationMetadataLinks(details),
     ...(details.token.balance === null ? {} : { balance: formatUnits(details.token.balance, 18) }) };
   const payoutActions: FoundationActionDescriptor[] = (["creator", "platform"] as const).filter(kind =>
     !session.account || getAddress(details.ledger[kind].beneficiary) === getAddress(session.account)).map(kind => {
