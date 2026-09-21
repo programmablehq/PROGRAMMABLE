@@ -160,6 +160,8 @@
   display: inline-flex;
   font-size: 16px;
   font-weight: 600;
+  letter-spacing: 0;
+  word-spacing: 0.12em;
   gap: 12px;
   justify-content: center;
   min-height: 48px;

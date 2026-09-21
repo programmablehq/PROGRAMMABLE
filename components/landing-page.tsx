@@ -163,7 +163,7 @@ export function LandingPage() {
           <h1 id="landing-title">Programmable</h1>
           <p>Infrastructure for customizable tokens.</p>
           <div className={styles.heroActions}>
-            <Link className={styles.launchButton} href="/launch/modules/foundation" prefetch={false}>
+            <Link className={styles.launchButton} href="/launch" prefetch={false}>
               Launch a coin
             </Link>
           </div>

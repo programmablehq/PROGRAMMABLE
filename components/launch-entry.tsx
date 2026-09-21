@@ -53,7 +53,7 @@ export function ModuleFoundationLaunchCard() {
     </span>
     <span className={`launch-model-card-body ${launchExperience.modelBody}`}>
       <span className={`launch-model-card-heading ${launchExperience.modelHeading}`}>
-        <strong id="launch-model-modules-title">Modules</strong>
+        <strong id="launch-model-modules-title">Module Mode</strong>
       </span>
       <span className={`launch-model-description ${launchExperience.modelDescription}`} id="launch-model-modules-description">
         Create a coin and choose its modules at launch.

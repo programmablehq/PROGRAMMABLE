@@ -11,7 +11,7 @@ import { indexStore } from "./store";
 const readSnapshot = unstable_cache(async () => (await indexStore().read())?.snapshot ?? null,
   ["robinhood-website-index-v1"], { revalidate: 15 });
 
-export async function readRobinhoodLaunches(page = 1, query = "", filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, pageSize: 8 | 10 | 50 = 50) {
+export async function readRobinhoodLaunches(page = 1, query = "", filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 50) {
   try {
     const snapshot = await readSnapshot();
     const visible = exploreCatalog(snapshot);

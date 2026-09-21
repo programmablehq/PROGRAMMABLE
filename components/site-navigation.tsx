@@ -28,7 +28,7 @@ import styles from "@/components/site-navigation.module.css";
 
 const desktopNavItems = [
   { href: "/explore", label: "Explore" },
-  { href: "/launch/modules/foundation", label: "Launch a coin", activePath: "/launch" },
+  { href: "/launch", label: "Launch a coin", activePath: "/launch" },
 ];
 
 const menuNavItems = [
@@ -447,7 +447,7 @@ export function SiteHeader() {
 
         <Link
           className={styles.mobileLaunch}
-          href="/launch/modules/foundation"
+          href="/launch"
           prefetch={false}
           aria-current={pathname.startsWith("/launch") ? "page" : undefined}
         >

@@ -77,6 +77,7 @@ describe("Ethereum verified Explore adapter", () => {
   });
   it("restricts Ethereum filters to supported data and rejects ambiguous parameters", () => {
     expect(parseEthereumExploreQuery(new URLSearchParams("mode=classic&sort=oldest&pageSize=10"))?.filters).toEqual({mode:"classic",sort:"oldest"});
+    expect(parseEthereumExploreQuery(new URLSearchParams("pageSize=6"))?.pageSize).toBe(6);
     expect(parseEthereumExploreQuery(new URLSearchParams("pageSize=8"))?.pageSize).toBe(8);
     for(const query of ["sort=highest","mode=module","page=0","page=1&page=2","chain=4663","pageSize=5"]) {
       expect(parseEthereumExploreQuery(new URLSearchParams(query))).toBeNull();
