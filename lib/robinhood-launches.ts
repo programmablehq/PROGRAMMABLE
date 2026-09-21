@@ -68,6 +68,8 @@ export type RobinhoodLaunchList = Readonly<{
     number: number;
     size: 10 | 50;
     totalItems: number;
+    /** Query/filter matches; the persistent pin is included only when it also matches. */
+    matchingItems?: number;
     totalPages: number;
     hasMore: boolean;
   }>;

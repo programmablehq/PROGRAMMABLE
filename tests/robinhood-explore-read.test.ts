@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
 vi.mock("@/lib/server/robinhood-index/store", () => ({ indexStore: () => ({ read: mocks.read }) }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: mocks.markets, readRobinhoodPresentations: mocks.presentations }));
-import { readRobinhoodLaunches, readRobinhoodToken } from "@/lib/server/robinhood-index/read";
+import { readRobinhoodLaunches, readRobinhoodToken, readRobinhoodTokenPresentation } from "@/lib/server/robinhood-index/read";
 
 const hex = (value: number, length: number) => `0x${value.toString(16).padStart(length, "0")}`;
 function token(id: number): RobinhoodLaunch & { poolId: string } {
@@ -71,18 +71,47 @@ describe("Robinhood Explore read model", () => {
     expect(await readRobinhoodToken(hex(99, 40))).toMatchObject({ status: "stale", token: null });
   });
 
-  it("ranks the full visible catalog and presents only the selected page using the same prices", async () => {
+  it("ranks every indexed launch in the full catalog and presents only the selected page using the same prices", async () => {
     const rows = Array.from({ length: 60 }, (_, index) => token(index + 1));
-    const hidden = { ...token(61), tokenAddress: "0x15fca474b23cafe775120b1fafbcff0e7a827af2" };
+    const canary = { ...token(61), tokenAddress: "0x15fca474b23cafe775120b1fafbcff0e7a827af2" };
     const observations = new Map(rows.map((row, index) => [row.tokenAddress, market(row, 60 - index)]));
-    mocks.read.mockResolvedValue({ snapshot: saved([...rows, hidden]) });
+    mocks.read.mockResolvedValue({ snapshot: saved([...rows, canary]) });
     mocks.markets.mockResolvedValue(observations);
-    const result = await readRobinhoodLaunches(2);
-    expect(mocks.markets).toHaveBeenCalledWith(rows);
-    expect(result.items).toEqual(rows.slice(50));
-    expect(mocks.presentations).toHaveBeenCalledWith(rows.slice(50), observations);
+    const result = await readRobinhoodLaunches(2, "", { sort: "highest" });
+    expect(mocks.markets).toHaveBeenCalledWith([...rows, canary]);
+    expect(result.items).toEqual([...rows.slice(50), canary]);
+    expect(mocks.presentations).toHaveBeenCalledWith([...rows.slice(50), canary], observations);
     expect(result.presentations[0].market).toBe(observations.get(rows[50].tokenAddress));
-    expect(result.page.totalItems).toBe(60);
+    expect(result.page.totalItems).toBe(61);
+  });
+
+  it("orders all pages by real 24h volume with unknown values last and the same observation on cards", async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => token(index + 1));
+    const observations = new Map(rows.slice(0, 11).map((row, index) => [row.tokenAddress,
+      { ...market(row, index), volume24hUsd: 10 - index }]));
+    mocks.read.mockResolvedValue({ snapshot: saved(rows) });
+    mocks.markets.mockResolvedValue(observations);
+    const first = await readRobinhoodLaunches(1, "", { sort: "activity" }, 10);
+    const second = await readRobinhoodLaunches(2, "", { sort: "activity" }, 10);
+    expect(first.items).toEqual(rows.slice(0, 10));
+    expect(second.items).toEqual(rows.slice(10));
+    expect(first.presentations[0].market?.volume24hUsd).toBe(10);
+    expect(second.presentations[0].market?.volume24hUsd).toBe(0);
+    expect(second.presentations[1].market).toBeNull();
+  });
+
+  it("shares Explore's full catalog market observation on direct coin visits", async () => {
+    const rows = [token(1), token(2)];
+    const observations = new Map(rows.map(row => [row.tokenAddress, market(row, 10)]));
+    mocks.read.mockResolvedValue({ snapshot: saved(rows) });
+    mocks.markets.mockResolvedValue(observations);
+    const detail = await readRobinhoodTokenPresentation(rows[1].tokenAddress);
+    expect(mocks.markets).toHaveBeenCalledWith(rows);
+    expect(mocks.presentations).toHaveBeenCalledWith([rows[1]], observations);
+    expect(detail.token).toEqual(rows[1]);
+    expect(detail.presentation?.market).toBe(observations.get(rows[1].tokenAddress));
+    mocks.presentations.mockRejectedValueOnce(new Error("metadata unavailable"));
+    expect(await readRobinhoodTokenPresentation(rows[1].tokenAddress)).toMatchObject({ status: "ready", token: rows[1], presentation: null });
   });
 
   it("keeps verified launches when the market provider is unavailable", async () => {

@@ -24,15 +24,12 @@
   align-items: center;
   background: var(--webde-surface-raised);
   border: 1px solid var(--webde-muted);
-  border-radius: 50%;
+  border-radius: 4px;
   color: var(--webde-ink);
   display: flex;
   font-size: 10px;
   height: 16px;
   justify-content: center;
-  position: absolute;
-  right: -5px;
-  top: -5px;
   width: 16px;
 }
 .panel {
@@ -71,7 +68,7 @@
   .trigger:hover:not(:disabled), .panel button:hover { background: var(--webde-surface-raised); }
 }
 @media (max-width: 700px) {
-  .trigger { min-width: 44px; padding: 0; width: 44px; }
+  .trigger { min-width: 44px; padding: 0 8px; }
   .label { display: none; }
 }
 @media (forced-colors: active) {

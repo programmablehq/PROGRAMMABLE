@@ -9,13 +9,12 @@ import {
 import styles from "./explore-filters.module.css";
 
 export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disabled = false,
-  defaultValue = DEFAULT_EXPLORE_FILTERS, modeOptions = LAUNCH_MODE_OPTIONS, marketCapAvailable = true }: {
+  defaultValue = DEFAULT_EXPLORE_FILTERS, modeOptions = LAUNCH_MODE_OPTIONS }: {
   value?: RobinhoodExploreFilters;
   onApply?: (filters: RobinhoodExploreFilters) => void;
   disabled?: boolean;
   defaultValue?: RobinhoodExploreFilters;
   modeOptions?: readonly { value: NonNullable<RobinhoodExploreFilters["mode"]>; label: string }[];
-  marketCapAvailable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [panelOffset, setPanelOffset] = useState(0);
@@ -24,7 +23,7 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
   const keyboardOpenRef = useRef(false);
   const panelId = useId();
   const count = defaultValue === DEFAULT_EXPLORE_FILTERS ? activeExploreFilterCount(value)
-    : Number(value.sort !== defaultValue.sort) + Number((value.mode ?? "all") !== (defaultValue.mode ?? "all"));
+    : Number((value.mode ?? "all") !== (defaultValue.mode ?? "all"));
 
   function close(restoreFocus = false) {
     setOpen(false);
@@ -77,7 +76,7 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
       <div className={styles.heading}>
         <div className={styles.headingLabel}>
           <h2>Filters</h2>
-          <button className={styles.reset} type="button" onClick={() => onApply?.(defaultValue)}>Reset</button>
+          <button className={styles.reset} type="button" onClick={() => onApply?.({ ...value, mode: defaultValue.mode })}>Reset</button>
         </div>
         <button className={styles.close} type="button" aria-label="Close filters" onClick={() => close(true)}><X size={18} aria-hidden="true" /></button>
       </div>
@@ -89,20 +88,7 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
             onClick={() => onApply?.({ ...value, mode: mode.value })}>{mode.label}</button>)}
         </div>
       </fieldset>
-      <fieldset className={styles.field}>
-        <legend>Age</legend>
-        <div className={styles.choices}>
-          <button type="button" aria-pressed={value.sort === "oldest"} onClick={() => onApply?.({ ...value, sort: "oldest" })}>Oldest</button>
-          <button type="button" aria-pressed={value.sort === "newest"} onClick={() => onApply?.({ ...value, sort: "newest" })}>Newest</button>
-        </div>
-      </fieldset>
-      {marketCapAvailable ? <fieldset className={styles.field}>
-        <legend>Market cap</legend>
-        <div className={styles.choices}>
-          <button type="button" aria-pressed={value.sort === "lowest"} onClick={() => onApply?.({ ...value, sort: "lowest" })}>Lowest</button>
-          <button type="button" aria-pressed={value.sort === "highest"} onClick={() => onApply?.({ ...value, sort: "highest" })}>Highest</button>
-        </div>
-      </fieldset> : null}
+
     </div> : null}
   </div>;
 }

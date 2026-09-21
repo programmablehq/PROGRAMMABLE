@@ -1,24 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pin, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { ExploreFilters } from "@/components/explore-filters";
+import { LaunchPairModules } from "@/components/launch-pair-modules";
+import type { LaunchPresentationSource } from "@/lib/launch-presentation-details";
 import { AnimatedMarketCap } from "@/components/animated-market-cap";
 import { ETHEREUM_EXPLORE_FILTERS, ETHEREUM_EXPLORE_MODES } from "@/lib/ethereum-explore";
 import { useRouteViewChain, type ViewChainId } from "@/components/view-chain";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { rememberRobinhoodTokenPresentations } from "@/components/robinhood-presentation-cache";
-import { coinAge, coinTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import { coinAge, coinDollars, coinTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, ROBINHOOD_EXPLORE_PAGE_SIZE, sameRobinhoodExploreRequest, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
 import { isRobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projection-v1";
 import { isPinnedRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import styles from "@/components/robinhood-launches-view.module.css";
 
-type Launch = {
+type Launch = LaunchPresentationSource & {
   launchProjection?: import("@/lib/custom-launch/launch-plan-v1").LaunchProjectionV1;
   launchId: string;
   tokenAddress: string;
@@ -44,6 +46,7 @@ type LaunchResponse = {
     number: number;
     size: number;
     totalItems: number;
+    matchingItems?: number;
     totalPages: number;
     hasMore: boolean;
   };
@@ -113,6 +116,7 @@ function readResponse(value: unknown, chainId: ViewChainId): LaunchResponse {
   if (!Number.isSafeInteger(page.number) || Number(page.number) < 1
     || (page.size !== ROBINHOOD_EXPLORE_PAGE_SIZE && page.size !== 50) || !Number.isSafeInteger(page.totalItems) || Number(page.totalItems) < 0
     || !Number.isSafeInteger(page.totalPages) || Number(page.totalPages) < 0
+    || (page.matchingItems !== undefined && (!Number.isSafeInteger(page.matchingItems) || Number(page.matchingItems) < 0 || Number(page.matchingItems) > Number(page.totalItems)))
     || typeof page.hasMore !== "boolean") {
     throw new Error("Invalid launch pagination");
   }
@@ -252,18 +256,18 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
   const sameRequest = sameRobinhoodExploreRequest(snapshot?.request, request);
   const pending = !sameRequest && !failed;
   const data = sameRequest ? snapshot?.data : undefined;
-  const pinned = chainId === 4663 ? snapshot?.data.items.find(launch => isPinnedRobinhoodToken(launch.tokenAddress)) : null;
+  const pinned = chainId === 4663 ? snapshot?.data.items.find(launch => isPinnedRobinhoodToken(launch.tokenAddress, chainId)) : null;
   const items = data?.items ?? (pending && pinned ? [pinned] : []);
   const hasRows = items.length > 0;
   const updatingSearch = search.trim() !== request.q;
-  const hasFilters = chainId === 4663 ? activeExploreFilterCount(request) > 0
-    : request.sort !== defaultFilters.sort || (request.mode ?? "all") !== "all";
-  const slots = pending || (data && data.page.totalPages > 1) ? Math.max(0, ROBINHOOD_EXPLORE_PAGE_SIZE - items.length) : 0;
+  const hasFilters = activeExploreFilterCount(request) > 0;
+  const slots = pending ? Math.max(0, ROBINHOOD_EXPLORE_PAGE_SIZE - items.length) : 0;
   const canPrevious = enabled && !pending && !updatingSearch && Boolean(data && data.page.number > 1);
   const canNext = enabled && !pending && !updatingSearch && Boolean(data?.page.hasMore);
   const Heading = embedded ? "h2" : "h1";
   const StateHeading = embedded ? "h3" : "h2";
-  const count = data?.page.totalItems ?? 0;
+  const count = data?.page.matchingItems ?? data?.page.totalItems ?? 0;
+  const noMatches = Boolean(data && pinned && count === 0 && (request.q || hasFilters));
   const statusText = pending || loading ? hasRows ? "Updating launches…" : "Loading launches…" : failed
     ? hasRows ? "Could not refresh. Showing the last loaded results." : "Launches are temporarily unavailable."
     : data?.status === "stale" || data?.status === "unavailable"
@@ -316,8 +320,15 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
               </button>
             ) : null}
           </form>
+          <div className={styles.sorts} role="group" aria-label="Sort launches">
+            {(chainId === 4663 ? [
+              { sort: "newest", label: "Newest" }, { sort: "activity", label: "24h volume" }, { sort: "highest", label: "Market cap" },
+            ] as const : [{ sort: "newest", label: "Newest" }, { sort: "oldest", label: "Oldest" }] as const).map(option =>
+              <button key={option.sort} type="button" aria-pressed={request.sort === option.sort} aria-controls={listId}
+                onClick={() => applyFilters({ ...request, sort: option.sort })}>{option.label}</button>)}
+          </div>
           <ExploreFilters value={request} onApply={applyFilters} defaultValue={defaultFilters}
-            modeOptions={chainId === 1 ? ETHEREUM_EXPLORE_MODES : undefined} marketCapAvailable={chainId === 4663} />
+            modeOptions={chainId === 1 ? ETHEREUM_EXPLORE_MODES : undefined} />
           <nav className={styles.pagination} aria-label="Launch pages">
             <button type="button" aria-disabled={!canPrevious} aria-label="Previous page" title="Previous page" aria-controls={listId}
               onClick={() => { if (canPrevious && data) changePage(data.page.number - 1); }}>
@@ -334,6 +345,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
           {statusText || (data ? `${count} ${count === 1 ? "launch" : "launches"}. Page ${data.page.number} of ${Math.max(1, data.page.totalPages)}.` : null)}
           {hasRows && !loading && statusText && data?.updatedAt ? <> Updated <time dateTime={data.updatedAt} title={new Date(data.updatedAt).toUTCString()}>{coinAge(data.updatedAt, now).replace("Just launched", "just now")}</time>.</> : null}
         </p>
+        {noMatches && !loading && !failed ? <p className={styles.status}>No matching launches. Programmable stays pinned.</p> : null}
         {hasRows && !loading && (failed || data?.status === "partial" || data?.status === "stale") ? <button className={styles.retry} type="button" onClick={() => {
           setFailedRequest(null); setRequest(current => ({ ...current }));
         }}>Try again</button> : null}
@@ -348,6 +360,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
               <li key={launch.tokenAddress.toLowerCase()} className={styles.item}>
                 <article className={styles.row}>
                 <Link className={styles.cardLink} href={`/token/${launch.tokenAddress}${chainId === 1 ? "?chain=1" : ""}`} prefetch={false}>
+                  <div className={styles.cardHeader}>
                   <RobinhoodCoinArtwork
                     eager={index < 5}
                     imageUrl={details?.imageUrl} loading={loading && !details}
@@ -356,17 +369,23 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                   />
                   <div className={styles.identity}>
                     <div className={styles.nameRow}>
+                      {isPinnedRobinhoodToken(launch.tokenAddress, chainId) ? <span className={styles.pinned} title="Pinned"><Pin size={13} aria-hidden="true" /><span className="sr-only">Pinned: </span></span> : null}
                       <strong className={styles.name} title={launch.name?.trim() || (launch.launchProjection ? "Unnamed contract" : "Unnamed token")}>{launch.name?.trim() || (launch.launchProjection ? "Unnamed contract" : "Unnamed token")}</strong>
                     </div>
                     {hasAsset ? <span className={styles.symbol} title={launch.symbol || undefined}>{coinTicker(launch.symbol)}</span> : null}
                     <span className={styles.mode}>{launch.category === "classic" ? "Classic" : isRobinhoodModuleLaunch(launch) ? "Module" : "Custom"}</span>
                   </div>
+                  </div>
+                  <LaunchPairModules launch={launch} chainId={chainId} market={details?.market} className={styles.pairModules} />
                   <div className={styles.cardFooter}>
                     {hasAsset && (chainId === 4663 || valuation.value !== null) ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
                       <span title={valuation.title}>{valuation.label}</span>
                       {details?.market && valuation.value !== null
                         ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`${chainId}:${launch.tokenAddress.toLowerCase()}:${details.market.poolId.toLowerCase()}:${valuation.label}`} />
                         : <strong>—</strong>}
+                    </div> : null}
+                    {hasAsset && chainId === 4663 && (request.sort === "activity" || details?.market?.volume24hUsd != null) ? <div className={styles.marketCap}>
+                      <span>24h volume</span><strong>{coinDollars(details?.market?.volume24hUsd)}</strong>
                     </div> : null}
                     {launch.launchedAt ? <time className={styles.launched} dateTime={launch.launchedAt} title={`Launched ${new Date(launch.launchedAt).toUTCString()}`}>{coinAge(launch.launchedAt, now)}</time> : null}
                   </div>
@@ -379,11 +398,13 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
             {Array.from({ length: slots }, (_, index) => <li key={`slot-${index}`}
               className={`${styles.item} ${pending ? styles.skeleton : styles.emptySlot}`} aria-hidden="true">
               <div className={styles.row}>
+                <div className={styles.cardHeader}>
                 <div className={`${styles.artwork} ${styles.skeletonArtwork}`} />
                 <div className={styles.identity}>
                   <span className={`${styles.skeletonLine} ${styles.skeletonName}`} />
                   <span className={`${styles.skeletonLine} ${styles.skeletonSymbol}`} />
                   <span className={`${styles.skeletonLine} ${styles.skeletonMode}`} />
+                </div>
                 </div>
                 <div className={styles.cardFooter}>{chainId === 4663 ? <div className={styles.marketCap}>
                   <span className={`${styles.skeletonLine} ${styles.skeletonCaption}`} />
