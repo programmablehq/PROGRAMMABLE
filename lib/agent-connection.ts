@@ -29,8 +29,18 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
       scopes: ["custom-launch:create", "custom-launch:read"],
       manifest: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/manifest.json",
       setup: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/agent-setup.json",
+      guide: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md",
       openApi: "https://programmable.market/openapi/custom-launch-v4.2.json",
       capabilities: "https://api.programmable.market/v4/chains/4663/custom-launch-capabilities",
+      indexing: {
+        authenticationRequired: false,
+        feed: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections",
+        detail: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections/{launchIdOrAddress}",
+        openApi: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/openapi.json",
+        guide: "https://programmable.market/developer-reference/robinhood-terminal-indexer#custom-launch-plans",
+        sourceVersions: ["multi_role_v2", "custom_launch_plan_v1"],
+        externalIndexingGuaranteed: false,
+      },
       availability: "Read the live operation status and bind the manifest digest before packing. Static artifacts do not activate writes.",
     },
     customLaunch: {
