@@ -37,6 +37,7 @@ export function useRobinhoodPresentation(query: string, enabled = true, initialP
       misses = items.length && items.every(item => item.market !== null) ? 0 : misses + 1;
     }
     function schedule() {
+      clearTimeout(timer);
       if (!disposed && isVisible()) timer = setTimeout(load, misses > 0 && misses <= 3 ? 5_000 : 60_000);
     }
     async function load() {
