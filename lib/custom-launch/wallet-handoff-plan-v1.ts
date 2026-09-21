@@ -3,6 +3,7 @@ import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "./browser-auth
 import { computeExpectedGraphResultHashV2, computeStampRequestHashV2, decodeCustomGraphRouteV2, decodeLaunchAndStampV2, encodeLaunchAndStampV2, permitDigestV2 } from "./multi-role-router-codec-v2";
 import { verifySafeWalletReviewV1 } from "./safe-wallet-review-v1";
 import { verifyStampWalletReviewV1 } from "./stamp-wallet-review-v1";
+import { verifyAtomicWalletReviewV2 } from "./atomic-wallet-review-v2";
 import { verifyLaunchPlanReleaseAuthorityV1 } from "./launch-plan-release-authority-v1";
 import { multiRoleOriginalTransactionHintV3 } from "./multi-role-finality-version-v3";
 import { projectionAddress, projectionHash, projectionObject, projectionUint } from "./launch-projection-v1";
@@ -52,9 +53,19 @@ export function readLaunchPlanResourceV1(value: unknown): LaunchPlanRecordV1 {
     || resource.manifestDigest !== plan.manifestDigest || resource.planHash !== canonicalBrowserSha256V2("programmable.custom-launch-plan.v1", plan)
     || !projectionObject(plan.controller) || !projectionAddress(plan.controller.address)
     || !["eoa", "delegated_eoa_v1", "erc1271", "smart_account"].includes(String(plan.controller.kind))
+    || !["atomic_graph_v2", "atomic_execute_and_stamp_v2", "controller_multi_step_v1", "observe_and_stamp_v1"].includes(String(plan.executor))
     || !Array.isArray(plan.components) || !Array.isArray(plan.actions) || !Array.isArray(plan.dependencies)
     || !Array.isArray(plan.expectedEffects) || !Array.isArray(plan.markets) || !projectionObject(plan.budgets)) return fail();
   if (resource.walletUrl !== undefined && resource.walletUrl !== launchPlanWalletUrlV1(resource.planId)) return fail("The website handoff does not match this launch.");
+  if (resource.continuation !== undefined) {
+    const continuation = record(resource.continuation);
+    if (Object.keys(continuation).sort().join(",") !== "currentManifestDigest,originalManifestDigest,replanUrl,schemaVersion,status"
+      || continuation.schemaVersion !== "programmable.custom-launch-plan-continuation.v1" || continuation.status !== "replan_required"
+      || continuation.originalManifestDigest !== resource.manifestDigest
+      || typeof continuation.currentManifestDigest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(continuation.currentManifestDigest)
+      || continuation.currentManifestDigest === resource.manifestDigest
+      || continuation.replanUrl !== `/v4/chains/4663/custom-launch-plans/${resource.planId}:replan`) return fail("The continuation notice does not match this launch.");
+  }
   for (const step of resource.steps) {
     const row = record(step);
     if (!equal(row.controller, plan.controller) || !Array.isArray(row.actionIds) || row.actionIds.length < 1 || !Array.isArray(row.preconditions) || !Array.isArray(row.postconditions)) return fail();
@@ -132,6 +143,7 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
   if (input.sourceVersion === "custom_launch_plan_v1") {
     const original = readLaunchPlanResourceV1(input.reviewedResource);
     const current = readLaunchPlanResourceV1(fresh);
+    if (current.continuation) return fail("This launch needs an updated plan. Ask your bot to replan using the existing completed steps.");
     if (original.planId !== current.planId || original.planHash !== current.planHash || current.plan.controller.address.toLowerCase() !== controller.toLowerCase()
       || !["wallet_action_ready", "broadcast", "mined"].includes(current.status)) return fail();
     const release = await verifyLaunchPlanReleaseAuthorityV1(current, cap, nowMilliseconds);
@@ -150,7 +162,20 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
     const resolve = (value: { address: Address } | { componentId: string }) => "address" in value ? value.address
       : current.plan.components.find(component => component.componentId === value.componentId)?.expectedAddress ?? fail();
     let platform = false; let decodedOperation: unknown; let createdAddress: Address | undefined;
-    for (const id of step.actionIds) {
+    let reviewDeadline = tx.deadline;
+    const atomic = current.plan.executor === "atomic_execute_and_stamp_v2";
+    if (atomic) {
+      const binding = release.atomicBinding ?? fail("This original release has no combined launch executor.");
+      const execution = release.execution.atomic;
+      if (!execution || !target || address(binding.address) !== target || tx.data.slice(0, 10) !== execution.selector) return fail();
+      const decoded = verifyAtomicWalletReviewV2(current, step, binding, nowSeconds);
+      decodedOperation = decoded;
+      reviewDeadline = decoded.order.deadline;
+      await Promise.all([assertRuntime(provider, target, binding.runtimeCodeHash),
+        assertRuntime(provider, binding.permitAuthority, binding.permitAuthorityRuntimeCodeHash),
+        assertRuntime(provider, binding.poolManager, binding.poolManagerRuntimeCodeHash)]);
+    }
+    for (const id of atomic ? [] : step.actionIds) {
       if (id === "platform:stampPlanV1") { platform = true; continue; }
       const action = current.plan.actions.find(item => item.actionId === id) ?? fail();
       if (action.kind === "deployEoaCreate") {
@@ -183,7 +208,8 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
       decodedOperation = await verifyStampWalletReviewV1(provider, current, step, release.binding, nowSeconds);
       await Promise.all([assertRuntime(provider, target, stamp.runtimeCodeHash),
         assertRuntime(provider, release.binding.permitAuthority, release.binding.permitAuthorityRuntimeCodeHash)]);
-    } else if (target) await assertRuntime(provider, target, runtime);
+    } else if (atomic) { /* The combined executor and its release roots were checked above. */ }
+    else if (target) await assertRuntime(provider, target, runtime);
     else if (!createdAddress) return fail("A creation transaction requires its explicit EOA deployment action.");
     if (current.steps.reduce((sum, item) => sum + uint(item.transaction.value), 0n) > uint(current.plan.budgets.maxTotalValue)
       || current.steps.reduce((sum, item) => sum + uint(item.transaction.gasLimit), 0n) > uint(current.plan.budgets.maxTotalGas)) return fail("The total launch budget changed.");
@@ -197,7 +223,7 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
         ...(current.plan.controller.kind === "delegated_eoa_v1" ? { type: "0x2" as const } : {}) },
       controllerNonce: toHex(nonce), ...(createdAddress ? { createdAddress } : {}),
       ...(decodedOperation ? { decodedOperation } : {}), ...(controllerAuthorization ? { controllerAuthorization } : {}), admissionAuthority,
-      binding: step.transactionDigest, valueWei: tx.value, deadline: tx.deadline, controllerKind: current.plan.controller.kind,
+      binding: step.transactionDigest, valueWei: tx.value, deadline: reviewDeadline, controllerKind: current.plan.controller.kind,
       preconditions: step.preconditions.map(id => current.plan.expectedEffects.find(effect => effect.effectId === id) ?? fail()),
       postconditions: step.postconditions.map(id => current.plan.expectedEffects.find(effect => effect.effectId === id) ?? fail()) };
   } else {

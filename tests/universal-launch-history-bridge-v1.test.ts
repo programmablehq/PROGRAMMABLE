@@ -37,6 +37,7 @@ describe("additive controller history bridge", () => {
     expect(url.searchParams.get("limit")).toBe("1");
     expect(new Headers(init.headers).get("x-programmable-bff-assertion-version")).toBe("2");
     expect(new Headers(init.headers).get("x-programmable-wallet-address")).toBe(controller);
+    expect(new Headers(init.headers).get("Programmable-Launch-Response-Version")).toBe("1.2");
   });
   it("rejects a different controller and never calls the backend for an unlinked wallet", async () => {
     const record = recordFixture(); const changed = { ...record, plan: { ...record.plan, controller: { ...record.plan.controller, address: component } } };
@@ -53,6 +54,7 @@ describe("additive controller history bridge", () => {
     const [url, init] = fetchBackend.mock.calls[0] as unknown as [URL, RequestInit];
     expect(url.pathname).toBe(`/v4/chains/4663/wallet-admin/${multiRole ? "custom-launches-multi-role" : "custom-launch-plans"}/${record.planId}${multiRole === "v3" ? "/transaction-hints-v3" : multiRole ? "/transaction-hints" : "/steps/configure/proofs"}`);
     expect(Buffer.from(init.body as Uint8Array).toString()).toBe(JSON.stringify(body));
+    expect(new Headers(init.headers).get("Programmable-Launch-Response-Version")).toBe(multiRole ? null : "1.2");
     expect(new Headers(init.headers).get("x-programmable-bff-assertion-body-sha256")).toBe(`sha256:${createHash("sha256").update(JSON.stringify(body)).digest("hex")}`);
     fetchBackend.mockClear();
     expect((await bridge.universal(request(multiRole ? "multi_role_v2" : "custom_launch_plan_v1", { ...body, target: component }), record.planId, multiRole ? undefined : "configure", multiRole)).status).toBe(400);
