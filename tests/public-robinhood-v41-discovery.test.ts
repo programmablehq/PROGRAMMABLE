@@ -25,11 +25,11 @@ describe("profile selected public Robinhood API contract", () => {
     expect(robinhoodV4PublicPolicyDescription("4.0.0", legacy)).toBe(legacy);
   });
 
-  it("preserves the historical launch profile in the complete website OpenAPI 1.13 snapshot", async () => {
+  it("preserves the historical launch profile in the complete website OpenAPI 1.14 snapshot", async () => {
     const actual = await document("4.0.0");
-    // Website 1.13 documents Explore sorting, result counts and market observations; historical launch rules are unchanged.
-    // The original 1.10, 1.11 and 1.12 snapshot digests remain retained in their separate fixture files.
-    const expectedDigest = readFileSync(new URL("./fixtures/public-openapi-v40-website-v113.sha256", import.meta.url), "utf8").trim();
+    // Website 1.14 adds the eight-card Explore page size; historical launch rules are unchanged.
+    // The original 1.10 through 1.13 snapshot digests remain retained in their separate fixture files.
+    const expectedDigest = readFileSync(new URL("./fixtures/public-openapi-v40-website-v114.sha256", import.meta.url), "utf8").trim();
     expect(createHash("sha256").update(JSON.stringify(actual)).digest("hex")).toBe(expectedDigest);
   });
 
