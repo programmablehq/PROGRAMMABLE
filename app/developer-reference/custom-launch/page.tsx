@@ -1,4 +1,5 @@
-export {
-  default,
-  metadata,
-} from "@/app/docs/developers/custom-launch/page";
+import { permanentRedirect } from "next/navigation";
+
+export default function CustomLaunchReferencePage() {
+  permanentRedirect("/docs/developers/custom-launch");
+}

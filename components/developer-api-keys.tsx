@@ -2206,7 +2206,7 @@ export function DeveloperApiKeysView({
       )}
 
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        <Link href="/developer-reference/custom-launch">Developer docs <ArrowRight size={16} aria-hidden="true" /></Link>
+        <a href="/docs/developers/custom-launch">Developer docs <ArrowRight size={16} aria-hidden="true" /></a>
       </nav>
 
     </div>
