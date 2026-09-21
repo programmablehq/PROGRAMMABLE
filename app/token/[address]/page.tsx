@@ -8,6 +8,7 @@ import { ModuleFoundationMarketHost } from "@/components/module-foundation-marke
 import { EthereumTokenView } from "@/components/ethereum-token-view";
 import { TokenRouteChainSync } from "@/components/token-route-chain-sync";
 import { resolveTokenPage } from "@/lib/server/token-page";
+import { readRobinhoodTokenPresentation } from "@/lib/server/robinhood-index/read";
 import { genericTokenDetailMetadata } from "@/lib/token-detail-metadata";
 import { tokenDetailPageChainId } from "@/lib/token-page-chain";
 import { isRobinhoodFoundationLaunch, robinhoodLaunchDescription } from "@/lib/robinhood-launches";
@@ -64,10 +65,12 @@ export default async function TokenPage({
   const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
   if (resolved === null) notFound();
   if (resolved.chainId === 4663) {
+    // Start the optional observation while verified identity and chart render.
+    const initialPresentation = readRobinhoodTokenPresentation(address).then(result => result.presentation).catch(() => null);
     return <TokenRouteChainSync key={4663} chainId={4663}>
       {isRobinhoodFoundationLaunch(resolved.token)
-        ? <ModuleFoundationMarketHost token={getAddress(address)} initialName={resolved.token.name?.trim() || "Unnamed token"} />
-        : <RobinhoodTokenView address={address} token={resolved.token} status={resolved.status} />}
+        ? <ModuleFoundationMarketHost token={getAddress(address)} initialLaunch={resolved.token} initialPresentation={initialPresentation} initialName={resolved.token.name?.trim() || "Unnamed token"} />
+        : <RobinhoodTokenView address={address} token={resolved.token} status={resolved.status} initialPresentation={initialPresentation} />}
     </TokenRouteChainSync>;
   }
   if (resolved.chainId === 1) {

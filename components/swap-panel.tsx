@@ -42,7 +42,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [asset, setAsset] = useState<{ key: string; descriptor?: SwapTokenDescriptor; error?: string } | null>(null);
   const [balances, setBalances] = useState<{ key: string; value?: WalletTradeBalances; error?: string } | null>(null);
-  const [quotation, setQuotation] = useState<{ key: string; review?: SwapReview; error?: string } | null>(null);
+  const [quotation, setQuotation] = useState<{ key: string; review?: SwapReview; error?: string; receivedAt?: number } | null>(null);
   const [pendingView, setPendingView] = useState<PendingView | null>(null);
   const [recoveryHash, setRecoveryHash] = useState("");
   const [revision, setRevision] = useState(0);
@@ -131,7 +131,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
     let active = true;
     const timer = setTimeout(() => {
       void import("@/lib/swap/client").then(({ prepareSwap }) => prepareSwap({ descriptor, owner, side, amountIn: parsed, slippageBps }, walletRef.current))
-        .then(value => { if (active) setQuotation({ key: quoteKey, review: value }); })
+        .then(value => { if (active) setQuotation({ key: quoteKey, review: value, receivedAt: Date.now() }); })
         .catch(caught => { if (active) setQuotation({ key: quoteKey, error: message(caught) }); });
     }, 450);
     return () => { active = false; clearTimeout(timer); };
@@ -139,10 +139,10 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
 
   useEffect(() => {
     if (!review || busy || pending) return;
-    const duration = Math.max(0, Number(review.expiresAt) * 1_000 - Date.now() - 5_000);
+    const duration = Math.max(0, Math.min(Number(review.expiresAt) * 1_000 - 5_000, (quotation?.receivedAt ?? 0) + 30_000) - Date.now());
     const timer = setTimeout(() => setRevision(value => value + 1), duration);
     return () => clearTimeout(timer);
-  }, [review, busy, pending]);
+  }, [review, quotation?.receivedAt, busy, pending]);
 
   function edit(change: () => void) {
     if (mutex.current || locked) return;
@@ -188,6 +188,9 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
       return;
     }
     if (!review || !descriptor || !owner || parsed === null || pending || pendingError || !pendingLoaded || insufficient) return;
+    if (Date.now() >= Math.min(Number(review.expiresAt) * 1_000 - 5_000, (quotation?.receivedAt ?? 0) + 30_000)) {
+      setRevision(value => value + 1); return;
+    }
     mutex.current = true; setBusy("signing"); setError(""); setOutcome(null);
     try {
       const { prepareSwap, submitSwap } = await import("@/lib/swap/client");
@@ -211,7 +214,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
         prepare: async () => {
           setBusy("preparing"); setSubmitted(null);
           const next = await prepareSwap({ descriptor, owner, side, amountIn: parsed, slippageBps }, actions);
-          if (mounted.current) setQuotation({ key: quoteKey, review: next });
+          if (mounted.current) setQuotation({ key: quoteKey, review: next, receivedAt: Date.now() });
           return next;
         },
         submit: async value => {
@@ -290,12 +293,14 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
         </div>
         <div className={styles.estimate}>
           <span id={`${id}-receive`}>You receive</span>
-          <output aria-labelledby={`${id}-receive`} data-empty={review?.amountOut == null}
+          <output aria-labelledby={`${id}-receive`} aria-live="polite" data-empty={review?.amountOut == null}
             title={review?.amountOut != null ? formatUnits(review.amountOut, outputDecimals) : undefined}>
             {quoting ? <LoaderCircle size={14} className={styles.spin} aria-label="Getting quote" />
-              : review?.amountOut != null ? `≈ ${displaySwapAmount(review.amountOut, outputDecimals)} ${outputSymbol}` : "—"}
+              : review?.amountOut != null ? `≈ ${displaySwapAmount(review.amountOut, outputDecimals)} ${outputSymbol}`
+                : parsed !== null && !connected ? "Connect wallet for a quote" : review?.kind === "approval" ? "Approval needed" : "—"}
           </output>
         </div>
+        {review?.minimumOutput != null ? <p className={styles.minimum}>Minimum {displaySwapAmount(review.minimumOutput, outputDecimals)} {outputSymbol}</p> : null}
         <div className={styles.settingsRow}>
           <button type="button" className={styles.settingsToggle} onClick={() => setSettingsOpen(!settingsOpen)} aria-expanded={settingsOpen} aria-controls={`${id}-slippage`} disabled={locked}>
             <Settings2 size={15} aria-hidden="true" />{slippageBps / 100}% slippage
@@ -309,9 +314,6 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
             {[50, 100, 300].map(value => <button key={value} type="button" aria-pressed={slippageBps === value}
               onClick={() => edit(() => setSlippageBps(value))}>{value / 100}%</button>)}
           </fieldset>
-          {review?.minimumOutput != null ? <dl className={styles.summary}>
-            <div><dt>Minimum received</dt><dd>{displaySwapAmount(review.minimumOutput, outputDecimals)} {outputSymbol}</dd></div>
-          </dl> : null}
         </div> : null}
         <button className={styles.primary} type="submit" disabled={disabled}>
           {busy || quoting || walletBusy ? <LoaderCircle size={18} className={styles.spin} aria-hidden="true" /> : null}{action}

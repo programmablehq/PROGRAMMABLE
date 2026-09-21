@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SwapPanel } from "@/components/swap-panel";
+import { ResponsiveTradePanel } from "@/components/responsive-trade-panel";
 import { TokenPoolChart } from "@/components/robinhood-chart";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
@@ -48,7 +49,7 @@ export function EthereumTokenView({ address, token, status, updatedAt }: {
       </p> : null}
       <div className={styles.tradingLayout}>
         <TokenPoolChart poolId={token.poolId} name={token.name || "Token"} chainId={1} />
-        <SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={token.symbol} />
+        <ResponsiveTradePanel symbol={token.symbol}><SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={token.symbol} /></ResponsiveTradePanel>
       </div>
     </article> : <section className={styles.empty}>
       <h1>{status === "ready" ? "Launch not found" : "Token details are temporarily unavailable"}</h1>

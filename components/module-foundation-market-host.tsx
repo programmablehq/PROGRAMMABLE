@@ -5,6 +5,9 @@ import Link from "next/link";
 import { decodeEventLog, formatUnits, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import type { OpenConfigContext } from "@/packages/classic-modules/src/open-config.mjs";
 import { ModuleFoundationMarket } from "./module-foundation-market";
+import { RobinhoodChart } from "./robinhood-chart";
+import { RobinhoodCoinArtwork, MODULE_TOKEN_FALLBACK_IMAGE } from "./robinhood-coin-artwork";
+import { ResponsiveTradePanel } from "./responsive-trade-panel";
 import { FoundationAddress } from "./module-foundation-review";
 import { ModuleFoundationActions, type FoundationActionDescriptor, type FoundationActionReview } from "./module-foundation-actions";
 import { FoundationSessionStatus, useFoundationSession, type FoundationExecutionResult } from "./module-foundation-session";
@@ -28,12 +31,18 @@ import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type Fo
 import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees";
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
 import { maximumSwapInput } from "./swap-amount";
+import { coinDollars, coinValuation, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
 import styles from "./module-foundation-ui.module.css";
 
-export function ModuleFoundationMarketHost({ token, transactionHash, initialName }: { token: Address; transactionHash?: Hex; initialName?: string }) {
+export function ModuleFoundationMarketHost({ token, transactionHash, initialName, initialLaunch, initialPresentation }: {
+  token: Address; transactionHash?: Hex; initialName?: string; initialLaunch?: RobinhoodLaunch;
+  initialPresentation?: Promise<RobinhoodCoinPresentation | null>;
+}) {
   const session = useFoundationSession(token);
-  const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(token)}`);
-  const market = presentation.items.find(item => item.tokenAddress.toLowerCase() === token.toLowerCase())?.market;
+  const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(token)}`, true, initialPresentation);
+  const coinPresentation = presentation.items.find(item => item.tokenAddress.toLowerCase() === token.toLowerCase());
+  const market = coinPresentation?.market;
   const [readback, setReadback] = useState<{ context: string; details: FoundationPoolDetails } | null>(null);
   const [nativeFunds, setNativeFunds] = useState<{ context: string; balance: string; maximum: string } | null>(null);
   const [error, setError] = useState(""); const [refreshKey, setRefreshKey] = useState(0);
@@ -97,10 +106,8 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
     if (!session.account || !details) throw new Error("Connect your wallet and load the verified pool first.");
     const account = session.account, context = session.contextKey; session.assertCurrent(account, context);
     if (session.preparationBlocked) throw new Error(session.preparationBlocked);
-    // The Buy/Sell action acknowledges the exact completed result before preparing a new trade.
-    // Pending and unreadable operations remain blocked by the session and wallet lock.
-    if (session.resolution) await session.acknowledgeResult(session.resolution.operationId, false);
-    session.assertCurrent(account, context);
+    // Quoting is read-only, including when a completed operation is still saved.
+    // The explicit Buy/Sell action acknowledges it at the confirmation boundary.
     const current = await session.resolveAuthority();
     if (details.ledger.modules.length > 0 && (!modules?.selections || !modules.context || modules.error)) {
       throw new Error("Wait for this pool's original module sources and asset bindings to be verified before trading.");
@@ -152,14 +159,23 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
     return outcome.result;
   }
 
-  if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><div className={styles.page}>
-    <div className={styles.topLine}><Link className={styles.textButton} href="/explore/robinhood">Explore</Link><span className={styles.chainBadge}>Robinhood Chain</span></div>
-    <div className={styles.pageHeading}><h1>{initialName || "Coin"}</h1>
-    <p role="status">{error || session.availability.status === "unavailable" ? "This coin could not be loaded. Try again." : "Loading coin…"}</p></div>
+  if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><div className={`${styles.page} ${styles.marketPage}`}>
+    <div className={styles.topline}><Link className={styles.backButton} href="/explore/robinhood">Explore</Link><span className={styles.network}>Robinhood Chain</span></div>
+    <div className={styles.pageHeading}><div className={styles.marketHeading}><RobinhoodCoinArtwork className={styles.marketArtwork} imageUrl={coinPresentation?.imageUrl} fallbackImageUrl={MODULE_TOKEN_FALLBACK_IMAGE} eager />
+      <div><h1>{initialName || "Coin"}</h1>{initialLaunch?.symbol ? <p>{initialLaunch.symbol}</p> : null}</div></div></div>
     <div className={styles.coinAddress}><FoundationAddress value={token} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${token}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
-    {error || session.availability.status === "unavailable" ? <button type="button" className={styles.secondaryButton} onClick={() => {
-      setError(""); session.retryAvailability(); setRefreshKey(value => value + 1);
-    }}>Retry</button> : null}</div></>;
+    <div className={styles.marketLayout}>
+      <div className={styles.marketChart}>
+        <dl className={styles.marketMetrics}><div><dt>Price</dt><dd>{presentation.loading && !market ? "Loading…" : coinDollars(market?.priceUsd, true)}</dd></div><div><dt>Market Cap</dt><dd>{presentation.loading && !market ? "Loading…" : coinDollars(coinValuation(market).value)}</dd></div></dl>
+        {initialLaunch?.poolId ? <RobinhoodChart poolId={initialLaunch.poolId} name={initialName || "Coin"} market={market} /> : null}
+      </div>
+      <div className={styles.mainColumn}><ResponsiveTradePanel symbol={initialLaunch?.symbol ?? undefined}><section className={styles.tradePanel} aria-label="Trade loading">
+        <p role="status">{error || session.availability.status === "unavailable" ? "Trading is temporarily unavailable." : "Loading trade…"}</p>
+        {error || session.availability.status === "unavailable" ? <button type="button" className={styles.secondaryButton} onClick={() => {
+          setError(""); session.retryAvailability(); setRefreshKey(value => value + 1);
+        }}>Retry</button> : null}
+      </section></ResponsiveTradePanel></div>
+    </div></div></>;
   const quote = { address: details.quote.address, chainId: 4663, name: details.quote.name, symbol: details.quote.symbol, decimals: details.quote.decimals,
     supported: true, ...(details.quote.balance === null ? {} : { balance: formatUnits(details.quote.balance, details.quote.decimals) }) };
   const coin = { address: token, name: details.token.name, symbol: details.token.symbol, description: details.token.description, decimals: 18,
@@ -175,11 +191,15 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
         creditedAmount: formatUnits(budget.credited, quote.decimals), paidAmount: formatUnits(budget.claimed, quote.decimals), asOfBlock: details.checkpoint.blockNumber.toString() } };
   });
   return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><ModuleFoundationMarket key={`${session.contextKey}:${session.resultGeneration}`} availability={session.availability} contextKey={session.contextKey}
-    coin={coin} quote={quote} market={market} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true, balance: funds?.balance }} maximumBuyAmount={funds?.maximum}
+    coin={coin} quote={quote} market={market} marketLoading={presentation.loading} marketDelayed={presentation.delayed} tradeAsset={{ address: zeroAddress, chainId: 4663, name: "Ether", symbol: "ETH", decimals: 18, supported: true, balance: funds?.balance }} maximumBuyAmount={funds?.maximum}
     pool={foundationPoolPresentation(details)} positions={foundationPositionPresentation(details)} {...foundationCreatorFeeFields(details)}
     walletAction={session.walletAction} submissionBlocked={session.preparationBlocked} onPrepareTrade={prepareTrade}
     onConfirmTrade={async review => { const sequence = trades.current.get(review); if (!sequence) throw new Error("Review this trade again.");
-      session.assertCurrent(sequence.account, review.contextKey); return verifiedResult(await session.execute(sequence)); }}
+      session.assertCurrent(sequence.account, review.contextKey);
+      if (session.preparationBlocked) throw new Error(session.preparationBlocked);
+      if (session.resolution) await session.acknowledgeResult(session.resolution.operationId, false);
+      session.assertCurrent(sequence.account, review.contextKey);
+      return verifiedResult(await session.execute(sequence)); }}
     onRefreshResult={async result => verifiedResult(await session.refreshResult(result))}
     feeLedger={{ asOfBlock: details.checkpoint.blockNumber.toString(), platformCredited: formatUnits(details.ledger.platform.credited, quote.decimals),
       platformPaid: formatUnits(details.ledger.platform.claimed, quote.decimals), creatorCredited: formatUnits(details.ledger.creator.credited, quote.decimals),

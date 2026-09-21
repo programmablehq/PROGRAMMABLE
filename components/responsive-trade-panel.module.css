@@ -1,0 +1,17 @@
+.host { min-width: 0; }
+.panel { background: transparent; border: 0; color: var(--webde-ink); display: block; margin: 0; max-width: none; overflow: visible; padding: 0; position: static; width: 100%; }
+.dock, .sheetHeader { display: none; }
+.panel::backdrop { background: rgb(0 0 0 / .65); }
+
+@media (max-width: 1000px) {
+  .host { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .dock { background: var(--webde-surface); border-top: 1px solid var(--webde-line); bottom: 0; display: flex; justify-content: center; inset-inline: 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); position: fixed; z-index: 30; }
+  .openButton { background: #ecece9; border: 1px solid #ecece9; border-radius: 10px; color: #161616; cursor: pointer; font: inherit; font-size: 16px; font-weight: 550; min-height: 48px; overflow: hidden; padding: 10px 20px; text-overflow: ellipsis; white-space: nowrap; width: min(100%, 560px); }
+  .panel { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: 16px 16px 0 0; bottom: 0; display: none; inset-inline: 0; margin: 0 auto; max-height: calc(100dvh - 24px); max-width: 600px; overflow: auto; overscroll-behavior: contain; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); position: fixed; top: auto; width: 100%; }
+  .panel[open][data-sheet-open="true"] { display: block; }
+  .sheetHeader { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 12px; }
+  .sheetHeader h2 { font-size: 18px; font-weight: 550; line-height: 24px; margin: 0; overflow-wrap: anywhere; }
+  .closeButton { align-items: center; background: var(--webde-surface-raised); border: 1px solid var(--webde-line); border-radius: 8px; color: var(--webde-ink); cursor: pointer; display: flex; flex: none; height: 44px; justify-content: center; width: 44px; }
+  .host button:focus-visible { outline: 2px solid var(--webde-ink); outline-offset: 3px; }
+  .openButton:focus-visible { outline-offset: -5px; outline-color: #161616; }
+}

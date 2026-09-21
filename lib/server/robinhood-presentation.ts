@@ -15,23 +15,6 @@ import { hashProjectMetadata, validateProjectMetadata } from "@/packages/launch/
 const FINALIZED_FEED = "https://api.programmable.market/v4/chains/4663/finalized-custom-launches";
 const DEX_PAIRS = "https://api.dexscreener.com/latest/dex/pairs/robinhood/";
 const MAIN_TOKEN = "0xc60ba256b44334a0cd2c7242e98b88f031abb006";
-// Platform-provided display assets supplement the immutable launch metadata.
-const SUPPLEMENTAL_TOKEN_PRESENTATIONS: Readonly<Record<string, Pick<RobinhoodCoinPresentation, "imageUrl" | "links">>> = {
-  "0x105f6435a4ab3c03c13d4a0db67961344694d0cc": {
-    imageUrl: "/brand/projects/blob-token-v1.jpg",
-    links: [
-      { label: "Website", url: "https://playblob.com/" },
-      { label: "X", url: "https://x.com/playblobdotcom" },
-    ],
-  },
-  "0x34cd7dd63c550a78a3228c199474189b88565ac9": {
-    imageUrl: "/brand/projects/arbit-token-v1.png",
-    links: [
-      { label: "Website", url: "https://www.arbithook.app/" },
-      { label: "X", url: "https://x.com/arbit_hook" },
-    ],
-  },
-};
 const MAX_RESPONSE_BYTES = 2_000_000;
 const MAX_METADATA_PAGES = 8;
 const MAX_TOKENS = 50;
@@ -254,6 +237,9 @@ async function readMarkets(tokens: readonly VerifiedMarketToken[]): Promise<Map<
       marketCapUsd: numeric(pair.marketCap),
       fdvUsd: numeric(pair.fdv),
       source: "dexscreener",
+      ...(object(pair.quoteToken) && typeof pair.quoteToken.address === "string" && ADDRESS.test(pair.quoteToken.address)
+        ? { quoteAsset: { address: pair.quoteToken.address, symbol: typeof pair.quoteToken.symbol === "string" && pair.quoteToken.symbol.trim().length <= 128 ? pair.quoteToken.symbol.trim() || null : null } }
+        : {}),
       ...(numeric(pair.marketCap) !== null ? { valuationKind: "market-cap" }
         : numeric(pair.fdv) !== null ? { valuationKind: "fdv" } : {}),
       liquidityUsd: object(pair.liquidity) ? numeric(pair.liquidity.usd) : null,
@@ -333,15 +319,9 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
         if (!links.some(existing => existing.label === labels[link.kind])) links.push({ label: labels[link.kind], url: link.url });
       }
     }
-    const supplemental = SUPPLEMENTAL_TOKEN_PRESENTATIONS[key];
-    for (const link of supplemental?.links ?? []) {
-      const existing = links.findIndex(candidate => candidate.label === link.label || candidate.url === link.url);
-      if (existing === -1) links.push(link);
-      else links[existing] = link;
-    }
     return {
       tokenAddress: token.tokenAddress,
-      imageUrl: supplemental?.imageUrl ?? presentation?.imageUrl ?? (main ? PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.imageUrl : isRobinhoodModuleSourceKind(token.sourceKind) ? MODULE_DEFAULT_TOKEN_IMAGE : null),
+      imageUrl: presentation?.imageUrl ?? (main ? PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.imageUrl : isRobinhoodModuleSourceKind(token.sourceKind) ? MODULE_DEFAULT_TOKEN_IMAGE : null),
       description: presentation?.description ?? (main ? PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.description : null),
       links,
       market: markets.status === "fulfilled" ? markets.value.get(key) ?? null : null,
