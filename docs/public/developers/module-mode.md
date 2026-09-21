@@ -58,7 +58,7 @@ An accepted build can be downloaded with the author's `modules:read` key through
 
 Coins retain the module revisions and configuration selected at launch. Later catalog updates do not replace them. Management actions may change only the state permitted by the deployed contracts.
 
-Foundation allocates module rewards from the creator fee using each instance's recorded `creatorShareBps`. Its 30 bps platform fee is separate. Native and Engine releases use their own author-fee rules. [Fees and revenue](../economics.md#module-mode) covers those versions.
+Foundation allocates module rewards from the creator fee using each instance's recorded `creatorShareBps`. Its 30 bps platform fee is separate. Native and Engine releases use their own author-fee rules. [Fees by contract version](../reference/fee-versions.md) covers those versions.
 
 Index by the launch source and interface version. Module names and categories do not define a coin's identity. A new module using an existing source version does not require a new indexing model.
 

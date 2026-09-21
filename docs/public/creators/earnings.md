@@ -1,25 +1,17 @@
----
-description: How creator fees accrue and are claimed
----
-
 # Creator earnings
 
-A coin's creator fee is set at launch. Earnings accrue when people trade the coin and remain in its fee contract until claimed. A claim pays the recorded recipient; it does not count the same earnings again.
+A creator fee is part of a coin's trading rules. It accrues to the recipients recorded for that coin and stays in the fee contract until claimed. The launching wallet is not necessarily the recipient.
 
 ## Module Mode
 
-Foundation lets you choose **0%, or 1% to 10% in 1% increments**, separate from Programmable's **0.30%** fee. Fees accrue in the pool's quote token. If modules receive a share of the creator fee, your earnings are the remainder after those allocations.
+Choose the creator rate before launch. If selected modules receive a share of that fee, your earnings are the remainder. Fees accrue in the asset paired with the coin; an ETH-funded launch can use WETH for fee accounting.
 
-Existing coins use their original fee contract. Check the recorded split for the coin before calculating or claiming earnings.
+The platform fee is separate. [Fees and revenue](../economics.md#module-mode) shows the rates and an example. A creator rate of 0% produces no creator earnings from those trades.
 
-## Custom launches
+## Claiming fees
 
-Robinhood Native20 adds Programmable's **0.20%** fee separately from creator and pool fees. A creator fee of 0% means no creator earnings from those trades, even when the platform earns fees.
+Connect the wallet recorded as the recipient and use the claim controls supported by the coin's fee contract. Custom projects define their own claim interface. An API key cannot claim funds.
 
-Custom contracts define their own claim interface. The launching wallet is not necessarily the recipient, and an API key cannot claim funds.
+A claim withdraws fees already earned. Analytics may include those balances before you claim them; withdrawing them does not add revenue a second time. Confirm the asset and recipient before signing.
 
-## Existing Classic coins
-
-Ethereum Classic includes Programmable's **0.10%** within the selected fee. At 1%, the creator receives 0.90%. ETH rewards can be split between recipients, each of whom claims its own share. Recipient changes leave already earned fees with their original recipients.
-
-[Fees and revenue](../economics.md) contains the full breakdown. The analytics totals include earned fees that have not yet been claimed; gas and liquidity deposits are excluded.
+Earlier coins keep their original fee and recipient rules. The [fee reference](../reference/fee-versions.md) covers those versions.
