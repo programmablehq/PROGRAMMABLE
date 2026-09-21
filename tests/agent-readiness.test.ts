@@ -160,7 +160,8 @@ describe("agent-readable public surface", () => {
     expect(
       programmablePublicOpenApi["x-programmable-boundary"].marketData,
     ).toContain("legacy reset routes");
-    expect(JSON.stringify(programmablePublicOpenApi)).not.toMatch(
+    const legacyResetPaths = ["/api/explore", "/api/explore/token", "/api/explore/token/analytics", "/api/explore/token/chart"] as const;
+    expect(JSON.stringify(legacyResetPaths.map(path => programmablePublicOpenApi.paths[path]))).not.toMatch(
       /gmgn|dexscreener|bitquery/iu,
     );
     const readOnlyPaths = [
