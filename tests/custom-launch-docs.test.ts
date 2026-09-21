@@ -26,7 +26,19 @@ const machineReadableGuide = read(
 );
 
 describe("Custom Launch API documentation", () => {
-  it("publishes one canonical human guide in both documentation systems", () => {
+  it("links the human guide to the workflow and complete versioned reference", () => {
+    expect(gitBookGuide).toContain("custom-launch-quickstart.md");
+    expect(gitBookGuide).toContain("https://programmable.market/developers/custom-launch-api-v1.md");
+    expect(gitBookGuide).toContain("custom-launch:create");
+    expect(gitBookGuide).toContain("custom-launch:read");
+    expect(gitBookGuide).toContain("publicAuthorization");
+    expect(gitBookGuide).toContain("publicWrites");
+    expect(gitBookGuide).toContain("releaseReady");
+    expect(gitBookGuide).toContain("allocates no nonce and persists no launch");
+    expect(gitBookGuide).toContain("# Existing-project integration");
+    expect(read("docs/public/developers/machine-readable.md")).toContain(
+      "https://programmable.market/.well-known/programmable.json",
+    );
     expect(summary).toContain(
       "[Custom Launch API](developers/custom-launch.md)",
     );
@@ -70,13 +82,11 @@ describe("Custom Launch API documentation", () => {
 
   it("requires verified discovery before Robinhood V4 public activation", () => {
     const v4Sources = [
-      gitBookGuide,
       websiteGuide,
       rawGuide,
       cliGuide,
       developerDocsMarkdown,
       machineReadableGuide,
-      read("docs/public/developers/machine-readable.md"),
     ];
 
     for (const source of v4Sources) {
@@ -147,7 +157,7 @@ describe("Custom Launch API documentation", () => {
   });
 
   it("documents the real packager and schema boundary without invented checks", () => {
-    for (const source of [gitBookGuide, websiteGuide]) {
+    for (const source of [websiteGuide]) {
       expect(source).toContain("/openapi/custom-launch-v1.json");
       expect(source).toContain("/openapi/custom-launch-v2.json");
       expect(source).toContain("does not publish a universal check-ID catalog");
@@ -158,7 +168,7 @@ describe("Custom Launch API documentation", () => {
   });
 
   it("keeps the raw guide and OpenAPI URLs compatible", () => {
-    for (const source of [gitBookGuide, websiteGuide, developerDocsMarkdown]) {
+    for (const source of [websiteGuide, developerDocsMarkdown]) {
       expect(source).toContain("/openapi/custom-launch-v1.json");
       expect(source).toContain("/openapi/custom-launch-v2.json");
       expect(source).toContain("/developers/custom-launch-api-v1.md");
@@ -174,7 +184,7 @@ describe("Custom Launch API documentation", () => {
       expect(source).toContain("Profile");
       expect(source).toContain("not automatically claimable");
       expect(source).toContain("error.requestId");
-      expect(source).toContain("resource-level");
+      expect(source).toMatch(/resource-level|single-resource/);
     }
   });
 
@@ -185,12 +195,13 @@ describe("Custom Launch API documentation", () => {
       expect(source).toContain("PROGRAMMABLE_API_KEY");
       expect(source).toMatch(/(?:without (?:signing|a wallet signature).{0,40}(?:or|and) broadcast(?:ing)?|never[^\n]{0,80}sign[^\n]{0,40}broadcast)/i);
     }
-    expect(gitBookGuide).toContain("programmable-launch-3.3.9.tgz");
     expect(rawGuide).toContain("programmable-launch-3.3.9.tgz");
     expect(developerDocsMarkdown).toContain("programmable-launch-3.3.9.tgz");
-    expect(gitBookGuide).toContain("examples/direct-native-v3-no-broadcast/README.md");
-    expect(gitBookGuide).toContain("deterministic-hook-permission-grind-v1");
-    expect(gitBookGuide).toContain("programmable-launch submit ./launch.json");
+    expect(rawGuide).toContain("examples/direct-native-v3-no-broadcast/README.md");
+    expect(cliGuide).toContain("deterministic-hook-permission-grind-v1");
+    expect(read("docs/public/developers/custom-launch-quickstart.md")).toContain(
+      "programmable-launch submit launch.json --config programmable-launch.config.json",
+    );
   });
 
   it("sends custom builders to the canonical in-page instructions", () => {
@@ -202,7 +213,7 @@ describe("Custom Launch API documentation", () => {
   });
 
   it("publishes capabilities, side-effect-free preflight and separate truth axes", () => {
-    for (const source of [gitBookGuide, websiteGuide, rawGuide, developerDocsMarkdown]) {
+    for (const source of [websiteGuide, rawGuide, developerDocsMarkdown]) {
       expect(source).toContain("/v3/capabilities");
       expect(source).toContain("/v3/custom-launches/preflight");
       expect(source).toContain("validate --remote");
@@ -231,7 +242,6 @@ describe("Custom Launch API documentation", () => {
 
   it("publishes public V3.3 while retaining the exact V1 and V2 write fences", () => {
     for (const source of [
-      gitBookGuide,
       websiteGuide,
       rawGuide,
       developerDocsMarkdown,
@@ -242,7 +252,7 @@ describe("Custom Launch API documentation", () => {
       expect(source).toMatch(/V2[\s\S]{0,200}(?:read-only|read only|write fence)/i);
       expect(source).toMatch(/Public V3/i);
     }
-    for (const source of [gitBookGuide, websiteGuide, rawGuide, developerDocsMarkdown]) {
+    for (const source of [websiteGuide, rawGuide, developerDocsMarkdown]) {
       expect(source).toContain("Retry-After");
       expect(source).toMatch(/V3[^\n]{0,120}(?:public|live)/i);
       expect(source).toContain("/openapi/custom-launch-v3.json");
@@ -287,7 +297,7 @@ describe("Custom Launch API documentation", () => {
   });
 
   it("discloses the exact public V3 fee without conflating LP fees or future operations", () => {
-    for (const source of [gitBookGuide, websiteGuide, rawGuide, cliGuide]) {
+    for (const source of [websiteGuide, rawGuide, cliGuide]) {
       expect(source).toContain("Ethereum Mainnet");
       expect(source).toContain("productionLaunchAuthorized: true");
       expect(source).toMatch(/1,000/);
@@ -302,7 +312,7 @@ describe("Custom Launch API documentation", () => {
       expect(source).toMatch(/Generic fee claiming and\s+buyback/);
       expect(source).toMatch(/V3/i);
     }
-    for (const source of [gitBookGuide, rawGuide, cliGuide]) {
+    for (const source of [rawGuide, cliGuide]) {
       expect(source).toContain("programmable-launch-3.3.9.tgz.sha256");
     }
     expect(websiteGuide).toContain("programmable-launch-3.3.9.tgz.sha256");

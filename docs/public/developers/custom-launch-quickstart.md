@@ -18,6 +18,8 @@ Read [discovery](https://programmable.market/.well-known/programmable.json) to f
 
 For Robinhood V4, require `publicWrites: true`, `publicAuthorization: true` and `releaseReady: true` in both the V4 and chain `4663` discovery entries. For MultiRole, require a complete `context` and `readiness.status: "ready"` in its capabilities response. Stop if readiness is missing or false.
 
+For the general Custom Launch Plan path used by the API-key workspace, read `/v4/chains/4663/custom-launch-capabilities`. Require `availability.operations.create.state: "active"` before creation. An active preflight does not establish that creation is enabled. Use that path's manifest and agent setup under `/v4/chains/4663/custom-launch-contract/`; the V4 commands below apply to the separate-contract profile.
+
 Check architecture coverage before building. A supported request format does not mean the server can verify every hook or settlement model. Use the selected API's schema and client together; V4 and MultiRole requests are different.
 
 ## 2. Prepare the project and budget

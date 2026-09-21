@@ -8,7 +8,11 @@ Custom Launch deploys your token, hook and supporting contracts through the Prog
 
 Start with [Launch through the API](custom-launch-quickstart.md) for the commands. The [versioned API reference](https://programmable.market/developers/custom-launch-api-v1.md) contains the complete schemas, field limits and compatibility rules.
 
-## Choose the Robinhood contract layout
+## Choose the request interface
+
+The API-key workspace can prepare a general Custom Launch Plan. Read `GET /v4/chains/4663/custom-launch-capabilities` and check `availability.operations.create.state` before creating one. Creation requires `active`; preflight and reads can remain active while creation is disabled. `PLAN_OPERATION_DISABLED` describes a platform operation setting and is not resolved by rotating the key. The plan schema and agent instructions are published under `/v4/chains/4663/custom-launch-contract/`.
+
+Existing profile-based integrations use the following layouts:
 
 | Contract layout | API |
 | --- | --- |
@@ -74,7 +78,7 @@ The `verificationBundle` binds the submitted source and build to the deployment.
 
 Remote preflight checks the packed request before creation. It consumes the authenticated request rate budget but no launch-creation quota, allocates no nonce and persists no launch. Read `launchEligibility`, findings and remediation before proceeding. The server makes the authorization decision after submission and the required transaction simulation.
 
-For `action_required`, follow the returned repair instructions, rebuild and submit a new immutable request when required. It is not a wallet action. Wider key permissions cannot repair source code or supply missing verification. Discovery's `customLaunchApi.agentIntegration` provides the matching remediation catalog. There is no project-specific allowlist.
+For `action_required`, follow the returned repair instructions, rebuild and submit a new immutable request when required. It is not a wallet action. Wider key permissions cannot repair source code or supply missing verification. Discovery's `customLaunchApi.agentIntegration` provides the matching remediation catalog. The selected profile determines which verification is required.
 
 ## Fees, funding and liquidity
 
@@ -135,6 +139,7 @@ V3 `prepared` means the artifact exists but there is no wallet transaction to si
 | `WALLET_BINDING_MISMATCH` | Match the controller to the key's wallet binding. |
 | Detail `404 NOT_FOUND` | Check the launch ID, API version, chain and credential lineage. |
 | `409 IDEMPOTENCY_CONFLICT` | Recover the request already bound to that key. Use a new idempotency key only for a deliberate new request. |
+| `503 PLAN_OPERATION_DISABLED` | Check the selected operation in capabilities. A new key does not enable it. |
 | `422` or `evidence_required` | Follow the reported source, funding or verification requirement. |
 | `429` or explicitly retryable `503` | Honor `Retry-After` and preserve the original request bytes. |
 | Expired permit | Check the existing request and transaction before preparing a replacement. |

@@ -1,37 +1,27 @@
 ---
-description: Coin launches, reusable modules and custom applications on Uniswap v4
+description: Launch coins and custom contracts on Uniswap v4
 cover: .gitbook/assets/programmable-warm-night-v3.gif
 coverY: 0
 ---
 
 # Programmable
 
-Programmable is a platform for launching coins and applications on Uniswap v4. Creators configure a coin with reusable modules or build a project with its own contracts. The platform prepares the launch, records its onchain origin and publishes the information that wallets, explorers and trading applications need to identify it.
+Programmable lets you launch coins and custom contracts on Uniswap v4. Use Module Mode to configure a coin on the website, or Custom Launch to build a project with your own code.
 
-The purpose is to make token behavior part of the product. A coin can have rules for fees, access, accounting or other activity through the contracts connected to its market. Those rules belong to the deployed code and continue to apply when someone uses another compatible interface.
+## Launch a coin
 
-## Choose a launch path
+Module Mode creates a coin and its pool on Robinhood Chain. Enter the coin details, choose creator fees and a first buy, and confirm the launch in your wallet. ETH is the default pair. You can add a module to pair with another supported token.
 
-| Launch path | Use it for |
-| --- | --- |
-| [Module Mode](models/module-mode.md) | A coin with a Uniswap v4 pool, creator fees and optional compatible modules. |
-| [Custom Launch](models/custom.md) | A token, hook or application with its own source code and deployment structure, submitted through the API. |
-| [Classic on Ethereum](models/classic.md) | The fixed supply Ethereum model with configurable buy and sell fees. |
+The [launch guide](creators/launch.md) walks through the form. [Module Mode](models/module-mode.md) explains how the pool, modules and fees work.
 
-Open [Create](https://programmable.market/launch) to start a launch, or [Explore](https://programmable.market/explore/robinhood) to view indexed coins. The [launch guide](creators/launch.md) explains configuration, funding and wallet confirmation.
+## Build custom contracts
 
-## Creators, module authors and the protocol
+Custom Launch accepts your token, hook and supporting contracts through an API. The API checks the submitted project and prepares the launch transaction. Your wallet reviews and signs it.
 
-Coin creators choose the settings and creator fees supported by their launch path. Module authors publish reusable behavior that other creators can select and earn rewards when their eligible modules are used. Custom developers control their project's code within the selected API's contract and evidence requirements.
+Start with the [Custom Launch quickstart](developers/custom-launch-quickstart.md). Availability depends on the selected network, contract layout and verification requirements.
 
-Programmable earns a share of trading fees. We use half of our platform fee revenue to buy and burn V4 each day, and keep the other half in the treasury. [Fees and revenue](economics.md) shows what each launch model charges and who receives it. The [V4 token page](v4-token.md) explains the main token and its burns.
+## Fees and integrations
 
-## Build and integrate
+Creators can earn fees from trades in their coins. Programmable receives a separate share according to the launch model. [Fees and revenue](economics.md) explains the rates and recipients.
 
-Start with [Developers](developers/README.md) for the Custom Launch API, module contribution workflow and indexing guides. Each interface publishes its supported versions, deployment data and machine-readable contract. An API key grants access to launch preparation; the controller wallet signs the transaction.
-
-Integrators identify a coin by its chain and contract address, then verify the relevant launch source. Module Mode and Custom Launches use different source interfaces. [Index launches](developers/indexing.md) explains how to ingest both without maintaining a list of coin names or module names.
-
-## Community and public records
-
-Follow [Programmable on X](https://x.com/ProgrammableHQ), join [Discord](https://discord.com/invite/programmable), and track launches, earned fees and burns on [Dune](https://dune.com/programmablehq/analytics). The [official links](reference/official-links.md) page collects the product and developer entry points.
+Terminals, explorers and wallets can use the public launch records to identify coins. The [indexing guide](developers/indexing.md) covers each launch source and the checks an integration needs.

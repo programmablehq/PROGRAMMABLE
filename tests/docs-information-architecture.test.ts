@@ -299,10 +299,10 @@ describe("Docs information architecture", () => {
     }
 
     expect(read("docs/public/creators/launch.md")).toContain(
-      "https://api.programmable.market/v3/custom-launches",
+      "../developers/custom-launch-quickstart.md",
     );
     expect(read("docs/public/developers/README.md")).toContain(
-      "Public indexing reads require no launch API key",
+      "Launch indexing does not need a launch API key",
     );
   });
 

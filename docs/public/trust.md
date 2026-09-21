@@ -1,29 +1,27 @@
 ---
-description: What source, execution and provenance checks establish
+description: What launch checks establish and what remains to verify
 ---
 
 # Verification and risk
 
-A launch has several kinds of evidence: the submitted source, the build, the simulated transaction, wallet execution, finality and its public source record. Each answers a different question. Programmable keeps them separate in the API and indexing interfaces.
+A source check, simulation and confirmed transaction answer different questions. Use the result relevant to the decision you are making.
 
-## Source and execution evidence
+| Check | What it establishes |
+| --- | --- |
+| Source and build | The submitted source and compiler inputs match the verified artifacts |
+| Simulation | The exact transaction can execute in the tested state |
+| Finality | The transaction has reached the chain confirmation level required by its launch source |
+| Launch record | The token came from the recorded Programmable launcher or Router |
+| Market data | The price, liquidity or activity observed by that provider |
 
-A Custom request binds the exact package, component graph and configuration required by its profile. Caller declarations identify evidence but do not make it authoritative. Profiles that require a protected build or economic proof bind those results to the source, compiler, settings and deployed bytecode. A provider's source match alone does not replace that binding.
-
-Simulation evaluates the exact transaction and context used for the launch. It does not establish every possible behavior of the project. Changed source, constructor values, permissions or transaction bytes may require a new request or fresh evidence.
+Changed source, settings or transaction bytes may need fresh checks. Simulation does not cover every future contract interaction. A valid launch record does not guarantee liquidity, sellability or terminal support.
 
 ## Wallet authority
 
-An API key allows scoped API operations. It does not control the launching wallet. A prepared artifact can exist before a wallet transaction is authorized. Once the API supplies an authorized handoff, the controller reviews the network, destination, value and effects before signing.
-
-## Finality and indexing
-
-A broadcast transaction needs a successful receipt and the finality evidence required by the source. Indexers verify the canonical launch identity before publishing it. Source verification, market data and trading support remain separate results; a chart or token name cannot establish origin.
+An API key allows specific API requests. It cannot sign for a wallet. The controller reviews the authorized transaction's network, destination, value and effects before signing.
 
 ## Security review
 
-The public Programmable contracts have not undergone an external audit or public security contest. Tests, internal review and reproducible builds help evaluate a release, but do not replace an independent audit. A launch stamp records provenance and is not a security endorsement.
+The public Programmable contracts have not undergone an external audit or public security contest. Internal review, tests and reproducible builds do not replace an independent audit. A launch stamp is a record of origin, not a security endorsement.
 
-Contract interactions can be irreversible. Review the token address, permissions and transaction effects, including the rules that may limit transfers or trading. Holding V4 does not create equity, a claim on protocol revenue or a guaranteed return.
-
-Report vulnerabilities through the private security reporting channel of the affected Programmable repository. Keep credentials, signatures and unpublished exploit details out of public issues.
+Report vulnerabilities through the affected repository's private security reporting channel. Keep credentials, signatures and unpublished exploit details out of public issues.
