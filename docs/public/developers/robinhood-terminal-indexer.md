@@ -4,14 +4,37 @@ description: Verify Custom Launch provenance, finality and source evidence on Ro
 
 # Index Custom Launches on Robinhood
 
-Custom Launches on Robinhood Chain use two Router interfaces. Select the one identified by the source's published route and Router protocol.
+Select the integration by the launch's source version. New Custom Launch Plans use the public projection feed, including launches that execute and stamp in one transaction. Historical Router launches retain their original interfaces.
 
 | Contract layout | Reference |
 | --- | --- |
+| Custom Launch Plan, with arbitrary component roles and optional markets | [Custom Launch Plans](#custom-launch-plans) |
 | Separate token and hook contracts | [V4 with Router V1](#resolve-the-v4-source) |
 | Shared token/hook or other supported combined roles | [MultiRole V2 with Router V2](#multirole-v2) |
 
 The V4 procedure below requires feed validation, Router verification, Ethereum finality and exact source matching before applying the **Programmable Custom** label. Module Mode has its own [indexing sources](indexing.md).
+
+## Custom Launch Plans
+
+Read the public [finalized projection feed](https://api.programmable.market/v4/chains/4663/finalized-launch-projections). It requires no API key. The [generated OpenAPI contract](https://api.programmable.market/v4/chains/4663/custom-launch-contract/openapi.json) defines the page, item and detail responses; its manifest digest must match the [published manifest](https://api.programmable.market/v4/chains/4663/custom-launch-contract/manifest.json).
+
+Pages use `programmable.launch-projection-page.v1`; items use `programmable.launch-projection.v1`. Pass `nextCursor` unchanged until it is null, including after a sparse or empty page. Preserve the full original projection and upsert launch records by `(chainId, sourceVersion, launchId)`. Fetch one record at `/v4/chains/4663/finalized-launch-projections/{launchIdOrAddress}` using the API launch UUID, onchain launch ID or component address. A failed or unavailable read is not an empty index.
+
+The current feed joins `multi_role_v2` and `custom_launch_plan_v1` records. The projection schema also defines `router_v1`; continue reading the separate Router V1 feed below for that history. Select verification by `sourceVersion`, and keep historical source bindings when releases change. The Router V1 event signatures and fixed addresses below apply only to that historical source.
+
+For `custom_launch_plan_v1`, retain these fields:
+
+| Data | Indexing rule |
+| --- | --- |
+| `chainId`, `controller`, `launchId`, `manifestDigest`, `planHash` | Preserve the chain, creator and immutable launch commitments. |
+| `components`, `primaryComponentId` | Resolve the primary address through `components[].expectedAddress`; keep each component's runtime hash. Descriptive roles do not prove ERC-20 behavior. Coin identity remains chain plus token address. |
+| `markets`, `primaryMarketId` | Resolve address references through their component IDs. A Uniswap v4 PoolKey comprises currencies, fee, tick spacing and hooks under its PoolManager. Keep every market; a launch may have none. |
+| `finality` | Require `status: final` and preserve transaction hashes, block number, block hash and the complete witness, including the stamp and Ethereum checkpoint. |
+| `publication`, `sourceVerification`, `assuranceClaims`, `distribution` | Keep metadata, source checks, individual claims and provider support as separate results. Missing optional claims, prices or images do not remove a finalized listed launch. |
+
+An atomic witness identifies `executorKind: atomic_execute_and_stamp_v2`. Verify its bound executor and runtime, `orderDigest`, `callsHash`, `stampHash` and event positions against the canonical receipt and published execution contract. Its finalized projection contains one transaction hash. Earlier multistep plans retain their own stamp witness and transaction sequence. The [Custom Launch Plan guide](https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md) describes execution and the wallet handoff.
+
+The Programmable stamp establishes launch provenance. It does not certify contract safety, liquidity or a working trade route. Index the finalized listed coin independently from those results. Each trading terminal must consume this source and separately establish its own display and trading support; publication in this feed alone does not prove a third-party listing.
 
 ## Resolve the V4 source
 
