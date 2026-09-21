@@ -18,7 +18,7 @@ export type LaunchAddressRefV1 = Readonly<{ address: Address }> | Readonly<{ com
 export type LaunchExecutorV1 = "atomic_graph_v2" | "controller_multi_step_v1" | "observe_and_stamp_v1";
 export type LaunchControllerV1 = Readonly<{
   address: Address;
-  kind: "eoa" | "erc1271" | "smart_account";
+  kind: "eoa" | "delegated_eoa_v1" | "erc1271" | "smart_account";
   /** Current contract-wallet runtime and authority snapshot, when applicable. */
   runtimeCodeHash?: Hex;
   authoritySnapshot?: JsonObject;

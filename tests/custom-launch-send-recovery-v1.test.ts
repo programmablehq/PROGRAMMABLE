@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getContractAddress, type Hex } from "viem";
+import { getContractAddress, keccak256, type Hex } from "viem";
 import { beginLaunchSendV1, finalizeLaunchSendV1, parseLaunchSendAttemptV1, readLaunchSendJournalV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "@/lib/custom-launch/launch-send-journal-v1";
 import { launchFlowStepsV1 } from "@/lib/custom-launch/launch-flow-v1";
 import { launchPlanWalletUrlV1, prepareUniversalLaunchWalletV1, readLaunchPlanResourceV1, recoverUniversalLaunchTransactionV1, type LaunchWalletProviderV1, type UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import { canonicalBrowserSha256V2 as digest } from "@/lib/custom-launch/browser-authority-v2";
 import { authorizeRecordFixture, capabilitiesFixture } from "./fixtures/launch-plan-admission-v1";
-import { bindStep, component, controller, hash, now, recordFixture, runtime } from "./fixtures/universal-launch-v1";
+import { bindStep, component, controller, hash, now, recordFixture, runtime, runtimeHash, stamp } from "./fixtures/universal-launch-v1";
 
 const review = (): UniversalLaunchWalletReviewV1 => ({ sourceVersion: "custom_launch_plan_v1", launchId: recordFixture().planId, stepId: "configure", binding: recordFixture().steps[0].transactionDigest,
   controllerKind: "eoa", transaction: { chainId: "0x1237", from: controller, to: component, data: "0x12345678", nonce: "0x7", gas: "0x186a0", value: "0x0" },
@@ -49,24 +49,34 @@ describe("durable custom launch send recovery", () => {
     await expect(recoverUniversalLaunchTransactionV1(recoveryProvider(transaction), attempt, hash)).resolves.toBe(hash);
     await expect(recoverUniversalLaunchTransactionV1(recoveryProvider(null), attempt, hash)).rejects.toThrow(/remains unresolved/);
     await expect(recoverUniversalLaunchTransactionV1(recoveryProvider({ ...transaction, input: "0x9876" }), attempt, hash)).rejects.toThrow(/does not match/);
+    await expect(recoverUniversalLaunchTransactionV1(recoveryProvider({ ...transaction, type: "0x4", authorizationList: [{}] }), attempt, hash)).rejects.toThrow(/does not match/);
     expect(parseLaunchSendAttemptV1(readLaunchSendJournalV1(controller, storage), controller)?.transactionHash).toBeNull();
   });
 });
 
 describe("direct EOA creation and launch handoff", () => {
-  it("omits to and preserves the controller nonce, initcode and constructor address", async () => {
+  it.each(["eoa", "delegated_eoa_v1"] as const)("omits to and preserves the %s controller nonce, initcode and constructor address", async kind => {
     const base = recordFixture();
     const expectedAddress = getContractAddress({ from: controller, nonce: 7n });
-    const plan = { ...base.plan, components: [{ ...base.plan.components[0], expectedAddress }], actions: [{ actionId: "create", kind: "deployEoaCreate" as const,
+    const designator = `0xef0100${stamp.slice(2)}` as Hex;
+    const plan = { ...base.plan, controller: { address: controller, kind, ...(kind === "delegated_eoa_v1" ? { runtimeCodeHash: keccak256(designator),
+      authoritySnapshot: { schemaVersion: "programmable.delegated-eoa-authority.v1", chainId: "4663", delegate: stamp, delegateRuntimeCodeHash: runtimeHash } } : {}) },
+      components: [{ ...base.plan.components[0], expectedAddress }], actions: [{ actionId: "create", kind: "deployEoaCreate" as const,
       componentId: "settlement", nonce: "7", dependsOn: [], authority: { kind: "controller" as const }, preconditions: [], postconditions: [],
       execution: { target: null, data: "0x6001600055" as Hex, value: "0", gasLimit: "100000" } }] };
     const planHash = digest("programmable.custom-launch-plan.v1", plan);
     const record = authorizeRecordFixture({ ...base, plan, planHash, rawRequestSha256: planHash,
-      steps: [bindStep({ ...base.steps[0], stepId: "create", actionIds: ["create"], postconditions: [], transaction: { ...base.steps[0].transaction, to: null, data: plan.actions[0].execution.data } })] });
+      steps: [bindStep({ ...base.steps[0], controller: plan.controller, stepId: "create", actionIds: ["create"], postconditions: [], transaction: { ...base.steps[0].transaction, to: null, data: plan.actions[0].execution.data } })] });
+    let changedDelegate = false;
     const provider: LaunchWalletProviderV1 = { request: vi.fn(async ({ method, params }) => {
       if (method === "eth_chainId") return "0x1237";
       if (method === "eth_accounts") return [controller];
-      if (method === "eth_getCode") return [controller.toLowerCase(), expectedAddress.toLowerCase()].includes(String(params?.[0]).toLowerCase()) ? "0x" : runtime;
+      if (method === "eth_getCode") {
+        const target = String(params?.[0]).toLowerCase();
+        if (target === controller.toLowerCase()) return kind === "eoa" ? "0x" : designator;
+        if (target === expectedAddress.toLowerCase()) return "0x";
+        return changedDelegate ? "0x6002" : runtime;
+      }
       if (method === "eth_getTransactionCount") return "0x7";
       if (method === "eth_gasPrice") return "0x2";
       if (method === "eth_estimateGas") return "0xc350";
@@ -78,6 +88,13 @@ describe("direct EOA creation and launch handoff", () => {
     const result = await prepareUniversalLaunchWalletV1(provider, controller, input, now);
     expect(result.transaction).not.toHaveProperty("to");
     expect(result.transaction.nonce).toBe("0x7"); expect(result.createdAddress).toBe(expectedAddress);
+    expect(result.transaction).not.toHaveProperty("authorizationList");
+    expect(result.controllerAuthorization).toBeUndefined();
+    if (kind === "delegated_eoa_v1") {
+      expect(result.transaction.type).toBe("0x2");
+      changedDelegate = true;
+      await expect(prepareUniversalLaunchWalletV1(provider, controller, input, now)).rejects.toThrow(/delegate runtime changed/);
+    }
     const attempt = beginLaunchSendV1(result, store());
     expect(await recoverUniversalLaunchTransactionV1(recoveryProvider({ ...result.transaction, to: null, input: result.transaction.data, hash }), attempt, hash)).toBe(hash);
   });
