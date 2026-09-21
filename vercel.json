@@ -17,6 +17,31 @@
   ],
   "redirects": [
     {
+      "source": "/docs/tokens",
+      "destination": "/docs",
+      "permanent": true
+    },
+    {
+      "source": "/docs/creators",
+      "destination": "/docs/launch/launch",
+      "permanent": true
+    },
+    {
+      "source": "/docs/creators/templates",
+      "destination": "/docs/developers/module-mode",
+      "permanent": true
+    },
+    {
+      "source": "/docs/creators/programs",
+      "destination": "/docs/developers/developers",
+      "permanent": true
+    },
+    {
+      "source": "/docs/infrastructure",
+      "destination": "/docs/reference/launch-stamps",
+      "permanent": true
+    },
+    {
       "source": "/markets",
       "destination": "/explore",
       "permanent": false
