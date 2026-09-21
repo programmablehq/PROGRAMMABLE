@@ -21,7 +21,11 @@ const page = object({ number: { type: "integer", minimum: 1 }, size: { enum: [10
 const market = nullable(object({ poolId: text, priceUsd: nullable({ type: "number" }),
   marketCapUsd: nullable({ type: "number" }), liquidityUsd: nullable({ type: "number" }),
   volume24hUsd: nullable({ type: "number" }), change24hPercent: nullable({ type: "number" }),
-  observedAt: timestamp, sourceUrl: text }));
+  observedAt: timestamp, sourceUrl: text,
+  fdvUsd: nullable({ type: "number" }), valuationKind: { enum: ["market-cap", "fdv"] },
+  source: { enum: ["dexscreener", "uniswap-v4"] }, blockNumber: block, blockHash: hash,
+  quoteAsset: object({ address, symbol: nullable(text) }),
+}, ["poolId", "priceUsd", "marketCapUsd", "liquidityUsd", "volume24hUsd", "change24hPercent", "observedAt", "sourceUrl"]));
 const presentation = (marketSchema: Schema) => object({ tokenAddress: address,
   imageUrl: nullable(text), description: nullable(text),
   links: array(object({ label: text, url: text })), market: marketSchema });
