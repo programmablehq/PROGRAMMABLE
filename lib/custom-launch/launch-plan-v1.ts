@@ -9,6 +9,7 @@ type ExactSourceVerificationBundleV2 = JsonObject;
 
 /** Additive wire domains. MultiRole V2 is never parsed or rehashed as this version. */
 export const CUSTOM_LAUNCH_PLAN_VERSION_V1 = "programmable.custom-launch-plan.v1" as const;
+export const CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1 = "programmable.custom-launch-policy.provenance.v1" as const;
 export const CUSTOM_LAUNCH_PLAN_ROUTE_V1 = "custom-launch-plan:create:v1" as const;
 export const CUSTOM_LAUNCH_PLAN_RECEIPT_VERSION_V1 = "programmable.custom-launch-plan-admission.v1" as const;
 export const LAUNCH_PROJECTION_VERSION_V1 = "programmable.launch-projection.v1" as const;
@@ -17,7 +18,7 @@ export type LaunchAddressRefV1 = Readonly<{ address: Address }> | Readonly<{ com
 export type LaunchExecutorV1 = "atomic_graph_v2" | "controller_multi_step_v1" | "observe_and_stamp_v1";
 export type LaunchControllerV1 = Readonly<{
   address: Address;
-  kind: "eoa" | "erc1271" | "smart_account";
+  kind: "eoa" | "delegated_eoa_v1" | "erc1271" | "smart_account";
   /** Current contract-wallet runtime and authority snapshot, when applicable. */
   runtimeCodeHash?: Hex;
   authoritySnapshot?: JsonObject;
@@ -57,6 +58,8 @@ export type LaunchActionV1 = LaunchActionBaseV1 & (
       salt: Hex; initCode: Hex; execution: LaunchCallV1 }>
   | Readonly<{ kind: "deployCreate"; componentId: string; parent: LaunchAddressRefV1;
       nonce: string; execution: LaunchCallV1 }>
+  | Readonly<{ kind: "deployEoaCreate"; componentId: string; nonce: string;
+      execution: Readonly<{ target: null; data: Hex; value: string; gasLimit: string }> }>
   | Readonly<{ kind: "useExisting"; componentId: string }>
   | Readonly<{ kind: "call"; execution: LaunchCallV1 }>
   | Readonly<{ kind: "initializePool"; marketId: string; sqrtPriceX96: string; execution: LaunchCallV1 }>
@@ -149,6 +152,7 @@ export interface LaunchClaimDescriptorV1 {
 export interface CustomLaunchPlanV1 {
   readonly schemaVersion: typeof CUSTOM_LAUNCH_PLAN_VERSION_V1;
   readonly manifestDigest: Sha256Digest;
+  readonly admissionPolicy?: typeof CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1;
   readonly chainId: string;
   readonly controller: LaunchControllerV1;
   readonly executor: LaunchExecutorV1;
@@ -268,6 +272,8 @@ export interface LaunchPlanRecordV1 {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly resumeUrl: string;
+  /** Optional response metadata negotiated with Programmable-Launch-Response-Version: 1.1. */
+  readonly walletUrl?: string;
 }
 
 export interface LaunchProjectionV1 {
