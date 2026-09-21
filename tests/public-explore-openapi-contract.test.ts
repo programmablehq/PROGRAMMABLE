@@ -188,6 +188,9 @@ describe("public Explore OpenAPI contract", () => {
       const defaults = Object.fromEntries(operation.parameters.map(parameter => [parameter.name, parameter.schema.default]));
       const parsed = parse(new URLSearchParams())!;
       expect(defaults).toEqual({ page: parsed.page, pageSize: parsed.pageSize, q: parsed.q, ...parsed.filters });
+      const sortSchema = operation.parameters.find(parameter => parameter.name === "sort")!.schema;
+      for (const sort of sortSchema.enum!) expect(parse(new URLSearchParams({ sort: String(sort) }))?.filters.sort).toBe(sort);
+      if (chain === "robinhood") expect(sortSchema.enum).toContain("activity");
       expect(operation.parameters.find(parameter => parameter.name === "mode")?.description).toContain("do not restrict module source submissions");
     }
     expect(programmablePublicOpenApi["x-programmable-availability"].chainExplore).toMatchObject({
@@ -230,6 +233,8 @@ describe("public Explore OpenAPI contract", () => {
       const value = await readRobinhoodLaunches();
       expect(value.status).toBe(status);
       expect(validate(JSON.parse(JSON.stringify(value))), JSON.stringify(validate.errors)).toBe(true);
+      expect(validate({ ...value, page: { ...value.page, matchingItems: 0 } }), JSON.stringify(validate.errors)).toBe(true);
+      expect(validate({ ...value, page: { ...value.page, matchingItems: -1 } })).toBe(false);
       expect(validate({ ...value, chainId: 1 })).toBe(false);
       expect(validate({ ...value, status: "partial" })).toBe(false);
     }

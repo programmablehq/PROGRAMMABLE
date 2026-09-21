@@ -1,4 +1,5 @@
 // Public projection contracts from the chain-specific Explore routes and readers.
+import { DEFAULT_EXPLORE_FILTERS, LAUNCH_SORT_OPTIONS } from "./robinhood-explore-filters";
 type Schema = Record<string, unknown>;
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const object = (properties: Record<string, Schema>, required = Object.keys(properties)) =>
@@ -14,7 +15,9 @@ const block = ref("CanonicalUint256");
 const checkpoint = nullable(object({ number: block, hash }));
 const sourceStatus = { enum: ["current", "last-known-good", "unavailable"] };
 const page = object({ number: { type: "integer", minimum: 1 }, size: { enum: [10, 50] },
-  totalItems: integer, totalPages: integer, hasMore: { type: "boolean" } });
+  totalItems: integer, totalPages: integer, hasMore: { type: "boolean" },
+  matchingItems: { ...integer, description: "Query and filter matches. Present when the persistent pin does not match, so it is not counted as a search result." },
+}, ["number", "size", "totalItems", "totalPages", "hasMore"]);
 const market = nullable(object({ poolId: text, priceUsd: nullable({ type: "number" }),
   marketCapUsd: nullable({ type: "number" }), liquidityUsd: nullable({ type: "number" }),
   volume24hUsd: nullable({ type: "number" }), change24hPercent: nullable({ type: "number" }),
@@ -91,8 +94,8 @@ const parameters = (chain: "ethereum" | "robinhood") => [
     description: "A positive decimal page number, at most six digits. The reader clamps it to the available pages." },
   { name: "pageSize", in: "query", schema: { type: "integer", enum: [10, 50], default: chain === "ethereum" ? 10 : 50 } },
   { name: "q", in: "query", schema: { type: "string", maxLength: 128, default: "" }, description: "Search text, at most 128 UTF-16 code units." },
-  { name: "sort", in: "query", schema: { type: "string", enum: chain === "ethereum" ? ["newest", "oldest"] : ["highest", "lowest", "newest", "oldest"],
-    default: chain === "ethereum" ? "newest" : "highest" } },
+  { name: "sort", in: "query", schema: { type: "string", enum: chain === "ethereum" ? ["newest", "oldest"] : LAUNCH_SORT_OPTIONS.map(option => option.value),
+    default: chain === "ethereum" ? "newest" : DEFAULT_EXPLORE_FILTERS.sort } },
   { name: "mode", in: "query", schema: { type: "string", enum: chain === "ethereum" ? ["all", "classic", "custom"] : ["all", "module", "custom"], default: "all" },
     description: "Filter published launch sources in this presentation feed. These values do not restrict module source submissions." },
 ];
@@ -114,7 +117,7 @@ export const chainExplorePaths = {
   } },
   "/api/explore/robinhood": { get: {
     operationId: "listRobinhoodExploreLaunches", summary: "Read Robinhood Chain launch pages",
-    description: "Reads the saved verified Custom Router, exact Module Mode release indexes and finalized launch projections. Projected launches may have no primary asset or market; their original source, assurance and provider states remain separate. ready means each saved source has reached its finalized cursor; syncing means an admitted source is still catching up; stale means an observation is over five minutes old; unavailable means the snapshot cannot be read. updatedAt is the oldest source observation. Optional market observations drive highest/lowest sorting; missing values sort after known values. The verified main token retains the first slot on every page, independently of the query and mode. Public reads do not fall through to RPC indexing. Unknown or repeated query parameters are rejected; no chain override is accepted. This presentation feed is not a complete archive or a publication authority.",
+    description: "Reads the saved verified Custom Router, exact Module Mode release indexes and finalized launch projections. Projected launches may have no primary asset or market; their original source, assurance and provider states remain separate. ready means each saved source has reached its finalized cursor; syncing means an admitted source is still catching up; stale means an observation is over five minutes old; unavailable means the snapshot cannot be read. updatedAt is the oldest source observation. Optional market observations drive highest/lowest sorting. Activity sorts by observed USD trading volume over the last 24 hours; missing values sort after known values. The verified main token retains the first slot on every page, independently of the query and mode. It is counted once in totalItems; matchingItems excludes the pin when it does not match the query or mode. Public reads do not fall through to RPC indexing. Unknown or repeated query parameters are rejected; no chain override is accepted. This presentation feed is not a complete archive or a publication authority.",
     tags: ["Discovery"], security: [], parameters: parameters("robinhood"), responses: {
       "200": { ...response(statusPage("RobinhoodExplorePage", ["ready", "syncing", "stale"]), "Verified saved launch identities with optional presentations and markets."),
         headers: headers(["ready", "syncing", "stale"], ["public, max-age=0, s-maxage=15, stale-while-revalidate=30", "no-store"]) },
