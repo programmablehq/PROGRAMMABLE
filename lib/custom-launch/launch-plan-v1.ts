@@ -253,6 +253,15 @@ export interface LaunchDistributionV1 {
   readonly hooklist: "not_requested" | "queued" | "submitted" | "merged" | "rejected";
 }
 
+/** Response 1.2 guidance only; never part of the original signed launch authority. */
+export interface LaunchPlanContinuationV1 {
+  readonly schemaVersion: "programmable.custom-launch-plan-continuation.v1";
+  readonly status: "replan_required";
+  readonly originalManifestDigest: Sha256Digest;
+  readonly currentManifestDigest: Sha256Digest;
+  readonly replanUrl: string;
+}
+
 export interface LaunchPlanRecordV1 {
   readonly schemaVersion: "programmable.custom-launch-plan-resource.v1";
   readonly planId: string;
@@ -275,6 +284,7 @@ export interface LaunchPlanRecordV1 {
   readonly resumeUrl: string;
   /** Optional response metadata negotiated with Programmable-Launch-Response-Version: 1.1 or 1.2. */
   readonly walletUrl?: string;
+  readonly continuation?: LaunchPlanContinuationV1;
 }
 
 export interface LaunchProjectionV1 {

@@ -41,6 +41,8 @@ export function launchFlowStateV1(record: LaunchPlanRecordV1): { title: string; 
   if (waiting) return { title: waiting.status === "mined" ? "Waiting for finality" : "Transaction submitted", description: atomic
     ? "Tracking your combined launch and Stamp automatically. Your program opens after independent finality and website indexing."
     : "Tracking continues automatically. The next wallet step becomes available after this transaction is independently final.", terminal: false };
+  if (record.continuation?.status === "replan_required") return { title: "Launch update required",
+    description: "The launch service has changed. Ask your bot to replan this launch using its completed steps. Keep this launch ID and every transaction receipt.", terminal: false };
   const ready = record.steps.find(step => step.status === "wallet_action_ready");
   if (ready) return { title: !atomic && isLaunchStampStepV1(record, ready.actionIds) ? "Stamp ready to confirm" : "Ready to launch", description: atomic
     ? "One wallet transaction completes the project calls and Programmable Stamp together. Check the wallet and current cost before confirming."
@@ -60,7 +62,7 @@ export function launchFlowPresentationV1(record: LaunchPlanRecordV1, submission?
   const pending = submission?.transactionHash && record.steps.find(step => step.stepId === submission.stepId
     && step.transactionDigest === submission.transactionDigest && ["pending", "wallet_action_ready"].includes(step.status));
   const view = pending && !["final", "source_verified", "indexed", "publicly_visible", "action_required"].includes(record.status)
-    ? { ...record, status: "broadcast" as const, steps: record.steps.map(step => step === pending
+    ? { ...record, continuation: undefined, status: "broadcast" as const, steps: record.steps.map(step => step === pending
       ? { ...step, status: "broadcast" as const, transactionHash: submission!.transactionHash } : step) } : record;
   return { steps: launchFlowStepsV1(view), state: launchFlowStateV1(view) };
 }

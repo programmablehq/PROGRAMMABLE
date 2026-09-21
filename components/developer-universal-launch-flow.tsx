@@ -27,7 +27,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const plan = entry.sourceVersion === "custom_launch_plan_v1" ? readLaunchPlanResourceV1(resource) : null;
   const id = String(resource.planId ?? resource.launchId);
   const step = plan?.steps.find(item => item.status === "wallet_action_ready");
-  const ready = plan ? !!step : ["authorized", "awaiting_wallet_signature", "wallet_action_required"].includes(String(resource.status));
+  const ready = plan ? !!step && !plan.continuation : ["authorized", "awaiting_wallet_signature", "wallet_action_required"].includes(String(resource.status));
   const wallet = projectionObject(resource.wallet) ? resource.wallet : null;
   const summary = wallet && projectionObject(wallet.launchSummary) ? wallet.launchSummary : null;
   const title = plan?.plan.publication?.name ?? (typeof summary?.name === "string" ? summary.name : "Custom project");
@@ -73,10 +73,10 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const observedPending = observedSubmission && !(plan ? plan.steps.find(item => item.stepId === observedSubmission.stepId)?.status === "final" : resource.status === "finalized") ? observedSubmission : null;
   const hash = ownAttempt?.transactionHash ?? pendingStep?.transactionHash ?? legacySubmission?.transactionHash ?? observedPending?.hash ?? null;
   const submittedStepId = ownAttempt?.stepId ?? pendingStep?.stepId ?? legacySubmission?.stepId ?? observedPending?.stepId ?? "multi-role-v2";
-  const hasUnresolved = !!rawJournal || !!legacySubmission || !!pendingStep;
+  const hasUnresolved = !!rawJournal || !!legacySubmission || !!pendingStep || !!observedPending;
   const unknownSend = !!ownAttempt && !hash;
   const visibleReview = review?.stepId === (step?.stepId ?? "multi-role-v2") && ready && !hasUnresolved ? review : null;
-  const presentation = plan ? launchFlowPresentationV1(plan, ownAttempt ? { stepId: ownAttempt.stepId,
+  const presentation = plan ? launchFlowPresentationV1(hasUnresolved ? { ...plan, continuation: undefined } : plan, ownAttempt ? { stepId: ownAttempt.stepId,
     transactionDigest: ownAttempt.binding, transactionHash: ownAttempt.transactionHash } : null) : null;
   const steps = presentation?.steps ?? [{ id: "multi-role-v2", label: "Launch and Programmable Stamp", status: resource.status === "finalized" ? "final" as const : hash ? "broadcast" as const : "pending" as const, stamp: true }];
   const state = presentation?.state ?? { title: resource.status === "finalized" ? "Confirming website indexing" : hash ? "Transaction submitted" : ready ? "Ready to launch" : "Preparing your launch",
@@ -188,10 +188,10 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open program</a> : null}
     {(error || trackingError) ? <p className={styles.error} role={error ? "alert" : "status"}>{error ?? trackingError}</p> : null}
     {plan?.preflight?.findings.length ? <details className={styles.details}><summary>Launch findings</summary><pre>{JSON.stringify(plan.preflight.findings, null, 2)}</pre></details> : null}
-    {plan?.status === "expired" || plan?.status === "action_required" ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
+    {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
     <details className={styles.details}><summary>Transaction and launch details</summary><dl className={styles.summary}><div><dt>Controller</dt><dd><code>{entry.controller}</code></dd></div><div><dt>Launch ID</dt><dd><code>{id}</code></dd></div></dl>
       <pre>{JSON.stringify({ manifestDigest: plan?.manifestDigest, components: plan?.plan.components, markets: plan?.plan.markets, feeObligations: plan?.plan.feeObligations,
         transaction: visibleReview?.transaction, decodedOperation: visibleReview?.decodedOperation, controllerAuthorization: visibleReview?.controllerAuthorization,
-        preconditions: visibleReview?.preconditions, postconditions: visibleReview?.postconditions, recovery: ownAttempt, status: resource.status }, null, 2)}</pre></details>
+        preconditions: visibleReview?.preconditions, postconditions: visibleReview?.postconditions, recovery: ownAttempt, continuation: plan?.continuation, status: resource.status }, null, 2)}</pre></details>
   </li>;
 }

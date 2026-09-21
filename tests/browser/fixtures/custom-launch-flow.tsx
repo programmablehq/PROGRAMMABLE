@@ -50,6 +50,10 @@ if (mode === "stamp") record = { ...record, steps: [ { ...record.steps[0], statu
 if (mode === "issuer") record = { ...record, status: "analysis_pending", steps: [{ ...record.steps[0], status: "final", transactionHash: hash }] };
 if (mode === "expired") record = { ...record, status: "expired", steps: record.steps.map(step => ({ ...step, status: "pending" })) };
 if (mode === "finality") record = { ...record, status: "mined", steps: record.steps.map(step => ({ ...step, status: "mined", transactionHash: hash })) };
+if (mode.startsWith("release-change")) record = { ...record, steps: record.steps.map(step => ({ ...step, status: "pending" })),
+  continuation: { schemaVersion: "programmable.custom-launch-plan-continuation.v1", status: "replan_required",
+    originalManifestDigest: record.manifestDigest, currentManifestDigest: `sha256:${"bb".repeat(32)}`,
+    replanUrl: `/v4/chains/4663/custom-launch-plans/${record.planId}:replan` } };
 if (mode === "indexing" || mode === "atomic-indexing") control.finalize();
 
 const review = (): UniversalLaunchWalletReviewV1 => {
@@ -60,7 +64,11 @@ const review = (): UniversalLaunchWalletReviewV1 => {
       gas: `0x${BigInt(step.transaction.gasLimit).toString(16)}`, nonce: `0x${BigInt(step.transaction.nonce).toString(16)}` },
     valueWei: "0", maxGasCostWei: "21000000000000", deadline: plan.budgets.deadline, preconditions: [], postconditions: [], ...(decodedOperation ? { decodedOperation } : {}) };
 };
-if (mode === "unknown" && !localStorage.getItem(`programmable:custom-launch-send:v1:4663:${controller}`)) beginLaunchSendV1(review());
+if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
+  && !localStorage.getItem(`programmable:custom-launch-send:v1:4663:${controller}`)) {
+  const attempt = beginLaunchSendV1(review());
+  if (mode === "release-change-known") rememberLaunchHashV1(attempt, hash);
+}
 
 window.fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);

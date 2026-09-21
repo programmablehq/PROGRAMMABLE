@@ -57,6 +57,15 @@ export function readLaunchPlanResourceV1(value: unknown): LaunchPlanRecordV1 {
     || !Array.isArray(plan.components) || !Array.isArray(plan.actions) || !Array.isArray(plan.dependencies)
     || !Array.isArray(plan.expectedEffects) || !Array.isArray(plan.markets) || !projectionObject(plan.budgets)) return fail();
   if (resource.walletUrl !== undefined && resource.walletUrl !== launchPlanWalletUrlV1(resource.planId)) return fail("The website handoff does not match this launch.");
+  if (resource.continuation !== undefined) {
+    const continuation = record(resource.continuation);
+    if (Object.keys(continuation).sort().join(",") !== "currentManifestDigest,originalManifestDigest,replanUrl,schemaVersion,status"
+      || continuation.schemaVersion !== "programmable.custom-launch-plan-continuation.v1" || continuation.status !== "replan_required"
+      || continuation.originalManifestDigest !== resource.manifestDigest
+      || typeof continuation.currentManifestDigest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(continuation.currentManifestDigest)
+      || continuation.currentManifestDigest === resource.manifestDigest
+      || continuation.replanUrl !== `/v4/chains/4663/custom-launch-plans/${resource.planId}:replan`) return fail("The continuation notice does not match this launch.");
+  }
   for (const step of resource.steps) {
     const row = record(step);
     if (!equal(row.controller, plan.controller) || !Array.isArray(row.actionIds) || row.actionIds.length < 1 || !Array.isArray(row.preconditions) || !Array.isArray(row.postconditions)) return fail();
@@ -134,6 +143,7 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
   if (input.sourceVersion === "custom_launch_plan_v1") {
     const original = readLaunchPlanResourceV1(input.reviewedResource);
     const current = readLaunchPlanResourceV1(fresh);
+    if (current.continuation) return fail("This launch needs an updated plan. Ask your bot to replan using the existing completed steps.");
     if (original.planId !== current.planId || original.planHash !== current.planHash || current.plan.controller.address.toLowerCase() !== controller.toLowerCase()
       || !["wallet_action_ready", "broadcast", "mined"].includes(current.status)) return fail();
     const release = await verifyLaunchPlanReleaseAuthorityV1(current, cap, nowMilliseconds);
