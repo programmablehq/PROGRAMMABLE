@@ -164,7 +164,6 @@ describe("partner credential discovery", () => {
       read("app/docs/developers/custom-launch/page.tsx"),
       read("docs/public/developers/custom-launch.md"),
       read("docs/public/developers/machine-readable.md"),
-      read("docs/public/developers/README.md"),
       read("public/developers/custom-launch-api-v1.md"),
     ];
 
@@ -173,6 +172,9 @@ describe("partner credential discovery", () => {
       expect(source).toMatch(/partner root/iu);
       expect(source).toMatch(/subkey/iu);
     }
+    expect(read("docs/public/developers/README.md")).toContain(
+      "[API reference](machine-readable.md)",
+    );
     expect(sources.join("\n")).toMatch(
       /(?:cannot|no (?:api key|credential) can) sign(?:,| or)/iu,
     );

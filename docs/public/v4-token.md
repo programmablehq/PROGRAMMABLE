@@ -1,7 +1,3 @@
----
-description: V4 identity, liquidity and burns
----
-
 # V4 token
 
 V4 is Programmable's token on Robinhood Chain. It was created with one billion tokens and has no further minting. Identify it by its contract address.
@@ -21,7 +17,7 @@ Programmable's liquidity is held in a [locked position](https://robinhoodchain.b
 
 ## Buybacks and burns
 
-Programmable allocates half of its platform fee revenue to buying and burning V4. The other half goes to the treasury. V4 collected from its liquidity fees is also burned. Creator fees and module rewards are excluded. [Fees and revenue](economics.md) explains the allocation.
+Part of Programmable's platform fee revenue is used to buy V4 and burn the purchased tokens. V4 collected from its own liquidity fees is also burned. [Fees and revenue](economics.md#platform-revenue) explains the allocation and excludes creator fees and module rewards.
 
 Burns send V4 to `0x000000000000000000000000000000000000dEaD`. These tokens are excluded from circulation, while the contract's reported total supply remains one billion. Completed burns and their transactions are available on the [Dune dashboard](https://dune.com/programmablehq/analytics).
 

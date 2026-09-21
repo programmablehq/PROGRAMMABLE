@@ -1,10 +1,6 @@
----
-description: Build with the launch APIs or index Programmable coins
----
-
 # Developers
 
-Choose the guide for the task you need to complete.
+Use the guide for the task you want to complete.
 
 | Task | Guide |
 | --- | --- |
@@ -14,14 +10,8 @@ Choose the guide for the task you need to complete.
 | Add coins to a terminal, wallet or explorer | [Index launches](indexing.md) |
 | Find schemas, ABIs and client releases | [API reference](machine-readable.md) |
 
-## Custom Launch access
+## Access
 
-Use a key from the [API-key manager](https://programmable.market/developers/api-keys). Preflight and creation need `custom-launch:create`; status reads need `custom-launch:read`. The key must also be bound to the intended chain and controller.
+Custom Launch uses an API key for preparation and status requests. Your wallet signs the prepared transactions. Check the current capabilities for your network and project before building; key permissions and operation availability are separate.
 
-Store the secret as `PROGRAMMABLE_API_KEY` outside source control, logs and chat messages. The API key and CLI never sign or broadcast. The controller wallet reviews and signs the authorized transaction.
-
-A key's permissions do not establish that a contract layout or source package is supported. Check the selected API's capabilities before building. Partner roots and subkeys use the scope, chain and history rules in `customLaunchApi.partnerCredentials`.
-
-## Public reads
-
-Launch indexing does not need a launch API key. Use the chain and token address as the coin's identity, and verify it against the correct source. Module Mode and Custom Launch use different records. Missing optional metadata or market data should not hide a verified coin.
+Launch indexing does not need a launch API key. Use the chain and token address as the coin's identity and verify it against the correct launch source. Missing optional metadata or market data should not hide a verified coin.

@@ -2,6 +2,8 @@
 
 Write product pages for someone learning how Programmable works. Explain what they pay, what they receive and what happens next in everyday language. Use connected paragraphs, clear percentages and a simple worked example when it helps. Keep contract internals, event names and accounting terminology in the technical references unless a reader needs them to make a decision.
 
+Keep the main reading path focused on Programmable, Module Mode, Custom Launch, fees and V4. Put contract generations and historical fee tables in the technical reference. A product page should not repeat its title in a subtitle. Explain revenue policy separately from completed transactions, and document Treasury spending purposes only when they have been confirmed.
+
 Write API and integration references for a developer who needs to complete a task. Begin with the purpose, required inputs and next action. Keep exact units, field names, contract versions and verification rules where they are needed to build an integration. Use descriptive links between the product explanation and the technical details.
 
 Use factual language. Avoid marketing, em dashes, filler, rhetorical questions and phrases such as "not just", "seamless" or "game-changing". Keep product terminology consistent across GitBook, GitHub, the website and agent instructions.
