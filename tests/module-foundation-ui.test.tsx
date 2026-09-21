@@ -177,7 +177,7 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
     const unsafeImage = renderToStaticMarkup(<ModuleFoundationMarket {...props} coin={{ ...coin, imageURI: "data:image/svg+xml,unsafe" }} />);
     expect(unsafeImage).not.toContain("data:image");
     expect(unsafeImage).toContain(FOUNDATION_DEFAULT_IMAGE.url);
-    expect(unsafeImage).toContain('aria-label="Copy coin address"');
+    expect(unsafeImage).toContain("Copy address");
     expect(html).toContain(`href="https://robinhoodchain.blockscout.com/token/${address}"`);
     expect(html).toContain('href="/explore/robinhood"');
   });

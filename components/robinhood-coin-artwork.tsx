@@ -37,7 +37,7 @@ function ArtworkImage({ source, fallback, loading, eager, className }: {
   return <div className={`${styles.artwork} ${className}`} data-loading={pending} aria-hidden="true">
     {currentSource && status !== "failed" ? <Image
       key={currentSource}
-      src={currentSource} alt="" width={600} height={600} unoptimized
+      src={currentSource} alt="" width={600} height={600} unoptimized referrerPolicy="no-referrer"
       loading={eager ? "eager" : "lazy"}
       className={status === "ready" ? styles.loaded : undefined}
       onLoad={() => setStatus("ready")}

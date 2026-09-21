@@ -27,8 +27,8 @@ describe("inline Foundation trading", () => {
   it("starts with Buy, gas-aware Max and three percent slippage without a review page", () => {
     const html = renderToStaticMarkup(<ModuleFoundationMarket {...props} />);
     expect(html).toMatch(/aria-pressed="true"[^>]*>Buy<\/button>/);
-    expect(html).toMatch(/<summary>Slippage <span>3%<\/span><\/summary>/);
-    expect(html).toMatch(/<button[^>]*class="[^"]*tradeMax[^>]*>Max<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*3% slippage<\/button>/);
+    expect(html).toMatch(/<button[^>]*class="[^"]*max[^>]*>Max<\/button>/);
     expect(html).toMatch(/<button type="submit"[^>]*>Buy<\/button>/);
     for (const removed of ["Review buy", "Continue in wallet", "Simulated at block", "Network gas is separate", "Return to trading"]) expect(html).not.toContain(removed);
     expect(props.onPrepareTrade).not.toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe("inline Foundation trading", () => {
     const submit = html.match(/<button type="submit"[^>]*>/)?.[0];
     expect(html).toContain("Connect wallet");
     expect(submit).not.toContain("disabled");
-    expect(html).toMatch(/<button[^>]*class="[^"]*tradeMax[^>]*disabled=""[^>]*>Max/);
+    expect(html).toMatch(/<button[^>]*class="[^"]*max[^>]*disabled=""[^>]*>Max/);
     expect(html).not.toContain("Balance:");
   });
 
