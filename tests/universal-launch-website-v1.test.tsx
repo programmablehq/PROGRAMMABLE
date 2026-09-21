@@ -9,6 +9,8 @@ import { syncLaunchProjectionIndex } from "@/lib/server/robinhood-index/launch-p
 import { prepareUniversalLaunchWalletV1, readLaunchPlanResourceV1, type LaunchWalletProviderV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import { prepareLaunchClaimWalletV1, type LaunchClaimReadV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import { readLaunchContractSetupV1 } from "@/lib/server/custom-launch/launch-contract-setup-v1";
+import { launchFlowPresentationV1, launchFlowStateV1 } from "@/lib/custom-launch/launch-flow-v1";
+import type { LaunchPlanRecordV1 } from "@/lib/custom-launch/launch-plan-v1";
 import { canonicalBrowserSha256V2 as digest } from "@/lib/custom-launch/browser-authority-v2";
 import { LaunchProjectionDetails } from "@/components/launch-projection-details";
 import { CUSTOM_LAUNCH_PLAN_STAMP_ABI_V1, customLaunchPlanStampComponentsHashV1, customLaunchPlanStampMarketsHashV1,
@@ -121,6 +123,43 @@ describe("exact wallet transaction review", () => {
     expect(customLaunchPlanStampHashV1(vector.permitDigest)).toBe(vector.stampHash);
     const decoded = decodeFunctionData({ abi: CUSTOM_LAUNCH_PLAN_STAMP_ABI_V1, data: vector.unsignedCalldata });
     expect(encodeFunctionData({ abi: CUSTOM_LAUNCH_PLAN_STAMP_ABI_V1, functionName: "stampPlanV1", args: decoded.args })).toBe(vector.unsignedCalldata);
+  });
+});
+
+describe("historical launch continuation", () => {
+  const retired = (): LaunchPlanRecordV1 => {
+    const original = authorizeRecordFixture(recordFixture());
+    return { ...original, steps: original.steps.map(step => ({ ...step, status: "pending" })), continuation: {
+      schemaVersion: "programmable.custom-launch-plan-continuation.v1", status: "replan_required",
+      originalManifestDigest: original.manifestDigest, currentManifestDigest: `sha256:${"bb".repeat(32)}`,
+      replanUrl: `/v4/chains/4663/custom-launch-plans/${original.planId}:replan`,
+    } };
+  };
+  it("shows explicit replan guidance without changing original signed bytes", () => {
+    const value = retired(); const before = JSON.stringify(value);
+    expect(readLaunchPlanResourceV1(value)).toBe(value);
+    expect(launchFlowStateV1(value)).toMatchObject({ title: "Launch update required", terminal: false });
+    expect(JSON.stringify(value)).toBe(before);
+  });
+  it.each(["originalManifestDigest", "currentManifestDigest", "replanUrl"] as const)("rejects continuation guidance with a changed %s", field => {
+    const value = retired();
+    const wrong = field === "replanUrl" ? "/v4/chains/4663/custom-launch-plans/another:replan"
+      : field === "currentManifestDigest" ? value.manifestDigest : `sha256:${"cc".repeat(32)}`;
+    expect(() => readLaunchPlanResourceV1({ ...value, continuation: { ...value.continuation, [field]: wrong } })).toThrow(/continuation notice/);
+  });
+  it("stops a fresh wallet handoff before provider access when continuation requires replanning", async () => {
+    const value = retired(); const rpc = provider();
+    await expect(prepareUniversalLaunchWalletV1(rpc, controller, { sourceVersion: "custom_launch_plan_v1", action: "review",
+      reviewedResource: value, loadFreshResource: async () => value, loadFreshCapabilities: async () => capabilitiesFixture(value) }, now)).rejects.toThrow(/updated plan/);
+    expect(rpc.request).not.toHaveBeenCalled();
+  });
+  it("keeps exact known-hash recovery and terminal indexing ahead of a stale replan notice", () => {
+    const value = retired(); const step = value.steps[0]; const before = JSON.stringify(value);
+    const submitted = launchFlowPresentationV1(value, { stepId: step.stepId, transactionDigest: step.transactionDigest, transactionHash: hash });
+    expect(submitted.state.title).toBe("Transaction submitted");
+    expect(submitted.steps[0].status).toBe("broadcast");
+    expect(launchFlowStateV1({ ...value, status: "final", steps: [{ ...step, status: "final", transactionHash: hash }] }).terminal).toBe(true);
+    expect(JSON.stringify(value)).toBe(before);
   });
 });
 

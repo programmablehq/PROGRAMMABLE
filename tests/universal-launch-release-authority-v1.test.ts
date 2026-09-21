@@ -156,6 +156,7 @@ describe("original release authority for launch wallet handoff", () => {
   });
   it.each(["chainId", "permitAuthority", "permitAuthorityRuntimeCodeHash", "policyBindingHash", "manifestDigest"])("requires the complete original preparation binding including %s", async field => {
     const base = stampRecordFixture(); const original = base.walletAuthorization!;
+    if (!("stampPreparation" in original)) throw new Error("Expected the historical Stamp V1 fixture");
     const preparation = original.stampPreparation;
     const binding = preparation.binding as NonNullable<LaunchPlanRecordV1["admissionEvidence"]>;
     const walletAuthorization = { ...original, stampPreparation: { ...preparation, binding: { ...binding,
