@@ -138,7 +138,6 @@
 .list {
   display: grid;
   gap: 16px;
-  grid-auto-rows: 1fr;
   grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
   list-style: none;
   margin: 0;
@@ -162,8 +161,6 @@
 
 .artwork { border-radius: 8px; flex: none; height: 64px; width: 64px; }
 .cardHeader { align-items: center; display: flex; gap: 12px; min-width: 0; }
-.pinned { align-items: center; color: var(--webde-muted); display: inline-flex; flex: none; }
-.pairModules { border-top: 1px solid var(--webde-line); margin-top: 16px; padding-top: 12px; }
 .sorts { align-items: center; display: flex; gap: 4px; }
 .sorts button { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: var(--webde-radius-control); color: var(--webde-muted); cursor: pointer; font: inherit; font-size: 14px; min-height: 44px; padding: 8px 12px; white-space: nowrap; }
 .sorts button[aria-pressed="true"] { background: var(--webde-surface-raised); border-color: var(--webde-muted); color: var(--webde-ink); }

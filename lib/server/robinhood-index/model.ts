@@ -227,7 +227,7 @@ export function exploreCatalog(snapshot: RobinhoodSnapshot | null): RobinhoodLau
   return [...unique.values()];
 }
 
-export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query = "", now = Date.now(), filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, marketCaps: ReadonlyMap<string, number> = new Map(), size: 10 | 50 = 50, volumes24h: ReadonlyMap<string, number> = new Map()): RobinhoodLaunchList {
+export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query = "", now = Date.now(), filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, marketCaps: ReadonlyMap<string, number> = new Map(), size: 8 | 10 | 50 = 50, volumes24h: ReadonlyMap<string, number> = new Map()): RobinhoodLaunchList {
   const q = query.trim().toLowerCase();
   const visible = exploreCatalog(snapshot);
   const pinned = visible.find((row) => isPinnedRobinhoodToken(row.tokenAddress, snapshot?.chainId ?? 0));

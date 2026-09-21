@@ -12,7 +12,7 @@ export const LAUNCH_MODE_OPTIONS = [
   { value: "custom", label: "Custom" },
 ] as const;
 
-export const ROBINHOOD_EXPLORE_PAGE_SIZE = 10;
+export const ROBINHOOD_EXPLORE_PAGE_SIZE = 8;
 
 export type RobinhoodExploreFilters = {
   sort: typeof LAUNCH_SORT_OPTIONS[number]["value"];
@@ -41,6 +41,6 @@ export function parseRobinhoodExploreQuery(query: URLSearchParams) {
     || !/^[1-9]\d{0,5}$/.test(page) || q.length > 128
     || !LAUNCH_SORT_OPTIONS.some((option) => option.value === sort)
     || !LAUNCH_MODE_OPTIONS.some((option) => option.value === mode)
-    || !["10", "50"].includes(pageSize)) return null;
-  return { page: Number(page), pageSize: Number(pageSize) as 10 | 50, q, filters: { sort, mode } as RobinhoodExploreFilters };
+    || !["8", "10", "50"].includes(pageSize)) return null;
+  return { page: Number(page), pageSize: Number(pageSize) as 8 | 10 | 50, q, filters: { sort, mode } as RobinhoodExploreFilters };
 }

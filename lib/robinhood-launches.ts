@@ -66,7 +66,7 @@ export type RobinhoodLaunchList = Readonly<{
   items: readonly RobinhoodLaunch[];
   page: Readonly<{
     number: number;
-    size: 10 | 50;
+    size: 8 | 10 | 50;
     totalItems: number;
     /** Query/filter matches; the persistent pin is included only when it also matches. */
     matchingItems?: number;

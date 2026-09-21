@@ -21,12 +21,12 @@ describe("Ethereum verified Explore adapter", () => {
   it("searches and pages verified launch identities without inventing market values", async () => {
     const entries = Array.from({length:23},(_,i)=>entry(i+1));
     const dependencies = { classic: source(entries), custom: source([]) };
-    const result = await readEthereumLaunches(2,"",{sort:"newest",mode:"all"},10,dependencies);
+    const result = await readEthereumLaunches(2,"",{sort:"newest",mode:"all"},8,dependencies);
     expect(result.status).toBe("ready");
-    expect(result.items.map(item=>item.name)).toEqual(entries.slice(3,13).toReversed().map(e=>e.name));
-    expect(result.page).toEqual({number:2,size:10,totalItems:23,totalPages:3,hasMore:true});
+    expect(result.items.map(item=>item.name)).toEqual(entries.slice(7,15).toReversed().map(e=>e.name));
+    expect(result.page).toEqual({number:2,size:8,totalItems:23,totalPages:3,hasMore:true});
     expect(result.presentations.every(item=>item.market===null)).toBe(true);
-    const search = await readEthereumLaunches(1,"$C19",{sort:"newest"},10,dependencies);
+    const search = await readEthereumLaunches(1,"$C19",{sort:"newest"},8,dependencies);
     expect(search.items.map(item=>item.tokenAddress)).toEqual([entry(19).tokenAddress]);
   });
   it("retains available identities and explicitly reports a missing source", async () => {
@@ -77,6 +77,7 @@ describe("Ethereum verified Explore adapter", () => {
   });
   it("restricts Ethereum filters to supported data and rejects ambiguous parameters", () => {
     expect(parseEthereumExploreQuery(new URLSearchParams("mode=classic&sort=oldest&pageSize=10"))?.filters).toEqual({mode:"classic",sort:"oldest"});
+    expect(parseEthereumExploreQuery(new URLSearchParams("pageSize=8"))?.pageSize).toBe(8);
     for(const query of ["sort=highest","mode=module","page=0","page=1&page=2","chain=4663","pageSize=5"]) {
       expect(parseEthereumExploreQuery(new URLSearchParams(query))).toBeNull();
     }

@@ -26,7 +26,7 @@ describe("topbar and Explore hero polish", () => {
     expect(css).toContain("background-color: rgb(0 0 0 / 0.9)");
   });
 
-  it("uses large white navigation text with a restrained active indicator", () => {
+  it("uses normal navigation text without an underline", () => {
     const css = read("app/webde-final-ui.css");
 
     expect(css).toMatch(
@@ -36,10 +36,7 @@ describe("topbar and Explore hero polish", () => {
       /\.desktop-nav a,[\s\S]*?\.desktop-nav a\.active\s*\{[^}]*color:\s*var\(--webde-ink\);[^}]*font-size:\s*17px;/s,
     );
     expect(css).toMatch(
-      /\.desktop-nav a::after,[\s\S]*?\.desktop-nav a\.active::after\s*\{[^}]*display:\s*block;[^}]*opacity:\s*0;[^}]*width:\s*0;/s,
-    );
-    expect(css).toMatch(
-      /\.desktop-nav a\.active::after\s*\{[^}]*opacity:\s*1;[^}]*width:\s*18px;/s,
+      /\.desktop-nav a::after,[\s\S]*?\.desktop-nav a\.active::after\s*\{[^}]*display:\s*none;/s,
     );
   });
 
