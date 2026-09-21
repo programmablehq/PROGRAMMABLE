@@ -289,6 +289,7 @@ do {
 
 const sections = [
   { id: "launch-sources", label: "Choose a source" },
+  { id: "custom-launch-plans", label: "Custom Launch Plans" },
   { id: "multi-role-v2", label: "MultiRole V2" },
   { id: "boundary", label: "Current boundary" },
   { id: "identity", label: "Identity and label" },
@@ -318,9 +319,19 @@ export default function RobinhoodTerminalIndexerPage() {
       <section id="launch-sources">
         <div className={styles.sectionIntro}>
           <h2>Choose the Custom Launch source</h2>
-          <p>Separate token and hook contracts use V4 with Router V1. Shared-role projects use MultiRole V2 with Router V2. Each has its own feed, schema and finality projection. The V1 reference below applies to the separate-contract source.</p>
+          <p>New Custom Launch Plans use the public projection feed, including atomic execution and stamping. Historical separate-contract launches use V4 with Router V1; historical shared-role projects use MultiRole V2. Select the verifier by the published source version.</p>
         </div>
         <p className={styles.bodyCopy}>Use the chain and token address as coin identity. Select the verifier by Router protocol and source version. Module names, project names and optional charts do not determine whether a verified launch exists.</p>
+      </section>
+      <section id="custom-launch-plans">
+        <div className={styles.sectionIntro}>
+          <h2>Index Custom Launch Plans</h2>
+          <p>The public <a href={`${API_ORIGIN}/v4/chains/4663/finalized-launch-projections`}>finalized projection feed</a> requires no API key. Read its <a href={`${API_ORIGIN}/v4/chains/4663/custom-launch-contract/openapi.json`}>generated OpenAPI contract</a> and bind its digest to the <a href={`${API_ORIGIN}/v4/chains/4663/custom-launch-contract/manifest.json`}>published manifest</a>.</p>
+        </div>
+        <p className={styles.bodyCopy}>Pages use <code>programmable.launch-projection-page.v1</code>; items use <code>programmable.launch-projection.v1</code>. Pass <code>nextCursor</code> unchanged until null, including after a sparse or empty page. Preserve the complete record and upsert by chain, <code>sourceVersion</code> and <code>launchId</code>. The detail route appends the API launch UUID, onchain launch ID or component address to the feed URL.</p>
+        <p className={styles.bodyCopy}>The current feed joins <code>multi_role_v2</code> and <code>custom_launch_plan_v1</code>. The schema also defines <code>router_v1</code>; keep reading its separate feed below for that history. Resolve <code>primaryComponentId</code> through <code>components[].expectedAddress</code>, and preserve component runtime hashes and every market. Resolve market address references through their component IDs. Descriptive roles do not prove ERC-20 behavior, and a launch may have no market.</p>
+        <p className={styles.bodyCopy}>For a Custom Launch Plan, require <code>finality.status: final</code> and retain its transaction hashes, canonical block and full witness, including the stamp and Ethereum checkpoint. An atomic witness identifies <code>executorKind: atomic_execute_and_stamp_v2</code> and one transaction. Verify its executor/runtime, order, calls, stamp and event positions against the canonical receipt and execution contract. Historical Router V1 addresses and events below do not describe this executor.</p>
+        <p className={styles.bodyCopy}>Index finalized listed coins independently from optional metadata, assurance claims, prices and trading support. The stamp establishes provenance; contract safety, liquidity and third-party listings remain separate results. Follow the <a href={`${API_ORIGIN}/v4/chains/4663/custom-launch-contract/guide.md`}>Custom Launch Plan guide</a> for execution and the personal wallet handoff.</p>
       </section>
       <section id="multi-role-v2">
         <div className={styles.sectionIntro}>

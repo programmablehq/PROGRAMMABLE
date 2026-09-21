@@ -10,6 +10,7 @@ Use the chain and token contract address to identify a coin. Its launch source d
 
 | Launch source | Integration guide |
 | --- | --- |
+| Custom Launch Plans on Robinhood, including atomic execution and stamping | [Custom Launch Plan indexing](robinhood-terminal-indexer.md#custom-launch-plans) |
 | Foundation on Robinhood | [Foundation indexing](foundation-indexing.md) |
 | Earlier Native and Engine launches on Robinhood | [Native and Engine indexing](module-mode-indexing.md) |
 | Custom V4 on Robinhood, with separate token and hook contracts | [Router V1 indexing](robinhood-terminal-indexer.md) |
