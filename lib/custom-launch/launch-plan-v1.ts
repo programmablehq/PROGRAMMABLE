@@ -58,6 +58,8 @@ export type LaunchActionV1 = LaunchActionBaseV1 & (
       salt: Hex; initCode: Hex; execution: LaunchCallV1 }>
   | Readonly<{ kind: "deployCreate"; componentId: string; parent: LaunchAddressRefV1;
       nonce: string; execution: LaunchCallV1 }>
+  | Readonly<{ kind: "deployEoaCreate"; componentId: string; nonce: string;
+      execution: Readonly<{ target: null; data: Hex; value: string; gasLimit: string }> }>
   | Readonly<{ kind: "useExisting"; componentId: string }>
   | Readonly<{ kind: "call"; execution: LaunchCallV1 }>
   | Readonly<{ kind: "initializePool"; marketId: string; sqrtPriceX96: string; execution: LaunchCallV1 }>
@@ -270,6 +272,8 @@ export interface LaunchPlanRecordV1 {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly resumeUrl: string;
+  /** Optional response metadata negotiated with Programmable-Launch-Response-Version: 1.1. */
+  readonly walletUrl?: string;
 }
 
 export interface LaunchProjectionV1 {
