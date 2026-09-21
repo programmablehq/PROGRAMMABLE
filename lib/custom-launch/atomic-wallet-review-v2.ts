@@ -20,16 +20,34 @@ const resolve = (plan: CustomLaunchPlanV1, ref: LaunchCallV1["target"]) => getAd
 /** Reconstruct the ordered project calls from original plan bytes. The released executor is
  * the CALL sender; direct EOA CREATE keeps its separate, already bound multistep adapter. */
 export function atomicCallsFromPlanV2(plan: CustomLaunchPlanV1, binding: LaunchPlanAtomicBindingV2): readonly CustomLaunchPlanAtomicCallV2[] {
+  return atomicScheduleV2(plan, binding).calls;
+}
+
+function atomicScheduleV2(plan: CustomLaunchPlanV1, binding: LaunchPlanAtomicBindingV2) {
   if (plan.executor !== "atomic_execute_and_stamp_v2") fail();
   const calls: CustomLaunchPlanAtomicCallV2[] = [];
+  const preconditions: string[] = [], postconditions: string[] = [];
+  const firstExecution = plan.actions.findIndex(action => "execution" in action);
+  const lastExecution = plan.actions.reduce((last, action, index) => "execution" in action ? index : last, -1);
+  if (firstExecution < 0) fail();
   let priorExecution: LaunchCallV1 | null = null;
   let priorWasDeployment = false;
-  for (const action of plan.actions) {
+  for (const [index, action] of plan.actions.entries()) {
     if (action.authority.kind !== "controller" || action.actionId.startsWith("platform:") || action.kind === "deployEoaCreate") fail();
-    if (!("execution" in action)) continue;
+    if (!("execution" in action)) {
+      if (index > firstExecution && index < lastExecution) fail();
+      const checks = [...action.preconditions, ...action.postconditions, ...(action.kind === "verifyEffect" ? [action.effectId] : [])];
+      (index < firstExecution ? preconditions : postconditions).push(...checks);
+      priorExecution = null;
+      priorWasDeployment = false;
+      continue;
+    }
     const deployment = action.kind === "deployCreate" || action.kind === "deployCreate2";
     const sameDeploymentCall = deployment && priorWasDeployment && same(action.execution, priorExecution);
-    if (calls.length > 0 && !sameDeploymentCall && action.preconditions.length > 0) fail();
+    const groupIndex = sameDeploymentCall ? calls.length - 1 : calls.length;
+    if (groupIndex === 0) preconditions.push(...action.preconditions);
+    else if (action.preconditions.length > 0) fail();
+    postconditions.push(...action.postconditions);
     if (deployment) {
       const component = plan.components.find(item => item.componentId === action.componentId) ?? fail();
       const expected = action.kind === "deployCreate2"
@@ -48,7 +66,8 @@ export function atomicCallsFromPlanV2(plan: CustomLaunchPlanV1, binding: LaunchP
     priorExecution = action.execution;
     priorWasDeployment = deployment;
   }
-  return calls;
+  postconditions.push(...plan.expectedEffects.filter(effect => effect.criticality === "critical").map(effect => effect.effectId));
+  return { calls, preconditions: [...new Set(preconditions)], postconditions: [...new Set(postconditions)] };
 }
 
 /** Independent browser comparison against the signed admission and original plan. The final
@@ -57,12 +76,12 @@ export function verifyAtomicWalletReviewV2(resource: LaunchPlanRecordV1, step: L
   binding: LaunchPlanAtomicBindingV2, now: bigint) {
   const { order, calls, components, markets } = decodeCustomLaunchPlanAtomicCallV2(step.transaction.data);
   const plan = resource.plan, authorization = object(resource.walletAuthorization), preparation = object(authorization.atomicPreparation);
+  const schedule = atomicScheduleV2(plan, binding);
   if (plan.executor !== "atomic_execute_and_stamp_v2" || resource.steps.length !== 1 || resource.steps[0] !== step
     || !keys(authorization, ["atomicPreparation", "executionOrder"])
     || !keys(preparation, ["order", "calls", "components", "markets", "orderDigest", "stampHash", "sourceEvidenceDigest", "binding"])
     || !same(step.actionIds, [...plan.actions.map(action => action.actionId), "platform:executeAndStampV2"])
-    || !same(step.preconditions, [...new Set(plan.actions.flatMap(action => action.preconditions))])
-    || !same(step.postconditions, [...new Set([...plan.actions.flatMap(action => action.postconditions), ...plan.expectedEffects.filter(effect => effect.criticality === "critical").map(effect => effect.effectId)])])) fail();
+    || !same(step.preconditions, schedule.preconditions) || !same(step.postconditions, schedule.postconditions)) fail();
   const expectedComponents = plan.components.map(component => ({ componentId: customLaunchPlanOccurrenceIdV1(resource.planHash, "component", component.componentId),
     account: component.expectedAddress, runtimeCodeHash: component.runtimeCodeHash })).sort((a, b) => a.componentId.localeCompare(b.componentId));
   const expectedMarkets = plan.markets.map(market => ({ marketId: customLaunchPlanOccurrenceIdV1(resource.planHash, "market", market.marketId),
@@ -77,7 +96,7 @@ export function verifyAtomicWalletReviewV2(resource: LaunchPlanRecordV1, step: L
     || order.manifestDigest !== customLaunchPlanDigestBytesV1(resource.manifestDigest)
     || order.effectsHash !== customLaunchPlanDigestBytesV1(canonicalBrowserSha256V2("programmable.custom-launch-plan-effects.v1", plan.expectedEffects))
     || order.feeObligationsHash !== customLaunchPlanDigestBytesV1(canonicalBrowserSha256V2("programmable.custom-launch-plan-fee-obligations.v1", plan.feeObligations))
-    || !sameWire(calls, atomicCallsFromPlanV2(plan, binding)) || !sameWire(components, expectedComponents) || !sameWire(markets, expectedMarkets)
+    || !sameWire(calls, schedule.calls) || !sameWire(components, expectedComponents) || !sameWire(markets, expectedMarkets)
     || markets.some(market => getAddress(market.poolManager) !== getAddress(binding.poolManager))
     || now < BigInt(order.validAfter) || now >= BigInt(order.deadline)
     || BigInt(order.validAfter) < BigInt(plan.budgets.validAfter) || BigInt(order.deadline) > BigInt(plan.budgets.deadline)

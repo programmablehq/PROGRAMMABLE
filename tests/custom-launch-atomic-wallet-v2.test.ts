@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Address } from "viem";
 import { prepareUniversalLaunchWalletV1, type LaunchWalletProviderV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
-import { verifyAtomicWalletReviewV2 } from "@/lib/custom-launch/atomic-wallet-review-v2";
+import { atomicCallsFromPlanV2, verifyAtomicWalletReviewV2 } from "@/lib/custom-launch/atomic-wallet-review-v2";
 import type { LaunchPlanRecordV1 } from "@/lib/custom-launch/launch-plan-v1";
 import { launchFlowPresentationV1, launchFlowStateV1, launchFlowStepsV1 } from "@/lib/custom-launch/launch-flow-v1";
 import { customLaunchPlanAtomicCallsHashV2, customLaunchPlanAtomicOrderDigestV2, customLaunchPlanAtomicStampHashV2,
@@ -29,6 +29,22 @@ function provider(changedRuntime?: Address): LaunchWalletProviderV1 {
 }
 
 describe("exact Atomic V2 wallet handoff", () => {
+  it("checks a leading verifyEffect before execution and rejects moving it between calls", async () => {
+    const base = recordFixture();
+    const check = { actionId: "check-configured", kind: "verifyEffect" as const, effectId: "configured", dependsOn: ["configure"],
+      authority: { kind: "controller" as const }, preconditions: [], postconditions: [] };
+    const original = atomicRecordFixture({ ...base, plan: { ...base.plan, actions: [check, ...base.plan.actions] } });
+    const record = authorizeRecordFixture({ ...original, steps: [bindStep({ ...original.steps[0], preconditions: ["configured"] })] });
+    const rpc = provider(), request = rpc.request;
+    rpc.request = vi.fn(async input => input.method === "eth_getStorageAt" ? `0x${"00".repeat(32)}` : request(input));
+    await expect(prepareUniversalLaunchWalletV1(rpc, controller, { action: "review", sourceVersion: "custom_launch_plan_v1", reviewedResource: record,
+      loadFreshResource: async () => record, loadFreshCapabilities: async () => capabilitiesFixture(record) }, now)).rejects.toThrow(/storage precondition changed/);
+    expect(vi.mocked(rpc.request).mock.calls.some(([input]) => input.method === "eth_getStorageAt")).toBe(true);
+    expect(vi.mocked(rpc.request).mock.calls.some(([input]) => input.method === "eth_call")).toBe(false);
+    expect(() => verifyAtomicWalletReviewV2(original, original.steps[0], atomicBindingFixture(original), now)).toThrow(/exact order/);
+    const [leading, first, last] = original.plan.actions;
+    expect(() => atomicCallsFromPlanV2({ ...original.plan, actions: [first, leading, last] }, atomicBindingFixture(original))).toThrow(/exact order/);
+  });
   it("keeps a saved matching hash submitted during a lagging ready response without asserting finality", () => {
     for (const record of [recordFixture(), atomicRecordFixture()]) {
       const step = record.steps[0], submission = { stepId: step.stepId, transactionDigest: step.transactionDigest, transactionHash: hash };
