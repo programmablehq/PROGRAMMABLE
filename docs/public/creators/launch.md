@@ -1,47 +1,32 @@
 ---
-description: Launch a Module Mode coin or a project through the Custom Launch API
+description: Create a coin, add modules and confirm the launch
 ---
 
-# Launch a project
+# Launch a coin
 
-Choose Module Mode for a coin with optional modules, or Custom Launch for your own contracts and execution logic.
+Module Mode creates your coin and a Uniswap v4 pool on Robinhood Chain. You need a connected wallet and enough ETH for the first buy and network gas. A standard launch supplies the initial token liquidity without a separate liquidity deposit.
 
-## Module Mode
+## Set up the coin
 
-Open the [coin builder](https://programmable.market/launch/modules/foundation). Enter the coin details, choose a pairing and creator fees, and set the first buy. Add compatible modules if you need them. The standard launch supplies token liquidity automatically, with no separate quote deposit required. The ETH-funded flow creates the coin and completes the first buy in one transaction. After confirmation, the website opens the coin page. The [Module Mode guide](../models/module-mode.md) explains the costs and controls.
+1. Open [Launch a Coin](https://programmable.market/launch/modules/foundation).
+2. Enter a name, ticker and description. Add an image and project links if you have them.
+3. Choose the creator fee under **Buy & Sell** and set the **First buy** amount.
+4. Select **Launch** and confirm the transaction in your wallet.
 
-## Custom Launch
+The coin, pool and first buy are created in one transaction. If you leave the image blank, the coin uses the Programmable logo.
 
-Follow [Launch through the API](../developers/custom-launch-quickstart.md). It covers network selection, contract layout, API keys, fees, funding, submission, wallet signing and error recovery.
+Website fields accept a domain or full URL. X accepts a username, an @username or a profile link. Use **Add More Links** for other project links.
 
-| Network and layout | Interface |
-| --- | --- |
-| Robinhood, separate token and hook | V4 and the compatible CLI from [discovery](https://programmable.market/.well-known/programmable.json) |
-| Robinhood, shared token/hook contract | [MultiRole V2](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/guide.md) |
-| Ethereum Mainnet | V3 at `https://api.programmable.market/v3/custom-launches` |
+## Add a module
 
-Check capabilities before choosing the implementation. The MultiRole economic verifier recognizes the exact Native20 reference contracts and supported constructor configuration. Other source or economic mechanisms can return `evidence_required`; follow the stated requirement before expecting a wallet handoff.
+The default **Classic** pairing uses ETH. To choose another token, select **Add module**, open **Pair another token** and enter its contract address. The form checks the address automatically. Save the module to add it to your launch; removing it restores the ETH pairing.
 
-## Custom fees and funding
+Pairing depends on the token's behavior and an available route for the ETH first buy. The builder checks these before preparing the transaction. Other modules use the configuration shown in the builder.
 
-Robinhood Native20 charges **20 bps (0.20%)** of gross native ETH per successful buy or sell for Programmable, rounded up to the next wei. Creator fees and pool fees are additional. The platform recipient is fixed at `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`.
+## After launch
 
-Choose creator buy and sell fees explicitly. A 0% creator fee produces no Creator Rewards from those trades. ETH already credited to a recipient remains earned even before it is claimed. [Fees and revenue](../economics.md) explains the calculation and the [Dune dashboard](https://dune.com/programmablehq/analytics).
+The website opens your coin page after it verifies the confirmed transaction. The page contains the chart, contract address, project links and trading controls. Once indexed, the coin also appears in Explore and on your profile.
 
-Record launch capital and gas separately. For V4 profile 4.1, include its atomic initial buy and positive minimum token output. Read the public initial-buy quote before packing and follow the fresh quote required by the server. MultiRole uses the funding configuration defined in its own guide.
+If the page does not update, keep the transaction hash and check its receipt before trying again. A delayed page does not mean the transaction failed.
 
-An ordinary Uniswap v4 pool needs a funded liquidity position. Initializing the pool does not add liquidity, and volume cannot create initial liquidity from nothing. A custom reserve or settlement model must be implemented by the project's contracts and covered by the selected API's verification.
-
-## Custom API key and wallet
-
-Create or reuse a key in the [API-key manager](https://programmable.market/developers/api-keys). It needs the intended chain grant, controller binding, `custom-launch:create` and `custom-launch:read`. Store the value as `PROGRAMMABLE_API_KEY` in an encrypted secret store.
-
-The API key authorizes API operations. The controller wallet separately reviews, signs and sends the transaction. Check the network, destination, calldata, value and expiry before sending.
-
-## Follow the Custom Launch result
-
-Save the exact request, idempotency key and returned launch ID. Use that ID for status reads. Retry the same request with unchanged bytes; a timeout is not a reason to create another launch.
-
-`action_required` means follow the returned remediation. `authorized` provides the exact wallet transaction. After it is sent, track the request to `finalized`, then inspect source verification and indexing. A successful API request is not an external audit or a guarantee of liquidity or trading support.
-
-After launch, share the chain and contract address. A material contract or configuration change creates a new launch subject; an earlier result does not cover changed bytes.
+For a project with its own contracts, use the [Custom Launch quickstart](../developers/custom-launch-quickstart.md).

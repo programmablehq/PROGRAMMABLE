@@ -5,6 +5,11 @@ structure:
   summary: SUMMARY.md
 
 redirects:
+  tokens: README.md
+  creators: creators/launch.md
+  creators/templates: developers/module-mode.md
+  creators/programs: developers/README.md
+  infrastructure: launch-stamps.md
   launch-stamps: launch-stamps.md
   trust: trust.md
   status: status.md

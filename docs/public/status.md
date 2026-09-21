@@ -1,27 +1,28 @@
 ---
-description: Check launch availability, request progress and indexing freshness
+description: Check whether an operation is available and follow its progress
 ---
 
 # Service status
 
-Use the status interface for the operation you are performing. API availability, a launch's progress and the freshness of an index are separate states. A successful HTTP response does not by itself establish that a new request can be authorized or that a feed has reached the current finalized block.
+Service availability, launch progress and index freshness are different checks. A running API may still be unable to authorize a particular launch.
 
-| Service | Status source |
+| Operation | Where to check |
 | --- | --- |
-| Module Mode | [Active engine and catalog](https://programmable.market/api/module-mode) |
-| Custom Launch API | [API readiness](https://api.programmable.market/readyz) and [product discovery](https://programmable.market/.well-known/programmable.json) |
-| Robinhood V4 | [Chain readiness](https://api.programmable.market/v4/chains/4663/readiness) |
-| Robinhood MultiRole | [Capabilities](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/capabilities) and the context linked by that response |
-| Ethereum Developer API | [Index status](https://developers.programmable.family/api/v2/status) |
+| Launch a Module Mode coin | The builder and [Foundation discovery](https://programmable.market/api/module-foundation) |
+| Prepare a Custom Launch | [Product discovery](https://programmable.market/.well-known/programmable.json) and its chain-specific capabilities |
+| Follow an existing request | The status URL returned with that request |
+| Check indexed launches | The checkpoint and data-quality fields in the selected source feed |
 
-## Launch requests
+## Custom Launch availability
 
-Use the status URL returned for your request. V4 and MultiRole have separate clients and resource contracts. Follow the reported remediation when evidence is missing; only an authorized wallet handoff is ready for transaction review. The [Custom Launch quickstart](developers/custom-launch-quickstart.md) explains API keys, retries and the wallet step.
+For Robinhood V4, `publicWrites`, `publicAuthorization` and `releaseReady` must be true for the version and chain entry. Use the client release advertised there. MultiRole publishes its own capabilities and request requirements.
 
-For Robinhood V4, discovery must report `publicWrites`, `publicAuthorization` and `releaseReady` for both the version and chain entry. Match the ready release to the immutable client release in discovery. MultiRole supplies its own context, readiness and economic verification. The [complete API reference](developers/custom-launch.md) defines the detailed lifecycle and error codes.
+The [Custom Launch quickstart](developers/custom-launch-quickstart.md) covers the workflow. The [API reference](developers/custom-launch.md) explains states and error responses.
 
-## Indexed data
+General Custom Launch Plans have a separate operation status at `/v4/chains/4663/custom-launch-capabilities`. Check `availability.operations.create.state`; preflight and reads may be active while creation reports `disabled`. `PLAN_OPERATION_DISABLED` requires a platform release change, not a different API key.
 
-Check the source's finalized checkpoint, scan coverage, cursor completion and data-quality fields. Preserve an existing verified launch if a price or chart provider is unavailable. Keep stale or missing market values explicitly marked rather than guessing replacements.
+## Delays and missing data
 
-[Module Mode indexing](developers/module-mode-indexing.md), [Robinhood Custom indexing](developers/robinhood-terminal-indexer.md) and the Ethereum status endpoint publish their own freshness and verification rules. Source verification follows finality and does not change the transaction's finality result. External terminals determine their own ingestion and trading support.
+Follow a request's returned next action. A prepared package is not yet an authorized wallet transaction. Source verification follows finality and is checked separately from indexing.
+
+Keep verified launch records when price or chart data is missing. Show missing or stale values as such. External terminals determine their own indexing schedule and trading support.

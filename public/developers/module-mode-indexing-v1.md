@@ -1,61 +1,56 @@
 ---
-description: Versioned indexing for earlier Native and Engine launches
+description: Verify existing Native and Engine launches with their original source contracts
 ---
 
 # Native and Engine indexing
 
-For Foundation coins, use [Index Foundation launches](https://programmable.market/docs/developers/foundation-indexing). This page retains the earlier Native and Engine source interfaces for existing coins. Do not apply these event formats or fee policies to Foundation.
+This reference covers the earlier Native and Engine sources on Robinhood Chain, `eip155:4663`. For Foundation coins, use [Foundation indexing](https://programmable.market/docs/developers/foundation-indexing).
 
-Index the launch contract, then attach the selected module configuration to that launch. Module names, categories and frontend controls are not part of coin identity. A coin with no modules uses the same source interface as a coin with modules.
-
-The detailed event procedure and `/api/module-mode/indexer/v1` JSON contract below cover `module-native-v1` on Robinhood Chain, `eip155:4663`. New modules within that source version use the same procedure. Native V2 and Engine V1 are distinct source versions; select their actual adapter and deployment binding before indexing them.
+Select the adapter by source version. Coins with and without modules use the same launch identity; the selected modules are configuration attached to that record.
 
 ## Source versions
 
-| Source version | Source and verification reference |
+| Source version | ABI and verifier |
 | --- | --- |
-| `module-native-v1` | Original Native launcher, V1 fees and launch/configuration commitments described below |
-| `module-native-v2` | Native V2 launcher with its versioned ABI and 10/30-bps policy; use the Native ABI selector and source verifier |
-| `module-engine-v1` | Engine host launch, canonical parameter and instance bindings; use the Engine ABI and Engine verifier |
+| `module-native-v1` | Native V1 launch and configuration commitments, described below |
+| `module-native-v2` | ABI selector in `lib/module-mode/native-abi.ts`; verifier in `lib/module-mode/provenance-v2.ts` |
+| `module-engine-v1` | ABI and verifier in `lib/module-engine/index/abi-v1.ts` and `provenance-v1.ts` |
 
-These are implementation references, not activated deployment claims. Require the selected source's installed release, deployment/source evidence and finalized lifecycle proof. Do not parse an Engine event using the Native V1 JSON contract or infer a new release from a manifest supplied by a coin.
+Bind the adapter to the installed release's deployment, source and finalized lifecycle evidence. The public `/api/module-mode/indexer/v1` contract covers Native V1 only. A source interface describes how to verify a launch; its deployment evidence establishes where that interface applies.
 
-An Engine launch binds its creator from the host's launch record and canonical launch-parameter event, including for a smart-wallet caller. Its token is bound through the pinned factory, CREATE2 inputs and metadata; there is no universal runtime hash for every token instance. Verify the actual engine instance, constructor/runtime commitments and admitted revision. Retain escrow or settlement coins that have no pool, and retain verified coins when optional prices or trading routes are unavailable. Market support and external terminal visibility are separate from launch identity.
+For Engine, verify the creator against the host's launch record and canonical launch parameters, including smart-wallet calls. Verify the token through the pinned factory, CREATE2 inputs and metadata, then check the engine instance and admitted revision against their constructor and runtime commitments. Each token instance can have its own runtime hash. Retain verified escrow or settlement coins that have no pool.
 
 ## Start with discovery
 
-Read the public [indexer contract](https://programmable.market/api/module-mode/indexer/v1). It includes the launch ABI, event topics, required identity fields and release discovery path. It is generated from the same ABI used by the website verifier.
+The public [Native V1 indexer contract](https://programmable.market/api/module-mode/indexer/v1) supplies the ABI, event topics, identity fields, metadata format and release path. It uses the same ABI as the website verifier.
 
-```bash
+```sh
 curl --fail --silent --show-error https://programmable.market/api/module-mode/indexer/v1
 curl --fail --silent --show-error https://programmable.market/api/module-mode
 ```
 
-The second response contains `release`. Require its schema `programmable.module-mode-source.v1`, `sourceVersion: "module-native-v1"`, `chainId: 4663`, `enabled: true` and `status: "active"` before accepting a new source. A missing release or unsupported version stops source activation.
+The second response's `release` must have schema `programmable.module-mode-source.v1`, `sourceVersion: "module-native-v1"`, `chainId: 4663`, `enabled: true` and `status: "active"` before you accept it as a new source. Stop source activation if the release is missing or unsupported.
 
-Bind the launcher address and runtime hash from `release.contracts.launcher`, the PoolManager and other dependencies from `release.contracts`, and the scan origin from `release.startBlock`. Verify the release digest with the published release implementation and retain the exact profile and its `sourceCommit`. Deployment, source verification and lifecycle evidence digests identify separate artifacts. A digest alone is not the artifact or proof of its contents.
-
-Do not substitute addresses from a token's metadata. Preserve the binding for each historical release when discovery later selects another release.
+Bind the launcher address and runtime hash from `release.contracts.launcher`, dependencies from `release.contracts` and scan origin from `release.startBlock`. Verify `releaseDigest` with the published release implementation and retain the profile, `sourceCommit` and underlying deployment, source and lifecycle evidence. Keep each historical binding when discovery selects another release.
 
 ## Discover and verify a launch
 
-1. Verify that the RPC reports chain 4663. Verify the launcher's deployed runtime against its release hash.
-2. Scan `ModuleNativeLaunched` from the bound launcher, starting at `release.startBlock`. Use bounded block ranges and split a range when a provider rejects it or truncates results.
-3. Fetch the successful transaction receipt. Check the emitting address, transaction hash, block number, block hash, log index and canonical ABI encoding. Reject removed logs.
-4. At that same canonical block, read `launchIdentityVersion()`, `getLaunch(token)` and `getLaunchIdentity(token)` from the launcher. Require version 1 and agreement with the event on launch ID, launching wallet, token, pool, hook and recipe. Check the PoolManager against the release.
-5. Read the matching `ModuleNativeProgramBound`, `ModuleNativeConfigurationBound` and `ModuleNativeTokenIdentityBound` events from the same receipt. Bind the runtime, launch key, funding, token identity and configuration commitments to the same launch ID.
-6. Verify the PoolKey, token identity, runtime program, selected registry revisions, module instances and deployed code at the same block. Recompute the recipe, program, launch and instance commitments using the reference verifier from the bound source revision.
-7. Verify finality, store the accepted record and advance the source checkpoint only after the entire range is complete.
+1. **Verify the source.** Check RPC chain ID 4663 and the launcher's runtime hash against the release.
+2. **Collect candidates.** Scan `ModuleNativeLaunched` from `release.startBlock` in bounded ranges. Split rejected or truncated ranges so that no launches are skipped.
+3. **Verify the receipt.** Require success and check the emitter, transaction hash, block number and hash, log index and canonical ABI encoding. Reject removed logs.
+4. **Match the launch record.** At the receipt's canonical block, read `launchIdentityVersion()`, `getLaunch(token)` and `getLaunchIdentity(token)`. Require version 1 and agreement on launch ID, launching wallet, token, pool, hook and recipe. Check the PoolManager against the release.
+5. **Verify configuration.** Correlate `ModuleNativeProgramBound`, `ModuleNativeConfigurationBound` and `ModuleNativeTokenIdentityBound` in the same receipt. At the same canonical block, check the runtime, launch key, funding, token identity, PoolKey, registry revisions and module instances. Recompute the recipe, program, launch and instance commitments with the release's verifier.
+6. **Finalize and save.** Authenticate finality, store the record and advance the checkpoint only after the complete range passes.
 
-The reference verifier checks consistency of supplied evidence. The collector must first obtain and authenticate the RPC results, receipt inclusion, runtime code and rollup finality. An untrusted JSON object claiming `verified` cannot establish provenance.
+The verifier checks supplied evidence. Your collector must authenticate the RPC results, receipt inclusion, deployed code and rollup finality before passing that evidence to it.
 
 ## Finality and checkpoints
 
-The source uses `robinhood-ethereum-finalized-v1`. A sequencer receipt alone is not finality under this policy. The collector establishes the transaction's L2 block, its rollup batch membership and the corresponding batch posting on Ethereum at or before the common finalized Ethereum checkpoint. The reference collector compares two independent L2 observations and two independent Ethereum providers. Its implementation is described in the index architecture.
+Native V1 uses `robinhood-ethereum-finalized-v1`. Establish the transaction's L2 block, rollup batch membership and Ethereum batch posting at or before the common finalized Ethereum checkpoint. The reference collector compares two independent L2 observations and two independent Ethereum providers. A sequencer receipt alone does not meet this policy.
 
-Keep a checkpoint for each `(chainId, sourceAddress, sourceReleaseDigest)`. Store its block number and hash. Process logs in block, transaction and log order. Commit rows and their checkpoint atomically. A failed or incomplete range must not advance the checkpoint.
+Keep a checkpoint for `(chainId, sourceAddress, sourceReleaseDigest)`, with its block number and hash. Process logs in block, transaction and log order, then commit rows and checkpoint atomically. A failed or incomplete range must not advance it.
 
-On restart, compare saved checkpoint hashes with the canonical chain. If they differ, roll back affected records and rescan from the last matching checkpoint. Retry temporary provider failures with bounded backoff. Retain previously verified rows and report their freshness; a failed read is not an empty result.
+On restart, compare checkpoint hashes with the canonical chain. Roll back to the last matching checkpoint and replay after a reorganization. Retry temporary provider errors with bounded backoff and retain previously verified rows with their freshness.
 
 ## Record identity
 
@@ -66,58 +61,51 @@ On restart, compare saved checkpoint hashes with the canonical chain. If they di
 | Launch | `(chainId, sourceAddress, launchId)` |
 | Event | `(chainId, blockHash, transactionHash, logIndex)` |
 
-Normalize addresses for comparisons. Preserve integer amounts and block numbers without floating point conversion. Deduplicate token, pool, launch and event identities before committing a batch.
+Normalize addresses for comparison, preserve integer amounts and deduplicate before committing a batch. The creator is `ModuleNativeLaunched.launchWallet`, checked against the launcher getters. Relayers and later fee-recipient changes do not alter this identity.
 
-The creator is `ModuleNativeLaunched.launchWallet`, checked against the launcher's getters. Do not infer it from `transaction.from`, the relayer, a module author, a fee recipient or `token.creator()`. Wallet relaying and later fee-recipient changes do not change launch ownership.
-
-The website's normalized Module Mode records use these fields:
+The normalized Native V1 record contains:
 
 | Field | Meaning |
 | --- | --- |
 | `sourceKind` | `module-native-v1` |
-| `sourceAddress`, `sourceReleaseDigest` | The verified launcher and its release identity |
-| `launchId`, `tokenAddress`, `creator` | The canonical launch, token and launching wallet |
-| `poolManager`, `poolId`, `hookAddress` | The verified pool and host hook |
-| `recipeHash`, `runtime`, `launchKey` | The launch's configuration and runtime binding |
-| `modulePackageIds`, `moduleFamilyIds` | Selected revision and family identifiers in their recorded order |
-| `transactionHash`, `blockNumber`, `blockHash`, `logIndex` | The launch event's chain coordinates |
-| `verificationDigest` | The verification artifact identity |
-| `routerAddress`, `stampHash` | `null` for this native source |
+| `sourceAddress`, `sourceReleaseDigest` | Verified launcher and release |
+| `launchId`, `tokenAddress`, `creator` | Launch, token and launching wallet |
+| `poolManager`, `poolId`, `hookAddress` | Pool and host hook |
+| `recipeHash`, `runtime`, `launchKey` | Configuration and runtime binding |
+| `modulePackageIds`, `moduleFamilyIds` | Selected revision and family IDs in recorded order |
+| `transactionHash`, `blockNumber`, `blockHash`, `logIndex` | Launch-event coordinates; `blockNumber` is a decimal string |
+| `launchedAt`, `name`, `symbol`, `decimals` | Launch time and token metadata |
+| `verificationDigest` | Verification artifact identity |
+| `routerAddress`, `stampHash` | `null`; Native launches do not require a Custom Router stamp |
 
-Custom Launches use a separate Launch Stamp Router source. Keep both sources in the same token index using the keys above, and select the verifier by source version. Do not require a Custom stamp for a native Module Mode launch. See the [Custom terminal reference](https://programmable.market/docs/developers/robinhood-terminal-indexer) for that source's rules.
+## Preserve module configuration
 
-## Handle modules generically
+Package and family IDs are opaque `bytes32` values. Keep selected revisions, configuration bytes, instance addresses and commitments in the order defined by the source. An empty selection is valid.
 
-Treat package and family IDs as opaque `bytes32` values. Preserve the exact selected revisions, configuration bytes, instance addresses and commitments. An empty selection is valid. The source version defines ordering and resource bounds.
+Read revision evidence at the launch block. Disabling a revision for future launches does not remove existing coins or change their configuration. Unfamiliar module names, missing controls or unsupported trading behavior must not remove a verified launch. Track those capabilities separately.
 
-Resolve display names, icons, configuration labels and management descriptions as optional enrichment. A valid launch does not disappear because an indexer has never seen a module before, cannot render its controls or cannot quote its market. Do not filter identity by a local list of module names, categories, fee values or available trading adapters.
+## Read token metadata
 
-Read revision evidence at the launch block. Disabling a revision for future launches must not remove existing coins. New module revisions retain their own IDs; they do not overwrite historical launch configuration. A change to the host or source interface requires a versioned adapter and an explicit release transition.
+After verifying the token address, call `metadata()`. It returns `(string description, string website, string image, bytes extraData)`. The image and website are public HTTPS URLs.
 
-## Images and social links
-
-Once the launch identity is verified, call `metadata()` on its canonical token address. The return values are `(string description, string website, string image, bytes extraData)`. `website` and `image` are public HTTPS URLs. A Module Mode launch without a selected image records `https://programmable.market/brand/loop/programmable-module-token-default-v1.png`; an uploaded or supplied image keeps its own URL.
-
-`extraData` contains optional UTF-8 JSON with version `v: 1`. Its supported social fields are `x`, `telegram`, `discord`, `github` and `gitbook`. The builder's Twitter field maps to `x`. The website remains in the separate `website` value.
+`extraData` is optional UTF-8 JSON with version `v: 1` and supported fields `x`, `telegram`, `discord`, `github` and `gitbook`. The builder's Twitter field maps to `x`; the website stays in the separate `website` value.
 
 ```json
-{"v":1,"x":"https://x.com/project","telegram":"https://t.me/project","discord":"https://discord.gg/project","github":"https://github.com/project/repo","gitbook":"https://project.gitbook.io/docs"}
+{"v":1,"x":"https://x.com/project"}
 ```
 
-Empty `extraData` (`0x`) and absent fields are valid. Each social URL is limited to 512 UTF-8 bytes; the complete encoded JSON is limited to 1,200 bytes. Images and website URLs have a 2,048-byte limit. Decode supported versions, validate HTTPS URLs and platform hosts, and render links as data. Do not execute content from metadata. GitBook may use a custom public HTTPS domain.
+Empty `extraData` (`0x`) and absent fields are valid. Limits are 512 UTF-8 bytes per social URL, 1,200 bytes for encoded JSON and 2,048 bytes each for image and website URLs. Validate HTTPS and the supported platform hosts before rendering links. GitBook may use a custom public HTTPS domain. Treat all metadata as display data and never execute its content.
 
-For launch-time metadata proof, compute `keccak256(abi.encode(name, symbol, metadata))`, where `metadata` is the single tuple `(description, website, image, extraData)`, and compare it with `ModuleNativeConfigurationBound.metadataHash` from the verified receipt. Keep metadata validation separate from launch discovery: an unavailable image, malformed optional link or unfamiliar metadata version must not remove the coin. The source reference publishes the getter ABI and field mapping in its `tokenMetadata` object.
-
-The website reads saved launch identities first, then attaches optional token metadata. `GET /api/explore/robinhood/presentation?token={tokenAddress}` returns `imageUrl`, `description`, labeled `links` and optional market data. The same presentation is attached to Explore list responses. This display response does not replace independent source and receipt verification.
+For the launch commitment, compute `keccak256(abi.encode(name, symbol, metadata))`, where `metadata` is the tuple `(description, website, image, extraData)`. Match it to `ModuleNativeConfigurationBound.metadataHash` in the verified receipt. The indexer contract's `tokenMetadata` object provides the getter ABI, field mapping and default image URL. Missing images, malformed optional links and unsupported metadata versions leave the launch identity intact.
 
 ## Website reads and archive indexing
 
-The website exposes [Explore records](https://programmable.market/api/explore/robinhood) and a creator lookup at `https://programmable.market/api/profile/robinhood?account={launchWallet}`. Both report `status`, `updatedAt`, `items` and pagination. Explore accepts `mode=all|module|custom`, `page`, `pageSize=10|50`, `q` and `sort`. The default API page size is 50; the website requests 10 cards and keeps the main Programmable token pinned. Read `page.totalPages` and `page.hasMore` and traverse all pages. Profile pages retain a size of 50.
+`GET /api/explore/robinhood` provides website listings. `GET /api/profile/robinhood?account={launchWallet}` looks up a creator's coins. Both return `status`, `updatedAt`, `items` and pagination; follow `page.totalPages` and `page.hasMore` to read every page.
 
-Explore applies website visibility, search and market filters. It is a presentation feed, not a complete archival export. For complete independent discovery, scan the bound launch contract using the procedure above. Do not use a displayed coin count as a source checkpoint.
+`GET /api/explore/robinhood/presentation?token={tokenAddress}` adds `imageUrl`, `description`, labeled `links` and optional market data. Explore also includes this presentation data.
 
-Keep provenance, indexing freshness and market support as separate fields. A terminal can display a verified coin identity while reporting that its trading adapter or market data is unavailable.
+These endpoints apply website visibility and display filters. For a complete archive, scan the bound launch contract and maintain its checkpoint. A displayed coin count cannot establish scan coverage.
 
-## Integration checks
+## Check the integration
 
-Before enabling a source, check a base coin, a configured coin, unfamiliar module IDs, disabled historical revisions, duplicate logs, an incomplete range, a changed checkpoint and a relayed launch. Invalid source, receipt, configuration or finality evidence must prevent admission. Missing optional metadata must not remove an otherwise verified record.
+Exercise coins with no modules, configured coins, unfamiliar module IDs, disabled historical revisions and relayed launches. Also test duplicate logs, incomplete ranges and changed checkpoint hashes. Invalid source, receipt, configuration or finality evidence must prevent admission; missing optional metadata must leave a verified record intact.

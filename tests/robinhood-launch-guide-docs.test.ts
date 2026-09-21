@@ -9,7 +9,7 @@ const guideUrl = "https://programmable.market/developers/robinhood-launch-guide-
 
 describe("separate Robinhood launch workflow documentation", () => {
   it("makes both public reports discoverable before implementation without creating a key", () => {
-    for (const relative of ["public/developers/custom-launch-api-v1.md", "docs/public/developers/custom-launch.md"]) {
+    for (const relative of ["public/developers/custom-launch-api-v1.md"]) {
       const entry = read(relative);
       expect(entry).toContain(guideUrl);
       expect(entry).toContain("GET /v4/chains/4663/launch-guide");
@@ -18,6 +18,11 @@ describe("separate Robinhood launch workflow documentation", () => {
       expect(entry).toContain("CLI `4.1.1`");
       expect(entry).toContain("API profile `4.1.0`");
     }
+    const humanGuide = read("docs/public/developers/custom-launch.md");
+    expect(humanGuide).toContain("GET /v4/chains/4663/launch-guide");
+    expect(humanGuide).toContain("GET /v4/chains/4663/launch-coverage");
+    expect(humanGuide).toContain("need no API key");
+    expect(humanGuide).toContain("https://programmable.market/developers/custom-launch-api-v1.md");
     const reportCommands = guide.match(/```sh\n([\s\S]*?)\n```/)?.[1] ?? "";
     expect(reportCommands.split("\n")).toEqual([
       "curl --fail --silent --show-error https://api.programmable.market/v4/chains/4663/launch-coverage",

@@ -1,31 +1,25 @@
 ---
-description: How coin creators earn trading fees and receive their rewards
+description: How creator fees accrue and are claimed
 ---
 
 # Creator earnings
 
-Creators earn fees when people buy or sell their coin. Before launching, choose your buy and sell fees and the wallet that will receive your earnings.
-
-## Robinhood Custom Launches
-
-Your creator fee belongs to you. Programmable's **0.20% (20 bps)** fee and the pool's trading fee are added separately.
-
-If you set your buy and sell fees to **0%**, you earn no creator fees from those trades. Programmable still receives its platform fee. That is why Dune can show **Custom Creator Rewards of 0** while Custom Protocol Revenue is above zero.
-
-Fees build up in the contract until they are claimed. A claim sends them to the wallet selected for those earnings. It does not charge another trading fee or count the same earnings twice.
-
-Our [Dune dashboard](https://dune.com/programmablehq/analytics) shows creator earnings from supported Custom Launch contracts, including fees that have not yet been claimed. Gas payments, liquidity deposits and separate pool fees are not included in that creator total.
+A coin's creator fee is set at launch. Earnings accrue when people trade the coin and remain in its fee contract until claimed. A claim pays the recorded recipient; it does not count the same earnings again.
 
 ## Module Mode
 
-Foundation lets you choose a creator fee of **0%, or 1% to 10% in 1% increments**, separate from Programmable's **0.30%**. If selected modules receive a share of your fee, your earnings are the remainder after that allocation. Fees accrue in the pool's quote token. The [fee guide](../economics.md#module-mode) covers Foundation and earlier versions; the launch screen shows your coin's split before you confirm.
+Foundation lets you choose **0%, or 1% to 10% in 1% increments**, separate from Programmable's **0.30%** fee. Fees accrue in the pool's quote token. If modules receive a share of the creator fee, your earnings are the remainder after those allocations.
 
-Module authors earn their own rewards when their modules are used. If you build modules, see [Reusable modules](templates.md) for how to publish them and receive rewards.
+Existing coins use their original fee contract. Check the recorded split for the coin before calculating or claiming earnings.
 
-## Classic on Ethereum
+## Custom launches
 
-Programmable's **0.10%** share is included in your selected trading fee. For example, a **1% fee** gives **0.90% to you** and **0.10% to Programmable**.
+Robinhood Native20 adds Programmable's **0.20%** fee separately from creator and pool fees. A creator fee of 0% means no creator earnings from those trades, even when the platform earns fees.
 
-You can receive ETH rewards in one wallet or split them between two and five wallets. Each wallet claims its own share. Changing the recipients only affects future earnings; fees already earned stay with the original recipients.
+Custom contracts define their own claim interface. The launching wallet is not necessarily the recipient, and an API key cannot claim funds.
 
-Read [Fees and revenue](../economics.md) for all launch fees and how Programmable uses its share.
+## Existing Classic coins
+
+Ethereum Classic includes Programmable's **0.10%** within the selected fee. At 1%, the creator receives 0.90%. ETH rewards can be split between recipients, each of whom claims its own share. Recipient changes leave already earned fees with their original recipients.
+
+[Fees and revenue](../economics.md) contains the full breakdown. The analytics totals include earned fees that have not yet been claimed; gas and liquidity deposits are excluded.

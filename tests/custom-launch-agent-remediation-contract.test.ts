@@ -441,7 +441,10 @@ describe("Custom Launch cold-agent remediation contract", () => {
   });
 
   it("publishes the same public contract on every agent-facing surface", () => {
-    for (const source of [websiteGuide, gitBookGuide, rawGuide]) {
+    expect(gitBookGuide).toContain("customLaunchApi.agentIntegration");
+    expect(gitBookGuide).toContain(discoveryUrl);
+    expect(gitBookGuide).toContain("remediation catalog");
+    for (const source of [websiteGuide, rawGuide]) {
       expect(source).toMatch(/existing-project-integration|Existing-project integration/);
       expect(source).toContain("custom-launch-agent-remediation-v1.json");
       expect(source).toContain("action_required");

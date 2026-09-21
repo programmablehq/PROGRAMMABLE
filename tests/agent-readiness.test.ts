@@ -75,9 +75,13 @@ describe("agent-readable public surface", () => {
       ...[
         "public/developers/custom-launch-api-v1.md",
         "public/developers/robinhood-launch-guide-v1.md",
-        "docs/public/developers/custom-launch.md",
       ].map((path) => readFileSync(path, "utf8")),
     ];
+    const humanGuide = readFileSync("docs/public/developers/custom-launch.md", "utf8");
+    expect(humanGuide).toContain("/v4/chains/4663/multi-role-custom-launches/capabilities");
+    for (const field of ["Native20", "evidence_required", "4.1", "context"]) {
+      expect(humanGuide).toContain(field);
+    }
     for (const text of publicDocs) {
       for (const url of [multiRole.capabilities, multiRole.guide, multiRole.client]) {
         expect(text).toContain(url);

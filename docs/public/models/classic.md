@@ -1,39 +1,35 @@
 ---
-description: How Classic creates a fixed supply token, locked liquidity and creator rewards on Ethereum
+description: Reference for existing Classic coins on Ethereum
 ---
 
-# Classic
+# Classic on Ethereum
 
-Classic is the direct public launch model. It creates the token, initializes the ETH pool, locks the complete token supply in a one sided Uniswap v4 position and completes the Initial Buy in one transaction signed by the launch wallet.
+Classic is the fixed supply Ethereum launch model. This page describes its deployed contracts and existing coins. The website's coin builder uses Module Mode on Robinhood Chain.
 
 ## Supply and liquidity
 
-Every Classic token has a fixed supply of one billion tokens with 18 decimals. There is no transfer tax, blacklist, rebase, post launch minting or creator allocation. The launch wallet receives only the tokens it buys during the Initial Buy.
+A Classic launch creates one billion tokens with 18 decimals, initializes an ETH pool and locks the token supply in a one-sided Uniswap v4 position. The launch wallet receives the tokens it buys during the initial transaction. The token has no transfer tax, blacklist, rebase, later minting or separate creator allocation.
 
-The position is permanently locked and has no liquidity removal path. This describes custody of the original position. It does not promise future liquidity, price stability or support from an external trading service.
+The original position has no liquidity removal path. This does not guarantee a future price or support from a trading service.
 
-## Buy and sell transaction fees
+## Fees and rewards
 
-The launch wallet chooses the buy transaction fee and sell transaction fee separately from 1% through 10% in steps of one percentage point. The selected rate already includes the Programmable share of 0.1% of the gross ETH amount exchanged. A 1% buy transaction fee therefore leaves 0.9% for creator rewards and 0.1% for Programmable rather than charging a second fee.
+Buy and sell fees are chosen separately from 1% to 10% in one-percentage-point steps. Programmable's 0.10% share is included. A 1% fee leaves 0.90% for creator rewards.
 
-Creator rewards accrue in ETH. They can go to the launch wallet, another wallet or a split between two and five unique wallets. Each beneficiary claims independently, and an update to a payout wallet affects future accrual without moving rewards that have already accrued.
+Rewards accrue in ETH and can be assigned to one wallet or split between two and five wallets. Each recipient claims its own share. Recipient changes apply to future earnings.
 
-## Initial Buy
+## Initial buy
 
-The creator chooses an Initial Buy of at least 0.0006 ETH. Purchased tokens can remain unlocked, use a fixed lock, vest linearly or vest after a cliff. Lock and vesting periods can run from one day to 3,650 days and cannot be changed after launch.
+The initial buy is at least 0.0006 ETH. Purchased tokens can remain unlocked, use a fixed lock, vest linearly or vest after a cliff. Lock and vesting periods run from one to 3,650 days and are fixed at launch.
 
-## Current Ethereum contracts
+## Contracts
 
-| Contract                    | Address                                      |
-| --------------------------- | -------------------------------------------- |
-| Classic launcher            | `0xC3bd04aAc2fb2ba58efD7Eb673E544E0B80De770` |
-| Classic hook                | `0x35Fe236EA82F7cF525c9719d7df8F49F94D720CC` |
-| Reward vault factory        | `0xF28967f9DFaC3Ca21384b59D6D75C8106b3eab2a` |
-| Initial Buy custody factory | `0xDe21b9c0Cc0AfDB9be20e8236113f066BB8C66f4` |
-| Position recipient factory  | `0x291a9ff1059d225d02B1659430804486404dB507` |
+| Contract | Ethereum address |
+| --- | --- |
+| Launcher | `0xC3bd04aAc2fb2ba58efD7Eb673E544E0B80De770` |
+| Hook | `0x35Fe236EA82F7cF525c9719d7df8F49F94D720CC` |
+| Reward vault factory | `0xF28967f9DFaC3Ca21384b59D6D75C8106b3eab2a` |
+| Initial buy custody factory | `0xDe21b9c0Cc0AfDB9be20e8236113f066BB8C66f4` |
+| Position recipient factory | `0x291a9ff1059d225d02B1659430804486404dB507` |
 
-The current product repository and its deployment records remain the source for code hashes, roles and release specific evidence. Check the connected wallet, network and complete transaction before signing.
-
-{% content-ref url="../creators/launch.md" %}
-[launch.md](../creators/launch.md)
-{% endcontent-ref %}
+Use the deployment records in the product repository to verify code hashes and the release that applies to a coin.

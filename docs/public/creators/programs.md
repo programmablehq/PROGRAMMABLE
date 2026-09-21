@@ -1,17 +1,9 @@
 ---
-description: Contribution paths for coin creators, module authors and application developers
+description: Contribute code or build an integration
 ---
 
-# Contributing to Programmable
+# Contributing
 
-Contributors can build reusable modules, launch custom applications or integrate Programmable records into another product. Each path has its own interface and evidence requirements.
+You can develop a module, build a custom contract project or integrate launch records into another product. The [developer guides](../developers/README.md) describe these paths.
 
-| Work | Starting point |
-| --- | --- |
-| Publish behavior that other coin creators can use | [Build a module](../developers/module-mode.md) |
-| Launch a token, hook or application with your own contracts | [Custom Launch quickstart](../developers/custom-launch-quickstart.md) |
-| Add launch discovery to a terminal, explorer or wallet | [Index launches](../developers/indexing.md) |
-
-Use [Discord](https://discord.com/invite/programmable) for product and integration discussions. Report reproducible source or documentation defects in the relevant GitHub repository. Security reports belong in its private security reporting channel.
-
-Participation in a partnership or contribution program does not change a launch's contract requirements, wallet authority or onchain provenance. Module rewards and creator earnings follow the deployed fee contract described in [Fees and revenue](../economics.md).
+Report reproducible code and documentation issues in the relevant Programmable repository. Use its private security reporting channel for vulnerabilities. Product and integration discussions take place in the community listed under [Official links](../reference/official-links.md).
