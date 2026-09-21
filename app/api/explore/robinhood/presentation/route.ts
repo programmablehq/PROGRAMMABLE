@@ -1,5 +1,5 @@
 import { isAddress } from "viem";
-import { readRobinhoodLaunches, readRobinhoodProfileLaunches, readRobinhoodToken } from "@/lib/server/robinhood-index/read";
+import { readRobinhoodLaunches, readRobinhoodProfileLaunches, readRobinhoodTokenPresentation } from "@/lib/server/robinhood-index/read";
 import { readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
 import { parseRobinhoodExploreQuery } from "@/lib/robinhood-explore-filters";
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   }
   const items = listQuery
     ? (await readRobinhoodLaunches(listQuery.page, listQuery.q, listQuery.filters, listQuery.pageSize)).presentations
-    : await readRobinhoodPresentations([(await readRobinhoodToken(token!)).token].filter((row) => row !== null));
+    : [(await readRobinhoodTokenPresentation(token!)).presentation].filter((row) => row !== null);
   return Response.json({ items }, { headers: {
     // Single-coin markets already have a bounded server cache; do not age them again at the CDN.
     "cache-control": listQuery ? "public, max-age=0, s-maxage=60, stale-while-revalidate=60" : "no-store",

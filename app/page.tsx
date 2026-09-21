@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing-page";
 
 const pageDescription =
-  "Build and launch custom Uniswap v4 hooks. Explore projects launched through Programmable.";
+  "Launch a coin, choose its modules and explore coins on Programmable. Built on Uniswap v4.";
 const pageSocialImage =
   "https://programmable.market/og/programmable-landing-preview-v2-1200x630.jpg";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://programmable.market",
     siteName: "Programmable",
-    title: "Programmable · Custom Uniswap v4 hooks",
+    title: "Programmable · Launch a coin",
     description: pageDescription,
     images: [
       {
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Programmable · Custom Uniswap v4 hooks",
+    title: "Programmable · Launch a coin",
     description: pageDescription,
     creator: "@ProgrammableHQ",
     images: [

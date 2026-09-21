@@ -8,21 +8,24 @@ import { AnimatedMarketCap } from "@/components/animated-market-cap";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { TokenLaunchModules } from "@/components/token-launch-modules";
+import { LaunchPairModules } from "@/components/launch-pair-modules";
 import { LaunchProjectionDetails } from "@/components/launch-projection-details";
 import { SwapPanel } from "@/components/swap-panel";
+import { ResponsiveTradePanel } from "@/components/responsive-trade-panel";
 import { useRobinhoodPresentation } from "@/components/use-robinhood-presentation";
 import { isRobinhoodFoundationLaunch, isRobinhoodModuleLaunch, robinhoodModuleManageHref, type RobinhoodLaunch } from "@/lib/robinhood-launches";
-import { coinDollars, coinTicker, coinValuation } from "@/lib/robinhood-presentation";
+import { coinDollars, coinTicker, coinValuation, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import styles from "./robinhood-token-view.module.css";
 
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 
-export function RobinhoodTokenView({ address, token, status }: {
+export function RobinhoodTokenView({ address, token, status, initialPresentation }: {
   address: string;
   token: RobinhoodLaunch | null;
   status: "ready" | "syncing" | "stale" | "unavailable";
+  initialPresentation?: Promise<RobinhoodCoinPresentation | null>;
 }) {
-  const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(address)}`, token !== null);
+  const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(address)}`, token !== null, initialPresentation);
   const details = presentation.items.find((item) => item.tokenAddress.toLowerCase() === address.toLowerCase());
   const market = details?.market;
   const valuation = coinValuation(market);
@@ -64,6 +67,7 @@ export function RobinhoodTokenView({ address, token, status }: {
                 {details?.links.length ? <RobinhoodProjectLinks links={details.links} name={name} /> : null}
               </div>
               <p className={styles.subtitle}>{hasAsset ? <span>{coinTicker(token.symbol)}</span> : null}<span>Robinhood</span></p>
+              <LaunchPairModules launch={token} chainId={4663} market={market} className={styles.launchProperties} />
               {details?.description ? <p className={styles.bio}>{details.description}</p> : null}
             </div>
           </div>
@@ -106,9 +110,10 @@ export function RobinhoodTokenView({ address, token, status }: {
                 </dd>
               </div>
             </dl>
+            {presentation.delayed ? <p className={styles.notice} role="status">{market ? "Price updates are delayed." : "Market data is temporarily unavailable."}</p> : null}
             <div className={styles.tradingLayout}>
               {token.poolId ? <RobinhoodChart poolId={token.poolId} name={name} market={market} /> : <div className={styles.chart}><p className={styles.chartState}>No trading market is verified for this coin.</p></div>}
-              <SwapPanel key={`4663:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={4663} tokenSymbol={token.symbol ?? undefined} />
+              <ResponsiveTradePanel symbol={token.symbol ?? undefined}><SwapPanel key={`4663:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={4663} tokenSymbol={token.symbol ?? undefined} /></ResponsiveTradePanel>
             </div>
             </> : <p className={styles.notice}>No primary asset is declared for this launch.</p>}
         {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}

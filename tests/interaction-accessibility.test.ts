@@ -259,7 +259,7 @@ describe("interaction accessibility", () => {
       return segments;
     });
 
-    expect(source).toContain("const mobileNavItems = [...desktopNavItems, ...menuNavItems];");
+    expect(source).toContain("const mobileNavItems = [desktopNavItems[0], ...menuNavItems];");
     expect(source).toContain('{ href: "/profile", label: "Profile" },');
     expect(source).not.toContain('{ href: "/migration", label: "Migrate" },');
     expect(source).not.toContain("/hookathon");

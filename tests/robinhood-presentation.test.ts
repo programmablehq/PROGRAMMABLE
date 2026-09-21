@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({
   readRobinhoodLaunches: storage.list,
-  readRobinhoodToken: storage.token,
+  readRobinhoodTokenPresentation: storage.token,
 }));
 
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
@@ -185,6 +185,16 @@ describe("Robinhood optional coin presentation", () => {
     expect(values).toHaveLength(2);
   });
 
+  it("does not give selected coins platform-supplied artwork or links", async () => {
+    vi.stubGlobal("fetch", sourceFetch(new Error("offline"), new Error("offline")));
+    const tokens = ["0x105f6435a4ab3c03c13d4a0db67961344694d0cc", "0x34cd7dd63c550a78a3228c199474189b88565ac9"]
+      .map(tokenAddress => ({ ...TOKEN, tokenAddress }));
+    for (const value of await readRobinhoodPresentations(tokens)) {
+      expect(value.imageUrl).toBeNull();
+      expect(value.links).toEqual([]);
+    }
+  });
+
   it("rejects stale metadata and oversized responses without affecting token identity", async () => {
     const stale = feed();
     stale.generatedAt = "2020-01-01T00:00:00.000Z";
@@ -232,6 +242,14 @@ describe("Robinhood catalog market observations", () => {
     const result = await readRobinhoodMarkets([TOKEN]);
     expect(result.get(TOKEN.tokenAddress)).toMatchObject({ source: "dexscreener", marketCapUsd: 3_000_000, fdvUsd: 8_000_000, valuationKind: "market-cap" });
     expect(onchain.read).not.toHaveBeenCalled();
+  });
+
+  it("carries quote identity only from the exact matched pool", async () => {
+    const quoteToken = { address: address("7"), symbol: "QUOTE" };
+    vi.stubGlobal("fetch", sourceFetch(feed(), { pairs: [{ ...pair(), quoteToken }] }));
+    expect((await readRobinhoodMarkets([TOKEN])).get(TOKEN.tokenAddress)?.quoteAsset).toEqual(quoteToken);
+    vi.stubGlobal("fetch", sourceFetch(feed(), { pairs: [{ ...pair(), pairAddress: hash("9"), quoteToken }] }));
+    expect((await readRobinhoodMarkets([TOKEN])).get(TOKEN.tokenAddress)).toBeUndefined();
   });
 
   it("batches the full catalog beyond the visible page with bounded concurrency and exact pool joins", async () => {
@@ -293,7 +311,7 @@ describe("Robinhood presentation HTTP boundary", () => {
   it("does not look up unverified token addresses at a provider", async () => {
     const fetcher = sourceFetch();
     vi.stubGlobal("fetch", fetcher);
-    storage.token.mockResolvedValue({ token: null, status: "ready" });
+    storage.token.mockResolvedValue({ token: null, status: "ready", presentation: null });
     const response = await GET(new Request(`${endpoint}?token=${TOKEN.tokenAddress}`));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ items: [] });
@@ -302,18 +320,21 @@ describe("Robinhood presentation HTTP boundary", () => {
 
   it("does not add a CDN cache lifetime to a single-token market observation", async () => {
     vi.stubGlobal("fetch", sourceFetch());
-    storage.token.mockResolvedValue({ token: TOKEN, status: "ready" });
+    storage.token.mockResolvedValue({ token: TOKEN, status: "ready", presentation: {
+      tokenAddress: TOKEN.tokenAddress, imageUrl: null, description: null, links: [], market: { priceUsd: 0.003 },
+    } });
     const response = await GET(new Request(`${endpoint}?token=${TOKEN.tokenAddress}`));
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect((await response.json()).items[0].market.priceUsd).toBe(0.003);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("reuses the selected page presentation without a second provider observation", async () => {
     vi.stubGlobal("fetch", sourceFetch());
     storage.list.mockResolvedValue({ items: [TOKEN], presentations: [{ tokenAddress: TOKEN.tokenAddress, market: null }] });
     const response = await GET(new Request(`${endpoint}?page=2&q=RHV4`));
-    expect(storage.list).toHaveBeenCalledWith(2, "RHV4", { sort: "highest", mode: "all" }, 50);
+    expect(storage.list).toHaveBeenCalledWith(2, "RHV4", { sort: "newest", mode: "all" }, 50);
     expect(storage.token).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(response.headers.get("cache-control")).toContain("s-maxage=60");

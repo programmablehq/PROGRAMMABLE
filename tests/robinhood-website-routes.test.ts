@@ -48,10 +48,10 @@ describe("Robinhood website HTTP boundaries", () => {
     mocks.read.mockResolvedValue({ chainId: 4663, status: "ready", items: [] });
     const response = await list(new Request("https://website.invalid/api/explore/robinhood?page=2&q=V4"));
     expect(response.status).toBe(200);
-    expect(mocks.read).toHaveBeenCalledWith(2, "V4", { sort: "highest", mode: "all" }, 50);
+    expect(mocks.read).toHaveBeenCalledWith(2, "V4", { sort: "newest", mode: "all" }, 50);
     expect(mocks.source).not.toHaveBeenCalled();
   });
-  it.each(["highest", "lowest", "newest", "oldest"])("passes %s order to the complete saved list", async (sort) => {
+  it.each(["highest", "lowest", "newest", "oldest", "activity"])("passes %s order to the complete saved list", async (sort) => {
     mocks.read.mockResolvedValue({ chainId: 4663, status: "ready", items: [] });
     expect((await list(new Request(`https://website.invalid/api/explore/robinhood?page=2&q=V4&sort=${sort}`))).status).toBe(200);
     expect(mocks.read).toHaveBeenCalledWith(2, "V4", { sort, mode: "all" }, 50);
@@ -60,7 +60,7 @@ describe("Robinhood website HTTP boundaries", () => {
   it("passes source filters and the website page size to the saved index", async () => {
     mocks.read.mockResolvedValue({ chainId: 4663, status: "ready", items: [] });
     expect((await list(new Request("https://website.invalid/api/explore/robinhood?page=2&mode=module&pageSize=10"))).status).toBe(200);
-    expect(mocks.read).toHaveBeenCalledWith(2, "", { sort: "highest", mode: "module" }, 10);
+    expect(mocks.read).toHaveBeenCalledWith(2, "", { sort: "newest", mode: "module" }, 10);
     expect(mocks.source).not.toHaveBeenCalled();
   });
   it.each([undefined, "Bearer wrong", `Bearer ${"b".repeat(48)}`])("does not start background work with invalid authorization", async (authorization) => {

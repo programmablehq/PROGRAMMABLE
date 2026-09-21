@@ -185,6 +185,7 @@ export async function readRobinhoodOnchainMarkets(tokens: readonly RobinhoodMark
     const fdvUsd = dollars(numerator * totalSupply / denominator);
     return [token.tokenAddress.toLowerCase(), {
       poolId: token.poolId!, source: "uniswap-v4", valuationKind: "fdv", priceUsd, marketCapUsd: null, fdvUsd,
+      quoteAsset: { address: tokenIs0 ? key.currency1 : key.currency0, symbol: null },
       liquidityUsd: null, volume24hUsd: null, change24hPercent: null,
       observedAt: new Date(Number(point.timestamp) * 1000).toISOString(), blockNumber: point.number.toString(), blockHash: point.hash,
       sourceUrl: `${ROBINHOOD_BLOCK_EXPLORER_URL}/block/${point.number}`,

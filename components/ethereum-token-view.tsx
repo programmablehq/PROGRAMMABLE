@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { SwapPanel } from "@/components/swap-panel";
+import { ResponsiveTradePanel } from "@/components/responsive-trade-panel";
+import { LaunchPairModules } from "@/components/launch-pair-modules";
 import { TokenPoolChart } from "@/components/robinhood-chart";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
@@ -26,6 +28,9 @@ export function EthereumTokenView({ address, token, status, updatedAt }: {
               {links.length ? <RobinhoodProjectLinks links={links} name={token.name || "Token"} /> : null}
             </div>
             <p className={styles.subtitle}><span>{coinTicker(token.symbol)}</span><span>Ethereum</span></p>
+            <LaunchPairModules launch={{ tokenAddress: address, poolId: token.poolId }} chainId={1}
+              market={token.quoteAssetAddress ? { poolId: token.poolId, quoteAsset: { address: token.quoteAssetAddress, symbol: token.quoteAssetSymbol ?? null } } : null}
+              className={styles.launchProperties} />
             {token.description ? <p className={styles.bio}>{token.description}</p> : null}
           </div>
         </div>
@@ -48,7 +53,7 @@ export function EthereumTokenView({ address, token, status, updatedAt }: {
       </p> : null}
       <div className={styles.tradingLayout}>
         <TokenPoolChart poolId={token.poolId} name={token.name || "Token"} chainId={1} />
-        <SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={token.symbol} />
+        <ResponsiveTradePanel symbol={token.symbol}><SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={token.symbol} /></ResponsiveTradePanel>
       </div>
     </article> : <section className={styles.empty}>
       <h1>{status === "ready" ? "Launch not found" : "Token details are temporarily unavailable"}</h1>

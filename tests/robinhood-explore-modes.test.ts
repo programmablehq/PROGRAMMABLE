@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RobinhoodLaunch, RobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import { parseRobinhoodExploreQuery } from "@/lib/robinhood-explore-filters";
-import { PINNED_ROBINHOOD_TOKEN } from "@/lib/robinhood-explore-policy";
+import { isPinnedRobinhoodToken, PINNED_ROBINHOOD_TOKEN } from "@/lib/robinhood-explore-policy";
 import { launchList, parseSnapshot, profileLaunchList, type RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
 
 const now = Date.parse("2026-09-07T00:00:00Z");
@@ -53,6 +53,17 @@ describe("Explore source filters and card pagination", () => {
     expect(saved.moduleMode?.items).toEqual(modules);
   });
 
+  it("pins only the canonical address on the canonical chain and counts search matches separately", () => {
+    expect(isPinnedRobinhoodToken(PINNED_ROBINHOOD_TOKEN.toUpperCase(), 4663)).toBe(true);
+    expect(isPinnedRobinhoodToken(PINNED_ROBINHOOD_TOKEN, 1)).toBe(false);
+    const { saved, pinned, customs } = catalog();
+    customs[0] = { ...customs[0], name: "Programmable", symbol: "V4" };
+    saved.items = [pinned, ...customs];
+    const result = launchList(saved, 1, customs[0].tokenAddress, now, { sort: "newest" }, undefined, 10);
+    expect(result.items).toEqual([pinned, customs[0]]);
+    expect(result.page).toMatchObject({ totalItems: 2, matchingItems: 1 });
+  });
+
   it("uses canonical source identity even for plain coins and misleading names", () => {
     const { saved, customs, modules } = catalog();
     const selected = launchList(saved, 1, "", now, { sort: "newest", mode: "module" });
@@ -61,7 +72,7 @@ describe("Explore source filters and card pagination", () => {
     expect(selected.items.slice(1).every(row => row.modulePackageIds?.length === 0)).toBe(true);
     const emptySearch = launchList(saved, 1, "missing", now, { sort: "newest", mode: "module" }, undefined, 10);
     expect(emptySearch.items.map(row => row.tokenAddress)).toEqual([PINNED_ROBINHOOD_TOKEN]);
-    expect(emptySearch.page).toMatchObject({ totalItems: 1, totalPages: 1, hasMore: false });
+    expect(emptySearch.page).toMatchObject({ totalItems: 1, totalPages: 1, hasMore: false, matchingItems: 0 });
   });
 
   it("keeps the main token in an empty source and keeps Explore and profile page sizes separate", () => {
@@ -72,7 +83,23 @@ describe("Explore source filters and card pagination", () => {
     saved.moduleMode!.items = [];
     const result = launchList(saved, 9, "", now, { sort: "newest", mode: "module" }, undefined, 10);
     expect(result.items).toEqual([pinned]);
-    expect(result.page).toEqual({ number: 1, size: 10, totalItems: 1, totalPages: 1, hasMore: false });
+    expect(result.page).toEqual({ number: 1, size: 10, totalItems: 1, totalPages: 1, hasMore: false, matchingItems: 0 });
+  });
+
+  it("deduplicates additive index lanes before pinning, sorting and pagination", () => {
+    const { saved, pinned, customs } = catalog();
+    saved.launchProjections = { version: 1, sourceUrl: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections",
+      updatedAt: saved.updatedAt, nextCursor: null, items: [{ ...pinned, tokenAddress: pinned.tokenAddress.toUpperCase() }, customs[0]] };
+    const first = launchList(saved, 1, "", now, { sort: "newest" }, undefined, 10);
+    const collected: string[] = [];
+    for (let page = 1; page <= first.page.totalPages; page++) {
+      const result = launchList(saved, page, "", now, { sort: "newest" }, undefined, 10);
+      expect(result.items.filter(row => isPinnedRobinhoodToken(row.tokenAddress, 4663))).toHaveLength(1);
+      collected.push(...result.items.slice(1).map(row => row.tokenAddress.toLowerCase()));
+    }
+    expect(new Set(collected).size).toBe(40);
+    expect(collected).toHaveLength(40);
+    expect(first.page.totalItems).toBe(41);
   });
 
   it("keeps direct search, page bounds and saved pending records separate", () => {
@@ -88,7 +115,8 @@ describe("Explore source filters and card pagination", () => {
 
 describe("Explore query compatibility", () => {
   it("defaults existing API requests to fifty and lets the website request ten", () => {
-    expect(parseRobinhoodExploreQuery(new URLSearchParams())).toEqual({ page: 1, pageSize: 50, q: "", filters: { sort: "highest", mode: "all" } });
+    expect(parseRobinhoodExploreQuery(new URLSearchParams())).toEqual({ page: 1, pageSize: 50, q: "", filters: { sort: "newest", mode: "all" } });
+    expect(parseRobinhoodExploreQuery(new URLSearchParams("sort=activity"))?.filters.sort).toBe("activity");
     expect(parseRobinhoodExploreQuery(new URLSearchParams("page=2&pageSize=10&mode=module&sort=newest&q=coin")))
       .toEqual({ page: 2, pageSize: 10, q: "coin", filters: { sort: "newest", mode: "module" } });
   });

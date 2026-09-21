@@ -24,7 +24,8 @@ describe("Explore request identity", () => {
     expect(sameRobinhoodExploreRequest({ ...request, mode: undefined }, { ...request, mode: "all" })).toBe(true);
     expect(activeExploreFilterCount(DEFAULT_EXPLORE_FILTERS)).toBe(0);
     expect(activeExploreFilterCount({ sort: "highest", mode: "module" })).toBe(1);
-    expect(activeExploreFilterCount({ sort: "newest", mode: "custom" })).toBe(2);
+    expect(activeExploreFilterCount({ sort: "newest", mode: "custom" })).toBe(1);
+    expect(activeExploreFilterCount({ sort: "activity", mode: "all" })).toBe(0);
   });
 });
 
@@ -44,6 +45,10 @@ describe("Explore toolbar and loading structure", () => {
     expect(html).toContain('aria-label="Launch pages"');
     expect(html.indexOf('aria-label="Filters"')).toBeLessThan(html.indexOf('aria-label="Previous page"'));
     expect(html).not.toContain('aria-label="Launch type"');
+    expect(html).toContain('aria-label="Sort launches"');
+    expect(html).toContain(">Newest</button>");
+    expect(html).toContain(">24h volume</button>");
+    expect(html).toContain(">Market cap</button>");
     expect(html).not.toContain("Page 1 of");
     expect(html).not.toContain(">Previous<");
     expect(html).not.toContain(">Next<");

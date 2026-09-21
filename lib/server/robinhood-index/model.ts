@@ -1,7 +1,7 @@
 import type { RobinhoodLaunch, RobinhoodModuleLaunch, RobinhoodLaunchList, RobinhoodProfileLaunchList, RobinhoodProfilePageSize } from "@/lib/robinhood-launches";
 import { isRobinhoodModuleLaunch, isRobinhoodModuleSourceKind } from "@/lib/robinhood-launches";
 import { DEFAULT_EXPLORE_FILTERS, type RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
-import { isPinnedRobinhoodToken, isVisibleRobinhoodToken } from "@/lib/robinhood-explore-policy";
+import { isPinnedRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projection-v1";
 
 export type Checkpoint = { number: string; hash: string };
@@ -215,32 +215,44 @@ function asPending(value: unknown) {
   return value as { block: Checkpoint; items: RobinhoodLaunch[] };
 }
 
-export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query = "", now = Date.now(), filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, marketCaps: ReadonlyMap<string, number> = new Map(), size: 10 | 50 = 50): RobinhoodLaunchList {
+/** One card per canonical token; legacy and projection lanes can describe the same launch. */
+export function exploreCatalog(snapshot: RobinhoodSnapshot | null): RobinhoodLaunch[] {
+  const unique = new Map<string, RobinhoodLaunch>();
+  for (const row of snapshotLaunches(snapshot)) {
+    if (row.launchProjection?.publication?.visibility === "unlisted") continue;
+    const key = row.tokenAddress.toLowerCase();
+    // Preserve the original canonical record when an additive lane repeats its token.
+    if (!unique.has(key)) unique.set(key, row);
+  }
+  return [...unique.values()];
+}
+
+export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query = "", now = Date.now(), filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, marketCaps: ReadonlyMap<string, number> = new Map(), size: 10 | 50 = 50, volumes24h: ReadonlyMap<string, number> = new Map()): RobinhoodLaunchList {
   const q = query.trim().toLowerCase();
-  const visible = snapshotLaunches(snapshot).filter((row) => isVisibleRobinhoodToken(row.tokenAddress)
-    && row.launchProjection?.publication?.visibility !== "unlisted");
-  const pinned = visible.find((row) => isPinnedRobinhoodToken(row.tokenAddress));
-  const cap = (address: string) => {
-    const value = marketCaps.get(address.toLowerCase());
+  const visible = exploreCatalog(snapshot);
+  const pinned = visible.find((row) => isPinnedRobinhoodToken(row.tokenAddress, snapshot?.chainId ?? 0));
+  const metric = (address: string) => {
+    const value = (filters.sort === "activity" ? volumes24h : marketCaps).get(address.toLowerCase());
     return value != null && Number.isFinite(value) && value >= 0 ? value : null;
   };
-  const items = visible.filter((row) => row !== pinned
-    && (filters.mode === "module" ? isRobinhoodModuleSourceKind(row.sourceKind)
+  const matches = (row: RobinhoodLaunch) => (filters.mode === "module" ? isRobinhoodModuleSourceKind(row.sourceKind)
       : filters.mode === "custom" ? row.sourceKind === undefined || isRobinhoodProjectedLaunch(row) : true) && (!q
-    || [row.name, row.symbol, row.tokenAddress, row.hookAddress].some((value) => value?.toLowerCase().includes(q))))
+    || [row.name, row.symbol, row.tokenAddress, row.hookAddress].some((value) => value?.toLowerCase().includes(q)));
+  const matchingItems = visible.filter(matches).length;
+  const items = visible.filter((row) => row !== pinned && matches(row))
     .toSorted((a, b) => {
-    if (filters.sort === "highest" || filters.sort === "lowest") {
-      const aCap = cap(a.tokenAddress);
-      const bCap = cap(b.tokenAddress);
+    if (filters.sort === "highest" || filters.sort === "lowest" || filters.sort === "activity") {
+      const aCap = metric(a.tokenAddress);
+      const bCap = metric(b.tokenAddress);
       if (aCap === null && bCap !== null) return 1;
       if (bCap === null && aCap !== null) return -1;
-      if (aCap !== null && bCap !== null && aCap !== bCap) return filters.sort === "highest" ? bCap - aCap : aCap - bCap;
+      if (aCap !== null && bCap !== null && aCap !== bCap) return filters.sort === "lowest" ? aCap - bCap : bCap - aCap;
     }
     const newest = BigInt(a.blockNumber) === BigInt(b.blockNumber)
       ? b.logIndex - a.logIndex : BigInt(a.blockNumber) > BigInt(b.blockNumber) ? -1 : 1;
     return (filters.sort === "oldest" ? -newest : newest) || a.tokenAddress.toLowerCase().localeCompare(b.tokenAddress.toLowerCase());
   });
-  // Reserve the first slot for the verified main token on every page and sort.
+  // The persistent pin occupies one slot, is counted once, and is never in the paginated slice.
   const pageSize = size - Number(Boolean(pinned));
   const totalItems = items.length + Number(Boolean(pinned));
   const totalPages = Math.max(pinned ? 1 : 0, Math.ceil(items.length / pageSize));
@@ -250,7 +262,7 @@ export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query =
   return {
     chainId: 4663, status, updatedAt: snapshotUpdatedAt(snapshot),
     items: [...(pinned ? [pinned] : []), ...items.slice((number - 1) * pageSize, number * pageSize)],
-    page: { number, size, totalItems, totalPages, hasMore: number < totalPages },
+    page: { number, size, totalItems, totalPages, hasMore: number < totalPages, ...(matchingItems !== totalItems ? { matchingItems } : {}) },
   };
 }
 

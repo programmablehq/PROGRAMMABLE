@@ -1,4 +1,5 @@
 export const LAUNCH_SORT_OPTIONS = [
+  { value: "activity", label: "24h volume" },
   { value: "highest", label: "Highest market cap" },
   { value: "lowest", label: "Lowest market cap" },
   { value: "newest", label: "Newest" },
@@ -18,10 +19,10 @@ export type RobinhoodExploreFilters = {
   mode?: typeof LAUNCH_MODE_OPTIONS[number]["value"] | "classic";
 };
 
-export const DEFAULT_EXPLORE_FILTERS: RobinhoodExploreFilters = { sort: "highest", mode: "all" };
+export const DEFAULT_EXPLORE_FILTERS: RobinhoodExploreFilters = { sort: "newest", mode: "all" };
 
 export function activeExploreFilterCount(filters: RobinhoodExploreFilters) {
-  return Number(filters.sort !== DEFAULT_EXPLORE_FILTERS.sort) + Number((filters.mode ?? "all") !== "all");
+  return Number((filters.mode ?? "all") !== "all");
 }
 
 export type RobinhoodExploreRequest = { page: number; q: string } & RobinhoodExploreFilters;

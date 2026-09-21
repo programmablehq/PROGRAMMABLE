@@ -37,6 +37,7 @@
 .estimate { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--webde-muted); font-size: 13px; min-height: 24px; }
 .estimate output { text-align: right; color: var(--webde-ink); overflow-wrap: anywhere; min-width: 0; font-variant-numeric: tabular-nums; }
 .estimate output[data-empty="true"] { color: var(--webde-muted); }
+.minimum { color: var(--webde-muted); font-size: 12px; line-height: 20px; margin: 4px 0 0; overflow-wrap: anywhere; text-align: right; }
 .amountBox { background: var(--webde-control); border: 1px solid transparent; border-radius: 16px; padding: 16px; min-width: 0; }
 .amountBox:focus-within { border-color: #777; }
 .amountBox + .amountBox { margin-top: 8px; }

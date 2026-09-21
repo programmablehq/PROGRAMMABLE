@@ -144,8 +144,11 @@
   padding: 24px;
   position: absolute;
   text-align: center;
+  z-index: 1;
 }
 .chartState strong { font-size: 18px; font-weight: 500; line-height: 28px; }
+.chartExternal { align-items: center; border: 1px solid var(--webde-line); border-radius: 8px; color: var(--webde-ink); display: inline-flex; font-size: 14px; justify-content: center; margin-top: 16px; min-height: 44px; padding: 8px 16px; text-decoration: none; }
+.chartExternal:focus-visible { outline: 2px solid var(--webde-ink); outline-offset: 3px; }
 .chartState p { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 8px 0 0; max-width: 32ch; text-wrap: pretty; }
 .notice { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 16px 0 0; }
 .notice a { color: var(--webde-ink); text-underline-offset: 4px; }
@@ -194,3 +197,6 @@
 @media (max-width: 360px) {
   .chart { height: 360px; }
 }
+.launchProperties { margin-top: 8px; max-width: 100%; width: fit-content; }
+.launchProperties > div { gap: 8px; justify-content: flex-start; }
+.launchProperties dt, .launchProperties dd { font-size: 14px; line-height: 22px; }

@@ -3,14 +3,16 @@ import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ snapshot: vi.fn() }));
+const mocks = vi.hoisted(() => ({ snapshot: vi.fn(),
+  markets: vi.fn().mockResolvedValue(new Map()), presentations: vi.fn().mockResolvedValue([]),
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (read: () => unknown) => read }));
 vi.mock("@/lib/market-data/envio-classic-v3-catalog.server", () => ({ readEnvioClassicV3CatalogV1: vi.fn() }));
 vi.mock("@/lib/alchemy/router-custom-public.server", () => ({ readWebsiteRouterCustomIdentitySnapshotV1: vi.fn() }));
 vi.mock("@/lib/server/robinhood-index/store", () => ({ indexStore: () => ({ read: mocks.snapshot }) }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({
-  readRobinhoodMarkets: async () => new Map(), readRobinhoodPresentations: async () => [],
+  readRobinhoodMarkets: mocks.markets, readRobinhoodPresentations: mocks.presentations,
 }));
 
 import { programmablePublicOpenApi } from "../lib/public-openapi";
@@ -165,7 +167,7 @@ describe("public Explore OpenAPI contract", () => {
       programmablePublicOpenApi["x-programmable-boundary"].marketData,
     ).toContain("legacy reset routes read no market, ranking, search, analytics or chart data");
 
-    const serialized = JSON.stringify(programmablePublicOpenApi);
+    const serialized = JSON.stringify(explorePaths.map(path => programmablePublicOpenApi.paths[path]));
     expect(serialized).not.toMatch(/gmgn|dexscreener|bitquery/iu);
     expect(serialized).not.toContain("X-Programmable-Market-Provider");
     expect(serialized).not.toContain("X-Programmable-Read-Source");
@@ -188,6 +190,9 @@ describe("public Explore OpenAPI contract", () => {
       const defaults = Object.fromEntries(operation.parameters.map(parameter => [parameter.name, parameter.schema.default]));
       const parsed = parse(new URLSearchParams())!;
       expect(defaults).toEqual({ page: parsed.page, pageSize: parsed.pageSize, q: parsed.q, ...parsed.filters });
+      const sortSchema = operation.parameters.find(parameter => parameter.name === "sort")!.schema;
+      for (const sort of sortSchema.enum!) expect(parse(new URLSearchParams({ sort: String(sort) }))?.filters.sort).toBe(sort);
+      if (chain === "robinhood") expect(sortSchema.enum).toContain("activity");
       expect(operation.parameters.find(parameter => parameter.name === "mode")?.description).toContain("do not restrict module source submissions");
     }
     expect(programmablePublicOpenApi["x-programmable-availability"].chainExplore).toMatchObject({
@@ -230,8 +235,38 @@ describe("public Explore OpenAPI contract", () => {
       const value = await readRobinhoodLaunches();
       expect(value.status).toBe(status);
       expect(validate(JSON.parse(JSON.stringify(value))), JSON.stringify(validate.errors)).toBe(true);
+      expect(validate({ ...value, page: { ...value.page, matchingItems: 0 } }), JSON.stringify(validate.errors)).toBe(true);
+      expect(validate({ ...value, page: { ...value.page, matchingItems: -1 } })).toBe(false);
       expect(validate({ ...value, chainId: 1 })).toBe(false);
       expect(validate({ ...value, status: "partial" })).toBe(false);
+    }
+  });
+
+  it("validates existing market observations and their same-pool quote metadata", async () => {
+    const validate = validator("RobinhoodExplorePage");
+    const address = `0x${"11".repeat(20)}`, hash = `0x${"ab".repeat(32)}`;
+    const updatedAt = new Date().toISOString();
+    const token = { routerAddress: address, launchId: hash, tokenAddress: address, hookAddress: address,
+      creator: address, poolManager: address, poolId: hash, stampHash: hash, transactionHash: hash,
+      blockNumber: "1", blockHash: hash, logIndex: 0, launchedAt: updatedAt, name: "Coin", symbol: "COIN", decimals: 18 };
+    mocks.snapshot.mockResolvedValue({ snapshot: { version: 1, chainId: 4663, routerAddress: address, binding: hash,
+      startBlock: "1", cursor: { number: "3", hash }, finalizedBlock: "3", updatedAt, items: [token] } });
+    for (const source of ["uniswap-v4", "dexscreener"] as const) {
+      const market = { poolId: hash, priceUsd: 0.001, marketCapUsd: source === "dexscreener" ? 1_000_000 : null,
+        fdvUsd: 1_000_000, valuationKind: source === "dexscreener" ? "market-cap" : "fdv", source,
+        ...(source === "uniswap-v4" ? { blockNumber: "3", blockHash: hash } : {}),
+        liquidityUsd: null, volume24hUsd: source === "dexscreener" ? 250 : null, change24hPercent: null,
+        quoteAsset: { address: `0x${"00".repeat(20)}`, symbol: source === "dexscreener" ? "ETH" : null },
+        observedAt: updatedAt, sourceUrl: "https://example.com/pool" };
+      const presentation = { tokenAddress: address, imageUrl: null, description: null, links: [], market };
+      mocks.markets.mockResolvedValueOnce(new Map([[address, market]]));
+      mocks.presentations.mockResolvedValueOnce([presentation]);
+      const value = await readRobinhoodLaunches();
+      expect(validate(JSON.parse(JSON.stringify(value))), JSON.stringify(validate.errors)).toBe(true);
+      for (const change of [{ quoteAsset: { address: "not-an-address", symbol: null } },
+        { blockHash: "not-a-hash" }, { source: "unknown" }, { valuationKind: "unknown" }]) {
+        expect(validate({ ...value, presentations: [{ ...presentation, market: { ...market, ...change } }] })).toBe(false);
+      }
     }
   });
 

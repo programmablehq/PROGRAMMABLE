@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { foundationInlineTradeError, ModuleFoundationMarket, type ModuleFoundationMarketProps } from "@/components/module-foundation-market";
+import { foundationInlineTradeError, foundationTradeQuoteExpiresAt, ModuleFoundationMarket, type ModuleFoundationMarketProps } from "@/components/module-foundation-market";
 import { FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationTradeReview } from "@/lib/module-foundation/ui-types";
 
 const address = "0x1111111111111111111111111111111111111111" as const;
@@ -33,6 +33,9 @@ describe("inline Foundation trading", () => {
     for (const removed of ["Review buy", "Continue in wallet", "Simulated at block", "Network gas is separate", "Return to trading"]) expect(html).not.toContain(removed);
     expect(props.onPrepareTrade).not.toHaveBeenCalled();
     expect(props.onConfirmTrade).not.toHaveBeenCalled();
+    expect(html).toContain("You receive");
+    expect(html.match(/<input[^>]*name="amount"/g)).toHaveLength(1);
+    expect(html).toContain('aria-haspopup="dialog"');
   });
 
   it("keeps Connect wallet enabled with an empty amount and disables Max without verified funds", () => {
@@ -62,5 +65,12 @@ describe("inline Foundation trading", () => {
     expect(verify({ ...review, contextKey: "another-wallet:release" })).toContain("changed");
     expect(verify({ ...review, expiresAt: 0 })).toContain("expired");
     expect(verify({ ...review, platformFeeRecipient: address as typeof FOUNDATION_PLATFORM_FEE_RECIPIENT })).toContain("fee");
+  });
+
+  it("expires the shown price before the transaction deadline and caps long deadlines at thirty seconds", () => {
+    const received = Date.now();
+    expect(foundationTradeQuoteExpiresAt({ ...review, expiresAt: Math.floor(received / 1000) + 600 }, received)).toBe(received + 30_000);
+    const short = { ...review, expiresAt: Math.floor(received / 1000) + 20 };
+    expect(foundationTradeQuoteExpiresAt(short, received)).toBe(short.expiresAt * 1000 - 5000);
   });
 });

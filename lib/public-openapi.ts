@@ -46,7 +46,7 @@ export const programmablePublicOpenApi = {
   openapi: "3.1.0",
   info: {
     title: "Programmable developer APIs",
-    version: "1.12.0",
+    version: "1.13.0",
     summary:
       "Ethereum and Robinhood Explore feeds, Custom launch contracts and release discovery.",
     description:

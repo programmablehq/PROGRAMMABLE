@@ -1,0 +1,4 @@
+.details { display: grid; gap: 4px; margin: 0; min-width: 0; }
+.details > div { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; min-width: 0; }
+.details dt { color: var(--webde-muted); flex: none; font-size: 12px; line-height: 20px; }
+.details dd { color: var(--webde-ink); font-size: 12px; line-height: 20px; margin: 0; min-width: 0; overflow: hidden; text-align: end; text-overflow: ellipsis; white-space: nowrap; }

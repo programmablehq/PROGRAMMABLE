@@ -251,7 +251,7 @@ describe("unreleased launch model gating", () => {
     expect(modulesCard).not.toContain("data-launch-model-available");
     expect(modulesCard).toContain('data-launch-model-entry="foundation"');
     expect(modulesCard).toContain('data-launch-model-launchable="false"');
-    expect(html).toContain("Launch a Coin");
+    expect(html).toContain("Launch a coin");
     expect(html).not.toContain('id="launch-model-modules-status">Preview</small>');
     expect(html).not.toContain('data-launch-model-option="classic"');
     expect(html).not.toContain('name="launch-chain"');
@@ -280,7 +280,7 @@ describe("unreleased launch model gating", () => {
     expect(modulesCard).toContain('data-launch-model-launchable="false"');
     expect(open).not.toContain('href="/launch/modules"');
     expect(open).not.toContain("Getting updated currently");
-    expect(open).toContain("Launch a Coin");
+    expect(open).toContain("Launch a coin");
   });
 
   it("keeps the Deep preset concise while retaining its material limits", () => {

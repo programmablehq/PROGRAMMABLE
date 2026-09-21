@@ -635,14 +635,15 @@ describe("Robinhood website launch list", () => {
     const saved = snapshot([...rows, pinned, hidden]);
     const caps = new Map([...rows, pinned, hidden].map((row, index) => [row.tokenAddress.toLowerCase(), index]));
     const ascending = sort === "lowest" || sort === "oldest";
-    const ordered = ascending ? rows : rows.toReversed();
+    const all = [...rows, hidden];
+    const ordered = ascending ? all : all.toReversed();
     const first = launchList(saved, 1, "", NOW, { sort }, caps);
     const second = launchList(saved, 2, "", NOW, { sort }, caps);
     expect(first.items).toEqual([pinned, ...ordered.slice(0, 49)]);
     expect(second.items).toEqual([pinned, ...ordered.slice(49)]);
-    expect(first.page).toMatchObject({ totalItems: 56, totalPages: 2 });
+    expect(first.page).toMatchObject({ totalItems: 57, totalPages: 2 });
     expect(launchList(saved, 1, rows[3].tokenAddress, NOW, { sort }, caps).items).toEqual([pinned, rows[3]]);
-    expect(launchList(saved, 1, hidden.tokenAddress, NOW, { sort }, caps).items).toEqual([pinned]);
+    expect(launchList(saved, 1, hidden.tokenAddress, NOW, { sort }, caps).items).toEqual([pinned, hidden]);
     expect(saved.items).toEqual([...rows, pinned, hidden]);
   });
 
@@ -661,11 +662,12 @@ describe("Robinhood website launch list", () => {
   it.each([
     { tokenAddress: "0x15fca474b23cafe775120b1fafbcff0e7a827af2", name: "Robinhood Clean Room", symbol: "RHCR" },
     { tokenAddress: "0xb36271399c031ce270e0d1eed5f26dcd08367119", name: "Any Quote LP Internal Test", symbol: "AQLPTEST" },
-  ])("hides only the exact $symbol canary without removing canonical records or other matching metadata", ({ tokenAddress, name, symbol }) => {
+  ])("shows the $symbol canary by the same rules as every other indexed launch", ({ tokenAddress, name, symbol }) => {
     const hidden = launch(1, 100, { tokenAddress, name, symbol });
     const other = launch(2, 101, { name, symbol });
     const saved = snapshot([hidden, other]);
-    expect(launchList(saved, 1, "", NOW).items).toEqual([other]);
+    expect(launchList(saved, 1, "", NOW).items).toEqual([other, hidden]);
+    expect(launchList(saved, 1, tokenAddress, NOW).items).toEqual([hidden]);
     expect(saved.items).toHaveLength(2);
   });
 
