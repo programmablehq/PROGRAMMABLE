@@ -33,6 +33,42 @@
   display: flex;
 }
 
+.siteHeader.siteHeader :global(.desktop-nav a).launchLink,
+.mobileLaunch {
+  align-items: center;
+  background: var(--webde-ink);
+  border: 1px solid var(--webde-ink);
+  border-radius: var(--webde-radius-control);
+  color: var(--webde-canvas);
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 44px;
+  opacity: 1;
+  padding: 8px 16px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.siteHeader.siteHeader :global(.desktop-nav a).launchLink::after {
+  display: none;
+}
+
+.mobileLaunch {
+  display: none;
+}
+
+.siteHeader.siteHeader :global(.desktop-nav a).launchLink:focus-visible,
+.mobileLaunch:focus-visible {
+  outline: 2px solid var(--brand-ivory);
+  outline-offset: 4px;
+}
+
+.headerWalletIcon {
+  display: none;
+}
+
 .menuButton {
   align-items: center;
   background: transparent;
@@ -358,6 +394,12 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .siteHeader.siteHeader :global(.desktop-nav a).launchLink:hover,
+  .mobileLaunch:hover {
+    background: #fff;
+    color: var(--webde-canvas);
+  }
+
   .siteHeader.siteHeader :global(.desktop-nav a:hover) {
     text-shadow: none;
   }
@@ -392,15 +434,20 @@
 
   .headerInner.headerInner {
     --navigation-inline-padding: 16px;
-    grid-template-columns: minmax(44px, 1fr) auto;
+    grid-template-columns: minmax(44px, 1fr) auto minmax(96px, 1fr);
   }
 
   .headerActions.headerActions {
-    grid-column: 2;
+    grid-column: 3;
   }
 
   .siteHeader.siteHeader :global(.desktop-nav) {
     display: none;
+  }
+
+  .mobileLaunch {
+    display: inline-flex;
+    grid-column: 2;
   }
 
   .mobileSheet.mobileSheet :global(.mobile-nav a).mobilePrimaryLink {
@@ -413,7 +460,17 @@
   }
 
   .headerWalletButton {
-    width: 136px;
+    padding: 0;
+    width: 48px;
+  }
+
+  .headerWalletIcon {
+    display: block;
+  }
+
+  .headerWalletLabel,
+  .headerWalletChevron {
+    display: none;
   }
 }
 

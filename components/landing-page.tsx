@@ -2,6 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 
 import { LandingExploreGate } from "@/components/landing-explore-gate";
 import styles from "@/components/landing-page.module.css";
@@ -152,11 +155,28 @@ export function LandingPage() {
             priority
           />
           <h1 id="landing-title">Programmable</h1>
-          <p>Build and launch custom Uniswap v4 hooks</p>
+          <p>Launch a coin. Choose its modules.</p>
+          <div className={styles.heroActions}>
+            <Link className={styles.launchButton} href="/launch/modules/foundation" prefetch={false}>
+              Launch a coin <ArrowRightIcon size={18} aria-hidden="true" />
+            </Link>
+            <Link className={styles.developerLink} href="/developers/api-keys?guide=custom-hook" prefetch={false}>
+              Custom hook guide
+            </Link>
+          </div>
+          <section className={styles.pairExample} aria-labelledby="landing-pair-title">
+            <h2 id="landing-pair-title">Pair another token</h2>
+            <div className={styles.pairIllustration}>
+              <span>Your coin</span>
+              <ArrowsLeftRightIcon size={20} aria-label="paired with" />
+              <span>Selected token</span>
+            </div>
+            <p>Choose what your coin trades against at launch. ETH is the default.</p>
+          </section>
         </div>
 
         <a className={styles.scrollCue} href="#explore">
-          <span>Discover Programmable</span>
+          <span>Explore coins</span>
           <span aria-hidden="true">↓</span>
         </a>
       </section>

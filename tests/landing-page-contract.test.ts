@@ -21,7 +21,7 @@ describe("landing page contract", () => {
     expect(chainPage).toContain("canonical: exploreChainPath(chainId)");
     expect(navigation).toContain('{ href: "/explore", label: "Explore" }');
     expect(navigation).toContain('href="/"');
-    expect(homePage).toContain('"Build and launch custom Uniswap v4 hooks.');
+    expect(homePage).toContain('"Launch a coin, choose its modules');
     expect(homePage).toContain("description: pageDescription");
     expect(homePage).toContain("openGraph:");
     expect(homePage).toContain("twitter:");
@@ -58,7 +58,11 @@ describe("landing page contract", () => {
     expect(landing).toContain("const HERO_TWINKLE_COUNT = 120");
     expect(landing).toContain("const duration = 2.8");
     expect(landing).toContain('<h1 id="landing-title">Programmable</h1>');
-    expect(landing).toContain("Build and launch custom Uniswap v4 hooks");
+    expect(landing).toContain("Launch a coin. Choose its modules.");
+    expect(landing).toContain('href="/launch/modules/foundation"');
+    expect(landing).toContain('href="/developers/api-keys?guide=custom-hook"');
+    expect(landing).toContain("Pair another token");
+    expect(landing).toContain("ETH is the default.");
     expect(landing).toContain('id="intro"');
     expect(landing).toContain('href="#explore"');
     expect(landing).toContain('id="explore"');

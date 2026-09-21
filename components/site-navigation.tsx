@@ -11,6 +11,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import {
   DiscordBrandIcon,
   DuneBrandIcon,
@@ -27,17 +28,17 @@ import styles from "@/components/site-navigation.module.css";
 
 const desktopNavItems = [
   { href: "/explore", label: "Explore" },
-  { href: "/launch", label: "Launch" },
+  { href: "/launch/modules/foundation", label: "Launch a coin", activePath: "/launch" },
 ];
 
 const menuNavItems = [
-  { href: "/launch/modules/foundation", label: "Modules" },
+  { href: "/launch", label: "Launch options" },
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/profile", label: "Profile" },
   { href: "/docs", label: "Docs" },
 ];
 
-const mobileNavItems = [...desktopNavItems, ...menuNavItems];
+const mobileNavItems = [desktopNavItems[0], ...menuNavItems];
 
 function warmNavigationRoute(
   router: ReturnType<typeof useRouter>,
@@ -228,8 +229,9 @@ function HeaderWalletButton({
           }
         }}
       >
-        <span>{label}</span>
-        {wallet && !connecting && !disconnecting ? <NavigationChevronIcon /> : null}
+        <WalletIcon className={styles.headerWalletIcon} size={22} aria-hidden="true" />
+        <span className={styles.headerWalletLabel}>{label}</span>
+        {wallet && !connecting && !disconnecting ? <NavigationChevronIcon className={styles.headerWalletChevron} /> : null}
       </button>
       {wallet ? (
         <div
@@ -323,7 +325,10 @@ function DesktopNavigation() {
         return (
           <Link
             key={item.href}
-            className={current ? "active" : undefined}
+            className={[
+              current ? "active" : "",
+              item.href === "/launch/modules/foundation" ? styles.launchLink : "",
+            ].filter(Boolean).join(" ") || undefined}
             href={item.href}
             prefetch={false}
             aria-current={current ? "page" : undefined}
@@ -442,6 +447,15 @@ export function SiteHeader() {
         </div>
 
         <DesktopNavigation />
+
+        <Link
+          className={styles.mobileLaunch}
+          href="/launch/modules/foundation"
+          prefetch={false}
+          aria-current={pathname.startsWith("/launch") ? "page" : undefined}
+        >
+          Launch a coin
+        </Link>
 
         <div className={`header-actions ${styles.headerActions}`}>
           <HeaderWalletButton
