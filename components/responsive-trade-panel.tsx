@@ -1,14 +1,26 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { X } from "lucide-react";
 import styles from "./responsive-trade-panel.module.css";
+
+const WalletHandoff = createContext<(() => void) | null>(null);
+
+/** Release the native top layer before Privy or a wallet opens its own dialog. */
+export function TradeWalletButton({ handoff, onClick, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { handoff: boolean }) {
+  const closeForWallet = useContext(WalletHandoff);
+  return <button {...props} onClick={event => {
+    onClick?.(event);
+    if (handoff && !event.defaultPrevented) closeForWallet?.();
+  }} />;
+}
 
 /** The same trade controls stay mounted when the mobile sheet opens or closes. */
 export function ResponsiveTradePanel({ children, symbol }: { children: ReactNode; symbol?: string }) {
   const id = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(true);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
@@ -32,13 +44,14 @@ export function ResponsiveTradePanel({ children, symbol }: { children: ReactNode
       <button ref={trigger} type="button" className={styles.openButton} aria-haspopup="dialog" aria-controls={id}
         onClick={() => {
           if (!dialog.current) return;
+          restoreFocus.current = true;
           dialog.current.dataset.sheetOpen = "true";
           setSheetOpen(true);
           dialog.current.showModal();
         }}>Trade{symbol ? ` ${symbol}` : ""}</button>
     </div>
     <dialog ref={dialog} id={id} open className={styles.panel} data-sheet-open={sheetOpen} aria-label={symbol ? `Trade ${symbol}` : "Trade"}
-      onClose={() => { setSheetOpen(false); if (sheetOpen && window.matchMedia("(max-width: 1000px)").matches) trigger.current?.focus(); }}
+      onClose={() => { setSheetOpen(false); if (restoreFocus.current && sheetOpen && window.matchMedia("(max-width: 1000px)").matches) trigger.current?.focus(); }}
       onClick={event => {
         if (event.target !== event.currentTarget || !event.currentTarget.open) return;
         const rect = event.currentTarget.getBoundingClientRect();
@@ -48,7 +61,11 @@ export function ResponsiveTradePanel({ children, symbol }: { children: ReactNode
         <h2>{symbol ? `Trade ${symbol}` : "Trade"}</h2>
         <button type="button" className={styles.closeButton} aria-label="Close trade" onClick={() => dialog.current?.close()}><X size={20} aria-hidden="true" /></button>
       </div>
-      {children}
+      <WalletHandoff.Provider value={() => {
+        if (!dialog.current?.matches(":modal")) return;
+        restoreFocus.current = false;
+        dialog.current.close();
+      }}>{children}</WalletHandoff.Provider>
     </dialog>
   </div>;
 }

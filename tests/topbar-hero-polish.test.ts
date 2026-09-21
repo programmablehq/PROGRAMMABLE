@@ -75,7 +75,7 @@ describe("topbar and Explore hero polish", () => {
     expect(navigation).not.toContain('if (pathname === "/") return null;');
     expect(navigation).toContain("<HeaderWalletButton");
     expect(navigation).toContain("<DesktopNavigation />");
-    expect(navigation).toContain("const mobileNavItems = [...desktopNavItems, ...menuNavItems];");
+    expect(navigation).toContain("const mobileNavItems = [desktopNavItems[0], ...menuNavItems];");
     expect(navigation).not.toContain("liquid-glass-surface");
     expect(navigation).not.toContain("lucide-react");
     expect(navigation).toContain('if (activePath === "/docs")');
@@ -84,7 +84,8 @@ describe("topbar and Explore hero polish", () => {
     expect(navigation).not.toContain("warmedNavigationRoutes");
     for (const label of [
       "Explore",
-      "Launch",
+      "Launch a coin",
+      "Launch options",
       "Docs",
       "API keys",
       "Profile",

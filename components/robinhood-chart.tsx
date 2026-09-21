@@ -96,6 +96,7 @@ function LivePriceChart({ name, points, now, market }: Readonly<{
 function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
   const [loadedPool, setLoadedPool] = useState<string | null>(null);
   const [failedPool, setFailedPool] = useState<string | null>(null);
+  const [slowPool, setSlowPool] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const matchingMarket = market?.poolId.toLowerCase() === poolId.toLowerCase() ? market : null;
   const [points, setPoints] = useState<readonly RobinhoodLivePrice[]>([]);
@@ -105,6 +106,14 @@ function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
   if (nextPoints !== points) setPoints(nextPoints);
   if (matchingMarket?.source && matchingMarket.source !== chartSource) setChartSource(matchingMarket.source);
   const showLive = chartSource === "uniswap-v4";
+  const chartUrl = `https://dexscreener.com/${chainId === 1 ? "ethereum" : "robinhood"}/${poolId}`;
+
+  useEffect(() => {
+    if (showLive || loadedPool === poolId || failedPool === poolId) return;
+    // Some browsers block third-party frames without dispatching an iframe error.
+    const timer = window.setTimeout(() => setSlowPool(poolId), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [showLive, loadedPool, failedPool, poolId]);
 
   useEffect(() => {
     if (!showLive) return;
@@ -118,12 +127,12 @@ function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
 
   // The embedded chart fetches its own data; metric refreshes must not remove it.
   return <div className={styles.chart}>
-    {failedPool === poolId ? <div className={styles.chartState} role="status">Chart unavailable.</div> : <>
-      {loadedPool !== poolId ? <div className={styles.chartState} role="status">Loading chart…</div> : null}
+    {failedPool === poolId ? <div className={styles.chartState} role="status">Chart unavailable.<a className={styles.chartExternal} href={chartUrl} target="_blank" rel="noopener noreferrer">Open on DEX Screener<span className="sr-only"> (opens in a new tab)</span></a></div> : <>
+      {loadedPool !== poolId ? <div className={styles.chartState} role="status">{slowPool === poolId ? <>Chart is taking longer to load.<a className={styles.chartExternal} href={chartUrl} target="_blank" rel="noopener noreferrer">Open on DEX Screener<span className="sr-only"> (opens in a new tab)</span></a></> : "Loading chart…"}</div> : null}
       <iframe
         key={poolId}
         title={`${name} price chart on DEX Screener`}
-        src={`https://dexscreener.com/${chainId === 1 ? "ethereum" : "robinhood"}/${poolId}?embed=1&loadChartSettings=0&trades=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15`}
+        src={`${chartUrl}?embed=1&loadChartSettings=0&trades=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15`}
         onLoad={() => setLoadedPool(poolId)}
         onError={() => setFailedPool(poolId)}
         referrerPolicy="no-referrer"

@@ -46,9 +46,9 @@ describe("Programmable branding assets", () => {
     const metadataSources = [
       [
         "app/layout.tsx",
-        'title: "Programmable · Custom Uniswap v4 hooks"',
+        'title: "Programmable · Launch a coin"',
       ],
-      ["app/page.tsx", 'title: "Programmable · Custom Uniswap v4 hooks"'],
+      ["app/page.tsx", 'title: "Programmable · Launch a coin"'],
       ["app/explore/page.tsx", 'title: "Explore · Programmable"'],
       ["app/launch/page.tsx", 'title: "Launch · Programmable"'],
     ] as const;
@@ -150,7 +150,7 @@ describe("Programmable branding assets", () => {
     const layout = read("app/layout.tsx");
     const homePage = read("app/page.tsx");
     const productDescription =
-      "Build and launch custom Uniswap v4 hooks. Explore projects launched through Programmable.";
+      "Launch a coin, choose its modules and explore coins on Programmable. Built on Uniswap v4.";
     const path = "public/og/programmable-landing-preview-v2-1200x630.jpg";
     const metadata = await sharp(join(root, path)).metadata();
     const topCenter = await sharp(join(root, path))

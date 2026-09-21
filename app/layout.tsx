@@ -25,7 +25,7 @@ const plexMono = IBM_Plex_Mono({
 
 const siteUrl = new URL("https://programmable.market");
 const siteDescription =
-  "Build and launch custom Uniswap v4 hooks. Explore projects launched through Programmable.";
+  "Launch a coin, choose its modules and explore coins on Programmable. Built on Uniswap v4.";
 const socialImageUrl = new URL(
   "/og/programmable-landing-preview-v2-1200x630.jpg",
   siteUrl,
@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     type: "website",
     url: siteUrl,
     siteName: "Programmable",
-    title: "Programmable · Custom Uniswap v4 hooks",
+    title: "Programmable · Launch a coin",
     description: siteDescription,
     images: [
       {
@@ -88,7 +88,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Programmable · Custom Uniswap v4 hooks",
+    title: "Programmable · Launch a coin",
     description: siteDescription,
     creator: "@ProgrammableHQ",
     images: [

@@ -69,7 +69,8 @@ export function useRobinhoodPresentation(query: string, enabled = true, initialP
       else { accept(items); void load(); }
     }
     if (initialPresentation) {
-      void initialPresentation.then(item => {
+      // React's streamed thenable is not necessarily a chainable native Promise.
+      void Promise.resolve(initialPresentation).then(item => {
         if (disposed) return;
         if (item) { accept([item]); schedule(); }
         else void load();

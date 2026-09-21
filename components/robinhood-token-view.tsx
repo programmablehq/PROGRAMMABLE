@@ -8,6 +8,7 @@ import { AnimatedMarketCap } from "@/components/animated-market-cap";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { TokenLaunchModules } from "@/components/token-launch-modules";
+import { LaunchPairModules } from "@/components/launch-pair-modules";
 import { LaunchProjectionDetails } from "@/components/launch-projection-details";
 import { SwapPanel } from "@/components/swap-panel";
 import { ResponsiveTradePanel } from "@/components/responsive-trade-panel";
@@ -66,6 +67,7 @@ export function RobinhoodTokenView({ address, token, status, initialPresentation
                 {details?.links.length ? <RobinhoodProjectLinks links={details.links} name={name} /> : null}
               </div>
               <p className={styles.subtitle}>{hasAsset ? <span>{coinTicker(token.symbol)}</span> : null}<span>Robinhood</span></p>
+              <LaunchPairModules launch={token} chainId={4663} market={market} className={styles.launchProperties} />
               {details?.description ? <p className={styles.bio}>{details.description}</p> : null}
             </div>
           </div>

@@ -334,7 +334,7 @@ describe("Robinhood presentation HTTP boundary", () => {
     vi.stubGlobal("fetch", sourceFetch());
     storage.list.mockResolvedValue({ items: [TOKEN], presentations: [{ tokenAddress: TOKEN.tokenAddress, market: null }] });
     const response = await GET(new Request(`${endpoint}?page=2&q=RHV4`));
-    expect(storage.list).toHaveBeenCalledWith(2, "RHV4", { sort: "highest", mode: "all" }, 50);
+    expect(storage.list).toHaveBeenCalledWith(2, "RHV4", { sort: "newest", mode: "all" }, 50);
     expect(storage.token).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(response.headers.get("cache-control")).toContain("s-maxage=60");

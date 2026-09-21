@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SwapPanel } from "@/components/swap-panel";
 import { ResponsiveTradePanel } from "@/components/responsive-trade-panel";
+import { LaunchPairModules } from "@/components/launch-pair-modules";
 import { TokenPoolChart } from "@/components/robinhood-chart";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
@@ -27,6 +28,9 @@ export function EthereumTokenView({ address, token, status, updatedAt }: {
               {links.length ? <RobinhoodProjectLinks links={links} name={token.name || "Token"} /> : null}
             </div>
             <p className={styles.subtitle}><span>{coinTicker(token.symbol)}</span><span>Ethereum</span></p>
+            <LaunchPairModules launch={{ tokenAddress: address, poolId: token.poolId }} chainId={1}
+              market={token.quoteAssetAddress ? { poolId: token.poolId, quoteAsset: { address: token.quoteAssetAddress, symbol: token.quoteAssetSymbol ?? null } } : null}
+              className={styles.launchProperties} />
             {token.description ? <p className={styles.bio}>{token.description}</p> : null}
           </div>
         </div>

@@ -10,6 +10,7 @@ import type { PendingSwap, SwapWalletActions } from "@/lib/swap/client";
 import { walletChainIdsEqual } from "@/lib/wallet-chain-id";
 import { displaySwapAmount, maximumSwapInput, parseSwapAmount } from "./swap-amount";
 import { runSwapFlow } from "./swap-flow";
+import { TradeWalletButton } from "./responsive-trade-panel";
 import styles from "./swap-panel.module.css";
 
 type PendingView = { key: string; operation: PendingSwap | null; error?: string };
@@ -315,9 +316,9 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
               onClick={() => edit(() => setSlippageBps(value))}>{value / 100}%</button>)}
           </fieldset>
         </div> : null}
-        <button className={styles.primary} type="submit" disabled={disabled}>
+        <TradeWalletButton handoff={!connected || !correctNetwork || Boolean(review)} className={styles.primary} type="submit" disabled={disabled}>
           {busy || quoting || walletBusy ? <LoaderCircle size={18} className={styles.spin} aria-hidden="true" /> : null}{action}
-        </button>
+        </TradeWalletButton>
       </form>
       {displayError ? <p id={`${id}-error`} className={styles.error} role="alert">{displayError}</p> : null}
       {balanceError && !displayError ? <p className={styles.note} role="status">Balance unavailable. Refresh to try again.</p> : null}

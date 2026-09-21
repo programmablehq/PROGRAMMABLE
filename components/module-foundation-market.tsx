@@ -9,7 +9,8 @@ import { parseUnits, type Address } from "viem";
 import { foundationDecimalError, foundationPublicUrl, foundationReviewError, type FoundationAvailability, type FoundationPoolIdentity, type FoundationPositionIdentity, type FoundationQuoteAsset, type FoundationTradeDraft, type FoundationTradeReview, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { FoundationAddress, FoundationPoolDetails } from "./module-foundation-review";
 import { RobinhoodChart } from "./robinhood-chart";
-import { ResponsiveTradePanel } from "./responsive-trade-panel";
+import { ResponsiveTradePanel, TradeWalletButton } from "./responsive-trade-panel";
+import { LaunchPairModules } from "./launch-pair-modules";
 import { displaySwapAmount } from "./swap-amount";
 import type { FoundationCreatorFees } from "@/lib/module-foundation/creator-fees";
 import { FOUNDATION_DEFAULT_IMAGE } from "@/lib/module-foundation/default-image";
@@ -186,7 +187,10 @@ export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
 
   return <div className={`${styles.page} ${styles.marketPage}`}>
     <div className={styles.topline}><Link className={styles.backButton} href="/explore/robinhood"><ArrowLeftIcon size={16} aria-hidden="true" />Explore</Link><span className={styles.network}>{availability.chainName}</span></div>
-    <header className={styles.pageHeading}><div className={styles.marketHeading}>{imageURI ? <Image src={imageURI} alt="" width={64} height={64} unoptimized referrerPolicy="no-referrer" onError={() => setFailedImage(imageURI)} /> : null}<div><h1>{coin.name}</h1><p>{coin.symbol} / {quote.symbol}</p></div></div>{socialLinks.length ? <nav className={styles.coinLinks} aria-label="Coin links">{socialLinks.map(link => <a key={`${link.label}:${link.url}`} href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${link.label} (opens in a new tab)`}>{link.label}<ArrowUpRightIcon size={16} aria-hidden="true" /></a>)}</nav> : null}</header>
+    <header className={styles.pageHeading}><div className={styles.marketHeading}>{imageURI ? <Image src={imageURI} alt="" width={64} height={64} unoptimized referrerPolicy="no-referrer" onError={() => setFailedImage(imageURI)} /> : null}<div><h1>{coin.name}</h1><p>{coin.symbol}</p>
+      <LaunchPairModules launch={{ tokenAddress: coin.address, sourceKind: "module-foundation-v1", poolId: pool.poolId, quoteAsset: quote.address }} chainId={availability.chainId}
+        market={{ poolId: pool.poolId, quoteAsset: { address: quote.address, symbol: quote.symbol } }} className={styles.launchProperties} />
+    </div></div>{socialLinks.length ? <nav className={styles.coinLinks} aria-label="Coin links">{socialLinks.map(link => <a key={`${link.label}:${link.url}`} href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${link.label} (opens in a new tab)`}>{link.label}<ArrowUpRightIcon size={16} aria-hidden="true" /></a>)}</nav> : null}</header>
     <div className={styles.coinAddress}><FoundationAddress value={coin.address} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${coin.address}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
     <div className={styles.marketLayout}>
       <div className={styles.marketChart}>
@@ -220,7 +224,7 @@ export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
             {quoteError ? <p className={styles.error} role="status">{quoteError} <button type="button" className={styles.textButton} onClick={() => setQuoteRevision(value => value + 1)}>Refresh quote</button></p> : null}
             {unavailable ? <p className={styles.error} role="status">{availability.reason ?? quote.reason ?? "Trading is temporarily unavailable. Try again shortly."}</p> : null}
             {error || submissionBlocked ? <p className={styles.error} role="alert">{error || submissionBlocked}</p> : null}
-            <button type="submit" className={styles.primaryButton} disabled={blocked || walletAction?.busy || (quoteReady && !review)} aria-busy={Boolean(busy) || walletAction?.busy}>{busy === "confirm" || busy === "connect" ? "Check your wallet…" : waitingForConfirmation ? "Confirming…" : walletAction?.label ?? (quoting ? "Getting quote…" : draft.side === "buy" ? "Buy" : "Sell")}</button>
+            <TradeWalletButton handoff={Boolean(walletAction || review)} type="submit" className={styles.primaryButton} disabled={blocked || walletAction?.busy || (quoteReady && !review)} aria-busy={Boolean(busy) || walletAction?.busy}>{busy === "confirm" || busy === "connect" ? "Check your wallet…" : waitingForConfirmation ? "Confirming…" : walletAction?.label ?? (quoting ? "Getting quote…" : draft.side === "buy" ? "Buy" : "Sell")}</TradeWalletButton>
           </form>
           {result ? <div className={styles.tradeResult} role="status"><span>{result.status === "confirmed" ? result.operationComplete ? "Trade complete" : "Approval confirmed. Continue your trade." : result.status === "reverted" ? "Trade failed. Try again." : "Waiting for confirmation…"}</span>{foundationPublicUrl(result.explorerUrl) ? <a href={result.explorerUrl} target="_blank" rel="noopener noreferrer" aria-label="View trade transaction"><ArrowUpRightIcon size={16} aria-hidden="true" /></a> : null}{waitingForConfirmation && onRefreshResult ? <button type="button" className={styles.textButton} disabled={Boolean(busy)} onClick={() => void refresh()}>{busy === "refresh" ? "Checking…" : "Check confirmation"}</button> : null}</div> : null}
         </section></ResponsiveTradePanel>

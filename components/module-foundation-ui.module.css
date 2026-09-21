@@ -411,3 +411,6 @@
   .marketHeading > img { flex-basis: 56px; height: 56px; width: 56px; }
   .marketHeading p { font-size: 16px; line-height: 24px; }
 }
+.launchProperties { margin-top: 8px; max-width: 100%; width: fit-content; }
+.launchProperties > div { gap: 8px; justify-content: flex-start; }
+.launchProperties dt, .launchProperties dd { font-size: 14px; line-height: 22px; }

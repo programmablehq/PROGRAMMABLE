@@ -8,6 +8,7 @@ import { ModuleFoundationMarket } from "./module-foundation-market";
 import { RobinhoodChart } from "./robinhood-chart";
 import { RobinhoodCoinArtwork, MODULE_TOKEN_FALLBACK_IMAGE } from "./robinhood-coin-artwork";
 import { ResponsiveTradePanel } from "./responsive-trade-panel";
+import { LaunchPairModules } from "./launch-pair-modules";
 import { FoundationAddress } from "./module-foundation-review";
 import { ModuleFoundationActions, type FoundationActionDescriptor, type FoundationActionReview } from "./module-foundation-actions";
 import { FoundationSessionStatus, useFoundationSession, type FoundationExecutionResult } from "./module-foundation-session";
@@ -162,7 +163,9 @@ export function ModuleFoundationMarketHost({ token, transactionHash, initialName
   if (!details) return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><div className={`${styles.page} ${styles.marketPage}`}>
     <div className={styles.topline}><Link className={styles.backButton} href="/explore/robinhood">Explore</Link><span className={styles.network}>Robinhood Chain</span></div>
     <div className={styles.pageHeading}><div className={styles.marketHeading}><RobinhoodCoinArtwork className={styles.marketArtwork} imageUrl={coinPresentation?.imageUrl} fallbackImageUrl={MODULE_TOKEN_FALLBACK_IMAGE} eager />
-      <div><h1>{initialName || "Coin"}</h1>{initialLaunch?.symbol ? <p>{initialLaunch.symbol}</p> : null}</div></div></div>
+      <div><h1>{initialName || "Coin"}</h1>{initialLaunch?.symbol ? <p>{initialLaunch.symbol}</p> : null}
+        {initialLaunch ? <LaunchPairModules launch={initialLaunch} chainId={4663} market={market} className={styles.launchProperties} /> : null}
+      </div></div></div>
     <div className={styles.coinAddress}><FoundationAddress value={token} label="coin address" /><a className={styles.textButton} href={`https://robinhoodchain.blockscout.com/token/${token}`} target="_blank" rel="noopener noreferrer">Explorer</a></div>
     <div className={styles.marketLayout}>
       <div className={styles.marketChart}>
