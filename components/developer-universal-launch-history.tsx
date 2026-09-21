@@ -17,6 +17,12 @@ type Props = {
 };
 const sources = ["custom_launch_plan_v1", "multi_role_v2"] as const;
 const identity = (entry: Entry) => `${entry.sourceVersion}:${entry.resource.planId ?? entry.resource.launchId}`;
+class HistoryReadError extends Error { constructor(message: string, readonly status: number) { super(message); } }
+export function LaunchHistoryMissingState({ launchId, unavailable }: { launchId: string; unavailable: boolean }) {
+  return <div className={styles.statePanel}><h3>{unavailable ? "Launch data is temporarily unavailable" : "This launch could not be found"}</h3>
+    <p>{unavailable ? "Keep this launch link and refresh when the service responds. An unavailable source does not mean the launch or its wallet has changed."
+      : "The available history does not contain this launch. Check the link and connect the wallet and account that own its API key, then refresh."}</p><code>{launchId}</code></div>;
+}
 function parseEntries(value: unknown, account: string): { entries: Entry[]; nextCursor: string | null } {
   if (!projectionObject(value) || value.schemaVersion !== "programmable.website-launch-history.v1" || !Array.isArray(value.launches)
     || !(value.nextCursor === null || typeof value.nextCursor === "string")) throw new Error("Launch history is unavailable.");
@@ -37,6 +43,7 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   const [cursors, setCursors] = useState<Partial<Record<UniversalLaunchSource, string | null>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceUnavailable, setSourceUnavailable] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const request = useCallback(async (source: UniversalLaunchSource, id?: string, init?: RequestInit, suffix = "", cursor?: string) => {
     const [access, identityToken] = await Promise.all([getAccessToken(), getIdentityToken()]);
@@ -48,28 +55,31 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
       headers: { Accept: "application/json", Authorization: `Bearer ${access}`,
         ...(identityToken ? { "X-Privy-Identity-Token": identityToken } : {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) },
     });
-    if (!response.ok) throw new Error(response.status === 401 ? "Sign in again with the account that owns this launch."
+    if (!response.ok) throw new HistoryReadError(response.status === 401 ? "Sign in again with the account that owns this launch."
       : response.status === 403 ? "This account or controller cannot access the launch. Connect the wallet that owns the API key."
       : response.status === 404 ? "This launch was not found for this controller."
-      : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.");
+      : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.", response.status);
     return response.json() as Promise<unknown>;
   }, [account, getAccessToken, getIdentityToken]);
   useEffect(() => {
     const controller = new AbortController();
     void Promise.allSettled(sources.map(async source => {
       const result = parseEntries(await request(source, undefined, { signal: controller.signal }), account);
+      let selectedUnavailable = false;
       if (props.initialLaunchId && !result.entries.some(entry => String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId)) {
         try { result.entries.push(...parseEntries(await request(source, props.initialLaunchId, { signal: controller.signal }), account).entries); }
-        catch { /* The immutable identifier may belong to another existing history source. */ }
+        catch (caught) { selectedUnavailable = !(caught instanceof HistoryReadError && caught.status === 404); }
       }
-      return { source, ...result };
+      return { source, selectedUnavailable, ...result };
     })).then(results => {
       if (controller.signal.aborted) return;
       const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
       setEntries(previous => [...new Map([...previous, ...successful.flatMap(result => result.entries)].map(entry => [identity(entry), entry])).values()]
         .sort((a, b) => Number(String(b.resource.planId ?? b.resource.launchId) === props.initialLaunchId) - Number(String(a.resource.planId ?? a.resource.launchId) === props.initialLaunchId) || Date.parse(String(b.resource.createdAt)) - Date.parse(String(a.resource.createdAt))));
       setCursors(previous => ({ ...previous, ...Object.fromEntries(successful.map(result => [result.source, result.nextCursor])) }));
-      setError(results.some(result => result.status === "rejected") ? "Some custom launch sources could not be refreshed. Existing records remain available." : null);
+      const unavailable = results.some(result => result.status === "rejected") || successful.some(result => result.selectedUnavailable);
+      setSourceUnavailable(unavailable);
+      setError(unavailable ? successful.some(result => result.entries.length) ? "Some custom launch sources could not be refreshed. Existing records remain available." : "Launch data is temporarily unavailable. Keep this link and refresh to retry." : null);
       setLoading(false);
     });
     const timer = window.setInterval(() => setRefresh(value => value + 1), 15000);
@@ -88,7 +98,7 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   return <section className={styles.history} aria-label="Custom project launch history">
     <div className={styles.heading}><button type="button" className={shared.secondaryButton} onClick={() => setRefresh(value => value + 1)} disabled={loading}>Refresh custom projects</button></div>
     <p role="status" className={styles.intro}>{loading ? "Loading custom projects…" : error ?? (entries.length ? "" : "No Custom Launch Plan or MultiRole requests for this controller.")}</p>
-    {props.initialLaunchId && !loading && !entries.some(entry => String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId) ? <div className={styles.statePanel}><h3>This launch could not be opened</h3><p>Connect the wallet and account that own this API key, then refresh. This link does not grant access to another controller&apos;s launch.</p><code>{props.initialLaunchId}</code></div> : null}
+    {props.initialLaunchId && !loading && !entries.some(entry => String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId) ? <LaunchHistoryMissingState launchId={props.initialLaunchId} unavailable={sourceUnavailable} /> : null}
     <ul className={styles.launchList}>{entries.map((entry, index) => <DeveloperUniversalLaunchFlow key={identity(entry)} entry={entry} highlighted={String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId}
       autoPrepare={String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId || !props.initialLaunchId && index === 0} sendWallet={props.sendWallet}
       load={async () => parseEntries(await request(entry.sourceVersion, String(entry.resource.planId ?? entry.resource.launchId)), account).entries[0].resource}
