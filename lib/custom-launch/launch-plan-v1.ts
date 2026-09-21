@@ -15,7 +15,7 @@ export const CUSTOM_LAUNCH_PLAN_RECEIPT_VERSION_V1 = "programmable.custom-launch
 export const LAUNCH_PROJECTION_VERSION_V1 = "programmable.launch-projection.v1" as const;
 
 export type LaunchAddressRefV1 = Readonly<{ address: Address }> | Readonly<{ componentId: string }>;
-export type LaunchExecutorV1 = "atomic_graph_v2" | "controller_multi_step_v1" | "observe_and_stamp_v1";
+export type LaunchExecutorV1 = "atomic_graph_v2" | "atomic_execute_and_stamp_v2" | "controller_multi_step_v1" | "observe_and_stamp_v1";
 export type LaunchControllerV1 = Readonly<{
   address: Address;
   kind: "eoa" | "delegated_eoa_v1" | "erc1271" | "smart_account";
@@ -253,6 +253,15 @@ export interface LaunchDistributionV1 {
   readonly hooklist: "not_requested" | "queued" | "submitted" | "merged" | "rejected";
 }
 
+/** Response 1.2 guidance only; never part of the original signed launch authority. */
+export interface LaunchPlanContinuationV1 {
+  readonly schemaVersion: "programmable.custom-launch-plan-continuation.v1";
+  readonly status: "replan_required";
+  readonly originalManifestDigest: Sha256Digest;
+  readonly currentManifestDigest: Sha256Digest;
+  readonly replanUrl: string;
+}
+
 export interface LaunchPlanRecordV1 {
   readonly schemaVersion: "programmable.custom-launch-plan-resource.v1";
   readonly planId: string;
@@ -266,14 +275,16 @@ export interface LaunchPlanRecordV1 {
   readonly preflight: LaunchPreflightV1 | null;
   readonly admission: LaunchAdmissionReceiptV1 | null;
   readonly admissionEvidence?: JsonObject;
-  readonly walletAuthorization?: Readonly<{ stampPreparation: JsonObject; controllerPrefix: JsonObject }>;
+  readonly walletAuthorization?: Readonly<{ stampPreparation: JsonObject; controllerPrefix: JsonObject }>
+    | Readonly<{ atomicPreparation: JsonObject; executionOrder: JsonObject }>;
   readonly steps: readonly LaunchWalletStepV1[];
   readonly distribution: LaunchDistributionV1;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly resumeUrl: string;
-  /** Optional response metadata negotiated with Programmable-Launch-Response-Version: 1.1. */
+  /** Optional response metadata negotiated with Programmable-Launch-Response-Version: 1.1 or 1.2. */
   readonly walletUrl?: string;
+  readonly continuation?: LaunchPlanContinuationV1;
 }
 
 export interface LaunchProjectionV1 {

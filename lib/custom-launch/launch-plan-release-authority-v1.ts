@@ -7,9 +7,17 @@ export type LaunchPlanStampBindingV1 = Readonly<{
   chainId: "4663"; manifestDigest: string; policyBindingHash: string;
   address: Address; runtimeCodeHash: Hex; permitAuthority: Address; permitAuthorityRuntimeCodeHash: Hex;
 }>;
+export type LaunchPlanAtomicBindingV2 = LaunchPlanStampBindingV1 & Readonly<{
+  poolManager: Address; poolManagerRuntimeCodeHash: Hex;
+}>;
+export type LaunchPlanAtomicExecutionV2 = Readonly<{
+  executorKind: "atomic_execute_and_stamp_v2"; address: Address; runtimeCodeHash: Hex; selector: "0x506aba45";
+  permitAuthority: Address; permitAuthorityRuntimeCodeHash: Hex; poolManager: Address; poolManagerRuntimeCodeHash: Hex;
+}>;
 export type LaunchPlanPublicReleaseV1 = Readonly<{
   releaseId: string; manifestDigest: string; issuerVersion: string; binding: LaunchPlanStampBindingV1;
-  execution: { stamp: { address: Address; runtimeCodeHash: Hex; selector: "0xbda52856" } };
+  atomicBinding?: LaunchPlanAtomicBindingV2;
+  execution: { stamp: { address: Address; runtimeCodeHash: Hex; selector: "0xbda52856" }; atomic?: LaunchPlanAtomicExecutionV2 | null };
   receiptIssuer: { keyId: string; publicKeyDigest: string; publicKey: string };
 }>;
 function fail(): never { throw new Error("The admission authority does not match this launch's original release. Refresh its wallet review."); }
@@ -42,6 +50,22 @@ function release(value: unknown): LaunchPlanPublicReleaseV1 {
     || typeof issuer.keyId !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(issuer.keyId) || !digest(issuer.publicKeyDigest)) fail();
   const publicKey = base64(issuer.publicKey, 1024);
   if (`sha256:${sha256(toHex(publicKey)).slice(2)}` !== issuer.publicKeyDigest) fail();
+  const execution = object(entry.execution);
+  if (entry.atomicBinding !== undefined || execution.atomic != null) {
+    const atomicBinding = object(entry.atomicBinding), atomic = object(execution.atomic);
+    if (!keys(atomicBinding, ["chainId", "manifestDigest", "policyBindingHash", "address", "runtimeCodeHash", "permitAuthority", "permitAuthorityRuntimeCodeHash", "poolManager", "poolManagerRuntimeCodeHash"])
+      || !keys(atomic, ["executorKind", "address", "runtimeCodeHash", "selector", "permitAuthority", "permitAuthorityRuntimeCodeHash", "poolManager", "poolManagerRuntimeCodeHash"])
+      || atomicBinding.chainId !== "4663" || atomicBinding.manifestDigest !== entry.manifestDigest
+      || atomicBinding.policyBindingHash !== binding.policyBindingHash
+      || atomic.executorKind !== "atomic_execute_and_stamp_v2" || atomic.selector !== "0x506aba45") fail();
+    for (const field of ["address", "permitAuthority", "poolManager"] as const) {
+      if (!projectionAddress(atomicBinding[field]) || /^0x0{40}$/i.test(atomicBinding[field])
+        || !projectionAddress(atomic[field]) || getAddress(atomic[field]) !== getAddress(atomicBinding[field])) fail();
+    }
+    for (const field of ["runtimeCodeHash", "permitAuthorityRuntimeCodeHash", "poolManagerRuntimeCodeHash"] as const) {
+      if (!projectionHash(atomicBinding[field]) || /^0x0{64}$/.test(atomicBinding[field]) || atomic[field] !== atomicBinding[field]) fail();
+    }
+  }
   return entry as unknown as LaunchPlanPublicReleaseV1;
 }
 
@@ -60,6 +84,7 @@ export async function verifyLaunchPlanReleaseAuthorityV1(resource: LaunchPlanRec
     && entry.binding.policyBindingHash === evidence.policyBindingHash);
   if (matches.length !== 1) fail();
   const selected = matches[0];
+  if (resource.plan.executor === "atomic_execute_and_stamp_v2" && (!selected.atomicBinding || !selected.execution.atomic)) fail();
   const { receiptHash, signature, ...body } = admission;
   if (admission.schemaVersion !== "programmable.custom-launch-plan-admission.v1" || admission.planHash !== resource.planHash
     || admission.rawRequestSha256 !== resource.rawRequestSha256 || admission.manifestDigest !== resource.manifestDigest

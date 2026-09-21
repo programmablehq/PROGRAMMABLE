@@ -5,6 +5,7 @@ import { LAUNCH_PROJECTION_FEED_V1, parseLaunchProjectionV1, projectionAddress, 
 import { canonicalBrowserJsonV2 } from "@/lib/custom-launch/browser-authority-v2";
 import { parseSnapshot } from "./model";
 import type { IndexStore } from "./store";
+import { verifyAtomicLaunchProvenanceV2 } from "./atomic-launch-provenance-v2";
 
 export type LaunchProjectionSourceV1 = {
   page(cursor: string | null): Promise<{ launches: readonly LaunchProjectionV1[]; nextCursor: string | null }>;
@@ -108,7 +109,10 @@ export function launchProjectionSourceV1(signal: AbortSignal = AbortSignal.timeo
         if (projection.sourceVersion === "multi_role_v2") {
           const stamp = await client.readContract({ address: source, abi: MULTI_ROLE_PROVENANCE_ABI, functionName: "launchStampV2", args: [witness.onchainLaunchId], blockNumber: height });
           if (!same(stamp.launchWallet, projection.controller) || /^0x0{64}$/.test(stamp.stampHash)) throw new Error("Projection original controller mismatch");
+        } else if (witness.schemaVersion === "programmable.custom-launch-plan-atomic-stamp-witness.v2" || witness.executorKind === "atomic_execute_and_stamp_v2") {
+          await verifyAtomicLaunchProvenanceV2(client, projection, witness, source, height);
         } else {
+          if (witness.executorKind !== undefined) throw new Error("Unrecognized projection executor");
           const stamp = await client.readContract({ address: source, abi: PLAN_PROVENANCE_ABI, functionName: "launchStampV1", args: [witness.onchainLaunchId], blockNumber: height });
           if (!same(stamp.controller, projection.controller) || stamp.blockNumber !== height
             || stamp.planHash !== `0x${projection.planHash?.slice(7)}` || stamp.manifestDigest !== `0x${projection.manifestDigest?.slice(7)}`
