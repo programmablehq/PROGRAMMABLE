@@ -38,6 +38,7 @@ const provider: LaunchWalletProviderV1 = { async request({ method, params }) {
   if (method === "eth_call") return "0x";
   if (method === "eth_gasPrice") return "0x2";
   if (method === "eth_estimateGas") return "0x186a0";
+  if (method === "eth_getTransactionCount") return "0x7";
   throw new Error(`Unexpected method ${method}`);
 } };
 describe("unchanged MultiRole V2 wallet codec", () => {

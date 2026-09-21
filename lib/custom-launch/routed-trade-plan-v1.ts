@@ -2,7 +2,7 @@ import { Actions, URVersion, V4Planner } from "@uniswap/v4-sdk";
 import { CommandType, RoutePlanner, UniversalRouterVersion } from "@uniswap/universal-router-sdk";
 import { encodeFunctionData, getAddress, parseAbi, type Address, type Hex } from "viem";
 import chainProfile from "@/contracts/spec/robinhood-custom-launch/chain-4663.v1.json";
-import type { LaunchProjectionV1 } from "./launch-plan-v1";
+import { CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1, type LaunchProjectionV1 } from "./launch-plan-v1";
 import { parseLaunchProjectionV1, projectionObject, resolveProjectionAddress } from "./launch-projection-v1";
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "./browser-authority-v2";
 import { assertIssuedImmutablePoolFeeRuntimeProofV1, rebuildImmutablePoolFeeRuntimeProofV1,
@@ -74,27 +74,46 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
   if (market.poolManager.toLowerCase() !== ROUTED_TRADE_CONTRACTS_V1.poolManager.address.toLowerCase()
     || BigInt(poolKey.currency0) >= BigInt(poolKey.currency1) || poolKey.tickSpacing < 1
     || (poolKey.fee > 1_000_000 && poolKey.fee !== 0x800000)) return bad("MARKET_BINDING_CHANGED", "The exact V4 market binding is unavailable.");
-  const matches = projection.assuranceClaims.filter(claim => ["fee_on_programmable_routed_trades", "fee_on_proven_pool_paths"].includes(claim.claimType)
-    && projectionObject(claim.observedValue) && Array.isArray(claim.observedValue.marketIds) && claim.observedValue.marketIds.includes(market.marketId));
-  if (matches.length !== 1) return bad("FEE_POLICY_PENDING", "The market fee policy requires verification.");
-  const claim = matches[0]!, obligation = claim.observedValue as Record<string, unknown>;
-  const poolClaim = claim.claimType === "fee_on_proven_pool_paths";
-  if (obligation.policyVersion !== "programmable.custom-launch-fee.v1" || obligation.rateBps !== 20
-    || obligation.mode !== (poolClaim ? "pool_enforced" : "programmable_routed")
-    || obligation.scope !== (poolClaim ? "proven_pool_paths" : "programmable_built_or_routed_qualifying_swaps")
-    || typeof obligation.recipient !== "string" || obligation.recipient.toLowerCase() !== ROUTED_FEE_RECIPIENT_V1.toLowerCase()
-    || typeof obligation.obligationId !== "string" || claim.subject !== obligation.obligationId
-    || (poolClaim ? claim.status !== "verified" : !["verified", "disclosed"].includes(claim.status))) {
-    return bad("FEE_POLICY_PENDING", "The market fee policy requires verification.");
+  const feeClaims = projection.assuranceClaims.filter(claim => ["fee_on_programmable_routed_trades", "fee_on_proven_pool_paths"].includes(claim.claimType));
+  let obligationId: string;
+  if (feeClaims.length === 0) {
+    const policies = projection.assuranceClaims.filter(claim => claim.claimType === "launch_admission_policy");
+    const policy = policies[0];
+    if (policies.length !== 1 || !policy || projection.planHash === null || projection.manifestDigest === null
+      || policy.subject !== projection.planHash || policy.observedValue !== CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1
+      || policy.status !== "verified" || policy.assessor !== "programmable.custom-launch-plan-policy" || policy.assessorVersion !== "1"
+      || policy.witness.kind !== "policy" || policy.witness.ref !== CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1
+      || policy.witness.details.scope !== "launch_provenance" || policy.witness.details.planHash !== projection.planHash
+      || policy.witness.details.manifestDigest !== projection.manifestDigest) {
+      return bad("FEE_POLICY_PENDING", "The market fee policy requires verification.");
+    }
+    // Provenance admission selects the site's existing trade policy. It is not
+    // a fee assurance claim or evidence that this pool already collects a fee.
+    obligationId = ROUTED_FEE_POLICY_V1;
+  } else {
+    const matches = feeClaims.filter(claim => projectionObject(claim.observedValue)
+      && Array.isArray(claim.observedValue.marketIds) && claim.observedValue.marketIds.includes(market.marketId));
+    if (matches.length !== 1) return bad("FEE_POLICY_PENDING", "The market fee policy requires verification.");
+    const claim = matches[0]!, obligation = claim.observedValue as Record<string, unknown>;
+    const poolClaim = claim.claimType === "fee_on_proven_pool_paths";
+    if (obligation.policyVersion !== "programmable.custom-launch-fee.v1" || obligation.rateBps !== 20
+      || obligation.mode !== (poolClaim ? "pool_enforced" : "programmable_routed")
+      || obligation.scope !== (poolClaim ? "proven_pool_paths" : "programmable_built_or_routed_qualifying_swaps")
+      || typeof obligation.recipient !== "string" || obligation.recipient.toLowerCase() !== ROUTED_FEE_RECIPIENT_V1.toLowerCase()
+      || typeof obligation.obligationId !== "string" || claim.subject !== obligation.obligationId
+      || (poolClaim ? claim.status !== "verified" : !["verified", "disclosed"].includes(claim.status))) {
+      return bad("FEE_POLICY_PENDING", "The market fee policy requires verification.");
+    }
+    obligationId = obligation.obligationId;
   }
   if (poolFeeProof) assertIssuedImmutablePoolFeeRuntimeProofV1(poolFeeProof, {
     chainId: "4663", poolManager: market.poolManager, ...poolKey });
   const inputCurrency = request.zeroForOne ? poolKey.currency0 : poolKey.currency1;
   const outputCurrency = request.zeroForOne ? poolKey.currency1 : poolKey.currency0;
-  const fee: LaunchPlanFeeBindingV1 = poolFeeProof ? { mode: "pool_enforced", obligationId: obligation.obligationId,
+  const fee: LaunchPlanFeeBindingV1 = poolFeeProof ? { mode: "pool_enforced", obligationId,
     policyVersion: ROUTED_FEE_POLICY_V1, scope: "fee_on_proven_pool_paths", rateBps: 20, routedRateBps: 0,
     recipient: ROUTED_FEE_RECIPIENT_V1, base: "not_applicable", rounding: "not_applicable", currency: outputCurrency,
-    poolEnforcementWitness: poolFeeProof } : { mode: "programmable_routed", obligationId: obligation.obligationId,
+    poolEnforcementWitness: poolFeeProof } : { mode: "programmable_routed", obligationId,
     policyVersion: ROUTED_FEE_POLICY_V1, scope: "fee_on_programmable_routed_trades",
     rateBps: 20, routedRateBps: 20, recipient: ROUTED_FEE_RECIPIENT_V1,
     base: "gross_output_credit", rounding: "floor", currency: outputCurrency, poolEnforcementWitness: null };

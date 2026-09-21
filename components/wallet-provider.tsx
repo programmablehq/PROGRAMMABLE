@@ -2906,15 +2906,24 @@ function PrivyWalletBridge({
         throw new Error("The wallet session changed. Refresh the wallet review.");
       }
     };
-    if (wallet.chainId !== robinhoodChainHex) {
+    if (wallet.chainId !== robinhoodChainHex && input.action !== "review") {
       await connectedWallet.switchChain(robinhoodChain.id);
       assertCurrentSession();
     }
     const provider = await connectedWallet.getEthereumProvider();
-    const { prepareUniversalLaunchWalletV1 } = await import("@/lib/custom-launch/wallet-handoff-plan-v1");
+    const { prepareUniversalLaunchWalletV1, recoverUniversalLaunchTransactionV1 } = await import("@/lib/custom-launch/wallet-handoff-plan-v1");
+    const { beginLaunchSendV1, readLaunchSendJournalV1, parseLaunchSendAttemptV1, rememberLaunchHashV1, rejectLaunchSendV1 } = await import("@/lib/custom-launch/launch-send-journal-v1");
+    if (input.action === "recover") {
+      const attempt = parseLaunchSendAttemptV1(readLaunchSendJournalV1(controller), controller);
+      if (!attempt || !input.recoveryHash || attempt.sourceVersion !== input.sourceVersion || attempt.stepId !== input.stepId) throw new Error("The saved launch attempt is unavailable. Restore its original transaction receipt.");
+      const hash = await recoverUniversalLaunchTransactionV1(provider, attempt, input.recoveryHash);
+      assertCurrentSession();
+      rememberLaunchHashV1(attempt, hash);
+      return hash;
+    }
     const review = await prepareUniversalLaunchWalletV1(provider, controller, input);
     assertCurrentSession();
-    if (input.action === "review") return review;
+    if (input.action === "review" || input.action === "switch_chain") return review;
     if (!input.reviewed || input.reviewed.binding !== review.binding
       || JSON.stringify(input.reviewed.transaction) !== JSON.stringify(review.transaction)
       || BigInt(review.maxGasCostWei) > BigInt(input.reviewed.maxGasCostWei)) {
@@ -2923,11 +2932,22 @@ function PrivyWalletBridge({
     return runWithBrowserWalletRequestLock({ sessionSubject, account: controller, chainId: "4663",
       requestSubject: JSON.stringify(["custom-launch-plan-wallet-v1", review.binding]), assertCurrentSession,
       execute: async () => {
-        const fresh = await prepareUniversalLaunchWalletV1(provider, controller, input);
-        assertCurrentSession();
-        if (fresh.binding !== review.binding || JSON.stringify(fresh.transaction) !== JSON.stringify(review.transaction)
-          || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The wallet review changed. Refresh before sending.");
-        return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
+        let fresh: UniversalLaunchWalletReviewV1;
+        try {
+          fresh = await prepareUniversalLaunchWalletV1(provider, controller, input);
+          assertCurrentSession();
+          if (fresh.binding !== review.binding || JSON.stringify(fresh.transaction) !== JSON.stringify(review.transaction)
+            || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The wallet review changed. Review the current transaction before sending.");
+        } catch (error) { throw new WalletRequestNotSubmittedError(error instanceof Error ? error.message : "The current wallet review is unavailable."); }
+        let attempt;
+        try { attempt = beginLaunchSendV1(fresh); }
+        catch (error) { throw new WalletRequestNotSubmittedError(error instanceof Error ? error.message : "The launch recovery record is unavailable."); }
+        try {
+          const hash = parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
+          try { rememberLaunchHashV1(attempt, hash); }
+          catch { /* Keep the durable unresolved attempt. Return the observed hash for immediate display and backend tracking. */ }
+          return hash;
+        } catch (error) { rejectLaunchSendV1(attempt, error); throw error; }
       },
     });
   }, [connectedWallet, user, wallet]);

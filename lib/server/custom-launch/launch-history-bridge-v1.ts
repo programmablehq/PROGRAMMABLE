@@ -381,8 +381,10 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           body = Buffer.from(JSON.stringify(value));
         }
         const method = write ? "POST" as const : "GET" as const;
+        const headers = walletAdminHeaders(principal, controller, method, url, body);
+        if (source === "custom_launch_plan_v1") headers.set("Programmable-Launch-Response-Version", "1.1");
         const backend = await input.fetchBackend(url, { method,
-          headers: walletAdminHeaders(principal, controller, method, url, body),
+          headers,
           ...(write ? { body } : {}), cache: "no-store", redirect: "error",
           signal: AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]) });
         if (!backend.ok) return mappedBackendError(backend).then(mappedError);

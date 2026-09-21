@@ -10,7 +10,7 @@ vi.mock("@/contracts/spec/robinhood-custom-launch/chain-4663.v1.json", async imp
 });
 import { projectionFixture, controller, component, runtime, runtimeHash, hash, now, nowIso } from "./fixtures/universal-launch-v1";
 import { buildLaunchPlanRoutedSwapV1, launchPlanTradeAmountsV1, launchPlanTradeBindingV1, launchPlanTradePreparationDigestV1,
-  parseLaunchPlanTradeRequestV1, ROUTED_FEE_RECIPIENT_V1, ROUTED_TRADE_CONTRACTS_V1, ROUTED_TRADE_REQUEST_V1, ROUTED_TRADE_ROUTER_ABI_V1,
+  parseLaunchPlanTradeRequestV1, ROUTED_FEE_POLICY_V1, ROUTED_FEE_RECIPIENT_V1, ROUTED_TRADE_CONTRACTS_V1, ROUTED_TRADE_REQUEST_V1, ROUTED_TRADE_ROUTER_ABI_V1,
   ROUTED_TRADE_TOKEN_ABI_V1, validateLaunchPlanTradePreparationV1, type LaunchPlanTradeRequestV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 import { prepareLaunchPlanTradeV1 } from "@/lib/server/custom-launch/routed-trade-plan-v1";
 import { productionTradeRpcsV1, tradePostStateV1, type TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
@@ -20,7 +20,7 @@ import feeVectors from "@/contracts/spec/immutable-pool-fee-runtime-vectors-v1.j
 import { rebuildImmutablePoolFeeRuntimeProofV1, materializeImmutableFeeRuntimeWordsV1,
   type ImmutablePoolFeeRuntimeProofV1 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v1";
 import { IMMUTABLE_POOL_FEE_RECIPES_V1 as feeRecipes } from "@/lib/custom-launch/immutable-pool-fee-recipes-custom-launch-plan-v1";
-import type { LaunchProjectionV1 } from "@/lib/custom-launch/launch-plan-v1";
+import { CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1, type LaunchClaimV1, type LaunchProjectionV1 } from "@/lib/custom-launch/launch-plan-v1";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const TAKE = parseAbi(["function take(address,address,uint256)"]);
@@ -32,6 +32,13 @@ function projection() {
     observedValue: { obligationId: "route-fee", mode: "programmable_routed", policyVersion: "programmable.custom-launch-fee.v1", rateBps: 20,
       scope: "programmable_built_or_routed_qualifying_swaps", recipient: ROUTED_FEE_RECIPIENT_V1, marketIds: ["unfamiliar-curve"] },
     status: "disclosed" as const, witness: { kind: "policy" as const, ref: "fixture:fee", details: {} }, assessor: "fixture", assessorVersion: "1", validAt: nowIso, blockNumber: "42" }] };
+}
+function provenanceProjection(original: LaunchProjectionV1 = projection()): LaunchProjectionV1 {
+  return { ...original, assuranceClaims: [{ claimType: "launch_admission_policy", subject: original.planHash!,
+    observedValue: CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1, status: "verified",
+    assessor: "programmable.custom-launch-plan-policy", assessorVersion: "1", validAt: nowIso, blockNumber: "42",
+    witness: { kind: "policy", ref: CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1,
+      details: { scope: "launch_provenance", planHash: original.planHash, manifestDigest: original.manifestDigest } } }] };
 }
 function request(): LaunchPlanTradeRequestV1 {
   return parseLaunchPlanTradeRequestV1({ schemaVersion: ROUTED_TRADE_REQUEST_V1, chainId: "4663", launchId: projection().launchId,
@@ -72,7 +79,7 @@ function fixtureRpc(options: { revert?: boolean; missingFee?: boolean; underpaid
 const prepared = async (options: Parameters<typeof fixtureRpc>[0] = {}) => prepareLaunchPlanTradeV1(request(), {
   loadProjection: async () => projection(), rpcs: [fixtureRpc(options), fixtureRpc(options)], now: () => now });
 
-function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean } = {}) {
+function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean } = {}) {
   const vector = feeVectors.proofs[index]! as unknown as ImmutablePoolFeeRuntimeProofV1;
   const proof = rebuildImmutablePoolFeeRuntimeProofV1(vector, vector.market), recipes = feeRecipes[proof.recipeId];
   const tradeRequest = { ...request(), zeroForOne: !options.sell };
@@ -81,11 +88,12 @@ function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAcc
   const codes = Object.fromEntries(proof.runtimeBindings.filter(b => b.role !== "module").map(binding => [binding.address.toLowerCase(),
     materializeImmutableFeeRuntimeWordsV1((binding.role === "controller" && "controller" in recipes ? recipes.controller
       : binding.role === "hook" ? recipes.hook : recipes.vault), binding.immutableWords!)]));
-  const value: LaunchProjectionV1 = { ...projection(), components: [...projection().components,
+  const original: LaunchProjectionV1 = { ...projection(), components: [...projection().components,
     ...proof.runtimeBindings.map(binding => ({ componentId: `fee-${binding.role}`, artifactId: `fee-source-${binding.role}`,
       expectedAddress: binding.address, runtimeCodeHash: binding.runtimeCodeHash }))], markets: [{ marketId: request().marketId, kind: "uniswap_v4",
         poolManager: proof.market.poolManager, currency0: { address: proof.market.currency0 }, currency1: { address: proof.market.currency1 },
         hooks: { address: proof.market.hooks }, fee: proof.market.fee, tickSpacing: proof.market.tickSpacing }] };
+  const value = options.provenance ? provenanceProjection(original) : original;
   const CALLBACK = parseAbi(["function beforeSwap(address,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks),(bool zeroForOne,int256 amountSpecified,uint160 sqrtPriceLimitX96),bytes)",
     "function afterSwap(address,(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks),(bool zeroForOne,int256 amountSpecified,uint160 sqrtPriceLimitX96),int256,bytes)"]);
   const LEDGER = parseAbi(["function platformAccrued() view returns(uint256)", "function creatorAccrued() view returns(uint256)", "function balanceOf(address,uint256) view returns(uint256)", "function recordFees(uint256,uint256)"]);
@@ -127,6 +135,70 @@ function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAcc
 }
 
 describe("generic vNext routed swap", () => {
+  it("uses the fixed routed trade policy for bound open provenance without adding fee assurance", async () => {
+    const value = provenanceProjection(), original = structuredClone(value);
+    const binding = launchPlanTradeBindingV1(value, request());
+    expect(binding.fee).toEqual({ mode: "programmable_routed", obligationId: ROUTED_FEE_POLICY_V1,
+      policyVersion: ROUTED_FEE_POLICY_V1, scope: "fee_on_programmable_routed_trades", rateBps: 20, routedRateBps: 20,
+      recipient: ROUTED_FEE_RECIPIENT_V1, base: "gross_output_credit", rounding: "floor", currency: component, poolEnforcementWitness: null });
+    expect(binding.projection).toEqual(original);
+    expect(value.assuranceClaims.map(claim => claim.claimType)).toEqual(["launch_admission_policy"]);
+    expect(buildLaunchPlanRoutedSwapV1(value, request(), 50001n).data).toBe(sdkVector.buy.transactionData);
+    expect(buildLaunchPlanRoutedSwapV1(value, { ...request(), zeroForOne: false }, 50001n).data).toBe(sdkVector.sell.transactionData);
+    const trade = await prepareLaunchPlanTradeV1(request(), {
+      loadProjection: async () => value, rpcs: [fixtureRpc(), fixtureRpc()], now: () => now });
+    expect(trade.quote).toMatchObject({ grossAmountOut: "50001", platformFeeAmount: "100", amountOut: "49901", amountOutMinimum: "49651" });
+    expect(validateLaunchPlanTradePreparationV1(trade, value, request(), now)).toEqual(trade);
+  });
+  it("rejects missing, duplicate, forged and unbound open provenance policy claims", () => {
+    const value = provenanceProjection(), claim = value.assuranceClaims[0]!;
+    const otherHash = `sha256:${"0".repeat(64)}`;
+    const detailPatches: LaunchClaimV1["witness"]["details"][] = [
+      { scope: "all_routes" }, { planHash: otherHash }, { manifestDigest: otherHash }, { manifestDigest: null },
+    ];
+    const patches: Partial<LaunchClaimV1>[] = [
+      { claimType: "unrelated_policy" }, { subject: otherHash }, { observedValue: "programmable.custom-launch-policy.v1" },
+      { status: "disclosed" }, { status: "unresolved" }, { assessor: "caller" }, { assessorVersion: "2" },
+      { witness: { ...claim.witness, kind: "source" } }, { witness: { ...claim.witness, ref: "caller-policy" } },
+      ...detailPatches.map(details => ({ witness: { ...claim.witness, details: { ...claim.witness.details, ...details } } })),
+      { witness: { ...claim.witness, details: { scope: "launch_provenance" } } },
+    ];
+    for (const patch of patches) {
+      expect(() => launchPlanTradeBindingV1({ ...value, assuranceClaims: [{ ...claim, ...patch }] }, request()))
+        .toThrowError(expect.objectContaining({ code: "FEE_POLICY_PENDING" }));
+    }
+    for (const assuranceClaims of [[], [claim, claim], [claim, { ...claim, subject: otherHash }]]) {
+      expect(() => launchPlanTradeBindingV1({ ...value, assuranceClaims }, request()))
+        .toThrowError(expect.objectContaining({ code: "FEE_POLICY_PENDING" }));
+    }
+    expect(() => launchPlanTradeBindingV1({ ...value, manifestDigest: null }, request()))
+      .toThrowError(expect.objectContaining({ code: "FEE_POLICY_PENDING" }));
+  });
+  it("retains existing admission fee bindings and never uses provenance to bypass a malformed fee claim", () => {
+    const legacy = projection(), policy = provenanceProjection().assuranceClaims[0]!;
+    expect(launchPlanTradeBindingV1({ ...legacy, assuranceClaims: [...legacy.assuranceClaims, policy] }, request()).fee)
+      .toEqual(launchPlanTradeBindingV1(legacy, request()).fee);
+    const feeClaim = legacy.assuranceClaims[0]!;
+    for (const observedValue of [null, {}, { ...feeClaim.observedValue, rateBps: 0 },
+      { ...feeClaim.observedValue, marketIds: ["other-market"] }, { ...feeClaim.observedValue, recipient: component }]) {
+      expect(() => launchPlanTradeBindingV1({ ...legacy, assuranceClaims: [policy, { ...feeClaim, observedValue }] }, request()))
+        .toThrowError(expect.objectContaining({ code: "FEE_POLICY_PENDING" }));
+    }
+  });
+  it("waives the open provenance route fee only for the existing issued runtime pool proof", async () => {
+    const fixture = immutablePoolFixture(0, { provenance: true });
+    expect(launchPlanTradeBindingV1(fixture.projection, fixture.request).fee)
+      .toMatchObject({ mode: "programmable_routed", routedRateBps: 20, poolEnforcementWitness: null });
+    expect(() => launchPlanTradeBindingV1(fixture.projection, fixture.request, structuredClone(fixture.proof))).toThrow();
+    const trade = await fixture.prepare();
+    expect(trade.fee).toMatchObject({ mode: "pool_enforced", routedRateBps: 0, rateBps: 20, scope: "fee_on_proven_pool_paths" });
+    expect(trade.evidence.feeTransfer).toMatchObject({ routedFeeAmount: "0", poolFeeAccrual: { platformAccruedIncrease: "200" } });
+    expect(validateLaunchPlanTradePreparationV1(trade, fixture.projection, fixture.request, now)).toEqual(trade);
+    const claim = fixture.projection.assuranceClaims[0]!;
+    const claimedFee = { ...fixture.projection, assuranceClaims: [{ ...claim,
+      witness: { ...claim.witness, details: { ...claim.witness.details, routedRateBps: 0, poolEnforced: true } } }] };
+    expect(launchPlanTradeBindingV1(claimedFee, fixture.request).fee).toMatchObject({ mode: "programmable_routed", routedRateBps: 20 });
+  });
   it("reuses each exact immutable native20 path without an additional output fee and verifies actual backed accrual", async()=>{
     for(let index=0;index<feeVectors.proofs.length;index++) for(const sell of [false,true]){
       const fixture=immutablePoolFixture(index,{sell}),value=await fixture.prepare();
