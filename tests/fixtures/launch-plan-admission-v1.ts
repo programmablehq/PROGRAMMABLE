@@ -7,6 +7,7 @@ import { CUSTOM_LAUNCH_PLAN_STAMP_ABI_V1, customLaunchPlanStampComponentsHashV1,
   customLaunchPlanStampPermitDigestV1, customLaunchPlanStampHashV1, customLaunchPlanDigestBytesV1,
   customLaunchPlanLaunchIdV1, customLaunchPlanOccurrenceIdV1, type CustomLaunchPlanStampPermitV1 } from "@/lib/custom-launch/stamp-plan-codec-v1";
 import { bindStep, component, controller, hash, now, nowIso, recordFixture, runtimeHash, stamp } from "./universal-launch-v1";
+import { atomicBindingFixture } from "./atomic-launch-v2";
 
 // Ephemeral keys exist only in Node tests. The browser fixtures never import this module.
 export function admissionIssuerFixture(keyId = "fixture-admission-issuer") {
@@ -37,9 +38,14 @@ export function authorizeRecordFixture(record: LaunchPlanRecordV1, overrides: Pa
 }
 export function releaseFixture(record: LaunchPlanRecordV1, issuer = issuerFixture): LaunchPlanPublicReleaseV1 {
   const binding = stampBindingFixture(record, String(record.admissionEvidence?.policyBindingHash ?? policyFixture));
+  const atomicBinding = record.plan.executor === "atomic_execute_and_stamp_v2" ? atomicBindingFixture(record) : undefined;
   return { releaseId: digest("programmable.custom-launch-plan-release.v1", { manifestDigest: record.manifestDigest, keyId: issuer.public.keyId }),
     manifestDigest: record.manifestDigest, issuerVersion: record.admission!.issuerVersion, binding,
-    execution: { stamp: { address: binding.address, runtimeCodeHash: binding.runtimeCodeHash, selector: "0xbda52856" } }, receiptIssuer: issuer.public };
+    ...(atomicBinding ? { atomicBinding } : {}),
+    execution: { stamp: { address: binding.address, runtimeCodeHash: binding.runtimeCodeHash, selector: "0xbda52856" },
+      ...(atomicBinding ? { atomic: { executorKind: "atomic_execute_and_stamp_v2" as const, selector: "0x506aba45" as const,
+        address: atomicBinding.address, runtimeCodeHash: atomicBinding.runtimeCodeHash, permitAuthority: atomicBinding.permitAuthority,
+        permitAuthorityRuntimeCodeHash: atomicBinding.permitAuthorityRuntimeCodeHash, poolManager: atomicBinding.poolManager, poolManagerRuntimeCodeHash: atomicBinding.poolManagerRuntimeCodeHash } } : {}) }, receiptIssuer: issuer.public };
 }
 export function capabilitiesFixture(record: LaunchPlanRecordV1, releases = [releaseFixture(record)], current = releases[0]) {
   const disabled = { state: "disabled", reasons: ["PLAN_OPERATION_DISABLED"] };

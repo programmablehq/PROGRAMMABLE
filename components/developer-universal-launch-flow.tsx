@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } fro
 import { useRouter } from "next/navigation";
 import { formatEther, type Hex } from "viem";
 import { parseLaunchProjectionV1, projectionObject, projectionToRobinhoodLaunch } from "@/lib/custom-launch/launch-projection-v1";
-import { launchFlowStateV1, launchFlowStepsV1 } from "@/lib/custom-launch/launch-flow-v1";
+import { launchFlowPresentationV1 } from "@/lib/custom-launch/launch-flow-v1";
 import { finalizeLaunchSendV1, parseLaunchSendAttemptV1, readLaunchSendJournalV1, rememberLaunchHashV1, subscribeLaunchSendV1 } from "@/lib/custom-launch/launch-send-journal-v1";
 import { launchPlanWalletUrlV1, readLaunchPlanResourceV1, type UniversalLaunchSource, type UniversalLaunchWalletInputV1, type UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import shared from "./developer-api-keys.module.css";
@@ -28,8 +28,6 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const id = String(resource.planId ?? resource.launchId);
   const step = plan?.steps.find(item => item.status === "wallet_action_ready");
   const ready = plan ? !!step : ["authorized", "awaiting_wallet_signature", "wallet_action_required"].includes(String(resource.status));
-  const steps = plan ? launchFlowStepsV1(plan) : [{ id: "multi-role-v2", label: "Launch and Programmable Stamp", status: resource.status === "finalized" ? "final" as const : "pending" as const, stamp: true }];
-  const state = plan ? launchFlowStateV1(plan) : { title: ready ? "Ready to launch" : resource.status === "finalized" ? "Confirming website indexing" : "Preparing your launch", description: ready ? "Check the wallet and current cost, then confirm the launch in your wallet." : "Tracking continues automatically. Reopen this launch to continue.", terminal: resource.status === "finalized" };
   const wallet = projectionObject(resource.wallet) ? resource.wallet : null;
   const summary = wallet && projectionObject(wallet.launchSummary) ? wallet.launchSummary : null;
   const title = plan?.plan.publication?.name ?? (typeof summary?.name === "string" ? summary.name : "Custom project");
@@ -78,6 +76,11 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const hasUnresolved = !!rawJournal || !!legacySubmission || !!pendingStep;
   const unknownSend = !!ownAttempt && !hash;
   const visibleReview = review?.stepId === (step?.stepId ?? "multi-role-v2") && ready && !hasUnresolved ? review : null;
+  const presentation = plan ? launchFlowPresentationV1(plan, ownAttempt ? { stepId: ownAttempt.stepId,
+    transactionDigest: ownAttempt.binding, transactionHash: ownAttempt.transactionHash } : null) : null;
+  const steps = presentation?.steps ?? [{ id: "multi-role-v2", label: "Launch and Programmable Stamp", status: resource.status === "finalized" ? "final" as const : hash ? "broadcast" as const : "pending" as const, stamp: true }];
+  const state = presentation?.state ?? { title: resource.status === "finalized" ? "Confirming website indexing" : hash ? "Transaction submitted" : ready ? "Ready to launch" : "Preparing your launch",
+    description: hash ? "Tracking continues automatically with the saved transaction hash." : ready ? "Check the wallet and current cost, then confirm the launch in your wallet." : "Tracking continues automatically. Reopen this launch to continue.", terminal: resource.status === "finalized" };
 
   async function loadFreshCapabilities() {
     const response = await fetch(`https://api.programmable.market/v4/chains/4663/${plan ? "custom-launch-capabilities" : "multi-role-custom-launches/capabilities"}`, { cache: "no-store", credentials: "omit", redirect: "error", signal: AbortSignal.timeout(15000) });
@@ -169,7 +172,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     <dl className={styles.summary}><div><dt>Controller wallet</dt><dd><span title={entry.controller}>{shortAddress(entry.controller)}</span></dd></div><div><dt>Wallet transactions</dt><dd>{steps.length} including Stamp</dd></div>
       <div><dt>{visibleReview ? "Current transaction value" : "Launch value limit"}</dt><dd>{formatEther(BigInt(visibleReview?.valueWei ?? plan?.plan.budgets.maxTotalValue ?? "0"))} ETH</dd></div>
       <div><dt>Current estimated gas cost</dt><dd>{visibleReview ? `${formatEther(BigInt(visibleReview.maxGasCostWei))} ETH` : ready && !hasUnresolved && autoPrepare && !error ? "Checking current cost…" : "Shown before confirmation"}</dd></div></dl>
-    <ol className={styles.steps} aria-label="Launch steps">{steps.map((item, index) => <li key={item.id} data-status={item.status} aria-current={item.id === step?.stepId ? "step" : undefined}><span className={styles.stepNumber}>{item.status === "final" ? "✓" : index + 1}</span><div><span>{item.label}</span><small>{stepLabels[item.status]}{item.stamp && item.status === "pending" ? " · after contract finality" : ""}</small></div></li>)}
+    <ol className={styles.steps} aria-label="Launch steps">{steps.map((item, index) => <li key={item.id} data-status={item.status} aria-current={item.id === step?.stepId ? "step" : undefined}><span className={styles.stepNumber}>{item.status === "final" ? "✓" : index + 1}</span><div><span>{item.label}</span><small>{stepLabels[item.status]}{item.stamp && item.status === "pending" && plan?.plan.executor !== "atomic_execute_and_stamp_v2" ? " · after contract finality" : ""}</small></div></li>)}
       <li data-status={indexedHref ? "final" : "pending"}><span className={styles.stepNumber}>{indexedHref ? "✓" : steps.length + 1}</span><div><span>Public website index</span><small>{indexedHref ? "Indexed" : "Automatic after finality · no wallet transaction"}</small></div></li></ol>
     {journalError ? <p role="alert" className={styles.error}>{journalError} This launch remains paused.</p> : null}
     {attempt && !ownAttempt ? <p className={styles.notice}>A previous launch transaction needs recovery or finality. <a href={launchPlanWalletUrlV1(attempt.launchId)}>Open its launch</a> before sending another transaction.</p> : null}
@@ -180,7 +183,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     {visibleReview ? <div className={styles.confirmation}><p>Next: <strong>{steps.find(item => item.id === visibleReview.stepId)?.label ?? "Launch and Stamp"}</strong>. Estimated total for this transaction: <strong>{formatEther(BigInt(visibleReview.valueWei) + BigInt(visibleReview.maxGasCostWei))} ETH</strong>.</p>
       {visibleReview.createdAddress ? <p>Direct contract deployment. Your wallet is the constructor sender.</p> : null}
       {visibleReview.controllerAuthorization ? <p>Confirm the bound Safe nonce and owner threshold in the controller wallet. Signature collection and finality remain pending.</p> : null}
-      <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy === "send" ? "Confirm in your wallet…" : "Confirm in wallet"}</button><p className={styles.hint}>The exact transaction is checked again before opening your wallet. Later steps show their own current gas cost.</p></div>
+      <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy === "send" ? "Confirm in your wallet…" : "Confirm in wallet"}</button><p className={styles.hint}>The exact transaction is checked again before opening your wallet.{steps.length > 1 ? " Later steps show their own current gas cost." : " This transaction includes the Programmable Stamp."}</p></div>
       : ready && !hasUnresolved ? <button className={shared.secondaryButton} type="button" disabled={!!busy} onClick={() => void action("switch_chain")}>{busy ? "Checking wallet…" : error && /chain|network|controller account/i.test(error) ? "Switch network and check wallet" : "Refresh wallet review"}</button> : null}
     {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open program</a> : null}
     {(error || trackingError) ? <p className={styles.error} role={error ? "alert" : "status"}>{error ?? trackingError}</p> : null}
