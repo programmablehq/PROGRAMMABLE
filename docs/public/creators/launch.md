@@ -1,7 +1,3 @@
----
-description: Create a coin, add modules and confirm the launch
----
-
 # Launch a coin
 
 Module Mode creates your coin and a Uniswap v4 pool on Robinhood Chain. You need a connected wallet and enough ETH for the first buy and network gas. A standard launch supplies the initial token liquidity without a separate liquidity deposit.
@@ -11,7 +7,7 @@ Module Mode creates your coin and a Uniswap v4 pool on Robinhood Chain. You need
 1. Open [Launch a Coin](https://programmable.market/launch/modules/foundation).
 2. Enter a name, ticker and description. Add an image and project links if you have them.
 3. Choose the creator fee under **Buy & Sell** and set the **First buy** amount.
-4. Select **Launch** and confirm the transaction in your wallet.
+4. Add any modules you want to use, then select **Create Launch** and confirm the transaction in your wallet.
 
 The coin, pool and first buy are created in one transaction. If you leave the image blank, the coin uses the Programmable logo.
 

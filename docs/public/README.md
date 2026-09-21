@@ -1,27 +1,29 @@
 ---
-description: Launch coins and custom contracts on Uniswap v4
 cover: .gitbook/assets/programmable-warm-night-v3.gif
 coverY: 0
 ---
 
 # Programmable
 
-Programmable lets you launch coins and custom contracts on Uniswap v4. Use Module Mode to configure a coin on the website, or Custom Launch to build a project with your own code.
+Programmable is a platform for launching tokens and custom projects on Uniswap v4. It provides a coin builder, launch APIs and public launch records that other apps can index. The website's coin builder runs on Robinhood Chain.
 
-## Launch a coin
+## Two ways to launch
 
-Module Mode creates a coin and its pool on Robinhood Chain. Enter the coin details, choose creator fees and a first buy, and confirm the launch in your wallet. ETH is the default pair. You can add a module to pair with another supported token.
+| Launch path | What you do |
+| --- | --- |
+| [Module Mode](models/module-mode.md) | Set up a coin on the website and choose compatible modules. No coding is needed. |
+| [Custom Launch](models/custom.md) | Build a project with your own token, hook or supporting contracts and prepare its launch through the API. |
 
-The [launch guide](creators/launch.md) walks through the form. [Module Mode](models/module-mode.md) explains how the pool, modules and fees work.
+Modules are reusable pieces of contract logic. You choose the available building blocks and their settings before launching. A custom project can define its own behavior, including how fees or other pool actions work.
 
-## Build custom contracts
+In both paths, your wallet confirms the transactions. The public launch record identifies the project's contracts. Websites, explorers and trading terminals can use that record to discover the project.
 
-Custom Launch accepts your token, hook and supporting contracts through an API. The API checks the submitted project and prepares the launch transaction. Your wallet reviews and signs it.
+## Fees and V4
 
-Start with the [Custom Launch quickstart](developers/custom-launch-quickstart.md). Availability depends on the selected network, contract layout and verification requirements.
+Programmable earns platform fees from trades covered by its fee rules. Creators can set their own fees separately. [Fees and revenue](economics.md) explains the rates and how platform revenue is used, including V4 buybacks and burns.
 
-## Fees and integrations
+## Development
 
-Creators can earn fees from trades in their coins. Programmable receives a separate share according to the launch model. [Fees and revenue](economics.md) explains the rates and recipients.
+We are adding more modules and working with teams building their own contracts and hooks. New modules expand what people can configure in the builder. Existing coins keep the module versions chosen at launch.
 
-Terminals, explorers and wallets can use the public launch records to identify coins. The [indexing guide](developers/indexing.md) covers each launch source and the checks an integration needs.
+Developers integrating launches, building modules or connecting a trading terminal can start with the [developer guides](developers/README.md).

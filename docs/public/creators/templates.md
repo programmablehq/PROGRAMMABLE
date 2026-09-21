@@ -10,4 +10,4 @@ Every coin records the module versions selected at launch. Publishing a newer ve
 
 Modules can earn the fee share recorded by their host and launch. Foundation allocates module rewards from the creator fee; earlier hosts have different rules. Earnings depend on use and trading activity, not publication alone.
 
-[Build a module](../developers/module-mode.md) covers development and submission access. [Fees and revenue](../economics.md#module-mode) explains the reward models.
+[Build a module](../developers/module-mode.md) covers development and submission access. [Fees by contract version](../reference/fee-versions.md) explains the reward models.
