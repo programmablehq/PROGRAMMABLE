@@ -12,7 +12,7 @@ import { useRouteViewChain, type ViewChainId } from "@/components/view-chain";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { rememberRobinhoodTokenPresentations } from "@/components/robinhood-presentation-cache";
-import { coinAge, coinDollars, coinTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import { coinAge, coinTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, ROBINHOOD_EXPLORE_PAGE_SIZE, sameRobinhoodExploreRequest, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
 import { isRobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projection-v1";
@@ -359,7 +359,6 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
               <li key={launch.tokenAddress.toLowerCase()} className={styles.item}>
                 <article className={styles.row}>
                 <Link className={styles.cardLink} href={`/token/${launch.tokenAddress}${chainId === 1 ? "?chain=1" : ""}`} prefetch={false}>
-                  <div className={styles.cardHeader}>
                   <RobinhoodCoinArtwork
                     eager={index < 5}
                     imageUrl={details?.imageUrl} loading={loading && !details}
@@ -373,16 +372,12 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                     {hasAsset ? <span className={styles.symbol} title={launch.symbol || undefined}>{coinTicker(launch.symbol)}</span> : null}
                     <span className={styles.mode}>{launch.category === "classic" ? "Classic" : isRobinhoodModuleLaunch(launch) ? "Module" : "Custom"}</span>
                   </div>
-                  </div>
                   <div className={styles.cardFooter}>
                     {hasAsset && (chainId === 4663 || valuation.value !== null) ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
                       <span title={valuation.title}>{valuation.label}</span>
                       {details?.market && valuation.value !== null
                         ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`${chainId}:${launch.tokenAddress.toLowerCase()}:${details.market.poolId.toLowerCase()}:${valuation.label}`} />
                         : <strong>—</strong>}
-                    </div> : null}
-                    {hasAsset && chainId === 4663 && (request.sort === "activity" || details?.market?.volume24hUsd != null) ? <div className={styles.marketCap}>
-                      <span>24h volume</span><strong>{coinDollars(details?.market?.volume24hUsd)}</strong>
                     </div> : null}
                     {launch.launchedAt ? <time className={styles.launched} dateTime={launch.launchedAt} title={`Launched ${new Date(launch.launchedAt).toUTCString()}`}>{coinAge(launch.launchedAt, now)}</time> : null}
                   </div>
@@ -395,13 +390,11 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
             {Array.from({ length: slots }, (_, index) => <li key={`slot-${index}`}
               className={`${styles.item} ${pending ? styles.skeleton : styles.emptySlot}`} aria-hidden="true">
               <div className={styles.row}>
-                <div className={styles.cardHeader}>
                 <div className={`${styles.artwork} ${styles.skeletonArtwork}`} />
                 <div className={styles.identity}>
                   <span className={`${styles.skeletonLine} ${styles.skeletonName}`} />
                   <span className={`${styles.skeletonLine} ${styles.skeletonSymbol}`} />
                   <span className={`${styles.skeletonLine} ${styles.skeletonMode}`} />
-                </div>
                 </div>
                 <div className={styles.cardFooter}>{chainId === 4663 ? <div className={styles.marketCap}>
                   <span className={`${styles.skeletonLine} ${styles.skeletonCaption}`} />
