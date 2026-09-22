@@ -256,7 +256,10 @@ describe("Robinhood Custom launch website flow", () => {
     expect(launchEntrySource).not.toContain(
       'href="/developers/hooks"',
     );
-    expect(launchEntrySource).toContain('data-launch-model-entry="maintenance"');
+    expect(launchEntrySource).toContain('data-launch-model-entry="developer-launch"');
+    expect(launchEntrySource).toContain(
+      'href="/developers/api-keys?start=custom&chainId=4663"',
+    );
     expect(launchEntrySource).toContain('data-launch-model-launchable="false"');
     expect(launchEntrySource).not.toContain("Live API");
     expect(apiKeysSource).toContain(

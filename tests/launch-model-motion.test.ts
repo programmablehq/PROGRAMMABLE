@@ -63,8 +63,8 @@ describe("launch model artwork", () => {
       'aria-describedby="launch-model-custom-description launch-model-custom-status"',
     );
     expect(source).toContain('data-launch-model-option="custom"');
-    expect(source).toContain('data-launch-model-available="false"');
-    expect(source).toContain('data-launch-model-entry="maintenance"');
+    expect(source).toContain('data-launch-model-available="true"');
+    expect(source).toContain('data-launch-model-entry="developer-launch"');
     expect(source).not.toContain(
       'href="/developers/hooks"',
     );

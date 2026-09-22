@@ -201,13 +201,13 @@ describe("unreleased launch model gating", () => {
     );
     expect(html).toContain('data-launch-model-option="custom"');
     const customCard = html.match(
-      /<button[^>]*data-launch-model-option="custom"[^>]*>/,
+      /<a[^>]*data-launch-model-option="custom"[^>]*>/,
     )?.[0];
-    expect(customCard).toContain('data-launch-model-available="false"');
-    expect(customCard).toContain('data-launch-model-entry="maintenance"');
+    expect(customCard).toContain('data-launch-model-available="true"');
+    expect(customCard).toContain('data-launch-model-entry="developer-launch"');
     expect(customCard).toContain('data-launch-model-launchable="false"');
-    expect(customCard).not.toContain("href=");
-    expect(customCard).toContain('disabled=""');
+    expect(customCard).toContain('href="/developers/api-keys?start=custom&amp;chainId=4663"');
+    expect(customCard).not.toContain("disabled");
     expect(html).toContain(
       'id="launch-model-custom-title">Custom hook</strong>',
     );
@@ -215,7 +215,7 @@ describe("unreleased launch model gating", () => {
     expect(html).toContain(
       "Create a Uniswap v4 hook with your own logic.",
     );
-    expect(html.match(/Getting updated currently/g)).toHaveLength(2);
+    expect(html.match(/Getting updated currently/g)).toHaveLength(1);
     expect(html).not.toContain("approved GitHub revision");
     expect(html.indexOf('data-launch-model-option="classic"')).toBeLessThan(
       html.indexOf('data-launch-model-option="custom"'),
@@ -237,7 +237,7 @@ describe("unreleased launch model gating", () => {
     expect(html).not.toContain("Liquidity Growth");
   });
 
-  it("opens the Robinhood coin draft immediately while the custom entry stays in maintenance", () => {
+  it("opens the Robinhood coin draft and the existing custom-launch workflow", () => {
     const html = renderToStaticMarkup(
       createElement(LaunchModelPicker, {
         chainId: 4663,
@@ -258,15 +258,15 @@ describe("unreleased launch model gating", () => {
     expect(html).not.toContain('data-launch-model-option="prediction"');
     expect(html).toContain('data-launch-model-option="custom"');
     expect(html).toContain('id="launch-model-custom-title"');
-    expect(html).not.toContain('data-launch-model-available="true"');
-    expect(html).toContain('data-launch-model-entry="maintenance"');
+    expect(html).toContain('data-launch-model-available="true"');
+    expect(html).toContain('data-launch-model-entry="developer-launch"');
     expect(html).toContain('data-launch-model-launchable="false"');
     expect(html).not.toContain("Preflight required");
     expect(html).not.toContain('href="/developers/hooks"');
-    expect(html.match(/Getting updated currently/g)).toHaveLength(1);
-    const customCard = html.match(/<button[^>]*data-launch-model-option="custom"[^>]*>/u)?.[0];
-    expect(customCard).toContain('disabled=""');
-    expect(customCard).not.toContain("href=");
+    expect(html).not.toContain("Getting updated currently");
+    const customCard = html.match(/<a[^>]*data-launch-model-option="custom"[^>]*>/u)?.[0];
+    expect(customCard).not.toContain("disabled");
+    expect(customCard).toContain('href="/developers/api-keys?start=custom&amp;chainId=4663"');
     expect(html).not.toContain("approved GitHub revision");
     expect(html).not.toContain("Build or resume");
   });
