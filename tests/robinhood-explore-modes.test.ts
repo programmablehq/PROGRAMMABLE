@@ -42,9 +42,9 @@ describe("Explore source filters and card pagination", () => {
     for (let page = 1; page <= first.page.totalPages; page++) {
       const result = launchList(saved, page, "", now, { sort: "newest", mode }, undefined, ROBINHOOD_EXPLORE_PAGE_SIZE);
       expect(result.items[0]).toEqual(pinned);
-      expect(result.items.length).toBeLessThanOrEqual(6);
-      expect(result.page).toMatchObject({ number: page, size: 6, totalItems: expected.length + 1,
-        totalPages: Math.ceil(expected.length / 5), hasMore: page < first.page.totalPages });
+      expect(result.items).toHaveLength(Math.min(10, expected.length - (page - 1) * 9 + 1));
+      expect(result.page).toMatchObject({ number: page, size: 10, totalItems: expected.length + 1,
+        totalPages: Math.ceil(expected.length / 9), hasMore: page < first.page.totalPages });
       collected.push(...result.items.slice(1));
     }
     expect(collected).toEqual(expected);

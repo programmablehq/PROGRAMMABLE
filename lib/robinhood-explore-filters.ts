@@ -12,7 +12,7 @@ export const LAUNCH_MODE_OPTIONS = [
   { value: "custom", label: "Custom" },
 ] as const;
 
-export const ROBINHOOD_EXPLORE_PAGE_SIZE = 6;
+export const ROBINHOOD_EXPLORE_PAGE_SIZE = 10;
 
 export type RobinhoodExploreFilters = {
   sort: typeof LAUNCH_SORT_OPTIONS[number]["value"];
