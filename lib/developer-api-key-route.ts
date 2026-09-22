@@ -1,8 +1,7 @@
 export function developerApiKeysInitialSection(
   searchParams: Record<string, string | string[] | undefined>,
 ) {
-  if (searchParams.view === "history") return "history" as const;
-  return searchParams.start === "custom"
-    ? "launch" as const
+  return searchParams.view === "history" || searchParams.start === "custom"
+    ? "history" as const
     : "keys" as const;
 }
