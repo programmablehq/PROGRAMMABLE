@@ -1,0 +1,14 @@
+.policyDisclosure { border-bottom: 1px solid var(--webde-line); margin-bottom: 24px; max-width: 900px; }
+.policyDisclosure summary { align-items: center; color: var(--webde-muted); cursor: pointer; display: flex; font-size: 14px; font-weight: 500; gap: 12px; line-height: 20px; list-style: none; min-height: 44px; padding-block: 12px; }
+.policyDisclosure summary::-webkit-details-marker { display: none; }
+.policyDisclosure summary > span:first-child { flex: 1; }
+.policyDisclosure summary > span:last-child { color: var(--webde-ink); font-variant-numeric: tabular-nums; }
+.policyDisclosure summary::after { border-bottom: 1.5px solid currentColor; border-right: 1.5px solid currentColor; content: ""; height: 6px; margin-inline: 6px 2px; transform: rotate(45deg); width: 6px; }
+.policyDisclosure[open] summary::after { transform: rotate(225deg); }
+.policyDisclosure p { color: var(--webde-muted); font-size: 12px; line-height: 18px; margin: 0 0 12px; max-width: 760px; text-wrap: pretty; }
+.policyDisclosure code { font-family: var(--font-plex-mono), monospace; overflow-wrap: anywhere; }
+.policyDisclosure summary:focus-visible { outline: 2px solid #e786b2; outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .policyDisclosure summary:hover { color: var(--webde-ink); }
+}
+@media (forced-colors: active) { .policyDisclosure { border: 1px solid CanvasText; } }

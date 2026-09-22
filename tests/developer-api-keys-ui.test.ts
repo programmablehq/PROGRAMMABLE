@@ -1716,7 +1716,7 @@ describe("developer launch history interface", () => {
     expect(apiKeysSource).toContain(
       "initialLaunchChainId={initialLaunchChainId}",
     );
-    expect(apiKeysSource).toContain('setActiveSection("history")');
+    expect(apiKeysSource).toContain('setActiveSection(section)');
     expect(historySource).toContain(
       'const version = initialLaunchChainId === "4663" ? "v4" : "v3"',
     );

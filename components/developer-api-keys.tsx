@@ -31,11 +31,8 @@ import type { LaunchContractSetupV1 } from "@/lib/server/custom-launch/launch-co
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import { DeveloperLaunchHistory } from "@/components/developer-launch-history";
 import type { BuilderKind } from "@/components/module-contribution-entry";
-import {
-  DeveloperRobinhoodLaunch,
-  RobinhoodFeePolicyDisclosure,
-} from
-  "@/components/developer-robinhood-launch";
+import { RobinhoodFeePolicyDisclosure } from
+  "@/components/robinhood-fee-policy-disclosure";
 import {
   useWallet,
   type CustomLaunchWalletActionInputV4,
@@ -108,7 +105,7 @@ type ApiKeyMutationState =
   | Readonly<{ kind: "rotate"; credentialId: string }>;
 
 type ListState = "idle" | "loading" | "ready" | "error";
-type ActiveSection = "keys" | "launch" | "history";
+type ActiveSection = "keys" | "history";
 const subscribeToHydration = () => () => {};
 const readHydrated = () => true;
 const readServerHydrated = () => false;
@@ -1120,8 +1117,8 @@ export function DeveloperApiKeysView({
     const candidate = searchParams.get("launchId");
     const chainId = searchParams.get("chainId");
     const launchId = candidate && launchRequestIdPattern.test(candidate) ? candidate : null;
-    const section = searchParams.get("start") === "custom" ? "launch"
-      : launchId || searchParams.get("view") === "history" ? "history" : "keys";
+    const section = launchId || searchParams.get("view") === "history"
+      || searchParams.get("start") === "custom" ? "history" : "keys";
     const update = window.setTimeout(() => {
       setActiveSection(section);
       setInitialLaunchId(launchId);
@@ -1317,43 +1314,21 @@ export function DeveloperApiKeysView({
     const url = new URL(window.location.href);
     if (section === "history") url.searchParams.set("view", "history");
     else url.searchParams.delete("view");
-    if (section === "launch") {
-      url.searchParams.set("start", "custom");
-      url.searchParams.set("chainId", "4663");
+    url.searchParams.delete("start");
+    if (section === "keys") {
       url.searchParams.delete("launchId");
+      url.searchParams.delete("chainId");
       setInitialLaunchId(null);
       setInitialLaunchChainId("4663");
-    } else {
-      url.searchParams.delete("start");
-      if (section === "keys") {
-        url.searchParams.delete("launchId");
-        url.searchParams.delete("chainId");
-        setInitialLaunchId(null);
-        setInitialLaunchChainId("4663");
-      } else if (!url.searchParams.has("launchId")) {
-        url.searchParams.delete("chainId");
-      }
+    } else if (!url.searchParams.has("launchId")) {
+      url.searchParams.delete("chainId");
     }
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
     setStatusMessage(
       section === "keys"
         ? "Showing API keys."
-        : section === "launch"
-          ? "Showing Robinhood Custom launch."
-          : "Showing launch history.",
+        : "Showing launches.",
     );
-  };
-
-  const openRobinhoodLaunchHistory = (launchId: string) => {
-    setInitialLaunchId(launchId);
-    setInitialLaunchChainId("4663");
-    setActiveSection("history");
-    const url = new URL(window.location.href);
-    url.searchParams.delete("start");
-    url.searchParams.set("launchId", launchId);
-    url.searchParams.set("chainId", "4663");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-    setStatusMessage("Opening the new Robinhood launch in history.");
   };
 
   const beginRevoke = (apiKeyId: string) => {
@@ -1555,13 +1530,11 @@ export function DeveloperApiKeysView({
 
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
-          <h1>{activeSection === "keys" ? "API keys" : activeSection === "launch" ? "Launch a hook" : "Your launches"}</h1>
+          <h1>{activeSection === "keys" ? "API keys" : "Your launches"}</h1>
           <p className={styles.intro}>
             {activeSection === "keys"
               ? "Create and manage API keys for custom hooks on Robinhood."
-              : activeSection === "launch"
-                ? "Upload the launch file from your builder."
-                : "Track progress and complete your wallet steps."}
+              : "Review and sign launches prepared through the API."}
           </p>
         </div>
       </header>
@@ -1579,20 +1552,12 @@ export function DeveloperApiKeysView({
           API keys
         </button>
         <button
-          aria-pressed={activeSection === "launch"}
-          disabled={!hydrated}
-          type="button"
-          onClick={() => showSection("launch")}
-        >
-          Launch
-        </button>
-        <button
           aria-pressed={activeSection === "history"}
           disabled={!hydrated}
           type="button"
           onClick={() => showSection("history")}
         >
-          History
+          Launches
         </button>
       </nav>
 
@@ -1620,7 +1585,7 @@ export function DeveloperApiKeysView({
         </Disclosure>
       ) : null}
 
-      {activeSection === "launch" ? (
+      {activeSection === "history" ? (
         <RobinhoodFeePolicyDisclosure />
       ) : null}
 
@@ -1657,9 +1622,7 @@ export function DeveloperApiKeysView({
             <p>
               {activeSection === "keys"
                 ? "Create and manage keys for this account."
-                : activeSection === "launch"
-                  ? "Continue your hook launch with this wallet."
-                  : "See launches linked to this wallet."}
+                : "See launches linked to this wallet."}
             </p>
           </div>
           <button
@@ -2180,10 +2143,6 @@ export function DeveloperApiKeysView({
                 ) : null}
               </section>
             </div>
-          ) : activeSection === "launch" ? (
-            <DeveloperRobinhoodLaunch
-              onOpenLaunch={openRobinhoodLaunchHistory}
-            />
           ) : (
             <>
             {account && sendUniversalLaunchWalletAction ? <DeveloperUniversalLaunchHistory key={account.toLowerCase()} account={account} initialLaunchId={initialLaunchId}
@@ -2206,7 +2165,7 @@ export function DeveloperApiKeysView({
       )}
 
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        <a href="/docs/developers/custom-launch">Developer docs <ArrowRight size={16} aria-hidden="true" /></a>
+        <a href="/docs/developers/custom-launch-quickstart">Developer docs <ArrowRight size={16} aria-hidden="true" /></a>
       </nav>
 
     </div>
