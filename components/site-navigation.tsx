@@ -19,7 +19,6 @@ import {
 } from "@/components/brand-icons";
 import {
   NavigationCloseIcon,
-  NavigationChevronIcon,
   NavigationMenuIcon,
 } from "@/components/navigation-icons";
 import { useWallet } from "@/components/wallet-provider";
@@ -36,6 +35,7 @@ const menuNavItems = [
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/profile", label: "Profile" },
   { href: "/docs", label: "Docs" },
+  { href: "/privacy", label: "Privacy & settings" },
 ];
 
 const mobileNavItems = [desktopNavItems[0], ...menuNavItems];
@@ -108,33 +108,42 @@ function shortenAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function HeaderWalletButton({
-  open,
-  triggerRef,
-  onOpen,
-  onToggle,
-  onClose,
-}: Readonly<{
+function HeaderWalletButton({ onOpen }: Readonly<{ onOpen: () => void }>) {
+  const { wallet, hasSession, connecting, openingWallet, disconnecting, openWallet, preloadWallet } = useWallet();
+  const label = disconnecting
+    ? "Disconnecting"
+    : connecting
+      ? openingWallet ? "Opening wallet" : "Loading wallet"
+      : hasSession ? "Reconnect wallet" : "Connect wallet";
+
+  if (wallet) {
+    return <span className={styles.headerWalletSummary} aria-label={`Connected wallet ${shortenAddress(wallet.account)}`}>
+      {shortenAddress(wallet.account)}
+    </span>;
+  }
+
+  return <button
+    className={styles.headerWalletButton}
+    type="button"
+    disabled={connecting || disconnecting}
+    aria-busy={connecting || disconnecting || undefined}
+    aria-haspopup="dialog"
+    aria-label={label}
+    onFocus={preloadWallet}
+    onPointerEnter={preloadWallet}
+    onClick={() => { onOpen(); openWallet(); }}
+  >
+    <WalletIcon className={styles.headerWalletIcon} size={22} aria-hidden="true" />
+    <span className={styles.headerWalletLabel}>{label}</span>
+  </button>;
+}
+
+function HeaderWalletActions({ open, triggerRef, onClose }: Readonly<{
   open: boolean;
   triggerRef: RefObject<HTMLButtonElement | null>;
-  onOpen: () => void;
-  onToggle: () => void;
   onClose: () => void;
 }>) {
-  const {
-    wallet,
-    authenticated,
-    hasSession,
-    connecting,
-    openingWallet,
-    disconnecting,
-    openWallet,
-    preloadWallet,
-    disconnect,
-  } = useWallet();
-  const router = useRouter();
-  const menuId = useId();
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const { wallet, authenticated, disconnecting, disconnect } = useWallet();
   const copyAddressRef = useRef<HTMLInputElement>(null);
   const busyRef = useRef(false);
   const menuOpen = open && wallet !== null;
@@ -147,12 +156,10 @@ function HeaderWalletButton({
     copyFailed: boolean;
   }>({ account, menuOpen, operation: null, message: "", copyFailed: false });
 
-  // A completed action belongs to the account and menu that started it.
-  // Reset the scope before rendering a changed wallet or reopened menu.
+  // An asynchronous result belongs only to the account and menu that started it.
   if (feedback.account !== account || feedback.menuOpen !== menuOpen) {
     setFeedback({ account, menuOpen, operation: null, message: "", copyFailed: false });
   }
-
   const feedbackCurrent = feedback.account === account && feedback.menuOpen === menuOpen;
   const message = feedbackCurrent ? feedback.message : "";
   const showCopyAddress = menuOpen && feedbackCurrent && feedback.copyFailed;
@@ -168,7 +175,6 @@ function HeaderWalletButton({
     setFeedback({ account, menuOpen, operation, message: "", copyFailed: false });
     return operation;
   }
-
   function completeFeedback(operation: object, text: string, copyFailed = false) {
     setFeedback((current) => current.operation === operation &&
       current.account === account && current.menuOpen
@@ -176,130 +182,45 @@ function HeaderWalletButton({
       : current);
   }
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const closeOnOutsidePress = (event: PointerEvent) => {
-      if (event.target instanceof Node && !wrapperRef.current?.contains(event.target)) {
-        onClose();
+  if (!wallet) return null;
+  return <div className={styles.walletActions} role="group" aria-label="Wallet actions">
+    <p className={styles.walletIdentity}>
+      <span>Connected wallet</span>
+      <span>{shortenAddress(wallet.account)}</span>
+    </p>
+    <AdminDashboardLink account={wallet.account} authenticated={authenticated}
+      menuOpen={menuOpen} onNavigate={onClose} />
+    <button type="button" onClick={async () => {
+      const operation = startFeedback();
+      try {
+        await navigator.clipboard.writeText(wallet.account);
+        completeFeedback(operation, "Address copied");
+      } catch {
+        completeFeedback(operation, "Select and copy the address below.", true);
       }
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePress);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePress);
-  }, [menuOpen, onClose]);
-  const label = disconnecting
-    ? "Disconnecting"
-    : connecting
-      ? openingWallet ? "Opening wallet" : "Loading wallet"
-      : wallet
-        ? shortenAddress(wallet.account)
-        : hasSession
-          ? "Reconnect wallet"
-          : "Connect wallet";
-
-  return (
-    <div
-      className={styles.headerWallet}
-      ref={wrapperRef}
-      onBlur={(event) => {
-        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
-        window.requestAnimationFrame(() => {
-          if (!wrapperRef.current?.contains(document.activeElement)) onClose();
-        });
-      }}
-    >
-      <button
-        ref={triggerRef}
-        className={styles.headerWalletButton}
-        type="button"
-        disabled={connecting || disconnecting}
-        aria-busy={connecting || disconnecting || undefined}
-        aria-haspopup={wallet ? undefined : "dialog"}
-        aria-controls={wallet ? menuId : undefined}
-        aria-expanded={wallet ? menuOpen : undefined}
-        aria-label={wallet ? `Wallet ${shortenAddress(wallet.account)}` : label}
-        onFocus={preloadWallet}
-        onPointerEnter={preloadWallet}
-        onClick={() => {
-          startFeedback();
-          onOpen();
-          if (wallet) onToggle();
-          else {
-            onClose();
-            openWallet();
-          }
-        }}
-      >
-        <WalletIcon className={styles.headerWalletIcon} size={22} aria-hidden="true" />
-        <span className={styles.headerWalletLabel}>{label}</span>
-        {wallet && !connecting && !disconnecting ? <NavigationChevronIcon className={styles.headerWalletChevron} /> : null}
-      </button>
-      {wallet ? (
-        <div
-          className={`${styles.walletMenu} ${menuOpen ? styles.walletMenuOpen : ""}`}
-          id={menuId}
-          role="group"
-          aria-label="Wallet actions"
-          aria-hidden={!menuOpen}
-          inert={menuOpen ? undefined : true}
-        >
-          <Link href="/profile" prefetch={false}
-            onFocus={() => warmNavigationRoute(router, "/profile")}
-            onPointerEnter={() => warmNavigationRoute(router, "/profile")}
-            onPointerDown={() => warmNavigationRoute(router, "/profile")}
-            onClick={onClose}>Profile</Link>
-          <Link href="/developers/api-keys" prefetch={false}
-            onFocus={() => warmNavigationRoute(router, "/developers/api-keys")}
-            onPointerEnter={() => warmNavigationRoute(router, "/developers/api-keys")}
-            onPointerDown={() => warmNavigationRoute(router, "/developers/api-keys")}
-            onClick={onClose}>API keys</Link>
-          <Link href="/privacy" prefetch={false}
-            onFocus={() => warmNavigationRoute(router, "/privacy")}
-            onPointerEnter={() => warmNavigationRoute(router, "/privacy")}
-            onPointerDown={() => warmNavigationRoute(router, "/privacy")}
-            onClick={onClose}>Privacy &amp; settings</Link>
-          <AdminDashboardLink account={wallet.account} authenticated={authenticated}
-            menuOpen={menuOpen} onNavigate={onClose} />
-          <button type="button" onClick={async () => {
-            const operation = startFeedback();
-            try {
-              await navigator.clipboard.writeText(wallet.account);
-              completeFeedback(operation, "Address copied");
-            } catch {
-              completeFeedback(operation, "Select and copy the address below.", true);
-            }
-          }}>Copy address</button>
-          <button type="button" aria-disabled={disconnecting || undefined} aria-busy={disconnecting || undefined} onClick={async () => {
-            if (busyRef.current) return;
-            busyRef.current = true;
-            const operation = startFeedback();
-            try {
-              if (await disconnect({ showDialogOnFailure: false })) {
-                onClose();
-                window.requestAnimationFrame(() => triggerRef.current?.focus());
-              } else {
-                completeFeedback(operation, "Unable to disconnect. Try again.");
-              }
-            } catch {
-              completeFeedback(operation, "Unable to disconnect. Try again.");
-            } finally {
-              busyRef.current = false;
-            }
-          }}>{disconnecting ? "Disconnecting…" : "Disconnect"}</button>
-          <p className={message ? styles.walletFeedback : "sr-only"} role="status" aria-live="polite">{message}</p>
-          {showCopyAddress ? (
-            <input
-              ref={copyAddressRef}
-              className={styles.walletAddress}
-              aria-label="Wallet address"
-              readOnly
-              value={wallet.account}
-              onFocus={(event) => event.currentTarget.select()}
-            />
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
+    }}>Copy address</button>
+    <button type="button" aria-disabled={disconnecting || undefined} aria-busy={disconnecting || undefined} onClick={async () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      const operation = startFeedback();
+      try {
+        if (await disconnect({ showDialogOnFailure: false })) {
+          onClose();
+          window.requestAnimationFrame(() => triggerRef.current?.focus());
+        } else {
+          completeFeedback(operation, "Unable to disconnect. Try again.");
+        }
+      } catch {
+        completeFeedback(operation, "Unable to disconnect. Try again.");
+      } finally {
+        busyRef.current = false;
+      }
+    }}>{disconnecting ? "Disconnecting…" : "Disconnect"}</button>
+    <p className={message ? styles.walletFeedback : "sr-only"} role="status" aria-live="polite">{message}</p>
+    {showCopyAddress ? <input ref={copyAddressRef} className={styles.walletAddress}
+      aria-label="Wallet address" readOnly value={wallet.account}
+      onFocus={(event) => event.currentTarget.select()} /> : null}
+  </div>;
 }
 
 function isCurrent(pathname: string, item: (typeof desktopNavItems)[number]) {
@@ -346,21 +267,17 @@ export function SiteHeader() {
   const menuId = useId();
   const headerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const walletButtonRef = useRef<HTMLButtonElement>(null);
   const [menuPath, setMenuPath] = useState<string | null>(null);
-  const [walletMenuPath, setWalletMenuPath] = useState<string | null>(null);
   const [navigationInput, setNavigationInput] = useState<"pointer" | "keyboard">("pointer");
   const menuOpen = menuPath === pathname;
-  const walletMenuOpen = walletMenuPath === pathname;
 
   useEffect(() => {
-    if (!menuOpen && !walletMenuOpen) return;
+    if (!menuOpen) return;
 
     const closeOnOutsidePress = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
       if (!headerRef.current?.contains(event.target)) {
         setMenuPath(null);
-        setWalletMenuPath(null);
       }
     };
 
@@ -371,15 +288,10 @@ export function SiteHeader() {
         setMenuPath(null);
         menuButtonRef.current?.focus();
       }
-      if (walletMenuOpen) {
-        setWalletMenuPath(null);
-        walletButtonRef.current?.focus();
-      }
     };
 
     const closeOnHistoryNavigation = () => {
       setMenuPath(null);
-      setWalletMenuPath(null);
     };
 
     document.addEventListener("pointerdown", closeOnOutsidePress);
@@ -391,7 +303,7 @@ export function SiteHeader() {
       document.removeEventListener("keydown", closeOnEscape);
       window.removeEventListener("popstate", closeOnHistoryNavigation);
     };
-  }, [menuOpen, walletMenuOpen]);
+  }, [menuOpen]);
 
   function closeOnFocusLeave(event: FocusEvent<HTMLElement>) {
     if (!menuOpen) return;
@@ -419,7 +331,6 @@ export function SiteHeader() {
       onClickCapture={(event) => {
         if (event.target instanceof Element && event.target.closest("a[href]")) {
           setMenuPath(null);
-          setWalletMenuPath(null);
         }
       }}
     >
@@ -455,15 +366,7 @@ export function SiteHeader() {
         </Link>
 
         <div className={`header-actions ${styles.headerActions}`}>
-          <HeaderWalletButton
-            triggerRef={walletButtonRef}
-            open={walletMenuOpen}
-            onOpen={() => setMenuPath(null)}
-            onToggle={() => {
-              setWalletMenuPath(walletMenuOpen ? null : pathname);
-            }}
-            onClose={() => setWalletMenuPath(null)}
-          />
+          <HeaderWalletButton onOpen={() => setMenuPath(null)} />
           <button
             ref={menuButtonRef}
             className={styles.menuButton}
@@ -472,7 +375,6 @@ export function SiteHeader() {
             aria-expanded={menuOpen}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             onClick={() => {
-              setWalletMenuPath(null);
               setMenuPath(menuOpen ? null : pathname);
             }}
           >
@@ -500,6 +402,7 @@ export function SiteHeader() {
               open={menuOpen}
               onNavigate={() => setMenuPath(null)}
             />
+            <HeaderWalletActions open={menuOpen} triggerRef={menuButtonRef} onClose={() => setMenuPath(null)} />
             <HeaderSocialLinks mobile />
           </div>
         </div>

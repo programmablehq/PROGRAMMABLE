@@ -68,20 +68,20 @@ async function expectMethods(page: Page, methods: string[]) {
 test("only the admin wallet gets one dashboard entry, including keyboard and account changes", async ({ page }) => {
   await open(page);
   const header = page.getByRole("banner");
-  await header.getByRole("button", { name: "Wallet 0xaaaa…aaaa", exact: true }).click();
+  await header.getByRole("button", { name: /^(Open|Close) menu$/ }).click();
   await expect(header.getByRole("link", { name: "Admin Dashboard", exact: true })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await scenario(page, "website-admin");
-  const button = header.getByRole("button", { name: /^Wallet 0x7987…1b9c$/i });
+  const button = header.getByRole("button", { name: /^(Open|Close) menu$/ });
   await button.focus();
   await page.keyboard.press("Enter");
   const link = header.getByRole("link", { name: "Admin Dashboard", exact: true });
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute("href", "/admin/modules");
-  await page.keyboard.press("Tab");
-  await expect(header.getByRole("link", { name: "Profile", exact: true })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(header.getByRole("link", { name: "API keys", exact: true })).toBeFocused();
+  for (const name of ["Launch options", "API keys", "Profile", "Docs"]) {
+    await page.keyboard.press("Tab");
+    await expect(header.getByRole("link", { name, exact: true })).toBeFocused();
+  }
   await page.keyboard.press("Tab");
   await expect(header.getByRole("link", { name: "Privacy & settings", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -526,10 +526,10 @@ for (const path of ["/profile", "/developers/api-keys"]) {
     await open(page, path);
     await scenario(page, "owned-with-foreign");
     const header = page.getByRole("banner");
-    const trigger = header.getByRole("button", { name: "Wallet 0xaaaa…aaaa", exact: true });
+    const trigger = header.getByRole("button", { name: /^(Open|Close) menu$/ });
     await trigger.click();
     const menu = header.getByRole("group", { name: "Wallet actions", exact: true });
-    await expect(menu.getByRole("link", { name: "Profile", exact: true })).toHaveAttribute("href", "/profile");
+    await expect(header.getByRole("link", { name: "Profile", exact: true })).toHaveAttribute("href", "/profile");
     await expect(menu.getByRole("button", { name: "Copy address", exact: true })).toBeVisible();
     await expect(menu.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
     await expect(menu.getByRole("button", { name: "Manage wallets", exact: true })).toHaveCount(0);

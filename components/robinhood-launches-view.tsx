@@ -286,7 +286,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
         ? "Launches are temporarily unavailable"
       : data?.status === "syncing"
         ? `Checking ${chainName} launches`
-        : snapshot?.request.q || hasFilters ? "No matching launches" : "No finalized launches yet";
+        : snapshot?.request.q || hasFilters ? "No matching launches" : "No priced launches yet";
 
   return (
     <div className={`${styles.page} page-width`}>
