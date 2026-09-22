@@ -102,15 +102,15 @@ describe("Robinhood Explore read model", () => {
     expect(second.presentations[0].market?.volume24hUsd).toBe(0);
   });
 
-  it("requires a positive displayed valuation even for the pinned coin", async () => {
+  it("requires a positive reported market cap and excludes FDV-only pools even for the pinned coin", async () => {
     const rows = Array.from({ length: 6 }, (_, index) => token(index + 1));
     rows[0] = { ...rows[0], tokenAddress: PINNED_ROBINHOOD_TOKEN };
     mocks.read.mockResolvedValue({ snapshot: saved(rows) });
     mocks.markets.mockResolvedValue(new Map(rows.map((row, index) => [row.tokenAddress.toLowerCase(),
       { ...market(row, [0, -1, NaN, Infinity, 100, 0][index]), ...(index === 5 ? { marketCapUsd: null, fdvUsd: 200 } : {}) }])));
     const result = await readRobinhoodLaunches();
-    expect(result.items).toEqual([rows[5], rows[4]]);
-    expect(result.page.totalItems).toBe(2);
+    expect(result.items).toEqual([rows[4]]);
+    expect(result.page.totalItems).toBe(1);
   });
 
   it("shares Explore's full catalog market observation on direct coin visits", async () => {
