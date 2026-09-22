@@ -54,6 +54,8 @@ const MAXIMUM_BACKEND_V4_BODY_BYTES = 16_777_216;
 // Complete protected vNext resources are bounded to 64 MiB; reserve one MiB
 // for the signed history/page envelope without truncating source or evidence.
 const MAXIMUM_BACKEND_PLAN_BODY_BYTES = 65 * 1024 * 1024;
+// Canonical owner resources allow depth 128; list envelopes add two levels.
+const MAXIMUM_BACKEND_PLAN_DEPTH = 130;
 const MAXIMUM_BROWSER_FUNDING_BODY_BYTES = 1_024;
 const DEFAULT_BACKEND_TIMEOUT_MS = 5_000;
 const DEFAULT_PAGE_SIZE = 5;
@@ -388,7 +390,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           ...(write ? { body } : {}), cache: "no-store", redirect: "error",
           signal: AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]) });
         if (!backend.ok) return mappedBackendError(backend).then(mappedError);
-        const resource = jsonRecord(await readBoundedBackendJson(backend, source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_BODY_BYTES : MAXIMUM_BACKEND_V4_BODY_BYTES));
+        const resource = jsonRecord(await readBoundedBackendJson(backend,
+          source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_BODY_BYTES : MAXIMUM_BACKEND_V4_BODY_BYTES,
+          source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_DEPTH : 16));
         if (write) return jsonResponse(backend.status, resource);
         const resources = launchId ? [resource] : source === "custom_launch_plan_v1" ? resource.plans : resource.launches;
         if (!Array.isArray(resources) || resources.length > (launchId ? 1 : 5)) throw new BackendContractErrorV1();
@@ -409,8 +413,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           return { sourceVersion: source, controller, resource: item };
         });
         if (!launchId && !(resource.nextCursor === null || typeof resource.nextCursor === "string" && resource.nextCursor.length <= 4096)) throw new BackendContractErrorV1();
-        return jsonResponse(200, { schemaVersion: "programmable.website-launch-history.v1", launches: entries,
-          nextCursor: launchId ? null : resource.nextCursor });
+        const historyBody = { schemaVersion: "programmable.website-launch-history.v1", launches: entries,
+          nextCursor: launchId ? null : resource.nextCursor };
+        return source === "custom_launch_plan_v1" ? streamedPlanHistoryResponse(historyBody) : jsonResponse(200, historyBody);
       } catch (error) { return mappedError(error); }
     },
     async list(request: Request) {
@@ -2047,6 +2052,7 @@ function requireLinkedWallet(
 async function readBoundedBackendJson(
   response: Response,
   maximumBytes: number,
+  maximumDepth = 16,
 ): Promise<JsonValue> {
   const contentLength = response.headers.get("content-length");
   const declaredLength = contentLength === null ? null : Number(contentLength);
@@ -2082,7 +2088,7 @@ async function readBoundedBackendJson(
   try {
     return parseStrictJson(text, {
       maximumBytes,
-      maximumDepth: 16,
+      maximumDepth,
     });
   } catch {
     throw new BackendContractErrorV1();
@@ -2224,6 +2230,22 @@ function mappedError(error: unknown) {
     undefined,
     requestId,
   );
+}
+
+/** Stream only after the entire protected response and owner binding pass.
+ * Complete plan evidence can exceed the host's buffered response limit. */
+function streamedPlanHistoryResponse(body: Readonly<Record<string, unknown>>) {
+  const bytes = Buffer.from(JSON.stringify(body), "utf8");
+  let offset = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const end = Math.min(offset + 64 * 1024, bytes.length);
+      controller.enqueue(bytes.subarray(offset, end));
+      offset = end;
+      if (offset === bytes.length) controller.close();
+    },
+  });
+  return new Response(stream, { status: 200, headers: RESPONSE_HEADERS });
 }
 
 function jsonResponse(
