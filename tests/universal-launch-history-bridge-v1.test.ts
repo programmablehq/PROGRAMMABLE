@@ -22,9 +22,29 @@ describe("additive controller history bridge", () => {
     const { bridge, fetchBackend } = context({ plans: [record], nextCursor: null });
     const response = await bridge.universal(request());
     expect(response.status).toBe(200);
-    expect((await response.json()).launches[0].resource.admissionEvidence.proof.length).toBe(33 * 1024 * 1024);
+    const reader = response.body!.getReader();
+    const chunks: Uint8Array[] = [];
+    for (let part = await reader.read(); !part.done; part = await reader.read()) chunks.push(part.value);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every(chunk => chunk.byteLength <= 64 * 1024)).toBe(true);
+    expect(JSON.parse(Buffer.concat(chunks).toString("utf8")).launches[0].resource).toEqual(record);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-length")).toBeNull();
     fetchBackend.mockImplementationOnce(async () => new Response("{}", { headers: { "content-type": "application/json", "content-length": String(65 * 1024 * 1024 + 1) } }));
     expect((await bridge.universal(request())).status).toBe(503);
+  });
+  it.each(["list", "detail"])("preserves nested EVM evidence for %s and retains a finite depth bound", async (mode) => {
+    let trace: unknown = { output: "unchanged", label: "Orbit 🚀" };
+    for (let depth = 0; depth < 10; depth++) trace = { calls: [trace] };
+    const record = { ...recordFixture(), admissionEvidence: { simulation: { effects: [{ witness: { details: { trace } } }] } } };
+    const { bridge, fetchBackend } = context(mode === "list" ? { plans: [record], nextCursor: null } : record);
+    const response = await bridge.universal(request(), mode === "detail" ? record.planId : undefined);
+    expect(response.status).toBe(200);
+    expect((await response.json()).launches[0].resource).toEqual(record);
+    for (let depth = 0; depth < 128; depth++) trace = { calls: [trace] };
+    const excessive = { ...record, admissionEvidence: { trace } };
+    fetchBackend.mockImplementationOnce(async () => Response.json(mode === "list" ? { plans: [excessive], nextCursor: null } : excessive));
+    expect((await bridge.universal(request(), mode === "detail" ? record.planId : undefined)).status).toBe(503);
   });
   it("preserves plan resource bytes and reuses signed wallet-admin authority", async () => {
     const record = recordFixture();
