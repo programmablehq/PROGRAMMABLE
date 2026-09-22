@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { DEFAULT_EXPLORE_FILTERS, type RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
+import { isDiscoverableRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
 import type { RobinhoodCoinMarket, RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import type { RobinhoodProfilePageSize } from "@/lib/robinhood-launches";
@@ -25,7 +26,8 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
       const value = market.volume24hUsd;
       return value === null || !Number.isFinite(value) || value < 0 ? [] : [[address, value] as const];
     }));
-    const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize, volumes, new Set(caps.keys()));
+    const eligibleTokens = new Set(Array.from(caps.keys()).filter(isDiscoverableRobinhoodToken));
+    const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize, volumes, eligibleTokens);
     // Ranking and card values use the same full-catalog market observation.
     return { ...list, sourceEvidence: snapshot ? {
       router: { source: "canonical-launch-stamp-router", sourceAddress: snapshot.routerAddress, binding: snapshot.binding,
