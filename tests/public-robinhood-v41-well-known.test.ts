@@ -77,18 +77,18 @@ describe("profile-selected Robinhood well-known discovery", () => {
       .toContain("Native20 charges 20 bps (0.20%)");
   });
 
-  it("takes ready authority only from activation and preserves Ethereum and historical routes", async () => {
+  it("retains released profile and historical routes while retiring fresh V4.1 writes", async () => {
     const previous = await document("4.0.0");
     const next = await document("4.1.0", true);
     expect(next.customLaunchApi.versions.v4).toMatchObject({
-      profileVersion: "4.1.0", publicWrites: true, publicAuthorization: true, releaseReady: true,
+      profileVersion: "4.1.0", publicWrites: false, publicAuthorization: false, releaseReady: true,
       activationBlockers: [], cli: { sourceCandidateVersion: "4.1.0", sourceCandidate: false,
         released: true, installable: true, release: "4.1.0", liveEthereumVersion: "3.3.9",
         signsWalletTransactions: false, broadcastsWalletTransactions: false },
       externalIndexingGuaranteed: false, genericFeeClaiming: "not-live", genericBuybackManagement: "not-live",
     });
     expect(next.chains.find(chain => chain.chainId === 4663)).toMatchObject({
-      publicWrites: true, publicAuthorization: true, releaseReady: true,
+      publicWrites: false, publicAuthorization: false, releaseReady: true,
     });
     const { v4: previousV4, ...previousVersions } = previous.customLaunchApi.versions;
     const { v4: nextV4, ...nextVersions } = next.customLaunchApi.versions;
