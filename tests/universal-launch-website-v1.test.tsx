@@ -85,6 +85,15 @@ describe("exact wallet transaction review", () => {
     expect(review.transaction).toMatchObject({ from: controller, to: component, chainId: "0x1237", data: "0x12345678", value: "0x0", nonce: "0x7" });
     expect(review.maxGasCostWei).toBe("200000"); expect(review.postconditions).toHaveLength(1);
   });
+  it("preserves the exact reviewed transaction when the wallet returns a numeric nonce", async () => {
+    const request = input();
+    const hexReview = await prepareUniversalLaunchWalletV1(provider(), controller, request, now);
+    const numericReview = await prepareUniversalLaunchWalletV1(provider({ eth_getTransactionCount: 7 }), controller, request, now);
+    expect(numericReview).toEqual(hexReview);
+  });
+  it.each([8, -1, 7.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity])("rejects a changed or inexact numeric nonce %s", async value => {
+    await expect(prepareUniversalLaunchWalletV1(provider({ eth_getTransactionCount: value }), controller, input(), now)).rejects.toThrow();
+  });
   it.each([ ["eth_chainId", "0x1"], ["eth_accounts", [component]], ["eth_getCode", "0x6002"], ["eth_getTransactionCount", "0x8"], ["eth_estimateGas", "0xfffff"] ])("rejects changed provider binding %s", async (method, value) => {
     await expect(prepareUniversalLaunchWalletV1(provider({ [String(method)]: value }), controller, input(), now)).rejects.toThrow();
   });

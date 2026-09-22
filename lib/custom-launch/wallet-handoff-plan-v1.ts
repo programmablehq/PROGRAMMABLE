@@ -36,6 +36,10 @@ const data = (value: unknown): Hex => typeof value === "string" && /^0x(?:[0-9a-
 const address = (value: unknown): Address => projectionAddress(value) ? getAddress(value) : fail();
 const uint = (value: unknown) => projectionUint(value) ? BigInt(value) : fail();
 const quantity = (value: unknown) => typeof value === "string" && /^0x[0-9a-f]+$/i.test(value) ? BigInt(value) : fail();
+// Wallet adapters may normalize eth_getTransactionCount to a JavaScript number.
+const transactionCount = (value: unknown) => typeof value === "number"
+  ? Number.isSafeInteger(value) && value >= 0 ? BigInt(value) : fail()
+  : quantity(value);
 const equal = (left: unknown, right: unknown) => canonicalBrowserJsonV2(left) === canonicalBrowserJsonV2(right);
 const plainHash = (value: unknown) => `sha256:${sha256(stringToHex(canonicalBrowserJsonV2(value))).slice(2)}`;
 const without = (value: Record<string, unknown>, field: string) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== field));
@@ -216,7 +220,7 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
     for (const id of step.preconditions) await verifyPrecondition(provider, current.plan.expectedEffects.find(effect => effect.effectId === id) ?? fail(), current);
     await assertAuthority(provider, controller, current.plan.controller.kind, current.plan.controller.runtimeCodeHash, current.plan.controller.authoritySnapshot);
     const controllerAuthorization = ["eoa", "delegated_eoa_v1"].includes(current.plan.controller.kind) ? undefined : await verifySafeWalletReviewV1(provider, current, step);
-    const nonce = controllerAuthorization ? uint(tx.nonce) : quantity(await provider.request({ method: "eth_getTransactionCount", params: [controller, "pending"] }));
+    const nonce = controllerAuthorization ? uint(tx.nonce) : transactionCount(await provider.request({ method: "eth_getTransactionCount", params: [controller, "pending"] }));
     if (nonce !== uint(tx.nonce)) return fail("The controller nonce changed. Reconcile the existing plan before sending.");
     review = { sourceVersion: input.sourceVersion, launchId: current.planId, stepId: step.stepId,
       transaction: { chainId: "0x1237", from: controller, ...(target ? { to: target } : {}), data: data(tx.data), value: toHex(uint(tx.value)), gas: toHex(uint(tx.gasLimit)), ...(controllerAuthorization ? {} : { nonce: toHex(nonce) }),
@@ -251,7 +255,7 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
       || computeStampRequestHashV2(artifact.stampRequest as typeof decoded.stampRequest) !== decoded.permit.stampRequestHash || record(artifact.route).routePayload !== decoded.routePayload) return fail();
     await assertAuthority(provider, controller, "eoa");
     await assertRuntime(provider, address(tx.to), record(tx.chainBindings).routerRuntimeCodeHash);
-    const nonce = quantity(await provider.request({ method: "eth_getTransactionCount", params: [controller, "pending"] }));
+    const nonce = transactionCount(await provider.request({ method: "eth_getTransactionCount", params: [controller, "pending"] }));
     review = { sourceVersion: input.sourceVersion, launchId: String(current.launchId), stepId: "multi-role-v2",
       transaction: { chainId: "0x1237", from: controller, to: address(tx.to), data: calldata, value: toHex(uint(tx.valueWei)), gas: "0x0", nonce: toHex(nonce) },
       binding: String(tx.transactionPreimageHash), valueWei: String(tx.valueWei), deadline: String(tx.deadline), controllerKind: "eoa",
