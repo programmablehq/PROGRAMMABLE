@@ -14,6 +14,10 @@ import {
   STOCK_PAIRED_TOTAL_SWAP_FEE_BPS,
 } from "../stock-paired";
 import type { ExploreEntry, LauncherToken } from "../tokens";
+import {
+  BitqueryResponseBodyError,
+  readBoundedBitqueryResponseText,
+} from "./bitquery-response.server";
 
 export const BITQUERY_LAUNCH_CATALOG_HTTP_ENDPOINT =
   "https://streaming.bitquery.io/graphql" as const;
@@ -411,20 +415,24 @@ async function requestBitquery(
     );
     if (!response.ok) throw new BitqueryLaunchCatalogError("transport");
     const contentType = response.headers.get("content-type")?.toLowerCase();
-    const declaredLength = Number(response.headers.get("content-length") ?? "0");
-    if (
-      !contentType?.includes("application/json") ||
-      (Number.isFinite(declaredLength) && declaredLength > MAXIMUM_RESPONSE_BYTES)
-    ) {
+    if (!contentType?.includes("application/json")) {
       throw new BitqueryLaunchCatalogError("response");
     }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAXIMUM_RESPONSE_BYTES) {
-      throw new BitqueryLaunchCatalogError("response");
+    let source: string;
+    try {
+      source = await readBoundedBitqueryResponseText(
+        response,
+        MAXIMUM_RESPONSE_BYTES,
+      );
+    } catch (error) {
+      if (!(error instanceof BitqueryResponseBodyError)) throw error;
+      throw new BitqueryLaunchCatalogError(
+        error.kind === "unavailable" ? "transport" : "response",
+      );
     }
     let payload: unknown;
     try {
-      payload = JSON.parse(new TextDecoder().decode(bytes));
+      payload = JSON.parse(source);
     } catch {
       throw new BitqueryLaunchCatalogError("response");
     }
