@@ -82,6 +82,25 @@ const HOSTED_PERSISTENCE_EVIDENCE_IDENTITY = Object.freeze({
   finalCatalogSha256:
     "0x92a17ae38c7562cea0609bc8a8263ff190486a389b886072fb9ef30f0cffc0c4",
 });
+const CURRENT_HOSTED_PERSISTENCE_EVIDENCE_IDENTITY = Object.freeze({
+  planArtifactSha256:
+    "sha256:4bea658e36b40af2d4d6ee7e71039d302704e6ddc2f4ca8f4190a17c2ad50d57",
+  rotationReceiptArtifactSha256:
+    "sha256:25991a95896673cbcffc60aefab8353a9562ef132e63bf2fb343f9b61411b163",
+  planRepositoryCommit: "c235fbd55259f76d8356d6f07073c48b00eb294d",
+  planRepositoryTree: "57d09edb4793d6fe9f8a3bfad8e311accbb4caec",
+  planSha256:
+    "0xbcdb49c686413cd5eab15514e0182eb929f5771e58059ce0fe59f928c44e6f3f",
+  orderSha256:
+    "0xce50954bfa6ff3b66b849bb5b53e8f1adf93abbe12cf865c19375100f2571cc2",
+  finalCatalogSha256:
+    "0x92a17ae38c7562cea0609bc8a8263ff190486a389b886072fb9ef30f0cffc0c4",
+  operatorCatalogSha256:
+    "0xf8127e64734fd233765f8d41fedde1d4b0e5af5035eef599bdb144764bd63baa",
+  rotationSourceCommit: "fec98782757aa9b87760c9a5743c3f016208f0ab",
+  rotationSourceTree: "0337d7a5bdda046cc4fa879283fd269068caa538",
+  rotationSourceParent: "6895dcf863e8406d283aec700c705a37ff76a8a3",
+});
 
 const INPUT_KEYS = Object.freeze([
   "approvalArtifactSchema",
@@ -138,6 +157,8 @@ export async function deriveGenericLaunchReadModelContractV2(input, options) {
   const gitBlobIdentity = options?.gitBlobIdentity ?? currentGitBlobIdentity;
   const hostedEvidenceIdentity = options?.hostedEvidenceIdentity
     ?? HOSTED_PERSISTENCE_EVIDENCE_IDENTITY;
+  const currentHostedEvidenceIdentity = options?.currentHostedEvidenceIdentity
+    ?? CURRENT_HOSTED_PERSISTENCE_EVIDENCE_IDENTITY;
   const value = exactObject(input, INPUT_KEYS, "derivation input");
   if (value.schemaVersion
     !== "programmable.generic-launch-read-model-contract-derivation-input.v1") {
@@ -172,6 +193,7 @@ export async function deriveGenericLaunchReadModelContractV2(input, options) {
     read,
     gitBlobIdentity,
     hostedEvidenceIdentity,
+    currentHostedEvidenceIdentity,
   );
   const queryContract = await queryComponent(
     value.queryContract,
@@ -281,6 +303,7 @@ async function persistenceComponent(
   read,
   gitBlobIdentity,
   hostedEvidenceIdentity,
+  currentHostedEvidenceIdentity,
 ) {
   const value = exactObject(raw, ["artifacts", "hostedEvidence"],
     "persistence component");
@@ -295,6 +318,7 @@ async function persistenceComponent(
   const evidence = await hostedPersistenceEvidence(
     value.hostedEvidence,
     hostedEvidenceIdentity,
+    currentHostedEvidenceIdentity,
   );
   assertExactArtifactInventory(artifacts, PERSISTENCE_ARTIFACTS, "persistence");
   for (const migration of evidence.plan.migrations) {
@@ -642,7 +666,15 @@ function assertExactArtifactInventory(artifacts, expected, label) {
   return artifacts;
 }
 
-async function hostedPersistenceEvidence(raw, expectedIdentity) {
+async function hostedPersistenceEvidence(
+  raw,
+  expectedIdentity,
+  currentExpectedIdentity,
+) {
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    && Object.keys(raw).includes("rotationReceipt")) {
+    return currentHostedPersistenceEvidence(raw, currentExpectedIdentity);
+  }
   const expected = exactObject(expectedIdentity, [
     "adoptionArtifactSha256", "applyArtifactSha256", "finalCatalogSha256",
     "orderSha256", "planArtifactSha256", "planRepositoryCommit",
@@ -774,6 +806,206 @@ async function hostedPersistenceEvidence(raw, expectedIdentity) {
       "programmable.generic-launch-read-model-hosted-persistence-closure.v1",
       normalized,
     ),
+  });
+}
+
+async function currentHostedPersistenceEvidence(raw, expectedIdentity) {
+  const expected = exactObject(expectedIdentity, [
+    "finalCatalogSha256", "operatorCatalogSha256", "orderSha256",
+    "planArtifactSha256", "planRepositoryCommit", "planRepositoryTree",
+    "planSha256", "rotationReceiptArtifactSha256", "rotationSourceCommit",
+    "rotationSourceParent", "rotationSourceTree",
+  ], "current hosted persistence expected identity");
+  const value = exactObject(raw, [
+    "currentVerify", "plan", "rotationReceipt",
+  ], "current hosted persistence evidence");
+  const [planArtifact, rotationArtifact, verifyArtifact] = await Promise.all([
+    readProtectedEvidenceArtifact(value.plan, "hosted migration plan"),
+    readProtectedEvidenceArtifact(
+      value.rotationReceipt,
+      "hosted credential rotation receipt",
+    ),
+    readProtectedEvidenceArtifact(
+      value.currentVerify,
+      "hosted current read-only verify evidence",
+    ),
+  ]);
+  const plan = validateWebsiteProjectionPlan(planArtifact.value);
+  if (planArtifact.sha256 !== digest(
+    expected.planArtifactSha256,
+    "expected hosted plan artifact",
+  )
+    || rotationArtifact.sha256 !== digest(
+      expected.rotationReceiptArtifactSha256,
+      "expected hosted rotation receipt artifact",
+    )
+    || plan.repositoryCommit !== expected.planRepositoryCommit
+    || plan.repositoryTree !== expected.planRepositoryTree
+    || plan.planSha256 !== expected.planSha256
+    || plan.orderSha256 !== expected.orderSha256) {
+    throw new TypeError(
+      "Current hosted persistence artifacts do not match the frozen closure",
+    );
+  }
+  const rotation = credentialRotationReceipt(rotationArtifact.value, expected);
+  const verified = operatorResult(verifyArtifact.value, "verify");
+  const verifyState = exactObject(verified.state, [
+    "appliedCount", "catalogSha256", "pending", "runtimeRoleStatus", "status",
+  ], "hosted current verify state");
+  if (verified.changed !== false
+    || verified.planSha256 !== plan.planSha256
+    || canonicalJson(verified.target) !== canonicalJson({
+      projectRef: rotation.target.projectRef,
+      host: rotation.target.authorityEndpoint.split(":")[0],
+      port: 5432,
+      database: rotation.target.database,
+      sslMode: "verify-full",
+    })
+    || verifyState.status !== "current"
+    || verifyState.appliedCount !== plan.migrationCount
+    || canonicalJson(verifyState.pending) !== "[]"
+    || verifyState.runtimeRoleStatus !== "current"
+    || verifyState.catalogSha256 !== expected.finalCatalogSha256
+    || verifyState.catalogSha256 !== rotation.catalog.afterSha256) {
+    throw new TypeError(
+      "Current hosted verify evidence does not close the exact 0005 catalog",
+    );
+  }
+  const normalized = Object.freeze({
+    evidenceBasis: "authenticated-rotation-plus-current-read-only-verify",
+    target: verified.target,
+    plan: Object.freeze({
+      repositoryCommit: plan.repositoryCommit,
+      repositoryTree: plan.repositoryTree,
+      planSha256: plan.planSha256,
+      orderSha256: plan.orderSha256,
+      migrations: Object.freeze(plan.migrations.map((migration) => Object.freeze({
+        ordinal: migration.ordinal,
+        version: migration.version,
+        file: migration.file,
+        fileSha256: migration.fileSha256,
+        executionSha256: migration.executionSha256,
+      }))),
+    }),
+    protectedArtifacts: Object.freeze({
+      planSha256: planArtifact.sha256,
+      rotationReceiptSha256: rotationArtifact.sha256,
+      currentVerifySha256: verifyArtifact.sha256,
+    }),
+    rotation,
+    currentVerify: Object.freeze({
+      operatorIdentity: verified.operatorIdentity,
+      state: Object.freeze({ ...verifyState }),
+    }),
+    finalCatalogSha256: verifyState.catalogSha256,
+    migratedThrough: "0005",
+  });
+  return Object.freeze({
+    ...normalized,
+    closureHash: canonicalSha256(
+      "programmable.generic-launch-read-model-hosted-persistence-current-closure.v1",
+      normalized,
+    ),
+  });
+}
+
+function credentialRotationReceipt(raw, expected) {
+  const value = exactObject(raw, [
+    "catalog", "changed", "cutover", "migrationEvidence", "operation",
+    "protectedOutputs", "rotatedAt", "runtimeProbe", "schemaVersion", "source",
+    "target", "tls",
+  ], "hosted credential rotation receipt");
+  const source = exactObject(value.source, [
+    "repositoryCommit", "repositoryParent", "repositoryTree",
+  ], "hosted credential rotation source");
+  const target = exactObject(value.target, [
+    "authorityEndpoint", "database", "projectRef", "runtimeEndpoint", "runtimeRole",
+  ], "hosted credential rotation target");
+  const migrationEvidence = exactObject(value.migrationEvidence, [
+    "catalogSha256", "migrationCount", "operatorCatalogSha256", "planSha256",
+    "repositoryCommit", "repositoryTree",
+  ], "hosted credential rotation migration evidence");
+  const catalog = exactObject(value.catalog, [
+    "afterSha256", "beforeSha256", "unchanged",
+  ], "hosted credential rotation catalog");
+  const runtimeProbe = exactObject(value.runtimeProbe, [
+    "databaseName", "leastPrivilege", "runtimeRole", "serverVersionNum", "sslBits",
+    "sslCipher", "sslVersion",
+  ], "hosted credential rotation runtime probe");
+  const tls = exactObject(value.tls, [
+    "caSha256", "hostnameVerified", "mode",
+  ], "hosted credential rotation TLS evidence");
+  const cutover = exactObject(value.cutover, [
+    "existingSessionsAreNotCutoverEvidence", "overlappingPasswordsSupported",
+    "passwordSlots", "postCommitFailure", "preCommitFailure",
+    "vercelMutationPerformed",
+  ], "hosted credential rotation cutover evidence");
+  const protectedOutputs = exactObject(value.protectedOutputs, [
+    "containsSecretDerivedDigest", "databaseCaPem", "databaseRole", "databaseUrl",
+    "mode", "receipt",
+  ], "hosted credential rotation protected outputs");
+  if (value.schemaVersion
+      !== "programmable.website-projection-runtime-credential-rotation.v1"
+    || value.operation !== "rotate-existing-runtime-role-password"
+    || value.changed !== true
+    || typeof value.rotatedAt !== "string"
+    || !Number.isFinite(Date.parse(value.rotatedAt))
+    || source.repositoryCommit !== expected.rotationSourceCommit
+    || source.repositoryTree !== expected.rotationSourceTree
+    || source.repositoryParent !== expected.rotationSourceParent
+    || target.projectRef !== WEBSITE_PROJECTION_ADOPTION_TARGET_PROJECT_REF
+    || target.database !== "postgres"
+    || target.authorityEndpoint !== `db.${target.projectRef}.supabase.co:5432`
+    || target.runtimeEndpoint !== "aws-0-eu-central-1.pooler.supabase.com:6543"
+    || target.runtimeRole !== "programmable_website_projection_runtime"
+    || migrationEvidence.migrationCount !== 5
+    || migrationEvidence.planSha256 !== expected.planSha256
+    || migrationEvidence.repositoryCommit !== expected.planRepositoryCommit
+    || migrationEvidence.repositoryTree !== expected.planRepositoryTree
+    || migrationEvidence.catalogSha256 !== expected.finalCatalogSha256
+    || migrationEvidence.operatorCatalogSha256 !== expected.operatorCatalogSha256
+    || catalog.beforeSha256 !== expected.finalCatalogSha256
+    || catalog.afterSha256 !== expected.finalCatalogSha256
+    || catalog.unchanged !== true
+    || runtimeProbe.runtimeRole !== target.runtimeRole
+    || runtimeProbe.databaseName !== target.database
+    || !/^[1-9][0-9]{5,}$/u.test(runtimeProbe.serverVersionNum)
+    || runtimeProbe.leastPrivilege !== true
+    || runtimeProbe.sslVersion !== "TLSv1.3"
+    || runtimeProbe.sslCipher !== "TLS_AES_256_GCM_SHA384"
+    || runtimeProbe.sslBits !== 256
+    || tls.mode !== "verify-full-equivalent"
+    || !SHA256.test(tls.caSha256)
+    || tls.hostnameVerified !== true
+    || cutover.passwordSlots !== 1
+    || cutover.overlappingPasswordsSupported !== false
+    || cutover.existingSessionsAreNotCutoverEvidence !== true
+    || cutover.preCommitFailure !== "automatic-transaction-rollback"
+    || cutover.postCommitFailure
+      !== "forward-rotate-or-rerun-with-the-same-protected-secret"
+    || cutover.vercelMutationPerformed !== false
+    || protectedOutputs.databaseUrl
+      !== "PROGRAMMABLE_WEBSITE_PROJECTION_DATABASE_URL"
+    || protectedOutputs.databaseRole
+      !== "PROGRAMMABLE_WEBSITE_PROJECTION_DATABASE_ROLE"
+    || protectedOutputs.databaseCaPem
+      !== "PROGRAMMABLE_WEBSITE_PROJECTION_DATABASE_CA_PEM"
+    || protectedOutputs.receipt
+      !== "programmable-website-projection-runtime-credential-rotation-v1.json"
+    || protectedOutputs.mode !== "0600"
+    || protectedOutputs.containsSecretDerivedDigest !== false) {
+    throw new TypeError(
+      "Hosted credential rotation receipt is not the authenticated current state",
+    );
+  }
+  return Object.freeze({
+    rotatedAt: value.rotatedAt,
+    source: Object.freeze({ ...source }),
+    target: Object.freeze({ ...target }),
+    migrationEvidence: Object.freeze({ ...migrationEvidence }),
+    catalog: Object.freeze({ ...catalog }),
+    runtimeProbe: Object.freeze({ ...runtimeProbe }),
+    tls: Object.freeze({ ...tls }),
   });
 }
 
