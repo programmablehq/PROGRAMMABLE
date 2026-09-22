@@ -227,9 +227,11 @@ export function exploreCatalog(snapshot: RobinhoodSnapshot | null): RobinhoodLau
   return [...unique.values()];
 }
 
-export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query = "", now = Date.now(), filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, marketCaps: ReadonlyMap<string, number> = new Map(), size: 6 | 8 | 10 | 50 = 50, volumes24h: ReadonlyMap<string, number> = new Map()): RobinhoodLaunchList {
+export function launchList(snapshot: RobinhoodSnapshot | null, page = 1, query = "", now = Date.now(), filters: RobinhoodExploreFilters = DEFAULT_EXPLORE_FILTERS, marketCaps: ReadonlyMap<string, number> = new Map(), size: 6 | 8 | 10 | 50 = 50, volumes24h: ReadonlyMap<string, number> = new Map(), eligibleTokens?: ReadonlySet<string>): RobinhoodLaunchList {
   const q = query.trim().toLowerCase();
-  const visible = exploreCatalog(snapshot);
+  // Discovery eligibility is applied before the persistent pin, search and pagination.
+  // The underlying catalog and direct/profile history remain complete.
+  const visible = exploreCatalog(snapshot).filter(row => !eligibleTokens || eligibleTokens.has(row.tokenAddress.toLowerCase()));
   const pinned = visible.find((row) => isPinnedRobinhoodToken(row.tokenAddress, snapshot?.chainId ?? 0));
   const metric = (address: string) => {
     const value = (filters.sort === "activity" ? volumes24h : marketCaps).get(address.toLowerCase());

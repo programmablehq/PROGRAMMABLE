@@ -18,13 +18,13 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
     const markets = await readRobinhoodMarkets(visible).catch(() => new Map<string, RobinhoodCoinMarket>());
     const caps = new Map(Array.from(markets).flatMap(([address, market]) => {
       const value = coinValuation(market).value;
-      return value === null ? [] : [[address, value] as const];
+      return value === null || value <= 0 ? [] : [[address.toLowerCase(), value] as const];
     }));
     const volumes = new Map(Array.from(markets).flatMap(([address, market]) => {
       const value = market.volume24hUsd;
       return value === null || !Number.isFinite(value) || value < 0 ? [] : [[address, value] as const];
     }));
-    const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize, volumes);
+    const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize, volumes, new Set(caps.keys()));
     // Ranking and card values use the same full-catalog market observation.
     return { ...list, sourceEvidence: snapshot ? {
       router: { source: "canonical-launch-stamp-router", sourceAddress: snapshot.routerAddress, binding: snapshot.binding,
@@ -35,7 +35,9 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
         finalizedBlock: source.finalizedBlock, updatedAt: source.updatedAt })),
       launchProjections: snapshot.launchProjections ? { sourceUrl: snapshot.launchProjections.sourceUrl,
         updatedAt: snapshot.launchProjections.updatedAt, nextCursor: snapshot.launchProjections.nextCursor } : null,
-    } : null, presentations: await readRobinhoodPresentations(list.items, markets).catch(() => [] as RobinhoodCoinPresentation[]) };
+    } : null, presentations: await readRobinhoodPresentations(list.items, markets).catch(() => list.items.map(row => ({
+      tokenAddress: row.tokenAddress, imageUrl: null, description: null, links: [], market: markets.get(row.tokenAddress.toLowerCase()) ?? null,
+    }))) };
   } catch { return { ...launchList(null, page, query, Date.now(), filters, undefined, pageSize), sourceEvidence: null, presentations: [] as RobinhoodCoinPresentation[] }; }
 }
 

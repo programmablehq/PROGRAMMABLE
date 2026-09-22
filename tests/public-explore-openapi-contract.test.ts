@@ -17,7 +17,7 @@ vi.mock("@/lib/server/robinhood-presentation", () => ({
 
 import { programmablePublicOpenApi } from "../lib/public-openapi";
 import { readEthereumLaunches } from "../lib/server/ethereum-explore";
-import { readRobinhoodLaunches } from "../lib/server/robinhood-index/read";
+import { readRobinhoodLaunches, readRobinhoodToken } from "../lib/server/robinhood-index/read";
 import { parseEthereumExploreQuery } from "../lib/ethereum-explore";
 import { parseRobinhoodExploreQuery } from "../lib/robinhood-explore-filters";
 import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
@@ -286,10 +286,13 @@ describe("public Explore OpenAPI contract", () => {
       launchProjections: { version: 1, sourceUrl: LAUNCH_PROJECTION_FEED_V1, updatedAt, nextCursor: null, items: [row] },
     } });
     const value = await readRobinhoodLaunches();
-    expect(value.items).toEqual([row]);
-    expect(value.items[0].primaryAssetAddress).toBe(primaryComponentId ? row.tokenAddress : null);
-    expect(value.items[0].poolId).toBeNull();
+    expect(value.items).toEqual([]);
+    const detail = await readRobinhoodToken(row.tokenAddress);
+    expect(detail.token).toEqual(row);
+    expect(detail.token?.primaryAssetAddress).toBe(primaryComponentId ? row.tokenAddress : null);
+    expect(detail.token?.poolId).toBeNull();
     expect(validate(JSON.parse(JSON.stringify(value))), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate(JSON.parse(JSON.stringify({ ...value, items: [row] }))), JSON.stringify(validate.errors)).toBe(true);
     expect(validate({ ...value, items: [{ ...row, launchProjection: {
       ...projection, distribution: { ...projection.distribution, uniswapLabsRouting: "guaranteed" },
     } }] })).toBe(false);
