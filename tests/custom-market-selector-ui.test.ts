@@ -33,6 +33,24 @@ describe("Custom market selector UI", () => {
     expect(tradeStyles).not.toContain(".customMarketSelect select");
   });
 
+  it("locks market and trade controls while preparation is pending", () => {
+    expect(tradeSource).toContain("disabled: boolean;");
+    expect(tradeSource).toContain("disabled={disabled}");
+    expect(tradeSource).toContain(
+      "aria-pressed={side === candidate}\n              key={candidate}\n              disabled={pending}",
+    );
+    expect(tradeSource).toContain(
+      "value={amount} disabled={pending} onChange=",
+    );
+    expect(tradeSource).toContain(
+      "value={slippage} disabled={pending} onChange=",
+    );
+    expect(tradeSource).toContain("if (pending) return;");
+    expect(tradeStyles).toContain(
+      ".customMarketOption:has(.customMarketOptionInput:disabled)",
+    );
+  });
+
   it("opens the canonical two-sided market on Buy and lists Buy first", () => {
     expect(tradeSource).toContain(
       'supported.includes("quote-to-base")',

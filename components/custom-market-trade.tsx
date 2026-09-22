@@ -97,10 +97,12 @@ function preferredCustomTradeSide(
 function CustomMarketSelector({
   markets,
   value,
+  disabled,
   onChange,
 }: {
   markets: readonly CustomMarket[];
   value: string;
+  disabled: boolean;
   onChange(nextMarketId: string): void;
 }) {
   const groupName = useId();
@@ -137,6 +139,7 @@ function CustomMarketSelector({
                 name={groupName}
                 value={market.marketId}
                 checked={selectedOption}
+                disabled={disabled}
                 onChange={() => onChange(market.marketId)}
               />
               <span>{customMarketLabel(market)}</span>
@@ -213,7 +216,7 @@ export function CustomMarketTrade({
   const outputSymbol = assetLabel(outputAsset);
 
   async function applyMax() {
-    if (!owner || inputDecimals === undefined) return;
+    if (pending || !owner || inputDecimals === undefined) return;
     setPending(true);
     setError("");
     try {
@@ -242,6 +245,7 @@ export function CustomMarketTrade({
 
   async function prepare(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+    if (pending) return;
     if (!owner) {
       onConnect();
       return;
@@ -388,7 +392,9 @@ export function CustomMarketTrade({
       <CustomMarketSelector
         markets={tradableMarkets}
         value={marketId}
+        disabled={pending}
         onChange={(nextMarketId) => {
+          if (pending) return;
           const nextCapability = tradableMarkets.find(
             (candidate) => candidate.marketId === nextMarketId,
           )?.tradeCapability;
@@ -421,6 +427,7 @@ export function CustomMarketTrade({
               type="button"
               aria-pressed={side === candidate}
               key={candidate}
+              disabled={pending}
               onClick={() => {
                 setSelectedSide(candidate);
                 setAmount("");
@@ -438,7 +445,7 @@ export function CustomMarketTrade({
           <button className={styles.maxButton} type="button" disabled={!owner || pending || inputDecimals === undefined} onClick={() => void applyMax()}>Max</button>
         </div>
         <div className={styles.amountInputRow}>
-          <input id={amountId} className={styles.amountInput} inputMode="decimal" autoComplete="off" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" aria-describedby={error ? errorId : undefined} />
+          <input id={amountId} className={styles.amountInput} inputMode="decimal" autoComplete="off" value={amount} disabled={pending} onChange={(event) => setAmount(event.target.value)} placeholder="0" aria-describedby={error ? errorId : undefined} />
           <span className={styles.asset}>{inputSymbol}</span>
         </div>
       </div>
@@ -447,7 +454,7 @@ export function CustomMarketTrade({
         <div>
           <dt><label htmlFor={slippageId}>Max slippage</label></dt>
           <dd className={styles.slippageControl}>
-            <input id={slippageId} inputMode="decimal" value={slippage} onChange={(event) => setSlippage(event.target.value)} />
+            <input id={slippageId} inputMode="decimal" value={slippage} disabled={pending} onChange={(event) => setSlippage(event.target.value)} />
             <span aria-hidden="true">%</span>
           </dd>
         </div>
