@@ -583,6 +583,14 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
       return new Response('null', { headers: { 'content-type': 'application/json' } });
     });
     if (missing) return null;
+    if (publish && response.value?.creationMatch === null && !canonicalAnyQuoteTargets.has(target)) {
+      // An existing runtime-only record still needs publication with the authenticated creation
+      // transaction. It is never returned as verified; the eventual full readback must pass below.
+      need(response.value.chainId === '4663' && same(response.value.address, target.address)
+        && response.value.match === 'match' && response.value.runtimeMatch === 'match'
+        && same(response.value.runtimeBytecode?.onchainBytecode, target.runtime), 'Runtime-only source identity differs');
+      return null;
+    }
     const recompilation = sourcifyNeedsRecompilation(target.input, response.value)
       ? await recompileSourcifyInput(response.value, target.input, { PATH: process.env.PATH, MODULE_MODE_SOLC: binary }) : undefined;
     if (response.value?.creationMatch === null && canonicalAnyQuoteTargets.has(target)) {

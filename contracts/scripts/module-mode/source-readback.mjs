@@ -67,6 +67,7 @@ function publicationSettings(input, value, artifact, recompilation, role) {
     equal(abiEntries(recompilation.abi), abiEntries(artifact.abi), `${role}: recompiled ABI differs`);
   }
   equal({ ...value.stdJsonInput, settings: expected }, { ...input, settings: expected }, `${role}: Sourcify standard input differs`);
+  return canonicalJson(actual) !== canonicalJson(expected);
 }
 
 function quotePlannerAuxdataProfile(plan, role, profile, artifact, input, metadata, constructorArguments) {
@@ -92,11 +93,15 @@ export function anyQuoteEthEngineAuxdataProfile(artifact, input, metadata, sourc
   const target = sourceProfile === 'module-engine-any-quote-v1'
     && canonicalJson(artifact.compilationTarget) === canonicalJson(positions) ? positions : legacy;
   equal(artifact.compilationTarget, target, 'Any Quote Engine compilation target differs');
+  engineAuxdataProfile(artifact, input, metadata);
+}
+
+function engineAuxdataProfile(artifact, input, metadata) {
   const compilerSettings = { optimizer: { enabled: true, runs: 1000 }, evmVersion: 'cancun', viaIR: true,
     metadata: { bytecodeHash: 'none' }, libraries: {}, remappings: [] };
-  equal(settings(input.settings), compilerSettings, 'ETH Engine compiler settings differ');
-  need(metadata?.compiler?.version === SOURCIFY_COMPILER, 'ETH Engine compiler metadata version differs');
-  equal(metadata.settings, { ...compilerSettings, compilationTarget: target }, 'ETH Engine compiler metadata settings differ');
+  equal(settings(input.settings), compilerSettings, 'Engine compiler settings differ');
+  need(metadata?.compiler?.version === SOURCIFY_COMPILER, 'Engine compiler metadata version differs');
+  equal(metadata.settings, { ...compilerSettings, compilationTarget: artifact.compilationTarget }, 'Engine compiler metadata settings differ');
 }
 
 export function exactSolcVersionAuxdataDescription(auxdata, compiled, role, label) {
@@ -122,9 +127,15 @@ export function validateSourcifyCompilation({ artifact, input, metadata, file, n
   const compilation = value.compilation;
   need(compilation?.language === 'Solidity' && compilation.compiler === 'solc' && compilation.compilerVersion === SOURCIFY_COMPILER
     && compilation.name === name && compilation.fullyQualifiedName === `${file}:${name}`, `${role}: Sourcify compiler/target differs`);
-  publicationSettings(input, value, artifact, recompilation, role);
+  const remapped = publicationSettings(input, value, artifact, recompilation, role);
   equal(value.sources, input.sources, `${role}: Sourcify source closure differs`);
-  equal(value.metadata, metadata, `${role}: Sourcify full compiler metadata differs`);
+  if (remapped) {
+    // Retained unused remappings also appear in solc metadata. Bind the full provider metadata
+    // to the same pinned recompilation, then permit only that already-proven settings difference.
+    equal(value.metadata, recompilation.metadata, `${role}: Sourcify recompiled metadata differs`);
+    const withoutRemappings = value => ({ ...value, settings: Object.fromEntries(Object.entries(value.settings).filter(([key]) => key !== 'remappings')) });
+    equal(withoutRemappings(value.metadata), withoutRemappings(metadata), `${role}: Sourcify full compiler metadata differs`);
+  } else equal(value.metadata, metadata, `${role}: Sourcify full compiler metadata differs`);
   // ABI item order has no semantic meaning; argument, tuple and output order remain exact.
   equal(abiEntries(value.abi), abiEntries(artifact.abi), `${role}: Sourcify ABI differs`);
 }
@@ -176,12 +187,17 @@ export function validateSourcifySource({ plan, build, role, constructorArguments
   // complete bytes already checked above; it does not grant the private canonical source witness.
   const anyQuoteEngineAuxdata = ['module-engine-any-quote-eth-v1', 'module-engine-any-quote-v1'].includes(sourceProfile) && role === 'engine';
   if (anyQuoteEngineAuxdata) anyQuoteEthEngineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata, sourceProfile);
-  const compilerTrailer = compilerAuxdataProfile !== undefined || anyQuoteEngineAuxdata;
+  const reviewedEngineAuxdata = sourceProfile === 'module-engine-v1' && role === 'engine';
+  if (reviewedEngineAuxdata) engineAuxdataProfile(artifact, input, build.compilerMetadata?.[role] ?? artifact.metadata);
+  const compilerTrailer = compilerAuxdataProfile !== undefined || anyQuoteEngineAuxdata || reviewedEngineAuxdata;
   for (const [label, code] of [['creation', c], ['runtime', r]]) {
     // Auxdata describes compiler bytes; it never authorizes a transformation or an ignored range.
     // The creation trailer ends at the compiled template boundary; appended arguments are bound above.
-    // Native/Core/default profiles retain their original empty-CBOR requirement.
-    if (compilerTrailer) exactSolcVersionAuxdata(code, label === 'creation' ? compiledCreation : compiledRuntime, role, label);
+    // Other roles and profiles retain their original empty-CBOR requirement.
+    // Historical Core records may omit the descriptive map. Complete byte equality still binds
+    // their compiler marker; any supplied description must identify exactly those same bytes.
+    const describedTrailer = reviewedEngineAuxdata ? Object.keys(code.cborAuxdata ?? {}).length > 0 : compilerTrailer;
+    if (describedTrailer) exactSolcVersionAuxdata(code, label === 'creation' ? compiledCreation : compiledRuntime, role, label);
     else empty(code.cborAuxdata, `${role}: unexpected ${label} CBOR transformation`);
     empty(code.linkReferences, `${role}: unexpected ${label} library link`);
   }

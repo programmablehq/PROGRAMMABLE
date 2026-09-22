@@ -333,7 +333,7 @@ test('the retained quote comparison rejects altered bytes and provider evidence 
     const value = structuredClone(quoteFullComparison(target)); mutate(value);
     assert.throws(() => validatePublished(target, value), undefined, mutate.toString());
   }
-  for (const sourceProfile of ['module-engine-v1', 'module-native-v1', 'module-native-v2', 'unrecognized'])
+  for (const sourceProfile of ['module-engine-v2', 'module-native-v1', 'module-native-v2', 'unrecognized'])
     assert.throws(() => validatePublished({ ...target, sourceProfile }, quoteFullComparison(target)), /unexpected creation CBOR/);
   assert.throws(() => validateSourcifyCreationGap(target, quoteActual.unavailableSourceRecords.engine));
   const unavailable = await ensureTargetResult(target, false, { binary: await sourceTestSolc(),
@@ -684,6 +684,7 @@ test('a partial token readback retains its job and checkpoint while the bound en
     const tokenJob = '11111111-1111-4111-8111-111111111111', engineJob = '22222222-2222-4222-8222-222222222222';
     const submitted = new Set(), before = [], context = { beforePublish: async target => { before.push(target.address); },
       fetchPublic: async (url, init) => {
+        if (String(url).endsWith(`/v2/verify/${tokenJob}`)) return Response.json({ isJobCompleted: true });
         const isToken = String(url).includes(token.target.address), fixture = isToken ? token : engine;
         if (init.method === 'POST') {
           submitted.add(fixture.target.address);
@@ -698,7 +699,7 @@ test('a partial token readback retains its job and checkpoint while the bound en
     for (const target of [token.target, engine.target]) records.push(await ensureTargetResult(target, true, context));
     assert.deepEqual([...submitted], [token.target.address, engine.target.address]);
     assert.deepEqual(before, [token.target.address, engine.target.address]);
-    assert.equal(records[0].status, 'failed'); assert.match(records[0].error, /Sourcify no-CBOR match is unavailable/);
+    assert.equal(records[0].status, 'failed'); assert.match(records[0].error, /finished without a verified readback/);
     assert.equal(records[0].verificationId, tokenJob);
     assert.equal(records[1].address, engine.target.address); assert.equal(records[1].comparison, 'exact-complete-creation-and-runtime');
     assert.equal(sourceRecordsStatus(records), 'failed');
@@ -713,6 +714,32 @@ test('a partial token readback retains its job and checkpoint while the bound en
     assert.equal(JSON.parse(await readFile(file)).releases[release.releaseDigest].nextBlock, '201');
     assert.equal(sourceRecordsStatus([{ status: 'not-published' }, records[1]]), 'source-publication-required');
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('publication repairs an existing runtime-only record using its bound creation transaction', async () => {
+  const { target, value } = publishedFixture(), partial = { ...value, creationMatch: null,
+    deployment: { transactionHash: null, blockNumber: null, transactionIndex: null, deployer: null } };
+  const readonly = await ensureTargetResult(target, false, { fetchPublic: async () => Response.json(partial) });
+  assert.equal(readonly.status, 'failed');
+  const job = '33333333-3333-4333-8333-333333333333';
+  let submissions = 0, reads = 0, rechecked = false;
+  const result = await ensureTargetResult(target, true, {
+    beforePublish: async candidate => { assert.equal(candidate, target); rechecked = true; },
+    fetchPublic: async (url, init) => {
+      if (init.method === 'POST') {
+        assert.equal(rechecked, true); submissions++;
+        const body = JSON.parse(init.body);
+        assert.equal(body.creationTransactionHash, target.transactionHash);
+        assert.deepEqual(body.stdJsonInput, target.input);
+        return Response.json({ verificationId: job }, { status: 202 });
+      }
+      if (String(url).endsWith(`/v2/verify/${job}`)) return Response.json({ isJobCompleted: false });
+      return Response.json(++reads <= 2 ? partial : value);
+    },
+  });
+  assert.equal(submissions, 1);
+  assert.equal(result.creationMatch, 'match');
+  assert.equal(result.comparison, 'exact-complete-creation-and-runtime');
 });
 
 test('an omitted empty library default needs the exact pinned provider recompilation and never permits links', () => {
