@@ -1,0 +1,63 @@
+{
+  "id": "first-mover",
+  "schemaVersion": 1,
+  "status": "design",
+  "compiler": {
+    "version": "0.8.26",
+    "evmVersion": "cancun",
+    "optimizer": true,
+    "runs": 1000,
+    "viaIR": false,
+    "bytecodeHash": "none",
+    "cborMetadata": false
+  },
+  "poolShape": {
+    "currency0": "native",
+    "tickSpacing": 200,
+    "lpFeePips": 0,
+    "transferTaxBps": 0
+  },
+  "fees": {
+    "denomination": "native",
+    "minTotalSwapFeeBps": 100,
+    "maxTotalSwapFeeBps": 1000,
+    "totalSwapFeeStepBps": 100,
+    "launcherFeeBps": 10,
+    "builderFeeBps": 10,
+    "carvedFromTotal": true,
+    "launcherFeeRecipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+    "launcherFeeRecipientEnforcement": "hardcoded constant, not a constructor argument"
+  },
+  "tickerRegistry": {
+    "confirmationFeeWei": "100000000000000000",
+    "confirmationFeeWeiHuman": "0.1 ether",
+    "graceBlocks": 50400,
+    "graceBlocksHuman": "~7 days",
+    "tributeShareBps": 2000,
+    "tributeShareHuman": "20% of a derivative's own creator share",
+    "tributeSource": "derivative's creator share only; launcher and builder shares are never touched",
+    "symbolNormalization": "ASCII case-fold only; non-ASCII lookalikes are distinct tickers by design",
+    "maxSymbolLengthBytes": 32,
+    "claimReassignment": "a confirmed claim is permanent; only an unclaimed or lapsed claim can be taken by a new confirmation"
+  },
+  "hookPermissions": [
+    "beforeInitialize",
+    "beforeSwap",
+    "afterSwap",
+    "beforeSwapReturnDelta",
+    "afterSwapReturnDelta"
+  ],
+  "dependencies": {
+    "note": "Revisions are those installed by scripts/bootstrap-deps.sh and must be pinned before release.",
+    "v4-core": null,
+    "v4-periphery": null,
+    "openzeppelin-contracts": null,
+    "openzeppelin-uniswap-hooks": null,
+    "forge-std": null,
+    "solmate": null
+  },
+  "builder": {
+    "githubIdentity": "locallaunchsc-cloud",
+    "beneficiaryAddress": "0xC180590a43bB72C123bD457dABf1730C9aA6712A"
+  }
+}
