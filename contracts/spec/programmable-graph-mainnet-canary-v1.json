@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "programmable-graph-mainnet-canary-v1",
+  "status": "LOCAL_AND_EPHEMERAL_MAINNET_FORK_VALIDATED_NOT_DEPLOYED",
+  "purpose": "Low-value, honestly tradable Mainnet canary for the exact Programmable Stamp Router Graph route.",
+  "claims": {
+    "productionDeployed": false,
+    "mainnetTransactionSent": false,
+    "independentlyAudited": false,
+    "liquidityLocked": false,
+    "fairLaunch": false,
+    "economicSafety": false
+  },
+  "source": {
+    "baseCommit": "bc43a26b4d1142c5934e871355fac7a909c81754",
+    "solidity": "0.8.26",
+    "optimizerRuns": 1000,
+    "files": [
+      {
+        "path": "src/ProgrammableCanaryTokenV1.sol",
+        "sha256": "7a77f7c52745323402115722ddc115c7e26b5917d584ce93346d3c220e85f095",
+        "creationCodeBytesBeforeConstructorArgs": 3656,
+        "runtimeCodeBytesBeforeImmutableSubstitution": 2130,
+        "reuse": "new-minimal-fixed-supply-token"
+      },
+      {
+        "path": "src/ProgrammableCanaryLiquidityInitializerV1.sol",
+        "sha256": "98bc33dacb5ab6039905921bbf8217514334bc127af54886643e591d5b999d5e",
+        "creationCodeBytesBeforeConstructorArgs": 15983,
+        "runtimeCodeBytesBeforeImmutableSubstitution": 14825,
+        "reuse": "new-one-shot-graph-initializer-over-reviewed-position-planner-actions"
+      },
+      {
+        "path": "src/PlatformFeeHookV1.sol",
+        "sha256": "dfe33c41d1e0bcabfdca29e16e3885a22fa61479beaacbb5ba5cd1ab7e536eec",
+        "gitBlob": "fea5e2eb53c6ade79b0af2d7f695ec62549ad6b3",
+        "creationCodeBytesBeforeConstructorArgs": 9473,
+        "runtimeCodeBytesBeforeImmutableSubstitution": 7986,
+        "reuse": "unchanged-existing-hook"
+      }
+    ]
+  },
+  "mainnetBindings": {
+    "chainId": 1,
+    "graphFactory": {
+      "address": "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887",
+      "runtimeCodeHash": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8"
+    },
+    "poolManager": {
+      "address": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "runtimeCodeHash": "0x785f1014552b7ce7d5fb7d0c970ca60edee94fd00425d7ca21609acac7ce1293"
+    },
+    "positionManager": {
+      "address": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+      "runtimeCodeHash": "0x77e36c08b19959a30dde46dec9abe6208e371ff2f56884a56fe1e1a53615528b"
+    },
+    "permit2": {
+      "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "canaryTokenApprovalUsed": false,
+      "reason": "The reviewed DirectLiquidityLauncherV1 pattern pre-transfers the exact token budget to PositionManager, so the canary creates no persistent Permit2 allowance."
+    },
+    "stampRouter": {
+      "address": null,
+      "requiredBeforeFinalManifest": true,
+      "mustEqualGraphAuthorizedLauncher": true,
+      "mustBindExactDeploymentSet": true,
+      "componentEncoding": "the exact three Graph deployments, unique and strictly numerically address-sorted; Graph target order remains initializer, token, hook"
+    }
+  },
+  "token": {
+    "name": "Programmable Mainnet Canary",
+    "symbol": "PCAN",
+    "decimals": 18,
+    "totalSupply": "1000000000000000000000000",
+    "initialRecipient": "predicted-initializer-address",
+    "launchWallet": null,
+    "admin": null,
+    "ownerRole": null,
+    "upgradeability": false,
+    "pause": false,
+    "blacklist": false,
+    "transferTax": false,
+    "additionalMint": false
+  },
+  "pool": {
+    "currency0": "0x0000000000000000000000000000000000000000",
+    "currency1": "predicted-token-address",
+    "lpFeePips": 3000,
+    "lpFeeBps": 30,
+    "tickSpacing": 60,
+    "initialTick": 207240,
+    "approximateInitialRawTokenPerNative": "999698077.713835",
+    "position": {
+      "kind": "full-range",
+      "tickLower": -887220,
+      "tickUpper": 887220,
+      "nftRecipient": null,
+      "locked": false,
+      "removableByNftOwner": true
+    },
+    "reviewedBudgets": {
+      "nativeWei": "1000000000000000",
+      "tokenWei": "1000000000000000000000000",
+      "unusedNativeRecipient": "launchWallet",
+      "unusedTokenRecipient": "launchWallet"
+    }
+  },
+  "programmableFee": {
+    "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+    "feePips": 1000,
+    "denominator": 1000000,
+    "feeBps": 10,
+    "rounding": "floor",
+    "basis": {
+      "exactInput": "output-currency-amount",
+      "exactOutput": "input-currency-amount"
+    },
+    "settlement": "PoolManager ERC6909 claims accrue only to the immutable hook; permissionless redemption sends all claims directly to the immutable recipient.",
+    "beforeSwapReturnDelta": false,
+    "hookAddressPermissionMask": "0x3fff",
+    "requiredHookAddressFlags": "0x2044",
+    "permissions": [
+      "beforeInitialize",
+      "afterSwap",
+      "afterSwapReturnDelta"
+    ]
+  },
+  "graph": {
+    "routeNamespace": "0xa93f0eb8b0e018d494b55cbf9b15d30252a8378059f010c51beeb8deb16136ae",
+    "routeNonce": null,
+    "topologyHash": "0x69437db25128cb7c3b73a64ed7336d4238d3cf238be98b3d2758f3098a8fbd66",
+    "graphCommitment": null,
+    "totalValueWei": "1000000000000000",
+    "atomicity": "Graph Factory deploys all raw CREATE2 targets first, then calls the initializer; any failure reverts deployment, pool initialization, and LP mint.",
+    "targetOrder": [
+      {
+        "index": 0,
+        "id": "programmable-canary-initializer-v1",
+        "targetIdHash": "0x68e386adabfc4d8f9283fc52d3f0c22cfdabdb19e4a3adf1d20bfcb47fb63800",
+        "applicantSalt": "0xf6aae3ef91bc644c49f31ecc338b6267c6457cbdf849a53920c855c6719699a4",
+        "deploymentValueWei": "0",
+        "initializerValueWei": "1000000000000000",
+        "expectedDeployment": null,
+        "expectedRuntimeCodeHash": null
+      },
+      {
+        "index": 1,
+        "id": "programmable-canary-token-v1",
+        "targetIdHash": "0x54fd63b67b7ebaa0a8c88812b3a17d45540cda31c3b76d0571378c28bca744d7",
+        "applicantSalt": "0x6a66987554fde0a46e3ac02292906d35e64f341e52d5be16374d329e034a3afd",
+        "deploymentValueWei": "0",
+        "initializerValueWei": "0",
+        "expectedDeployment": null,
+        "expectedRuntimeCodeHash": null
+      },
+      {
+        "index": 2,
+        "id": "programmable-canary-hook-v1",
+        "targetIdHash": "0x5413f5d6a0da5fdfda480e87e3084541ec6efb63c151cbd9b7a2dc1098a23315",
+        "applicantSalt": null,
+        "applicantSaltRule": "Mine offchain only after stampRouter address and routeNonce are frozen; predicted address low 14 bits must equal 0x2044.",
+        "deploymentValueWei": "0",
+        "initializerValueWei": "0",
+        "expectedDeployment": null,
+        "expectedRuntimeCodeHash": null
+      }
+    ],
+    "constructorDependencyOrder": [
+      "initializer depends only on frozen Mainnet infrastructure, explicit Graph Factory, launchWallet, and LP NFT recipient",
+      "token embeds the predicted initializer address",
+      "hook embeds predicted initializer and token addresses",
+      "initializer calldata embeds predicted token and hook addresses plus a finite deadline"
+    ],
+    "initializerCaller": "explicit-graph-factory-address",
+    "factoryCallerIdentityUsedAsOwner": false
+  },
+  "custody": {
+    "initializerResidualNative": "must-equal-zero",
+    "initializerPrefundedNative": "every pre-existing or forced native residual is sent only to the signed immutable launchWallet after LP creation; a failed refund reverts the entire Graph",
+    "initializerResidualToken": "must-equal-zero",
+    "positionManagerNativeAfter": "must-equal-zero",
+    "positionManagerPreexistingForcedNative": "cannot change fixed LP liquidity; the reviewed SETTLE plus TAKE_PAIR plan routes any such surplus to launchWallet instead of retaining it",
+    "positionManagerTokenBeforeAndAfter": "must-equal-zero-for-this-token",
+    "lpNft": "minted-directly-to-explicit-recipient",
+    "dust": "PositionManager TAKE_PAIR sends both currencies directly to launchWallet",
+    "platformFees": "redeemable-only-to-immutable-platform-recipient"
+  },
+  "finalizationRequired": [
+    "Freeze the deployed Stamp Router address and use it as GraphAuthorization.authorizedLauncher.",
+    "Freeze one nonzero launchWallet and one nonzero LP NFT recipient; equality is allowed only if explicitly chosen.",
+    "Freeze a fresh routeNonce and a finite execution deadline.",
+    "Materialize exact constructor arguments and initializer calldata, then mine the hook applicantSalt offchain.",
+    "Recompute all three predicted deployments, init-code hashes, runtime-code hashes, graphCommitment, Router exact deployment set, and permit fields.",
+    "Run the identical final payload on a current Mainnet fork and recheck infrastructure runtime hashes immediately before any signing.",
+    "Do not claim live until an authorized Mainnet transaction is finalized and independently observed."
+  ]
+}
