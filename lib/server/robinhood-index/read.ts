@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { DEFAULT_EXPLORE_FILTERS, type RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
-import { coinValuation, type RobinhoodCoinMarket, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import type { RobinhoodCoinMarket, RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import type { RobinhoodProfilePageSize } from "@/lib/robinhood-launches";
 import { exploreCatalog, launchList, moduleModeSnapshots, profileLaunchList, snapshotLaunches, tokenLaunchRecord } from "./model";
 import { indexStore } from "./store";
@@ -17,8 +17,9 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
     const visible = exploreCatalog(snapshot);
     const markets = await readRobinhoodMarkets(visible).catch(() => new Map<string, RobinhoodCoinMarket>());
     const caps = new Map(Array.from(markets).flatMap(([address, market]) => {
-      const value = coinValuation(market).value;
-      return value === null || value <= 0 ? [] : [[address.toLowerCase(), value] as const];
+      const value = market.marketCapUsd;
+      // A pool's calculated FDV is not a reported market capitalization.
+      return value === null || !Number.isFinite(value) || value <= 0 ? [] : [[address.toLowerCase(), value] as const];
     }));
     const volumes = new Map(Array.from(markets).flatMap(([address, market]) => {
       const value = market.volume24hUsd;
