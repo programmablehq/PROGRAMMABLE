@@ -1,5 +1,6 @@
 import { build, version } from 'esbuild';
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, link, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { REPOSITORY_ROOT } from './build.mjs';
@@ -16,7 +17,13 @@ export async function launchSourceWire() {
     tsconfig: path.join(REPOSITORY_ROOT, 'tsconfig.json'), logLevel: 'silent' });
   const output = result.outputFiles[0].contents, directory = path.join(REPOSITORY_ROOT, 'contracts/out/module-mode-deployment/shared');
   await mkdir(directory, { recursive: true }); const file = path.join(directory, `${sha256(output)}.mjs`);
-  try { await writeFile(file, output, { flag: 'wx', mode: 0o600 }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; need(sha256(await readFile(file)) === sha256(output), 'Source validator cache differs'); }
+  // Publish only a complete file. Concurrent test workers must never observe a partially written
+  // cache entry; an existing entry still has to match its content-addressed digest exactly.
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, output, { flag: 'wx', mode: 0o600 });
+    try { await link(temporary, file); }
+    catch (error) { if (error.code !== 'EEXIST') throw error; need(sha256(await readFile(file)) === sha256(output), 'Source validator cache differs'); }
+  } finally { await rm(temporary, { force: true }); }
   loaded = await import(pathToFileURL(file).href); return loaded;
 }
