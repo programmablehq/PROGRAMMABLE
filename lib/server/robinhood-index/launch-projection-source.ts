@@ -6,6 +6,7 @@ import { canonicalBrowserJsonV2 } from "@/lib/custom-launch/browser-authority-v2
 import { parseSnapshot } from "./model";
 import type { IndexStore } from "./store";
 import { verifyAtomicLaunchProvenanceV2 } from "./atomic-launch-provenance-v2";
+import { readStampEvmBlockNumber } from "./stamp-block-context";
 
 export type LaunchProjectionSourceV1 = {
   page(cursor: string | null): Promise<{ launches: readonly LaunchProjectionV1[]; nextCursor: string | null }>;
@@ -113,8 +114,11 @@ export function launchProjectionSourceV1(signal: AbortSignal = AbortSignal.timeo
           await verifyAtomicLaunchProvenanceV2(client, projection, witness, source, height);
         } else {
           if (witness.executorKind !== undefined) throw new Error("Unrecognized projection executor");
-          const stamp = await client.readContract({ address: source, abi: PLAN_PROVENANCE_ABI, functionName: "launchStampV1", args: [witness.onchainLaunchId], blockNumber: height });
-          if (!same(stamp.controller, projection.controller) || stamp.blockNumber !== height
+          const [stamp, evmBlockNumber] = await Promise.all([
+            client.readContract({ address: source, abi: PLAN_PROVENANCE_ABI, functionName: "launchStampV1", args: [witness.onchainLaunchId], blockNumber: height }),
+            readStampEvmBlockNumber(client, block.hash),
+          ]);
+          if (!same(stamp.controller, projection.controller) || stamp.blockNumber !== evmBlockNumber
             || stamp.planHash !== `0x${projection.planHash?.slice(7)}` || stamp.manifestDigest !== `0x${projection.manifestDigest?.slice(7)}`
             || stamp.stampHash !== witness.stampHash || stamp.permitDigest !== witness.permitDigest) throw new Error("Projection plan stamp mismatch");
         }
