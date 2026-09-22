@@ -6,6 +6,7 @@ import { projectionAddress, projectionHash, projectionUint, resolveProjectionAdd
 import { customLaunchPlanOccurrenceIdV1 } from "@/lib/custom-launch/stamp-plan-codec-v1";
 import { CUSTOM_LAUNCH_PLAN_ATOMIC_ABI_V2, customLaunchPlanAtomicOrderDigestV2, customLaunchPlanAtomicStampHashV2,
   decodeCustomLaunchPlanAtomicCallV2 } from "@/lib/custom-launch/atomic-plan-codec-v2";
+import { readStampEvmBlockNumber } from "./stamp-block-context";
 
 const same = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 const digest = (value: unknown): value is `sha256:${string}` => typeof value === "string" && /^sha256:(?!0{64}$)[0-9a-f]{64}$/.test(value);
@@ -50,11 +51,12 @@ export async function verifyAtomicLaunchProvenanceV2(client: PublicClient, proje
     return result as Reads[Name];
   }
   const hash = projection.finality.transactionHashes[0];
-  const [stamp, tx, receipt] = await Promise.all([
+  const [stamp, tx, receipt, evmBlockNumber] = await Promise.all([
     read("launchStampV2", [launchId]),
     client.getTransaction({ hash }), client.getTransactionReceipt({ hash }),
+    readStampEvmBlockNumber(client, witness.blockHash as Hex),
   ]);
-  if (!same(stamp.controller, projection.controller) || stamp.blockNumber !== height || stamp.planHash !== planHash
+  if (!same(stamp.controller, projection.controller) || stamp.blockNumber !== evmBlockNumber || stamp.planHash !== planHash
     || stamp.manifestDigest !== manifestDigest || stamp.stampHash !== witness.stampHash || stamp.orderDigest !== witness.orderDigest
     || stamp.callsHash !== witness.callsHash || receipt.status !== "success" || receipt.blockNumber !== height || receipt.blockHash !== witness.blockHash
     || tx.hash !== hash || !tx.to || !same(tx.to, source) || !same(tx.from, projection.controller) || tx.blockHash !== witness.blockHash

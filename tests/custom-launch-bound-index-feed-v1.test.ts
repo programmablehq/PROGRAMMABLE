@@ -48,7 +48,7 @@ describe("bound open-provenance feed through the real website index", () => {
         topics: encodeEventTopics({ abi: CUSTOM_LAUNCH_PLAN_ATOMIC_ABI_V2, ...event } as never) as Hex[],
         blockNumber: "0x2a", blockHash: hash, transactionHash: hash, transactionIndex: "0x0", logIndex: `0x${index.toString(16)}`, removed: false };
     });
-    const observed = new Set<string>(); let wrongRuntime = false, paddedTopic = false, paddedProof = false, emptyPool = false;
+    const observed = new Set<string>(); let wrongRuntime = false, wrongStampBlock = false, invalidBlockRead = false, paddedTopic = false, paddedProof = false, emptyPool = false;
     const server = createServer(async (request, response) => {
       const url = new URL(request.url!, "http://fixture.local");
       response.setHeader("content-type", "application/json");
@@ -63,12 +63,16 @@ describe("bound open-provenance feed through the real website index", () => {
       else if (rpc.method === "eth_getTransactionByHash") result = { hash, from: controller, to: atomicExecutor, input: record.steps[0].transaction.data,
         value: "0x0", nonce: "0x7", gas: "0x445c0", chainId: "0x1237", type: "0x2", blockHash: hash, blockNumber: "0x2a", transactionIndex: "0x0" };
       else if (rpc.method === "eth_getCode") result = wrongRuntime && url.pathname === "/secondary" ? "0x6002" : runtime;
+      else if (rpc.method === "eth_call" && rpc.params[0].data === "0x4360005260206000f3") {
+        expect(rpc.params[1]).toEqual({ blockHash: hash, requireCanonical: true });
+        result = invalidBlockRead ? "0x" : encodeAbiParameters([{ type: "uint256" }], [17n]);
+      }
       else if (rpc.method === "eth_call" && atomic) {
         expect(rpc.params[1]).toEqual({ blockHash: hash, requireCanonical: true });
         const decoded = rpc.params[0].to.toLowerCase() === market.poolManager.toLowerCase() ? { functionName: "extsload" }
           : decodeFunctionData({ abi: CUSTOM_LAUNCH_PLAN_ATOMIC_ABI_V2, data: rpc.params[0].data });
         if (decoded.functionName === "launchStampV2") result = encodeFunctionResult({ abi: CUSTOM_LAUNCH_PLAN_ATOMIC_ABI_V2, functionName: "launchStampV2",
-          result: { stampHash, orderDigest, planHash: order.planHash, manifestDigest: order.manifestDigest, callsHash: order.callsHash, controller, blockNumber: 42n } });
+          result: { stampHash, orderDigest, planHash: order.planHash, manifestDigest: order.manifestDigest, callsHash: order.callsHash, controller, blockNumber: wrongStampBlock ? 42n : 17n } });
         else if (decoded.functionName === "stampProofV2") {
           result = encodeFunctionResult({ abi: CUSTOM_LAUNCH_PLAN_ATOMIC_ABI_V2, functionName: "stampProofV2", result: [component, runtimeHash, stampHash] });
           if (paddedProof) result = `0x01${String(result).slice(4)}`;
@@ -77,7 +81,7 @@ describe("bound open-provenance feed through the real website index", () => {
         else throw new Error("Unexpected Atomic getter");
       }
       else if (rpc.method === "eth_call") result = encodeAbiParameters([{ type: "tuple", components: [{ type: "bytes32", name: "stampHash" }, { type: "bytes32", name: "permitDigest" }, { type: "bytes32", name: "planHash" }, { type: "bytes32", name: "manifestDigest" }, { type: "address", name: "controller" }, { type: "uint256", name: "blockNumber" }] }],
-        [{ stampHash: hash, permitDigest: hash, planHash: `0x${projection.planHash!.slice(7)}`, manifestDigest: `0x${projection.manifestDigest!.slice(7)}`, controller, blockNumber: 42n }]);
+        [{ stampHash: hash, permitDigest: hash, planHash: `0x${projection.planHash!.slice(7)}`, manifestDigest: `0x${projection.manifestDigest!.slice(7)}`, controller, blockNumber: wrongStampBlock ? 42n : 17n }]);
       else { response.statusCode = 400; response.end(JSON.stringify({ error: `Unexpected RPC ${rpc.method}` })); return; }
       response.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result }));
     });
@@ -111,6 +115,12 @@ describe("bound open-provenance feed through the real website index", () => {
       const before = await readFile(path, "utf8"); wrongRuntime = true;
       projection.sourceVerification = "partial";
       await expect(syncLaunchProjectionIndex(launchProjectionSourceV1(), store)).rejects.toThrow(/runtime mismatch/);
+      expect(await readFile(path, "utf8")).toBe(before);
+      wrongRuntime = false; wrongStampBlock = true;
+      await expect(syncLaunchProjectionIndex(launchProjectionSourceV1(), store)).rejects.toThrow(/binding mismatch|stamp mismatch/);
+      wrongStampBlock = false; invalidBlockRead = true;
+      await expect(syncLaunchProjectionIndex(launchProjectionSourceV1(), store)).rejects.toThrow(/block-number read is invalid/);
+      invalidBlockRead = false;
       expect(await readFile(path, "utf8")).toBe(before);
       if (atomic) {
         wrongRuntime = false; paddedTopic = true;
