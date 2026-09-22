@@ -98,6 +98,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/swap",
+        destination: "/explore",
+        permanent: true,
+      },
+      {
         source: "/docs/models/stock-paired",
         destination: "/developer-reference/stock-paired",
         permanent: true,
