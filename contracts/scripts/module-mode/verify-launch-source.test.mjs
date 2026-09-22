@@ -716,7 +716,7 @@ test('a partial token readback retains its job and checkpoint while the bound en
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('publication repairs an existing runtime-only record using its bound creation transaction', async () => {
+test('publication repairs a runtime-only record even when the job completes after its first readback', async () => {
   const { target, value } = publishedFixture(), partial = { ...value, creationMatch: null,
     deployment: { transactionHash: null, blockNumber: null, transactionIndex: null, deployer: null } };
   const readonly = await ensureTargetResult(target, false, { fetchPublic: async () => Response.json(partial) });
@@ -733,7 +733,7 @@ test('publication repairs an existing runtime-only record using its bound creati
         assert.deepEqual(body.stdJsonInput, target.input);
         return Response.json({ verificationId: job }, { status: 202 });
       }
-      if (String(url).endsWith(`/v2/verify/${job}`)) return Response.json({ isJobCompleted: false });
+      if (String(url).endsWith(`/v2/verify/${job}`)) return Response.json({ isJobCompleted: true });
       return Response.json(++reads <= 2 ? partial : value);
     },
   });

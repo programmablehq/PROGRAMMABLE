@@ -626,7 +626,11 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
       await new Promise(resolve => setTimeout(resolve, 3000));
       const result = await read(); if (result) return result;
       const { value } = await boundedPublicJson(`${SOURCIFY_BASE}/v2/verify/${job.verificationId}`, fetchPublic);
-      if (value.isJobCompleted) throw new Error(`${target.role}: source verification finished without a verified readback`);
+      if (value.isJobCompleted) {
+        // The job can finish between the contract read and job-status read.
+        const completed = await read(); if (completed) return completed;
+        throw new Error(`${target.role}: source verification finished without a verified readback`);
+      }
     }
     throw new Error(`${target.role}: source verification is still pending; the checkpoint was not advanced`);
   } catch (error) { throw Object.assign(error, { verificationId: job.verificationId }); }
