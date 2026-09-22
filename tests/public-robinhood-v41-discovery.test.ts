@@ -56,7 +56,7 @@ describe("profile selected public Robinhood API contract", () => {
     expect(doc["x-programmable-api-scopes"]["fees:claim"].state).toBe("reserved-disabled");
   });
 
-  it("preserves Ethereum, paths, schemas and other discovery while activation retains sole authority", async () => {
+  it("preserves Ethereum, paths and schemas while released V4.1 fresh writes stay retired", async () => {
     const old = await document("4.0.0");
     const next = await document("4.1.0", true);
     const { v4: oldV4, ...oldOther } = old["x-programmable-availability"];
@@ -65,7 +65,8 @@ describe("profile selected public Robinhood API contract", () => {
     expect(next.paths).toEqual(old.paths);
     expect(next.components).toEqual(old.components);
     expect(next["x-programmable-wallet-authorization-gate"]).toEqual(old["x-programmable-wallet-authorization-gate"]);
-    expect(nextV4.publicWrites).toBe(true);
+    expect(nextV4.publicWrites).toBe(false);
+    expect(nextV4.publicAuthorization).toBe(false);
     expect(nextV4.releaseReady).toBe(true);
     expect(oldV4.publicWrites).toBe(false);
     for (const field of ["publicWrites", "publicAuthorization", "releaseReady", "released", "installable", "releaseBlockers"]) {

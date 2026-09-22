@@ -132,8 +132,8 @@ describe("Custom Launch API documentation", () => {
         released: V4_API_DISCOVERY.cliReleased,
         installable: V4_API_DISCOVERY.cliInstallable,
         releaseReady: V4_API_DISCOVERY.releaseReady,
-        publicAuthorization: V4_API_DISCOVERY.publicAuthorization,
-        publicWrites: V4_API_DISCOVERY.publicWrites,
+        publicAuthorization: V4_API_PROFILE_VERSION === "4.0.0" ? V4_API_DISCOVERY.publicAuthorization : false,
+        publicWrites: V4_API_PROFILE_VERSION === "4.0.0" ? V4_API_DISCOVERY.publicWrites : false,
       });
     expect(officialLinks).toContain("../developers/machine-readable.md");
     for (const path of ["docs/public/developers/README.md", "docs/public/status.md"]) {
@@ -200,7 +200,7 @@ describe("Custom Launch API documentation", () => {
     expect(rawGuide).toContain("examples/direct-native-v3-no-broadcast/README.md");
     expect(cliGuide).toContain("deterministic-hook-permission-grind-v1");
     expect(read("docs/public/developers/custom-launch-quickstart.md")).toContain(
-      "programmable-launch submit launch.json --config programmable-launch.config.json",
+      "/v4/chains/4663/custom-launch-plans:preflight",
     );
   });
 

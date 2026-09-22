@@ -6,13 +6,13 @@ description: Custom Launch requirements, API access, request handling and wallet
 
 Custom Launch deploys your token, hook and supporting contracts through the Programmable Launch Stamp Router. The API checks the deployment request and prepares a transaction. The controller wallet reviews, signs and sends it.
 
-Start with [Launch through the API](custom-launch-quickstart.md) for the commands. The [versioned API reference](https://programmable.market/developers/custom-launch-api-v1.md) contains the complete schemas, field limits and compatibility rules.
+Start with [Launch through the API](custom-launch-quickstart.md) for new Robinhood projects. The [Custom Launch Plan guide](https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md) contains the live schema and agent instructions. The [versioned reference](https://programmable.market/developers/custom-launch-api-v1.md) and profile-based V4 details below remain for existing launch history and recovery.
 
 ## Choose the request interface
 
-The API-key workspace can prepare a general Custom Launch Plan. Read `GET /v4/chains/4663/custom-launch-capabilities` and check `availability.operations.create.state` before creating one. Creation requires `active`; preflight and reads can remain active while creation is disabled. `PLAN_OPERATION_DISABLED` describes a platform operation setting and is not resolved by rotating the key. The plan schema and agent instructions are published under `/v4/chains/4663/custom-launch-contract/`.
+New Robinhood launches use the open Custom Launch Plan. Read `GET /v4/chains/4663/custom-launch-capabilities` and require `availability.operations.create.state: "active"` before creating one. Its schema and agent instructions are published under `/v4/chains/4663/custom-launch-contract/`.
 
-Existing profile-based integrations use the following layouts:
+Historical profile-based integrations used the following layouts. Their records and wallet recovery remain available:
 
 | Contract layout | API |
 | --- | --- |
@@ -23,9 +23,11 @@ Read [discovery](https://programmable.market/.well-known/programmable.json) befo
 
 MultiRole publishes its context, readiness, guide and client through `GET /v4/chains/4663/multi-role-custom-launches/capabilities`. Require a complete `context` and `readiness.status: "ready"`. Its automatic economic verifier accepts the exact Native20 reference contracts and supported constructor configuration. Different source or economic behavior can require additional verification. An `evidence_required` result does not authorize a wallet transaction.
 
-## Robinhood Chain V4
+## Robinhood Chain V4.1 history and recovery
 
-Robinhood Chain uses chain ID `4663` and network identifier `eip155:4663`. Before authenticated preflight or creation, both `customLaunchApi.versions.v4` and the matching `chains[]` entry in discovery must report:
+Fresh requests through `POST /v4/chains/4663/custom-launches/preflight` and `POST /v4/chains/4663/custom-launches` are retired. Existing launch reads and exact create replays remain available. For a new launch, use the Custom Launch Plan guide linked above.
+
+Robinhood Chain uses chain ID `4663` and network identifier `eip155:4663`. Historical V4 clients required both `customLaunchApi.versions.v4` and the matching `chains[]` entry in discovery to report:
 
 ```json
 {

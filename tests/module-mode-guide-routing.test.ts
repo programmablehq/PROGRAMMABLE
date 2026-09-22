@@ -16,7 +16,7 @@ it("keeps the module host guide outside the externally managed docs namespace", 
   const guideAnchors = [...contributorGuide.matchAll(/https:\/\/programmable\.market\/developer-reference\/module-mode#([a-z-]+)/g)];
   expect(guideAnchors.length).toBeGreaterThan(0);
   for (const [, anchor] of guideAnchors) expect(page).toContain(`id="${anchor}"`);
-  expect(readFileSync("components/developer-api-keys.tsx", "utf8")).toContain('href="/docs/developers/custom-launch-quickstart"');
+  expect(readFileSync("components/developer-api-keys.tsx", "utf8")).toContain('href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md"');
   const config = JSON.parse(readFileSync("vercel.json", "utf8"));
   expect(config.redirects).not.toContainEqual({ source: "/docs/developers/module-mode", destination: path, permanent: false });
 });

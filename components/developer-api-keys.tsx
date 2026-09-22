@@ -2165,7 +2165,7 @@ export function DeveloperApiKeysView({
       )}
 
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        <a href="/docs/developers/custom-launch-quickstart">Developer docs <ArrowRight size={16} aria-hidden="true" /></a>
+        <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Developer docs <ArrowRight size={16} aria-hidden="true" /></a>
       </nav>
 
     </div>
