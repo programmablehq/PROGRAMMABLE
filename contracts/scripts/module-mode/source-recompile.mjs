@@ -15,7 +15,7 @@ export async function recompileSourcifyInput(value, expectedInput, environment =
   const { stdout: version } = await exec(binary, ['--version'], { timeout: 10000, maxBuffer: 4096 });
   need(version.includes(`Version: ${SOURCIFY_COMPILER}`), 'Pinned solc 0.8.26 required; set MODULE_MODE_SOLC');
   const input = { ...value.stdJsonInput, settings: { ...value.stdJsonInput.settings,
-    outputSelection: { '*': { '*': ['abi', 'evm.bytecode', 'evm.deployedBytecode'] } } } };
+    outputSelection: { '*': { '*': ['abi', 'metadata', 'evm.bytecode', 'evm.deployedBytecode'] } } } };
   const encoded = JSON.stringify(input); need(Buffer.byteLength(encoded) <= 16 * 1024 * 1024, 'Recompilation input too large');
   const output = await new Promise((resolve, reject) => {
     const child = execFile(binary, ['--standard-json', '--no-import-callback'],
@@ -29,5 +29,6 @@ export async function recompileSourcifyInput(value, expectedInput, environment =
   const file = value.compilation.fullyQualifiedName.slice(0, separator), name = value.compilation.fullyQualifiedName.slice(separator + 1);
   const artifact = result.contracts?.[file]?.[name]; need(artifact?.evm?.bytecode && artifact?.evm?.deployedBytecode, 'Recompiled target missing');
   return { compilerVersion: SOURCIFY_COMPILER, inputDigest: keccak256(toHex(canonicalJson(value.stdJsonInput))),
-    creationBytecode: `0x${artifact.evm.bytecode.object}`, runtimeBytecode: `0x${artifact.evm.deployedBytecode.object}`, abi: artifact.abi };
+    creationBytecode: `0x${artifact.evm.bytecode.object}`, runtimeBytecode: `0x${artifact.evm.deployedBytecode.object}`, abi: artifact.abi,
+    metadata: exactJson(Buffer.from(artifact.metadata), 'Recompiled compiler metadata') };
 }

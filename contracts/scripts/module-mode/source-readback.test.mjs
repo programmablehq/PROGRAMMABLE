@@ -232,7 +232,7 @@ test('ETH engine auxdata never masks byte, constructor, immutable, source or pro
 
 test('ETH compiler trailer support requires the exact profile, engine target and compiler settings', () => {
   const mutations = [
-    ...[undefined, 'module-native-v1', 'module-native-v2', 'module-engine-v1', 'module-engine-any-quote-v2'].map(profile => ({ expected }) => { expected.sourceProfile = profile; }),
+    ...[undefined, 'module-native-v1', 'module-native-v2', 'module-engine-any-quote-v2'].map(profile => ({ expected }) => { expected.sourceProfile = profile; }),
     ({ expected, value }) => {
       expected.role = 'token';
       for (const entries of [expected.plan.contracts, expected.build.artifacts, expected.build.standardInputs, expected.build.compilerMetadata]) {
@@ -272,7 +272,20 @@ test('ETH compiler trailer support requires the exact profile, engine target and
   }
 });
 
-test('Native and Core readbacks keep the existing no-CBOR default and reject the Quote opt-in', () => {
+test('reviewed module engines bind their complete solc trailer without accepting transformations', () => {
+  for (const [file, name] of [['src/QuoteBoundSettlementV1.sol', 'QuoteBoundSettlementV1'], ['src/module-engine/ModuleQuoteEngineV1.sol', 'ModuleQuoteEngineV1']]) {
+    const { expected, value } = anyQuoteEthContext({ file, name }); expected.sourceProfile = 'module-engine-v1';
+    assert.equal(validateSourcifySource(expected, value).providerClassification, 'NO_METADATA_HASH_PROVIDER_MATCH');
+    const changed = structuredClone(value); changed.creationBytecode.cborAuxdata[1].offset--;
+    assert.throws(() => validateSourcifySource(expected, changed), /compiler trailer/);
+    const historical = structuredClone(value); historical.creationBytecode.cborAuxdata = {}; historical.runtimeBytecode.cborAuxdata = {};
+    assert.equal(validateSourcifySource(expected, historical).independentByteComparison, 'exact-complete-creation-and-runtime');
+    value.runtimeBytecode.transformations.push({ type: 'replace', reason: 'cborAuxdata', offset: 10845 });
+    assert.throws(() => validateSourcifySource(expected, value), /runtime transformations differ/);
+  }
+});
+
+test('non-engine roles keep the existing no-CBOR default and reject the Quote opt-in', () => {
   for (const sourceProfile of [undefined, 'module-native-v1', 'module-native-v2', 'module-engine-v1']) {
     const { expected, value } = context(); expected.sourceProfile = sourceProfile;
     assert.equal(validateSourcifySource(expected, value).providerClassification, 'NO_CBOR_PROVIDER_MATCH');
@@ -370,15 +383,20 @@ test('deduplicated remappings require an exact input-bound pinned recompilation'
   value.compilation.compilerSettings = structuredClone(value.compilation.compilerSettings);
   value.compilation.compilerSettings.remappings = ['unused/=lib/unused/'];
   value.stdJsonInput.settings = structuredClone(value.compilation.compilerSettings);
+  value.metadata = structuredClone(value.metadata);
+  value.metadata.settings.remappings = [':unused/=lib/unused/'];
   assert.equal(sourcifyNeedsRecompilation(expected.build.standardInputs[expected.role], value), true);
   assert.throws(() => validateSourcifySource(expected, value), /recompilation required/);
   const a = expected.build.artifacts[expected.role];
   expected.recompilation = { compilerVersion: '0.8.26+commit.8a97fa7a', inputDigest: keccak256(toHex(canonicalJson(value.stdJsonInput))),
-    creationBytecode: a.bytecode.object, runtimeBytecode: a.deployedBytecode.object, abi: a.abi };
+    creationBytecode: a.bytecode.object, runtimeBytecode: a.deployedBytecode.object, abi: a.abi, metadata: structuredClone(value.metadata) };
   assert.equal(validateSourcifySource(expected, value).providerMatch, 'match');
-  for (const change of [r => { r.inputDigest = txHash; }, r => { r.runtimeBytecode += '00'; }, r => { r.creationBytecode += '00'; }, r => { r.compilerVersion = '0.8.27'; }, r => { r.abi = []; }]) {
+  for (const change of [r => { r.inputDigest = txHash; }, r => { r.runtimeBytecode += '00'; }, r => { r.creationBytecode += '00'; }, r => { r.compilerVersion = '0.8.27'; }, r => { r.abi = []; }, r => { r.metadata.settings.remappings = []; }]) {
     const changed = structuredClone(expected); change(changed.recompilation); assert.throws(() => validateSourcifySource(changed, value));
   }
+  value.metadata.output = { devdoc: { notice: 'changed' } };
+  expected.recompilation.metadata = structuredClone(value.metadata);
+  assert.throws(() => validateSourcifySource(expected, value), /full compiler metadata differs/);
 });
 test('ABI comparison ignores item order only and Sourcify deployer means transaction sender', () => {
   const { expected, value } = context();

@@ -583,6 +583,14 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
       return new Response('null', { headers: { 'content-type': 'application/json' } });
     });
     if (missing) return null;
+    if (publish && response.value?.creationMatch === null && !canonicalAnyQuoteTargets.has(target)) {
+      // An existing runtime-only record still needs publication with the authenticated creation
+      // transaction. It is never returned as verified; the eventual full readback must pass below.
+      need(response.value.chainId === '4663' && same(response.value.address, target.address)
+        && response.value.match === 'match' && response.value.runtimeMatch === 'match'
+        && same(response.value.runtimeBytecode?.onchainBytecode, target.runtime), 'Runtime-only source identity differs');
+      return null;
+    }
     const recompilation = sourcifyNeedsRecompilation(target.input, response.value)
       ? await recompileSourcifyInput(response.value, target.input, { PATH: process.env.PATH, MODULE_MODE_SOLC: binary }) : undefined;
     if (response.value?.creationMatch === null && canonicalAnyQuoteTargets.has(target)) {
@@ -618,7 +626,11 @@ export async function ensurePublished(target, publish, { fetchPublic = fetch, bi
       await new Promise(resolve => setTimeout(resolve, 3000));
       const result = await read(); if (result) return result;
       const { value } = await boundedPublicJson(`${SOURCIFY_BASE}/v2/verify/${job.verificationId}`, fetchPublic);
-      if (value.isJobCompleted) throw new Error(`${target.role}: source verification finished without a verified readback`);
+      if (value.isJobCompleted) {
+        // The job can finish between the contract read and job-status read.
+        const completed = await read(); if (completed) return completed;
+        throw new Error(`${target.role}: source verification finished without a verified readback`);
+      }
     }
     throw new Error(`${target.role}: source verification is still pending; the checkpoint was not advanced`);
   } catch (error) { throw Object.assign(error, { verificationId: job.verificationId }); }
