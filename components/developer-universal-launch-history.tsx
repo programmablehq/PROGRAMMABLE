@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Hex } from "viem";
 import { projectionObject } from "@/lib/custom-launch/launch-projection-v1";
 import { multiRoleOriginalTransactionHintV3 } from "@/lib/custom-launch/multi-role-finality-version-v3";
@@ -45,8 +45,11 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [sourceUnavailable, setSourceUnavailable] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const credentials = useRef({ getAccessToken, getIdentityToken });
+  useEffect(() => { credentials.current = { getAccessToken, getIdentityToken }; }, [getAccessToken, getIdentityToken]);
   const request = useCallback(async (source: UniversalLaunchSource, id?: string, init?: RequestInit, suffix = "", cursor?: string) => {
-    const [access, identityToken] = await Promise.all([getAccessToken(), getIdentityToken()]);
+    const loaders = credentials.current;
+    const [access, identityToken] = await Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
     if (!access) throw new Error("Sign in again to load your launch history.");
     const query = new URLSearchParams({ walletAddress: account, source });
     if (cursor) query.set("cursor", cursor);
@@ -60,7 +63,7 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
       : response.status === 404 ? "This launch was not found for this controller."
       : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.", response.status);
     return response.json() as Promise<unknown>;
-  }, [account, getAccessToken, getIdentityToken]);
+  }, [account]);
   useEffect(() => {
     const controller = new AbortController();
     void Promise.allSettled(sources.map(async source => {
