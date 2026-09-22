@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { useState } from "react";
 import { DeveloperUniversalLaunchHistory } from "../../../components/developer-universal-launch-history";
 import { beginLaunchSendV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "../../../lib/custom-launch/launch-send-journal-v1";
 import { canonicalBrowserSha256V2 as digest } from "../../../lib/custom-launch/browser-authority-v2";
@@ -104,5 +105,22 @@ async function sendWallet(input: UniversalLaunchWalletInputV1) {
   record = { ...record, status: "broadcast", steps: record.steps.map(step => ({ ...step, status: "broadcast", transactionHash: hash })), updatedAt: new Date().toISOString() };
   return hash;
 }
+function SessionRefreshFixture() {
+  const [identityReads, setIdentityReads] = useState(0);
+  const [reviewAttempts, setReviewAttempts] = useState(0);
+  const [sessionRevision, setSessionRevision] = useState(0);
+  return <><p>Identity reads: {identityReads}; review attempts: {reviewAttempts}; session revision: {sessionRevision}</p>
+    <button onClick={() => setSessionRevision(value => value + 1)}>Replace session callbacks</button>
+    <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId}
+      getAccessToken={async () => "fixture-session"}
+      getIdentityToken={async () => { setIdentityReads(value => Math.min(20, value + 1)); return null; }}
+      sendWallet={async input => {
+        if (input.action === "review") {
+          setReviewAttempts(value => Math.min(20, value + 1));
+          await input.loadFreshResource();
+        }
+        return sendWallet(input);
+      }} /></>;
+}
 createRoot(document.getElementById("root")!).render(<main className={`${styles.page} page-width`}><header className={styles.hero}><div><p style={{ color: "var(--webde-muted)", fontSize: 12 }}>Local QA fixture · no real wallet or funds</p><h1>Launch history</h1><p className={styles.intro}>Track progress and complete your wallet steps.</p></div></header>
-  <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId} getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} sendWallet={sendWallet} /></main>);
+  {mode === "session-refresh" ? <SessionRefreshFixture /> : <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId} getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} sendWallet={sendWallet} />}</main>);

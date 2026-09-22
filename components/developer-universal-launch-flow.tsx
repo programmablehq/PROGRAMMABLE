@@ -43,6 +43,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const navigated = useRef(false);
   const onSubmittedRef = useRef(onSubmitted);
   useEffect(() => { onSubmittedRef.current = onSubmitted; }, [onSubmitted]);
+  const reviewCallbacks = useRef({ load, sendWallet });
+  useEffect(() => { reviewCallbacks.current = { load, sendWallet }; }, [load, sendWallet]);
   const rawJournal = useSyncExternalStore(subscribeLaunchSendV1, () => readLaunchSendJournalV1(entry.controller), () => null);
   const legacyRaw = useSyncExternalStore(subscribeLaunchSendV1, () => {
     try { return window.localStorage.getItem(`programmable:launch-submission:4663:${entry.controller.toLowerCase()}:${entry.sourceVersion}:${id}`); }
@@ -91,15 +93,18 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   useEffect(() => {
     if (!ready || hasUnresolved || !autoPrepare) return;
     let current = true;
-    void sendWallet({ action: "review", sourceVersion: entry.sourceVersion, reviewedResource: resource,
-      stepId: step?.stepId, loadFreshResource: load, loadFreshCapabilities: async () => {
+    // Session refreshes replace callbacks without changing the reviewed launch.
+    // They must not cancel and restart the same automatic wallet review.
+    const callbacks = reviewCallbacks.current;
+    void callbacks.sendWallet({ action: "review", sourceVersion: entry.sourceVersion, reviewedResource: resource,
+      stepId: step?.stepId, loadFreshResource: callbacks.load, loadFreshCapabilities: async () => {
         const response = await fetch(`https://api.programmable.market/v4/chains/4663/${entry.sourceVersion === "custom_launch_plan_v1" ? "custom-launch-capabilities" : "multi-role-custom-launches/capabilities"}`, { cache: "no-store", credentials: "omit", redirect: "error", signal: AbortSignal.timeout(15000) });
         if (!response.ok) throw new Error("Current wallet bindings are unavailable. Refresh this launch to try again.");
         return response.json();
       } }).then(value => { if (current && typeof value !== "string") { setReview(value); setError(null); } })
       .catch(caught => { if (current) { setReview(null); setError(caught instanceof Error ? caught.message : "Could not load the wallet review."); } });
     return () => { current = false; };
-  }, [ready, hasUnresolved, autoPrepare, entry.sourceVersion, resource, step?.stepId, load, sendWallet]);
+  }, [ready, hasUnresolved, autoPrepare, entry.sourceVersion, resource, step?.stepId]);
 
   useEffect(() => {
     if (!ownAttempt || !completedHash || !completedDigest) return;
