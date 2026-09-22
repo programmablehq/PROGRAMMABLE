@@ -6,7 +6,6 @@ const PUBLIC_ROUTES = [
   "",
   "/explore",
   "/launch",
-  "/swap",
   "/launch/modules",
   "/developers/modules",
   "/developers/hooks",
