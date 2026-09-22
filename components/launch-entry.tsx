@@ -204,11 +204,10 @@ export function LaunchModelPicker({
           Create a Uniswap v4 hook with your own logic.
         </span>
         <span
-          className={launchExperience.maintenanceStatus}
+          className={launchExperience.modelAction}
           id="launch-model-custom-status"
         >
-          <Clock3 aria-hidden="true" size={14} />
-          Getting updated currently
+          Launch a hook<ArrowRight aria-hidden="true" size={16} />
         </span>
       </span>
     </>
@@ -299,19 +298,18 @@ export function LaunchModelPicker({
           <ModuleFoundationLaunchCard />
         )}
 
-        <button
+        <Link
           className={`launch-model-card ${launchExperience.modelCard} liquid-glass-surface`}
           data-launch-model-option="custom"
-          data-launch-model-available="false"
-          data-launch-model-entry="maintenance"
+          data-launch-model-available="true"
+          data-launch-model-entry="developer-launch"
           data-launch-model-launchable="false"
-          type="button"
-          disabled
+          href="/developers/api-keys?start=custom&chainId=4663"
           aria-labelledby="launch-model-custom-title"
           aria-describedby="launch-model-custom-description launch-model-custom-status"
         >
           {customCardContent}
-        </button>
+        </Link>
 
       </div>
       {modelLoadError ? (
