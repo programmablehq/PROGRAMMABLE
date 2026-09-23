@@ -47,9 +47,10 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   const [refresh, setRefresh] = useState(0);
   const credentials = useRef({ getAccessToken, getIdentityToken });
   useEffect(() => { credentials.current = { getAccessToken, getIdentityToken }; }, [getAccessToken, getIdentityToken]);
-  const request = useCallback(async (source: UniversalLaunchSource, id?: string, init?: RequestInit, suffix = "", cursor?: string) => {
+  const request = useCallback(async (source: UniversalLaunchSource, id?: string, init?: RequestInit, suffix = "", cursor?: string,
+    sharedTokens?: readonly [string | null, string | null]) => {
     const loaders = credentials.current;
-    const [access, identityToken] = await Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
+    const [access, identityToken] = sharedTokens ?? await Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
     if (!access) throw new Error("Sign in again to load your launch history.");
     const query = new URLSearchParams({ walletAddress: account, source });
     if (cursor) query.set("cursor", cursor);
@@ -66,14 +67,22 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   }, [account]);
   useEffect(() => {
     const controller = new AbortController();
+    const loaders = credentials.current;
+    const sharedTokens = Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
+    let timer: number | undefined;
     void Promise.allSettled(sources.map(async source => {
-      const result = parseEntries(await request(source, undefined, { signal: controller.signal }), account);
-      let selectedUnavailable = false;
-      if (props.initialLaunchId && !result.entries.some(entry => String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId)) {
-        try { result.entries.push(...parseEntries(await request(source, props.initialLaunchId, { signal: controller.signal }), account).entries); }
-        catch (caught) { selectedUnavailable = !(caught instanceof HistoryReadError && caught.status === 404); }
+      const tokens = await sharedTokens;
+      if (props.initialLaunchId) {
+        try {
+          return { source, selectedUnavailable: false,
+            ...parseEntries(await request(source, props.initialLaunchId, { signal: controller.signal }, "", undefined, tokens), account) };
+        } catch (caught) {
+          if (caught instanceof HistoryReadError && caught.status === 404) return { source, selectedUnavailable: false, entries: [], nextCursor: null };
+          throw caught;
+        }
       }
-      return { source, selectedUnavailable, ...result };
+      return { source, selectedUnavailable: false,
+        ...parseEntries(await request(source, undefined, { signal: controller.signal }, "", undefined, tokens), account) };
     })).then(results => {
       if (controller.signal.aborted) return;
       const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
@@ -84,9 +93,10 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
       setSourceUnavailable(unavailable);
       setError(unavailable ? successful.some(result => result.entries.length) ? "Some custom launch sources could not be refreshed. Existing records remain available." : "Launch data is temporarily unavailable. Keep this link and refresh to retry." : null);
       setLoading(false);
+      const selected = successful.flatMap(result => result.entries).find(entry => String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId);
+      if (!unavailable && selected?.resource.status === "accepted") timer = window.setTimeout(() => setRefresh(value => value + 1), 20_000);
     });
-    const timer = window.setInterval(() => setRefresh(value => value + 1), 15000);
-    return () => { controller.abort(); window.clearInterval(timer); };
+    return () => { controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
   }, [request, account, props.initialLaunchId, refresh]);
   async function more(source: UniversalLaunchSource) {
     const cursor = cursors[source]; if (!cursor) return;
