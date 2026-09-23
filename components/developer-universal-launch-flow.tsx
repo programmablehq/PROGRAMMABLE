@@ -124,7 +124,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       catch { if (active) setTrackingError("The transaction is saved. Tracking will retry automatically with the same hash."); }
       finally { inFlight = false; }
     };
-    void track(); const timer = window.setInterval(() => void track(), 15000);
+    void track(); const timer = window.setInterval(() => void track(), 60000);
     return () => { active = false; window.clearInterval(timer); };
   }, [hash, submittedStepId, ownStep?.status]);
 
