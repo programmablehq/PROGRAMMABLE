@@ -70,16 +70,32 @@ export async function GET(request: Request) {
         results[lane.releaseDigest] = { status: "unavailable" };
         const budget = 165_000 - (Date.now() - startedAt);
         if (budget <= 0) continue;
-        try {
-          const laneBudget = Math.max(1, Math.floor(budget / (ordered.length - index)));
-          const laneDeadline = Date.now() + laneBudget;
-          const source = await lane.source(AbortSignal.timeout(laneBudget));
-          results[lane.releaseDigest] = await syncModuleModeIndex(source, store, {
-            ...(lane.foundation ? { rangeSize: 5_000n } : {}),
-            // Leave time for the final canonical checkpoint read and the shared CAS write.
-            budgetMs: Math.max(0, Math.min(90_000, laneDeadline - Date.now() - 8_000)),
-          });
-        } catch { /* Retain this generation's verified history and let the remaining sources progress. */ }
+        const laneBudget = Math.max(1, Math.floor(budget / (ordered.length - index)));
+        const laneDeadline = Date.now() + laneBudget;
+        // A Foundation provider can fail one read without changing canonical history.
+        // Repeat that lane once within its original budget; each attempt still verifies
+        // both providers and writes only a fully checked checkpoint.
+        const maxAttempts = lane.foundation ? 2 : 1;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          const remainingLane = laneDeadline - Date.now();
+          if (remainingLane <= 0) break;
+          try {
+            const source = await lane.source(AbortSignal.timeout(remainingLane));
+            results[lane.releaseDigest] = await syncModuleModeIndex(source, store, {
+              ...(lane.foundation ? { rangeSize: 5_000n } : {}),
+              // Leave time for the final canonical checkpoint read and the shared CAS write.
+              budgetMs: Math.max(0, Math.min(90_000, laneDeadline - Date.now() - 8_000)),
+            });
+            break;
+          } catch (error) {
+            if (attempt + 1 === maxAttempts || Date.now() >= laneDeadline) {
+              console.warn("robinhood-index-source-unavailable", JSON.stringify({
+                sourceKind: lane.foundation ? "foundation" : "module", releaseDigest: lane.releaseDigest,
+                errorName: error instanceof Error ? error.name : "unknown",
+              }));
+            }
+          }
+        }
       }
       moduleMode = primary ? moduleSources[primary] : { status: modules.status === "fulfilled" ? "disabled" : "unavailable" };
       const states = Object.values(foundationSources).map(source => source.status);
