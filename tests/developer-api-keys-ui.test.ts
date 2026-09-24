@@ -604,7 +604,7 @@ describe("developer API key interface", () => {
     expect(apiKeyPurpose(["modules:read", "modules:submit"]))
       .toBe("module-contributions");
     expect(apiKeyPurposeLabel(["modules:submit", "modules:read"]))
-      .toBe("Modules");
+      .toBe("Legacy module key");
     for (const scopes of [
       [], ["modules:submit"], ["modules:submit", "modules:submit"],
       ["modules:read", "custom-launch:create"],
