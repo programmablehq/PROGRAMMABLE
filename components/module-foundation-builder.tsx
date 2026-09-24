@@ -15,6 +15,7 @@ import { prepareTokenImage, isProgrammableTokenImageUrl } from "@/lib/token-imag
 import { validateModuleSocialLinks, type ModuleSocialKind, type ModuleSocialLinks } from "@/lib/module-mode/token-metadata";
 import { foundationDecimalError, foundationReviewError, foundationSelectionErrors, isFoundationCreatorFee, type FoundationAvailability, type FoundationConfigurationField, type FoundationImage, type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationModuleDescriptor, type FoundationModuleSelection, type FoundationQuoteAsset, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { foundationCreatorFeesEqual } from "@/lib/module-foundation/creator-fees";
+import { FOUNDATION_WETH } from "@/lib/module-foundation/native-funding";
 import { FOUNDATION_DEFAULT_IMAGE, isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
 import { normalizeFoundationSocialInput, normalizeFoundationSocialInputs } from "@/lib/module-foundation/social-input";
 import { ModuleFoundationTransactionResult } from "./module-foundation-review";
@@ -36,6 +37,7 @@ export interface ModuleFoundationBuilderProps {
   catalog: readonly FoundationModuleDescriptor[];
   quoteAssets: readonly FoundationQuoteAsset[];
   onResolveQuote?: (address: Address) => Promise<FoundationQuoteAsset>;
+  onResolveSuggestedInitialBuy?: () => Promise<string>;
   onUploadImage: (input: { image: { kind: "local"; sha256: Hex; mimeType: "image/webp"; bytes: number }; blob: Blob }) => Promise<FoundationImage>;
   onPrepareLaunch: (draft: FoundationLaunchDraft) => Promise<FoundationLaunchReview | null>;
   onConfirmLaunch: (review: FoundationLaunchReview) => Promise<FoundationTransactionResult>;
@@ -65,7 +67,7 @@ function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes
     initialBuy: initial?.initialBuy ?? "", additionalLiquidity: "0", modules: initial?.modules ?? EMPTY_MODULES };
 }
 
-export function ModuleFoundationBuilder({ availability, contextKey, catalog, quoteAssets, onResolveQuote, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, launchProgress, submissionBlocked }: ModuleFoundationBuilderProps) {
+export function ModuleFoundationBuilder({ availability, contextKey, catalog, quoteAssets, onResolveQuote, onResolveSuggestedInitialBuy, onUploadImage, onPrepareLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, suggestedInitialBuy, launchProgress, submissionBlocked }: ModuleFoundationBuilderProps) {
   const [draft, setDraft] = useState<EditableDraft>(() => initialForm(initialDraft, quoteAssets, availability.chainId));
   const [buyEdited, setBuyEdited] = useState(initialDraft?.initialBuy !== undefined);
   const initialBuy = buyEdited ? draft.initialBuy : suggestedInitialBuy ?? "";
@@ -102,9 +104,9 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
 
   const busy = phase === "uploading" || phase === "preparing" || phase === "signing";
   const nativeQuote = quoteAssets.find(asset => asset.chainId === availability.chainId && asset.supported && asset.supportsNativeEth);
-  const quoteAddress = customQuote ? draft.quoteAsset.trim() : nativeQuote?.address ?? "";
+  const quoteAddress = customQuote ? draft.quoteAsset.trim() : nativeQuote?.address ?? FOUNDATION_WETH;
   const knownQuote = quoteAssets.find(asset => asset.address.toLowerCase() === quoteAddress.toLowerCase() && asset.chainId === availability.chainId);
-  const lookedUpQuote = customQuote && quoteLookup?.address.toLowerCase() === quoteAddress.toLowerCase() && quoteLookup.status === "resolved" && quoteLookup.contextKey === contextKey ? quoteLookup.asset : undefined;
+  const lookedUpQuote = quoteLookup?.address.toLowerCase() === quoteAddress.toLowerCase() && quoteLookup.status === "resolved" && quoteLookup.contextKey === contextKey ? quoteLookup.asset : undefined;
   const quote = knownQuote ?? lookedUpQuote;
   const quoteSymbol = !customQuote || quote?.supportsNativeEth ? "ETH" : quote?.symbol || "TOKEN";
   const imageSource = localImage?.preview ?? draft.image?.url;
@@ -175,7 +177,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
         pendingQuote.current = null;
         setQuoteLookup({ address: quoteAddress, status: "error", message: cleanError(caught), contextKey });
       }
-      return undefined;
+      throw caught;
     });
     pendingQuote.current = { key, promise };
     return promise;
@@ -183,7 +185,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
 
   useEffect(() => {
     if (!customQuote || !canResolveQuote || knownQuote || lookedUpQuote || !/^0x[0-9a-fA-F]{40}$/.test(quoteAddress)) return;
-    const timer = window.setTimeout(() => void resolveQuote(), 300);
+    const timer = window.setTimeout(() => void resolveQuote().catch(() => undefined), 300);
     return () => window.clearTimeout(timer);
   }, [customQuote, canResolveQuote, knownQuote, lookedUpQuote, quoteAddress, resolveQuote]);
 
@@ -193,15 +195,15 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       configuration: Object.fromEntries(descriptor.fields.map(field => [field.key, field.defaultValue ?? (field.kind === "boolean" ? false : "")])) }]);
   }
 
-  function validate(selectedQuote: FoundationQuoteAsset | undefined): { errors: Errors; links: ModuleSocialLinks } {
+  function validate(selectedQuote: FoundationQuoteAsset | undefined, buyAmount: string): { errors: Errors; links: ModuleSocialLinks } {
     const next: Errors = {};
     if (!draft.name.trim() || new TextEncoder().encode(draft.name.trim()).length > 48) next.name = "Enter a coin name of up to 48 bytes.";
     if (!/^[A-Za-z0-9]{1,12}$/.test(draft.symbol.trim())) next.symbol = "Use 1 to 12 letters or numbers.";
     if (new TextEncoder().encode(draft.description.trim()).length > 280) next.description = "Use a description of up to 280 bytes.";
     if (draft.image && !isFoundationDefaultImage(draft.image) && !isProgrammableTokenImageUrl(draft.image.url)) next.image = "Choose an image to save with this launch.";
-    if (!selectedQuote?.supported || selectedQuote.chainId !== availability.chainId) next.quoteAsset = selectedQuote?.reason ?? (customQuote ? /^0x[0-9a-fA-F]{40}$/.test(quoteAddress) ? "This token could not be verified. Try launching again." : "Enter a token contract address on Robinhood Chain." : "ETH is still loading. Try again in a moment.");
+    if (!selectedQuote?.supported || selectedQuote.chainId !== availability.chainId || (!customQuote && !selectedQuote.supportsNativeEth)) next.quoteAsset = selectedQuote?.reason ?? (customQuote ? /^0x[0-9a-fA-F]{40}$/.test(quoteAddress) ? "This token could not be verified. Try launching again." : "Enter a token contract address on Robinhood Chain." : "ETH pairing could not be verified. Try again.");
     if (!isFoundationCreatorFee(draft.creatorFeeBps)) next.creatorFeeBps = "Choose a whole percentage from 0% to 10%.";
-    const buyError = foundationDecimalError(initialBuy, 18, false);
+    const buyError = foundationDecimalError(buyAmount, 18, false);
     if (buyError) next.initialBuy = buyError;
     if (modulesError.length) next.modules = modulesError.join(" ");
     const socials = validateModuleSocialLinks(normalizeFoundationSocialInputs(draft.socialLinks));
@@ -212,7 +214,12 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
   async function prepare(event: FormEvent) {
     event.preventDefault();
     if (lock.current || imagePreparing || locked || unavailable || submissionBlocked) return;
-    if (walletAction) { try { await walletAction.onClick(); } catch (caught) { setError(cleanError(caught)); } return; }
+    if (walletAction) {
+      lock.current = true;
+      try { await walletAction.onClick(); } catch (caught) { setError(cleanError(caught)); }
+      finally { lock.current = false; }
+      return;
+    }
     setAnnouncement("");
     const request = ++generation.current;
     const context = currentContext.current;
@@ -221,13 +228,18 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     };
     lock.current = true;
     try {
+      setPhase("preparing");
       let selectedQuote = quote;
-      if (customQuote && !selectedQuote && /^0x[0-9a-fA-F]{40}$/.test(quoteAddress)) {
-        setPhase("preparing");
+      if (!selectedQuote && /^0x[0-9a-fA-F]{40}$/.test(quoteAddress)) {
         selectedQuote = await resolveQuote();
         assertCurrent();
       }
-      const checked = validate(selectedQuote);
+      let launchInitialBuy = initialBuy;
+      if (!buyEdited && !launchInitialBuy && onResolveSuggestedInitialBuy) {
+        launchInitialBuy = await onResolveSuggestedInitialBuy();
+        assertCurrent();
+      }
+      const checked = validate(selectedQuote, launchInitialBuy);
       setErrors(checked.errors); setError("");
       if (Object.keys(checked.errors).length) {
         setPhase("editing");
@@ -252,7 +264,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       savedImage ??= FOUNDATION_DEFAULT_IMAGE;
       assertCurrent(); setPhase("preparing");
       const prepared = await onPrepareLaunch({ ...draft, name: draft.name.trim(), symbol: draft.symbol.trim().toUpperCase(), description: draft.description.trim(), quoteAsset: selectedQuote!.address,
-        socialLinks: checked.links, image: savedImage, initialBuy, additionalLiquidity: "0" });
+        socialLinks: checked.links, image: savedImage, initialBuy: launchInitialBuy, additionalLiquidity: "0" });
       assertCurrent();
       if (!prepared) { setPhase("editing"); return; }
       const invalid = foundationReviewError(prepared, context);
@@ -291,10 +303,11 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     requestAnimationFrame(() => document.getElementById("foundation-name")?.focus());
   }
 
-  const actionLabel = walletAction?.label ?? (phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Preparing launch…" : phase === "signing" ? launchProgress || "Opening coin…" : "Create Launch");
+  const actionLabel = walletAction?.label ?? (availability.status === "checking" ? "Checking launch…" : phase === "uploading" ? "Saving image…" : phase === "preparing" ? "Preparing launch…" : phase === "signing" ? launchProgress || "Opening coin…" : "Create Launch");
   return <div className={`${styles.page} ${styles.builderPage}`}>
     <div className={styles.topline}>{onBack ? <button type="button" className={styles.backButton} disabled={busy} onClick={onBack}><ArrowLeftIcon size={16} aria-hidden="true" /> Home</button> : <span className={styles.eyebrow}>Module Mode</span>}<span className={styles.network}>{availability.chainName}</span></div>
     <header className={styles.pageHeading}><h1>Launch a Coin</h1></header>
+    {availability.status === "checking" ? <div className={styles.launchStatus} role="status">Checking launch availability…</div> : null}
     {availability.status === "unavailable" ? <div className={styles.launchStatus} role="status"><span>Launching is temporarily unavailable.</span>{onRetryAvailability ? <button type="button" className={styles.textButton} onClick={onRetryAvailability}>Retry</button> : null}</div> : null}
     {submissionBlocked && !launchProgress ? <div className={styles.availability} role="status"><strong>A wallet operation needs checking</strong><p>{submissionBlocked}</p></div> : null}
     <div className={styles.layout}>
@@ -348,7 +361,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
               {errors.modules ? <p className={styles.error} role="alert">{errors.modules}</p> : null}
             </section> : null}
           </fieldset>
-          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p><button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button></div>
+          <div className={styles.formFooter}><p className={styles.error} role="alert">{error}</p>{phase === "preparing" ? <p className={styles.help} role="status">Checking your launch. MetaMask will open when the checks finish.</p> : null}<button type="submit" className={styles.primaryButton} disabled={locked || imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} aria-busy={busy || walletAction?.busy}>{actionLabel}<ArrowRightIcon size={18} aria-hidden="true" /></button></div>
         </form>}
       </div>
       <aside className={styles.preview} aria-label="Coin preview">
