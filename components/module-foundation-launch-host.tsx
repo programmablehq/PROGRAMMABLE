@@ -4,7 +4,7 @@ import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/mod
 import { foundationParseAmount } from "@/lib/module-foundation/price";
 import type { FoundationFundingHop } from "@/lib/module-foundation/atomic-launch";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatUnits, getAddress, keccak256, toHex, type Address, type Hex, type PublicClient } from "viem";
 import { ModuleFoundationBuilder } from "./module-foundation-builder";
@@ -68,6 +68,7 @@ export function ModuleFoundationLaunchHost() {
   const router = useRouter(), session = useFoundationSession();
   const [completedDraft, setCompletedDraft] = useState<string | null>(null);
   const [suggestedInitialBuy, setSuggestedInitialBuy] = useState<string>();
+  const suggestedBuyRequest = useRef<Promise<string> | null>(null);
   const draftKey = `${session.contextKey}:${session.resultGeneration}`;
   const [quoteState, setQuoteState] = useState<{ context: string; assets: FoundationQuoteAsset[] }>({ context: "", assets: [] });
   const quotes = quoteState.context === session.contextKey ? quoteState.assets : [];
@@ -97,13 +98,14 @@ export function ModuleFoundationLaunchHost() {
     return () => controller.abort();
   }, [session.account, session.client, session.pending, session.progress, session.resolution, recoveryRetry, router]);
 
-  useEffect(() => {
-    let active = true;
-    void readFoundationSuggestedBuy(session.client).then(amount => {
-      if (active) setSuggestedInitialBuy(amount);
-    }).catch(() => undefined);
-    return () => { active = false; };
+  const resolveSuggestedInitialBuy = useCallback(() => {
+    if (!suggestedBuyRequest.current) suggestedBuyRequest.current = readFoundationSuggestedBuy(session.client)
+      .then(amount => { setSuggestedInitialBuy(amount); return amount; })
+      .catch(error => { suggestedBuyRequest.current = null; throw error; });
+    return suggestedBuyRequest.current;
   }, [session.client]);
+
+  useEffect(() => { void resolveSuggestedInitialBuy().catch(() => undefined); }, [resolveSuggestedInitialBuy]);
 
   useEffect(() => {
     let active = true;
@@ -223,7 +225,7 @@ export function ModuleFoundationLaunchHost() {
       <button type="button" className={styles.secondaryButton} onClick={() => { setSavedLaunchError(null); setRecoveryRetry(value => value + 1); }}>Open coin</button>
     </div> : null}<ModuleFoundationBuilder key={session.resultGeneration} availability={session.availability} contextKey={session.contextKey}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
-    catalog={catalog} quoteAssets={quotes} suggestedInitialBuy={suggestedInitialBuy} launchProgress={session.progress} onResolveQuote={resolveQuote} onUploadImage={upload}
+    catalog={catalog} quoteAssets={quotes} suggestedInitialBuy={suggestedInitialBuy} onResolveSuggestedInitialBuy={resolveSuggestedInitialBuy} launchProgress={session.progress} onResolveQuote={resolveQuote} onUploadImage={upload}
     onPrepareLaunch={prepare} onConfirmLaunch={async review => { const sequence = prepared.current.get(review);
       if (!sequence) throw new Error("Prepare this launch again with your current wallet."); session.assertCurrent(sequence.account, review.contextKey);
       launching.current = true;

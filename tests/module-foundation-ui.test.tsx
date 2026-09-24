@@ -113,7 +113,8 @@ describe("Module foundation UI financial and lifecycle boundaries", () => {
   it("leaves unavailable launch and direct trading unavailable without a source deployment binding", () => {
     const checking = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "checking" }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
     expect(checking).toContain("Launch a Coin");
-    expect(checking).not.toContain("Checking availability");
+    expect(checking).toContain("Checking launch availability");
+    expect(checking).toContain("Checking launch");
     expect(checking.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain("disabled");
     const html = renderToStaticMarkup(<ModuleFoundationBuilder availability={{ ...availability, status: "unavailable", reason: "Deployment is not bound." }} contextKey="fixture" catalog={[]} quoteAssets={[quote]} {...actions} />);
     expect(html).toContain("Launching is temporarily unavailable.");
