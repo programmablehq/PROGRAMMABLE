@@ -12,6 +12,7 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
   releaseDiscoveryUrl: "https://programmable.market/.well-known/programmable.json",
   docsIndexUrl: "https://programmable.market/llms.txt",
   docsFullUrl: "https://programmable.market/llms-full.txt",
+  primaryRobinhoodCreateWorkflow: "customLaunchPlan",
   website: {
     launch: "https://programmable.market/launch",
     moduleMode: "https://programmable.market/launch/modules",
@@ -25,6 +26,7 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
   workflows: {
     customLaunchPlan: {
       chainId: 4663,
+      recommendedForNewRobinhoodProjects: true,
       scopes: ["custom-launch:create", "custom-launch:read"],
       manifest: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/manifest.json",
       setup: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/agent-setup.json",
@@ -45,12 +47,13 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
     customLaunch: {
       scopes: ["custom-launch:create", "custom-launch:read"],
       guide: "https://programmable.market/developer-reference/custom-launch",
-      robinhood: { chainId: 4663, capabilities: "https://api.programmable.market/v4/chains/4663/capabilities", readiness: "https://api.programmable.market/v4/chains/4663/readiness", openApi: "https://programmable.market/openapi/custom-launch-v4.json" },
+      robinhood: { chainId: 4663, recommendedForNewProjects: false, capabilities: "https://api.programmable.market/v4/chains/4663/capabilities", readiness: "https://api.programmable.market/v4/chains/4663/readiness", openApi: "https://programmable.market/openapi/custom-launch-v4.json" },
     },
     multiRoleProject: {
       chainId: 4663,
       scopes: ["custom-launch:create", "custom-launch:read"],
-      useWhen: "The token and hook share one physical contract. MultiRole V2 is separate from the existing 4.1 profile.",
+      useWhen: "Existing MultiRole V2 requests and history only. New Robinhood projects use customLaunchPlan even when token and hook share one physical contract.",
+      recommendedForNewRobinhoodProjects: false,
       capabilities: "https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/capabilities",
       guide: "https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/guide.md",
       client: "https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/client.mjs",

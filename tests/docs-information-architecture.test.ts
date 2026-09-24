@@ -171,6 +171,7 @@ describe("Docs information architecture", () => {
           "/docs/creators/programs",
           "/docs/developers",
           "/docs/developers/custom-launch",
+          "/docs/developers/custom-launch-quickstart",
           "/docs/developers/verify",
           "/docs/developers/indexing",
           "/docs/developers/machine-readable",
