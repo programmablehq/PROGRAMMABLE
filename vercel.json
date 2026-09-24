@@ -28,7 +28,12 @@
     },
     {
       "source": "/docs/creators/templates",
-      "destination": "/docs/developers/module-mode",
+      "destination": "/docs/models/module-mode",
+      "permanent": true
+    },
+    {
+      "source": "/docs/developers/module-mode",
+      "destination": "/docs/models/module-mode",
       "permanent": true
     },
     {

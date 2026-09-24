@@ -125,11 +125,6 @@ describe("Docs information architecture", () => {
           },
           {
             depth: 1,
-            href: "/docs/developers/module-mode",
-            label: "Build a module",
-          },
-          {
-            depth: 1,
             href: "/developer-reference/module-mode-indexing",
             label: "Index Module Mode launches",
           },

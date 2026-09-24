@@ -26,4 +26,4 @@ Programmable earns platform fees from trades covered by its fee rules. Creators 
 
 We are adding more modules and working with teams building their own contracts and hooks. New modules expand what people can configure in the builder. Existing coins keep the module versions chosen at launch.
 
-Developers integrating launches, building modules or connecting a trading terminal can start with the [developer guides](developers/README.md).
+Developers integrating launches or connecting a trading terminal can start with the [developer guides](developers/README.md).

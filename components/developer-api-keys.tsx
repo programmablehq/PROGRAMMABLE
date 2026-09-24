@@ -1982,7 +1982,7 @@ export function DeveloperApiKeysView({
                             </div>
                             <span className={styles.keyPurpose}>{apiKeyPurposeLabel(apiKey.scopes)}</span>
                             {status === "Active" && !rotationSupported ? (
-                              <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module API access is paused." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
+                              <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module submissions are closed." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
                             ) : null}
                           </div>
 

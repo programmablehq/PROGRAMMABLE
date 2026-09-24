@@ -63,9 +63,7 @@ describe("agent-readable public surface", () => {
     expect(discovery.workflows.customLaunch.robinhood.capabilities).toBe(
       `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/capabilities`,
     );
-    expect(discovery.workflows.moduleContribution.scopes).toEqual([
-      "modules:submit", "modules:read",
-    ]);
+    expect(discovery.workflows).not.toHaveProperty("moduleContribution");
 
     const publicDocs = [
       await getAgentGuide().text(),

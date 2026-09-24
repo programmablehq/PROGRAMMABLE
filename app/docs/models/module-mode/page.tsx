@@ -54,10 +54,7 @@ export default function ModuleModeOverviewPage() {
         another revision does not replace existing coins. Later state changes follow the deployed permissions.</p>
     </section>
     <section id="developers">
-      <h2>Build and integrate</h2>
-      <p className={styles.bodyCopy}>Submit reusable modules through the API with their source, configuration,
-        management interface, author wallet and reward wallet. Read <Link href="/developer-reference/module-mode">Build
-        a module</Link> for the package and review workflow.</p>
+      <h2>Index Module Mode</h2>
       <p className={styles.bodyCopy}>Indexers recognize the launch source independently of module names.
         Read <Link href="/developer-reference/module-mode-indexing">Index Module Mode launches</Link> for the
         ABI, canonical identity and finality procedure.</p>

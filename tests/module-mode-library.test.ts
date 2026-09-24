@@ -5,10 +5,10 @@ import { AGENT_KEY_SCHEMA, AGENT_SCOPES, buildAgentConnection, buildAgentInstruc
 import { apiKeyRotationVersion, apiKeyMutationPath, parseApiKeyMutationResult } from "../components/developer-api-keys";
 
 describe("module discovery and agent connections", () => {
-  it("advertises only Robinhood custom launches and paused module authoring", () => {
+  it("advertises Robinhood launches without a public module submission workflow", () => {
     expect(PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch).not.toHaveProperty("ethereum");
     expect(PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.robinhood.chainId).toBe(4663);
-    expect(PROGRAMMABLE_AGENT_ENTRY.workflows.moduleContribution.available).toBe(false);
+    expect(PROGRAMMABLE_AGENT_ENTRY.workflows).not.toHaveProperty("moduleContribution");
     expect(buildAgentInstructions()).not.toContain("submit-module");
   });
   it("discovers presentation entries without source bindings and preserves their caller data", () => {

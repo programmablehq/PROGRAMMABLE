@@ -88,6 +88,12 @@ export async function GET(request: Request) {
     }
     const failed = result === null || result.status === "partial" || launchProjections.status === "unavailable" || launchProjections.status === "partial" || moduleMode.status === "partial" || moduleMode.status === "unavailable"
       || foundation === "unavailable" || foundation === "partial" || moduleUnavailableSources.length > 0 || Object.values(moduleSources).some(source => source.status === "partial" || source.status === "unavailable");
+    if (failed) console.warn("robinhood-index-incomplete", JSON.stringify({
+      elapsedMs: Date.now() - startedAt, custom: result?.status ?? "unavailable", launchProjections: launchProjections.status,
+      moduleMode: moduleMode.status, foundation, moduleUnavailableSources, foundationUnavailableSources,
+      moduleSources: Object.fromEntries(Object.entries(moduleSources).map(([digest, source]) => [digest, source.status])),
+      foundationSources: Object.fromEntries(Object.entries(foundationSources).map(([digest, source]) => [digest, source.status])),
+    }));
     return reply({ ...(result ?? { error: "index_update_unavailable" }),
       custom: result ?? { status: "unavailable" }, launchProjections, moduleMode, moduleSources, moduleUnavailableSources, foundation, foundationSources, foundationUnavailableSources }, failed ? 503 : 200);
   } catch { return reply({ error: "index_update_unavailable" }, 503); }

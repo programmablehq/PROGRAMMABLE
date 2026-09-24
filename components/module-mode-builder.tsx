@@ -342,7 +342,6 @@ export function ModuleModeBuilder({ catalog = PREVIEW_MODULE_CATALOG, engine = N
             </dl>
             <p className={styles.coinFeeNote}>Includes the {fees.programmable} platform fee.</p>
           </div>
-          <Link href="/developers/modules" className={styles.buildModuleLink}><Puzzle size={16} aria-hidden="true" />Build your own module<ArrowRight size={16} aria-hidden="true" /></Link>
         </aside> : null}
       </div>
       {pickerOpen ? <ModulePickerDialog variant="library" animateOpen={pickerPointer} title={configuringAnyQuote ? "Any Quote LP" : "Add modules"} description={configuringAnyQuote ? "Choose the token for your coin’s liquidity pool." : "Modules are upgrades for your coin. Pick the features you want."}

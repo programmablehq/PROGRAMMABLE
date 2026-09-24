@@ -3,7 +3,6 @@
 import { Disclosure, DisclosurePanel, useDisclosureState } from "@/components/disclosure";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { formatUnits, keccak256, toHex, type Address, type Hex } from "viem";
 import { ArrowLeft, ArrowUpRight, Check, ChevronDown, Plus, Puzzle, Settings2, X } from "lucide-react";
@@ -377,7 +376,6 @@ export function ModuleEngineBuilder({ availability: raw, client: suppliedClient,
             {needsInitial && !customInitial ? <div><dt>{spot ? "First buy" : "Starting funds"}</dt><dd>{amount.trim() ? `${amount} tokens` : "Not set"}</dd></div> : null}
           </dl>
           </div>
-          <Link href="/developers/modules" className={engineStyles.buildLink}><Puzzle size={16} aria-hidden="true" />Build your own module<ArrowUpRight size={16} aria-hidden="true" /></Link>
         </aside>
       </div>
       {anyQuoteEntry ? pickerOpen ? <ModulePickerDialog variant="library" animateOpen={pickerPointer} title={pickerConfiguringQuote ? "Any Quote LP" : "Add modules"} description={pickerConfiguringQuote ? "Choose the token for your coin’s liquidity pool." : "Modules are upgrades for your coin. Pick the features you want."}
