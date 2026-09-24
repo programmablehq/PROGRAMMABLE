@@ -32,11 +32,18 @@ describe("Foundation management actions", () => {
     const descriptor = { ...payout, payout: { ...payout.payout!, claimableAmount: huge } };
     const prepared = { ...review, transfers: [{ ...review.transfers[0], amount: huge }] };
     expect(verify(prepared, descriptor)).toBeNull();
-    expect(verify({ ...prepared, transfers: [{ ...prepared.transfers[0], amount: "9007199254740993.000002" }] }, descriptor)).toContain("differs");
+    expect(verify({ ...prepared, simulationBlock: "111", transfers: [{ ...prepared.transfers[0], amount: "9007199254740993.000002" }] }, descriptor)).toContain("differs");
     expect(verify({ ...review, transfers: [{ ...review.transfers[0], recipient: account }] })).toContain("recipient");
     expect(verify({ ...review, transfers: [{ ...review.transfers[0], asset: { ...quote, address: ledger } }] })).toContain("differs");
     expect(verify({ ...review, transfers: [...review.transfers, review.transfers[0]] })).toContain("differs");
     expect(verify({ ...review, transfers: [{ ...review.transfers[0], amount: "12.0000010" }] })).toContain("amount");
+  });
+
+  it("accepts fees accrued after the displayed block but rejects a reduced or older claim", () => {
+    expect(verify({ ...review, transfers: [{ ...review.transfers[0], amount: "12.000002" }] })).toBeNull();
+    expect(verify({ ...review, transfers: [{ ...review.transfers[0], amount: "12" }] })).toContain("differs");
+    expect(verify({ ...review, simulationBlock: "110" })).toContain("differs");
+    expect(verify({ ...review, simulationBlock: "111", transfers: [{ ...review.transfers[0], amount: "12.000002" }] })).toContain("differs");
   });
 
   it("requires a verified nonzero claimable instead of deriving it from cumulative credits", () => {

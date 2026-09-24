@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { Address, Hex } from "viem";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { FOUNDATION_INT128_MAX } from "@/lib/module-foundation/constants";
 import { foundationDecimalError, type FoundationAvailability, type FoundationConfiguration, type FoundationConfigurationField, type FoundationTransactionResult, type FoundationTransactionSummary, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
 import { FoundationAddress, FoundationTransactionSteps, ModuleFoundationTransactionResult } from "./module-foundation-review";
 import styles from "./module-foundation-ui.module.css";
@@ -132,7 +133,18 @@ export function foundationActionReviewError(review: FoundationActionReview, acti
   if (review.transfers.some(transfer => !validAddress(transfer.recipient) || !validAddress(transfer.asset.address) || exactAmount(transfer.amount, transfer.asset.decimals) === null)) return "The transfer recipient or amount could not be verified. Review again.";
   if (action.payout) {
     const payout = action.payout, transfer = review.transfers[0];
-    if (review.transfers.length !== 1 || !transfer || transfer.recipient.toLowerCase() !== payout.recipient.toLowerCase() || transfer.asset.address.toLowerCase() !== payout.asset.address.toLowerCase() || transfer.asset.symbol !== payout.asset.symbol || transfer.asset.decimals !== payout.asset.decimals || exactAmount(transfer.amount, transfer.asset.decimals) !== exactAmount(payout.claimableAmount, payout.asset.decimals)) return "The payout differs from the displayed fee balance or recipient. Refresh its balance and review again.";
+    const displayed = exactAmount(payout.claimableAmount, payout.asset.decimals);
+    const simulated = transfer && exactAmount(transfer.amount, transfer.asset.decimals);
+    const readbackBlock = payout.asOfBlock && /^\d+$/.test(payout.asOfBlock) ? BigInt(payout.asOfBlock) : null;
+    const reviewBlock = BigInt(review.simulationBlock);
+    const displayedTranche = displayed === null ? null : displayed > FOUNDATION_INT128_MAX ? FOUNDATION_INT128_MAX : displayed;
+    if (review.transfers.length !== 1 || !transfer || transfer.recipient.toLowerCase() !== payout.recipient.toLowerCase()
+      || transfer.asset.address.toLowerCase() !== payout.asset.address.toLowerCase() || transfer.asset.symbol !== payout.asset.symbol
+      || transfer.asset.decimals !== payout.asset.decimals || simulated === null || displayedTranche === null || readbackBlock === null
+      || reviewBlock < readbackBlock || simulated < displayedTranche
+      || (reviewBlock === readbackBlock && simulated !== displayedTranche)) {
+      return "The payout differs from the displayed fee balance or recipient. Refresh its balance and review again.";
+    }
   }
   return foundationActionUnavailableReason(action);
 }
