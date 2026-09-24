@@ -59,6 +59,19 @@ describe("Independent canonical Robinhood index lanes", () => {
     expect(response.status).toBe(503); expect(body).toMatchObject({ custom: { status: "ready" }, moduleMode: { status: "unavailable" } });
     expect(f.read()?.cursor).toEqual(point(100)); expect(f.read()?.moduleMode).toBeUndefined();
   });
+  it("retries one transient Foundation source failure and records the verified checkpoint", async () => {
+    const f = fixture();
+    const foundation: ModuleModeIndexSource = { sourceKind: "module-foundation-v1", factoryVersion: "v2",
+      sourceAddress: a(820), releaseDigest: h(821), startBlock: 50n, finalized: point(100),
+      block: async n => point(Number(n)), launches: async () => [] };
+    const source = vi.fn().mockRejectedValueOnce(new Error("Temporary provider failure")).mockResolvedValue(foundation);
+    mocks.foundation.mockResolvedValue({ lanes: [{ releaseDigest: foundation.releaseDigest, source }], unavailableSources: [] });
+    const response = await GET(request()); const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.foundationSources[foundation.releaseDigest]).toMatchObject({ status: "ready", indexedThrough: "100" });
+    expect(source).toHaveBeenCalledTimes(2);
+    expect(f.read()?.moduleModeSources?.[0]?.releaseDigest).toBe(foundation.releaseDigest);
+  });
   it("never fabricates a missing Custom envelope just to initialize Module Mode", async () => {
     const f = fixture(); f.remove(); mocks.custom.mockRejectedValue(new Error("Custom unavailable"));
     expect((await GET(request())).status).toBe(503); expect(f.write).not.toHaveBeenCalled(); expect(f.read()).toBeNull();
