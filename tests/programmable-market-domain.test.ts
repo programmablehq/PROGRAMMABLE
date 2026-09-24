@@ -23,6 +23,11 @@ describe("programmable.market website origin", () => {
     expect(robots()).toMatchObject({
       host: "https://programmable.market",
       sitemap: "https://programmable.market/sitemap.xml",
+      rules: {
+        userAgent: "*",
+        allow: ["/", "/api/agent"],
+        disallow: ["/api/", "/analytics"],
+      },
     });
     expect(sitemap()).not.toHaveLength(0);
     expect(

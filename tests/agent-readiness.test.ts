@@ -46,15 +46,22 @@ describe("agent-readable public surface", () => {
     expect(canonical.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("routes shared token/hook projects from official entries to the separate MultiRole contract", async () => {
+  it("routes new Robinhood projects to Custom Launch Plans and labels older profiles", async () => {
     const response = getAgentDiscovery();
     expect(response.status).toBe(200);
     const discovery = await response.json();
     const base = `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/multi-role-custom-launches`;
+    expect(discovery.primaryRobinhoodCreateWorkflow).toBe("customLaunchPlan");
+    expect(discovery.workflows.customLaunchPlan).toMatchObject({
+      chainId: 4663,
+      recommendedForNewRobinhoodProjects: true,
+      capabilities: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-capabilities`,
+    });
     const multiRole = discovery.workflows.multiRoleProject;
     expect(multiRole).toMatchObject({
       chainId: 4663,
       scopes: ["custom-launch:create", "custom-launch:read"],
+      recommendedForNewRobinhoodProjects: false,
       capabilities: `${base}/capabilities`,
       guide: `${base}/guide.md`,
       client: `${base}/client.mjs`,
@@ -65,11 +72,17 @@ describe("agent-readable public surface", () => {
     );
     expect(discovery.workflows).not.toHaveProperty("moduleContribution");
 
-    const publicDocs = [
-      await getAgentGuide().text(),
+    const agentGuide = await getAgentGuide().text();
+    for (const text of [agentGuide, programmableLlmsIndex, programmableLlmsFullFallback]) {
+      expect(text.indexOf("custom-launch-capabilities")).toBeLessThan(text.indexOf(multiRole.capabilities));
+      expect(text).toContain("custom-launch-plans");
+      expect(text).toContain("provenance.v1");
+      expect(text).toContain("Native20");
+      expect(text).toContain("evidence_required");
+      expect(text).toContain("4.1");
+    }
+    const historicalDocs = [
       await getDeveloperMarkdown().text(),
-      programmableLlmsIndex,
-      programmableLlmsFullFallback,
       ...[
         "public/developers/custom-launch-api-v1.md",
         "public/developers/robinhood-launch-guide-v1.md",
@@ -80,7 +93,7 @@ describe("agent-readable public surface", () => {
     for (const field of ["Native20", "evidence_required", "4.1", "context"]) {
       expect(humanGuide).toContain(field);
     }
-    for (const text of publicDocs) {
+    for (const text of historicalDocs) {
       for (const url of [multiRole.capabilities, multiRole.guide, multiRole.client]) {
         expect(text).toContain(url);
       }

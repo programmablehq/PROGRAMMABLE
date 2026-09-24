@@ -80,18 +80,18 @@ describe("active Robinhood agent setup and generated documentation", () => {
       .toBe(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.slice(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.indexOf(ethereumHeading)));
   });
 
-  it("preserves complete historical Markdown, llms outputs and home output byte for byte", async () => {
+  it("preserves historical Markdown and home output while updating the agent index", async () => {
     const docs = await activeDocs("4.0.0");
     // Captured from source 1f488b4685e349f09d41cc45dbd5e27ce0d4a996 before this change.
     expect(hash(docs.developerDocsMarkdown)).toBe("11c46682593943bc0495bbd36b80678c8318607c8b68db20d638379067806ee5");
-    expect(hash(docs.programmableLlmsIndex)).toBe("03d3816e6ac4d55164c3824cb3b389fff047e691386c4eb1e1f3c2e22b79004b");
-    expect(hash(docs.programmableLlmsFullFallback)).toBe("ab3c5564c0f5c288b60cca9364a5c61f6337fe889ea57597b1d88508d61ec351");
+    expect(docs.programmableLlmsIndex).toContain("primary Robinhood create workflow is customLaunchPlan");
+    expect(docs.programmableLlmsFullFallback).toContain(docs.developerDocsMarkdown);
     expect(hash(docs.programmableHomeMarkdown)).toBe("d9b088638004c6837081c0ee4301a8ef95f3de37272606ff01294a3149c30a3d");
   });
 
-  it("publishes 4.1 funding, first-buy and fee facts in Markdown and both llms views without claiming activation", async () => {
+  it("keeps 4.1 facts in historical references and makes the current agent index plan-first", async () => {
     const docs = await activeDocs("4.1.0");
-    for (const text of [docs.developerDocsMarkdown, docs.programmableLlmsIndex, docs.programmableLlmsFullFallback]) {
+    for (const text of [docs.developerDocsMarkdown, docs.programmableLlmsFullFallback]) {
       for (const fact of ["fundingPlan", "USD 1", "initial-buy-quote", "60 seconds", "positive minimum token output",
         "20 bps (0.20%)", "0xD88539d3c4C460136a733A3Fd60cf6BF269079da", "PoolManager native claims",
         "gas is additional", "build-only plan cannot obtain a permit"]) expect(text).toContain(fact);
@@ -102,7 +102,9 @@ describe("active Robinhood agent setup and generated documentation", () => {
     expect(docs.developerDocsMarkdown).toContain("/openapi/custom-launch-v4.1.json");
     expect(docs.developerDocsMarkdown).toContain("/schemas/custom-launch/v4.1/pack-config.json");
     expect(docs.developerDocsMarkdown).toContain("Install CLI `4.1.0`");
-    expect(docs.programmableLlmsIndex).toContain("CLI 3.3.9 remains the Ethereum V3 integration");
+    expect(docs.programmableLlmsIndex).toContain("custom-launch-capabilities");
+    expect(docs.programmableLlmsIndex).toContain("custom-launch-plans");
+    expect(docs.programmableLlmsIndex).not.toContain("20 bps (0.20%)");
     expect(docs.programmableHomeMarkdown).toContain("/openapi/custom-launch-v4.1.json");
   });
 
