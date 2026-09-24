@@ -264,8 +264,26 @@ async function readMarkets(tokens: readonly VerifiedMarketToken[]): Promise<Map<
 const cachedMetadata = unstable_cache(async (tokens: readonly RobinhoodLaunch[]) =>
   Array.from(await readMetadata(tokens)), ["robinhood-coin-metadata-v2"], { revalidate: 60 });
 
-const cachedModuleMetadata = unstable_cache(async (tokens: readonly RobinhoodLaunch[]) =>
-  Array.from(await readModuleTokenMetadata(tokens)), ["robinhood-module-metadata-v2"], { revalidate: 60 });
+// A new launch must not invalidate every older coin's artwork cache. Do not
+// cache a transient RPC failure as an empty, verified presentation either.
+const cachedModuleTokenMetadata = unstable_cache(async (token: RobinhoodLaunch) =>
+  (await readModuleTokenMetadata([token], { failOnProviderError: true }))
+    .get(token.tokenAddress.toLowerCase()) ?? null,
+  ["robinhood-module-token-metadata-v1"], { revalidate: 60 });
+
+async function readCachedModuleMetadata(tokens: readonly RobinhoodLaunch[]): Promise<Map<string, Metadata>> {
+  const metadata = new Map<string, Metadata>();
+  for (let offset = 0; offset < tokens.length; offset += 8) {
+    const batch = tokens.slice(offset, offset + 8);
+    const results = await Promise.allSettled(batch.map(token => cachedModuleTokenMetadata(token)));
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled" && result.value) {
+        metadata.set(batch[index].tokenAddress.toLowerCase(), result.value);
+      }
+    });
+  }
+  return metadata;
+}
 
 // A shared full-catalog observation makes sorting independent of the current page.
 const cachedMarkets = unstable_cache(async (tokens: readonly VerifiedMarketToken[]) =>
@@ -299,7 +317,7 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
   const native = ordered.filter(token => isRobinhoodModuleSourceKind(token.sourceKind));
   const [metadata, moduleMetadata, markets] = await Promise.allSettled([
     custom.length ? cachedMetadata(custom).then((entries) => new Map(entries)) : Promise.resolve(new Map<string, Metadata>()),
-    native.length ? cachedModuleMetadata(native).then((entries) => new Map(entries)) : Promise.resolve(new Map<string, Metadata>()),
+    native.length ? readCachedModuleMetadata(native) : Promise.resolve(new Map<string, Metadata>()),
     knownMarkets ? Promise.resolve(knownMarkets) : readRobinhoodMarkets(tokens),
   ]);
   return tokens.map((token): RobinhoodCoinPresentation => {

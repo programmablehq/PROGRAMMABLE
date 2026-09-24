@@ -3,6 +3,8 @@ import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
 
 const onchain = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("@/lib/server/robinhood-market", () => ({ readRobinhoodOnchainMarkets: onchain.read }));
+const moduleMetadata = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("@/lib/server/module-mode/token-presentation", () => ({ readModuleTokenMetadata: moduleMetadata.read }));
 const storage = vi.hoisted(() => ({ list: vi.fn(), token: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
@@ -12,6 +14,7 @@ vi.mock("@/lib/server/robinhood-index/read", () => ({
 }));
 
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
+import { MODULE_DEFAULT_TOKEN_IMAGE } from "@/lib/module-mode/token-metadata";
 import { GET } from "@/app/api/explore/robinhood/presentation/route";
 // @ts-expect-error -- package fixtures are intentionally JavaScript.
 import { validV4ProjectMetadata } from "../packages/launch/test/fixtures/v4.mjs";
@@ -174,6 +177,22 @@ describe("Robinhood optional coin presentation", () => {
     const [value] = await readRobinhoodPresentations([TOKEN]);
     expect(value.imageUrl).toBeNull();
     expect(value.market?.marketCapUsd).toBe(3_000_000);
+  });
+
+  it("keeps one module coin's artwork when another coin's metadata read fails", async () => {
+    const first = { ...TOKEN, sourceKind: "module-native-v1", tokenAddress: address("6") } as unknown as RobinhoodLaunch;
+    const second = { ...TOKEN, sourceKind: "module-native-v1", tokenAddress: address("7") } as unknown as RobinhoodLaunch;
+    moduleMetadata.read.mockImplementation(async ([token]: RobinhoodLaunch[]) => {
+      if (token.tokenAddress === second.tokenAddress) throw new Error("RPC timeout");
+      return new Map([[first.tokenAddress.toLowerCase(), {
+        imageUrl: "https://example.com/first.png", description: null, links: [],
+      }]]);
+    });
+    const values = await readRobinhoodPresentations([first, second], new Map());
+    expect(values.map(value => value.imageUrl)).toEqual([
+      "https://example.com/first.png", MODULE_DEFAULT_TOKEN_IMAGE,
+    ]);
+    expect(moduleMetadata.read).toHaveBeenCalledTimes(2);
   });
 
   it("uses only the known main-token artwork when both providers are unavailable", async () => {

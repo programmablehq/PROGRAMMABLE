@@ -43,7 +43,10 @@ async function responseJson(response: Response): Promise<unknown> {
 }
 
 /** Optional artwork and links for identities already authenticated by the saved launch index. */
-export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]): Promise<Map<string, Metadata>> {
+export async function readModuleTokenMetadata(
+  tokens: readonly RobinhoodLaunch[],
+  options: { failOnProviderError?: boolean } = {},
+): Promise<Map<string, Metadata>> {
   const native = tokens.filter(isRobinhoodModuleLaunch);
   if (native.length > 50) throw new Error("Too many token metadata reads");
   const batches = Array.from({ length: Math.ceil(native.length / 20) }, (_, index) => native.slice(index * 20, (index + 1) * 20));
@@ -72,11 +75,14 @@ export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]
     }
     if (replies.get(0)?.result !== "0x1237" || replies.get(0)?.error) throw new Error("Token metadata chain mismatch");
     return batch.flatMap((token, index): [string, Metadata][] => {
+      const offset = offsets[index];
+      const metadata = replies.get(offset);
+      const identity = replies.get(offset + 1);
+      if (metadata?.error || identity?.error || typeof metadata?.result !== "string" || typeof identity?.result !== "string") {
+        if (options.failOnProviderError) throw new Error("Token metadata provider response unavailable");
+        return [];
+      }
       try {
-        const offset = offsets[index];
-        const metadata = replies.get(offset);
-        const identity = replies.get(offset + 1);
-        if (metadata?.error || identity?.error || typeof metadata?.result !== "string" || typeof identity?.result !== "string") return [];
         const [description, website, image, extraData] = decodeFunctionResult({ abi: uerc20ReadAbi, functionName: "metadata", data: metadata.result as Hex });
         if (foundation(token)) {
           const committed = token.metadataHash;
@@ -105,5 +111,8 @@ export async function readModuleTokenMetadata(tokens: readonly RobinhoodLaunch[]
       } catch { return []; }
     });
   }));
+  if (options.failOnProviderError && results.some(result => result.status === "rejected")) {
+    throw new Error("Token metadata provider unavailable");
+  }
   return new Map(results.flatMap(result => result.status === "fulfilled" ? result.value : []));
 }

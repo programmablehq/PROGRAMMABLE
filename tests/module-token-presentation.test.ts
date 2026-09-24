@@ -61,6 +61,7 @@ describe("Native module token presentation", () => {
     const fetcher = vi.fn(async () => { throw new Error("offline"); });
     vi.stubGlobal("fetch", fetcher);
     expect((await readModuleTokenMetadata([token])).size).toBe(0);
+    await expect(readModuleTokenMetadata([token], { failOnProviderError: true })).rejects.toThrow("Token metadata provider unavailable");
     fetcher.mockClear();
     expect((await readModuleTokenMetadata([{ ...token, sourceKind: undefined }])).size).toBe(0);
     expect(fetcher).not.toHaveBeenCalled();
