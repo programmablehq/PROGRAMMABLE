@@ -23,6 +23,10 @@ Creator and pool fees are additional. Author rewards are divided equally between
 
 ## Custom launches
 
+The planned Custom Launch platform fee is 30 bps (0.30%) on buys and sells. Its API rollout is still in progress. Use the deployed contract and recorded configuration for an existing launch's rate; the new policy does not change older contracts.
+
+### Native20
+
 Robinhood Native20 charges 20 bps (0.20%) on the gross native ETH amount of each successful buy or sell through its bound pool. Creator and pool fees are separate. For a gross amount of 1 ETH, Programmable earns 0.002 ETH.
 
 Native20's rate is not a universal rule for custom contracts. Use the fee configuration and verified fee path of the exact launch and pool. A configured policy or a launch stamp alone does not establish that a fee is enforced. A creator fee of 0% produces no creator earnings from that trade.
@@ -38,3 +42,5 @@ Classic includes Programmable's 0.10% within the selected fee. A 1% fee leaves 0
 Fees accrue before they are claimed. A claim withdraws an existing balance and must not be counted again as revenue. Keep creator fees, module rewards, LP-position proceeds and platform fees separate. Gas, liquidity deposits, escrow and refunds do not count as platform trading revenue.
 
 The Dune dashboard uses **Custom Launches** for confirmed launches, **Custom Creator Rewards** for creator fees and **Custom Protocol Revenue** for Programmable's fees. Each query identifies the contracts and transactions it covers. Earned fees are distinct from completed buybacks and burns.
+
+The 50/50 use of Programmable's income is documented in [Fees and revenue](../economics.md#platform-revenue). It covers platform fees and fees received from Programmable's own V4/ETH LP position on Robinhood Chain; these remain separate revenue sources in the accounting.

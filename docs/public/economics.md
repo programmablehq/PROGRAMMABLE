@@ -19,25 +19,31 @@ These percentages apply to trades, not an allocation of the coin's token supply.
 
 ## Custom launches
 
-Custom fees depend on the project's contracts and recorded fee settings. Creator fees, platform fees and liquidity-provider fees can follow different rules. Check the configuration for the coin and trading route you use.
+The planned platform fee for Custom Launch is **0.30% on buys and sells**. The API update for this rate is still in progress. Until it is available, the fee depends on the launch's deployed contracts and recorded settings. Creator and pool fees are separate.
 
-Existing launch contracts retain their original fees. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
+Existing launch contracts retain their original fees. The [fee reference](reference/fee-versions.md) covers those versions.
+
+## Programmable's V4/ETH pool
+
+The V4/ETH pool on **Robinhood Chain** charges a **1% pool fee**, shared by liquidity providers according to their positions. Programmable receives the fees earned by its own locked liquidity position.
+
+The position's V4 buyback and burn allocation is processed automatically. The [V4 token page](v4-token.md) covers the token and its liquidity.
 
 ## Platform revenue
 
-Programmable's revenue policy allocates its platform fees as follows:
+The same 50/50 allocation applies to Module Mode platform fees, Custom Launch platform fees and fees received from Programmable's own V4/ETH liquidity position:
 
 | Use | Share |
 | --- | --- |
-| Buy V4 and burn the purchased tokens | 50% |
+| V4 buybacks and burns | 50% |
 | Programmable treasury | 50% |
 
-Creator fees and module rewards are excluded. The policy calls for daily buybacks and burns; completed transactions show what has actually been processed.
+At a **0.30% platform fee**, this is **0.15% of the trade value for V4 buybacks and burns** and **0.15% for the treasury**. The treasury pays ongoing platform costs and funds future development and other platform needs.
 
-V4 received as fees from Programmable's own V4/ETH liquidity position is also burned. This is separate from buying V4 with platform revenue. The [V4 token page](v4-token.md) explains the token and its liquidity.
+Creator fees and module rewards belong to their recipients and are excluded from this allocation. V4 already received within the burn allocation can be burned directly; other fee assets are used to buy V4 first.
 
 ## Check the records
 
-The [Dune dashboard](https://dune.com/programmablehq/analytics) reports the launches, fees and burns covered by its queries. It refreshes every 24 hours and links completed burns to their transactions.
+[Dune Analytics](https://dune.com/programmablehq/analytics) tracks launches, fees and completed burns, with links to the burn transactions. It refreshes every 24 hours. Each query identifies the contracts and transactions it covers.
 
 Earned fees can still be unclaimed. Withdrawing them is not new revenue. Gas, liquidity deposits and funds reserved for module behavior are excluded from platform fee revenue.

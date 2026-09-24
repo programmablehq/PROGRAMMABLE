@@ -11,14 +11,16 @@ V4 is Programmable's token on Robinhood Chain. It was created with one billion t
 
 ## Liquidity and trading fees
 
-The V4/ETH pool charges a **1% trading fee**, shared by liquidity providers according to their positions. Wallet-to-wallet transfers do not incur this pool fee.
+The V4/ETH pool on **Robinhood Chain** charges a **1% trading fee**, shared by liquidity providers according to their positions. Wallet-to-wallet transfers do not incur this pool fee.
 
 Programmable's liquidity is held in a [locked position](https://robinhoodchain.blockscout.com/address/0x9f9424BbCCe8a865f70155fe40Fb22A103eBEc63), NFT `1708785`. The position can collect fees while its liquidity remains locked. It earns ETH on buys and V4 on sells.
 
 ## Buybacks and burns
 
-Part of Programmable's platform fee revenue is used to buy V4 and burn the purchased tokens. V4 collected from its own liquidity fees is also burned. [Fees and revenue](economics.md#platform-revenue) explains the allocation and excludes creator fees and module rewards.
+Programmable allocates **50% of the fees received from its own liquidity position to automated V4 buybacks and burns**. The other **50% goes to the treasury** for ongoing costs, future development and other platform needs.
 
-Burns send V4 to `0x000000000000000000000000000000000000dEaD`. These tokens are excluded from circulation, while the contract's reported total supply remains one billion. Completed burns and their transactions are available on the [Dune dashboard](https://dune.com/programmablehq/analytics).
+Module Mode and Custom Launch platform fees follow the same allocation. [Fees and revenue](economics.md#platform-revenue) explains their rates and the planned Custom Launch update. Creator fees and module rewards are excluded.
+
+Burns send V4 to `0x000000000000000000000000000000000000dEaD`. These tokens are excluded from circulation, while the contract's reported total supply remains one billion. [Dune Analytics](https://dune.com/programmablehq/analytics) tracks fees and completed burns and links to the burn transactions.
 
 V4 does not give holders company ownership or a right to platform revenue. Buybacks and burns do not guarantee a price or return. This token is separate from Programmable's earlier Ethereum tokens.
