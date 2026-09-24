@@ -7,7 +7,7 @@ structure:
 redirects:
   tokens: README.md
   creators: creators/launch.md
-  creators/templates: developers/module-mode.md
+  creators/templates: models/module-mode.md
   creators/programs: developers/README.md
   infrastructure: launch-stamps.md
   launch-stamps: launch-stamps.md

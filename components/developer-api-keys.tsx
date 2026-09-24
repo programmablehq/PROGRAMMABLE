@@ -244,9 +244,9 @@ export function apiKeyPurpose(scopes: unknown): ApiKeyPurpose | null {
 
 export function apiKeyPurposeLabel(scopes: unknown): string {
   const purpose = apiKeyPurpose(scopes);
-  if (purpose === "all") return "Launches + modules";
+  if (purpose === "all") return "Launches + legacy modules";
   if (purpose === "custom-launches") return "Custom hooks";
-  if (purpose === "module-contributions") return "Modules";
+  if (purpose === "module-contributions") return "Legacy module key";
   if (Array.isArray(scopes) && scopes.length === 1
     && fixedScopes.includes(scopes[0])) return scopes[0] === "custom-launch:read" ? "Custom hooks · read only" : "Custom hooks";
   return "Other permissions";
@@ -386,15 +386,15 @@ export function parseApiKeyMutationResultForAttempt(
 export function ApiKeyPermissions({ scopes }: Readonly<{ scopes: readonly string[] }>) {
   const purpose = apiKeyPurpose(scopes);
   const summary = purpose === "custom-launches" ? "Launch + read"
-    : purpose === "module-contributions" ? "Submit + read"
+    : purpose === "module-contributions" ? "Legacy module access"
       : scopes.length === 1 && scopes[0] === "custom-launch:read" ? "Read only"
         : scopes.length === 1 && scopes[0] === "custom-launch:create" ? "Launch only"
           : `${scopes.length} ${scopes.length === 1 ? "scope" : "scopes"}`;
   const descriptions: Readonly<Record<string, string>> = {
     "custom-launch:create": "Prepare launch requests. Your controller wallet must sign each transaction.",
     "custom-launch:read": "Read launch history across API keys and linked wallets in your account.",
-    "modules:submit": "Submit module source packages for review. This does not approve or deploy a module.",
-    "modules:read": "Read module submission status.",
+    "modules:submit": "Module submissions are closed. This legacy permission cannot create a submission.",
+    "modules:read": "Read existing module submission status.",
   };
   return (
     <Disclosure className={styles.scopeLedger}>
@@ -1982,7 +1982,7 @@ export function DeveloperApiKeysView({
                             </div>
                             <span className={styles.keyPurpose}>{apiKeyPurposeLabel(apiKey.scopes)}</span>
                             {status === "Active" && !rotationSupported ? (
-                              <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module API access is paused." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
+                              <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module submissions are closed." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
                             ) : null}
                           </div>
 

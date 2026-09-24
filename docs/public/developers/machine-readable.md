@@ -26,8 +26,6 @@ Partner roots and subkeys follow `customLaunchApi.partnerCredentials`, including
 
 The [Native indexer contract](https://programmable.market/api/module-mode/indexer/v1) describes earlier Native launches. It must not be used to decode Foundation events. The [indexing guide](indexing.md) explains how to select the right source.
 
-Module contributions use a separate author API. [Build a module](module-mode.md) covers submission access, configuration and review. A Custom Launch key does not grant module contribution scopes.
-
 ## Ethereum public read API
 
 The Developer API at `https://developers.programmable.family` is read only and needs no API key. It is separate from the authenticated launch service at `https://api.programmable.market`.

@@ -102,15 +102,14 @@ export function ProfileModuleSubmissions({ data = unavailable, onRetry }: { data
 
   if (data.status === "ready") return <div className={styles.state}>
     <span className={styles.icon} aria-hidden="true"><Puzzle size={28} strokeWidth={1.4} /></span>
-    <h3>No submissions yet.</h3>
-    <p>Build a module and submit it for review.</p>
-    <Link className={styles.guide} href="/developers/modules">Build a module<ArrowUpRight size={16} aria-hidden="true" strokeWidth={1.8} /></Link>
+    <h3>No module submissions.</h3>
+    <p>New submissions are closed.</p>
   </div>;
 
   return <div className={styles.state} role="status">
     <span className={styles.icon} aria-hidden="true"><Inbox size={28} strokeWidth={1.4} /></span>
     <h3>Couldn’t load your submissions.</h3>
     {onRetry ? <button type="button" className={styles.guide} onClick={onRetry}><RefreshCw size={16} aria-hidden="true" strokeWidth={1.8} />Try again</button>
-      : <Link className={styles.guide} href="/developer-reference/module-mode">Module guide<ArrowUpRight size={16} aria-hidden="true" strokeWidth={1.8} /></Link>}
+      : <Link className={styles.guide} href="/docs/models/module-mode">Module Mode guide<ArrowUpRight size={16} aria-hidden="true" strokeWidth={1.8} /></Link>}
   </div>;
 }

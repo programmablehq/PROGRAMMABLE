@@ -6,7 +6,6 @@ Use the guide for the task you want to complete.
 | --- | --- |
 | Launch your own contracts | [Custom Launch quickstart](custom-launch-quickstart.md) |
 | Check request fields and errors | [Custom Launch API](custom-launch.md) |
-| Develop a reusable module | [Build a module](module-mode.md) |
 | Add coins to a terminal, wallet or explorer | [Index launches](indexing.md) |
 | Find schemas, ABIs and client releases | [API reference](machine-readable.md) |
 

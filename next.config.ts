@@ -108,6 +108,11 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
+        source: "/docs/developers/module-mode",
+        destination: "/docs/models/module-mode",
+        permanent: true,
+      },
+      {
         source: "/docs/developers/module-mode-indexing.md",
         destination: "/developers/module-mode-indexing-v1.md",
         permanent: false,

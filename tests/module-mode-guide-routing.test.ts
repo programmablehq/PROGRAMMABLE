@@ -2,21 +2,13 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { PROGRAMMABLE_AGENT_ENTRY } from "../lib/agent-connection";
 
-it("keeps the module host guide outside the externally managed docs namespace", () => {
-  const path = new URL(PROGRAMMABLE_AGENT_ENTRY.workflows.moduleContribution.developerGuide).pathname;
-  expect(path).not.toMatch(/^\/docs(?:\/|$)/);
-  const alias = readFileSync(`app${path}/page.tsx`, "utf8");
-  expect(alias).toContain('from "@/app/docs/developers/module-mode/page"');
-  const page = readFileSync("app/docs/developers/module-mode/page.tsx", "utf8");
-  expect(page).toContain(`canonical: "${path}"`);
-  expect(page).toContain("Module API-key issuance and source submissions are currently paused.");
-  expect(page).not.toContain("Launches + modules");
-  expect(page).not.toContain("purpose=modules");
-  const contributorGuide = readFileSync("packages/classic-modules/AGENT_GUIDE.md", "utf8");
-  const guideAnchors = [...contributorGuide.matchAll(/https:\/\/programmable\.market\/developer-reference\/module-mode#([a-z-]+)/g)];
-  expect(guideAnchors.length).toBeGreaterThan(0);
-  for (const [, anchor] of guideAnchors) expect(page).toContain(`id="${anchor}"`);
-  expect(readFileSync("components/developer-api-keys.tsx", "utf8")).toContain('href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md"');
-  const config = JSON.parse(readFileSync("vercel.json", "utf8"));
-  expect(config.redirects).not.toContainEqual({ source: "/docs/developers/module-mode", destination: path, permanent: false });
+it("keeps retired module submissions out of public discovery and navigation", () => {
+  expect(PROGRAMMABLE_AGENT_ENTRY.workflows).not.toHaveProperty("moduleContribution");
+  expect(PROGRAMMABLE_AGENT_ENTRY.website).not.toHaveProperty("buildModule");
+  expect(readFileSync("components/docs-data.ts", "utf8")).not.toContain('label: "Build a module"');
+  expect(readFileSync("app/docs/developers/module-mode/page.tsx", "utf8")).toContain('redirect("/docs/models/module-mode")');
+  expect(JSON.parse(readFileSync("vercel.json", "utf8")).redirects).toContainEqual({
+    source: "/docs/developers/module-mode", destination: "/docs/models/module-mode", permanent: true,
+  });
+  expect(readFileSync("public/developers/module-mode-api-v1.md", "utf8")).toContain("New module API keys and source submissions are no longer offered.");
 });

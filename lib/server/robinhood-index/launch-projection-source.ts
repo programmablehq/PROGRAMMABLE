@@ -65,7 +65,14 @@ export function launchProjectionSourceV1(signal: AbortSignal = AbortSignal.timeo
       const url = new URL(LAUNCH_PROJECTION_FEED_V1);
       url.searchParams.set("limit", "10");
       if (cursor) url.searchParams.set("cursor", cursor);
-      const response = await fetch(url, { signal, redirect: "error", cache: "no-store", headers: { accept: "application/json" } });
+      const readPage = () => fetch(url, { signal, redirect: "error", cache: "no-store", headers: { accept: "application/json" } });
+      let response = await readPage();
+      // The public feed occasionally returns a short-lived 503. Retry that read once
+      // without advancing the saved cursor or weakening projection verification.
+      if (response.status === 503) {
+        await response.body?.cancel();
+        response = await readPage();
+      }
       if (!response.ok || response.redirected || response.headers.get("content-type")?.split(";", 1)[0] !== "application/json"
         || !response.body || Number(response.headers.get("content-length")) > 16_777_216) throw new Error("Launch projection feed unavailable");
       const reader = response.body.getReader();

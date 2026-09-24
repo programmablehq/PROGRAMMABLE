@@ -10,25 +10,24 @@ const item: ProfileModuleSubmission = {
 };
 
 describe("submission agent handoff", () => {
-  it("binds the existing identity and requires authenticated context and review before changes", () => {
+  it("binds the existing identity and requires authenticated review without resubmission", () => {
     const prompt = buildModuleSubmissionHandoff(item);
     expect(prompt).toContain(`GET https://api.programmable.market/v1/modules/submissions/${item.id}/review`);
-    expect(prompt.indexOf("GET https://api.programmable.market/v1/modules/context")).toBeLessThan(prompt.indexOf("address its actual review items"));
+    expect(prompt.indexOf("GET https://api.programmable.market/v1/modules/context")).toBeLessThan(prompt.indexOf("report its actual requested changes"));
     for (const value of [item.id, item.packageId, item.author, item.rewardWallet!, item.familySalt!, item.version, item.feedback!]) expect(prompt).toContain(value);
     expect(prompt).toContain('"reviewRevision": 2');
     expect(prompt).toContain("API key already stored in your secure environment");
     expect(prompt).not.toContain("Bearer ");
-    expect(prompt).toContain("supersedesSubmissionId");
-    expect(prompt).toContain("new idempotency key");
-    expect(prompt).toContain("same saved bytes and that same new idempotency key");
-    expect(prompt).toContain("Bump the semantic version");
+    expect(prompt).toContain("New public module submissions and revisions are closed");
+    expect(prompt).toContain("Do not submit a new module or revision");
+    expect(prompt).not.toContain("supersedesSubmissionId");
   });
 
-  it("recovers an absent salt from the original descriptor rather than generating a new family", () => {
+  it("does not invent an absent salt for an existing submission", () => {
     const prompt = buildModuleSubmissionHandoff({ ...item, familySalt: undefined });
     expect(prompt).not.toContain('"familySalt":');
-    expect(prompt).toContain("read it from that descriptor; never generate a replacement");
-    expect(prompt).toContain("If the original descriptor is unavailable");
+    expect(prompt).toContain("bind the returned submission ID, package ID, version and reward wallet to the existing receipt");
+    expect(prompt).not.toContain("generate a replacement");
   });
 
   it.each(["awaiting_plan", "queued", "running", "built", "accepted"] as const)("does not request a revision for %s", reviewState => {

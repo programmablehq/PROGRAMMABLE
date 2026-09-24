@@ -51,14 +51,15 @@ describe("profile submission presentation", () => {
 
   it("keeps empty, loading and unavailable feeds distinct with an actionable retry", () => {
     const empty = renderToStaticMarkup(<ProfileModuleSubmissions data={{ status: "ready", items: [] }} />);
-    expect(empty).toContain("No submissions yet.");
-    expect(empty).toContain('href="/developers/modules"');
+    expect(empty).toContain("No module submissions.");
+    expect(empty).toContain("New submissions are closed.");
+    expect(empty).not.toContain('href="/developers/modules"');
     const loading = renderToStaticMarkup(<ProfileModuleSubmissions data={{ status: "loading" }} />);
     expect(loading).toContain('aria-busy="true"');
-    expect(loading).not.toContain("No submissions yet.");
+    expect(loading).not.toContain("No module submissions.");
     const failed = renderToStaticMarkup(<ProfileModuleSubmissions data={{ status: "error" }} onRetry={() => {}} />);
     expect(failed).toContain("Try again");
-    expect(failed).not.toContain("No submissions yet.");
+    expect(failed).not.toContain("No module submissions.");
     expect(renderToStaticMarkup(<ProfileModuleSubmissions />)).not.toContain("isn’t available here yet");
   });
 });

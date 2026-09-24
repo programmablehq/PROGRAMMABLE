@@ -25,9 +25,7 @@ const tokenModelPaths = [
 ] as const;
 
 const developerReferencePaths = [
-  "/developer-reference/module-mode",
   "/developer-reference/module-mode-indexing",
-  "/docs/developers/module-mode",
   "/docs/developers/custom-launch",
   "/developer-reference/robinhood-terminal-indexer",
   "/docs/developers/verify",
@@ -67,7 +65,7 @@ export const docsCategories = [
     relatedPaths: creatorPaths,
   },
   {
-    description: "Module contributions, custom launches and indexing",
+    description: "Custom launches and indexing",
     href: "/docs/developers",
     label: "Developers",
     relatedPaths: developerReferencePaths,
@@ -134,11 +132,6 @@ export const docsNavigation: readonly DocsNavigationGroup[] = [
         depth: 1,
         href: "/docs/developers/custom-launch",
         label: "Custom Launch API",
-      },
-      {
-        depth: 1,
-        href: "/docs/developers/module-mode",
-        label: "Build a module",
       },
       {
         depth: 1,
@@ -299,12 +292,6 @@ export const docsSearchItems: DocsSearchItem[] = [
       "sequencer soft confirmed",
       "ethereum posted",
     ],
-  },
-  {
-    title: "Build a module",
-    description: "Submit a Module Mode source package through the API with an EVM author and reward wallet.",
-    href: "/docs/developers/module-mode",
-    keywords: ["Module Mode", "modules:submit", "module contribution", "module API", "reward wallet", "source package"],
   },
   {
     title: "Robinhood terminal and indexer integration",

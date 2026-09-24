@@ -16,7 +16,6 @@
 - [Overview](developers/README.md)
 - [Launch through the API](developers/custom-launch-quickstart.md)
   - [Custom Launch API](developers/custom-launch.md)
-- [Build a module](developers/module-mode.md)
 - [Index launches](developers/indexing.md)
   - [Foundation](developers/foundation-indexing.md)
   - [Native and Engine](developers/module-mode-indexing.md)

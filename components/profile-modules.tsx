@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowLeftRight, ArrowUpRight, ChevronLeft, ChevronRight, Coins, FlaskConical, Gift, Link2, Percent, Puzzle, RefreshCw, Shield, Waves } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Coins, FlaskConical, Gift, Link2, Percent, Puzzle, RefreshCw, Shield, Waves } from "lucide-react";
 import { ModuleDetailDialog } from "@/components/module-detail-dialog";
 import { ProfileModuleSubmissions } from "@/components/profile-module-submissions";
 import { useLiveDataRefresh } from "@/components/use-live-data-refresh";
@@ -95,7 +94,6 @@ export function ProfileModules({ account, ownProfile = false, initialSection = "
         <h2 id="profile-modules-title">Modules{!ownProfile && scoped && (!partial || scoped.page.totalItems > 0) ? <span className={styles.count}> {scoped.page.totalItems}{partial ? "+" : ""}</span> : null}</h2>
       </div>
       {ownProfile ? <div className={styles.headingActions}>
-        <Link className={styles.buildLink} href="/developers/modules">Build a module<ArrowUpRight aria-hidden="true" size={16} strokeWidth={1.8} /></Link>
         <button type="button" className={styles.refresh} onClick={() => setRetry(value => value + 1)} disabled={section === "published" && loading} aria-label={section === "published" ? "Refresh modules" : "Refresh submissions"} title={section === "published" ? "Refresh modules" : "Refresh submissions"} aria-busy={section === "published" && loading}><RefreshCw aria-hidden="true" size={16} strokeWidth={1.8} /></button>
       </div>
         : <button type="button" className={styles.refresh} onClick={() => setRetry(value => value + 1)} disabled={loading} aria-label="Refresh modules" aria-busy={loading}>
