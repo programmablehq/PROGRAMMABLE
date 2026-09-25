@@ -82,6 +82,7 @@ window.fetch = async (input) => {
   }
   if (url.pathname.startsWith("/api/developer/custom-launch-plans")) {
     if (mode === "api-error") return Response.json({ error: "temporarily unavailable" }, { status: 503 });
+    if (mode === "missing") return Response.json({ error: { code: "PLAN_NOT_FOUND", context: { resource: "owned_plan" } } }, { status: 404 });
     if (url.searchParams.get("source") === "multi_role_v2") return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches: [], nextCursor: null });
     return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches: [{ sourceVersion: "custom_launch_plan_v1", controller, resource: record }], nextCursor: null });
   }
