@@ -646,6 +646,8 @@ export function getWalletTransactionErrorMessage(error: unknown) {
           typeof (error as { message?: unknown }).message === "string"
         ? (error as { message: string }).message
         : "";
+  const shortMessage = typeof error === "object" && error !== null && "shortMessage" in error
+    && typeof error.shortMessage === "string" ? error.shortMessage : "";
 
   if (code === 4001 || /user rejected|user denied/i.test(message)) {
     return "Transaction cancelled in wallet";
@@ -658,7 +660,7 @@ export function getWalletTransactionErrorMessage(error: unknown) {
     return "Wallet connection was interrupted. Reload the page and try again";
   }
 
-  return message || "The wallet could not open the transaction";
+  return (shortMessage || message).split("\n")[0]?.trim() || "The wallet could not open the transaction";
 }
 
 export function getWalletDisconnectOutcome(succeeded: boolean) {
@@ -2381,7 +2383,10 @@ function PrivyWalletBridge({
               };
               await assertAuthority();
               const { revalidateModuleModeTransaction } = await import("@/components/module-mode-wallet-state");
-              const transaction = await revalidateModuleModeTransaction(prepared, account);
+              const transaction = "sourceKind" in prepared && prepared.sourceKind === "module-foundation-v1"
+                ? await (await import("@/lib/module-foundation/preparation-retry")).retryFoundationReadOnlyPreparation(
+                  () => revalidateModuleModeTransaction(prepared, account), assertCurrentSession)
+                : await revalidateModuleModeTransaction(prepared, account);
               enginePreparationPending = "sourceKind" in prepared && prepared.sourceKind === "module-engine-v1";
               if (transaction.chainId !== robinhoodChain.id || transaction.from.toLowerCase() !== account.toLowerCase()) {
                 throw new Error("The Module Mode transaction is bound to a different wallet or network");
