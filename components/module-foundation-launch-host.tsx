@@ -17,6 +17,7 @@ import { parseFoundationAssetPinsV1 } from "@/lib/module-foundation/assets";
 import { foundationMetadata, prepareFoundationLaunch, readFoundationQuote } from "@/lib/module-foundation/client";
 import { isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
 import { readFoundationSuggestedBuy } from "@/lib/module-foundation/first-buy";
+import { retryFoundationReadOnlyPreparation } from "@/lib/module-foundation/preparation-retry";
 import { FOUNDATION_WETH, foundationSupportsEth } from "@/lib/module-foundation/native-funding";
 import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalog";
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
@@ -140,57 +141,59 @@ export function ModuleFoundationLaunchHost() {
       session.assertCurrent(account, context);
     }
     if (!isFoundationDefaultImage(draft.image) && uploads.current.get(`${account.toLowerCase()}:${draft.image.url}`) !== draft.image.sha256) throw new Error("Choose and upload the exact coin image for this wallet before preparing.");
-    const binding = await session.resolveAuthority();
-    const creatorFees = foundationCreatorFeeFields(draft);
-    const feeRates = foundationCreatorFeeRates(creatorFees);
-    if (binding.factoryVersion !== "v3" && feeRates.creatorBuyFeeBps !== feeRates.creatorSellFeeBps) throw new Error("Independent buy and sell fees are not live yet.");
-    const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
-    const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
-    const composition = await response.json() as { error?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
-      moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; path: FoundationFundingHop[] } | null };
-    if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
-    const moduleAssetPins = parseFoundationAssetPinsV1(composition.moduleAssetPins);
-    const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,
-      modulePackageIds: draft.modules.map(item => item.id as Hex), moduleAssetPins });
-    if (nativeCanonicalJson(nativeJson(composition.metadata)) !== nativeCanonicalJson(metadata)) throw new Error("The coin metadata changed. Review again.");
-    session.assertCurrent(account, context);
-    const maximumEth = foundationParseAmount(draft.initialBuy, 18);
-    const ethFunding = composition.ethFunding ? { ...composition.ethFunding, maximumEth: BigInt(composition.ethFunding.maximumEth), quoteAmount: BigInt(composition.ethFunding.quoteAmount) } : undefined;
-    if ((maximumEth > 0n) !== Boolean(ethFunding) || (ethFunding && ethFunding.maximumEth !== maximumEth)) throw new Error("The ETH spending amount changed. Create the launch again.");
-    const sequence = await prepareFoundationLaunch({ client: session.client, binding, account, tokenSalt,
-      metadata, quote: draft.quoteAsset,
-      startPrice: composition.startPrice, initialBuy: ethFunding ? formatUnits(ethFunding.quoteAmount, composition.startPrice.decimals) : "0", additionalLiquidity: "0", ethFunding,
-      ...creatorFees, modules: composition.modules, slippageBps: 100 });
-    session.assertCurrent(account, context);
-    if (sequence.steps.length !== 1 || sequence.steps[0].kind !== "launch") throw new Error("This launch could not be prepared as one transaction.");
-    if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
-    const quote: FoundationQuoteAsset = { address: sequence.quote.address, chainId: 4663, name: sequence.quote.name,
-      symbol: sequence.quote.symbol, decimals: sequence.quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(sequence.quote), balance: formatUnits(sequence.quote.balance ?? 0n, sequence.quote.decimals) };
-    const positions = foundationLaunchPositionPresentation(sequence, account);
-    const custody = (() => {
-      if (sequence.result.factoryVersion === "v1") return { factoryVersion: "v1" as const };
-      if (binding.factoryVersion !== sequence.result.factoryVersion) throw new Error("The launch liquidity version changed. Review again.");
-      return { factoryVersion: sequence.result.factoryVersion, lpCustodyId: binding.lpCustodyId,
-        roundingInventory: { recipient: sequence.result.roundingInventoryRecipient,
-          tokenAmount: formatUnits(sequence.result.baseTokenRounding, 18), unrecoverable: true as const },
-        quoteFunding: { maximum: formatUnits(sequence.parameters.initialBuyQuoteAmount + sequence.parameters.additionalQuoteAmount, quote.decimals),
-          principal: formatUnits(sequence.result.creatorQuotePrincipal, quote.decimals),
-          refund: formatUnits(sequence.result.actualQuoteRefund, quote.decimals) } };
-    })();
-    const review: FoundationLaunchReview = { id: crypto.randomUUID(), contextKey: context, account, chainId: 4663,
-      simulationBlock: sequence.checkpoint.blockNumber.toString(), expiresAt: Number(sequence.expiresAt), quote,
-      tokenAddress: sequence.result.token, metadataHash: sequence.metadataHash,
-      pool: { ...sequence.poolKey, poolId: sequence.result.poolId, poolManager: FOUNDATION_INFRASTRUCTURE.poolManager.address },
-      positions, ...custody,
-      platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
-      ...foundationCreatorFeeFields(sequence.parameters), initialBuy: draft.initialBuy,
-      minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
-      additionalLiquidity: formatUnits(sequence.result.factoryVersion !== "v1" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
-      actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
-      transactions: sequence.steps.map(foundationStepSummary), notes: ["The coin launch and first buy use one transaction.",
-        "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };
-    prepared.current.set(review, sequence); return review;
+    return retryFoundationReadOnlyPreparation(async () => {
+      const binding = await session.resolveAuthority();
+      const creatorFees = foundationCreatorFeeFields(draft);
+      const feeRates = foundationCreatorFeeRates(creatorFees);
+      if (binding.factoryVersion !== "v3" && feeRates.creatorBuyFeeBps !== feeRates.creatorSellFeeBps) throw new Error("Independent buy and sell fees are not live yet.");
+      const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
+      const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
+      const composition = await response.json() as { error?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
+        moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; path: FoundationFundingHop[] } | null };
+      if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
+      const moduleAssetPins = parseFoundationAssetPinsV1(composition.moduleAssetPins);
+      const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,
+        modulePackageIds: draft.modules.map(item => item.id as Hex), moduleAssetPins });
+      if (nativeCanonicalJson(nativeJson(composition.metadata)) !== nativeCanonicalJson(metadata)) throw new Error("The coin metadata changed. Review again.");
+      session.assertCurrent(account, context);
+      const maximumEth = foundationParseAmount(draft.initialBuy, 18);
+      const ethFunding = composition.ethFunding ? { ...composition.ethFunding, maximumEth: BigInt(composition.ethFunding.maximumEth), quoteAmount: BigInt(composition.ethFunding.quoteAmount) } : undefined;
+      if ((maximumEth > 0n) !== Boolean(ethFunding) || (ethFunding && ethFunding.maximumEth !== maximumEth)) throw new Error("The ETH spending amount changed. Create the launch again.");
+      const sequence = await prepareFoundationLaunch({ client: session.client, binding, account, tokenSalt,
+        metadata, quote: draft.quoteAsset,
+        startPrice: composition.startPrice, initialBuy: ethFunding ? formatUnits(ethFunding.quoteAmount, composition.startPrice.decimals) : "0", additionalLiquidity: "0", ethFunding,
+        ...creatorFees, modules: composition.modules, slippageBps: 100 });
+      session.assertCurrent(account, context);
+      if (sequence.steps.length !== 1 || sequence.steps[0].kind !== "launch") throw new Error("This launch could not be prepared as one transaction.");
+      if (getAddress(composition.token) !== getAddress(sequence.result.token)) throw new Error("The source-bound coin address changed. Review again.");
+      const quote: FoundationQuoteAsset = { address: sequence.quote.address, chainId: 4663, name: sequence.quote.name,
+        symbol: sequence.quote.symbol, decimals: sequence.quote.decimals, supported: true, supportsNativeEth: foundationSupportsEth(sequence.quote), balance: formatUnits(sequence.quote.balance ?? 0n, sequence.quote.decimals) };
+      const positions = foundationLaunchPositionPresentation(sequence, account);
+      const custody = (() => {
+        if (sequence.result.factoryVersion === "v1") return { factoryVersion: "v1" as const };
+        if (binding.factoryVersion !== sequence.result.factoryVersion) throw new Error("The launch liquidity version changed. Review again.");
+        return { factoryVersion: sequence.result.factoryVersion, lpCustodyId: binding.lpCustodyId,
+          roundingInventory: { recipient: sequence.result.roundingInventoryRecipient,
+            tokenAmount: formatUnits(sequence.result.baseTokenRounding, 18), unrecoverable: true as const },
+          quoteFunding: { maximum: formatUnits(sequence.parameters.initialBuyQuoteAmount + sequence.parameters.additionalQuoteAmount, quote.decimals),
+            principal: formatUnits(sequence.result.creatorQuotePrincipal, quote.decimals),
+            refund: formatUnits(sequence.result.actualQuoteRefund, quote.decimals) } };
+      })();
+      const review: FoundationLaunchReview = { id: crypto.randomUUID(), contextKey: context, account, chainId: 4663,
+        simulationBlock: sequence.checkpoint.blockNumber.toString(), expiresAt: Number(sequence.expiresAt), quote,
+        tokenAddress: sequence.result.token, metadataHash: sequence.metadataHash,
+        pool: { ...sequence.poolKey, poolId: sequence.result.poolId, poolManager: FOUNDATION_INFRASTRUCTURE.poolManager.address },
+        positions, ...custody,
+        platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
+        ...foundationCreatorFeeFields(sequence.parameters), initialBuy: draft.initialBuy,
+        minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
+        additionalLiquidity: formatUnits(sequence.result.factoryVersion !== "v1" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
+        actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
+        transactions: sequence.steps.map(foundationStepSummary), notes: ["The coin launch and first buy use one transaction.",
+          "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };
+      prepared.current.set(review, sequence); return review;
+    }, () => session.assertCurrent(account, context));
   }
   async function resultFrom(outcome: FoundationExecutionResult): Promise<FoundationTransactionResult> {
     if (!outcome.receipt || outcome.receipt.status !== "success" || outcome.sequence.kind !== "launch"

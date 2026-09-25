@@ -695,6 +695,10 @@ describe("wallet recovery state", () => {
         new Error("Wallet request failed"),
       ),
     ).toBe("Wallet request failed");
+    expect(subject.getWalletTransactionErrorMessage({
+      message: `RPC failure\n${"request details ".repeat(40)}`,
+      shortMessage: "The RPC timed out",
+    })).toBe("The RPC timed out");
   });
 
   it("keeps the visible wallet session and dialog open when disconnect fails", () => {

@@ -56,7 +56,9 @@ const SOCIAL_LABELS: Record<ModuleSocialKind, string> = { website: "Website", tw
 const EMPTY_MODULES: FoundationModuleSelection[] = [];
 
 function cleanError(error: unknown) {
-  const message = error instanceof Error ? error.message : "This step could not complete. Please try again.";
+  const shortMessage = error && typeof error === "object" && "shortMessage" in error ? error.shortMessage : undefined;
+  const message = typeof shortMessage === "string" ? shortMessage
+    : error instanceof Error ? error.message : "This step could not complete. Please try again.";
   return message.length <= 320 ? message : "This step could not complete. Your coin details are kept. Please try again.";
 }
 
