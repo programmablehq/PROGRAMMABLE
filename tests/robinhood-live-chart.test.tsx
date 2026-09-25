@@ -26,11 +26,14 @@ describe("Robinhood first party live chart", () => {
     expect(html).not.toContain("<iframe");
   });
 
-  it("uses observed prices for DEX Screener markets and keeps the legacy embed", () => {
+  it("uses the native chart from the first paint and keeps the Ethereum embed", () => {
     vi.useFakeTimers({ now });
-    const legacy = renderToStaticMarkup(<RobinhoodChart poolId={poolId} name="First coin" />);
+    const waiting = renderToStaticMarkup(<RobinhoodChart poolId={poolId} name="First coin" />);
+    const ethereum = renderToStaticMarkup(<RobinhoodChart poolId={poolId} name="First coin" chainId={1} />);
     const dex = renderToStaticMarkup(<RobinhoodChart poolId={poolId} name="First coin" market={{ ...market(), source: "dexscreener" }} />);
-    expect(legacy).toContain(`https://dexscreener.com/robinhood/${poolId}?embed=1`);
+    expect(waiting).toContain("Waiting for a price update.");
+    expect(waiting).not.toContain("<iframe");
+    expect(ethereum).toContain(`https://dexscreener.com/ethereum/${poolId}?embed=1`);
     expect(dex).toContain("DEX Screener");
     expect(dex).toContain("$0.00042");
     expect(dex).toContain("<svg");

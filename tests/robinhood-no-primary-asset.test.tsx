@@ -46,12 +46,14 @@ describe("launch pages without a primary asset", () => {
     expect(html).not.toContain("No primary asset is declared");
   });
 
-  it("preserves the existing chart for a legacy token with no generic projection", () => {
+  it("shows the native price chart for a legacy Robinhood token", () => {
     const token = { ...projectionToRobinhoodLaunch(projectionFixture(), nowIso), launchProjection: undefined, name: "Existing token", symbol: "EXIST", poolId: hash };
     const html = renderToStaticMarkup(<RobinhoodTokenView address={component} token={token} status="ready" />);
     expect(html).toContain("EXIST");
     expect(html).toContain("Market Cap");
-    expect(html).toContain("Existing token price chart on DEX Screener");
+    expect(html).toContain('aria-label="Existing token live price"');
+    expect(html).toContain("Live price is unavailable.");
+    expect(html).not.toContain("<iframe");
     expect(html).not.toContain("No primary asset is declared");
   });
 });

@@ -90,7 +90,7 @@ function LivePriceChart({ name, points, now, market }: Readonly<{
           <circle className={liveStyles.point} cx={geometry.last.x} cy={geometry.last.y} r="4" vectorEffect="non-scaling-stroke" />
         </svg>
         {points.length === 1 ? <p className={liveStyles.firstPoint}>The chart grows with each price update.</p> : null}
-      </> : <p className={liveStyles.empty}>Live price is unavailable.</p>}
+      </> : <p className={liveStyles.empty}>{market ? "Live price is unavailable." : "Waiting for a price update."}</p>}
     </div>
   </figure>;
 }
@@ -102,12 +102,11 @@ function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
   const [now, setNow] = useState(() => Date.now());
   const matchingMarket = market?.poolId.toLowerCase() === poolId.toLowerCase() ? market : null;
   const [points, setPoints] = useState<readonly RobinhoodLivePrice[]>([]);
-  const [chartSource, setChartSource] = useState<ChartMarket["source"]>();
   const nextPoints = appendRobinhoodLivePrice(points, poolId, matchingMarket, now);
   // Keep observations tied to this mounted pool; a refresh must not invent or reset history.
   if (nextPoints !== points) setPoints(nextPoints);
-  if (matchingMarket?.source && matchingMarket.source !== chartSource) setChartSource(matchingMarket.source);
-  const showLive = chainId === 4663 && (chartSource === "uniswap-v4" || chartSource === "dexscreener");
+  // The Robinhood presentation endpoint supplies observed prices; avoid the cross-origin chart while it loads.
+  const showLive = chainId === 4663;
   const chartUrl = `https://dexscreener.com/${chainId === 1 ? "ethereum" : "robinhood"}/${poolId}`;
 
   useEffect(() => {
