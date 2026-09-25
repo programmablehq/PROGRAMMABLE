@@ -18,7 +18,8 @@ const chartTime = new Intl.DateTimeFormat("en-GB", {
 export function appendRobinhoodLivePrice(
   points: readonly RobinhoodLivePrice[], poolId: string, market: ChartMarket | null | undefined, now: number,
 ): readonly RobinhoodLivePrice[] {
-  if (market?.source !== "uniswap-v4" || market.poolId.toLowerCase() !== poolId.toLowerCase()) return points;
+  if ((market?.source !== "uniswap-v4" && market?.source !== "dexscreener")
+    || market.poolId.toLowerCase() !== poolId.toLowerCase()) return points;
   const time = Date.parse(market.observedAt);
   const price = market.priceUsd;
   const age = now - time;
@@ -56,7 +57,8 @@ export function robinhoodLivePriceStatus(last: RobinhoodLivePrice | undefined, n
   if (!last) return "Waiting for a price update";
   if (now - last.time > ROBINHOOD_MARKET_MAX_AGE_MS) return "Price updates delayed";
   const age = now - Date.parse(market?.observedAt ?? "");
-  if (market?.source !== "uniswap-v4" || market.priceUsd === null || !Number.isFinite(market.priceUsd) || market.priceUsd <= 0
+  if ((market?.source !== "uniswap-v4" && market?.source !== "dexscreener")
+    || market.priceUsd === null || !Number.isFinite(market.priceUsd) || market.priceUsd <= 0
     || !Number.isFinite(age) || age < -CLOCK_SKEW_MS || age > ROBINHOOD_MARKET_MAX_AGE_MS) return "Price update unavailable";
   return "Live price";
 }
@@ -76,7 +78,7 @@ function LivePriceChart({ name, points, now, market }: Readonly<{
         <p className={liveStyles.label}>Live price <span>USD</span></p>
         <p className={liveStyles.price}>{last ? coinDollars(last.price, true) : "—"}</p>
       </div>
-      <p className={liveStyles.status} role="status">{status === "Live price" ? "Uniswap v4" : status}</p>
+      <p className={liveStyles.status} role="status">{status === "Live price" ? (market?.source === "dexscreener" ? "DEX Screener" : "Uniswap v4") : status}</p>
     </header>
     <div className={liveStyles.plot}>
       {geometry && last ? <>
@@ -105,7 +107,7 @@ function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
   // Keep observations tied to this mounted pool; a refresh must not invent or reset history.
   if (nextPoints !== points) setPoints(nextPoints);
   if (matchingMarket?.source && matchingMarket.source !== chartSource) setChartSource(matchingMarket.source);
-  const showLive = chartSource === "uniswap-v4";
+  const showLive = chainId === 4663 && (chartSource === "uniswap-v4" || chartSource === "dexscreener");
   const chartUrl = `https://dexscreener.com/${chainId === 1 ? "ethereum" : "robinhood"}/${poolId}`;
 
   useEffect(() => {

@@ -250,6 +250,7 @@ describe("unreleased launch model gating", () => {
     expect(modulesCard).not.toContain("disabled");
     expect(modulesCard).not.toContain("data-launch-model-available");
     expect(modulesCard).toContain('data-launch-model-entry="foundation"');
+    expect(modulesCard).toContain('aria-label="Launch a coin with Module Mode"');
     expect(modulesCard).toContain('data-launch-model-launchable="false"');
     expect(html).toContain("Launch a coin");
     expect(html).not.toContain('id="launch-model-modules-status">Preview</small>');
@@ -267,6 +268,7 @@ describe("unreleased launch model gating", () => {
     const customCard = html.match(/<a[^>]*data-launch-model-option="custom"[^>]*>/u)?.[0];
     expect(customCard).not.toContain("disabled");
     expect(customCard).toContain('href="/developers/api-keys?start=custom&amp;chainId=4663"');
+    expect(customCard).toContain('aria-label="Launch a custom hook"');
     expect(html).not.toContain("approved GitHub revision");
     expect(html).not.toContain("Build or resume");
   });

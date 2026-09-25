@@ -44,7 +44,7 @@ export function ModuleFoundationLaunchCard() {
     "data-launch-model-option": "modules",
     "data-launch-model-entry": "foundation",
     "data-launch-model-launchable": "false",
-    "aria-labelledby": "launch-model-modules-title",
+    "aria-label": "Launch a coin with Module Mode",
     "aria-describedby": "launch-model-modules-description launch-model-modules-status",
   };
   const content = <>
@@ -305,7 +305,7 @@ export function LaunchModelPicker({
           data-launch-model-entry="developer-launch"
           data-launch-model-launchable="false"
           href="/developers/api-keys?start=custom&chainId=4663"
-          aria-labelledby="launch-model-custom-title"
+          aria-label="Launch a custom hook"
           aria-describedby="launch-model-custom-description launch-model-custom-status"
         >
           {customCardContent}
