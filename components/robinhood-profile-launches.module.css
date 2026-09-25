@@ -9,8 +9,16 @@
 .empty { color: var(--webde-muted); padding: 8px 10px 16px; }
 .empty p { margin: 0 0 12px; }
 .notice { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 0 0 12px; }
+.claimArea { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 0 10px 12px 80px; }
+.claimArea button, .manageLink { align-items: center; background: var(--webde-surface-raised); border: 1px solid var(--webde-line); border-radius: var(--webde-radius-control); color: var(--webde-ink); cursor: pointer; display: inline-flex; justify-content: center; min-height: 40px; padding: 8px 12px; }
+.claimArea button:disabled { cursor: default; opacity: .6; }
+.claimStatus { color: var(--webde-muted); font-size: 13px; line-height: 18px; }
+.claimStatus a { color: var(--webde-ink); text-decoration: underline; text-underline-offset: 2px; }
+.claimMessage { color: var(--webde-muted); font-size: 13px; line-height: 18px; margin: 0; }
+.claimMessage a { color: var(--webde-ink); text-decoration: underline; text-underline-offset: 2px; }
+.manageLink { margin: 0 10px 12px 80px; text-decoration: none; width: fit-content; }
 .empty a, .empty button { align-items: center; background: var(--webde-surface-raised); border: 1px solid var(--webde-line); border-radius: var(--webde-radius-control); color: var(--webde-ink); cursor: pointer; display: inline-flex; justify-content: center; min-height: 44px; padding: 10px 14px; }
-.row:focus-visible, .empty a:focus-visible, .empty button:focus-visible { outline: 2px solid var(--webde-muted); outline-offset: 2px; }
+.row:focus-visible, .empty a:focus-visible, .empty button:focus-visible, .claimArea button:focus-visible, .claimArea a:focus-visible, .manageLink:focus-visible { outline: 2px solid var(--webde-muted); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .row:hover { background: var(--webde-surface-raised); } }
-@media (max-width: 480px) { .row { gap: 10px; } .identity strong { font-size: 14px; } .artwork { height: 44px; width: 44px; } .metrics strong { font-size: 13px; } }
+@media (max-width: 480px) { .row { gap: 10px; } .identity strong { font-size: 14px; } .artwork { height: 44px; width: 44px; } .metrics strong { font-size: 13px; } .claimArea { padding-left: 64px; } .manageLink { margin-left: 64px; } }
 @media (forced-colors: active) { .row:focus-visible, .empty a:focus-visible, .empty button:focus-visible { outline-color: Highlight; } }

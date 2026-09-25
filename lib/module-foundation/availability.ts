@@ -74,12 +74,24 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
 }
 export async function fetchFoundationAvailability(signal?: AbortSignal, token?: Address): Promise<FoundationAvailabilityEnvelope> {
   const selected = token === undefined ? undefined : tokenAddress(token);
-  const response = await fetch(`/api/module-foundation${selected ? `?token=${selected}` : ""}`, { cache: "no-store", credentials: "same-origin", redirect: "error", signal });
-  if (response.redirected || !response.headers.get("content-type")?.startsWith("application/json")) throw new Error("Launch availability could not be checked.");
-  const value = await response.json();
-  if (!response.ok && (!value || typeof value !== "object" || !("schemaVersion" in value))) return unavailableFoundation();
-  const envelope = parseFoundationAvailability(value);
-  if (envelope.token !== selected?.toLowerCase()) throw new Error("The release authority belongs to a different token request.");
-  if (!response.ok && envelope.available) throw new Error("An unsuccessful response cannot authorize a release.");
-  return envelope;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    signal?.throwIfAborted();
+    const response = await fetch(`/api/module-foundation${selected ? `?token=${selected}` : ""}`, { cache: "no-store", credentials: "same-origin", redirect: "error", signal });
+    if (response.redirected || !response.headers.get("content-type")?.startsWith("application/json")) throw new Error("Launch availability could not be checked.");
+    const value: unknown = await response.json();
+    if (!response.ok && (!value || typeof value !== "object" || !("schemaVersion" in value))) return unavailableFoundation();
+    const envelope = parseFoundationAvailability(value);
+    if (envelope.token !== selected?.toLowerCase()) throw new Error("The release authority belongs to a different token request.");
+    if (!response.ok && envelope.available) throw new Error("An unsuccessful response cannot authorize a release.");
+    // Robinhood RPCs occasionally disagree at a fresh checkpoint. A new server proof is required on every retry.
+    if (attempt === 2 || envelope.available || !value || typeof value !== "object" || !("reason" in value)
+      || value.reason !== "MODULE_INDEX_PROVIDER_DISAGREEMENT") return envelope;
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); reject(signal?.reason); };
+      const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, 200 * (attempt + 1));
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
+    });
+  }
+  throw new Error("Launch availability could not be checked.");
 }

@@ -76,4 +76,14 @@ describe("V2 same-origin authority transport boundary", () => {
     expect(result).toMatchObject({ available: false, binding: null, token: token.toLowerCase(), schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V2 });
     expect(request).toHaveBeenCalledOnce();
   });
+  it("rechecks transient Robinhood provider disagreement before a wallet action", async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce(Response.json({ schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V2, available: false,
+        reason: "MODULE_INDEX_PROVIDER_DISAGREEMENT", token: token.toLowerCase() }))
+      .mockResolvedValueOnce(Response.json({ ...envelope(), token: token.toLowerCase() }));
+    vi.stubGlobal("fetch", request);
+    const result = await fetchFoundationAvailability(undefined, token);
+    expect(result.available).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
 });
