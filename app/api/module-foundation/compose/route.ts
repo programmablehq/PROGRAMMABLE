@@ -48,7 +48,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!/^0x[0-9a-fA-F]{64}$/.test(body.tokenSalt)) throw new Error("The launch salt is invalid.");
     // The authority can spend 50 seconds checking runtime and finality. Match the
     // availability route's deadline and leave time for the remaining launch reads.
-    const availability = parseFoundationAvailability(await readFoundationAvailabilityResponse(fetch, 55_000));
+    const rawAvailability = await readFoundationAvailabilityResponse(fetch, 55_000);
+    const availability = parseFoundationAvailability(rawAvailability);
+    if (availability.providerDisagreement) return NextResponse.json({
+      code: "MODULE_INDEX_PROVIDER_DISAGREEMENT", error: "Robinhood launch checks are temporarily out of sync.",
+    }, { status: 503, headers });
     const binding = availability.binding;
     if (!availability.available || !binding || binding.releaseDigest !== body.releaseDigest) throw new Error("The reviewed launch version is unavailable. Review again.");
     if (binding.factoryVersion !== "v3" && feeRates.creatorBuyFeeBps !== feeRates.creatorSellFeeBps) throw new Error("Independent buy and sell fees are not live yet.");

@@ -14,6 +14,11 @@ export interface FoundationAvailabilityEnvelope {
   catalog: { document: FoundationCatalogDocumentV1; authority: FoundationCatalogAuthorityV1 };
   /** Present only on a token-specific authority response, normalized to lowercase. */
   token?: Address;
+  /** An exact backend provider disagreement is retryable; it never authorizes a launch. */
+  providerDisagreement?: boolean;
+}
+export class FoundationProviderDisagreementError extends Error {
+  constructor() { super("Robinhood launch checks are temporarily out of sync."); }
 }
 export function unavailableFoundation(schemaVersion: FoundationAvailabilityEnvelope["schemaVersion"] = FOUNDATION_AVAILABILITY_SCHEMA): FoundationAvailabilityEnvelope {
   return { schemaVersion, available: false,
@@ -44,7 +49,8 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
   if (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V2 && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V3) throw new Error("The release response is unsupported.");
   const token = r.token === undefined ? undefined : tokenAddress(r.token).toLowerCase() as Address;
   if (r.token !== undefined && r.token !== token) throw new Error("The token authority response is not canonical.");
-  if (r.available !== true) return { ...unavailableFoundation(r.schemaVersion), ...(token ? { token } : {}) };
+  if (r.available !== true) return { ...unavailableFoundation(r.schemaVersion), ...(token ? { token } : {}),
+    ...(r.reason === "MODULE_INDEX_PROVIDER_DISAGREEMENT" ? { providerDisagreement: true } : {}) };
   const b = record(r.binding), evidence = record(r.evidence);
   if (typeof b.sourceCommit !== "string" || !/^[a-f0-9]{40}$/.test(b.sourceCommit)
     || typeof b.startBlock !== "string" || !/^[1-9][0-9]{0,19}$/.test(b.startBlock)
