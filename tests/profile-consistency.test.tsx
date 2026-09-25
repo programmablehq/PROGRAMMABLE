@@ -34,13 +34,12 @@ describe("shared wallet profile", () => {
     expect(robinhood.match(/class="[^"]*skeletonProject[^"]*"/g)).toHaveLength(1);
   });
 
-  it("keeps fee and claim sections without implying a generic custom-hook payout", () => {
+  it("keeps Module fee actions separate from Custom Launch claims without a fake fee total", () => {
     const html = renderToStaticMarkup(<RobinhoodProfileRewards />);
-    expect(html).toContain("Fees earned");
-    expect(html).toContain("Claim rewards");
-    expect(html).toContain("Not available");
+    expect(html).toContain("Custom launch claims");
+    expect(html).toContain("Connect the creator wallet to view and claim Module fees.");
     expect(html).toContain("Custom hooks manage their own fees and claims.");
-    expect(html).not.toContain("0 ETH");
+    expect(html).not.toContain("Fees earned");
     expect(html).not.toContain("<button");
   });
 
@@ -52,8 +51,8 @@ describe("shared wallet profile", () => {
     expect(html).toContain('href="/profile">My profile</a>');
     expect(html).toContain("another wallet");
     expect(html).not.toContain("Edit profile");
-    if (viewChainId === 4663) expect(html).toContain("Claim rewards");
-    else expect(html).not.toContain("Claim rewards");
+    if (viewChainId === 4663) expect(html).toContain("Custom launch claims");
+    else expect(html).not.toContain("Custom launch claims");
     expect(html).not.toContain("Review claim");
     expect(html).not.toContain("Confirm claim in wallet");
   });

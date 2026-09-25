@@ -3866,7 +3866,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
         terminalErrorReady={terminalErrorReady}
       />
       </> : <>
-        <RobinhoodProfileLaunches key={account.toLowerCase()} account={account} />
+        <RobinhoodProfileLaunches key={account.toLowerCase()} account={account} enableClaims />
         <RobinhoodProfileRewards account={account} sendWallet={sendLaunchClaimWalletAction} />
       </>}
     </div>
@@ -4796,12 +4796,14 @@ export function PublicCreatorProfile({
 export function RobinhoodProfileRewards({ account, sendWallet }: { account?: string;
   sendWallet?: (input: LaunchClaimWalletInputV1) => Promise<LaunchClaimWalletReviewV1 | Hex> } = {}) {
   return <section className={styles.portfolio} aria-label="Profile overview">
-    <div className={`${styles.profileWorkspace} liquid-glass-surface`}>
-      <FeeEarningsPanel nativeEarned={null} nativeClaimable={null} nativeClaimed={null} />
+    <div className={`${styles.profileWorkspace} ${styles.robinhoodClaimsWorkspace} liquid-glass-surface`}>
       <section className={styles.claimablePanel} aria-labelledby="profile-claimable-title">
         <header className={styles.panelHeader}>
-          <h2 id="profile-claimable-title">Claim rewards</h2>
+          <h2 id="profile-claimable-title">Custom launch claims</h2>
         </header>
+        <p className={styles.robinhoodClaimsNote}>{sendWallet
+          ? "Module creator fees are shown with each coin above."
+          : "Connect the creator wallet to view and claim Module fees."}</p>
         {account ? <GenericLaunchClaims key={account.toLowerCase()} account={account} sendWallet={sendWallet} /> : <div className={styles.claimEmpty}>
           <strong>Rewards depend on the hook</strong>
           <p>Custom hooks manage their own fees and claims.</p>

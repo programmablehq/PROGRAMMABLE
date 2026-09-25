@@ -2381,6 +2381,21 @@
   min-height: var(--profile-claims-min-height);
 }
 
+.robinhoodClaimsWorkspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.robinhoodClaimsWorkspace .claimablePanel {
+  height: auto !important;
+  min-height: 0;
+}
+
+.robinhoodClaimsNote {
+  color: var(--webde-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+
 .feeChart {
   grid-template-rows: auto minmax(210px, 1fr) auto;
   margin: 0;
