@@ -6,7 +6,6 @@ import { useFoundationSession } from "@/components/module-foundation-session";
 import { ROBINHOOD_BLOCK_EXPLORER_URL } from "@/lib/chains";
 import { foundationLedgerAbi } from "@/lib/module-foundation/abi";
 import { prepareFoundationClaim } from "@/lib/module-foundation/client";
-import { readFoundationResolution } from "@/lib/module-foundation/result-store";
 import type { FoundationPool } from "@/lib/module-foundation/route";
 import type { RobinhoodFoundationLaunch } from "@/lib/robinhood-launches";
 import styles from "./robinhood-profile-launches.module.css";
@@ -21,6 +20,7 @@ export function FoundationProfileClaim({ launch, account }: { launch: RobinhoodF
   const [balanceError, setBalanceError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [acknowledging, setAcknowledging] = useState(false);
   const claiming = useRef(false);
   const [message, setMessage] = useState("");
   const [transactionHash, setTransactionHash] = useState<Hex | null>(null);
@@ -28,6 +28,8 @@ export function FoundationProfileClaim({ launch, account }: { launch: RobinhoodF
     && launch.creator.toLowerCase() === account.toLowerCase();
   const balance = balanceState?.context === session.contextKey ? balanceState : null;
   const releaseDigest = session.envelope?.binding?.releaseDigest;
+  const savedClaim = session.resolution?.metadata?.operationKind === "claim"
+    && session.resolution.metadata.token?.toLowerCase() === token.toLowerCase() ? session.resolution : null;
 
   useEffect(() => {
     if (!owner || session.availability.status !== "ready" || !releaseDigest) return;
@@ -82,10 +84,6 @@ export function FoundationProfileClaim({ launch, account }: { launch: RobinhoodF
         setMessage("Fee payout confirmed onchain.");
         setBalanceState(null);
         setRefresh(value => value + 1);
-        try {
-          const saved = readFoundationResolution(wallet);
-          if (saved?.transactionHash.toLowerCase() === outcome.result.transactionHash.toLowerCase()) await session.acknowledgeResult(saved.operationId);
-        } catch { /* The confirmed payout remains visible even if saved-operation cleanup fails. */ }
       } else {
         setMessage(outcome.result.message ?? "The transaction was sent. Check its confirmation before claiming again.");
       }
@@ -95,6 +93,14 @@ export function FoundationProfileClaim({ launch, account }: { launch: RobinhoodF
       claiming.current = false;
       setBusy(false);
     }
+  }
+
+  async function acknowledgeSavedClaim() {
+    if (!savedClaim || acknowledging) return;
+    setAcknowledging(true);
+    try { await session.acknowledgeResult(savedClaim.operationId); setMessage(""); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "The saved result could not be cleared."); }
+    finally { setAcknowledging(false); }
   }
 
   if (!owner) return null;
@@ -108,7 +114,11 @@ export function FoundationProfileClaim({ launch, account }: { launch: RobinhoodF
     <span className={styles.claimStatus}>{balanceError || session.availability.status === "unavailable" ? balanceError || "Fee claims are temporarily unavailable"
       : !ready ? "Checking fees…" : balance.amount === 0n ? "No creator fees available"
       : balance.decimals === null ? "Creator fees available" : `${formatUnits(balance.amount, balance.decimals)} ${balance.symbol} available`}</span>
-    {session.submissionBlocked ? <span className={styles.claimStatus}>{session.submissionBlocked} <a href={`/modules/${token}`}>Review wallet activity</a></span> : null}
+    {savedClaim ? <><span className={styles.claimStatus}>{savedClaim.status === "success" ? "Fee payout saved at" : "Reverted transaction at"} block {savedClaim.blockNumber}.{" "}
+      <a href={`${ROBINHOOD_BLOCK_EXPLORER_URL}/tx/${savedClaim.transactionHash}`} target="_blank" rel="noreferrer">View transaction</a></span>
+      <button type="button" disabled={acknowledging} onClick={() => void acknowledgeSavedClaim()}>{acknowledging ? "Continuing…" : "Continue"}</button></>
+      : session.submissionBlocked ? <span className={styles.claimStatus}>{session.submissionBlocked}{" "}
+        <a href={`/modules/${session.resolution?.metadata?.token ?? token}`}>Review wallet activity</a></span> : null}
     {message ? <p className={styles.claimMessage} role="status">{message}{transactionHash ? <> <a href={`${ROBINHOOD_BLOCK_EXPLORER_URL}/tx/${transactionHash}`}
       target="_blank" rel="noreferrer">View transaction</a></> : null}</p> : null}
   </div>;
