@@ -144,6 +144,15 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation compose BFF asset bindings", () => {
+  it("identifies provider disagreement as a retryable read-only check", async () => {
+    mocks.availability.mockResolvedValue({ schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA, available: false,
+      reason: "MODULE_INDEX_PROVIDER_DISAGREEMENT" });
+    const response = await POST(request(body()));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "MODULE_INDEX_PROVIDER_DISAGREEMENT" });
+    expect(mocks.infrastructure).not.toHaveBeenCalled();
+  });
+
   it("prepares after a slow authority response and closes a stalled read before the route expires", async () => {
     vi.useRealTimers(); vi.useFakeTimers(); vi.setSystemTime(now * 1000);
     vi.stubEnv("PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL", "https://foundation-authority.example");

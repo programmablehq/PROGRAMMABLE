@@ -7,7 +7,7 @@ import { assertModuleModeWalletUnchanged, moduleModeWalletStep, switchModuleMode
 import { browserWalletRequestIsPending, subscribeToBrowserWalletRequest } from "@/lib/wallet-request-lock";
 import { ROBINHOOD_BLOCK_EXPLORER_URL } from "@/lib/chains";
 import { createFoundationClient } from "@/lib/module-foundation/client";
-import { fetchFoundationAvailability, type FoundationAvailabilityEnvelope } from "@/lib/module-foundation/availability";
+import { fetchFoundationAvailability, FoundationProviderDisagreementError, type FoundationAvailabilityEnvelope } from "@/lib/module-foundation/availability";
 import { bindFoundationCatalogV1 } from "@/lib/module-foundation/catalog";
 import { bindFoundationWalletStep, FOUNDATION_PENDING_EVENT, readFoundationPending, reconcileFoundationPending,
   submitFoundationWalletStep, type FoundationPreparedSequence } from "@/lib/module-foundation/wallet";
@@ -25,16 +25,16 @@ export interface FoundationExecutionResult {
 
 /** Newly launched coins can reach the page before both providers observe their registration. */
 export async function loadFoundationSessionAvailability(signal: AbortSignal, token?: Address): Promise<FoundationAvailabilityEnvelope> {
-  const attempts = token ? 4 : 1;
+  const attempts = 4;
   for (let attempt = 0; attempt < attempts; attempt++) {
     signal.throwIfAborted();
     try {
       const value = await fetchFoundationAvailability(signal, token);
       signal.throwIfAborted();
-      if (value.available || attempt === attempts - 1) return value;
+      if (value.available || (!token && !value.providerDisagreement) || attempt === attempts - 1) return value;
     } catch (error) {
       signal.throwIfAborted();
-      if (attempt === attempts - 1) throw error;
+      if (!token || attempt === attempts - 1) throw error;
     }
     await new Promise<void>((resolve, reject) => {
       const abort = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); reject(signal.reason); };
@@ -109,12 +109,14 @@ export function useFoundationSession(token?: Address) {
   }
   async function resolveAuthority() {
     const current = await fetchFoundationAvailability(undefined, token);
+    if (current.providerDisagreement) throw new FoundationProviderDisagreementError();
     if (!current.available || !current.binding) throw new Error(current.reason ?? "This release is unavailable.");
     if (current.binding.releaseDigest !== sourceRef.current?.binding?.releaseDigest) throw new Error("The authorized launch version changed. Reload the release and review again.");
     return current.binding;
   }
   async function resolveCatalog() {
     const current = await fetchFoundationAvailability(undefined, token);
+    if (current.providerDisagreement) throw new FoundationProviderDisagreementError();
     if (!current.available || !current.binding || current.binding.releaseDigest !== sourceRef.current?.binding?.releaseDigest) throw new Error("The admitted module catalog changed. Reload and review again.");
     return bindFoundationCatalogV1(current.catalog.document, current.catalog.authority);
   }

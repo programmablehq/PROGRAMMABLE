@@ -74,4 +74,12 @@ describe("initial coin authority propagation", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(fetchFoundationAvailability).toHaveBeenCalledOnce();
   });
+
+  it("recovers a launch form from a transient provider disagreement without a retry click", async () => {
+    vi.mocked(fetchFoundationAvailability).mockResolvedValueOnce({ ...unavailable, providerDisagreement: true }).mockResolvedValueOnce(ready);
+    const result = loadFoundationSessionAvailability(new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(result).resolves.toBe(ready);
+    expect(fetchFoundationAvailability).toHaveBeenCalledTimes(2);
+  });
 });

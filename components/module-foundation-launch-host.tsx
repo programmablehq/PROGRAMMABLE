@@ -23,7 +23,7 @@ import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalo
 import { FOUNDATION_INFRASTRUCTURE, FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
 import type { FoundationContractModule } from "@/lib/module-foundation/abi";
 import { verifyFoundationLaunchReceipt } from "@/lib/module-foundation/readback";
-import { fetchFoundationAvailability } from "@/lib/module-foundation/availability";
+import { fetchFoundationAvailability, FoundationProviderDisagreementError } from "@/lib/module-foundation/availability";
 import { discoverFoundationLaunch } from "@/lib/module-foundation/discovery";
 import type { FoundationResolution } from "@/lib/module-foundation/result-store";
 import { foundationLaunchPositionPresentation, foundationPoolPresentation, foundationPositionPresentation } from "@/lib/module-foundation/ui-readback";
@@ -149,8 +149,9 @@ export function ModuleFoundationLaunchHost() {
       const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
       const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1" }) });
-      const composition = await response.json() as { error?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
+      const composition = await response.json() as { error?: string; code?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
         moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; path: FoundationFundingHop[] } | null };
+      if (response.status === 503 && composition.code === "MODULE_INDEX_PROVIDER_DISAGREEMENT") throw new FoundationProviderDisagreementError();
       if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
       const moduleAssetPins = parseFoundationAssetPinsV1(composition.moduleAssetPins);
       const metadata = foundationMetadata({ ...draft, imageURI: draft.image.url,

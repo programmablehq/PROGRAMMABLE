@@ -1,8 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { RpcRequestError, TimeoutError } from "viem";
 import { isTemporaryFoundationPreparationError, retryFoundationReadOnlyPreparation } from "@/lib/module-foundation/preparation-retry";
+import { FoundationProviderDisagreementError } from "@/lib/module-foundation/availability";
 
 describe("Module launch read-only preparation retries", () => {
+  it("keeps one click active until an exact provider disagreement clears", async () => {
+    const prepare = vi.fn().mockRejectedValueOnce(new FoundationProviderDisagreementError()).mockResolvedValue("review");
+    expect(await retryFoundationReadOnlyPreparation(prepare, vi.fn())).toBe("review");
+    expect(prepare).toHaveBeenCalledTimes(2);
+  });
+
   it("retries an RPC timeout before any wallet step", async () => {
     const prepare = vi.fn().mockRejectedValueOnce(new TimeoutError({ body: {}, url: "https://rpc.example" })).mockResolvedValue("review");
     const assertCurrent = vi.fn();

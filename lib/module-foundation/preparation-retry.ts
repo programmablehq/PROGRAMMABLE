@@ -1,6 +1,8 @@
 import { HttpRequestError, RpcRequestError, SocketClosedError, TimeoutError } from "viem";
+import { FoundationProviderDisagreementError } from "./availability";
 
 const RETRY_DELAYS_MS = [250, 700] as const;
+const PROVIDER_DISAGREEMENT_DELAYS_MS = [750, 1_500, 3_000, 5_000, 8_000, 12_000, 16_000] as const;
 const TEMPORARY_PREPARATION_ERRORS = new Set([
   "A current price for this quote token is unavailable. Try again or choose another quote token.",
   "The automatic starting price is unavailable or expired. Review again to refresh it.",
@@ -16,7 +18,7 @@ export function isTemporaryFoundationPreparationError(error: unknown): boolean {
   let current = error;
   while (current && !seen.has(current)) {
     seen.add(current);
-    if (current instanceof TimeoutError || current instanceof SocketClosedError) return true;
+    if (current instanceof FoundationProviderDisagreementError || current instanceof TimeoutError || current instanceof SocketClosedError) return true;
     if (current instanceof HttpRequestError && (current.status === undefined || current.status === 408
       || current.status === 429 || current.status >= 500)) return true;
     if (current instanceof RpcRequestError && (current.code === 429 || current.code === -32_005
@@ -37,10 +39,11 @@ export async function retryFoundationReadOnlyPreparation<T>(prepare: () => Promi
     } catch (error) {
       assertCurrent();
       if (!isTemporaryFoundationPreparationError(error)) throw error;
-      if (attempt >= RETRY_DELAYS_MS.length) {
+      const delays = error instanceof FoundationProviderDisagreementError ? PROVIDER_DISAGREEMENT_DELAYS_MS : RETRY_DELAYS_MS;
+      if (attempt >= delays.length) {
         throw new Error("The Robinhood launch checks are temporarily unavailable. Your coin details are kept. Please try again in a moment.", { cause: error });
       }
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+      await new Promise(resolve => setTimeout(resolve, delays[attempt]));
       assertCurrent();
     }
   }
