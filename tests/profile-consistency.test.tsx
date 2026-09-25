@@ -37,7 +37,7 @@ describe("shared wallet profile", () => {
   it("keeps Module fee actions separate from Custom Launch claims without a fake fee total", () => {
     const html = renderToStaticMarkup(<RobinhoodProfileRewards />);
     expect(html).toContain("Custom launch claims");
-    expect(html).toContain("Module creator fees are shown with each coin above.");
+    expect(html).toContain("Connect the creator wallet to view and claim Module fees.");
     expect(html).toContain("Custom hooks manage their own fees and claims.");
     expect(html).not.toContain("Fees earned");
     expect(html).not.toContain("<button");
