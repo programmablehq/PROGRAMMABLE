@@ -30,7 +30,7 @@
 .grid { stroke: var(--webde-line); stroke-width: 1; }
 .line { fill: none; stroke: var(--webde-ink); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .point { fill: var(--webde-ink); }
-.firstPoint { inset: auto 16px 24px; position: absolute; text-align: center; }
+.firstPoint { inset: auto 16px 48px; position: absolute; text-align: center; }
 .empty { align-items: center; display: flex; height: 100%; justify-content: center; text-align: center; }
 
 @media (max-width: 700px) {
