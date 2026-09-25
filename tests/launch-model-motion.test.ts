@@ -57,7 +57,7 @@ describe("launch model artwork", () => {
       'aria-describedby={classicV3LaunchAvailable ? "launch-model-classic-description" : "launch-model-classic-description launch-model-classic-status"}',
     );
     expect(source).toContain(
-      'aria-labelledby="launch-model-custom-title"',
+      'aria-label="Launch a custom hook"',
     );
     expect(source).toContain(
       'aria-describedby="launch-model-custom-description launch-model-custom-status"',

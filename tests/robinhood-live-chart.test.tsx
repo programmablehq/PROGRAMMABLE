@@ -26,12 +26,16 @@ describe("Robinhood first party live chart", () => {
     expect(html).not.toContain("<iframe");
   });
 
-  it("keeps the existing embedded chart for legacy or Dexscreener markets", () => {
+  it("uses observed prices for DEX Screener markets and keeps the legacy embed", () => {
+    vi.useFakeTimers({ now });
     const legacy = renderToStaticMarkup(<RobinhoodChart poolId={poolId} name="First coin" />);
     const dex = renderToStaticMarkup(<RobinhoodChart poolId={poolId} name="First coin" market={{ ...market(), source: "dexscreener" }} />);
     expect(legacy).toContain(`https://dexscreener.com/robinhood/${poolId}?embed=1`);
-    expect(dex).toContain("<iframe");
-    expect(dex).not.toContain("<svg");
+    expect(dex).toContain("DEX Screener");
+    expect(dex).toContain("$0.00042");
+    expect(dex).toContain("<svg");
+    expect(dex).not.toContain("<iframe");
+    expect(appendRobinhoodLivePrice([], poolId, { ...market(), source: "dexscreener" }, now)).toEqual([{ time: now, price: 0.00042 }]);
     expect(renderToStaticMarkup(<RobinhoodChart poolId="invalid" name="Coin" market={market()} />)).toContain("Chart unavailable.");
   });
 
