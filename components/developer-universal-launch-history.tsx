@@ -21,7 +21,7 @@ class HistoryReadError extends Error { constructor(message: string, readonly sta
 export function LaunchHistoryMissingState({ launchId, unavailable }: { launchId: string; unavailable: boolean }) {
   return <div className={styles.statePanel}><h3>{unavailable ? "Launch data is temporarily unavailable" : "This launch could not be found"}</h3>
     <p>{unavailable ? "Keep this launch link and refresh when the service responds. An unavailable source does not mean the launch or its wallet has changed."
-      : "The available history does not contain this launch. Check the link and connect the wallet and account that own its API key, then refresh."}</p><code>{launchId}</code></div>;
+      : "Check that your create request returned this launch ID. Sign in with the account that created it, connect its controller wallet, then refresh. This ID may also be invalid or the plan may not have been created."}</p><code>{launchId}</code></div>;
 }
 function parseEntries(value: unknown, account: string): { entries: Entry[]; nextCursor: string | null } {
   if (!projectionObject(value) || value.schemaVersion !== "programmable.website-launch-history.v1" || !Array.isArray(value.launches)
@@ -60,8 +60,8 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
         ...(identityToken ? { "X-Privy-Identity-Token": identityToken } : {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) },
     });
     if (!response.ok) throw new HistoryReadError(response.status === 401 ? "Sign in again with the account that owns this launch."
-      : response.status === 403 ? "This account or controller cannot access the launch. Connect the wallet that owns the API key."
-      : response.status === 404 ? "This launch was not found for this controller."
+      : response.status === 403 ? "This account or controller cannot access the launch. Check the signed-in account and controller wallet."
+      : response.status === 404 ? "This launch ID is not in this account's accessible history. Check the account, controller wallet and ID."
       : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.", response.status);
     return response.json() as Promise<unknown>;
   }, [account]);

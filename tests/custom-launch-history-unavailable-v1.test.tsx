@@ -10,6 +10,9 @@ describe("selected launch history failure", () => {
     expect(unavailable).toContain("Keep this launch link and refresh");
     expect(unavailable).toContain(launchId);
     expect(unavailable).not.toContain("connect the wallet");
-    expect(renderToStaticMarkup(<LaunchHistoryMissingState launchId={launchId} unavailable={false} />)).toContain("The available history does not contain this launch");
+    const missing = renderToStaticMarkup(<LaunchHistoryMissingState launchId={launchId} unavailable={false} />);
+    expect(missing).toContain("Check that your create request returned this launch ID");
+    expect(missing).toContain("account that created it");
+    expect(missing).not.toContain("API key");
   });
 });
