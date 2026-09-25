@@ -1,4 +1,4 @@
-artifacts/
+/artifacts/
 contracts/cache/
 contracts/out/
 docs/programmable-x-launch-article*.md
