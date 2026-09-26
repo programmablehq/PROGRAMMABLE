@@ -26,6 +26,20 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 
+async function readLaunchAvailability() {
+  const deadline = Date.now() + 55_000;
+  // Retry only a fresh-checkpoint RPC disagreement. These are read-only proofs;
+  // launch simulation and wallet submission still run at most once per click.
+  for (const delay of [750, 1_500, 3_000, 0]) {
+    const availability = parseFoundationAvailability(await readFoundationAvailabilityResponse(fetch, Math.max(1, deadline - Date.now())));
+    if (!availability.providerDisagreement || delay === 0) return availability;
+    const remaining = deadline - Date.now();
+    if (remaining <= 1_000) return availability;
+    await new Promise(resolve => setTimeout(resolve, Math.min(delay, remaining - 1_000)));
+  }
+  throw new Error("The launch availability could not be checked.");
+}
+
 /** Read-only composition from admitted source. Request JSON cannot supply review or runtime authority. */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -48,8 +62,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!/^0x[0-9a-fA-F]{64}$/.test(body.tokenSalt)) throw new Error("The launch salt is invalid.");
     // The authority can spend 50 seconds checking runtime and finality. Match the
     // availability route's deadline and leave time for the remaining launch reads.
-    const rawAvailability = await readFoundationAvailabilityResponse(fetch, 55_000);
-    const availability = parseFoundationAvailability(rawAvailability);
+    const availability = await readLaunchAvailability();
     if (availability.providerDisagreement) return NextResponse.json({
       code: "MODULE_INDEX_PROVIDER_DISAGREEMENT", error: "Robinhood launch checks are temporarily out of sync.",
     }, { status: 503, headers });
