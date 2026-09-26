@@ -55,11 +55,20 @@ export interface ModuleFoundationBuilderProps {
 const SOCIAL_LABELS: Record<ModuleSocialKind, string> = { website: "Website", twitter: "X / Twitter", telegram: "Telegram", discord: "Discord", github: "GitHub", gitbook: "Docs" };
 const EMPTY_MODULES: FoundationModuleSelection[] = [];
 
-function cleanError(error: unknown) {
+type LaunchErrorStage = "details" | "image" | "simulation" | "wallet" | "result";
+
+function cleanError(error: unknown, stage: LaunchErrorStage = "details") {
   const shortMessage = error && typeof error === "object" && "shortMessage" in error ? error.shortMessage : undefined;
   const message = typeof shortMessage === "string" ? shortMessage
     : error instanceof Error ? error.message : "This step could not complete. Please try again.";
-  return message.length <= 320 ? message : "This step could not complete. Your coin details are kept. Please try again.";
+  if (message.length <= 320) return message;
+  if (stage === "image") return "The coin image could not be saved. Your coin details are kept.";
+  if (stage === "simulation") return "The launch checks or simulation failed before your wallet opened. Your coin details are kept.";
+  if (stage === "wallet") return error && typeof error === "object" && "walletRequestAttempted" in error && error.walletRequestAttempted === false
+    ? "The transaction could not be checked before opening your wallet. Your coin details are kept."
+    : "The wallet step did not complete. Check wallet activity before trying again.";
+  if (stage === "result") return "The transaction result could not be checked. Check wallet activity before trying again.";
+  return "The coin details could not be checked. Your entries are kept.";
 }
 
 function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes: readonly FoundationQuoteAsset[], chainId: number): EditableDraft {
@@ -154,7 +163,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       setDraft(current => ({ ...current, image: null }));
       setErrors(current => { const next = { ...current }; delete next.image; return next; });
       setAnnouncement("Image selected. It will be saved when you create the launch.");
-    } catch (caught) { if (active.current && generation.current === request) setImageError(cleanError(caught)); }
+    } catch (caught) { if (active.current && generation.current === request) setImageError(cleanError(caught, "image")); }
     finally { if (active.current) setImagePreparing(false); }
   }
 
@@ -224,6 +233,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     }
     setAnnouncement("");
     const request = ++generation.current;
+    let errorStage: LaunchErrorStage = "details";
     const context = currentContext.current;
     const assertCurrent = () => {
       if (!active.current || generation.current !== request || currentContext.current !== context) throw new Error("Your wallet or launch version changed. Create the launch again; your coin details are kept.");
@@ -256,6 +266,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       }
       let savedImage = draft.image;
       if (!savedImage && localImage) {
+        errorStage = "image";
         setPhase("uploading");
         savedImage = await onUploadImage({ image: { kind: "local", sha256: localImage.sha256, mimeType: "image/webp", bytes: localImage.blob.size }, blob: localImage.blob });
         assertCurrent();
@@ -264,6 +275,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
         setAnnouncement("Image saved. Preparing the launch simulation.");
       }
       savedImage ??= FOUNDATION_DEFAULT_IMAGE;
+      errorStage = "simulation";
       assertCurrent(); setPhase("preparing");
       const prepared = await onPrepareLaunch({ ...draft, name: draft.name.trim(), symbol: draft.symbol.trim().toUpperCase(), description: draft.description.trim(), quoteAsset: selectedQuote!.address,
         socialLinks: checked.links, image: savedImage, initialBuy: launchInitialBuy, additionalLiquidity: "0" });
@@ -274,9 +286,10 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
       if (prepared.quote.address.toLowerCase() !== selectedQuote!.address.toLowerCase() || prepared.chainId !== availability.chainId || !foundationCreatorFeesEqual(prepared, draft) || prepared.transactions.length === 0) throw new Error("Your coin settings changed. Create the launch again.");
       assertCurrent();
       setPhase("signing");
+      errorStage = "wallet";
       const receipt = await onConfirmLaunch(prepared);
       if (active.current) { automaticRefreshes.current = 0; submittedContext.current = context; setResult(receipt); setPhase("result"); }
-    } catch (caught) { if (active.current) { setError(cleanError(caught)); setPhase("editing"); } }
+    } catch (caught) { if (active.current) { setError(cleanError(caught, errorStage)); setPhase("editing"); } }
     finally { lock.current = false; }
   }
 
@@ -285,7 +298,7 @@ export function ModuleFoundationBuilder({ availability, contextKey, catalog, quo
     refreshLock.current = true;
     setRefreshing(true);
     try { const next = await onRefreshResult(result); if (active.current) { setResult(next); setError(""); } }
-    catch (caught) { if (active.current) setError(cleanError(caught)); }
+    catch (caught) { if (active.current) setError(cleanError(caught, "result")); }
     finally { refreshLock.current = false; if (active.current) setRefreshing(false); }
   }, [result, onRefreshResult]);
 
