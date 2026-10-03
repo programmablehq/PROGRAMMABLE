@@ -10,7 +10,7 @@ export const MULTICALL = "0xcA11bde05977b3631167028862bE2a173976CA11";
 export const MULTICALL_HASH = "0xd5c15df687b16f2ff992fc8d767b4216323184a2bbc6ee2f9c398c318e770891";
 export const MANAGER = "0x8366a39CC670B4001A1121B8F6A443A643e40951";
 export const MANAGER_HASH = "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626";
-export const RPC_URLS = ["https://rpc.mainnet.chain.robinhood.com", "https://rpc-robinhood.blockmachine.io"];
+export const RPC_URLS = ["/api/robinhood-rpc?provider=primary", "/api/robinhood-rpc?provider=secondary"];
 export const MAX_CLAIMS = 128;
 const MAX_AMOUNT = (1n << 127n) - 1n;
 const HASH = /^0x[0-9a-f]{64}$/i;
@@ -39,8 +39,9 @@ const HOOK_ABI = parseAbi(["function ledger() view returns (address)", "function
 const BACKING_ABI = parseAbi(["function balanceOf(address owner,uint256 id) view returns (uint256)"]);
 export const CLAIM_DATA = encodeFunctionData({ abi: LEDGER_ABI, functionName: "claimPlatform" });
 
-export function createClients() {
-  return RPC_URLS.map(url => createPublicClient({ transport: http(url, { timeout: 15000, retryCount: 1 }), batch: { multicall: false } }));
+export function createClients(origin = globalThis.location?.origin) {
+  if (!origin) throw new Error("Die Claim-Seite muss über ihren Webserver geöffnet werden.");
+  return RPC_URLS.map(url => createPublicClient({ transport: http(new URL(url, origin).href, { timeout: 20000, retryCount: 1 }), batch: { multicall: false } }));
 }
 
 export function parseReleases(history, active) {
@@ -108,8 +109,18 @@ async function readBoth(clients, calls, blockNumber) {
   return decoded.map((item, index) => decodeFunctionResult({ ...calls[index], data: item.returnData }));
 }
 
-async function logsInRange(client, release, fromBlock, toBlock) {
+export async function logsInRange(client, release, fromBlock, toBlock) {
   if (fromBlock > toBlock) return [];
+  // Use stable windows within the provider's limit instead of failed oversized requests.
+  const window = 100_000n;
+  if (toBlock - fromBlock + 1n > window) {
+    const logs = [];
+    for (let first = fromBlock; first <= toBlock; first += window) {
+      const last = first + window - 1n < toBlock ? first + window - 1n : toBlock;
+      logs.push(...await logsInRange(client, release, first, last));
+    }
+    return logs;
+  }
   const abi = FACTORY_ABIS[release.factoryVersion];
   const event = abi.find(item => item.type === "event");
   try {

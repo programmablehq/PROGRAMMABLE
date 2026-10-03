@@ -4,7 +4,7 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "npm run build && node serve.mjs",
-    "test": "node --test logic.test.mjs module-mode.test.mjs",
+    "test": "node --test logic.test.mjs module-mode.test.mjs rpc.test.mjs",
     "check": "npm test && npm run build"
   },
   "dependencies": { "viem": "2.55.5" },

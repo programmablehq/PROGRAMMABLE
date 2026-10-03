@@ -199,7 +199,9 @@ export function mountModuleMode(overrides = {}) {
     try { await action(); } catch (cause) {
       status.textContent = "";
       error(cause.name === "TimeoutError" ? "Das Laden dauert gerade zu lange. Bitte erneut versuchen." :
-        cause.shortMessage ?? cause.message ?? "Bitte erneut versuchen.");
+        /RPC Request failed|HTTP request failed|fetch failed|Failed to fetch/i.test(cause.shortMessage ?? cause.message ?? "")
+          ? "Die Netzwerkverbindung ist gerade nicht verfügbar. Bitte gleich erneut versuchen."
+          : cause.shortMessage ?? cause.message ?? "Bitte erneut versuchen.");
       if (!snapshot && !journal) { count.textContent = "Gebühren noch nicht verfügbar"; status.textContent = "Bitte aktualisieren."; }
     }
     finally {

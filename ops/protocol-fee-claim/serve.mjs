@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { build } from "esbuild";
+import rpcHandler from "./api/robinhood-rpc.mjs";
 
 const root = new URL("./dist/", import.meta.url).pathname;
 const fixtures = process.argv.includes("--fixtures");
@@ -13,6 +14,17 @@ const upstreams = {
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://127.0.0.1");
+    if (url.pathname === "/api/robinhood-rpc") {
+      let body = "";
+      for await (const chunk of request) {
+        body += chunk;
+        if (body.length > 65_536) { response.writeHead(413); response.end(); return; }
+      }
+      request.body = body;
+      response.status = code => { response.statusCode = code; return response; };
+      response.json = value => response.end(JSON.stringify(value));
+      return rpcHandler(request, response);
+    }
     if (request.method !== "GET") { response.writeHead(405); response.end(); return; }
     if (upstreams[url.pathname]) {
       const upstream = await fetch(upstreams[url.pathname], { signal: AbortSignal.timeout(15000) });

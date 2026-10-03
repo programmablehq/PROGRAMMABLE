@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, multicall3Abi, parseAbiParameters } from "viem";
 import { CHAIN_ID, TREASURY, MULTICALL, MULTICALL_HASH, MANAGER, MANAGER_HASH, LEDGER_ABI, CLAIM_DATA,
-  buildClaimTransaction, parseReleases, validateLedger, verifySimulation, verifyClaimReceipt, confirmClaim, findMinedClaimHash } from "./module-mode-core.mjs";
+  buildClaimTransaction, parseReleases, validateLedger, verifySimulation, verifyClaimReceipt, confirmClaim, findMinedClaimHash, logsInRange } from "./module-mode-core.mjs";
 
 const address = n => "0x" + n.toString(16).padStart(40, "0");
 const hash = n => "0x" + n.toString(16).padStart(64, "0");
@@ -42,6 +42,26 @@ test("conflicting factory pins cannot override a historical release", () => {
   const next = structuredClone(history.releases[0].binding);
   next.factory.runtimeCodeHash = hash(777);
   assert.throws(() => parseReleases(history, { available: true, binding: next }));
+});
+
+test("complete log history crosses provider boundaries without gaps or duplicates", async () => {
+  const release = parseReleases(history)[0], ranges = [];
+  const client = { getLogs: async ({ fromBlock, toBlock }) => {
+    assert.ok(toBlock - fromBlock < 100_000n);
+    ranges.push([fromBlock, toBlock]);
+    return [...new Set([fromBlock, toBlock])].map(blockNumber => ({ blockNumber }));
+  } };
+  const logs = await logsInRange(client, release, 17n, 200_021n);
+  assert.deepEqual(ranges, [[17n, 100_016n], [100_017n, 200_016n], [200_017n, 200_021n]]);
+  assert.deepEqual(logs.map(log => log.blockNumber), [17n, 100_016n, 100_017n, 200_016n, 200_017n, 200_021n]);
+});
+
+test("dense log windows still split and retain every event once", async () => {
+  const client = { getLogs: async ({ fromBlock, toBlock }) => toBlock - fromBlock > 2n
+    ? Array.from({ length: 1000 }, () => ({}))
+    : Array.from({ length: Number(toBlock - fromBlock + 1n) }, (_, index) => ({ blockNumber: fromBlock + BigInt(index) })) };
+  const logs = await logsInRange(client, parseReleases(history)[0], 10n, 20n);
+  assert.deepEqual(logs.map(log => log.blockNumber), Array.from({ length: 11 }, (_, index) => 10n + BigInt(index)));
 });
 
 function ledgerFixture() {
