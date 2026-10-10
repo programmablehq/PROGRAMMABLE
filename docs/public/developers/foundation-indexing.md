@@ -10,7 +10,7 @@ Robinhood Foundation uses a factory record. Ethereum Foundation uses a canonical
 
 ## Ethereum module launches
 
-Read [Ethereum Foundation discovery](https://programmable.market/api/module-foundation?chainId=1). For an existing coin, use `GET /api/module-foundation?chainId=1&token={checksummedTokenAddress}`. The response binds the module implementation, graph factory, runtime hashes, release digest and source commit. The [Ethereum release descriptor](https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/deployments/ethereum-module-release-v1.json) supplies the versioned source.
+Read [Ethereum Foundation discovery](https://programmable.market/api/module-foundation?chainId=1). For an existing coin, use `GET /api/module-foundation?chainId=1&token={checksummedTokenAddress}`. The response binds the module implementation, graph factory, runtime hashes, release digest and source commit. The [V2 release descriptor](https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/deployments/ethereum-module-release-v2.json) supplies the source for new launches. Retain the [V1 descriptor](https://github.com/programmablehq/PROGRAMMABLE/blob/production/contracts/deployments/ethereum-module-release-v1.json) for historical coins; verify each coin against its own implementation and runtime.
 
 Discover Ethereum identities from the [canonical Router snapshot](https://programmable.market/api/indexers/v1/router-custom-identities). These launches have `custom-graph` provenance; the public `custom` category does not exclude Module Mode. Verify the Router stamp and its token, hook and pool proofs first, including [every published Router generation](ethereum-custom-indexing.md#include-every-router-generation). Then use `isEthereumModuleLaunchCandidate` and `decodeFoundationEthereumGraphLaunch` from the pinned source's `lib/module-foundation/ethereum-release.ts` and `ethereum-graph.ts` to identify the module implementation and decode its initializer. A matching display label alone is insufficient.
 
@@ -22,7 +22,9 @@ The Robinhood factory events and `launchOf(token)` procedure below do not apply 
 
 For a token-specific Ethereum discovery request, `MODULE_INDEX_PENDING` means the launch has not finalized or its verified stamp has not reached the index yet. Retry that read. `MODULE_STAMP_MISSING` means both providers found the deployed token at the same finalized block and verified that neither published Router has a stamp for it. Retrying indexing cannot create the missing stamp; neither response grants transaction authority.
 
-Send the prepared `launchAndStampV1` transaction to the canonical Router. A direct Graph Factory call used for simulation is not a launch transaction to broadcast. It can deploy a token and pool without a Programmable stamp, and the existing Router cannot stamp those already deployed contracts afterward.
+Send the prepared `launchAndStampV1` transaction to the canonical Router. V2 enforces this in the launch-account constructor: a direct Graph Factory call from a wallet or forwarding contract reverts. Deployment and stamping complete in the same transaction, or both revert.
+
+The older V1 contracts are immutable and can still be called directly. Such a V1 deployment can have a token and pool without a canonical stamp. The existing Router cannot stamp those already deployed contracts afterward. Keep that distinction when indexing historical tokens; neither a matching name nor an index entry replaces the onchain proof.
 
 ## Robinhood module launches
 

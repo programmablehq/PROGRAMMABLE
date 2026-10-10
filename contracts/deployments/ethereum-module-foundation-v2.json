@@ -30,5 +30,59 @@
   "graphFactory": "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887",
   "releaseDigest": "0x3eb74e57033aab0d95ab26b933ba4d761a5b6285bf769149cd34ab151ad5146d",
   "platformFeeBps": 30,
-  "status": "deployed-runtime-verified-awaiting-activation"
+  "status": "active-lifecycle-verified",
+  "sourceVerification": {
+    "provider": "Sourcify",
+    "verificationId": "4cd80e0f-7b79-47cf-a330-29da47aa7d52",
+    "matchId": "55889992",
+    "creationMatch": "match",
+    "runtimeMatch": "match",
+    "verifiedAt": "2026-10-10T18:59:52Z"
+  },
+  "lifecycleEvidence": {
+    "observedAt": "2026-10-10T22:26:18.678Z",
+    "canaryToken": "0xBB73F3Bb5CfAe5629F0a6a58bb10ab1e35e4c11a",
+    "launchId": "0x50f0c38c8166227c96b7579fd03cb950851294c557d04e84c5379c80ffdf02eb",
+    "transactionHash": "0xb2d9fc1b8a311b195d461184a8a50dac62c5557a983351797f534e8564cc56b3",
+    "blockNumber": "26165011",
+    "blockHash": "0x01389bdf1e0a312bc7f718e839f83c2ba91f6bfc33f60b4757e8bd5ef068fb5b",
+    "engine": "0x58CC6409B9C89425A782748Bf1197445A205BDA9",
+    "hook": "0x3aB443E90d7738176aACb1537AFD8AC8112B60Cc",
+    "poolId": "0x9565519bc665ad69d2980bfffe813ee78112a6dbb7527eddffd9f19176f6c915",
+    "initialBuyQuoteAmountWei": "3000000000000000",
+    "initialBuyTokenAmount": "481627661255292698264",
+    "gasUsed": "7530304",
+    "effectiveGasPriceWei": "68684278",
+    "gasCostWei": "517213493360512",
+    "independentProviders": 2,
+    "verifiedChecks": [
+      "successful-receipt",
+      "atomic-token-engine-hook-stamp",
+      "proxy-runtime-hash",
+      "initial-buy-minimum-output",
+      "liquidity-position-custody"
+    ],
+    "positions": {
+      "base": {
+        "kind": "base",
+        "custody": "dead-v1",
+        "positionId": "451188",
+        "status": "active",
+        "owner": "0x000000000000000000000000000000000000dEaD",
+        "tickLower": -120000,
+        "tickUpper": 887220,
+        "liquidity": "2479495864288162666676267"
+      },
+      "creator": null
+    }
+  },
+  "productionActivation": {
+    "observedAt": "2026-10-10T22:24:53.033Z",
+    "websiteCommit": "2143ec8b0124cb83e38efdf32c9a655a265ba421",
+    "websiteDeploymentUrl": "https://launcher-v4-k75dehiot-aficialais-projects.vercel.app",
+    "apiSourceCommit": "0f37c09734a4f433c1df618bd8a46a393a73b0f4",
+    "apiReleaseId": "sha256:10aca5f7dfe4b99181fa19b81a60c230c75987ccba25e6ed475ea4524763ddac",
+    "apiActivationGateRun": 38091067478,
+    "ethereumAdmissionsDigest": "sha256:abcaeacad573275551e41be6429dd471e62c586d42e66dda34159e8f9e9313b4"
+  }
 }
