@@ -2,6 +2,17 @@
 useDefault = true
 
 [[allowlists]]
+description = "Atomic Module V2 lifecycle evidence identifies its public canary and activated API source"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^contracts/deployments/ethereum-module-foundation-v2\.json$''']
+regexes = [
+  '''^\s*"canaryToken": "0xBB73F3Bb5CfAe5629F0a6a58bb10ab1e35e4c11a",\s*$''',
+  '''^\s*"apiSourceCommit": "0f37c09734a4f433c1df618bd8a46a393a73b0f4",\s*$''',
+]
+
+[[allowlists]]
 description = "Hazarrobin pins the public migrated Programmable token address"
 targetRules = ["generic-api-key"]
 condition = "AND"
