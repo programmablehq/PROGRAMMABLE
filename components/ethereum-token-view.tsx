@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { getAddress } from "viem";
+import { fetchFoundationAvailability } from "@/lib/module-foundation/availability";
 import { ChainMark } from "./chain-mark";
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
 import { SwapPanel } from "@/components/swap-panel";
@@ -42,6 +44,21 @@ export function EthereumTokenView({ address, token, status, updatedAt, market: i
   const links = display?.links ?? token?.links?.map(link => ({ label: link.kind, url: link.url })) ?? [];
   const [copyResult, setCopyResult] = useState<{ address: string; state: "copied" | "failed" } | null>(null);
   const copyState = copyResult?.address === address ? copyResult.state : null;
+  const [stampCheck, setStampCheck] = useState<{ address: string; missing: boolean } | null>(null);
+  const stampMissing = !token && stampCheck?.address === address && stampCheck.missing;
+  useEffect(() => {
+    if (token) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const result = await fetchFoundationAvailability(controller.signal, getAddress(address), 1);
+        if (!controller.signal.aborted) setStampCheck({ address, missing: result.stampMissing === true });
+      } catch {
+        // A failed provider read must never label a coin as unstamped.
+      }
+    })();
+    return () => controller.abort();
+  }, [address, token]);
   useEffect(() => {
     if (!copyResult) return;
     const timer = setTimeout(() => setCopyResult(null), 3_000);
@@ -98,8 +115,8 @@ export function EthereumTokenView({ address, token, status, updatedAt, market: i
         <ResponsiveTradePanel symbol={symbol}><SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={symbol} /></ResponsiveTradePanel>
       </div>
     </article> : <section className={styles.empty}>
-      <h1>{status === "ready" ? "Launch not found" : "Token details are temporarily unavailable"}</h1>
-      <p>{status === "ready" ? "This address is not in the verified Ethereum launch index." : "The Ethereum launch index could not confirm this address. Try again shortly."}</p>
+      <h1>{stampMissing ? "No Programmable launch stamp" : status === "ready" ? "Launch not found" : "Token details are temporarily unavailable"}</h1>
+      <p>{stampMissing ? "This token was deployed without a Programmable launch stamp. Contact the project team." : status === "ready" ? "This address is not in the verified Ethereum launch index." : "The Ethereum launch index could not confirm this address. Try again shortly."}</p>
       <a href={`https://etherscan.io/token/${address}`} target="_blank" rel="noreferrer">View address on Etherscan<ArrowUpRight aria-hidden="true" size={16} /><span className="sr-only"> (opens in a new tab)</span></a>
     </section>}
   </div>;
