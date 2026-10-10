@@ -492,7 +492,7 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
         assertEq(stampRouter.launchIdByToken(request.token), bytes32(0));
     }
 
-    function testEconomicStrategiesThroughCanonicalStamp() public {
+    function testEconomicStrategiesThroughCanonicalStamp() public virtual {
         for (uint8 kind; kind < 4; ++kind) {
             uint256 snapshot = vm.snapshotState();
             _verifyEconomicStamp(kind, address(0));

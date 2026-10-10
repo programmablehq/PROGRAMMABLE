@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { ETHEREUM_MODULE_BINDING as binding } from "@/lib/module-foundation/ethereum-release";
+import { ETHEREUM_MODULE_BINDING as binding, ETHEREUM_MODULE_SOURCES, ethereumModuleBinding, ethereumModuleSourceForStamp } from "@/lib/module-foundation/ethereum-release";
 import { parseFoundationAvailability, FOUNDATION_AVAILABILITY_SCHEMA_V5, unavailableFoundation } from "@/lib/module-foundation/availability";
 function envelope() { return JSON.parse(JSON.stringify({ schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V5, chainId: 1, available: true, binding,
   catalog: unavailableFoundation().catalog, evidence: { kind: "owner-source-runtime-v1", providerCount: 2, releaseDigest: binding.releaseDigest,
@@ -31,4 +31,28 @@ it("reports a missing stamp without granting authority or polling for index reco
   expect(parsed.indexPending).toBeUndefined();
   expect(parsed.reason).toContain("no Programmable launch stamp");
   expect(parseFoundationAvailability(missing).stampMissing).toBeUndefined();
+});
+
+it("preserves the original stamped release for existing coins without admitting it for new launches", () => {
+  const original = ethereumModuleBinding(ETHEREUM_MODULE_SOURCES[1]);
+  const token = "0x1111111111111111111111111111111111111111";
+  const value = envelope();
+  value.binding = JSON.parse(JSON.stringify({ ...original, factory: { address: token,
+    runtimeCodeHash: original.ethereumGraph!.proxyRuntimeCodeHash } }, (_, v) => typeof v === "bigint" ? v.toString() : v));
+  value.evidence.releaseDigest = original.releaseDigest;
+  expect(parseFoundationAvailability({ ...value, token }).binding?.releaseDigest).toBe(original.releaseDigest);
+  expect(() => parseFoundationAvailability(value)).toThrow();
+  expect(() => parseFoundationAvailability({ ...value, token,
+    binding: { ...value.binding, releaseDigest: binding.releaseDigest } })).toThrow();
+});
+
+it("identifies both generations by their stamped runtime and deployment block", () => {
+  for (const source of ETHEREUM_MODULE_SOURCES) {
+    const stamp = { chainId: 1, kind: "custom-graph", routerAddress: "0x8622DD5bAb44185f2A458ac90384Ac99248f8d56",
+      routeLauncherAddress: binding.hookDeployer.address, blockNumber: source.startBlock.toString(),
+      components: [{ kind: "other", scope: "exclusive", runtimeCodeHash: source.proxyRuntimeCodeHash },
+        { kind: "token" }, { kind: "hook" }] };
+    expect(ethereumModuleSourceForStamp({ launchStampProvenance: stamp as never })).toBe(source);
+    expect(ethereumModuleSourceForStamp({ launchStampProvenance: { ...stamp, blockNumber: String(source.startBlock - 1n) } as never })).toBeUndefined();
+  }
 });

@@ -14,6 +14,24 @@ contract FoundationDirectGraphCallerV2 {
 
 /// @notice Reuses the existing stamped launch, fee, module and custody lifecycle against V2.
 contract FoundationEthereumStampV2Test is FoundationEthereumStampV1Test {
+    // Mining is deliberately charged to the test. Keep each strategy's full
+    // lifecycle within its own test budget instead of sharing one four-case cap.
+    function testEconomicStrategiesThroughCanonicalStamp() public override {
+        _verifyEconomicStamp(0, address(0));
+    }
+
+    function testEconomicStrategyOneThroughCanonicalStamp() public {
+        _verifyEconomicStamp(1, address(0));
+    }
+
+    function testEconomicStrategyTwoThroughCanonicalStamp() public {
+        _verifyEconomicStamp(2, address(0));
+    }
+
+    function testEconomicStrategyThreeThroughCanonicalStamp() public {
+        _verifyEconomicStamp(3, address(0));
+    }
+
     function _deployGraphImplementation(bytes32[5] memory hashes) internal override returns (address) {
         return deployCode(
             "FoundationEthereumGraphLaunchV2.sol:FoundationEthereumGraphLaunchV2",

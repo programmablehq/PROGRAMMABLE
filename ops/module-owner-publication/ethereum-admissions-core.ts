@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { createPublicClient, http } from "viem";
 import publishers from "@/config/module-foundation/owner-publishers.json";
-import host from "@/contracts/deployments/ethereum-module-release-v1.json";
+import host from "@/contracts/deployments/ethereum-module-release-v2.json";
 import { nativeCanonicalJson } from "@/lib/module-mode/native-catalog";
 import { foundationChainProfile } from "@/lib/module-foundation/chains";
 import { verifyFoundationOwnerPublicationV1 } from "@/lib/module-foundation/owner-verification";

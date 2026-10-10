@@ -3,6 +3,7 @@ import {
   keccak256, parseAbiParameters, stringToHex, toHex, type AbiParameter, type Address, type Hex,
 } from "viem";
 import bytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v1.json";
+import stampedBytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v2.json";
 import ethereum from "@/contracts/spec/module-foundation/chain-1.v1.json";
 import type { FoundationLaunchParametersV3 } from "./abi";
 import { assertFoundationFundingPath, encodeFoundationFundingPath, type FoundationFundingHop } from "./funding-path";
@@ -20,10 +21,16 @@ const namespace = hash("programmable.module-foundation.ethereum-graph.v1");
 const topology = hash("engine-token-hook.v1");
 const nonceDomain = hash("programmable.module-foundation.ethereum-graph-nonce.v1");
 const launchDomain = hash("programmable.module-foundation.ethereum-launch-id.v1");
-const contracts = bytecode.contracts;
+const contracts = { ...bytecode.contracts, FoundationEthereumGraphProxyV2: stampedBytecode.contracts.FoundationEthereumGraphProxyV2 };
 type ContractName = keyof typeof contracts;
 // Only locally mined proofs are retained. Funding, deadlines and authorization are rebuilt every time.
 const minedHooks = new Map<string, Readonly<{ address: Address; applicantSalt: Hex }>>();
+
+export function foundationEthereumProxyContract(source: FoundationEthereumGraphSource) {
+  if (source.sourceCommit === stampedBytecode.sourceCommit) return "FoundationEthereumGraphProxyV2" as const;
+  if (source.sourceCommit === bytecode.sourceCommit) return "FoundationEthereumGraphProxyV1" as const;
+  throw new Error("The Ethereum module source has no installed compiler artifact.");
+}
 
 function creation(name: ContractName, args: readonly unknown[]): Hex {
   const artifact = contracts[name];
@@ -45,7 +52,7 @@ export function predictFoundationEthereumAccounts(input: {
   metadata: FoundationLaunchParametersV3["metadata"];
 }) {
   const { source, metadata, tokenSalt } = input, account = getAddress(input.account);
-  if (source.chainId !== 1 || source.sourceCommit !== bytecode.sourceCommit || BigInt(account) === 0n
+  if (source.chainId !== 1 || BigInt(account) === 0n
     || !/^0x[\da-f]{64}$/i.test(tokenSalt) || BigInt(tokenSalt) === 0n) {
     throw new Error("The Ethereum launch source, wallet or salt is invalid.");
   }
@@ -60,8 +67,10 @@ export function predictFoundationEthereumAccounts(input: {
     routeNonce: keccak256(encodeAbiParameters(parseAbiParameters("bytes32,uint256,address,bytes32,address,bytes32"),
       [nonceDomain, 1n, source.implementation.address, source.releaseDigest, account, tokenSalt])),
   };
-  const engineTarget = target("engine", creation("FoundationEthereumGraphProxyV1",
-    [source.implementation.address, source.implementation.runtimeCodeHash, account]));
+  const proxyContract = foundationEthereumProxyContract(source);
+  const engineTarget = target("engine", creation(proxyContract,
+    [source.implementation.address, source.implementation.runtimeCodeHash, account,
+      ...(proxyContract === "FoundationEthereumGraphProxyV2" ? [identity.routeNonce] : [])]));
   const engine = predictFoundationEthereumTarget(identity, engineTarget);
   const tokenTarget = target("token", creation("FoundationTokenV1", [metadata, engine]));
   const token = predictFoundationEthereumTarget(identity, tokenTarget);

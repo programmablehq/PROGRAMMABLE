@@ -1,7 +1,7 @@
 import { foundationBindingChainId, foundationChainProfile, type FoundationChainId } from "./chains";
 import { getAddress, isAddress, type Address, type Hex } from "viem";
 import type { FoundationDeploymentBinding } from "./client";
-import { ETHEREUM_MODULE_BINDING, ETHEREUM_MODULE_SOURCE } from "./ethereum-release";
+import { ETHEREUM_MODULE_BINDING, ETHEREUM_MODULE_SOURCE, ethereumModuleBinding, ethereumModuleSourceByRelease } from "./ethereum-release";
 import { foundationFactoryVersion } from "./protocol";
 import { bindFoundationCatalogV1, FOUNDATION_CATALOG_SCHEMA_V1, type FoundationCatalogAuthorityV1, type FoundationCatalogDocumentV1 } from "./catalog";
 
@@ -65,21 +65,24 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
       ...(token && r.reason === "MODULE_STAMP_MISSING" ? { stampMissing: true,
         reason: "This token has no Programmable launch stamp. Contact the project team." } : {}) };
     const b = record(r.binding), e = record(r.evidence);
-    if (e.kind !== "owner-source-runtime-v1" || e.releaseDigest !== ETHEREUM_MODULE_SOURCE.releaseDigest
+    const source = token ? ethereumModuleSourceByRelease(b.releaseDigest) : ETHEREUM_MODULE_SOURCE;
+    if (!source) throw new Error("The Ethereum source is not installed.");
+    const installedBinding = ethereumModuleBinding(source);
+    if (e.kind !== "owner-source-runtime-v1" || e.releaseDigest !== source.releaseDigest
       || typeof e.checkedAt !== "string" || !Number.isFinite(Date.parse(e.checkedAt))
       || Math.abs(now - Date.parse(e.checkedAt)) > 120_000 || e.providerCount !== 2
-      || b.releaseDigest !== ETHEREUM_MODULE_SOURCE.releaseDigest || b.chainId !== 1
-      || b.sourceCommit !== ETHEREUM_MODULE_SOURCE.sourceCommit || b.startBlock !== String(ETHEREUM_MODULE_SOURCE.startBlock)
+      || b.releaseDigest !== source.releaseDigest || b.chainId !== 1
+      || b.sourceCommit !== source.sourceCommit || b.startBlock !== String(source.startBlock)
       || b.factoryVersion !== "v3" || b.lpCustodyId !== ETHEREUM_MODULE_BINDING.lpCustodyId) throw new Error("Current Ethereum source evidence is unavailable.");
     hash(e.blockHash);
     const factory = pin(b.factory), hookDeployer = pin(b.hookDeployer);
     if (hookDeployer.address !== ETHEREUM_MODULE_BINDING.hookDeployer.address || hookDeployer.runtimeCodeHash !== ETHEREUM_MODULE_BINDING.hookDeployer.runtimeCodeHash
-      || (token ? factory.runtimeCodeHash !== ETHEREUM_MODULE_SOURCE.proxyRuntimeCodeHash
-        : factory.address !== ETHEREUM_MODULE_SOURCE.implementation.address || factory.runtimeCodeHash !== ETHEREUM_MODULE_SOURCE.implementation.runtimeCodeHash)) throw new Error("The Ethereum launch source changed.");
+      || (token ? factory.runtimeCodeHash !== source.proxyRuntimeCodeHash
+        : factory.address !== source.implementation.address || factory.runtimeCodeHash !== source.implementation.runtimeCodeHash)) throw new Error("The Ethereum launch source changed.");
     const catalog = record(r.catalog) as unknown as FoundationAvailabilityEnvelope["catalog"];
     bindFoundationCatalogV1(catalog.document, catalog.authority);
     return { schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V5, chainId: 1, available: true, reason: null,
-      binding: { ...ETHEREUM_MODULE_BINDING, factory }, catalog, ...(token ? { token } : {}) };
+      binding: { ...installedBinding, factory }, catalog, ...(token ? { token } : {}) };
   }
   if (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V2 && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V3 && r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA_V4) throw new Error("The release response is unsupported.");
   const chainId = r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V4 ? foundationChainProfile(Number(r.chainId)).chainId : 4663;
