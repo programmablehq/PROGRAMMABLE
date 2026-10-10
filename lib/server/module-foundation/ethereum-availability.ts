@@ -7,6 +7,7 @@ import { getOnchainDeployment } from "@/lib/onchain/config";
 import { readFinalizedRouterCustomIdentitySnapshotCoreV1 } from "@/lib/alchemy/router-custom-public.server";
 import { readFoundationEthereumGraphLaunch } from "./ethereum-graph";
 import { withFoundationOwnerCatalogV1 } from "./owner-catalog";
+import { readEthereumMissingIndexReason } from "./ethereum-stamp-status";
 import release from "@/contracts/deployments/ethereum-module-release-v1.json";
 
 const reads = new Map<string, { expires: number; value: Promise<unknown> }>();
@@ -22,7 +23,8 @@ export function readEthereumFoundationAvailability(token?: Address): Promise<unk
 async function current(token?: Address) {
   // Share the existing per-provider budget with quotes instead of sending a
   // burst of archive reads every time a token's authority is checked.
-  const clients = foundationMainnetRpcs().map(foundationMainnetReadClient);
+  const rpcs = foundationMainnetRpcs();
+  const clients = [foundationMainnetReadClient(rpcs[0]), foundationMainnetReadClient(rpcs[1])] as const;
   const heads = await Promise.all(clients.map(async client => {
     const [chainId, head] = await Promise.all([client.getChainId(), client.getBlock({ blockTag: "finalized" })]);
     if (chainId !== 1) throw new Error("The module RPC is not Ethereum.");
@@ -45,7 +47,8 @@ async function current(token?: Address) {
     const p = entry?.launchStampProvenance;
     const deployment = getOnchainDeployment("production");
     if (deployment.status !== "ready") throw new Error("The Ethereum deployment is unavailable.");
-    if (!p) return { ...unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1), token: token.toLowerCase(), reason: "MODULE_INDEX_PENDING" };
+    if (!p) return { ...unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1), token: token.toLowerCase(),
+      reason: await readEthereumMissingIndexReason({ clients, token, blockNumber: number }) };
     const checked = await readFoundationEthereumGraphLaunch({ client: clients[0], deployment, source: ETHEREUM_MODULE_SOURCE,
       anchor: { launchId: p.launchId, token, hook: p.poolKey.hooks, poolManager: p.poolManagerAddress,
         poolId: p.poolId, stampHash: p.stampHash, blockNumber: BigInt(p.blockNumber), blockHash: p.blockHash,

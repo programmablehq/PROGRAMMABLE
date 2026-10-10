@@ -1,6 +1,8 @@
 import { webcrypto } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { encodeFunctionData, getAddress, keccak256, toHex, type Hex, type PublicClient } from "viem";
+import { decodeFunctionData, encodeFunctionData, getAddress, keccak256, toHex, type Hex, type PublicClient } from "viem";
+import ethereumGraphFixture from "./fixtures/module-foundation-ethereum-graph.json";
+import { foundationEthereumStampAbi } from "@/lib/module-foundation/ethereum-graph";
 import {
   bindFoundationWalletStep, foundationWalletRequestNonce, readFoundationPending, readFoundationLaunchRetry, reconcileFoundationPending, recoverFoundationPending, noteFoundationWalletRequest,
   revalidateFoundationWalletStep, submitFoundationWalletStep,
@@ -142,6 +144,14 @@ function fixture(index = 0, registered = true, v2 = false) {
 }
 
 describe("foundation V2 final wallet revalidation dispatch", () => {
+  it("blocks a direct Ethereum factory launch before wallet state is persisted", () => {
+    const f = fixture(0, true, true);
+    Object.assign(f.sequence, { binding: { ...f.release, chainId: 1 } });
+    expect(() => f.bind()).toThrow("stamp router");
+    expect(storage.values.size).toBe(0);
+    expect(f.send).not.toHaveBeenCalled();
+    expect(f.client.getChainId).not.toHaveBeenCalled();
+  });
   it("rechecks V2 NFTs and settlement immediately before the exact wallet request", async () => {
     const f = fixture(0, true, true);
     await expect(submitFoundationWalletStep(f.bind(), f.send)).resolves.toBe(transactionHash);
@@ -569,6 +579,13 @@ describe("retrying an unsubmitted launch without advancing its nonce", () => {
   async function lostLaunch(chainId: 1 | 4663) {
     const f = fixture(0, true, true);
     Object.assign(f.sequence.binding, { chainId });
+    if (chainId === 1) {
+      const { args } = decodeFunctionData({ abi: foundationEthereumStampAbi, data: ethereumGraphFixture.calldata as Hex });
+      // Keep the retry fixture on the actual stamped route. The signature stub is not production authority.
+      const data = encodeFunctionData({ abi: foundationEthereumStampAbi, functionName: "launchAndStampV1",
+        args: [{ ...args[0], launchWallet: account }, args[1], args[2], args[3]] });
+      Object.assign(f.sequence.steps[0].transaction, { to: args[0].router, data, value: args[0].value });
+    }
     Object.assign(f.client, { chain: { id: chainId } });
     vi.mocked(f.client.getChainId).mockResolvedValue(chainId);
     await expect(submitFoundationWalletStep(f.bind(), async value => {

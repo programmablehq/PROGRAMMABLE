@@ -22,3 +22,13 @@ it("keeps pending index reads non-authorizing and specific to an Ethereum token"
   expect(parsed.binding).toBeNull();
   expect(parseFoundationAvailability(pending).indexPending).toBeUndefined();
 });
+
+it("reports a missing stamp without granting authority or polling for index recovery", () => {
+  const missing = { schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V5, chainId: 1,
+    available: false, reason: "MODULE_STAMP_MISSING" };
+  const parsed = parseFoundationAvailability({ ...missing, token: "0x1111111111111111111111111111111111111111" });
+  expect(parsed).toMatchObject({ stampMissing: true, available: false, binding: null });
+  expect(parsed.indexPending).toBeUndefined();
+  expect(parsed.reason).toContain("no Programmable launch stamp");
+  expect(parseFoundationAvailability(missing).stampMissing).toBeUndefined();
+});
