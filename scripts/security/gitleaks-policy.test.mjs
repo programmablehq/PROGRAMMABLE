@@ -117,6 +117,11 @@ test("atomic module lifecycle allows only its exact public evidence fields", (t)
       `  "apiKey": "${value}",\n${line}`,
     ]) assertFiles(scan(t, { [path]: rejected }, { raw: true }), [path]);
     assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+    const fixturePath = "scripts/security/gitleaks-policy.test.mjs";
+    const fixture = `    ["${field}", "${value}"],`;
+    assert.deepEqual(scan(t, { [fixturePath]: fixture }, { raw: true }), []);
+    assertFiles(scan(t, { [fixturePath]: fixture.replace(value, material) }, { raw: true }), [fixturePath]);
+    assertFiles(scan(t, { [`${fixturePath}.backup`]: fixture }, { raw: true }), [`${fixturePath}.backup`]);
   }
 });
 
