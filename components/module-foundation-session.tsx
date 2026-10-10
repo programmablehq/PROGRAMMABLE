@@ -34,7 +34,7 @@ export async function loadFoundationSessionAvailability(signal: AbortSignal, tok
     try {
       const value = await (chainId === 4663 ? fetchFoundationAvailability(signal, token) : fetchFoundationAvailability(signal, token, chainId));
       signal.throwIfAborted();
-      if (value.available || value.indexPending || (!token && !value.providerDisagreement) || attempt === attempts - 1) return value;
+      if (value.available || value.indexPending || value.stampMissing || (!token && !value.providerDisagreement) || attempt === attempts - 1) return value;
     } catch (error) {
       signal.throwIfAborted();
       if (!token || attempt === attempts - 1) throw error;

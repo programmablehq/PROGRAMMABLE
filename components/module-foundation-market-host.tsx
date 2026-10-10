@@ -174,7 +174,7 @@ function ModuleFoundationMarketContent({ token, transactionHash, initialName, in
 
   if (!details) {
     const trade = <div className={`${styles.marketScope} ${tradeStyles.embedded}`}><section className={tradeStyles.card} aria-label="Trade loading">
-        <p className={tradeStyles.note} role="status">{session.envelope?.indexPending ? session.envelope.reason : error || session.availability.status === "unavailable" ? "Trading is temporarily unavailable." : "Loading trade…"}</p>
+        <p className={tradeStyles.note} role="status">{session.envelope?.indexPending || session.envelope?.stampMissing ? session.envelope.reason : error || session.availability.status === "unavailable" ? "Trading is temporarily unavailable." : "Loading trade…"}</p>
         {error || session.availability.status === "unavailable" ? <button type="button" className={styles.secondaryButton} onClick={() => {
           setError(""); session.retryAvailability(); setRefreshKey(value => value + 1);
         }}>Retry</button> : null}

@@ -1,6 +1,6 @@
 import { errorIsExplicitWalletRejection } from "../wallet-rejection";
 import { findFoundationTransactionByNonce } from "./transaction-by-nonce";
-import { decodeFoundationEthereumTransaction } from "./ethereum-graph";
+import { assertFoundationEthereumStampEnvelope, decodeFoundationEthereumTransaction } from "./ethereum-graph";
 import { assertFoundationEthereumTransaction } from "./ethereum-graph-builder";
 import { getAddress, keccak256, toHex, type Address, type Hex, type PublicClient } from "viem";
 import type { ModuleNativeWalletTransaction } from "@/lib/module-mode/native-client";
@@ -65,6 +65,9 @@ export function bindFoundationWalletStep(input: Omit<PrivatePreparation, "state"
   const sequence = immutableSnapshot(input.sequence);
   const step = sequence.steps[input.index];
   if (!step || input.index < 0 || !Number.isInteger(input.index)) throw new Error("The transaction step is invalid.");
+  if (sequence.kind === "launch" && step.kind === "launch" && foundationBindingChainId(sequence.binding) === 1) {
+    assertFoundationEthereumStampEnvelope(step.transaction, sequence.account);
+  }
   const transaction: ModuleNativeWalletTransaction = {
     chainId: foundationBindingChainId(sequence.binding), ...step.transaction, value: toHex(step.transaction.value),
     gas: toHex(foundationTransactionGasLimit(step.gasUsed, foundationBindingChainId(sequence.binding))),
@@ -259,6 +262,9 @@ export async function submitFoundationWalletStep(value: FoundationWalletPreparat
   send: (value: FoundationWalletPreparation) => Promise<Hex>, trackPreflight = false, retry?: FoundationLaunchRetry): Promise<Hex> {
   const binding = prepared.get(value);
   if (!binding || binding.state !== "ready") throw new Error("This transaction is not ready for signing.");
+  if (binding.sequence.kind === "launch" && value.transaction.action === "launch" && value.transaction.chainId === 1) {
+    assertFoundationEthereumStampEnvelope({ ...value.transaction, value: BigInt(value.transaction.value) }, value.account);
+  }
   if (!navigator.locks) throw new Error("This browser cannot safely coordinate wallet requests.");
   return navigator.locks.request(storeKey(value.account, value.transaction.chainId), { mode: "exclusive", ifAvailable: true }, async lock => {
     const previous = readFoundationPending(value.account, value.transaction.chainId);

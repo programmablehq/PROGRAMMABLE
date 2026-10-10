@@ -3,7 +3,7 @@ import { decodeAbiParameters, decodeFunctionData, encodeFunctionData, getAddress
 import fixture from "./fixtures/module-foundation-ethereum-graph.json";
 import ethereum from "@/contracts/spec/module-foundation/chain-1.v1.json";
 import {
-  decodeFoundationEthereumGraphLaunch, foundationEthereumRouteParameters, foundationEthereumStampAbi,
+  assertFoundationEthereumStampEnvelope, decodeFoundationEthereumGraphLaunch, foundationEthereumRouteParameters, foundationEthereumStampAbi,
   type FoundationEthereumGraphSource,
 } from "@/lib/module-foundation/ethereum-graph";
 import { foundationPoolId } from "@/lib/module-foundation/route";
@@ -51,6 +51,18 @@ function candidate() {
 }
 
 describe("Ethereum Module Mode canonical graph readback", () => {
+  it("allows the stamped wallet envelope and rejects direct-factory or substituted-wallet requests", () => {
+    const { transaction } = candidate();
+    expect(() => assertFoundationEthereumStampEnvelope(transaction, transaction.from)).not.toThrow();
+    expect(() => assertFoundationEthereumStampEnvelope({ ...transaction,
+      to: getAddress(ethereum.canonicalStamp.graphFactory.address) }, transaction.from)).toThrow("stamp router");
+    expect(() => assertFoundationEthereumStampEnvelope(transaction,
+      getAddress("0x0000000000000000000000000000000000000001"))).toThrow("stamp router");
+    const call = decodeFunctionData({ abi: foundationEthereumStampAbi, data: transaction.data });
+    const data = encodeFunctionData({ abi: foundationEthereumStampAbi, functionName: call.functionName,
+      args: [{ ...call.args[0], launchWallet: getAddress("0x0000000000000000000000000000000000000001") }, call.args[1], call.args[2], call.args[3]] });
+    expect(() => assertFoundationEthereumStampEnvelope({ ...transaction, data }, transaction.from)).toThrow("another wallet");
+  });
   it("decodes the same source-bound launch inside a smart-wallet transaction", () => {
     const input = candidate(), original = input.transaction;
     const outer = { hash: original.hash, from: getAddress("0x0000000000000000000000000000000000000001"),

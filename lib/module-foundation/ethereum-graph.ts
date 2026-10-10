@@ -140,3 +140,14 @@ export function decodeFoundationEthereumTransaction(transaction: { data: Hex; va
   const [path] = decodeAbiParameters(fundingParameters, fundingPath);
   return { permit, stamp, route, signature, parameters, token, hook, engine: getAddress(route.expectedOutputs[0].account), path };
 }
+
+/** The wallet must never send a simulation's direct factory call as the launch. */
+export function assertFoundationEthereumStampEnvelope(transaction: {
+  from: Address; to: Address; data: Hex; value: bigint;
+}, account: Address): void {
+  if (!same(transaction.to, ethereum.canonicalStamp.router.address) || !same(transaction.from, account)) {
+    throw new Error("Ethereum launches must use the Programmable stamp router. Prepare the launch again.");
+  }
+  const { permit } = decodeFoundationEthereumTransaction(transaction);
+  if (!same(permit.launchWallet, account)) throw new Error("The launch stamp belongs to another wallet.");
+}

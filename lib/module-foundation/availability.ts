@@ -23,6 +23,8 @@ export interface FoundationAvailabilityEnvelope {
   providerDisagreement?: boolean;
   /** Token absent from the finalized index; never grants transaction authority. */
   indexPending?: boolean;
+  /** Both finalized providers verified that this deployed token has no canonical stamp. */
+  stampMissing?: boolean;
 }
 export class FoundationProviderDisagreementError extends Error {
   constructor() { super("Launch checks are temporarily out of sync."); }
@@ -59,7 +61,9 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
     if (r.chainId !== 1) throw new Error("This graph release belongs only to Ethereum.");
     const token = r.token === undefined ? undefined : tokenAddress(r.token).toLowerCase() as Address;
     if (r.available !== true) return { ...unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1), ...(token ? { token } : {}),
-      ...(token && r.reason === "MODULE_INDEX_PENDING" ? { indexPending: true, reason: "Waiting for this launch to appear in the index." } : {}) };
+      ...(token && r.reason === "MODULE_INDEX_PENDING" ? { indexPending: true, reason: "Waiting for this launch to appear in the index." } : {}),
+      ...(token && r.reason === "MODULE_STAMP_MISSING" ? { stampMissing: true,
+        reason: "This token has no Programmable launch stamp. Contact the project team." } : {}) };
     const b = record(r.binding), e = record(r.evidence);
     if (e.kind !== "owner-source-runtime-v1" || e.releaseDigest !== ETHEREUM_MODULE_SOURCE.releaseDigest
       || typeof e.checkedAt !== "string" || !Number.isFinite(Date.parse(e.checkedAt))

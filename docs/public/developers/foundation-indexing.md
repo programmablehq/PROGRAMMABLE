@@ -18,6 +18,12 @@ Verify the graph proxy, implementation, initializer, token, hook and pool using 
 
 The Robinhood factory events and `launchOf(token)` procedure below do not apply to this Ethereum graph. After verifying the graph, use its bound pool, ledger, module descriptors and token metadata for the corresponding reads below.
 
+### Missing entry or missing stamp
+
+For a token-specific Ethereum discovery request, `MODULE_INDEX_PENDING` means the launch has not finalized or its verified stamp has not reached the index yet. Retry that read. `MODULE_STAMP_MISSING` means both providers found the deployed token at the same finalized block and verified that neither published Router has a stamp for it. Retrying indexing cannot create the missing stamp; neither response grants transaction authority.
+
+Send the prepared `launchAndStampV1` transaction to the canonical Router. A direct Graph Factory call used for simulation is not a launch transaction to broadcast. It can deploy a token and pool without a Programmable stamp, and the existing Router cannot stamp those already deployed contracts afterward.
+
 ## Robinhood module launches
 
 ### Resolve the launch source
