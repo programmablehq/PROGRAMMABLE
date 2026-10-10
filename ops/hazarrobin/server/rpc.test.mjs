@@ -1,7 +1,34 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mapLimit, recoverRpcRead } from './rpc.mjs';
+import { mapLimit, paced, recoverRpcRead } from './rpc.mjs';
 
 describe('scan recovery', () => {
+  it('budgets every RPC call inside a batch below the provider 50/s limit', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const starts=[];
+      const send=paced(async()=>{starts.push(Date.now());return {};});
+      const body=JSON.stringify(Array.from({length:10},(_,id)=>({jsonrpc:'2.0',id,method:'eth_getCode',params:[]})));
+      const pending=Promise.all(Array.from({length:12},()=>send('https://rpc.example',{body})));
+      await vi.runAllTimersAsync();
+      await pending;
+      expect(starts).toHaveLength(12);
+      for(const start of starts) expect(starts.filter(time=>time>=start&&time<start+1000).length*10).toBeLessThanOrEqual(40);
+    } finally { vi.useRealTimers(); }
+  });
+  it('retries the provider JSON-RPC rate limit without relaxing proof checks', async () => {
+    vi.useFakeTimers();
+    try {
+      const read=vi.fn().mockRejectedValueOnce(Object.assign(new Error('RPC request failed'),{
+        name:'RpcRequestError',cause:{code:-32007},
+      })).mockResolvedValueOnce(42);
+      const retry=vi.fn(),result=recoverRpcRead(read,retry);
+      await vi.runAllTimersAsync();
+      expect(await result).toBe(42);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(retry).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
   it('stops scheduling work and drains active reads before reporting a failed source', async () => {
     let release;
     const pending = new Promise(resolve => { release = resolve; });

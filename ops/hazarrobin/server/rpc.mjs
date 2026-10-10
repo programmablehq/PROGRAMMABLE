@@ -10,11 +10,17 @@ const immutable = new Map();
 const inflight = new Map();
 
 // Limit provider pressure and reuse only immutable, explicitly numbered history.
-function paced(fetcher) {
+export function paced(fetcher) {
   let active=0, next=0; const queue=[];
   return async (url, options) => {
     if(active>=6) await new Promise(resolve=>queue.push(resolve)); active++;
-    const now=Date.now(),start=Math.max(now,next);next=start+75;
+    // Providers meter JSON-RPC calls, not HTTP requests. A ten-call batch
+    // otherwise consumes ten times the intended budget and exhausts 50/s plans.
+    let weight=1;
+    if(typeof options?.body==='string'){
+      try{const payload=JSON.parse(options.body);if(Array.isArray(payload))weight=Math.max(1,payload.length);}catch{}
+    }
+    const now=Date.now(),start=Math.max(now,next);next=start+Math.max(75,weight*30);
     try { if(start>now)await new Promise(r=>setTimeout(r,start-now));return await fetcher(url, options); }
     finally { active--; queue.shift()?.(); }
   };
@@ -86,7 +92,7 @@ export async function recoverRpcRead(read, onRetry=()=>{}) {
     for(let i=0;current&&i<8;i++,current=current.cause){
       if(['ContractFunctionRevertedError','ExecutionRevertedError'].includes(current.name))throw error;
       const status=Number(current.status??current.statusCode);
-      if([408,429,500,502,503,504].includes(status)||[-32005,-32016].includes(current.code)
+      if([408,429,500,502,503,504].includes(status)||[-32005,-32007,-32016].includes(current.code)
         ||['HttpRequestError','TimeoutError','SocketClosedError'].includes(current.name)
         ||(current instanceof TypeError&&/fetch|network/i.test(current.message)))transient=true;
     }
