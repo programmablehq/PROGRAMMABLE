@@ -522,6 +522,7 @@ condition = "AND"
 regexTarget = "line"
 paths = [
   '''^contracts/spec/module-foundation/ethereum-graph-bytecode\.v1\.json$''',
+  '''^contracts/spec/module-foundation/ethereum-graph-bytecode\.v2\.json$''',
   '''^packages/module-foundation-ethereum/dist/index\.mjs$''',
 ]
 regexes = [

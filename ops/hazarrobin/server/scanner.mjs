@@ -30,20 +30,27 @@ function descriptor(input) {
   return {...input,id:`${input.chainId}:${input.to.toLowerCase()}:${input.data.toLowerCase()}`,amount:String(input.amount),decimals:input.decimals??18,symbol:input.symbol??'ETH',asset:input.asset??ZERO};
 }
 
-async function ethereumDiscovery(clients, block, abis, progress=()=>{}) {
-  const release=deployments.ethereumModule.payload;
+export async function ethereumDiscovery(clients, block, abis, progress=()=>{}) {
+  const releases=(deployments.ethereumModuleHistory??[deployments.ethereumModule]).map(r=>r.payload);
   const root=deployments.ethereum.canonicalStamp;
-  await Promise.all([pin(clients,release.implementation,block.number),pin(clients,root.graphFactory,block.number)]);
+  const active=releases.filter(r=>BigInt(r.startBlock)<=block.number);
+  await Promise.all([...active.map(r=>pin(clients,r.implementation,block.number)),pin(clients,root.graphFactory,block.number)]);
   const event=abis.v3.find(e=>e.type==='event');
-  const logs=await rangeLogs(clients[1],{event},BigInt(release.startBlock),block.number);
+  const from=releases.reduce((a,r)=>BigInt(r.startBlock)<a?BigInt(r.startBlock):a,BigInt(releases[0].startBlock));
+  const logs=await rangeLogs(clients[1],{event},from,block.number);
   progress(`${logs.length} Ethereum-Module werden geprüft…`);
   let checked=0;
   const batches=[];for(let i=0;i<logs.length;i+=12)batches.push(logs.slice(i,i+12));
   return (await mapLimit(batches,2,async batch=>{
     for(const log of batch)need(log.args?.token&&log.args?.ledger&&!log.removed,'Ungültiger Ethereum-Moduleintrag.');
-    await Promise.all(batch.map(log=>pin(clients,{address:log.address,runtimeCodeHash:release.proxyRuntimeCodeHash},block.number)));
-    const values=await readBoth(clients,batch.flatMap(log=>['implementation','implementationCodeHash','GRAPH_FACTORY','initialized'].map(n=>call(log.address,n))),block.number);
-    const found=batch.map((log,i)=>{
+    const recognized=(await Promise.all(batch.map(async log=>{
+      const codes=await Promise.all(clients.map(c=>c.getCode({address:log.address,blockNumber:block.number})));
+      need(codes.every(c=>same(c,codes[0])),'Ethereum-Module unterscheiden sich zwischen Anbietern.');
+      const release=active.find(r=>codes[0]&&keccak256(codes[0])===r.proxyRuntimeCodeHash&&log.blockNumber>=BigInt(r.startBlock));
+      return release?{log,release}:null;
+    }))).filter(Boolean);
+    const values=recognized.length?await readBoth(clients,recognized.flatMap(({log})=>['implementation','implementationCodeHash','GRAPH_FACTORY','initialized'].map(n=>call(log.address,n))),block.number):[];
+    const found=recognized.map(({log,release},i)=>{
       const [impl,hash,factory,initialized]=values.slice(i*4,i*4+4);
       need(same(impl,release.implementation.address)&&same(hash,release.implementation.runtimeCodeHash)&&same(factory,root.graphFactory.address)&&initialized,'Module-Quelle stimmt nicht.');
       return {...log.args,log,release:{factoryVersion:'v3',factory:{address:log.address},startBlock:BigInt(release.startBlock)}};

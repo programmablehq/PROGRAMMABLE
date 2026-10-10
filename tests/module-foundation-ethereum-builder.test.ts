@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { decodeAbiParameters, decodeFunctionData, getAddress, keccak256, stringToHex, type Hex } from "viem";
 import fixture from "./fixtures/module-foundation-ethereum-graph.json";
 import bytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v1.json";
+import stampedBytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v2.json";
 import { foundationEthereumGraphAbi, foundationEthereumRouteParameters, foundationEthereumStampAbi, type FoundationEthereumGraphSource } from "@/lib/module-foundation/ethereum-graph";
 import { assertFoundationEthereumRuntime, buildFoundationEthereumGraph, predictFoundationEthereumAccounts } from "@/lib/module-foundation/ethereum-graph-builder";
 
@@ -19,6 +20,22 @@ function sample() {
 }
 
 describe("Ethereum graph materialization", () => {
+  it("binds the V2 proxy constructor to the same nonce used by the canonical factory salt", () => {
+    const input = sample();
+    const source = { ...input.source, sourceCommit: stampedBytecode.sourceCommit };
+    const graph = predictFoundationEthereumAccounts({ source, account: input.account,
+      metadata: input.parameters.metadata, tokenSalt: input.parameters.tokenSalt });
+    const artifact = stampedBytecode.contracts.FoundationEthereumGraphProxyV2;
+    expect(graph.engineTarget.initCode.startsWith(artifact.creationBytecode)).toBe(true);
+    const values = decodeAbiParameters([
+      { type: "address" }, { type: "bytes32" }, { type: "address" }, { type: "bytes32" },
+    ], `0x${graph.engineTarget.initCode.slice(artifact.creationBytecode.length)}` as Hex);
+    expect(values).toEqual([source.implementation.address, source.implementation.runtimeCodeHash,
+      input.account, graph.identity.routeNonce]);
+    expect(() => predictFoundationEthereumAccounts({ source: { ...source, sourceCommit: "f".repeat(40) },
+      account: input.account, metadata: input.parameters.metadata, tokenSalt: input.parameters.tokenSalt })).toThrow("compiler artifact");
+  });
+
   it("separates wallet, release and token-salt namespaces without RPC", () => {
     const input = sample(), p = { ...input, metadata: input.parameters.metadata, tokenSalt: input.parameters.tokenSalt };
     const a = predictFoundationEthereumAccounts(p);

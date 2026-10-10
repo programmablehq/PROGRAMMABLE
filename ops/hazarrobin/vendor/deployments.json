@@ -49,17 +49,17 @@
     }
   },
   "ethereumModule": {
-    "releaseDigest": "0xfe914882521999a177d69b49f021a265b39c3ae27fb1f89c29ae826a0d7bde4a",
+    "releaseDigest": "0x3eb74e57033aab0d95ab26b933ba4d761a5b6285bf769149cd34ab151ad5146d",
     "payload": {
       "schemaVersion": "programmable.ethereum-module-release.v1",
       "chainId": 1,
-      "sourceCommit": "92ff1f513c47fe94ddc1022babffdf95ad47d76b",
-      "startBlock": "26125550",
+      "sourceCommit": "ca4e0f38bd977cdd84e2cf988c456deecdc62b5e",
+      "startBlock": "26163972",
       "implementation": {
-        "address": "0x487E8A196812fEC534f2D2514bfdc7c609EBAe35",
-        "runtimeCodeHash": "0x4013d721f43d3061e4593c5da8e1dfa64a943573240c7e247905c3a1986dbbec"
+        "address": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
+        "runtimeCodeHash": "0x8bbf4dba5090996e29fafa6292c731ce13f580eb54877e689f66820c2b0981df"
       },
-      "proxyRuntimeCodeHash": "0xbcd79a29bbf85a76fd696e196516bfd23aae5e00b56a1dc21cc3e6b2599c40cf",
+      "proxyRuntimeCodeHash": "0x30eb0ae1b6114acce98f33d53a9c93d392d39cbddd2f5ed9d716f1c2b2777888",
       "modules": [
         {
           "id": "launch-wallet-cap",
@@ -1017,5 +1017,59 @@
         "runtimeCodeHash": "0xbe8e8191bb42d843c2e948a5a55772eaab864ce01e54dcd47c9d089170b302d5"
       }
     }
-  }
+  },
+  "ethereumModuleHistory": [
+    {
+      "releaseDigest": "0x3eb74e57033aab0d95ab26b933ba4d761a5b6285bf769149cd34ab151ad5146d",
+      "payload": {
+        "schemaVersion": "programmable.ethereum-module-release.v1",
+        "chainId": 1,
+        "sourceCommit": "ca4e0f38bd977cdd84e2cf988c456deecdc62b5e",
+        "startBlock": "26163972",
+        "implementation": {
+          "address": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
+          "runtimeCodeHash": "0x8bbf4dba5090996e29fafa6292c731ce13f580eb54877e689f66820c2b0981df"
+        },
+        "proxyRuntimeCodeHash": "0x30eb0ae1b6114acce98f33d53a9c93d392d39cbddd2f5ed9d716f1c2b2777888",
+        "modules": [
+          {
+            "id": "launch-wallet-cap",
+            "factory": "0x2960751d51a6559D630F9Fa9D94CD0011816d5D2",
+            "factoryCodeHash": "0x984c80e16fa4da55c7f1c69ca25a3fa4e60206aa1d67c73d5c0eb9849dabf39a",
+            "moduleCodeHash": "0x5be365d8785b43fc8e47d75b0006d59cca48ab93ebf67c91d3aa9414066564f6",
+            "descriptorHash": "0x1bd5aa9a4e6ca7771b3946b1ad429fdc7d301f5774e341b9ccf53e1cdeb1ac75"
+          }
+        ],
+        "platformFeeBps": 30,
+        "stampRouter": "0x8622DD5bAb44185f2A458ac90384Ac99248f8d56",
+        "graphFactory": "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887"
+      }
+    },
+    {
+      "releaseDigest": "0xfe914882521999a177d69b49f021a265b39c3ae27fb1f89c29ae826a0d7bde4a",
+      "payload": {
+        "schemaVersion": "programmable.ethereum-module-release.v1",
+        "chainId": 1,
+        "sourceCommit": "92ff1f513c47fe94ddc1022babffdf95ad47d76b",
+        "startBlock": "26125550",
+        "implementation": {
+          "address": "0x487E8A196812fEC534f2D2514bfdc7c609EBAe35",
+          "runtimeCodeHash": "0x4013d721f43d3061e4593c5da8e1dfa64a943573240c7e247905c3a1986dbbec"
+        },
+        "proxyRuntimeCodeHash": "0xbcd79a29bbf85a76fd696e196516bfd23aae5e00b56a1dc21cc3e6b2599c40cf",
+        "modules": [
+          {
+            "id": "launch-wallet-cap",
+            "factory": "0x2960751d51a6559D630F9Fa9D94CD0011816d5D2",
+            "factoryCodeHash": "0x984c80e16fa4da55c7f1c69ca25a3fa4e60206aa1d67c73d5c0eb9849dabf39a",
+            "moduleCodeHash": "0x5be365d8785b43fc8e47d75b0006d59cca48ab93ebf67c91d3aa9414066564f6",
+            "descriptorHash": "0x1bd5aa9a4e6ca7771b3946b1ad429fdc7d301f5774e341b9ccf53e1cdeb1ac75"
+          }
+        ],
+        "platformFeeBps": 30,
+        "stampRouter": "0x8622DD5bAb44185f2A458ac90384Ac99248f8d56",
+        "graphFactory": "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887"
+      }
+    }
+  ]
 }

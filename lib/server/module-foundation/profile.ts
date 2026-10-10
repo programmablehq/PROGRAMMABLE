@@ -1,6 +1,6 @@
 import "server-only";
 import { readWebsiteRouterCustomIdentitySnapshotV1 } from "@/lib/alchemy/router-custom-public.server";
-import { ETHEREUM_MODULE_BINDING, isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
+import { ethereumModuleSourceForStamp } from "@/lib/module-foundation/ethereum-release";
 import { MODULE_PROFILE_PAGE_SIZE, type EthereumModuleProfile, type EthereumProfileModuleLaunch } from "@/lib/profile/module-launches";
 import { readRecentFoundationLaunches } from "./recent-launch-store";
 
@@ -19,11 +19,12 @@ export async function readEthereumProfileModules(account: string, requestedPage 
   }
   for (const entry of catalog?.entries ?? []) {
     const p = entry.launchStampProvenance;
-    if (!p || !isEthereumModuleLaunchCandidate(entry) || p.launchWallet.toLowerCase() !== normalized) continue;
+    const source = ethereumModuleSourceForStamp(entry);
+    if (!p || !source || p.launchWallet.toLowerCase() !== normalized) continue;
     const quoteAsset = p.poolKey.currency0.toLowerCase() === entry.tokenAddress.toLowerCase() ? p.poolKey.currency1 : p.poolKey.currency0;
     rows.set(entry.tokenAddress.toLowerCase(), {
       tokenAddress: entry.tokenAddress, creator: p.launchWallet, hookAddress: p.poolKey.hooks,
-      poolId: p.poolId, quoteAsset, sourceReleaseDigest: ETHEREUM_MODULE_BINDING.releaseDigest,
+      poolId: p.poolId, quoteAsset, sourceReleaseDigest: source.releaseDigest,
       name: entry.name || null, symbol: entry.symbol || null, imageUrl: entry.imageUrl ?? null,
       launchedAt: entry.launchedAt && Number.isFinite(Date.parse(entry.launchedAt)) ? entry.launchedAt : null,
       blockNumber: p.blockNumber, logIndex: p.launchLogIndex,

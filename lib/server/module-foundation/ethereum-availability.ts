@@ -1,6 +1,6 @@
 import "server-only";
 import { getAddress, keccak256, type Address } from "viem";
-import { ETHEREUM_MODULE_BINDING, ETHEREUM_MODULE_SOURCE } from "@/lib/module-foundation/ethereum-release";
+import { ETHEREUM_MODULE_BINDING, ETHEREUM_MODULE_SOURCE, ethereumModuleSourceForStamp } from "@/lib/module-foundation/ethereum-release";
 import { FOUNDATION_AVAILABILITY_SCHEMA_V5, unavailableFoundation } from "@/lib/module-foundation/availability";
 import { foundationMainnetReadClient, foundationMainnetRpcs } from "./rpc";
 import { getOnchainDeployment } from "@/lib/onchain/config";
@@ -8,7 +8,7 @@ import { readFinalizedRouterCustomIdentitySnapshotCoreV1 } from "@/lib/alchemy/r
 import { readFoundationEthereumGraphLaunch } from "./ethereum-graph";
 import { withFoundationOwnerCatalogV1 } from "./owner-catalog";
 import { readEthereumMissingIndexReason } from "./ethereum-stamp-status";
-import release from "@/contracts/deployments/ethereum-module-release-v1.json";
+import release from "@/contracts/deployments/ethereum-module-release-v2.json";
 
 const reads = new Map<string, { expires: number; value: Promise<unknown> }>();
 export function readEthereumFoundationAvailability(token?: Address): Promise<unknown> {
@@ -49,11 +49,13 @@ async function current(token?: Address) {
     if (deployment.status !== "ready") throw new Error("The Ethereum deployment is unavailable.");
     if (!p) return { ...unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1), token: token.toLowerCase(),
       reason: await readEthereumMissingIndexReason({ clients, token, blockNumber: number }) };
-    const checked = await readFoundationEthereumGraphLaunch({ client: clients[0], deployment, source: ETHEREUM_MODULE_SOURCE,
+    const source = ethereumModuleSourceForStamp(entry);
+    if (!source) throw new Error("The stamp does not identify an installed Ethereum module release.");
+    const checked = await readFoundationEthereumGraphLaunch({ client: clients[0], deployment, source,
       anchor: { launchId: p.launchId, token, hook: p.poolKey.hooks, poolManager: p.poolManagerAddress,
         poolId: p.poolId, stampHash: p.stampHash, blockNumber: BigInt(p.blockNumber), blockHash: p.blockHash,
         transactionHash: p.transactionHash, transactionIndex: p.transactionIndex, logIndex: p.launchLogIndex } });
-    binding = { ...checked.binding, ethereumGraph: ETHEREUM_MODULE_SOURCE };
+    binding = { ...checked.binding, ethereumGraph: source };
   }
   const envelope = await withFoundationOwnerCatalogV1({ schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V5, chainId: 1,
     available: true, reason: null, binding, ...(token ? { token: token.toLowerCase() as Address } : {}),

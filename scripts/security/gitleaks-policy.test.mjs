@@ -113,7 +113,7 @@ test("recent launch visibility allows only the exact public coin field", (t) => 
 });
 
 test("Ethereum compiler exports allow only the exact public source hash lines", (t) => {
-  const paths = ["contracts/spec/module-foundation/ethereum-graph-bytecode.v1.json", "packages/module-foundation-ethereum/dist/index.mjs"];
+  const paths = ["contracts/spec/module-foundation/ethereum-graph-bytecode.v1.json", "contracts/spec/module-foundation/ethereum-graph-bytecode.v2.json", "packages/module-foundation-ethereum/dist/index.mjs"];
   const digest = "0x28ad9a130f32c14d931da364f529c63a207b9476bfc19c67751d9df0d568397d";
   const line = `  "src/module-foundation/FoundationTokenV1.sol": "${digest}",`;
   assert.deepEqual(scan(t, Object.fromEntries(paths.map(path => [path, line])), { raw: true }), []);

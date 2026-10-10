@@ -1,7 +1,7 @@
 import { decodeFunctionResult, encodeFunctionData, getAddress, keccak256, parseAbi, type Hex, type PublicClient } from "viem";
 import ethereum from "@/contracts/spec/module-foundation/chain-1.v1.json";
 import type { FoundationEthereumGraphSource } from "./ethereum-graph";
-import { assertFoundationEthereumRuntime, type buildFoundationEthereumGraph } from "./ethereum-graph-builder";
+import { assertFoundationEthereumRuntime, foundationEthereumProxyContract, type buildFoundationEthereumGraph } from "./ethereum-graph-builder";
 import { prepareFoundationEthereumStamp } from "./ethereum-graph-plan";
 
 export const foundationEthereumFactoryGraphAbi = parseAbi([
@@ -64,7 +64,7 @@ export async function simulateFoundationEthereumGraph(input: {
   });
   if (addresses.length !== 3 || hashes.length !== 3 || runtimes.length !== 3) throw new Error("The Ethereum graph has unexpected outputs.");
   const expected = [graph.engine, graph.token, graph.hook];
-  const names = ["FoundationEthereumGraphProxyV1", "FoundationTokenV1", "FoundationHookV2"] as const;
+  const names = [foundationEthereumProxyContract(source), "FoundationTokenV1", "FoundationHookV2"] as const;
   for (let i = 0; i < 3; i++) {
     if (!same(addresses[i], expected[i]) || !same(keccak256(runtimes[i]), hashes[i])) throw new Error("The simulated Ethereum output changed.");
     assertFoundationEthereumRuntime(names[i], runtimes[i]);
