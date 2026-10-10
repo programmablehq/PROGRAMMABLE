@@ -96,14 +96,25 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
         assertEq(CANONICAL_GRAPH_FACTORY.codehash, stampRouter.GRAPH_FACTORY_RUNTIME_CODE_HASH());
         bytes32[5] memory hashes =
             [MANAGER.codehash, POSM.codehash, ROUTER.codehash, PERMIT2.codehash, CANONICAL_GRAPH_FACTORY.codehash];
-        implementation = deployCode(
+        implementation = _deployGraphImplementation(hashes);
+        vm.deal(ALICE, 10 ether);
+        vm.deal(address(this), 10 ether);
+    }
+
+    function _deployGraphImplementation(bytes32[5] memory hashes) internal virtual returns (address) {
+        return deployCode(
             "FoundationEthereumGraphLaunchV1.sol:FoundationEthereumGraphLaunchV1",
             abi.encode(
                 manager, positions, IFoundationUniversalRouterV2(ROUTER), permits, CANONICAL_GRAPH_FACTORY, hashes
             )
         );
-        vm.deal(ALICE, 10 ether);
-        vm.deal(address(this), 10 ether);
+    }
+
+    function _graphProxyCreationCode(bytes32) internal view virtual returns (bytes memory) {
+        return abi.encodePacked(
+            type(FoundationEthereumGraphProxyV1).creationCode,
+            abi.encode(implementation, implementation.codehash, ALICE)
+        );
     }
 
     function _build(uint8 moduleCount, uint128 firstBuy)
@@ -181,15 +192,7 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
         );
         G.Target[] memory targets = new G.Target[](3);
         targets[0] = G.Target(
-            keccak256("engine"),
-            bytes32(0),
-            0,
-            firstBuy,
-            abi.encodePacked(
-                type(FoundationEthereumGraphProxyV1).creationCode,
-                abi.encode(implementation, implementation.codehash, ALICE)
-            ),
-            bytes("")
+            keccak256("engine"), bytes32(0), 0, firstBuy, _graphProxyCreationCode(authorization.routeNonce), bytes("")
         );
         engine = graph.predictTarget(authorization, targets[0]);
         targets[1] = G.Target(
