@@ -101,6 +101,30 @@ function assertFiles(findings, paths, count = paths.length) {
   assert.deepEqual([...new Set(findings.map(({ File }) => File))].sort(), [...paths].sort());
 }
 
+test("atomic module lifecycle allows only its exact public evidence fields", (t) => {
+  const path = "contracts/deployments/ethereum-module-foundation-v2.json";
+  const fields = [
+    ["canaryToken", "0xBB73F3Bb5CfAe5629F0a6a58bb10ab1e35e4c11a"],
+    ["apiSourceCommit", "0f37c09734a4f433c1df618bd8a46a393a73b0f4"],
+  ];
+  for (const [field, value] of fields) {
+    const line = `  "${field}": "${value}",`;
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    for (const rejected of [
+      `  "${field}": "${material}",`,
+      `  "apiKey": "${value}",`,
+      `${line}\n  "apiKey": "${value}",`,
+      `  "apiKey": "${value}",\n${line}`,
+    ]) assertFiles(scan(t, { [path]: rejected }, { raw: true }), [path]);
+    assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+    const fixturePath = "scripts/security/gitleaks-policy.test.mjs";
+    const fixture = `    ["${field}", "${value}"],`;
+    assert.deepEqual(scan(t, { [fixturePath]: fixture }, { raw: true }), []);
+    assertFiles(scan(t, { [fixturePath]: fixture.replace(value, material) }, { raw: true }), [fixturePath]);
+    assertFiles(scan(t, { [`${fixturePath}.backup`]: fixture }, { raw: true }), [`${fixturePath}.backup`]);
+  }
+});
+
 test("recent launch visibility allows only the exact public coin field", (t) => {
   const coin = completedLaunchCoin.toLowerCase();
   const field = `tokenAddress: "${coin}"`;
