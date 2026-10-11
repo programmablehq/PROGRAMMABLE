@@ -25,7 +25,7 @@ describe("profile selected public Robinhood API contract", () => {
     expect(robinhoodV4PublicPolicyDescription("4.0.0", legacy)).toBe(legacy);
   });
 
-  it("preserves the historical launch profile while website OpenAPI 1.18 adds completed index observations", async () => {
+  it("preserves the historical launch profile while website OpenAPI adds completed and early index observations", async () => {
     const actual = await document("4.0.0");
     expect(actual.info.version).toBe("1.18.0");
     const previous = JSON.parse(JSON.stringify(actual));
@@ -34,6 +34,15 @@ describe("profile selected public Robinhood API contract", () => {
     previous.paths["/api/ops/health"].get = health.operation;
     previous.components.schemas.OperationsHealth = health.schema;
     previous.components.schemas.EthereumExplorePage.properties.presentations.items.properties.market = { type: "null" };
+    const ethereumItems = previous.components.schemas.EthereumExplorePage.properties.items;
+    expect(ethereumItems.items.oneOf).toHaveLength(2);
+    expect(ethereumItems.items.oneOf[1]).toMatchObject({
+      additionalProperties: false,
+      properties: { confirmation: { const: "confirming" }, observationExpiresAt: { type: "integer" } },
+      description: expect.stringContaining("Not finalized provenance or authorization to trade"),
+    });
+    // The additive display-only variant may change; the canonical contract must not.
+    ethereumItems.items = ethereumItems.items.oneOf[0];
     for (const kind of ["classic", "custom"]) {
       const source = previous.components.schemas.EthereumExplorePage.properties.sourceEvidence.properties[kind].anyOf[0].properties;
       expect(source.source).toEqual({ enum: ["codex-classic-launches", "canonical-launch-stamp-router"] });
