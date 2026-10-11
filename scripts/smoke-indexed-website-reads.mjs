@@ -197,11 +197,26 @@ function validateProjectedItem(item, sources) {
   } else check(item.poolManager === null && item.hookAddress === null && item.poolId === null, "Robinhood no-market projection");
 }
 
-function validateItem(item, body, route, expectations) {
+function validateItem(item, body, route, expectations, nowMs) {
   check(record(item) && ADDRESS.test(item.tokenAddress ?? "") && ADDRESS.test(item.creator ?? "") &&
     HASH.test(item.transactionHash ?? "") && BLOCK.test(item.blockNumber ?? "") &&
     (item.chainId === undefined || item.chainId === route.chainId), "launch identity");
   if (route.chainId === 1) {
+    // The website also shows fresh, independently observed receipts while they
+    // wait for the canonical reader's finality depth. Validate their separate
+    // display-only contract; never count them as canonical provenance.
+    if (item.confirmation !== undefined) {
+      check(item.confirmation === "confirming" && item.chainId === 1 && item.category === "custom"
+        && ["custom", "module"].includes(item.mode) && ADDRESS.test(item.hookAddress ?? "")
+        && HASH.test(item.launchId ?? "") && HASH.test(item.blockHash ?? "") && HASH.test(item.poolId ?? "")
+        && /^0x[0-9a-f]{40}$/iu.test(item.quoteAsset ?? "") && timestamp(item.launchedAt, nowMs)
+        && Number.isSafeInteger(item.observationExpiresAt) && item.observationExpiresAt > nowMs
+        && item.observationExpiresAt <= nowMs + 60_000
+        && BigInt(item.blockNumber) > BigInt(body.sourceEvidence.custom.asOfBlock)
+        && item.provenance === undefined && item.finality === undefined && item.launchProjection === undefined,
+      "Ethereum confirming observation");
+      return;
+    }
     const provenance = item.provenance;
     check(ADDRESS.test(item.hookAddress ?? "") && ["classic", "custom"].includes(item.category) && record(provenance) &&
       provenance.schemaVersion === "programmable.explore-launch-category-provenance.v1" && provenance.category === item.category,
@@ -270,7 +285,7 @@ export function validateIndexedWebsiteList({ body, response, route, pageNumber, 
   const identities = new Set();
   const addresses = new Set();
   for (const item of body.items) {
-    validateItem(item, body, route, expectations);
+    validateItem(item, body, route, expectations, nowMs);
     check(!identities.has(launchIdentity(item)), "duplicate launch identity");
     identities.add(launchIdentity(item));
     addresses.add(item.tokenAddress.toLowerCase());
@@ -334,7 +349,8 @@ async function observeReads(input, target, headers, observedAt) {
         check(!identities.has(launchIdentity(item)), "duplicate launch across pages; rerun smoke");
         identities.add(launchIdentity(item));
       }
-      pages.push({ number, status: body.status, count: body.items.length, updatedAt: body.updatedAt,
+      pages.push({ number, status: body.status, count: body.items.length,
+        confirmingCount: body.items.filter(item => item.confirmation === "confirming").length, updatedAt: body.updatedAt,
         sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest: result.bodyDigest });
     }
     check(identities.size === first.page.totalItems, "catalog count");
