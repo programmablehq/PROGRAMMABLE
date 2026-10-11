@@ -7,7 +7,8 @@ import { isRobinhoodModuleSourceKind } from "@/lib/robinhood-launches";
 import { isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
 import { operationIdentity, type OperationsLaunch, type OperationsSnapshot, type OperationsSource } from "@/lib/launch-operations";
 import { readEthereumUnifiedExploreCatalog } from "./ethereum-explore";
-import { readRobinhoodExploreCatalog, readRobinhoodOperationsLaunches } from "./robinhood-index/read";
+import { readRobinhoodExploreCatalog } from "./robinhood-index/read";
+import { readRobinhoodOperationsFeed } from "./launch-operations-robinhood-feed";
 import { readProductionFinalizedCustomLaunchMetadataFeedV1 } from "./custom-launch/finalized-custom-launch-metadata-feed-v1";
 import { readRecentFoundationLaunches } from "./module-foundation/recent-launch-store";
 import { confirmedLaunchClients } from "./module-foundation/confirmed-launch";
@@ -60,18 +61,7 @@ async function collectSnapshot(): Promise<OperationsSnapshot> {
           listed: visible({ tokenAddress: row.token }, 1),
         })) };
     }),
-    observe("feed:4663", "Robinhood verified launches", 4663, async () => {
-      const data = await readRobinhoodOperationsLaunches();
-      return { status: data.status, updatedAt: data.updatedAt, complete: data.complete,
-        rows: data.items.map(row => ({ chainId: 4663 as const, token: row.tokenAddress,
-          name: name(row.name, row.tokenAddress), symbol: row.symbol || "",
-          mode: isRobinhoodModuleSourceKind(row.sourceKind) ? "module" as const : "custom" as const,
-          launchId: row.launchProjection?.launchId ?? row.launchId, subjectHash: row.launchProjection?.planHash ?? undefined,
-          transactionHash: row.transactionHash, observedAt: row.launchedAt,
-          stamp: row.stampHash || row.launchProjection ? "recorded" as const : "native-source" as const,
-          listed: row.launchProjection?.publication?.visibility !== "unlisted" && visible(row, 4663),
-        })) };
-    }),
+    observe("feed:4663", "Robinhood finalized launches", 4663, readRobinhoodOperationsFeed),
     observe("receipts", "Recent module receipts", null, async () => {
       if (!process.env.OPS_BLOB_READ_WRITE_TOKEN?.trim() && !process.env.BLOB_READ_WRITE_TOKEN?.trim()) throw new Error("Receipt storage unavailable");
       const data = await readRecentFoundationLaunches();

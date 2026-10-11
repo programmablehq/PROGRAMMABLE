@@ -1,71 +1,107 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { projectionFixture, hash } from "./fixtures/universal-launch-v1";
-import { projectionToRobinhoodLaunch } from "@/lib/custom-launch/launch-projection-v1";
-import type { RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
-import { buildOperationsRows, type OperationsReview } from "@/lib/launch-operations";
-
-const mocks = vi.hoisted(() => ({ read: vi.fn(), page: vi.fn(), write: vi.fn() }));
+import { describe, expect, it, vi } from "vitest";
+import { projectionFixture } from "./fixtures/universal-launch-v1";
+import { buildOperationsRows, type OperationsReview, type OperationsSnapshot } from "@/lib/launch-operations";
+import { readRobinhoodOperationsFeed, type OperationsFeedState, type OperationsFeedStore } from "@/lib/server/launch-operations-robinhood-feed";
 vi.mock("server-only", () => ({}));
-vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
-vi.mock("@/lib/server/robinhood-index/store", () => ({ indexStore: () => ({ read: mocks.read, write: mocks.write }) }));
-vi.mock("@/lib/server/robinhood-index/launch-projection-source", () => ({ launchProjectionSourceV1: () => ({ page: mocks.page }) }));
-vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumUnifiedExploreCatalog: async () => ({ status: "ready", entries: [] }) }));
-vi.mock("@/lib/server/custom-launch/finalized-custom-launch-metadata-feed-v1", () => ({ readProductionFinalizedCustomLaunchMetadataFeedV1: async () => ({ status: "current", launches: [] }) }));
-vi.mock("@/lib/server/module-foundation/recent-launch-store", () => ({ readRecentFoundationLaunches: async () => [] }));
-import { createOperationsSnapshotReader } from "@/lib/server/launch-operations";
 
-const now = Date.parse("2026-10-11T18:00:00Z"), fresh = new Date(now).toISOString();
-function fixture(): RobinhoodSnapshot {
-  const items = Array.from({ length: 241 }, (_, index) => {
-    const base = projectionFixture();
-    const projection = { ...base, launchId: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-      planHash: `sha256:${(index + 1).toString(16).padStart(64, "0")}` as const,
-      components: [{ ...base.components[0], expectedAddress: `0x${(index + 1).toString(16).padStart(40, "0")}` as `0x${string}` }],
-      publication: index === 240 ? { visibility: "unlisted" as const } : null };
-    return projectionToRobinhoodLaunch(projection, fresh);
-  });
-  return { version: 1, chainId: 4663, routerAddress: `0x${"1".repeat(40)}`, binding: hash, startBlock: "1",
-    cursor: { number: "42", hash }, checkpoints: [], finalizedBlock: "42", updatedAt: fresh, items: [],
-    launchProjections: { version: 1, sourceUrl: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections",
-      updatedAt: fresh, completedAt: fresh, nextCursor: null, items } };
+const now = Date.parse("2026-10-11T18:00:00Z");
+function projection(index: number, listed = true) {
+  const base = projectionFixture();
+  return { ...base, launchId: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    planHash: `sha256:${(index + 1).toString(16).padStart(64, "0")}` as const,
+    components: [{ ...base.components[0], expectedAddress: `0x${(index + 1).toString(16).padStart(40, "0")}` as `0x${string}` }],
+    publication: { visibility: listed ? "listed" as const : "unlisted" as const } };
 }
-beforeEach(() => {
-  vi.resetAllMocks(); vi.spyOn(Date, "now").mockReturnValue(now); vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN", "fixture");
-  // Reproduces the old collector: every page has a continuation, including empty pages.
-  mocks.page.mockImplementation(async (cursor: string | null) => ({ launches: [], nextCursor: String(Number(cursor ?? 0) + 1) }));
-});
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+function memory() {
+  let state: OperationsFeedState | null = null, version = 0;
+  const store: OperationsFeedStore = {
+    read: async () => state && { state: structuredClone(state), etag: String(version) },
+    write: vi.fn(async (next, etag) => {
+      if (etag !== (state ? String(version) : null)) throw new Error("Version changed");
+      state = structuredClone(next); version++;
+    }),
+  };
+  return { store };
+}
+describe("independent resumable Robinhood observations", () => {
+  it("resumes beyond 20 pages across instances, including empty pages and an unlisted final launch", async () => {
+    const { store } = memory(); let clock = now;
+    const page = vi.fn(async (cursor: string | null) => {
+      const number = Number(cursor ?? 0);
+      return { launches: number === 23 ? [] : [projection(number, number !== 24)], nextCursor: number === 24 ? null : String(number + 1) };
+    });
+    const first = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock, maxPages: 20 });
+    expect(first).toMatchObject({ status: "partial", complete: false }); expect(first.rows).toHaveLength(20);
+    clock += 11_000;
+    const complete = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock });
+    expect(page.mock.calls[20]).toEqual(["20"]);
+    expect(complete).toMatchObject({ status: "ready", complete: true }); expect(complete.rows).toHaveLength(24);
+    expect(complete.rows.at(-1)).toMatchObject({ launchId: projection(24).launchId, listed: false });
+    expect((await store.read())!.state.nextCursor).toBeNull();
+    expect((await store.read())!.state.pendingRows).toEqual([]);
+  });
 
-describe("complete saved Robinhood observations", () => {
-  it("recognizes a completed unlisted launch beyond 20 pages without re-fetching the feed", async () => {
-    const saved = fixture(), last = saved.launchProjections!.items[240];
-    mocks.read.mockResolvedValue({ snapshot: saved });
-    const snapshot = await createOperationsSnapshotReader()();
-    expect(snapshot.published).toHaveLength(241);
-    expect(snapshot.sources.find(source => source.id === "feed:4663")).toMatchObject({ status: "ready", complete: true, count: 241 });
+  it("detects independently finalized launches missing from the index and completes unlisted reviews", async () => {
+    const { store } = memory(), publicLaunch = projection(0), hiddenLaunch = projection(1, false);
+    const result = await readRobinhoodOperationsFeed({ store, source: { page: async () => ({ launches: [publicLaunch, hiddenLaunch], nextCursor: null }) }, now: () => now });
+    const snapshot: OperationsSnapshot = { schemaVersion: "programmable.launch-operations.v1", checkedAt: new Date(now).toISOString(),
+      indexed: [], recent: [], published: result.rows, sources: [{ id: "index:4663", label: "Robinhood", chainId: 4663, status: "ready", count: 0, complete: true, updatedAt: result.updatedAt }] };
     const review: OperationsReview = { schemaVersion: "programmable.custom-launch-manual-review.v1", reviewId: "20000000-0000-4000-8000-000000000001",
-      launchId: last.launchId, subjectHash: last.launchProjection!.planHash!, chainId: "4663", controller: last.creator,
-      state: "approved", revision: 1, submittedAt: fresh, approvedAt: fresh, expiresAt: fresh,
+      launchId: hiddenLaunch.launchId, subjectHash: hiddenLaunch.planHash, chainId: "4663", controller: hiddenLaunch.controller,
+      state: "approved", revision: 1, submittedAt: result.updatedAt, approvedAt: result.updatedAt, expiresAt: result.updatedAt,
       launchRequestedAt: null, launchDeadline: null, reason: null, requestSummary: {} };
-    expect(buildOperationsRows([review], snapshot, now).find(row => row.reviewId === review.reviewId)).toMatchObject({ group: "complete", status: "Launched · unlisted" });
-    expect(mocks.page).not.toHaveBeenCalled(); expect(mocks.write).not.toHaveBeenCalled();
+    const rows = buildOperationsRows([review], snapshot, now);
+    expect(rows.find(row => row.reviewId === review.reviewId)).toMatchObject({ group: "complete", status: "Launched · unlisted" });
+    expect(rows.find(row => !row.reviewId)).toMatchObject({ group: "attention", status: "Index not observed" });
   });
 
-  it("retains finalized rows during a stale refresh and excludes unconfirmed pending rows", async () => {
-    const saved = fixture(), stale = new Date(now - 300_001).toISOString();
-    saved.launchProjections!.completedAt = stale; saved.launchProjections!.nextCursor = "refresh-in-progress";
-    saved.pending = { block: { number: "43", hash }, items: [{ ...saved.launchProjections!.items[0], launchId: "not-finalized" }] };
-    mocks.read.mockResolvedValue({ snapshot: saved });
-    const snapshot = await createOperationsSnapshotReader()();
-    expect(snapshot.sources.find(source => source.id === "feed:4663")).toMatchObject({ status: "stale", complete: false });
-    expect(snapshot.published).toHaveLength(241);
-    expect(snapshot.published.some(row => row.launchId === "not-finalized")).toBe(false);
+  it("keeps the complete pass during a failed refresh and never refreshes its completion time", async () => {
+    const { store } = memory(); let clock = now;
+    const source = { page: vi.fn().mockResolvedValueOnce({ launches: [projection(0)], nextCursor: null }).mockRejectedValueOnce(new Error("Unavailable")) };
+    const first = await readRobinhoodOperationsFeed({ store, source, now: () => clock });
+    clock += 11_000;
+    const failed = await readRobinhoodOperationsFeed({ store, source, now: () => clock });
+    expect(failed).toMatchObject({ status: "stale", complete: false, updatedAt: first.updatedAt, rows: first.rows });
+    expect((await store.read())!.state.completedAt).toBe(first.updatedAt);
   });
 
-  it("does not report complete coverage without a saved projection traversal", async () => {
-    const saved = fixture(); saved.launchProjections = null;
-    mocks.read.mockResolvedValue({ snapshot: saved });
-    const snapshot = await createOperationsSnapshotReader()();
-    expect(snapshot.sources.find(source => source.id === "feed:4663")).toMatchObject({ status: "partial", complete: false });
+  it("retains older completed records while a later pass is still paging", async () => {
+    const { store } = memory(); let clock = now;
+    const page = vi.fn().mockResolvedValueOnce({ launches: [projection(0), projection(1)], nextCursor: null })
+      .mockResolvedValueOnce({ launches: [projection(2)], nextCursor: "older" })
+      .mockResolvedValueOnce({ launches: [projection(0), projection(1)], nextCursor: null });
+    const complete = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock });
+    clock += 11_000;
+    const progress = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock, maxPages: 1 });
+    expect(progress.rows).toHaveLength(3); expect(progress.updatedAt).toBe(complete.updatedAt);
+    clock += 301_000;
+    const next = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock });
+    expect(next).toMatchObject({ status: "ready", complete: true }); expect(next.rows).toHaveLength(3);
+    expect(next.updatedAt).not.toBe(complete.updatedAt);
+  });
+
+  it("uses a concurrent writer's checkpoint instead of overwriting newer progress", async () => {
+    const { store } = memory();
+    await readRobinhoodOperationsFeed({ store, source: { page: async () => ({ launches: [projection(0)], nextCursor: null }) }, now: () => now });
+    const winner = (await store.read())!;
+    const conflict: OperationsFeedStore = { read: vi.fn().mockResolvedValueOnce(null).mockResolvedValue(winner), write: vi.fn().mockRejectedValue(new Error("Precondition failed")) };
+    const result = await readRobinhoodOperationsFeed({ store: conflict,
+      source: { page: async () => ({ launches: [projection(1)], nextCursor: "next" }) }, now: () => now, maxPages: 1 });
+    expect(result).toMatchObject({ complete: true, rows: winner.state.rows });
+    expect(conflict.write).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a cursor cycle across separate batches and does not include non-finalized data", async () => {
+    const { store } = memory(); let clock = now;
+    const page = vi.fn().mockResolvedValueOnce({ launches: [projection(0)], nextCursor: "next" })
+      .mockResolvedValueOnce({ launches: [projection(1)], nextCursor: "next" })
+      .mockResolvedValueOnce({ launches: [{ ...projection(2), finality: { ...projection(2).finality, status: "pending" } }], nextCursor: null });
+    await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock, maxPages: 1 });
+    clock += 11_000;
+    const cycle = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock });
+    expect(cycle.complete).toBe(false); expect(cycle.rows).toHaveLength(1);
+    clock += 11_000;
+    const unconfirmed = await readRobinhoodOperationsFeed({ store, source: { page }, now: () => clock });
+    expect(unconfirmed.complete).toBe(false); expect(unconfirmed.rows).toHaveLength(1);
   });
 });
