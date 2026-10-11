@@ -19,7 +19,7 @@ function fixture(): RobinhoodSnapshot {
   const items = Array.from({ length: 241 }, (_, index) => {
     const base = projectionFixture();
     const projection = { ...base, launchId: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-      planHash: `sha256:${(index + 1).toString(16).padStart(64, "0")}`,
+      planHash: `sha256:${(index + 1).toString(16).padStart(64, "0")}` as const,
       components: [{ ...base.components[0], expectedAddress: `0x${(index + 1).toString(16).padStart(40, "0")}` as `0x${string}` }],
       publication: index === 240 ? { visibility: "unlisted" as const } : null };
     return projectionToRobinhoodLaunch(projection, fresh);
