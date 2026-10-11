@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
@@ -29,7 +30,8 @@ type Launch = LaunchPresentationSource & {
   hookAddress: string | null;
   category?: "classic" | "custom";
   mode?: "classic" | "custom" | "module";
-  confirmation?: "confirmed";
+  confirmation?: "confirmed" | "confirming";
+  observationExpiresAt?: number;
   creator: string;
   transactionHash: string;
   blockNumber: string;
@@ -78,6 +80,7 @@ function readRememberedSnapshot(chainId: ExploreScope) {
   } };
 }
 function rememberSnapshot(value: Snapshot) {
+  value = { ...value, data: { ...value.data, items: liveLaunchObservations(value.data.items) } };
   if (typeof window !== "undefined") rememberedSnapshots.set(value.data.scope ?? value.data.chainId!, { value, savedAt: Date.now() });
   return value;
 }
@@ -180,6 +183,11 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
   const [failedRequest, setFailedRequest] = useState<Request | null>(null);
   const [now, setNow] = useState(Date.now);
   const presentations = new Map((snapshot?.data.presentations ?? []).map((item) => [exploreIdentityKey(item), item]));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -299,7 +307,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
   const pending = !sameRequest && !failed;
   const data = sameRequest ? snapshot?.data : undefined;
   const pinned = chainId !== 1 ? snapshot?.data.items.find(launch => isPinnedRobinhoodToken(launch.tokenAddress, launch.chainId ?? 4663)) : null;
-  const items = data?.items ?? (pending && pinned ? [pinned] : []);
+  const items = liveLaunchObservations(data?.items ?? (pending && pinned ? [pinned] : []), now);
   const hasRows = items.length > 0;
   const updatingSearch = search.trim() !== request.q;
   const hasFilters = activeExploreFilterCount(request) > 0;
@@ -414,6 +422,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                     </div>
                     <span className={styles.mode}>{{ classic: "Classic", module: "Module", custom: "Custom" }[launchMode]}
                       <ChainMark chainId={launchChainId} className={styles.chainMark} />
+                      {launch.confirmation === "confirming" ? <span className={styles.confirming}>Confirming</span> : null}
                     </span>
                   </div>
                   <div className={styles.cardFooter}>

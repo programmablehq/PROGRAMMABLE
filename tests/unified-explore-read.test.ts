@@ -1,3 +1,5 @@
+vi.mock("@/lib/server/confirming-launches", () => ({ readConfirmingEthereumLaunches: vi.fn().mockResolvedValue([]) }));
+import { OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 } from "@/lib/explore-public-visibility";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
 import type { CanonicalTokenExploreEntry } from "@/lib/tokens";
@@ -11,6 +13,7 @@ vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalo
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumUnifiedExploreCatalog: sources.eth }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: sources.rhMarkets, readRobinhoodPresentations: sources.presentations }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: sources.ethMarkets }));
+import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { readUnifiedLaunches } from "@/lib/server/unified-explore";
 import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
 
@@ -36,6 +39,21 @@ beforeEach(() => {
 });
 
 describe("Unified verified source adapter", () => {
+  it("shows a receipt observation before indexing and replaces it by exact chain/token identity", async () => {
+    const row = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
+      category: "custom" as const, mode: "custom" as const, tokenAddress: other, name: "Fresh", symbol: "NEW",
+      hookAddress: address, launchId: pool, creator: address, transactionHash: pool, blockHash: pool,
+      blockNumber: "123", poolId: pool, quoteAsset: address, launchedAt: "2026-10-11T10:00:00Z", decimals: 18 };
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([row]);
+    expect((await readUnifiedLaunches(1, "NEW")).items).toEqual([expect.objectContaining({ confirmation: "confirming" })]);
+    sources.eth.mockResolvedValue({ status: "ready", entries: [{ ...eth, tokenAddress: other }], sourceEvidence: {}, updatedAt: null });
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([row]);
+    const canonical = (await readUnifiedLaunches()).items.filter(item => item.chainId === 1 && item.tokenAddress === other);
+    expect(canonical).toHaveLength(1);
+    expect(canonical[0]).not.toHaveProperty("confirmation");
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([{ ...row, tokenAddress: OWNER_HIDDEN_EXPLORE_IDENTITIES_V1.find(item => item.chainId === 1)!.identity }]);
+    expect((await readUnifiedLaunches(1, "NEW")).items).toEqual([]);
+  });
   it("preserves the exact pair ticker independently of optional price data", async () => {
     sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [{ ...rh, quoteAsset: other }], sourceEvidence: {} });
     sources.rhMarkets.mockResolvedValue(new Map([[address, { ...market(20), quoteAsset: { address: other, symbol: "QUOTE" } }]]));

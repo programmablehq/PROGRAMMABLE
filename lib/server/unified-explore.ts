@@ -10,6 +10,10 @@ import { isRobinhoodModuleSourceKind } from "@/lib/robinhood-launches";
 import { coinValuation, type RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 import { exploreIdentityKey, selectUnifiedExplorePage } from "@/lib/unified-explore";
 import type { RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
+import { readConfirmingEthereumLaunches } from "./confirming-launches";
+import { PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1 } from "@/lib/public-explore-catalog-v1";
+import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
+import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { readRecentFoundationLaunches } from "./module-foundation/recent-launch-store";
 
 const readers = {
@@ -23,6 +27,7 @@ const readers = {
 /** Two independently verified catalogs, one global ranking, and at most one market batch per chain per cache window. */
 export async function readUnifiedLaunches(page = 1, query = "", filters: RobinhoodExploreFilters = { sort: "highest", mode: "all" },
   size: 6 | 8 | 10 | 50 = 10, dependencies: typeof readers = readers) {
+  const observations = readConfirmingEthereumLaunches().catch(() => []);
   // Each network can enrich its catalog as soon as it arrives. A slower index
   // must not hold up the other network's independent market request.
   const [[rh, rhMarkets], [eth, ethMarkets]] = await Promise.all([
@@ -61,14 +66,17 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const recent = await readRecentFoundationLaunches(indexed).catch(() => []);
   const recentRows = recent.map(item => ({ ...item.row, chainId: item.chainId, mode: "module" as const,
     category: "custom" as const, confirmation: "confirmed" as const }));
+  const known = new Set([...indexed, ...recentRows.map(exploreIdentityKey)]);
+  const confirming = liveLaunchObservations(await observations).filter(row => !known.has(exploreIdentityKey(row)) && isPublicExploreIdentityV1(row, 1)
+    && !PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1.some(hidden => hidden.tokenAddress.toLowerCase() === row.tokenAddress.toLowerCase() && hidden.launchId.toLowerCase() === row.launchId.toLowerCase()));
   const values = new Map<string, number>();
   for (const [identity, market] of markets) {
     const value = filters.sort === "activity" ? market.volume24hUsd : coinValuation(market).value;
     if (value !== null && Number.isFinite(value) && value >= 0) values.set(identity, value);
   }
-  const selection = selectUnifiedExplorePage<(typeof rhRows)[number] | (typeof ethRows)[number] | (typeof recentRows)[number]>(
-    [...rhRows, ...ethRows, ...recentRows], page, query, filters, values, size);
-  const symbols = new Map([...rhRows, ...ethRows, ...recentRows].map(row => [exploreIdentityKey(row), row.symbol]));
+  const selection = selectUnifiedExplorePage<(typeof rhRows)[number] | (typeof ethRows)[number] | (typeof recentRows)[number] | (typeof confirming)[number]>(
+    [...rhRows, ...ethRows, ...recentRows, ...confirming], page, query, filters, values, size);
+  const symbols = new Map([...rhRows, ...ethRows, ...recentRows, ...confirming].map(row => [exploreIdentityKey(row), row.symbol]));
   // Pair identity belongs to the launch, and survives optional price expiry.
   // Resolve catalog tickers on the same chain before using the exact pool observation.
   const items = selection.items.map(row => {
@@ -98,6 +106,6 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     ...recent.filter(item => selection.items.some(row => exploreIdentityKey(row) === exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress })))
       .map(item => item.presentation),
   ];
-  return { scope: "all" as const, status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence },
+  return { scope: "all" as const, status: status === "unavailable" && confirming.length ? "partial" as const : status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence },
     updatedAt, ...selection, items, presentations };
 }

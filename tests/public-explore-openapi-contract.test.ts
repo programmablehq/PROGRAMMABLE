@@ -1,3 +1,4 @@
+vi.mock("@/lib/server/confirming-launches", () => ({ readConfirmingEthereumLaunches: vi.fn().mockResolvedValue([]) }));
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
@@ -17,6 +18,7 @@ vi.mock("@/lib/server/robinhood-presentation", () => ({
 }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: mocks.codexMarkets }));
 
+import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { programmablePublicOpenApi } from "../lib/public-openapi";
 import { readEthereumLaunches } from "../lib/server/ethereum-explore";
 import { readRobinhoodLaunches, readRobinhoodToken } from "../lib/server/robinhood-index/read";
@@ -46,6 +48,20 @@ const explorePaths = [
 ] as const;
 
 describe("public Explore OpenAPI contract", () => {
+  it("documents early receipt observations without inventing finalized provenance", async () => {
+    const row = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
+      category: "custom" as const, mode: "custom" as const, launchId: `0x${"aa".repeat(32)}`,
+      tokenAddress: `0x${"11".repeat(20)}`, hookAddress: `0x${"22".repeat(20)}`, creator: `0x${"33".repeat(20)}`,
+      transactionHash: `0x${"44".repeat(32)}`, blockHash: `0x${"55".repeat(32)}`, blockNumber: "26170294",
+      poolId: `0x${"66".repeat(32)}`, quoteAsset: `0x${"00".repeat(20)}`, launchedAt: "2026-10-11T16:05:47Z",
+      name: null, symbol: null, decimals: null };
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([row]);
+    const empty = async () => ({ entries: [], status: "current" as const, generatedAt: "2026-10-11T16:05:47Z" });
+    const response = await readEthereumLaunches(1, "", undefined, 10, { classic: empty, custom: empty });
+    const valid = validator("EthereumExplorePage");
+    expect(valid(response), JSON.stringify(valid.errors)).toBe(true);
+    expect(response.items[0]).not.toHaveProperty("provenance");
+  });
   it("documents the deterministic reset error for the retired JSON Explore reads", () => {
     const validate = validator("ExploreIndexResetError");
 

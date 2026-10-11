@@ -1,3 +1,4 @@
+vi.mock("@/lib/server/confirming-launches", () => ({ readConfirmingEthereumLaunches: vi.fn().mockResolvedValue([]) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ vi.mock("../lib/server/ethereum-explore", () => ({
   readEthereumTokenPresentation: vi.fn(async () => ({ presentation: null })),
 }));
 
+import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import ExplorePage from "../app/explore/page";
 import ExploreChainPage from "../app/explore/[chain]/page";
 import TokenPage, { generateMetadata as tokenMetadata } from "../app/token/[address]/page";
@@ -76,6 +78,17 @@ describe("Explore chain routes", () => {
 });
 
 describe("verified token routing", () => {
+  it("opens a refreshing observation page without changing the canonical transaction resolver", async () => {
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([{
+      chainId: 1, confirmation: "confirming", observationExpiresAt: Date.now() + 30_000,
+      category: "custom", mode: "custom", launchId: "launch", tokenAddress: address, hookAddress: address,
+      creator: address, transactionHash: "tx", blockHash: "hash", blockNumber: "123", poolId: "pool",
+      quoteAsset: address, launchedAt: "2026-10-11T16:05:47Z", name: "New", symbol: "NEW", decimals: 18,
+    }]);
+    expect(await resolveTokenPage(address, "1")).toMatchObject({ token: null });
+    const page = await TokenPage({ params: Promise.resolve({ address }), searchParams: Promise.resolve({ chain: "1" }) });
+    expect(page.props.children.type.name).toBe("ConfirmingLaunchView");
+  });
   it("resolves a clean URL from the exact Robinhood record independently of cookies", async () => {
     mocks.cookie.mockReturnValue({ value: "1" });
     mocks.readToken.mockResolvedValue({ status: "ready", token, updatedAt: null });

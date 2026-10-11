@@ -345,3 +345,10 @@
     background-color: color-mix(in srgb, var(--panel-fill-control, var(--surface-soft)) 90%, var(--text));
   }
 }
+.confirming {
+  color: #e7c786;
+  font-size: 0.68rem;
+  border: 1px solid #e7c78655;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
