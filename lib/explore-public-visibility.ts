@@ -77,6 +77,7 @@ export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
   Object.freeze({ chainId: 1, identity: "0x705f60fadb9728ca976e727ae9d746cc4d303be2" }), // ETH 3.6 release canary
   Object.freeze({ chainId: 1, identity: "0xbb73f3bb5cfae5629f0a6a58bb10ab1e35e4c11a" }), // Atomic module-stamp release canary
   Object.freeze({ chainId: 1, identity: "0x2bbc1677a495746a7fad51851dcba8bc37c5a213" }), // WECWDCWDE
+  Object.freeze({ chainId: 1, identity: "0x3d2315f1869518129b508a55f86d0afcb2fefba6" }), // Old DNA launch; owner requested removal before relaunch
 ]);
 /**
  * Controls only public discovery. Direct token lookup remains available so
