@@ -1,9 +1,20 @@
+import { customLaunchTradeEvidence } from "@/lib/custom-launch-trade-evidence";
+
 const record = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
-export function CustomLaunchAssessment({ value, admin = false }: { value: unknown; admin?: boolean }) {
+export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subjectHash, chainId }: { value: unknown; admin?: boolean; tradeChecks?: unknown; subjectHash?: string; chainId?: string }) {
   const a = record(value), timing = record(a.timing), fees = record(a.fees), trading = record(a.trading);
+  const evidence = customLaunchTradeEvidence(tradeChecks ?? a.operatorTradeChecks, subjectHash, chainId);
+  const preparation = record(a.preparation);
+  const notes = Array.isArray(preparation.notes) ? preparation.notes.map(record).filter(note => typeof note.message === "string") : [];
   const deadlines = Array.isArray(timing.deadlines) ? timing.deadlines.map(record).filter(d => d.state !== "covers_window") : [];
-  if (!Object.keys(a).length) return null;
+  if (!Object.keys(a).length && !evidence.report) return null;
   return <section aria-label="Launch readiness">
+    {notes.length ? <details open><summary>Before launch</summary>
+      {notes.map((note, i) => <div key={i}><p>{String(note.message)}</p>
+        {admin && typeof note.location === "string" ? <small style={{ overflowWrap: "anywhere" }}>{note.location}</small> : null}
+      </div>)}
+      <p>These are preparation hints. The exact launch and trading behavior still require review.</p>
+    </details> : null}
     {deadlines.length ? <div role="status"><strong>Embedded deadline needs attention</strong>
       {deadlines.map((d, i) => <p key={i}>{String(d.path)}: {d.state === "unknown_semantics" ? "may be a sentinel, duration or block number; confirm its meaning in the source" : d.state === "expired" ? "already expired" : "ends before the review and launch window"}{typeof d.expiresAt === "string" ? ` (${new Date(d.expiresAt).toLocaleString()})` : ""}.</p>)}
       {deadlines.some(d => d.state === "expired" || d.state === "short_window") ? <p>Approval cannot extend a deadline inside your contract call. Update it to cover review and launch, then submit the new request.</p> : <p>The argument name alone does not establish a time limit. Confirm its meaning in the contract source.</p>}
@@ -13,11 +24,14 @@ export function CustomLaunchAssessment({ value, admin = false }: { value: unknow
       <p>Programmable route fee: <strong>{typeof fees.platformRoutedRateBps === "number" ? `${(fees.platformRoutedRateBps / 100).toFixed(2)}%` : "See the signed fee obligations"}</strong>.</p>
       {typeof fees.recipient === "string" ? <p>Recipient: <code style={{ overflowWrap: "anywhere" }}>{fees.recipient}</code></p> : null}
       {typeof fees.buyBasis === "string" ? <p>Buy: {fees.buyBasis.replaceAll("-", " ")}. Sell: {String(fees.sellBasis).replaceAll("-", " ")}. Currency: {String(fees.currency)}.</p> : null}
-      <p>Custom hook and pool fees may be additional. Total fees are not yet measured. A hook fee only replaces the route fee after the route verifies it.</p>
+      <p>Custom hook and pool fees may be additional. The full combined fee is not established here. A hook fee only replaces the route fee after the route verifies it.</p>
     </details> : null}
-    {admin && Object.keys(trading).length ? <details open><summary>Trading checks</summary>
-      <p>Launch approval does not verify trading. Buy, sell and platform fee amount/recipient need separate execution evidence.</p>
-      <p>Current status: {String(trading.status).replaceAll("_", " ")}.</p>
+    {admin && (Object.keys(trading).length > 0 || evidence.report) ? <details open><summary>Trading checks</summary>
+      <p role="status">{evidence.status === "passed" ? "Passed on fork: buy, sell and 0.30% platform fee collection." : evidence.status === "failed" ? "Fork check failed. Review the results before approval." : "Buy, sell and platform fee checks are pending for this version."}</p>
+      {evidence.report ? <>
+        <p>Checked for this exact launch on {chainId === "1" ? "Ethereum" : "Robinhood"}, block {String(evidence.report.forkBlockNumber)}. This records the tested scenario; live execution is checked separately.</p>
+        <details><summary>Fork check results</summary><pre>{JSON.stringify(evidence.report, null, 2)}</pre></details>
+      </> : <p>A launch simulation or approval alone does not verify trading.</p>}
       {trading.evidence ? <details><summary>Recorded behavior evidence</summary><pre>{JSON.stringify(trading.evidence, null, 2)}</pre></details> : null}
     </details> : null}
   </section>;

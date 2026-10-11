@@ -13,3 +13,7 @@ New Robinhood Custom Launches use the [Custom Launch Plan guide](https://api.pro
 5. Open the returned launch in [Your launches](https://programmable.market/developers/api-keys?view=history). Check the network, controller, transaction destination, calldata and value before signing in your wallet. Follow the plan through finality and public indexing.
 
 The earlier `/v4/chains/4663/custom-launches` profile is retained for existing launch history and recovery. It does not accept new requests. Ethereum Mainnet has a [separate V3 guide](https://programmable.market/developers/custom-launch-api-v1.md).
+
+Preflight also provides preparation hints for review. On Ethereum, read `reviewReadiness.preparation`; on Robinhood, read the `programmable.review_preparation` entry in `assurance.claims`. These point to old router or platform-fee constants, zero initial-buy amounts, missing buy evidence and declared liquidity gaps. Confirm the relevant code path, fix the mismatch and repack, or provide evidence for your custom implementation. A hint is not an automatic rejection, and declared funding is not proof that a purchase ran.
+
+In the review console, a passed fork check means the saved buy, sell and platform-fee scenario passed for that exact version and chain. Manual approval opens the 24-hour launch window. The team's wallet still signs the launch; production trading and external terminal support are checked separately.
