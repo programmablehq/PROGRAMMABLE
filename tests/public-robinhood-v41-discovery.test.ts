@@ -25,9 +25,9 @@ describe("profile selected public Robinhood API contract", () => {
     expect(robinhoodV4PublicPolicyDescription("4.0.0", legacy)).toBe(legacy);
   });
 
-  it("preserves the historical launch profile while website OpenAPI 1.17 adds index health", async () => {
+  it("preserves the historical launch profile while website OpenAPI 1.18 adds completed index observations", async () => {
     const actual = await document("4.0.0");
-    expect(actual.info.version).toBe("1.17.0");
+    expect(actual.info.version).toBe("1.18.0");
     const previous = JSON.parse(JSON.stringify(actual));
     previous.info.version = "1.15.0";
     const health = JSON.parse(readFileSync(new URL("./fixtures/public-ops-health-website-v116.json", import.meta.url), "utf8"));
@@ -47,10 +47,20 @@ describe("profile selected public Robinhood API contract", () => {
       source.deployment = { type: "string" };
       source.sourceCommit = { type: "string" };
     }
+    const projection = previous.components.schemas.RobinhoodExplorePage.properties.sourceEvidence.anyOf[0].properties.launchProjections.anyOf[0];
+    expect(projection.properties.completedAt).toMatchObject({ description: expect.stringContaining("Last fully verified traversal") });
+    expect(projection.required).toEqual(["sourceUrl", "updatedAt", "nextCursor"]);
+    delete projection.properties.completedAt;
+    const operation = previous.paths["/api/explore/robinhood"].get;
+    expect(operation.description).toContain("routine projection refreshes preserve that completed observation");
+    operation.description = operation.description.replace(
+      "ready means each block source has reached its finalized cursor and the projection feed has a completed traversal within five minutes; routine projection refreshes preserve that completed observation; syncing means an admitted source is still catching up without completed coverage;",
+      "ready means each saved source has reached its finalized cursor; syncing means an admitted source is still catching up;",
+    );
     const serialized = JSON.stringify(previous);
     const sources = '"enum":["codex","dexscreener","uniswap-v4"]';
     expect(serialized).toContain(sources);
-    // Only website version, index health, market observations and the verified Codex source migration may differ.
+    // Only the explicitly normalized website observations may differ from the historical launch contract.
     const historical = serialized.replace(sources, '"enum":["dexscreener","uniswap-v4"]');
     const expectedDigest = readFileSync(new URL("./fixtures/public-openapi-v40-website-v115.sha256", import.meta.url), "utf8").trim();
     expect(createHash("sha256").update(historical).digest("hex")).toBe(expectedDigest);
