@@ -42,6 +42,7 @@
 .moduleLoading > div::after { content: ""; height: 9px; width: 64%; border-radius: 5px; background: #ffffff0b; }
 .moduleCard { display: flex; width: 100%; text-align: left; gap: 7px; border: 0; border-radius: 11px; padding: 12px 10px; min-height: 64px; align-items: center; background: var(--panel-fill-soft); transition: background .32s ease; }
 .moduleCard[data-active="true"] { background: var(--panel-fill-selected); }
+.moduleCard:has(.comingSoon),.pickerModule:has(.comingSoon) { display: none; }
 .studio .moduleCard[data-unavailable="true"],.studio .pickerModule[data-unavailable="true"] { opacity: .65; filter: grayscale(1); }
 .comingSoon { display: block; margin-top: 4px; color: #b4b4bc; font-size: 11px; line-height: 15px; font-weight: 500; }
 .moduleName > span:last-child { overflow-wrap: anywhere; }
