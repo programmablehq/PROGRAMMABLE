@@ -8,17 +8,17 @@ import { customLaunchReviewLabel, customLaunchReviewOverdue, parseCustomLaunchRe
 import styles from "./custom-launch-review-console.module.css";
 type ReviewRow = CustomLaunchReview & { launchId: string; requestSummary: Record<string, unknown> };
 type ReviewDetail = CustomLaunchReview & { launchId: string; request: Record<string, unknown>; technicalStatus: Record<string, unknown>; assessment?: unknown };
-export function CustomLaunchReviewConsole() {
+export function CustomLaunchReviewConsole({ initialReviewId }: { initialReviewId?: string } = {}) {
   const { authReady, authenticated, connecting, openWallet, wallet } = useWallet();
   const account = authenticated && isWebsiteAdminWallet(wallet?.account) ? wallet?.account : null;
   return <main className={styles.page}>
-    <header><Link href="/admin/partners">Partner access</Link><h1>Custom launch reviews</h1><p>Review applications within 24 hours. Approval opens a separate 24-hour launch window.</p></header>
-    {account ? <AccountReviews key={account} account={account} /> :
+    <header><Link href="/admin/launch-operations">Launch overview</Link> · <Link href="/admin/partners">Partner access</Link><h1>Custom launch reviews</h1><p>Review applications within 24 hours. Approval opens a separate 24-hour launch window.</p></header>
+    {account ? <AccountReviews key={`${account}:${initialReviewId ?? ""}`} account={account} initialReviewId={initialReviewId} /> :
       <section><p>{!authReady ? "Loading…" : authenticated ? "Connect an authorized admin wallet to continue." : "Sign in with your admin wallet."}</p><button disabled={connecting || !authReady} onClick={() => openWallet()}>Connect wallet</button></section>}
   </main>;
 }
 
-function AccountReviews({ account }: { account: string }) {
+function AccountReviews({ account, initialReviewId }: { account: string; initialReviewId?: string }) {
   const { getAccessToken, getIdentityToken } = useWallet();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60_000); return () => window.clearInterval(timer); }, []);
@@ -27,6 +27,7 @@ function AccountReviews({ account }: { account: string }) {
   const [reviews, setReviews] = useState<ReviewRow[]>([]), [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [replacementId, setReplacementId] = useState("");
   const [tradeReport, setTradeReport] = useState("");
+  const selectedReview = useRef(initialReviewId);
   const [busy, setBusy] = useState(true), [error, setError] = useState(""), [reason, setReason] = useState("");
   const request = useCallback(async (reviewId?: string, decision?: { review: ReviewDetail; choice: "approve" | "reject" | "request_information" | "replace" | "record_checks"; reason: string; replacementReviewId?: string; report?: unknown }) => {
     if (!account) throw new Error("Connect an admin wallet.");
@@ -53,6 +54,15 @@ function AccountReviews({ account }: { account: string }) {
     finally { setBusy(false); }
   }, [request]);
   useEffect(() => {
+    if (!initialReviewId) return;
+    let current = true;
+    request(initialReviewId).then(value => {
+      parseCustomLaunchReview(value.review);
+      if (current && selectedReview.current === initialReviewId) setDetail(value.review);
+    }).catch(error => { if (current) setError(error instanceof Error ? error.message : "Unable to load launch."); });
+    return () => { current = false; };
+  }, [initialReviewId, request]);
+  useEffect(() => {
     let current = true;
     request().then(value => {
       value.reviews.forEach(parseCustomLaunchReview);
@@ -63,6 +73,7 @@ function AccountReviews({ account }: { account: string }) {
     return () => { current = false; };
   }, [request]);
   async function select(reviewId: string) {
+    selectedReview.current = reviewId;
     setBusy(true); setError(""); setDetail(null); setReason(""); setReplacementId(""); setTradeReport("");
     try { const value = await request(reviewId); parseCustomLaunchReview(value.review); setDetail(value.review); }
     catch (e) { setError(e instanceof Error ? e.message : "Unable to load launch."); } finally { setBusy(false); }
