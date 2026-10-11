@@ -96,8 +96,7 @@ function AccountReviews({ account }: { account: string }) {
           <strong>{entry.author === "applicant" ? "Team reply" : "Programmable"}</strong><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.message}</p>
           {entry.links.map(link => <p key={link}><a href={link} target="_blank" rel="noopener noreferrer">{link}</a></p>)}
         </div>)}</section> : null}
-        <CustomLaunchAssessment value={detail.assessment} admin />
-        {detail.tradeChecks ? <details open><summary>Recorded fork trading check: {String(detail.tradeChecks.status)}</summary><p>Operator evidence for the specified scenario and block. No live trading guarantee.</p><pre>{JSON.stringify(detail.tradeChecks, null, 2)}</pre></details> : null}
+        <CustomLaunchAssessment value={detail.assessment} tradeChecks={detail.tradeChecks} subjectHash={detail.subjectHash} chainId={detail.chainId} admin />
         {canDecide && detail.state !== "approved" ? <details><summary>Record targeted trading checks</summary><p>Run the review-trade-checks-v4 operator tool with this review ID and subject hash, then paste its report. This does not approve the launch.</p><textarea aria-label="Fork trading report JSON" maxLength={12000} value={tradeReport} onChange={e => setTradeReport(e.target.value)} /><button disabled={busy || !tradeReport.trim()} onClick={() => void decide("record_checks")}>Save check report</button></details> : null}
         <h3>Technical checks</h3><pre>{JSON.stringify(detail.technicalStatus, null, 2)}</pre>
         <details><summary>Submitted launch and source</summary><pre>{JSON.stringify(detail.request, null, 2)}</pre></details>
