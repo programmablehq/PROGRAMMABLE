@@ -55,7 +55,7 @@ function responseStatusSummary(body, response) {
 
 class IncompleteEthereumCatalogError extends Error {}
 
-function isIncompleteEthereumCatalog(body, response, expectations, nowMs) {
+function isIncompleteEthereumCatalog(body, response, expectations, nowMs, pageNumber) {
   if (!record(body) || body.chainId !== 1 || !record(body.sources) || !record(body.sourceEvidence) ||
     Object.keys(body.sources).sort().join(",") !== "classic,custom" ||
     Object.keys(body.sourceEvidence).sort().join(",") !== "classic,custom" ||
@@ -67,10 +67,12 @@ function isIncompleteEthereumCatalog(body, response, expectations, nowMs) {
   if (!["classic", "custom"].every(name => body.sources[name] === "unavailable"
     ? body.sourceEvidence[name] === null
     : ["current", "last-known-good"].includes(body.sources[name]) && record(body.sourceEvidence[name]))) return false;
-  if (!record(body.page) || body.page.number !== 1 || body.page.size !== PAGE_SIZE ||
+  if (!record(body.page) || body.page.size !== PAGE_SIZE ||
     !Number.isSafeInteger(body.page.totalItems) || body.page.totalItems < 0 || body.page.totalItems > MAXIMUM_ITEMS ||
-    body.page.totalPages !== Math.ceil(body.page.totalItems / PAGE_SIZE) || body.page.hasMore !== (body.page.totalPages > 1) ||
-    !Array.isArray(body.items) || body.items.length !== Math.min(PAGE_SIZE, body.page.totalItems) ||
+    body.page.totalPages !== Math.ceil(body.page.totalItems / PAGE_SIZE) ||
+    body.page.number !== Math.min(pageNumber, Math.max(1, body.page.totalPages)) ||
+    body.page.hasMore !== (body.page.number < body.page.totalPages) ||
+    !Array.isArray(body.items) || body.items.length !== Math.min(PAGE_SIZE, Math.max(0, body.page.totalItems - (body.page.number - 1) * PAGE_SIZE)) ||
     !Array.isArray(body.presentations)) return false;
   if (unavailable === 2 && (body.updatedAt !== null || body.page.totalItems !== 0 || body.presentations.length !== 0)) return false;
   try {
@@ -333,12 +335,15 @@ async function observeReads(input, target, headers, observedAt) {
       const result = await request(`${route.path}?page=${number}&pageSize=${PAGE_SIZE}&sort=newest&mode=all`, "application/json");
       let body;
       try { body = JSON.parse(result.text); } catch { throw new Error("indexed website JSON is invalid"); }
-      if (input.targetKind === "staged" && route.chainId === 1 && number === 1 &&
-        isIncompleteEthereumCatalog(body, result.response, expectations, Date.parse(observedAt))) {
+      if (input.targetKind === "staged" && route.chainId === 1 &&
+        isIncompleteEthereumCatalog(body, result.response, expectations, Date.parse(observedAt), number)) {
         throw new IncompleteEthereumCatalogError(`indexed website ethereum response status (${responseStatusSummary(body, result.response)}) is incomplete`);
       }
       validateIndexedWebsiteList({ body, response: result.response, route, pageNumber: number, expectations, nowMs: Date.parse(observedAt) });
       first ??= body;
+      if (input.targetKind === "staged" && body.page.totalItems !== first.page.totalItems) {
+        throw new IncompleteEthereumCatalogError("indexed website catalog changed during pagination; recapture the complete observation");
+      }
       check(body.page.totalItems === first.page.totalItems, "catalog changed during pagination; rerun smoke");
       check(hasPersistentPin(body, route) === hasPersistentPin(first, route), "persistent pin changed during pagination");
       for (const [index, item] of body.items.entries()) {

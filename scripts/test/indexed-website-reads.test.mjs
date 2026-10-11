@@ -520,16 +520,36 @@ test("malformed or untrusted incomplete source envelopes never trigger availabil
   }
 });
 
-test("production, later-page incompleteness and other-chain integrity failures are not retried", async () => {
-  for (const kind of ["production", "later-page", "other-chain"]) {
+test("production and other-chain integrity failures are not retried", async () => {
+  for (const kind of ["production", "other-chain"]) {
     const f = fixture(({ url, spec }) => {
-      if (url.pathname === "/api/explore/ethereum" && (kind !== "later-page" || spec.body.page.number === 2)) incompleteEthereum(spec);
+      if (url.pathname === "/api/explore/ethereum") incompleteEthereum(spec);
       if (kind === "other-chain" && url.pathname === "/api/explore/robinhood") spec.body.sourceEvidence.router.binding = "invalid";
     });
     await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
       ...(kind === "production" ? { targetKind: "production", targetUrl: "https://programmable.market" } : {}),
       waitImpl: async () => assert.fail("nonretryable observation was retried") })),
     kind === "other-chain" ? /Robinhood Router binding/u : /ethereum response status/u);
+  }
+});
+
+test("later-page availability and live count drift discard the entire attempt before a bounded retry", async () => {
+  for (const kind of ["availability", "count"]) {
+    let firstPages = 0;
+    const waits = [];
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname !== "/api/explore/ethereum") return;
+      if (spec.body.page.number === 1) firstPages += 1;
+      if (spec.body.page.number !== 2 || firstPages !== 1) return;
+      if (kind === "availability") incompleteEthereum(spec);
+      else { spec.body.page.totalItems = 52; spec.body.items.push(ethereumItem(52)); }
+    });
+    const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl, waitImpl: async delay => waits.push(delay) }));
+    assert.deepEqual(waits, [5_000]);
+    assert.equal(firstPages, 2);
+    assert.equal(result.chains[0].totalItems, 51);
+    assert.equal(result.chains[0].pages.length, 2);
+    assert.doesNotMatch(JSON.stringify(result), /partial|unavailable/);
   }
 });
 
