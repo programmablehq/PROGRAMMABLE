@@ -85,3 +85,12 @@ still requires fresh per-release authority and independent provider evidence.
 Future factory releases require their own reviewed technical record before
 being introduced to the shared index; new tokens on an existing factory need
 no per-token configuration. Unknown source identities remain a smoke failure.
+
+Finalized custom projections keep a separate completion timestamp. The cursor is
+a resumable background checkpoint, not a loss of previously verified coverage.
+An initial traversal reports `syncing` until its terminal page is verified. Later
+refreshes retain the last completed observation; it becomes `stale` after five
+minutes if the worker cannot finish another traversal. Individual successful
+pages never renew that completion timestamp. Each pass drains up to 128 pages
+within the existing 45-second projection budget, since the upstream feed can
+return one candidate per page. Verification and conditional writes are unchanged.

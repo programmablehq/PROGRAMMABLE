@@ -145,10 +145,14 @@ function validateSources(body, route, expectations, nowMs) {
     if (projection != null) check(record(projection) && projection.sourceUrl === LAUNCH_PROJECTION_SOURCE &&
       timestamp(projection.updatedAt, nowMs) && (projection.nextCursor === null ||
         typeof projection.nextCursor === "string" && projection.nextCursor.length <= 4096), "Robinhood projection source");
-    check(body.updatedAt === [...sources, ...(projection ? [projection] : [])].map(source => source.updatedAt).sort()[0], "Robinhood oldest source timestamp");
+    if (projection?.completedAt != null) check(timestamp(projection.completedAt, nowMs) &&
+      Date.parse(projection.completedAt) <= Date.parse(projection.updatedAt), "Robinhood projection completion");
+    const completedAt = projection?.completedAt ?? (projection?.nextCursor === null ? projection.updatedAt : null);
+    const projectionObservedAt = completedAt ?? projection?.updatedAt;
+    check(body.updatedAt === [...sources.map(source => source.updatedAt), ...(projection ? [projectionObservedAt] : [])].sort()[0], "Robinhood oldest source timestamp");
     if (body.status === "ready") check(sources.every(source => source.cursor.number === source.finalizedBlock &&
       nowMs - Date.parse(source.updatedAt) <= 300_000) && (!projection ||
-      projection.nextCursor === null && nowMs - Date.parse(projection.updatedAt) <= 300_000), "Robinhood ready checkpoint");
+      completedAt !== null && nowMs - Date.parse(completedAt) <= 300_000), "Robinhood ready checkpoint");
   }
 }
 

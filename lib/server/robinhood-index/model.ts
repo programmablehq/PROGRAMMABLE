@@ -28,6 +28,8 @@ export type LaunchProjectionSnapshot = {
   sourceUrl: string;
   updatedAt: string;
   nextCursor: string | null;
+  /** Last fully verified traversal; page progress must not refresh this observation. */
+  completedAt?: string | null;
   items: RobinhoodLaunch[];
 };
 
@@ -124,6 +126,7 @@ export function parseSnapshot(value: unknown): RobinhoodSnapshot {
     if (!isObject(lane) || lane.version !== 1
       || lane.sourceUrl !== "https://api.programmable.market/v4/chains/4663/finalized-launch-projections"
       || !date(lane.updatedAt) || !(lane.nextCursor === null || typeof lane.nextCursor === "string" && lane.nextCursor.length <= 4096)
+      || !(lane.completedAt == null || date(lane.completedAt) && Date.parse(lane.completedAt) <= Date.parse(String(lane.updatedAt)))
       || !Array.isArray(lane.items) || lane.items.length > 10000 || !lane.items.every(isRobinhoodProjectedLaunch)) {
       throw new Error("Invalid launch projection index");
     }
@@ -173,17 +176,28 @@ export function snapshotLaunches(snapshot: RobinhoodSnapshot | null): readonly R
 export function moduleModeSnapshots(snapshot: RobinhoodSnapshot | null): readonly ModuleModeSnapshot[] {
   return [...(snapshot?.moduleMode ? [snapshot.moduleMode] : []), ...(snapshot?.moduleModeSources ?? [])];
 }
+/** Older snapshots prove completion only when their persisted cursor is exhausted. */
+export function projectionCompletedAt(source: LaunchProjectionSnapshot): string | null {
+  return source.completedAt ?? (source.nextCursor === null ? source.updatedAt : null);
+}
+export function projectionReadState(source: LaunchProjectionSnapshot, now: number) {
+  const completedAt = projectionCompletedAt(source);
+  const updatedAt = completedAt ?? source.updatedAt;
+  return { updatedAt, status: now - Date.parse(updatedAt) > 300_000 ? "stale" as const
+    : completedAt ? "ready" as const : "syncing" as const };
+}
 function snapshotStatus(snapshot: RobinhoodSnapshot | null, now: number): RobinhoodLaunchList["status"] {
   if (!snapshot) return "unavailable";
   const sources = [snapshot, ...moduleModeSnapshots(snapshot)];
   if (sources.some(source => now - Date.parse(source.updatedAt) > 300_000)) return "stale";
-  if (snapshot.launchProjections && now - Date.parse(snapshot.launchProjections.updatedAt) > 300_000) return "stale";
-  if (snapshot.launchProjections?.nextCursor) return "syncing";
+  const projection = snapshot.launchProjections && projectionReadState(snapshot.launchProjections, now);
+  if (projection?.status === "stale") return "stale";
+  if (projection?.status === "syncing") return "syncing";
   return sources.some(source => source.pending || source.cursor?.number !== source.finalizedBlock) ? "syncing" : "ready";
 }
 function snapshotUpdatedAt(snapshot: RobinhoodSnapshot | null): string | null {
   if (!snapshot) return null;
-  return [...moduleModeSnapshots(snapshot), ...(snapshot.launchProjections ? [snapshot.launchProjections] : [])].reduce((oldest, source) =>
+  return [...moduleModeSnapshots(snapshot), ...(snapshot.launchProjections ? [{ updatedAt: projectionCompletedAt(snapshot.launchProjections) ?? snapshot.launchProjections.updatedAt }] : [])].reduce((oldest, source) =>
     Date.parse(source.updatedAt) < Date.parse(oldest) ? source.updatedAt : oldest, snapshot.updatedAt);
 }
 
@@ -197,8 +211,8 @@ export function tokenLaunchRecord(snapshot: RobinhoodSnapshot | null, address: s
     const token = source.items.find(row => row.tokenAddress.toLowerCase() === identity
       || row.launchProjection?.components.some(component => component.expectedAddress.toLowerCase() === identity));
     if (!token) continue;
-    const syncing = "nextCursor" in source ? Boolean(source.nextCursor)
-      : Boolean(source.pending || source.cursor?.number !== source.finalizedBlock);
+    if ("nextCursor" in source) return { ...projectionReadState(source, now), token };
+    const syncing = Boolean(source.pending || source.cursor?.number !== source.finalizedBlock);
     return {
       status: now - Date.parse(source.updatedAt) > 300_000 ? "stale" : syncing ? "syncing" : "ready",
       updatedAt: source.updatedAt,

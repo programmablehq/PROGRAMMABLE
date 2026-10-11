@@ -5,7 +5,7 @@ import { isDiscoverableRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "@/lib/server/robinhood-presentation";
 import type { RobinhoodCoinMarket, RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import type { RobinhoodProfilePageSize } from "@/lib/robinhood-launches";
-import { exploreCatalog, launchList, moduleModeSnapshots, profileLaunchList, snapshotLaunches, tokenLaunchRecord } from "./model";
+import { exploreCatalog, launchList, moduleModeSnapshots, profileLaunchList, snapshotLaunches, tokenLaunchRecord, projectionCompletedAt } from "./model";
 import { indexStore } from "./store";
 
 // A page reads the saved list only. Failures never fall through to an RPC.
@@ -27,7 +27,7 @@ export async function readRobinhoodExploreCatalog() {
           releaseDigest: source.releaseDigest, startBlock: source.startBlock, cursor: source.cursor,
           finalizedBlock: source.finalizedBlock, updatedAt: source.updatedAt })),
         launchProjections: snapshot.launchProjections ? { sourceUrl: snapshot.launchProjections.sourceUrl,
-          updatedAt: snapshot.launchProjections.updatedAt, nextCursor: snapshot.launchProjections.nextCursor } : null,
+          updatedAt: snapshot.launchProjections.updatedAt, completedAt: projectionCompletedAt(snapshot.launchProjections), nextCursor: snapshot.launchProjections.nextCursor } : null,
       } : null };
   } catch {
     return { status: "unavailable" as const, updatedAt: null, items: [], sourceEvidence: null };
@@ -59,7 +59,7 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
         releaseDigest: source.releaseDigest, startBlock: source.startBlock, cursor: source.cursor,
         finalizedBlock: source.finalizedBlock, updatedAt: source.updatedAt })),
       launchProjections: snapshot.launchProjections ? { sourceUrl: snapshot.launchProjections.sourceUrl,
-        updatedAt: snapshot.launchProjections.updatedAt, nextCursor: snapshot.launchProjections.nextCursor } : null,
+        updatedAt: snapshot.launchProjections.updatedAt, completedAt: projectionCompletedAt(snapshot.launchProjections), nextCursor: snapshot.launchProjections.nextCursor } : null,
     } : null, presentations: await readRobinhoodPresentations(list.items, markets).catch(() => list.items.map(row => ({
       tokenAddress: row.tokenAddress, imageUrl: null, description: null, links: [], market: markets.get(row.tokenAddress.toLowerCase()) ?? null,
     }))) };
