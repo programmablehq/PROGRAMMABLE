@@ -5,6 +5,7 @@ import { canonicalBrowserSha256V2 as digest } from "@/lib/custom-launch/browser-
 import type { LaunchPlanRecordV1 } from "@/lib/custom-launch/launch-plan-v1";
 import { admissionIssuerFixture, authorizeRecordFixture, capabilitiesFixture, releaseFixture, stampRecordFixture } from "./fixtures/launch-plan-admission-v1";
 import { bindStep, component, controller, now, recordFixture, runtime, runtimeHash, stamp } from "./fixtures/universal-launch-v1";
+import { atomicRecordFixture } from "./fixtures/atomic-launch-v2";
 
 const milliseconds = Number(now) * 1000;
 const changedDigest = `sha256:${"bb".repeat(32)}`;
@@ -31,8 +32,38 @@ function historicalCapabilities(record: LaunchPlanRecordV1) {
     execution: { stamp: { address: component, runtimeCodeHash: runtimeHash, selector: "0xbda52856" } }, receiptIssuer: admissionIssuerFixture("new-issuer").public };
   return capabilitiesFixture(record, [current, original], current);
 }
+function retainedCapabilities(record: LaunchPlanRecordV1, count: number) {
+  const original = releaseFixture(record);
+  const others = Array.from({ length: count - 1 }, (_, index) => {
+    const manifestDigest = digest("programmable.release-inventory-test.v1", { index });
+    return { ...original, releaseId: manifestDigest, manifestDigest,
+      binding: { ...original.binding, manifestDigest },
+      ...(original.atomicBinding ? { atomicBinding: { ...original.atomicBinding, manifestDigest } } : {}) };
+  });
+  // Keep the requested release last so a truncated inventory cannot pass.
+  return capabilitiesFixture(record, [...others, original]);
+}
 
 describe("original release authority for launch wallet handoff", () => {
+  it.each([34, 65, 129])("verifies the original signed launch with %i retained public releases", async count => {
+    for (const record of [stampRecordFixture(), authorizeRecordFixture(atomicRecordFixture())]) {
+      const result = await prepareUniversalLaunchWalletV1(provider(), controller, input(record, retainedCapabilities(record, count)), now);
+      expect(result.transaction.to).toBe(record.steps.at(-1)!.transaction.to);
+      expect(result.admissionAuthority?.receiptHash).toBe(record.admission!.receiptHash);
+      expect(result.admissionAuthority?.releaseId).toBe(releaseFixture(record).releaseId);
+    }
+  });
+  it("rejects more than the API's 128 historical releases plus its current release before wallet reads", async () => {
+    const record = stampRecordFixture(); const rpc = provider();
+    await expect(prepareUniversalLaunchWalletV1(rpc, controller, input(record, retainedCapabilities(record, 130)), now)).rejects.toThrow(/original release/);
+    expect(rpc.request).not.toHaveBeenCalled();
+  });
+  it("still rejects an ambiguous original authority in a large inventory before wallet reads", async () => {
+    const record = stampRecordFixture(); const rpc = provider(); const capabilities = retainedCapabilities(record, 65);
+    capabilities.availability.bindings.releases[0] = { ...releaseFixture(record), releaseId: changedDigest };
+    await expect(prepareUniversalLaunchWalletV1(rpc, controller, input(record, capabilities), now)).rejects.toThrow(/original release/);
+    expect(rpc.request).not.toHaveBeenCalled();
+  });
   it("uses the actual production nesting and verifies the signed admission before wallet reads", async () => {
     const record = stampRecordFixture(); const capabilities = capabilitiesFixture(record); const rpc = provider();
     expect(capabilities).not.toHaveProperty("execution");

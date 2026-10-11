@@ -25,6 +25,8 @@ const object = (value: unknown) => projectionObject(value) ? value : fail();
 const digest = (value: unknown): value is string => typeof value === "string" && /^sha256:(?!0{64}$)[0-9a-f]{64}$/.test(value);
 const same = (a: unknown, b: unknown) => canonicalBrowserJsonV2(a) === canonicalBrowserJsonV2(b);
 const keys = (value: Record<string, unknown>, expected: readonly string[]) => same(Object.keys(value).sort(), [...expected].sort());
+// The API retains up to 128 historical releases and may add one current release.
+const MAX_PUBLIC_RELEASES_V1 = 129;
 
 function base64(value: unknown, maximum: number): Uint8Array<ArrayBuffer> {
   if (typeof value !== "string" || value.length === 0 || value.length > maximum || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) fail();
@@ -75,7 +77,7 @@ export async function verifyLaunchPlanReleaseAuthorityV1(resource: LaunchPlanRec
   nowMilliseconds: number): Promise<LaunchPlanPublicReleaseV1> {
   const cap = object(capabilities), bindings = object(object(cap.availability).bindings);
   if (cap.schemaVersion !== "programmable.custom-launch-capabilities.v1" || cap.chainId !== "4663" || !digest(cap.manifestDigest)
-    || !Array.isArray(bindings.releases) || bindings.releases.length < 1 || bindings.releases.length > 33
+    || !Array.isArray(bindings.releases) || bindings.releases.length < 1 || bindings.releases.length > MAX_PUBLIC_RELEASES_V1
     || !Number.isSafeInteger(nowMilliseconds) || nowMilliseconds < 0) fail();
   const admission = resource.admission, evidence = resource.admissionEvidence;
   if (!admission || !evidence || !digest(evidence.policyBindingHash)) fail();
