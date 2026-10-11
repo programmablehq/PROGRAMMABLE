@@ -34,6 +34,12 @@ export function launchFlowStateV1(record: LaunchPlanRecordV1): { title: string; 
   if (["final", "source_verified", "indexed", "publicly_visible"].includes(record.status)) return {
     title: "Confirming website indexing", description: "Your launch is final onchain. Programmable is checking the saved website record before opening your program.", terminal: true,
   };
+  const waiting = record.steps.find(step => step.status === "broadcast" || step.status === "mined" || step.transactionHash && step.status !== "final" && step.status !== "failed");
+  if (waiting) return { title: waiting.status === "mined" ? "Waiting for finality" : "Transaction submitted", description: atomic
+    ? "Tracking your combined launch and Stamp automatically. Your program opens after independent finality and website indexing."
+    : "Tracking continues automatically. The next wallet step becomes available after this transaction is independently final.", terminal: false };
+  if (record.continuation?.status === "replan_required" && (!record.manualReview || customLaunchReviewLabel(record.manualReview) === "Approved")) return { title: "Team action: refresh preparation",
+    description: "Ask your bot to replan this request with current bindings. Keep completed transactions. Your existing approval deadline still applies.", terminal: false };
   if (record.manualReview && customLaunchReviewNeedsStart(record.manualReview)
     && !record.steps.some(step => step.transactionHash)) return {
     title: "Approved", description: customLaunchReviewDescription(record.manualReview), terminal: false,
@@ -42,10 +48,6 @@ export function launchFlowStateV1(record: LaunchPlanRecordV1): { title: string; 
   if (record.steps.some(step => step.status === "failed") || record.status === "action_required") return {
     title: "Launch needs attention", description: "Read the launch finding below and return it to the bot. Keep the current launch and completed transactions when preparing its successor.", terminal: false,
   };
-  const waiting = record.steps.find(step => step.status === "broadcast" || step.status === "mined");
-  if (waiting) return { title: waiting.status === "mined" ? "Waiting for finality" : "Transaction submitted", description: atomic
-    ? "Tracking your combined launch and Stamp automatically. Your program opens after independent finality and website indexing."
-    : "Tracking continues automatically. The next wallet step becomes available after this transaction is independently final.", terminal: false };
   if (record.manualReview && !customLaunchReviewAllowsSigning(record.manualReview)) return {
     title: customLaunchReviewLabel(record.manualReview), description: customLaunchReviewDescription(record.manualReview), terminal: false,
   };

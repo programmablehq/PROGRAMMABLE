@@ -36,7 +36,7 @@ describe("launch operations observations", () => {
     const r = { ...review, launchRequestedAt: "2026-10-11T10:00:00Z", requestSummary: { operations: current } };
     expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ group: "waiting", status: "Ready · waiting for team signature" });
     const result = describeStoredLaunchStatus({ status: "analysis_pending", errorCode: "PLAN_COMPILER_UNAVAILABLE" }, reviewOperations(review, current));
-    expect(result.status).toBe("authorized · router-transaction-required");
+    expect(result).toMatchObject({ status: "Ready · waiting for team signature", owner: "Team" });
     expect(describeStoredLaunchStatus({}, reviewOperations(review, operations)).next).toContain("own API key");
   });
   it("does not call an approved but unsigned launch stuck, and marks an overdue review without expiring it", () => {
@@ -46,6 +46,21 @@ describe("launch operations observations", () => {
     expect(buildOperationsRows([pending], empty(), now)[0]).toMatchObject({ group: "review", status: "Review overdue" });
     expect(pending.state).toBe("pending");
     expect(buildOperationsRows([{ ...review, launchRequestedAt: "2026-10-11T11:00:00Z" }], empty(), now)[0].status).toBe("Launch completion unconfirmed");
+  });
+  it("assigns stale preparation and provider failures to Programmable, not the team", () => {
+    const r = { ...review, launchRequestedAt: "2026-10-11T11:00:00Z", requestSummary: { operations: {
+      ...operations, current: { launchId: successor, status: "analysis_pending", replanRequired: false, updatedAt: "2026-10-11T11:01:00Z", findingCodes: [] } } } };
+    expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ owner: "Programmable", group: "attention", status: "Preparation needs checking" });
+    expect(describeStoredLaunchStatus({ status: "analysis_pending", preflight: { findings: [{ code: "PLAN_COMPILER_UNAVAILABLE" }] } })).toMatchObject({ owner: "Programmable", status: "Waiting for Programmable preparation" });
+  });
+  it("keeps transaction confirmation ahead of expired approval and replan advice", () => {
+    const r = { ...review, expiresAt: "2026-10-11T00:00:00Z", requestSummary: { operations: {
+      ...operations, current: { launchId: successor, status: "mined", replanRequired: true } } } };
+    const before = JSON.stringify(r);
+    expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ owner: "Blockchain", group: "waiting", status: "Waiting for confirmation" });
+    expect(JSON.stringify(r)).toBe(before);
+    r.requestSummary.operations.current.status = "source_verified";
+    expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ owner: "Programmable", status: "Onchain complete · check index" });
   });
   it("matches finalization by exact request and chain, never ticker or creator; excludes replaced requests", () => {
     const snapshot: OperationsSnapshot = { ...empty(), published: [{ ...launch, chainId: 4663 as const }], indexed: [{ ...launch, chainId: 4663 as const }] };

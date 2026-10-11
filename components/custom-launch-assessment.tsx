@@ -1,19 +1,28 @@
 import { customLaunchTradeEvidence } from "@/lib/custom-launch-trade-evidence";
+import type { CustomLaunchReview } from "@/lib/custom-launch-review";
 
 const record = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
-export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subjectHash, chainId }: { value: unknown; admin?: boolean; tradeChecks?: unknown; subjectHash?: string; chainId?: string }) {
+export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subjectHash, chainId, review }: { value: unknown; admin?: boolean; tradeChecks?: unknown; subjectHash?: string; chainId?: string; review?: CustomLaunchReview }) {
   const a = record(value), timing = record(a.timing), fees = record(a.fees), trading = record(a.trading);
   const evidence = customLaunchTradeEvidence(tradeChecks ?? a.operatorTradeChecks, subjectHash, chainId);
   const preparation = record(a.preparation);
   const notes = Array.isArray(preparation.notes) ? preparation.notes.map(record).filter(note => typeof note.message === "string") : [];
+  // Approval supplies review context, not proof that a particular purchase occurred.
+  // Keep source heuristics available without presenting them as new blockers.
+  const reviewed = review?.state === "approved" && !review.supersededBy
+    && review.subjectHash === subjectHash && review.chainId === chainId;
   const deadlines = Array.isArray(timing.deadlines) ? timing.deadlines.map(record).filter(d => d.state !== "covers_window") : [];
   if (!Object.keys(a).length && !evidence.report) return null;
   return <section aria-label="Launch readiness">
-    {notes.length ? <details open><summary>Before launch</summary>
-      {notes.map((note, i) => <div key={i}><p>{String(note.message)}</p>
+    {notes.length ? <details open={!reviewed}><summary>{reviewed ? "Automated hints from before review" : "Before launch"}</summary>
+      {reviewed ? <p>These source checks were recorded before approval. They are not a new rejection. Read the review decision for the checked launch behavior; current launch status determines the next step.</p> : null}
+      {notes.map((note, i) => <div key={i}><p>{note.code === "INITIAL_BUY_NOT_ESTABLISHED"
+        ? reviewed ? "The source check could not identify the initial buy automatically. See the review decision for its execution results."
+          : "Initial buy needs review: identify the purchase call and its input and output in the launch simulation."
+        : String(note.message)}</p>
         {admin && typeof note.location === "string" ? <small style={{ overflowWrap: "anywhere" }}>{note.location}</small> : null}
       </div>)}
-      <p>These are preparation hints. The exact launch and trading behavior still require review.</p>
+      {!reviewed ? <p>These are preparation hints, not a review decision.</p> : null}
     </details> : null}
     {deadlines.length ? <div role="status"><strong>Embedded deadline needs attention</strong>
       {deadlines.map((d, i) => <p key={i}>{String(d.path)}: {d.state === "unknown_semantics" ? "may be a sentinel, duration or block number; confirm its meaning in the source" : d.state === "expired" ? "already expired" : "ends before the review and launch window"}{typeof d.expiresAt === "string" ? ` (${new Date(d.expiresAt).toLocaleString()})` : ""}.</p>)}
