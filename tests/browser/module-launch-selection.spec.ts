@@ -287,26 +287,24 @@ test.describe("Module Studio", () => {
     }
   });
 
-  for (const width of [1440, 390]) test(`coming soon modules stay disabled while available modules can launch at ${width}px`, async ({ page }) => {
+  for (const width of [1440, 390]) test(`coming soon modules stay hidden while available modules can launch at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${studioOrigin}?mode=availability`);
     if (width < 600) await page.getByRole("button", { name: "Modules", exact: true }).click();
     const ready = ["Initial wallet buy limit", "Hot potato", "Plague", "Reactive pair", "Entangled"];
     const pending = ["Buyback and burn", "Dip buyback", "LP rewards", "Full-range liquidity", "Buyer rewards", "Nth-buy pot", "King of the Hill"];
     for (const name of pending) {
-      const card = page.getByRole("switch", { name, exact: true });
+      const card = page.getByRole("switch", { name, exact: true, includeHidden: true });
+      await expect(card).toBeHidden();
       await expect(card).toBeDisabled();
-      await expect(card).toContainText("Coming soon");
-      await expect(card).toHaveCSS("filter", "grayscale(1)");
-      await expect(card).toHaveAttribute("aria-checked", "false");
     }
     if (width < 600) await page.getByRole("button", { name: "Your coin", exact: true }).click();
     await page.getByRole("button", { name: "Add module", exact: true }).click({ position: { x: 10, y: 10 } });
     const picker = page.getByRole("dialog", { name: "Add module", exact: true });
     for (const name of pending) {
-      const option = picker.getByRole("button", { name: new RegExp(`^${name}`) });
+      const option = picker.getByRole("button", { name: new RegExp(`^${name}`), includeHidden: true });
+      await expect(option).toBeHidden();
       await expect(option).toBeDisabled();
-      await expect(option).toContainText("Coming soon");
     }
     for (const name of ready) await expect(picker.getByRole("button", { name, exact: true })).toBeEnabled();
     await picker.getByRole("button", { name: "Close module list", exact: true }).click();
