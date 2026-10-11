@@ -1,8 +1,10 @@
 import "server-only";
+import { readConfirmingEthereumLaunches } from "./confirming-launches";
+import { liveLaunchObservations } from "@/lib/confirming-launches";
 
 import { readWebsiteRouterCustomIdentitySnapshotV1 } from "@/lib/alchemy/router-custom-public.server";
 import { readClassicLaunchCatalogV1 } from "@/lib/market-data/classic-launch-catalog.server";
-import { publicExploreCatalogEntriesV1, publicExplorePresentationEntryV1 } from "@/lib/public-explore-catalog-v1";
+import { PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1, publicExploreCatalogEntriesV1, publicExplorePresentationEntryV1 } from "@/lib/public-explore-catalog-v1";
 import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
 import { readCodexMarkets } from "./codex-market";
 import { ETHEREUM_EXPLORE_FILTERS } from "@/lib/ethereum-explore";
@@ -118,32 +120,38 @@ export async function readEthereumExploreCatalog(dependencies: Dependencies = re
 }
 
 export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 10, dependencies?: Dependencies) {
+  const observations = readConfirmingEthereumLaunches().catch(() => []);
   const catalog = await readEthereumExploreCatalog(dependencies);
   const q = query.normalize("NFC").trim().replace(/^\$/, "").toLowerCase();
   const visible = publicExploreCatalogEntriesV1(catalog.entries).filter((entry): entry is CanonicalTokenExploreEntry => entry.exploreKind === "token" && isPublicExploreIdentityV1(entry));
-  const filtered = visible.filter(entry => (filters.mode === undefined || filters.mode === "all" || entry.launchCategoryProvenance.category === filters.mode)
+  const indexed = new Set(catalog.entries.map(entry => entry.tokenAddress.toLowerCase()));
+  const confirming = liveLaunchObservations(await observations).filter(row => !indexed.has(row.tokenAddress.toLowerCase()) && isPublicExploreIdentityV1(row, 1)
+    && !PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1.some(hidden => hidden.tokenAddress.toLowerCase() === row.tokenAddress.toLowerCase() && hidden.launchId.toLowerCase() === row.launchId.toLowerCase()));
+  const rows = [...visible.map(entry => ({
+    launchId: entry.launchStampProvenance?.launchId ?? entry.id,
+    tokenAddress: entry.tokenAddress, hookAddress: entry.hookAddress, creator: entry.creatorAddress,
+    transactionHash: entry.launchTransactionHash, blockNumber: entry.launchBlockNumber,
+    launchedAt: entry.launchedAt, name: entry.name, symbol: entry.symbol, decimals: entry.tokenDecimals ?? null,
+    category: entry.launchCategoryProvenance.category, provenance: entry.launchCategoryProvenance,
+  })), ...confirming];
+  const logOrder = new Map(visible.map(entry => [entry.tokenAddress.toLowerCase(), entry.launchLogIndex ?? 0]));
+  const filtered = rows.filter(entry => (filters.mode === undefined || filters.mode === "all" || entry.category === filters.mode)
     && (!q || [entry.name, entry.symbol, entry.tokenAddress].some(value => value?.normalize("NFC").toLowerCase().includes(q))));
   filtered.sort((a, b) => {
-    const left = BigInt(a.launchBlockNumber ?? "0");
-    const right = BigInt(b.launchBlockNumber ?? "0");
-    const difference = left === right ? (a.launchLogIndex ?? 0) - (b.launchLogIndex ?? 0) : left > right ? 1 : -1;
+    const left = BigInt(a.blockNumber ?? "0"), right = BigInt(b.blockNumber ?? "0");
+    const difference = left === right ? (logOrder.get(a.tokenAddress.toLowerCase()) ?? 0) - (logOrder.get(b.tokenAddress.toLowerCase()) ?? 0) : left > right ? 1 : -1;
     return (filters.sort === "oldest" ? difference : -difference) || a.tokenAddress.localeCompare(b.tokenAddress);
   });
   const totalPages = Math.ceil(filtered.length / pageSize);
   const number = Math.min(Math.max(1, page), Math.max(1, totalPages));
   const selected = filtered.slice((number - 1) * pageSize, number * pageSize);
-  const markets = await readCodexMarkets(selected, 1);
+  const keys = new Set(selected.map(row => row.tokenAddress.toLowerCase()));
+  const selectedCanonical = visible.filter(entry => keys.has(entry.tokenAddress.toLowerCase()));
+  const markets = await readCodexMarkets(selectedCanonical, 1).catch(() => new Map<string, RobinhoodCoinMarket>());
   return {
-    chainId: catalog.chainId, status: catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,
-    items: selected.map(entry => ({
-      launchId: entry.launchStampProvenance?.launchId ?? entry.id,
-      tokenAddress: entry.tokenAddress, hookAddress: entry.hookAddress, creator: entry.creatorAddress,
-      transactionHash: entry.launchTransactionHash, blockNumber: entry.launchBlockNumber,
-      launchedAt: entry.launchedAt, name: entry.name, symbol: entry.symbol, decimals: entry.tokenDecimals ?? null,
-      category: entry.launchCategoryProvenance.category,
-      provenance: entry.launchCategoryProvenance,
-    })),
-    presentations: selected.map(entry => ({ tokenAddress: entry.tokenAddress, imageUrl: entry.imageUrl ?? null,
+    chainId: catalog.chainId, status: catalog.status === "unavailable" && confirming.length ? "partial" as const : catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,
+    items: selected,
+    presentations: selectedCanonical.map(entry => ({ tokenAddress: entry.tokenAddress, imageUrl: entry.imageUrl ?? null,
       description: entry.description ?? null, links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })), market: markets.get(entry.tokenAddress.toLowerCase()) ?? null })),
     page: { number, size: pageSize, totalItems: filtered.length, totalPages, hasMore: number < totalPages },
   };

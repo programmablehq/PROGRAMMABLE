@@ -1330,7 +1330,9 @@ export function createLaunchStampReaderV1(binding: Readonly<{
       caughtUp: targetNumber === highestSafeNumber,
     };
   }
-  return Object.freeze({ scanLaunchStampAnchors, parseLaunchStampReceipt, hydrateLaunchStampAnchor, createInitialLaunchStampRouterSlice, advanceLaunchStampRouterSlice });
+  // Parsing an observation does not establish finality. Only the scanner and
+  // hydrator above may produce canonical launch identities.
+  return Object.freeze({ anchorFromLog, scanLaunchStampAnchors, parseLaunchStampReceipt, hydrateLaunchStampAnchor, createInitialLaunchStampRouterSlice, advanceLaunchStampRouterSlice });
 }
 
 export const { scanLaunchStampAnchors, parseLaunchStampReceipt, hydrateLaunchStampAnchor, createInitialLaunchStampRouterSlice, advanceLaunchStampRouterSlice } = createLaunchStampReaderV1({

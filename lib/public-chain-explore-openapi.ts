@@ -47,6 +47,14 @@ const ethereumItem = object({ launchId: text, tokenAddress: address, hookAddress
   name: text, symbol: text, decimals: nullable({ type: "integer" }),
   category: { enum: ["classic", "custom"] }, provenance: ethereumProvenance },
 ["launchId", "tokenAddress", "hookAddress", "launchedAt", "name", "symbol", "decimals", "category", "provenance"]);
+const confirmingEthereumItem = {
+  ...object({ chainId: { const: 1 }, confirmation: { const: "confirming" }, observationExpiresAt: integer,
+    category: { const: "custom" }, mode: { enum: ["module", "custom"] }, launchId: hash,
+    tokenAddress: address, hookAddress: address, creator: address, transactionHash: hash,
+    blockNumber: block, blockHash: hash, poolId: hash, quoteAsset: address,
+    launchedAt: timestamp, name: nullable(text), symbol: nullable(text), decimals: nullable(integer) }),
+  description: "Display-only receipt observation from two independent Ethereum providers. Expires at observationExpiresAt (Unix milliseconds). Not finalized provenance or authorization to trade. Replaced by the canonical item after verification.",
+};
 const robinhoodItem = object({
   routerAddress: nullable(address), launchId: text,
   tokenAddress: { ...address, description: "Address used by the Coin route. For a projected launch without a primary asset, this identifies the first declared component and does not imply an ERC-20 role." },
@@ -83,7 +91,7 @@ export const chainExploreSchemas = {
   EthereumExplorePage: object({ chainId: { const: 1 }, status: { enum: ["ready", "partial", "stale", "unavailable"] },
     sources: object({ classic: sourceStatus, custom: sourceStatus }),
     sourceEvidence: object({ classic: ethereumSource, custom: ethereumSource }), updatedAt: nullable(timestamp),
-    items: { ...array(ethereumItem), maxItems: 50 }, presentations: { ...array(presentation(market)), maxItems: 50 }, page }),
+    items: { ...array({ oneOf: [ethereumItem, confirmingEthereumItem] }), maxItems: 50 }, presentations: { ...array(presentation(market)), maxItems: 50 }, page }),
   RobinhoodExplorePage: object({ chainId: { const: 4663 }, status: { enum: ["ready", "syncing", "stale", "unavailable"] },
     updatedAt: nullable(timestamp), items: { ...array(robinhoodItem), maxItems: 50 }, page,
     sourceEvidence: nullable(object({ router: robinhoodSource, modules: array(moduleSource), launchProjections: launchProjectionSource })),

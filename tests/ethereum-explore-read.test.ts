@@ -1,3 +1,4 @@
+vi.mock("@/lib/server/confirming-launches", () => ({ readConfirmingEthereumLaunches: vi.fn().mockResolvedValue([]) }));
 import { describe, expect, it, vi } from "vitest";
 import { canonicalTokenExploreEntryV1 } from "@/lib/explore-entry-v1";
 import type { CanonicalTokenExploreEntry } from "@/lib/tokens";

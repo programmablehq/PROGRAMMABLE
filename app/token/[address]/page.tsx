@@ -16,6 +16,9 @@ import { tokenDetailPageChainId } from "@/lib/token-page-chain";
 import { isRobinhoodFoundationLaunch, robinhoodLaunchDescription } from "@/lib/robinhood-launches";
 import { ethereumFoundationPresentation } from "@/lib/launch-presentation-details";
 import { findRecentFoundationLaunch } from "@/lib/server/module-foundation/recent-launch-store";
+import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
+import { liveLaunchObservations } from "@/lib/confirming-launches";
+import { ConfirmingLaunchView } from "@/components/confirming-launch-view";
 
 type TokenPageSearchParams = Promise<
   Record<string, string | string[] | undefined>
@@ -86,6 +89,11 @@ export default async function TokenPage({
         transactionHash={recent.row.transactionHash as Hex} initialLaunch={recent.row}
         initialName={recent.row.name || undefined} initialPresentation={Promise.resolve(recent.presentation)} />
     </TokenRouteChainSync>;
+    if (chainId === 1) {
+      const observations = await readConfirmingEthereumLaunches().catch(() => []);
+      const launch = liveLaunchObservations(observations).find(row => row.tokenAddress.toLowerCase() === address.toLowerCase());
+      if (launch) return <TokenRouteChainSync key={1} chainId={1}><ConfirmingLaunchView launch={launch} /></TokenRouteChainSync>;
+    }
   }
   if (resolved.chainId === 4663) {
     // Start the optional observation while verified identity and chart render.
