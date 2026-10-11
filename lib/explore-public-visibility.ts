@@ -65,6 +65,7 @@ const NON_PUBLIC_TOKEN_ADDRESSES = new Set(
 // Owner-requested discovery exclusions are separate from release canaries.
 // A matching address on another chain and future verified launches stay visible.
 export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
+  Object.freeze({ chainId: 4663, identity: "0xe0a557b41a13dd0ff3378c13ac700d7515cc79e8" }), // Preparation-feedback release check; tx 0x05572442b8ea459bf2ee2e2583bfa5f8d66fe9a065e40aac562fdbabef1713d9
   Object.freeze({ chainId: 4663, identity: "0x734b0dc83c29b9da80d5c733815f705a8b6f9d5e" }), // Manual-review checkpoint release check
   Object.freeze({ chainId: 4663, identity: "0x8b69fd6e401039e45444eea5d99e59a4122d859a" }), // Source-verification release check
   Object.freeze({ chainId: 4663, identity: "0xf9261d85c503927bf70916a6594a33979e614ec3" }), // Replacement admission API release check
