@@ -38,10 +38,26 @@ export function operationTokenHref(row: Pick<OperationsLaunch, "chainId" | "toke
 }
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown) => typeof value === "string" ? value.slice(0, 200) : "";
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+export function reviewOperations(review: Pick<CustomLaunchReview, "reviewId" | "chainId" | "subjectHash">, value: unknown) {
+  const v = object(value), current = object(v.current);
+  if (v.schemaVersion !== "programmable.custom-launch-review-operations.v1" || v.reviewId !== review.reviewId
+    || v.chainId !== review.chainId || v.subjectHash !== review.subjectHash || typeof v.bindingsComplete !== "boolean"
+    || !Array.isArray(v.boundLaunchIds) || v.boundLaunchIds.length > 128
+    || !v.boundLaunchIds.every(id => typeof id === "string" && uuid.test(id))
+    || (v.current !== null && (typeof current.launchId !== "string" || !v.boundLaunchIds.includes(current.launchId)
+      || typeof current.replanRequired !== "boolean"))) return null;
+  return { boundLaunchIds: v.boundLaunchIds as string[], current: v.current === null ? null : {
+    launchId: current.launchId as string, status: text(current.status), stage: text(current.stage),
+    errorCode: text(current.errorCode), replanRequired: current.replanRequired === true,
+  } };
+}
 export function reviewProject(review: OperationsReview) {
   const metadata = object(review.requestSummary.projectMetadata);
   const primary = object(metadata.token ?? metadata.primaryToken);
-  return { name: text(metadata.name) || text(primary.name) || `Request ${review.launchId.slice(0, 8)}`, symbol: text(metadata.symbol) || text(primary.symbol) };
+  const publication = object(review.requestSummary.publication);
+  return { name: text(metadata.name) || text(primary.name) || text(publication.name) || `Request ${review.launchId.slice(0, 8)}`,
+    symbol: text(metadata.symbol) || text(primary.symbol) || text(publication.symbol) };
 }
 
 /** Match exact request bindings, never the creator wallet or ticker. Approval alone is not a launch. */
@@ -50,8 +66,10 @@ export function buildOperationsRows(reviews: OperationsReview[], snapshot: Opera
   const published = snapshot?.published ?? [];
   const rows: OperationsRow[] = reviews.filter(review => !review.supersededBy).map(review => {
     const chainId = Number(review.chainId) as OperationsChain;
-    const final = published.find(row => row.chainId === chainId && (row.requestId === review.launchId
-      || row.launchId === review.launchId || (row.subjectHash && row.subjectHash === review.subjectHash)));
+    const operations = reviewOperations(review, review.requestSummary.operations);
+    const boundIds = new Set([review.launchId, ...operations?.boundLaunchIds ?? []]);
+    const final = published.find(row => row.chainId === chainId && (boundIds.has(row.requestId ?? "")
+      || boundIds.has(row.launchId) || (row.subjectHash && row.subjectHash === review.subjectHash)));
     const base = { id: `review:${review.reviewId}`, chainId, ...reviewProject(review), mode: "custom" as const,
       reviewId: review.reviewId, updatedAt: review.launchRequestedAt ?? review.approvedAt ?? review.submittedAt };
     if (final) {
@@ -68,6 +86,10 @@ export function buildOperationsRows(reviews: OperationsReview[], snapshot: Opera
     }
     if (review.state === "rejected" || review.requiresRepack) return { ...base, group: "waiting", status: label, next: "The team needs to update its submission." };
     if (label === "Approval expired") return { ...base, group: "waiting", status: "Window ended · launch unconfirmed", next: "Check launch status before offering another approval. An absent feed entry does not prove no transaction was sent." };
+    if (operations?.current?.replanRequired) return { ...base, group: "waiting", status: "Refresh launch preparation",
+      next: "The team must replan with its own API key on the current release. The existing approval deadline still applies." };
+    if (operations?.current?.status === "authorized" || operations?.current?.stage === "router-transaction-required") return { ...base,
+      group: "waiting", status: "Ready · waiting for team signature", next: "The team can sign the prepared launch within its approval window." };
     const started = review.launchRequestedAt ? Date.parse(review.launchRequestedAt) : null;
     return { ...base, group: started !== null && now - started >= 15 * 60_000 ? "attention" : "waiting",
       status: started === null ? "Approved · waiting for team" : "Launch completion unconfirmed",
@@ -92,7 +114,10 @@ export function buildOperationsRows(reviews: OperationsReview[], snapshot: Opera
 }
 
 /** Stored status is diagnostic only; never changes approval or authorizes a new transaction. */
-export function describeStoredLaunchStatus(value: unknown): { status: string; next: string } {
+export function describeStoredLaunchStatus(value: unknown, operations?: ReturnType<typeof reviewOperations>): { status: string; next: string } {
+  if (operations?.current?.replanRequired) return { status: "Refresh launch preparation",
+    next: "The team must replan this unsigned request with its own API key on the current release. If approval expired, obtain a new approval before signing." };
+  if (operations?.current) value = { ...operations.current, result: { stage: operations.current.stage } };
   const record = object(value), result = object(record.result), preflight = object(record.preflight);
   const status = text(record.status) || "not recorded";
   const code = text(record.errorCode);

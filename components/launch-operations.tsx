@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWallet } from "./wallet-provider";
 import { isWebsiteAdminWallet } from "@/lib/admin-access";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
-import { buildOperationsRows, describeStoredLaunchStatus, operationTokenHref, type OperationsReview, type OperationsRow, type OperationsSnapshot } from "@/lib/launch-operations";
+import { buildOperationsRows, describeStoredLaunchStatus, operationTokenHref, reviewOperations, type OperationsReview, type OperationsRow, type OperationsSnapshot } from "@/lib/launch-operations";
 import styles from "./launch-operations.module.css";
 
 type Diagnostic = { status: string; next: string };
@@ -86,7 +86,8 @@ function AccountOperations({ account }: { account: string }) {
       const response = await fetch(`${path}?${params}`, { headers, cache: "no-store", signal: AbortSignal.timeout(65_000) });
       if (!response.ok) throw new Error("The detail check is unavailable. Open the review or try again.");
       const value = await response.json();
-      const result = row.token ? value as Diagnostic : describeStoredLaunchStatus(value.review.technicalStatus);
+      const result = row.token ? value as Diagnostic : describeStoredLaunchStatus(value.review.technicalStatus,
+        reviewOperations(parseCustomLaunchReview(value.review), value.review.operations));
       if (active.current) setDiagnostics(previous => ({ ...previous, [row.id]: result }));
     } catch (error) {
       if (active.current) setDiagnostics(previous => ({ ...previous, [row.id]: { status: "Not checked", next: error instanceof Error ? error.message : "Try again." } }));

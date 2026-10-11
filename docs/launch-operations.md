@@ -10,7 +10,8 @@ The overview cannot sign, approve, relaunch, change a review deadline or write t
 
 ## Coverage
 
-- The review service returns its latest 100 applications. Replaced applications do not count as current work. A finalized launch is correlated by chain and exact request ID or request hash, never by wallet or ticker.
+- The review service returns its latest 100 applications. Replaced applications do not count as current work. A finalized launch is correlated by chain and exact request ID or request hash, including up to 128 requests explicitly bound to the same review. A successful replan therefore completes its original application. Wallets and tickers never establish this link.
+- Saved status from the current bound request distinguishes a prepared launch waiting for the team from an unsigned request on a retired release. The latter needs owner-authenticated replanning. Replanning does not extend approval; an expired approval needs a new review decision. Neither a stored status nor an approval is proof of finalization: completion still requires the canonical finalized feed.
 - Website index counts use complete canonical catalogs, independent of market cap, images or trading volume. Intentional discovery exclusions do not become missing-index alerts.
 - Finalized Robinhood feed traversal stops at 20 pages. Remaining pages make coverage partial. Ethereum uses the existing bounded finalized metadata reader.
 - Recent module receipts cover the last hour and the existing 64-record storage bound. Unsubmitted wallet drafts and transactions that have not reached a recorded service are not visible.
