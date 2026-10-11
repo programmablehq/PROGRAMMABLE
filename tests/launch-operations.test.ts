@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { buildOperationsRows, describeStoredLaunchStatus, type OperationsReview, type OperationsLaunch, type OperationsSnapshot } from "../lib/launch-operations";
+import { buildOperationsRows, describeStoredLaunchStatus, reviewOperations, type OperationsReview, type OperationsLaunch, type OperationsSnapshot } from "../lib/launch-operations";
 import { createLaunchOperationsRoute, createOperationsSnapshotReader } from "../lib/server/launch-operations";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
 
@@ -15,6 +15,30 @@ const empty = (): OperationsSnapshot => ({ schemaVersion: "programmable.launch-o
   sources: [{ id: "index:1", label: "Ethereum", chainId: 1, status: "ready", updatedAt: new Date(now).toISOString(), count: 0, complete: true }] });
 
 describe("launch operations observations", () => {
+  const successor = "30000000-0000-4000-8000-000000000001";
+  const operations = { schemaVersion: "programmable.custom-launch-review-operations.v1", reviewId: review.reviewId, chainId: review.chainId,
+    subjectHash: review.subjectHash, bindingsComplete: true, boundLaunchIds: [review.launchId, successor],
+    current: { launchId: successor, status: "analysis_pending", replanRequired: true } };
+  it("completes a reviewed replan only from its bound finalized feed, including deliberately unlisted canaries", () => {
+    const r = { ...review, requestSummary: { publication: { name: "Canary", symbol: "CN" }, operations } };
+    const finalized = { ...launch, requestId: successor, listed: false };
+    expect(buildOperationsRows([r], { ...empty(), published: [finalized] }, now)[0]).toMatchObject({ name: "Canary", symbol: "CN", group: "complete", status: "Launched · unlisted" });
+    expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ group: "waiting", status: "Refresh launch preparation" });
+    expect(buildOperationsRows([{ ...r, expiresAt: "2026-10-11T00:00:00Z" }], empty(), now)[0].status).toBe("Window ended · launch unconfirmed");
+    for (const invalid of [{ ...operations, reviewId: successor }, { ...operations, chainId: "4663" }, { ...operations, subjectHash: "different" },
+      { ...operations, boundLaunchIds: ["invalid"] }, { ...operations, boundLaunchIds: Array(129).fill(successor) }]) {
+      expect(reviewOperations(review, invalid)).toBeNull();
+      expect(buildOperationsRows([{ ...r, requestSummary: { operations: invalid } }], { ...empty(), published: [finalized] }, now)[0].group).toBe("waiting");
+    }
+  });
+  it("reports the current bound request instead of a superseded compiler error and keeps ready launches with the team", () => {
+    const current = { ...operations, current: { launchId: successor, status: "authorized", stage: "router-transaction-required", replanRequired: false } };
+    const r = { ...review, launchRequestedAt: "2026-10-11T10:00:00Z", requestSummary: { operations: current } };
+    expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ group: "waiting", status: "Ready · waiting for team signature" });
+    const result = describeStoredLaunchStatus({ status: "analysis_pending", errorCode: "PLAN_COMPILER_UNAVAILABLE" }, reviewOperations(review, current));
+    expect(result.status).toBe("authorized · router-transaction-required");
+    expect(describeStoredLaunchStatus({}, reviewOperations(review, operations)).next).toContain("own API key");
+  });
   it("does not call an approved but unsigned launch stuck, and marks an overdue review without expiring it", () => {
     const rows = buildOperationsRows([review], empty(), now);
     expect(rows[0]).toMatchObject({ name: "Example", group: "waiting", status: "Approved · waiting for team" });
