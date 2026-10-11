@@ -60,7 +60,8 @@ function LaunchDiscussion({ review, launchId, onUpdated }: DiscussionProps) {
   if (review.supersededBy) return <p>Continue with request {review.supersededBy.launchId}.</p>;
   return <details className={discussionStyles.discussion} onToggle={event => { if (event.currentTarget.open) void readAssessment(); }}>
     <summary>Review messages{review.discussion?.length ? ` (${review.discussion.length})` : ""}</summary>
-    <CustomLaunchAssessment value={assessment} />
+    {review.reason ? <section aria-label="Review decision"><strong>Programmable review</strong><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{review.reason}</p></section> : null}
+    <CustomLaunchAssessment value={assessment} review={review} subjectHash={review.subjectHash} chainId={review.chainId} tradeChecks={review.tradeChecks} />
     {review.discussion?.map(entry => <div key={entry.revision}>
       <strong>{entry.author === "reviewer" ? "Programmable" : "Your team"}</strong>
       <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.message}</p>

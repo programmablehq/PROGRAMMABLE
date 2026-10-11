@@ -106,7 +106,7 @@ function AccountOperations({ account }: { account: string }) {
     <section className={styles.stats} aria-label="Work queue totals">
       <button onClick={() => { setGroup("review"); setLimit(25); }}><span>Needs review</span><strong>{reviews === null ? "—" : counts.review}</strong></button>
       <button onClick={() => { setGroup("attention"); setLimit(25); }}><span>Needs checking</span><strong>{snapshot === null ? "—" : counts.attention}</strong></button>
-      <button onClick={() => { setGroup("waiting"); setLimit(25); }}><span>Waiting for team</span><strong>{reviews === null ? "—" : counts.waiting}</strong></button>
+      <button onClick={() => { setGroup("waiting"); setLimit(25); }}><span>Waiting</span><strong>{reviews === null ? "—" : counts.waiting}</strong></button>
     </section>
     <section className={styles.networks} aria-label="Chain indexes">{[1, 4663].filter(id => chain === "all" || String(id) === chain).map(id => {
       const source = snapshot?.sources.find(source => source.id === `index:${id}`);
@@ -118,14 +118,14 @@ function AccountOperations({ account }: { account: string }) {
     <section className={styles.panel} aria-labelledby="queue-title"><h2 id="queue-title">Work queue</h2>
       <div className={styles.filters}>
         <label>Chain<select value={chain} onChange={event => { setChain(event.target.value); setLimit(25); }}><option value="all">Both chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option></select></label>
-        <label>Show<select value={group} onChange={event => { setGroup(event.target.value); setLimit(25); }}><option value="action">Action needed</option><option value="review">Needs review</option><option value="attention">Needs checking</option><option value="waiting">Waiting for team</option><option value="complete">Completed</option><option value="all">All</option></select></label>
+        <label>Show<select value={group} onChange={event => { setGroup(event.target.value); setLimit(25); }}><option value="action">Action needed</option><option value="review">Needs review</option><option value="attention">Needs checking</option><option value="waiting">Waiting</option><option value="complete">Completed</option><option value="all">All</option></select></label>
         <label className={styles.search}>Search<input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(25); }} placeholder="Name, symbol, address or review ID" /></label>
       </div>
       <p role="status" className={styles.muted}>{rows.length} matching items{!complete ? " · observations incomplete" : ""}</p>
       {rows.length === 0 && <p>{busy ? "Loading…" : !complete ? "No items in this view. Some sources could not be checked." : "No items in this view."}</p>}
       <ul className={styles.queue}>{rows.slice(0, limit).map(row => <li key={row.id}>
         <div className={styles.itemHeading}><div><strong>{row.name}</strong>{row.symbol && <span className={styles.muted}> {row.symbol.replace(/^\$+/, "")}</span>}<p className={styles.muted}>{chainName(row.chainId)} · {row.mode === "module" ? "Module" : "Custom"} · {date(row.updatedAt)}</p></div><span className={styles.badge}>{row.status}</span></div>
-        <p>{row.next}</p>
+        <p><strong>{row.owner === "None" ? "No action needed" : `Next: ${row.owner}`}</strong> · {row.next}</p>
         <div className={styles.actions}>{row.reviewId && <Link href={`/admin/custom-launch-reviews?reviewId=${row.reviewId}`}>Open review</Link>}{row.token && <Link href={operationTokenHref({ chainId: row.chainId, token: row.token })}>Open coin</Link>}
           <button disabled={checking !== null} onClick={() => void diagnose(row)}>{checking === row.id ? "Checking…" : "Check status"}</button></div>
         {diagnostics[row.id] && <div className={styles.diagnostic} role="status"><strong>{diagnostics[row.id].status}</strong><p>{diagnostics[row.id].next}</p></div>}

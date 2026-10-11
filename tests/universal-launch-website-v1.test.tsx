@@ -163,7 +163,7 @@ describe("historical launch continuation", () => {
   it("shows explicit replan guidance without changing original signed bytes", () => {
     const value = retired(); const before = JSON.stringify(value);
     expect(readLaunchPlanResourceV1(value)).toBe(value);
-    expect(launchFlowStateV1(value)).toMatchObject({ title: "Launch update required", terminal: false });
+    expect(launchFlowStateV1(value)).toMatchObject({ title: "Team action: refresh preparation", terminal: false });
     expect(JSON.stringify(value)).toBe(before);
   });
   it.each(["originalManifestDigest", "currentManifestDigest", "replanUrl"] as const)("rejects continuation guidance with a changed %s", field => {
@@ -185,6 +185,13 @@ describe("historical launch continuation", () => {
     expect(submitted.steps[0].status).toBe("broadcast");
     expect(launchFlowStateV1({ ...value, status: "final", steps: [{ ...step, status: "final", transactionHash: hash }] }).terminal).toBe(true);
     expect(JSON.stringify(value)).toBe(before);
+  });
+  it("shows a recorded hash before an expired preparation without changing wallet authority", () => {
+    const value = retired();
+    const submitted = { ...value, status: "expired" as const, steps: [{ ...value.steps[0], transactionHash: hash }] };
+    const before = JSON.stringify(submitted);
+    expect(launchFlowStateV1(submitted).title).toBe("Transaction submitted");
+    expect(JSON.stringify(submitted)).toBe(before);
   });
 });
 

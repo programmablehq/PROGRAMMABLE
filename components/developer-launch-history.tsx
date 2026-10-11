@@ -3708,7 +3708,7 @@ export function DeveloperLaunchHistory({
                 </p>
                 {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status)
                   ? <CustomLaunchStartButton key={`${resourceIdentity}:${launch.manualReview.revision}`} review={launch.manualReview} launchId={resourceIdentity} onStarted={refresh} /> : null}
-                <CustomLaunchAssessment value={launch.output?.reviewReadiness} />
+                <CustomLaunchAssessment value={launch.output?.reviewReadiness} review={launch.manualReview} subjectHash={launch.manualReview?.subjectHash} chainId={launch.manualReview?.chainId} tradeChecks={launch.manualReview?.tradeChecks} />
                 {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
                 {["authorized", "wallet_action_required", "awaiting_wallet_signature", "awaiting_funding_authorization"].includes(launch.status)
                   && (!launch.manualReview || customLaunchReviewAllowsSigning(launch.manualReview)) ? (

@@ -190,7 +190,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       <p>{indexedHref ? "The finalized launch is stored in the website index." : unknownSend ? "The wallet call may have been sent. Check the original wallet activity or explorer and recover its hash. This step stays paused until the same transaction is verified." : ready ? "Confirm the transaction in your wallet." : state.description}</p></div>
     {plan?.manualReview && !hasUnresolved && !state.terminal
       ? <CustomLaunchStartButton key={`${id}:${plan.manualReview.revision}`} review={plan.manualReview} launchId={id} onStarted={load} /> : null}
-    <CustomLaunchAssessment value={(plan?.preflight as unknown as Record<string, unknown>)?.reviewReadiness} />
+    <CustomLaunchAssessment value={(plan?.preflight as unknown as Record<string, unknown>)?.reviewReadiness} review={plan?.manualReview} subjectHash={plan?.manualReview?.subjectHash} chainId={plan?.manualReview?.chainId} tradeChecks={plan?.manualReview?.tradeChecks} />
     {plan?.manualReview ? <CustomLaunchDiscussion review={plan.manualReview} launchId={id} onUpdated={load} /> : null}
     {journalError ? <p role="alert" className={styles.error}>{journalError} This launch remains paused.</p> : null}
     {attempt && !ownAttempt ? <p className={styles.notice}>A previous launch transaction needs recovery or finality. <a href={launchPlanWalletUrlV1(attempt.launchId)}>Open its launch</a> before sending another transaction.</p> : null}
