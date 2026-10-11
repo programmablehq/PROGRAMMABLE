@@ -923,3 +923,22 @@ test("workflow requires separate website policy, bound smoke and retained eviden
     assert.match(pkg.scripts[name], /indexed-website-reads\.test\.mjs/u);
   }
 });
+
+
+test("projection refresh retains only fresh completed coverage", async () => {
+  const completedAt = new Date(NOW - 120_000).toISOString();
+  const refreshing = projectedFixture({ nextCursor: "refresh", mutate: ({ url, spec }) => {
+    if (url.pathname !== "/api/explore/robinhood") return;
+    spec.body.sourceEvidence.launchProjections.completedAt = completedAt;
+    spec.body.updatedAt = [UPDATED, completedAt].sort()[0];
+  } });
+  assert.equal((await runIndexedWebsiteReadSmoke(input({ fetchImpl: refreshing.fetchImpl }))).chains[1].status, "ready");
+  for (const completion of [new Date(NOW - 301_000).toISOString(), new Date(NOW + 120_000).toISOString(), "invalid"]) {
+    const bad = projectedFixture({ nextCursor: "refresh", mutate: ({ url, spec }) => {
+      if (url.pathname !== "/api/explore/robinhood") return;
+      spec.body.sourceEvidence.launchProjections.completedAt = completion;
+      spec.body.updatedAt = [UPDATED, completion].sort()[0];
+    } });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: bad.fetchImpl })), /indexed website/u);
+  }
+});

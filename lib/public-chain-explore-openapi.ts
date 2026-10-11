@@ -76,7 +76,8 @@ const moduleSource = object({ source: { enum: ["module-native-v1", "module-nativ
 const launchProjectionSource = nullable(object({
   sourceUrl: { const: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections" },
   updatedAt: timestamp, nextCursor: nullable(text),
-}));
+  completedAt: { ...nullable(timestamp), description: "Last fully verified traversal. Background page progress does not renew this timestamp." },
+}, ["sourceUrl", "updatedAt", "nextCursor"]));
 
 export const chainExploreSchemas = {
   EthereumExplorePage: object({ chainId: { const: 1 }, status: { enum: ["ready", "partial", "stale", "unavailable"] },
@@ -121,7 +122,7 @@ export const chainExplorePaths = {
   } },
   "/api/explore/robinhood": { get: {
     operationId: "listRobinhoodExploreLaunches", summary: "Read Robinhood Chain launch pages",
-    description: "Reads the saved verified Custom Router, exact Module Mode release indexes and finalized launch projections. Projected launches may have no primary asset or market; their original source, assurance and provider states remain separate. ready means each saved source has reached its finalized cursor; syncing means an admitted source is still catching up; stale means an observation is over five minutes old; unavailable means the snapshot cannot be read. updatedAt is the oldest source observation. Optional market observations drive highest/lowest sorting. Activity sorts by observed USD trading volume over the last 24 hours; missing values sort after known values. The verified main token retains the first slot on every page, independently of the query and mode. It is counted once in totalItems; matchingItems excludes the pin when it does not match the query or mode. Public reads do not fall through to RPC indexing. Unknown or repeated query parameters are rejected; no chain override is accepted. This presentation feed is not a complete archive or a publication authority.",
+    description: "Reads the saved verified Custom Router, exact Module Mode release indexes and finalized launch projections. Projected launches may have no primary asset or market; their original source, assurance and provider states remain separate. ready means each block source has reached its finalized cursor and the projection feed has a completed traversal within five minutes; routine projection refreshes preserve that completed observation; syncing means an admitted source is still catching up without completed coverage; stale means an observation is over five minutes old; unavailable means the snapshot cannot be read. updatedAt is the oldest source observation. Optional market observations drive highest/lowest sorting. Activity sorts by observed USD trading volume over the last 24 hours; missing values sort after known values. The verified main token retains the first slot on every page, independently of the query and mode. It is counted once in totalItems; matchingItems excludes the pin when it does not match the query or mode. Public reads do not fall through to RPC indexing. Unknown or repeated query parameters are rejected; no chain override is accepted. This presentation feed is not a complete archive or a publication authority.",
     tags: ["Discovery"], security: [], parameters: parameters("robinhood"), responses: {
       "200": { ...response(statusPage("RobinhoodExplorePage", ["ready", "syncing", "stale"]), "Verified saved launch identities with optional presentations and markets."),
         headers: headers(["ready", "syncing", "stale"], ["public, max-age=0, s-maxage=15, stale-while-revalidate=30", "no-store"]) },

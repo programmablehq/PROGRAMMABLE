@@ -99,7 +99,7 @@ describe("Robinhood website HTTP boundaries", () => {
     expect(mocks.projectionSync).toHaveBeenCalledTimes(2);
     mocks.projectionSync.mockReset().mockResolvedValue(progress);
     expect(await (await update(request())).json()).toMatchObject({ launchProjections: progress });
-    expect(mocks.projectionSync).toHaveBeenCalledTimes(20);
+    expect(mocks.projectionSync).toHaveBeenCalledTimes(128);
   });
   it.each(["disabled", "unavailable"])("hides provider credentials when Module Mode is %s", async (moduleStatus) => {
     mocks.source.mockRejectedValue(new Error("https://rpc.invalid/private-key"));

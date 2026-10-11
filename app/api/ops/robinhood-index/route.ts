@@ -36,7 +36,8 @@ export async function GET(request: Request) {
       const source = launchProjectionSourceV1(AbortSignal.timeout(projectionBudget));
       // Each verified page commits its cursor before the next read. Drain the
       // bounded backlog instead of leaving one page for each cron invocation.
-      for (let page = 0; page < 20; page++) {
+      // The feed may return only one candidate per page; the time budget remains primary.
+      for (let page = 0; page < 128; page++) {
         launchProjections = await syncLaunchProjectionIndex(source, store);
         if (launchProjections.nextCursor === null || Date.now() + 5000 >= projectionDeadline) break;
       }

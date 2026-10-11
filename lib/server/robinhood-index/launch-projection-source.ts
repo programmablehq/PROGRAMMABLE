@@ -3,7 +3,7 @@ import { ROBINHOOD_MAINNET_RPC_URL } from "@/lib/chains";
 import type { LaunchProjectionV1 } from "@/lib/custom-launch/launch-plan-v1";
 import { LAUNCH_PROJECTION_FEED_V1, parseLaunchProjectionV1, projectionAddress, projectionHash, projectionObject, projectionToRobinhoodLaunch } from "@/lib/custom-launch/launch-projection-v1";
 import { canonicalBrowserJsonV2 } from "@/lib/custom-launch/browser-authority-v2";
-import { parseSnapshot } from "./model";
+import { parseSnapshot, projectionCompletedAt } from "./model";
 import type { IndexStore } from "./store";
 import { verifyAtomicLaunchProvenanceV2 } from "./atomic-launch-provenance-v2";
 import { readStampEvmBlockNumber } from "./stamp-block-context";
@@ -42,8 +42,10 @@ export async function syncLaunchProjectionIndex(source: LaunchProjectionSourceV1
     const verified = await source.verify(projection);
     rows.set(key, projectionToRobinhoodLaunch(projection, verified.launchedAt));
   }
+  const observedAt = new Date(now()).toISOString();
   await store.write(parseSnapshot({ ...saved.snapshot, launchProjections: {
-    version: 1, sourceUrl: LAUNCH_PROJECTION_FEED_V1, updatedAt: new Date(now()).toISOString(),
+    version: 1, sourceUrl: LAUNCH_PROJECTION_FEED_V1, updatedAt: observedAt,
+    completedAt: page.nextCursor === null ? observedAt : old ? projectionCompletedAt(old) : null,
     nextCursor: page.nextCursor, items: [...rows.values()],
   } }), saved.etag);
   // A continuation cursor means another verified page remains, not a failed proof.
