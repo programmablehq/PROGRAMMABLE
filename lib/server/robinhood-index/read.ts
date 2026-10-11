@@ -12,6 +12,15 @@ import { indexStore } from "./store";
 const readSnapshot = unstable_cache(async () => (await indexStore().read())?.snapshot ?? null,
   ["robinhood-website-index-v1"], { revalidate: 15 });
 
+/** Admin completion evidence includes unlisted launches and every verified source lane.
+ * Reuse the durable traversal instead of restarting a bounded public-feed scan on each visit. */
+export async function readRobinhoodOperationsLaunches() {
+  const snapshot = await readSnapshot();
+  const state = launchList(snapshot);
+  const status = state.status === "ready" && !snapshot?.launchProjections ? "partial" as const : state.status;
+  return { status, updatedAt: state.updatedAt, complete: status === "ready", items: snapshotLaunches(snapshot) };
+}
+
 /** Complete verified discovery identities. Presentation and paging never determine membership. */
 export async function readRobinhoodExploreCatalog() {
   try {
