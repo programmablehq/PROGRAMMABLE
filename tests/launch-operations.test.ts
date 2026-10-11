@@ -24,7 +24,7 @@ describe("launch operations observations", () => {
     expect(buildOperationsRows([{ ...review, launchRequestedAt: "2026-10-11T11:00:00Z" }], empty(), now)[0].status).toBe("Launch completion unconfirmed");
   });
   it("matches finalization by exact request and chain, never ticker or creator; excludes replaced requests", () => {
-    const snapshot = { ...empty(), published: [{ ...launch, chainId: 4663 as const }], indexed: [{ ...launch, chainId: 4663 as const }] };
+    const snapshot: OperationsSnapshot = { ...empty(), published: [{ ...launch, chainId: 4663 as const }], indexed: [{ ...launch, chainId: 4663 as const }] };
     expect(buildOperationsRows([review], snapshot, now)[0].group).toBe("waiting");
     snapshot.published = [launch]; snapshot.indexed = [launch];
     expect(buildOperationsRows([review], snapshot, now)[0]).toMatchObject({ group: "complete", status: "Launched" });
