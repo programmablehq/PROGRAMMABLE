@@ -156,8 +156,6 @@ contract RobinhoodNative100HookV1Test is Test, IUnlockCallback {
         assertEq(manager.allowance(address(hook.feeVault()), attacker, 0), 0);
     }
 
-
-
     function test_exactRuntimePermissionsAndFixedBindings() public view {
         assertEq(uint160(address(hook)) & ((1 << 14) - 1), REQUIRED_FLAGS);
         assertEq(hook.CHAIN_ID(), 4663);
@@ -168,8 +166,6 @@ contract RobinhoodNative100HookV1Test is Test, IUnlockCallback {
         assertEq(hook.feeVault().kernel(), address(hook));
         assertEq(hook.feeVault().creatorRecipient(), creator);
     }
-
-
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
         require(msg.sender == address(manager), "only manager");
