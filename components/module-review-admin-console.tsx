@@ -73,7 +73,7 @@ export function FoundationReviewChecks({ artifact }: { artifact: FoundationBuild
   </tbody></table></div>;
 }
 
-export function ModuleReviewAdminConsole() {
+export function ModuleReviewAdminConsole({ title = "Module reviews" }: { title?: string } = {}) {
   const { authenticated, authReady, sessionReady, connecting, disconnecting, wallet, getAccessToken, getIdentityToken, openWallet } = useWallet();
   const account = authenticated && isWebsiteAdminWallet(wallet?.account)
     ? wallet?.account.toLowerCase() ?? null : null;
@@ -108,7 +108,7 @@ export function ModuleReviewAdminConsole() {
   }, [account, getAccessToken, getIdentityToken]);
   return <div className={`${styles.page} page-width`} data-module-review-page>
     <header className={styles.header}>
-      <div><p className={styles.eyebrow}>Admin</p><h1>Module reviews</h1></div>
+      <div><p className={styles.eyebrow}>Admin</p><h1>{title}</h1></div>
       <details className={styles.tools} onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
         <summary><Settings2 size={17} aria-hidden="true" />Tools<ChevronDown size={14} aria-hidden="true" /></summary>
         <div className={styles.toolsMenu}>
