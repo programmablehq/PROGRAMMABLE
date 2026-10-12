@@ -244,7 +244,7 @@ describe("Foundation compose BFF asset bindings", () => {
     }
   });
 
-  it("composes independent buy and sell fees only for a verified V3 release", async () => {
+  it.each([30, 100] as const)("composes independent fees using the verified V3 platform rate %i", async platformFeeBps => {
     const input = body();
     const draft: Partial<FoundationLaunchDraft> = { ...input.draft };
     delete draft.creatorFeeBps;
@@ -256,11 +256,11 @@ describe("Foundation compose BFF asset bindings", () => {
 
     const release = accepted();
     mocks.availability.mockResolvedValue({ ...release, schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA_V3,
-      binding: { ...release.binding, factoryVersion: "v3", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID },
+      binding: { ...release.binding, factoryVersion: "v3", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID, platformFeeBps },
       evidence: { ...release.evidence, sourcePath: `/v1/modules/foundation/source/release/${releaseDigest}` } });
     const response = await POST(request(directional));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ releaseDigest, modules: [] });
+    expect(await response.json()).toMatchObject({ releaseDigest, modules: [], totals: { platformBps: platformFeeBps } });
     expect(predictions()).toHaveLength(1);
   });
 
@@ -323,6 +323,7 @@ describe("Foundation compose BFF asset bindings", () => {
       .toEqual([getAddress(first), result.token, quote, creator, factory, getAddress(third)]);
     expect(result.modules[0]).toMatchObject({ factory: f.entry.release!.factory, creatorShareBps: 2550 });
     expect(result.totals.creatorAssignedShareBps).toBe(2550);
+    expect(result.totals.platformBps).toBe(30);
     expect(resolveFoundationAssetsV1).toHaveBeenCalledOnce();
     expect(mocks.getCode.mock.calls.map(([call]) => call.address.toLowerCase())).toEqual([quote, first]);
     expect(response.headers.get("cache-control")).toBe("no-store");
