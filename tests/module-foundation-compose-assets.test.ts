@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decodeAbiParameters, encodeAbiParameters, getAddress, keccak256, toHex, type Address, type Hex } from "viem";
+import { decodeAbiParameters, encodeAbiParameters, getAddress, keccak256, toHex, RpcRequestError, TimeoutError, type Address, type Hex } from "viem";
 import type { OpenConfigSchema } from "@/packages/classic-modules/src/open-config.mjs";
 import type { OpenSourcePackage } from "@/packages/classic-modules/src/open-packages.mjs";
 import type { ModuleEngineConfigurationArgument } from "@/lib/module-engine/catalog";
@@ -195,6 +195,23 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation compose BFF asset bindings", () => {
+  it.each([1, 4663])("preserves temporary provider failures as retryable on chain %s without exposing provider details", async chainId => {
+    mocks.availability.mockRejectedValue(new TimeoutError({ body: {}, url: "https://rpc.example/private-key" }));
+    const response = await POST(request({ ...body(), chainId }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: "MODULE_PREPARATION_UNAVAILABLE", retryable: true,
+      error: "Launch checks are temporarily unavailable. Your coin details are saved. Try again." });
+  });
+
+  it("does not retry a contract revert as a provider outage", async () => {
+    mocks.availability.mockResolvedValue(accepted([]));
+    mocks.infrastructure.mockRejectedValue(new RpcRequestError({ body: {}, url: "https://rpc.example",
+      error: { code: 3, message: "execution reverted" } }));
+    const response = await POST(request(body()));
+    expect(response.status).toBe(400);
+    expect((await response.json()).retryable).not.toBe(true);
+  });
+
   it.each([["MARKET_PRICE_IMPACT_TOO_HIGH", 422, false], ["V4_DISCOVERY_PROVIDER_UNAVAILABLE", 503, true]] as const)(
     "preserves %s as a market result instead of an opaque launch error", async (code, status, retryable) => {
       mocks.ethFunding.mockRejectedValue(new FoundationQuoteMarketError(code));

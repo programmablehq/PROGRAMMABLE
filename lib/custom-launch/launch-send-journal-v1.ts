@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 import { errorIsExplicitWalletRejection } from "@/lib/wallet-request-lock";
-import type { UniversalLaunchWalletReviewV1 } from "./wallet-handoff-plan-v1";
+import { readLaunchPlanResourceV1, type UniversalLaunchWalletReviewV1 } from "./wallet-handoff-plan-v1";
 
 const PREFIX = "programmable:custom-launch-send:v1";
 const EVENT = "programmable:custom-launch-send-change";
@@ -93,4 +93,17 @@ export function finalizeLaunchSendV1(attempt: LaunchSendAttemptV1, step: { trans
 export function subscribeLaunchSendV1(callback: () => void): () => void {
   window.addEventListener("storage", callback); window.addEventListener(EVENT, callback);
   return () => { window.removeEventListener("storage", callback); window.removeEventListener(EVENT, callback); };
+}
+
+/** Reconcile a prior plan when the owner opens their next launch. */
+export function reconcileFinalizedLaunchSendV1(attempt: LaunchSendAttemptV1, resource: unknown, store: StorageLike = storage()): boolean {
+  if (attempt.sourceVersion !== "custom_launch_plan_v1") return false;
+  const plan = readLaunchPlanResourceV1(resource);
+  if (plan.planId !== attempt.launchId || plan.plan.controller.address.toLowerCase() !== attempt.controller.toLowerCase()) return false;
+  const step = plan.steps.find(item => item.stepId === attempt.stepId && item.transactionDigest === attempt.binding);
+  if (step?.status !== "final" || !step.transactionHash) return false;
+  if (attempt.transactionHash && attempt.transactionHash.toLowerCase() !== step.transactionHash.toLowerCase()) return false;
+  const bound = attempt.transactionHash ? attempt : rememberLaunchHashV1(attempt, step.transactionHash, store);
+  finalizeLaunchSendV1(bound, step, store);
+  return readLaunchSendJournalV1(attempt.controller, store) === null;
 }

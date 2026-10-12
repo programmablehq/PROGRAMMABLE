@@ -48,10 +48,10 @@ describe("Robinhood API launch website handoff", () => {
       'aria-labelledby="robinhood-fee-policy-title"',
     );
     expect(html).toContain(
-      '<span id="robinhood-fee-policy-title">Robinhood fee policy</span><span>0.20%</span>',
+      '<span id="robinhood-fee-policy-title">Robinhood fee policy</span><span>0.30%</span>',
     );
     expect(html).toContain(
-      "Programmable policy for new Robinhood V4 API Custom launch requests is 0.20% (2,000 ppm), recipient <code>0xD88539d3c4C460136a733A3Fd60cf6BF269079da</code>. Existing launches are unchanged.",
+      "Programmable policy for new Robinhood V4 API Custom launch requests is 0.30% (3,000 ppm), recipient <code>0xD88539d3c4C460136a733A3Fd60cf6BF269079da</code>. Existing launches are unchanged.",
     );
     expect(html).toContain(
       "The current V4 runtime does not claim immutable onchain fee enforcement, fee behavior, claiming, or guaranteed revenue. The Launch Stamp proves provenance only.",
