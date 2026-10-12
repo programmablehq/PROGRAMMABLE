@@ -84,6 +84,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const pendingStep = plan?.steps.find(item => item.transactionHash && item.status !== "final");
   const observedPending = observedSubmission && !(plan ? plan.steps.find(item => item.stepId === observedSubmission.stepId)?.status === "final" : resource.status === "finalized") ? observedSubmission : null;
   const hash = ownAttempt?.transactionHash ?? pendingStep?.transactionHash ?? legacySubmission?.transactionHash ?? observedPending?.hash ?? null;
+  const visibleError = hash ? trackingError : error ?? trackingError;
   const submittedStepId = ownAttempt?.stepId ?? pendingStep?.stepId ?? legacySubmission?.stepId ?? observedPending?.stepId ?? "multi-role-v2";
   const hasUnresolved = !!rawJournal || !!legacySubmission || !!pendingStep || !!observedPending;
   const unknownSend = !!ownAttempt && !hash;
@@ -236,7 +237,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy ? "Confirm in your wallet…" : "Sign and launch"}</button>
     </div> : null}
     {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open program</a> : null}
-    {(error || trackingError) ? <p className={styles.error} role={error ? "alert" : "status"}>{error ?? trackingError}</p> : null}
+    {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{visibleError}</p> : null}
     {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
     <details className={styles.details}><summary>Details and review</summary>
     {plan?.preflight?.findings.length ? <details className={styles.details}><summary>Launch findings</summary><pre>{JSON.stringify(plan.preflight.findings, null, 2)}</pre></details> : null}

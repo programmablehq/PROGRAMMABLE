@@ -78,7 +78,7 @@ const review = (): UniversalLaunchWalletReviewV1 => {
       gas: `0x${BigInt(step.transaction.gasLimit).toString(16)}`, nonce: `0x${BigInt(step.transaction.nonce).toString(16)}` },
     valueWei: "0", maxGasCostWei: "21000000000000", deadline: plan.budgets.deadline, preconditions: [], postconditions: [], ...(decodedOperation ? { decodedOperation } : {}) };
 };
-if (["unknown", "automatic-recovery", "release-change-unknown", "release-change-known"].includes(mode)
+if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
   && !localStorage.getItem(`programmable:custom-launch-send:v1:4663:${controller}`)) {
   const attempt = beginLaunchSendV1(review());
   if (mode === "release-change-known") rememberLaunchHashV1(attempt, hash);
@@ -137,7 +137,7 @@ async function sendWallet(input: UniversalLaunchWalletInputV1) {
   control.requests.push({ method: "eth_sendTransaction", params: [attempt.transaction] });
   localStorage.setItem("fixture:launch-sends", String(control.sends() + 1));
   if (mode === "rejected") { const error = { code: 4001, message: "Wallet confirmation was cancelled. You can review the same launch again." }; rejectLaunchSendV1(attempt, error); throw new Error(error.message); }
-  if (mode === "lost-response") throw new Error("The wallet response was interrupted. Recover the original transaction.");
+  if (mode === "lost-response" || mode === "automatic-recovery") throw new Error("The wallet response was interrupted. Recover the original transaction.");
   rememberLaunchHashV1(attempt, hash);
   record = { ...record, status: "broadcast", steps: record.steps.map(step => ({ ...step, status: "broadcast", transactionHash: hash })), updatedAt: new Date().toISOString() };
   return hash;
