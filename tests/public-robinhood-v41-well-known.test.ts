@@ -40,9 +40,18 @@ describe("profile-selected Robinhood well-known discovery", () => {
     const original = await document("4.0.0");
     // Ethereum discovery now selects the active profile from capabilities. The
     // Robinhood 4.0.0 fixture remains historical; the complete document includes
-    // the additive Ethereum 3.6 metadata and the immutable CLI 4.1.5 release pointer.
+    // the additive Ethereum 3.6 fee100 metadata and the CLI 4.1.6 candidate pointer.
+    expect(original.customLaunchApi.ethereumProfileSelection).toMatchObject({
+      discoveryIsActivationEvidence: false,
+      profile36: {
+        programmableHundredthsOfBip: "10000",
+        programmableTradeFeePolicyHash: "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a",
+        rateSource: "capabilities.programmableTradeFeePolicy.policy.ratePpm",
+      },
+      cli: { sourceCandidateVersion: "4.1.6", publicationVerified: null },
+    });
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
-      .toBe("620239777ec837e950b51c30d731107f8b569adf5eab3550e0c66f42bbb9e5ad");
+      .toBe("167e128ace3e149de845d1f675b0d5dca08e477f015e618feb3dd80524d1558c");
   });
 
   it("publishes successor fee and funding rules while pending authority stays closed", async () => {
