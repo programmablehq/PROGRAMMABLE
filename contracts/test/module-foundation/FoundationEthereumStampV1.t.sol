@@ -117,6 +117,10 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
         );
     }
 
+    function _graphHookCreationCode() internal pure virtual returns (bytes memory) {
+        return type(FoundationHookV2).creationCode;
+    }
+
     function _build(uint8 moduleCount, uint128 firstBuy)
         internal
         returns (R.LaunchPermitV1 memory permit, R.StampRequestV1 memory request, bytes memory payload, address engine)
@@ -211,7 +215,7 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
             0,
             0,
             abi.encodePacked(
-                type(FoundationHookV2).creationCode,
+                _graphHookCreationCode(),
                 abi.encode(
                     manager,
                     engine,
@@ -341,7 +345,7 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
         assertEq(FoundationHookV2(r.hook).moduleCount(), 2);
         assertEq(IERC20(request.token).balanceOf(ALICE), r.initialBuyTokenAmount);
         assertGt(r.initialBuyTokenAmount, 0);
-        assertEq(FoundationLedgerV1(r.ledger).platformReceived(), permit.value * 30 / 10_000);
+        assertEq(FoundationLedgerV1(r.ledger).platformReceived(), permit.value * _platformFeeBps() / 10_000);
         (string memory description, string memory website, string memory image, bytes memory extra) =
             FoundationTokenV1(request.token).metadata();
         assertEq(description, "Immutable metadata in the Classic ABI");
@@ -606,7 +610,7 @@ contract FoundationEthereumStampV1Test is FoundationForkBaseV3 {
         assertEq(host.moduleCount(), 1);
         assertEq(host.moduleAt(0).codeHash, sample.codehash);
         assertEq(IERC20(request.token).balanceOf(ALICE), result.initialBuyTokenAmount);
-        assertEq(FoundationLedgerV1(result.ledger).platformReceived(), permit.value * 30 / 10_000);
+        assertEq(FoundationLedgerV1(result.ledger).platformReceived(), permit.value * _platformFeeBps() / 10_000);
         if (kind == 10) return; // Gate opening is exercised by the linked-pool lifecycle tests.
         vm.warp(block.timestamp + 300);
         vm.startPrank(ALICE);

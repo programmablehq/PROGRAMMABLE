@@ -32,7 +32,7 @@ contract FoundationEthereumStampV2Test is FoundationEthereumStampV1Test {
         _verifyEconomicStamp(3, address(0));
     }
 
-    function _deployGraphImplementation(bytes32[5] memory hashes) internal override returns (address) {
+    function _deployGraphImplementation(bytes32[5] memory hashes) internal virtual override returns (address) {
         return deployCode(
             "FoundationEthereumGraphLaunchV2.sol:FoundationEthereumGraphLaunchV2",
             abi.encode(
