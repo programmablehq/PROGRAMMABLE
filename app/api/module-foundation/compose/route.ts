@@ -1,6 +1,6 @@
 import { predictFoundationEthereumAccounts } from "@/lib/module-foundation/ethereum-graph-builder";
 import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
-import { readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
+import { FoundationQuoteMarketError, readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
 import { assertFoundationAtomicEth } from "@/lib/module-foundation/atomic-launch";
 import { foundationParseAmount } from "@/lib/module-foundation/price";
 import { NextResponse } from "next/server";
@@ -156,6 +156,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       compositionHash: composition.compositionHash,
       totals: { ...composition.totals, platformBps: foundationPlatformFeeBps(binding) } }, { headers });
   } catch (error) {
+    if (error instanceof FoundationQuoteMarketError) return NextResponse.json({ error: error.message, code: error.code, retryable: error.retryable },
+      { status: error.retryable ? 503 : 422, headers });
     const message = error instanceof Error && error.message.length < 240 ? error.message : "This launch could not be prepared. Check its details and retry.";
     return NextResponse.json({ error: message }, { status: 400, headers });
   }

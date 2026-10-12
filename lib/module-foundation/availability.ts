@@ -4,6 +4,7 @@ import type { FoundationDeploymentBinding } from "./client";
 import { ETHEREUM_MODULE_BINDING, ETHEREUM_MODULE_SOURCE, ethereumModuleBinding, ethereumModuleSourceByRelease } from "./ethereum-release";
 import { foundationFactoryVersion } from "./protocol";
 import { bindFoundationCatalogV1, FOUNDATION_CATALOG_SCHEMA_V1, type FoundationCatalogAuthorityV1, type FoundationCatalogDocumentV1 } from "./catalog";
+import { withFoundationReadDeadline } from "./read-deadline";
 
 export const FOUNDATION_AVAILABILITY_SCHEMA = "programmable.module-foundation.availability.v1";
 export const FOUNDATION_AVAILABILITY_SCHEMA_V2 = "programmable.module-foundation.availability.v2";
@@ -61,6 +62,7 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
     if (r.chainId !== 1) throw new Error("This graph release belongs only to Ethereum.");
     const token = r.token === undefined ? undefined : tokenAddress(r.token).toLowerCase() as Address;
     if (r.available !== true) return { ...unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1), ...(token ? { token } : {}),
+      ...(r.reason === "MODULE_INDEX_PROVIDER_DISAGREEMENT" ? { providerDisagreement: true } : {}),
       ...(token && r.reason === "MODULE_INDEX_PENDING" ? { indexPending: true, reason: "Waiting for this launch to appear in the index." } : {}),
       ...(token && r.reason === "MODULE_STAMP_MISSING" ? { stampMissing: true,
         reason: "This token has no Programmable launch stamp. Contact the project team." } : {}) };
@@ -127,6 +129,10 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
   return { schemaVersion: r.schemaVersion, ...(r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V4 ? { chainId } : {}), available: true, reason: null, binding, catalog: { document, authority }, ...(token ? { token } : {}) };
 }
 export async function fetchFoundationAvailability(signal?: AbortSignal, token?: Address, chainId: FoundationChainId = 4663): Promise<FoundationAvailabilityEnvelope> {
+  // Includes every retry and response body. A lost connection must not leave the launch button spinning.
+  return withFoundationReadDeadline(current => fetchCurrentFoundationAvailability(current, token, chainId), 60_000, signal);
+}
+async function fetchCurrentFoundationAvailability(signal: AbortSignal, token: Address | undefined, chainId: FoundationChainId): Promise<FoundationAvailabilityEnvelope> {
   const profile = foundationChainProfile(chainId);
   const unavailable = () => unavailableFoundation(chainId === 1 ? FOUNDATION_AVAILABILITY_SCHEMA_V4 : FOUNDATION_AVAILABILITY_SCHEMA, chainId);
   const params = new URLSearchParams(); if (chainId !== 4663) params.set("chainId", String(chainId));

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAddress, toHex } from "viem";
-import { readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
+import { FoundationQuoteMarketError, readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
 import { readFoundationStartPrice } from "@/lib/server/module-foundation/start-price";
 import { foundationChainProfile } from "@/lib/module-foundation/chains";
 import type { AnyQuoteUsdReferenceV1 } from "@/lib/module-engine/any-quote/readiness.server";
@@ -57,5 +57,14 @@ describe("one verified market for funding and launch valuation", () => {
   it("does not describe a provider outage as a missing token route", async () => {
     mocks.assess.mockResolvedValue({ status: "inconclusive", code: "PROVIDER_OR_EXECUTION_INCONCLUSIVE" });
     await expect(readFoundationEthFunding(address, 100n, 1)).rejects.toThrow("could not be verified");
+  });
+
+  it("preserves the market failure and does not tell thin-market users to retry the same route", async () => {
+    mocks.assess.mockResolvedValue({ status: "inconclusive", code: "MARKET_PRICE_IMPACT_TOO_HIGH" });
+    await expect(readFoundationEthFunding(address, 100n, 1)).rejects.toMatchObject({
+      code: "MARKET_PRICE_IMPACT_TOO_HIGH", retryable: false, message: expect.stringContaining("too little liquidity"),
+    });
+    expect(new FoundationQuoteMarketError("V4_DISCOVERY_PROVIDER_UNAVAILABLE").retryable).toBe(true);
+    expect(new FoundationQuoteMarketError("PROVIDER_CHAIN_MISMATCH").retryable).toBe(false);
   });
 });

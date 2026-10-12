@@ -12,6 +12,26 @@ const review = () => ({ contextKey: context, expiresAt: Math.floor(Date.now() / 
 afterEach(() => vi.useRealTimers());
 
 describe("exact launch preparation while editing", () => {
+  it("releases a stalled background preparation and rejects its late result", async () => {
+    vi.useFakeTimers();
+    const cache = new FoundationLaunchPreparation();
+    let finish!: (value: FoundationLaunchReview) => void;
+    let signal!: AbortSignal;
+    const stalled = cache.prepare(draft, context, (_draft, current) => {
+      signal = current;
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const rejected = expect(stalled).rejects.toThrow("timed out");
+    await vi.advanceTimersByTimeAsync(90_000);
+    await rejected;
+    expect(signal.aborted).toBe(true);
+    const next = review();
+    expect(await cache.prepare(draft, context, async () => next)).toBe(next);
+    finish({ ...review(), expiresAt: 0 });
+    await Promise.resolve();
+    expect(await cache.prepare(draft, context, vi.fn())).toBe(next);
+  });
+
   it("joins pending work and reuses its successful result for the same click", async () => {
     const cache = new FoundationLaunchPreparation();
     let finish!: (value: FoundationLaunchReview) => void;

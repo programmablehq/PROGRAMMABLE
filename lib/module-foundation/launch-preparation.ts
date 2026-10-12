@@ -1,5 +1,6 @@
 import { foundationReviewError, type FoundationLaunchDraft, type FoundationLaunchReview } from "./ui-types";
 import { nativeCanonicalJson, nativeJson } from "../module-mode/native-catalog";
+import { withFoundationReadDeadline } from "./read-deadline";
 
 /** One exact draft, in this tab only. This cache never signs or submits a transaction. */
 export class FoundationLaunchPreparation {
@@ -27,7 +28,7 @@ export class FoundationLaunchPreparation {
     const snapshot = structuredClone(draft);
     entry.promise = Promise.resolve().then(() => {
       controller.signal.throwIfAborted();
-      return prepare(snapshot, controller.signal);
+      return withFoundationReadDeadline(signal => prepare(snapshot, signal), 90_000, controller.signal);
     }).then(review => {
       controller.signal.throwIfAborted();
       if (this.entry !== entry) throw new Error("Your coin settings changed. Prepare the current draft again.");
