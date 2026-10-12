@@ -1,4 +1,5 @@
 "use client";
+import { customLaunchTradeEvidence } from "@/lib/custom-launch-trade-evidence";
 import { CustomLaunchAssessment } from "./custom-launch-assessment";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -45,7 +46,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
       signal: AbortSignal.timeout(70_000),
     });
     const value = await response.json();
-    if (!response.ok) throw new Error(value?.error?.code === "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT" ? "The embedded deadline does not cover the 24-hour launch window. Ask the team to repack it." : response.status === 409 ? "This review changed. Refresh before deciding." : response.status === 403 ? "This wallet is not authorized to review launches." : "Could not load launch reviews. Try again.");
+    if (!response.ok) throw new Error(value?.error?.code === "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED" ? "Record passing buy and sell checks for the 1% platform fee collected by this pool before approving." : value?.error?.code === "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT" ? "The embedded deadline does not cover the 24-hour launch window. Ask the team to repack it." : response.status === 409 ? "This review changed. Refresh before deciding." : response.status === 403 ? "This wallet is not authorized to review launches." : "Could not load launch reviews. Try again.");
     if (!active.current) throw new Error("Wallet changed. Refresh to continue.");
     return value;
   }, [account, getAccessToken, getIdentityToken]);
@@ -94,6 +95,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
       setReviews(current => current.map(item => item.reviewId === updated.reviewId ? { ...item, ...updated } : item));
     } catch (e) { setError(e instanceof Error ? e.message : "Decision could not be saved."); } finally { setBusy(false); }
   }
+  const currentPlatformFee = detail && customLaunchTradeEvidence(detail.tradeChecks, detail.subjectHash, detail.chainId).currentPlatformFee;
   const canDecide = detail && !detail.supersededBy && customLaunchReviewLabel(detail, now) !== "Approved";
   const replacements = detail ? reviews.filter(r => r.chainId === detail.chainId && r.controller === detail.controller && Date.parse(r.submittedAt) > Date.parse(detail.submittedAt) && !r.supersededBy) : [];
   const progress = detail ? buildOperationsRows([{ ...detail, requestSummary: { operations: detail.operations } } as OperationsReview], null, now)[0] : null;
@@ -117,12 +119,12 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
           {entry.links.map(link => <p key={link}><a href={link} target="_blank" rel="noopener noreferrer">{link}</a></p>)}
         </div>)}</section> : null}
         <CustomLaunchAssessment value={detail.assessment} tradeChecks={detail.tradeChecks} subjectHash={detail.subjectHash} chainId={detail.chainId} review={detail} admin />
-        {canDecide && detail.state !== "approved" ? <details><summary>Record targeted trading checks</summary><p>Run the review-trade-checks-v4 operator tool with this review ID and subject hash, then paste its report. This does not approve the launch.</p><textarea aria-label="Fork trading report JSON" maxLength={12000} value={tradeReport} onChange={e => setTradeReport(e.target.value)} /><button disabled={busy || !tradeReport.trim()} onClick={() => void decide("record_checks")}>Save check report</button></details> : null}
+        {canDecide && detail.state !== "approved" ? <details><summary>Record targeted trading checks</summary><p>Run the review-trade-checks-v4 operator tool with this review ID and subject hash, then paste its report. The report must prove that the pool collects 1% for the platform on buys and sells. This does not approve the launch.</p><textarea aria-label="Fork trading report JSON" maxLength={12000} value={tradeReport} onChange={e => setTradeReport(e.target.value)} /><button disabled={busy || !tradeReport.trim()} onClick={() => void decide("record_checks")}>Save check report</button></details> : null}
         <details><summary>Technical checks</summary><pre>{JSON.stringify(detail.technicalStatus, null, 2)}</pre></details>
         <details><summary>Submitted launch and source</summary><pre>{JSON.stringify(detail.request, null, 2)}</pre></details>
         <p className={styles.address}>Reviewed version: {detail.subjectHash}</p>
-        {canDecide && <><label>Note to the team <textarea maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} /></label>
-          <div className={styles.actions}><button disabled={busy || detail.requiresRepack === true} onClick={() => void decide("approve")}>Approve for 24 hours</button><button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Request changes</button><button disabled={busy || !reason.trim() || detail.state === "approved"} onClick={() => void decide("request_information")}>Ask for information</button></div>
+        {canDecide && <>{!currentPlatformFee && <p>Approval requires passing 1% platform fee checks for this pool.</p>}<label>Note to the team <textarea maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} /></label>
+          <div className={styles.actions}><button disabled={busy || detail.requiresRepack === true || !currentPlatformFee} onClick={() => void decide("approve")}>Approve for 24 hours</button><button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Request changes</button><button disabled={busy || !reason.trim() || detail.state === "approved"} onClick={() => void decide("request_information")}>Ask for information</button></div>
           {replacements.length && detail.state !== "approved" ? <div><label>Replace this old request with<select value={replacementId} onChange={event => setReplacementId(event.target.value)} disabled={busy}>
             <option value="">Choose the newer request</option>{replacements.map(r => <option value={r.reviewId} key={r.reviewId}>{r.launchId} · {new Date(r.submittedAt).toLocaleString()}</option>)}
           </select></label><button disabled={busy || !replacementId} onClick={() => void decide("replace")}>Mark as replaced</button></div> : null}</>}

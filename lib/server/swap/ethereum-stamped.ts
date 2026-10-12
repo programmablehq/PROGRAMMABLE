@@ -1,3 +1,4 @@
+import { ethereumPoolFeeMatchesPolicy } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
 import "server-only";
 import { createPublicClient, decodeFunctionData, decodeFunctionResult, encodeFunctionData, getAddress, http, keccak256, parseAbi, toHex, type Address, type Hex } from "viem";
 import { mainnet } from "viem/chains";
@@ -180,14 +181,14 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
 
   const requiresFee = ethereumRouteRequiresFee(route);
   const feePolicy = requiresFee ? ethereumRouteFeePolicy(route) : null;
-  if (native30Proof && feePolicy && !same(native30Proof.recipient, feePolicy.policy.native30Waiver?.recipient ?? "")) return unavailable("ETHEREUM_POOL_FEE_RECIPIENT_MISMATCH");
+  if (native30Proof && feePolicy && !ethereumPoolFeeMatchesPolicy(feePolicy.policy, native30Proof)) return unavailable("ETHEREUM_POOL_FEE_RECIPIENT_MISMATCH");
   const recipient = getAddress(feePolicy?.policy.defaultCollection.recipient ?? ETHEREUM_ROUTING_FEE_POLICY_V1.defaultCollection.recipient);
   const recipientBefore = requiresFee && !native30Proof
     ? same(request.owner, recipient) ? nativeBalance : await rpc("eth_getBalance", [recipient, reference], value => quantityV1(value).toString()) : "0";
   const routerNativeBefore = requiresFee
     ? await rpc("eth_getBalance", [getAddress(protocol.router.address), reference], value => quantityV1(value).toString()) : "0";
   let fee: EthereumSwapFeeV1 | undefined = requiresFee ? {
-    policyHash: feePolicy!.policyHash, mode: native30Proof ? "pool_enforced_native30" : "programmable_routed",
+    policyHash: feePolicy!.policyHash, mode: native30Proof ? native30Proof.rateBps === 100 ? "pool_enforced_native100" : "pool_enforced_native30" : "programmable_routed",
     rateBps: feePolicy!.policy.rateBps, routedRateBps: native30Proof ? 0 : feePolicy!.policy.defaultCollection.routedRateBps, recipient,
     grossNativeAmount: "0", platformFeeAmount: "0", netNativeAmount: "0", native30Proof: native30Proof ?? null, accrual: null,
   } : undefined;

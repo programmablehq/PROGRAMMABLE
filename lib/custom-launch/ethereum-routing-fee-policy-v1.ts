@@ -125,3 +125,13 @@ export function validateEthereumFeeClassificationV1(value: EthereumFeeClassifica
   if (BigInt(stamp.blockNumber) <= BigInt(ETHEREUM_ROUTING_FEE_BOUNDARY_V1.blockNumber)) return invalid();
   return value;
 }
+
+/** Exact-runtime proofs must match this launch's signed rate and recipient.
+ * A historical 30bps pool never waives the current 100bps policy. */
+export function ethereumPoolFeeMatchesPolicy(policy: EthereumRoutingFeePolicy,
+  proof: { rateBps: number; recipient: string; recipeId: string }): boolean {
+  return proof.rateBps === policy.rateBps
+    && (policy.rateBps === 100 ? proof.recipeId === "native100_fee_kernel_v1"
+      && same(proof.recipient, policy.defaultCollection.recipient)
+      : same(proof.recipient, policy.native30Waiver.recipient));
+}

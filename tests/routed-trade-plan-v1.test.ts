@@ -17,6 +17,8 @@ import { productionTradeRpcsV1, tradePostStateV1, type TradeRpcV1 } from "@/lib/
 import { prepareLaunchPlanTradeWalletV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import sdkVector from "@/tests/fixtures/routed-trade-fee-vnext-vector-v211.json";
 import feeVectors from "@/contracts/spec/immutable-pool-fee-runtime-vectors-v1.json";
+import { ROBINHOOD_NATIVE100_RECIPES_V1 as feeRecipesV3 } from "@/lib/custom-launch/robinhood-native100-recipes-v1";
+import { proveImmutablePoolFeeRuntimeV3 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v3";
 import native30Vector from "./fixtures/immutable-pool-fee-runtime-v2.json";
 import { rebuildImmutablePoolFeeRuntimeProof } from "@/lib/custom-launch/immutable-pool-fee-runtime";
 import { IMMUTABLE_POOL_FEE_RECIPES_V2 as feeRecipesV2 } from "@/lib/custom-launch/immutable-pool-fee-recipes-custom-launch-plan-v2";
@@ -84,10 +86,17 @@ function fixtureRpc(options: { revert?: boolean; missingFee?: boolean; underpaid
 const prepared = async (options: Parameters<typeof fixtureRpc>[0] = {}) => prepareLaunchPlanTradeV1(request(), {
   loadProjection: async () => projection(), rpcs: [fixtureRpc(options), fixtureRpc(options)], now: () => now });
 
-function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean; native30?: boolean; permitExpiration?: number } = {}) {
-  const vector = (options.native30 ? native30Vector : feeVectors.proofs[index]!) as unknown as ImmutablePoolFeeRuntimeProofV1;
+function native100Vector() {
+  const old = native30Vector as unknown as import("@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v3").ImmutablePoolFeeRuntimeProofV3;
+  const recipe = feeRecipesV3.native100_fee_kernel_v1;
+  const codes = Object.fromEntries(old.runtimeBindings.filter(b => b.role !== "module").map(b => [b.address.toLowerCase(),
+    materializeImmutableFeeRuntimeWordsV1(b.role === "hook" ? recipe.hook : recipe.vault, b.immutableWords!)]));
+  return proveImmutablePoolFeeRuntimeV3(old.market,codes)!;
+}
+function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean; native30?: boolean; native100?: boolean; permitExpiration?: number } = {}) {
+  const vector = (options.native100 ? native100Vector() : options.native30 ? native30Vector : feeVectors.proofs[index]!) as unknown as ImmutablePoolFeeRuntimeProofV1;
   const proof = rebuildImmutablePoolFeeRuntimeProof(vector, vector.market);
-  const recipes = proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v2" ? feeRecipesV2[proof.recipeId] : feeRecipes[proof.recipeId];
+  const recipes = proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v3" ? feeRecipesV3[proof.recipeId] : proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v2" ? feeRecipesV2[proof.recipeId] : feeRecipes[proof.recipeId];
   const platform = BigInt(proof.rateBps) * 10n;
   const tradeRequest = { ...request(), zeroForOne: !options.sell };
   const creatorAmount = proof.recipeId === "native_fee_kernel_v1" ? options.sell ? 250n : 150n : 0n;
@@ -249,6 +258,18 @@ describe("generic vNext routed swap", () => {
       const decoded=decodeFunctionData({abi:ROUTED_TRADE_ROUTER_ABI_V1,data:value.transaction.data});
       expect(decodeAbiParameters([{type:"bytes"},{type:"bytes[]"}],decoded.args[1][0]!)[0]).toBe("0x060c0f");
     }
+  });
+  it("proves the current 1% pool fee on both sides and does not add another route fee", async () => {
+    for (const sell of [false,true]) {
+      const f = immutablePoolFixture(0,{native100:true,provenance:true,sell});
+      const value = await f.prepare();
+      expect(value.fee).toMatchObject({policyVersion:ROUTED_FEE_POLICY_V3,rateBps:100,routedRateBps:0});
+      expect(value.evidence.feeTransfer).toMatchObject({routedFeeAmount:"0",poolFeeAccrual:{rateBps:100,grossNativeAmount:"100000",platformAccruedIncrease:"1000"}});
+      expect(validateLaunchPlanTradePreparationV1(value,f.projection,f.request,now)).toEqual(value);
+      const decoded=decodeFunctionData({abi:ROUTED_TRADE_ROUTER_ABI_V1,data:value.transaction.data});
+      expect(decodeAbiParameters([{type:"bytes"},{type:"bytes[]"}],decoded.args[1][0]!)[0]).toBe("0x060c0f");
+    }
+    await expect(immutablePoolFixture(0,{native100:true,provenance:true,unbacked:true}).prepare()).rejects.toMatchObject({status:503});
   });
   it("proves Native30 buy and sell accrual without charging a second route fee", async () => {
     for (const sell of [false, true]) {

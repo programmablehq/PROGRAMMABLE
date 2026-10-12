@@ -25,6 +25,10 @@ Creator and pool fees are additional. Author rewards are divided equally between
 
 ## Custom launches
 
+New Ethereum and Robinhood approvals require a 100 bps (1%) platform share collected by the pool on each buy and sell. The Native100 V1 references use the gross native ETH leg, round up per trade and accrue fully backed PoolManager native claims. `claimPlatform()` always pays `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`, regardless of its caller. Exact runtime and trade-accrual proof lets the website recognize that fee and avoid adding a second 1% routing fee. Source, bytecode and trade evidence must agree.
+
+Existing Native30 contracts retain 30 bps (0.30%). Neither changing documentation nor upgrading the website changes those immutable contracts.
+
 Earlier Robinhood Native20 charges 20 bps (0.20%) on the gross native ETH amount of each successful buy or sell through its bound pool. Creator and pool fees are separate. For a gross amount of 1 ETH, Programmable earns 0.002 ETH.
 
 Native20's rate is not a universal rule for custom contracts. Use the fee configuration and verified fee path of the exact launch and pool. A configured policy or a launch stamp alone does not establish that a fee is enforced. A creator fee of 0% produces no creator earnings from that trade.

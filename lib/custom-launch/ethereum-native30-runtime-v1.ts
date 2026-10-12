@@ -2,7 +2,9 @@ import { getAddress, getContractAddress, keccak256, stringToHex, type Address, t
 import { ETHEREUM_NATIVE30_RECIPES_V1 } from "./ethereum-native30-recipes-v1";
 
 import { ETHEREUM_NATIVE30_RECIPES_V2 } from "./ethereum-native30-recipes-v2";
+import { ETHEREUM_NATIVE100_RECIPES_V1 } from "./ethereum-native100-recipes-v1";
 const recipes = {
+  ...ETHEREUM_NATIVE100_RECIPES_V1,
   native30_fee_kernel_v2: { ...ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2, recipient: "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c" },
   ...ETHEREUM_NATIVE30_RECIPES_V2,
 } as const;
@@ -26,7 +28,7 @@ export interface EthereumNative30RuntimeProofV1 {
   readonly sourceArtifactHash: string;
   readonly market: EthereumNative30MarketV1;
   readonly recipient: Address;
-  readonly rateBps: typeof ETHEREUM_NATIVE30_RATE_BPS_V1;
+  readonly rateBps: 30 | 100;
   readonly denominator: 10000;
   readonly scope: "exact_pool_key";
   readonly feeCurrency: "native";
@@ -112,15 +114,16 @@ function hookCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
   })).find(candidate => candidate.words !== null);
   if (!match?.words) return null;
   const { recipeId, recipe, words } = match;
+  const rateBps = recipeId === "native100_fee_kernel_v1" ? 100 as const : 30 as const;
   const vault = addressWord(words, "feeVault"), feeModule = addressWord(words, "module");
   if (!eq(addressWord(words, "poolManager"), key.poolManager) || !eq(addressWord(words, "token"), key.currency1)
     || numberWord(words, "lpFee") !== BigInt(key.fee) || numberWord(words, "tickSpacing") !== BigInt(key.tickSpacing)
     || !eq(vault, getContractAddress({ from: key.hooks, nonce: 1n })) || eq(addressWord(words, "initializer"), ZERO)
     || numberWord(words, "initialSqrtPriceX96") === 0n || numberWord(words, "initialSqrtPriceX96") >= 1n << 160n
-    || numberWord(words, "creatorBuyFeeBps") + 30n >= 10000n || numberWord(words, "creatorSellFeeBps") + 30n >= 10000n
+    || numberWord(words, "creatorBuyFeeBps") + BigInt(rateBps) >= 10000n || numberWord(words, "creatorSellFeeBps") + BigInt(rateBps) >= 10000n
     || numberWord(words, "maxModuleLpFeePips") > 1000000n || eq(feeModule, key.poolManager)
     || eq(feeModule, ZERO) !== eq(words.moduleCodeHash!, WORD0)) return null;
-  return { key, words, vault, feeModule, recipeId, recipe };
+  return { key, words, vault, feeModule, recipeId, recipe, rateBps };
 }
 export function ethereumNative30RequiredAddressesV1(market: EthereumNative30MarketV1, hookRuntime: Hex): readonly Address[] | null {
   try {
@@ -136,7 +139,7 @@ function buildProof(market: EthereumNative30MarketV1, codes: Readonly<Record<str
   };
   const hookCode = code(market.hooks); if (!hookCode) return null;
   const candidate = hookCandidate(market, hookCode); if (!candidate) return null;
-  const { key, words, vault, feeModule, recipeId, recipe } = candidate, vaultCode = code(vault); if (!vaultCode) return null;
+  const { key, words, vault, feeModule, recipeId, recipe, rateBps } = candidate, vaultCode = code(vault); if (!vaultCode) return null;
   const vaultWords = readEthereumNative30RuntimeWordsV1(recipe.vault, vaultCode);
   if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
     || !eq(addressWord(vaultWords, "kernel"), key.hooks) || eq(addressWord(vaultWords, "creatorRecipient"), ZERO)) return null;
@@ -154,7 +157,7 @@ function buildProof(market: EthereumNative30MarketV1, codes: Readonly<Record<str
   bindings.sort((a, b) => a.role.localeCompare(b.role));
   const body = { schemaVersion: ETHEREUM_NATIVE30_PROOF_SCHEMA_V1, recipeId,
     sourceArtifactHash: recipe.sourceArtifactHash, market: key,
-    recipient: getAddress(recipe.recipient), rateBps: ETHEREUM_NATIVE30_RATE_BPS_V1, denominator: 10000 as const,
+    recipient: getAddress(recipe.recipient), rateBps, denominator: 10000 as const,
     scope: "exact_pool_key" as const, feeCurrency: "native" as const, assessmentBase: "gross_native_leg" as const,
     rounding: "ceil_per_trade" as const, accrual: "backed_pool_manager_native_claims" as const,
     claim: "permissionless_fixed_recipient" as const, feeVault: vault, feeRecorder: key.hooks, runtimeBindings: bindings };
