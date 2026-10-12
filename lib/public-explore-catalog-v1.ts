@@ -45,6 +45,20 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
   // Owner-supplied artwork and social link for this verified, finalized launch.
   // This display correction never creates or changes launch provenance.
   if (provenance?.chainId === 1 &&
+    entry.tokenAddress.toLowerCase() === "0xab40efbaff5a67ec3e273b746ae7bac7d1bc4ae3" &&
+    provenance.launchId.toLowerCase() === "0xa0525234d1e19bc5aaaa389652233bd56cc76fabdbb37f4d986966f239861718" &&
+    provenance.stampHash.toLowerCase() === "0xeda4426986cb163bf32e262504d3f56deb1c492760ba50be0b03760fcad7ca02") {
+    return Object.freeze({
+      ...entry,
+      imageUrl: "/token-images/hive.png",
+      links: [
+        ...(entry.links ?? []).filter(link => link.kind !== "website" && link.kind !== "x"),
+        { kind: "website", url: "https://www.hiveeth.si/" },
+        { kind: "x", url: "https://x.com/Hive_v4" },
+      ],
+    }) as T;
+  }
+  if (provenance?.chainId === 1 &&
     entry.tokenAddress.toLowerCase() === "0xf9f7944aa311535fd86b7daa17e6d3e753915bd7" &&
     provenance.launchId.toLowerCase() === "0x41f47f07e4afeba4495130c065d6cf60e4263c2628e03092ccc328a9d29d02b1" &&
     provenance.stampHash.toLowerCase() === "0x25bb83d3b2ec32e8f7af86ff76134dfd3416ed50f216f6ee83bd4144cb84bf0b") {
