@@ -7,7 +7,7 @@ export function isInterfaceMaintenance(paths, readPair) {
   if (!paths?.length) return false;
   try {
     for (const path of paths) {
-      if (/^(?:AGENTS\.md|scripts\/ci\/(?:README\.md|interface-[^/]+\.mjs|reuse-interface-verification(?:\.test)?\.mjs|verify-interface(?:-workflow\.test)?\.mjs|classify-verify-paths\.test\.mjs))$/u.test(path)) continue;
+      if (/^(?:AGENTS\.md|scripts\/publish-website-ui\.mjs|scripts\/test\/publish-website-ui\.test\.mjs|scripts\/ci\/(?:README\.md|interface-[^/]+\.mjs|reuse-interface-verification(?:\.test)?\.mjs|verify-interface(?:-workflow\.test)?\.mjs|classify-verify-paths\.test\.mjs))$/u.test(path)) continue;
       if (/^tests\/(?!browser\/).*\.test\.tsx?$/u.test(path)) {
         const [before, after] = readPair(path);
         if (before && after === null) continue;

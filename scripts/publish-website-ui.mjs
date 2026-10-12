@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { isInterfacePresentationCandidate } from "./ci/classify-verify-paths.mjs";
+import { isInterfaceMaintenance } from "./ci/interface-maintenance.mjs";
 
 const exec = promisify(execFile);
 const REPOSITORY = "programmablehq/PROGRAMMABLE";
@@ -84,6 +85,11 @@ async function source() {
   return head;
 }
 
+export function presentationChanges(paths, readPair) {
+  const ignoredPaths = paths.filter(path => isInterfaceMaintenance([path], readPair));
+  return { paths: paths.filter(path => !ignoredPaths.includes(path)), ignoredPaths };
+}
+
 async function plan() {
   const head = await source();
   const live = deploymentSource(await deployment("programmable.market"));
@@ -91,8 +97,18 @@ async function plan() {
   // Check the entire outstanding release, not just the last push. A pending
   // trading or server change cannot ride along with a later CSS change.
   await git("merge-base", "--is-ancestor", live.sha, head);
-  const paths = (await git("diff", "--no-renames", "--name-only", live.sha, head)).split("\n").filter(Boolean);
-  return { eligible: isInterfacePresentationCandidate(paths), reason: "presentation-scope", head, live, paths };
+  const changed = (await git("diff", "--no-renames", "--name-only", live.sha, head)).split("\n").filter(Boolean);
+  const pairs = new Map();
+  for (const path of changed) {
+    // Maintenance has no runtime payload. Still compare both blobs for package
+    // commands and workflow changes; build settings must never be filtered out.
+    if (path === "package.json" || path.startsWith(".github/") || path.startsWith("tests/")) {
+      pairs.set(path, await Promise.all([live.sha, head].map(sha => git("show", `${sha}:${path}`).catch(() => null))));
+    }
+  }
+  const selected = presentationChanges(changed, path => pairs.get(path) ?? [null, null]);
+  return { eligible: isInterfacePresentationCandidate(selected.paths),
+    reason: selected.paths.length ? "presentation-scope" : "no-application-changes", head, live, ...selected };
 }
 
 async function provePresentation(value) {
@@ -176,7 +192,7 @@ async function main() {
     if (process.env.GITHUB_OUTPUT) await writeFile(process.env.GITHUB_OUTPUT,
       `eligible=${value.eligible}\n`, { flag: "a" });
     emit(value);
-  } else if (value.reason === "already-live") emit(value);
+  } else if (["already-live", "no-application-changes"].includes(value.reason)) emit(value);
   else await publish(value);
 }
 

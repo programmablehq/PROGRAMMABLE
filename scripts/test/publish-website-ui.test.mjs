@@ -6,10 +6,31 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import yaml from "js-yaml";
-import { deploymentSource, deploymentUrlFromOutput, presentationDeploymentArguments } from "../publish-website-ui.mjs";
+import { deploymentSource, deploymentUrlFromOutput, presentationDeploymentArguments, presentationChanges } from "../publish-website-ui.mjs";
 
 const fixture = { id: "dpl_ABC123", projectId: "prj_MM8nbhoztJnz1yhimwc9CVFYhAd7", readyState: "READY",
   url: "programmable-ui.vercel.app", meta: { githubCommitSha: "a".repeat(40) } };
+
+test("undeployed verification maintenance does not block the next presentation update", () => {
+  const paths = ["components/token-experience.module.css", "AGENTS.md", "scripts/ci/interface-plan.mjs",
+    "scripts/publish-website-ui.mjs", "tests/old-layout.test.ts", "package.json"];
+  const before = { scripts: { build: "next build", "test:interface:ci": "old" }, dependencies: { next: "16" } };
+  const after = { ...before, scripts: { ...before.scripts, "test:interface:ci": "new" } };
+  const selected = presentationChanges(paths, path => path === "package.json"
+    ? [JSON.stringify(before), JSON.stringify(after)] : ["old test", null]);
+  assert.deepEqual(selected.paths, [paths[0]]);
+  assert.equal(selected.ignoredPaths.length, 5);
+  assert.deepEqual(presentationChanges(selected.ignoredPaths, path => path === "package.json"
+    ? [JSON.stringify(before), JSON.stringify(after)] : ["old test", null]).paths, []);
+});
+
+test("server, fees, dependencies and build commands remain in the outstanding release", () => {
+  const paths = ["app/api/trade/route.ts", "lib/protocol-fee.ts", "config/module.json", "package.json"];
+  const before = { scripts: { build: "next build" }, dependencies: { viem: "1" } };
+  for (const after of [{ ...before, scripts: { build: "different" } }, { ...before, dependencies: { viem: "2" } }]) {
+    assert.deepEqual(presentationChanges(paths, () => [JSON.stringify(before), JSON.stringify(after)]).paths, paths);
+  }
+});
 
 test("CLI agent JSON and terminal output recover the same candidate without another deployment", () => {
   const expected = `https://${fixture.url}`;
