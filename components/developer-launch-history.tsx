@@ -1,4 +1,5 @@
 "use client";
+import { DeveloperIssue } from "./developer-issue";
 import { CustomLaunchAssessment } from "./custom-launch-assessment";
 import { CustomLaunchDiscussion } from "./custom-launch-discussion";
 import { CustomLaunchStartButton } from "./custom-launch-start-button";
@@ -207,8 +208,10 @@ type HistoryPage = Readonly<{
   nextCursor: string | null;
 }>;
 
-type DeveloperLaunchHistoryProps = Readonly<{
+export type DeveloperLaunchHistoryProps = Readonly<{
   account: `0x${string}`;
+  detailOnly?: boolean;
+  initialLaunchVersion?: "v1" | "v2" | "v3" | "v4";
   initialLaunchId: string | null;
   initialLaunchChainId: "4663" | null;
   getAccessToken: () => Promise<string | null>;
@@ -805,7 +808,7 @@ function parseV4Launch(
   };
 }
 
-function parseLaunch(value: unknown, account: string): LaunchResource | null {
+export function parseLaunch(value: unknown, account: string): LaunchResource | null {
   if (isRecord(value)
     && value.schemaVersion === "programmable.custom-launch-summary.v4") {
     return parseV4LaunchSummary(value, account);
@@ -2358,6 +2361,8 @@ export function DeveloperLaunchHistory({
   account,
   initialLaunchId,
   initialLaunchChainId,
+  detailOnly = false,
+  initialLaunchVersion,
   getAccessToken,
   getIdentityToken,
   sendCustomLaunchWalletAction,
@@ -2661,7 +2666,7 @@ export function DeveloperLaunchHistory({
 
   const readLaunchById = useCallback(async (
     launchId: string,
-    version: "v3" | "v4",
+    version: "v1" | "v2" | "v3" | "v4",
     signal?: AbortSignal,
   ) => {
     const response = await fetch(
@@ -2669,7 +2674,7 @@ export function DeveloperLaunchHistory({
       {
         cache: "no-store",
         headers: await getAuthHeaders(),
-        signal,
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
       },
     );
     const body = await response.json().catch(() => null);
@@ -2695,6 +2700,7 @@ export function DeveloperLaunchHistory({
   }, []);
 
   useEffect(() => {
+    if (detailOnly) return;
     const controller = new AbortController();
     const initialRead = window.setTimeout(() => {
       void load(null, controller.signal);
@@ -2703,7 +2709,7 @@ export function DeveloperLaunchHistory({
       window.clearTimeout(initialRead);
       controller.abort();
     };
-  }, [load]);
+  }, [load, detailOnly]);
 
   useEffect(() => {
     const updateClock = () => setCurrentTimeMs(Date.now());
@@ -2717,7 +2723,7 @@ export function DeveloperLaunchHistory({
 
   useEffect(() => {
     if (!initialLaunchId || !requestIdPattern.test(initialLaunchId)) return;
-    const version = initialLaunchChainId === "4663" ? "v4" : "v3";
+    const version = initialLaunchVersion ?? (initialLaunchChainId === "4663" ? "v4" : "v3");
     const deepLinkKey = `${account}:${version}:${initialLaunchId}`;
     if (deepLinkHandledRef.current === deepLinkKey) return;
     deepLinkHandledRef.current = deepLinkKey;
@@ -2755,18 +2761,21 @@ export function DeveloperLaunchHistory({
             ? cause.message
             : "Unable to open this wallet handoff.",
         );
+        if (detailOnly) setState("error");
       })
       .finally(() => {
         if (deepLinkHandledRef.current !== deepLinkKey) return;
         hydrateInFlightRef.current = false;
         setHydratingId(null);
       });
-    return () => controller.abort();
+    return () => { controller.abort(); if (deepLinkHandledRef.current === deepLinkKey) deepLinkHandledRef.current = null; };
   }, [
     account,
     focusLaunchCard,
     initialLaunchId,
     initialLaunchChainId,
+    initialLaunchVersion,
+    detailOnly,
     readLaunchById,
     updateLaunch,
   ]);
@@ -2802,7 +2811,11 @@ export function DeveloperLaunchHistory({
     setRefreshing(true);
     setError("");
     setStatusMessage("Refreshing launch history.");
-    void load(null, controller.signal, true).finally(() => {
+    const refreshRead = detailOnly && initialLaunchId ? readLaunchById(initialLaunchId, initialLaunchVersion ?? (initialLaunchChainId === "4663" ? "v4" : "v3"), controller.signal)
+      .then(launch => { updateLaunch(launch); setHydratedReviews(current => ({ ...current, [launchResourceKey(launch)]: launch })); setState("ready"); })
+      .catch(cause => setError(cause instanceof Error ? cause.message : "Launch unavailable"))
+      .finally(() => setRefreshing(false)) : load(null, controller.signal, true);
+    void refreshRead.finally(() => {
       window.clearTimeout(timeout);
       if (refreshControllerRef.current === controller) {
         refreshControllerRef.current = null;
@@ -3614,33 +3627,14 @@ export function DeveloperLaunchHistory({
             size={16}
             strokeWidth={1.9}
           />
-          Refresh history
+          {detailOnly ? "Refresh launch" : "Refresh history"}
         </button>
       </div>
 
       {launchUpdate ? <p role="status" aria-live="polite" className={styles.intro}>{launchUpdate}</p> : null}
       {state === "loading" ? <HistorySkeleton /> : null}
 
-      {state === "error" ? (
-        <div className={styles.statePanel} role="alert">
-          <h3>Launch history is unavailable</h3>
-          <p>{error}</p>
-          <p>
-            If retrying does not help, share the request ID with support.
-            Never share your API key.
-          </p>
-          <a
-            href="https://discord.com/invite/programmable"
-            rel="noreferrer"
-            target="_blank"
-          >
-            Open Programmable support
-          </a>
-          <button className={styles.secondaryButton} type="button" onClick={refresh}>
-            Try again
-          </button>
-        </div>
-      ) : null}
+      {state === "error" ? <DeveloperIssue message={error} retry={refresh} chainId={initialLaunchChainId ?? "1"} /> : null}
 
       {state === "ready" && launches.length === 0 ? (
         <div className={styles.statePanel}>
@@ -3651,7 +3645,7 @@ export function DeveloperLaunchHistory({
 
       {state === "ready" && launches.length > 0 ? (
         <ul className={styles.launchList}>
-          {launches.map((launch) => {
+          {launches.filter(launch => !detailOnly || launchResourceIdentity(launch) === initialLaunchId).map((launch) => {
             const key = launchResourceKey(launch);
             const resourceIdentity = launchResourceIdentity(launch);
             const reviewLaunch = reviewResourceForLaunch(
@@ -4091,7 +4085,7 @@ export function DeveloperLaunchHistory({
         </ul>
       ) : null}
 
-      {state === "ready" && nextCursor ? (
+      {!detailOnly && state === "ready" && nextCursor ? (
         <button
           className={styles.secondaryButton}
           disabled={loadingMore}
@@ -4103,7 +4097,7 @@ export function DeveloperLaunchHistory({
         </button>
       ) : null}
       {state === "ready" && error ? (
-        <p className={styles.inlineError} role="alert">{error}</p>
+        <DeveloperIssue message={error} retry={refresh} chainId={initialLaunchChainId ?? "1"} />
       ) : null}
     </section>
   );

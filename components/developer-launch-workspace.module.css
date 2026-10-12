@@ -1,0 +1,15 @@
+.workspace { display: grid; gap: 16px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.toolbar label { display: flex; align-items: center; gap: 12px; }
+.toolbar select { color: inherit; background: var(--panel-fill-control); border: 1px solid var(--panel-line); border-radius: 10px; padding: 10px; font: inherit; min-height: 44px; }
+.list { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.card { width: 100%; display: flex; align-items: center; gap: 16px; background: var(--panel-fill); color: inherit; border: 1px solid transparent; border-radius: 16px; text-align: start; padding: 20px; font: inherit; cursor: pointer; }
+.card:hover { background: var(--panel-fill-hover); }
+.card:focus-visible { outline: 2px solid var(--api-accent); outline-offset: 3px; }
+.image { height: 48px; width: 48px; flex: 0 0 48px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: var(--panel-fill-control); }
+.image img { width: 100%; height: 100%; object-fit: cover; }
+.identity { min-width: 0; flex: 1; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.identity strong { font-size: 17px; }
+.identity span, .identity small { color: var(--webde-muted); font-size: 13px; line-height: 1.5; }
+.status { font-size: 13px; text-align: end; }
+@media(max-width: 520px) { .card { flex-wrap: wrap; padding: 16px; } .status { margin-inline-start: 64px; text-align: start; } }

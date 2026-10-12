@@ -26,13 +26,12 @@ import {
 
 import styles from "@/components/developer-api-keys.module.css";
 import { AGENT_KEY_SCHEMA, AGENT_SCOPES, buildAgentConnection, buildAgentInstructions } from "@/lib/agent-connection";
-import { DeveloperUniversalLaunchHistory } from "@/components/developer-universal-launch-history";
+import { DeveloperLaunchWorkspace } from "@/components/developer-launch-workspace";
+import { DeveloperIssue } from "./developer-issue";
+import { DeveloperConnectionCheck } from "./developer-connection-check";
 import type { LaunchContractSetupV1 } from "@/lib/server/custom-launch/launch-contract-setup-v1";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
-import { DeveloperLaunchHistory } from "@/components/developer-launch-history";
 import type { BuilderKind } from "@/components/module-contribution-entry";
-import { RobinhoodFeePolicyDisclosure } from
-  "@/components/robinhood-fee-policy-disclosure";
 import {
   useWallet,
   type CustomLaunchWalletActionInputV4,
@@ -890,6 +889,8 @@ export function DeveloperApiKeysView({
     account ? "loading" : "idle",
   );
   const [listError, setListError] = useState("");
+  const [setupChainId, setSetupChainId] = useState<"1" | "4663" | "">(() => { const id = new URLSearchParams(navigationQuery).get("chainId"); return id === "1" || id === "4663" ? id : ""; });
+  const chainSelectRef = useRef<HTMLSelectElement>(null);
   const [label, setLabel] = useState("");
   const [access, setAccess] = useState<ApiKeyAccess>("prepare-and-read");
   const [capabilities, setCapabilities] = useState<ApiKeyCapabilities | null>(null);
@@ -994,7 +995,7 @@ export function DeveloperApiKeysView({
         signal?.throwIfAborted();
         const query = `?walletAddress=${encodeURIComponent(walletAddress)}`;
         let response = await fetch(`/api/developer/api-keys/v2${query}`, {
-          cache: "no-store", headers, signal,
+          cache: "no-store", headers, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
         }).catch(() => null);
         let body = response?.ok ? await readJson(response) : null;
         let parsed = response?.ok ? parseApiKeyList(body, walletAddress) : null;
@@ -1262,9 +1263,10 @@ export function DeveloperApiKeysView({
 
   const copyConnection = async () => {
     if (mutationResult?.result.secretState !== "delivered-once") return;
+    if (!setupChainId) { setStatusMessage("Choose the chain for your builder first."); chainSelectRef.current?.focus(); return; }
     try {
       await copyToClipboard(buildAgentConnection(mutationResult.result.apiKeySecret, {
-        scopes: mutationResult.result.apiKey.scopes, wallet: account ?? undefined,
+        scopes: mutationResult.result.apiKey.scopes, wallet: account ?? undefined, chainId: setupChainId || undefined,
         ...(launchContractSetup ? { launchContract: launchContractSetup } : {}),
       }));
       setConnectionCopyState("copied");
@@ -1276,7 +1278,8 @@ export function DeveloperApiKeysView({
   };
 
   const copyAgentSetup = async (scopes?: readonly string[]) => {
-    const instructions = [buildAgentInstructions({ scopes, wallet: account ?? undefined }), launchContractSetup?.text].filter(Boolean).join("\n\n");
+    if (!setupChainId) { setStatusMessage("Choose the chain for your builder first."); chainSelectRef.current?.focus(); return; }
+    const instructions = [buildAgentInstructions({ scopes, wallet: account ?? undefined, chainId: setupChainId }), setupChainId === "4663" ? launchContractSetup?.text : undefined].filter(Boolean).join("\n\n");
     try {
       await copyToClipboard(instructions);
       setSetupCopyState("copied");
@@ -1552,6 +1555,14 @@ export function DeveloperApiKeysView({
         </button>
       </nav>
 
+      <p className={styles.reviewIntro}>We review your submission within a target of 24 hours. After approval, you have 24 hours to prepare and sign your launch.</p>
+      {activeSection === "keys" ? <div className={styles.setupBar}>
+        <label className={styles.field} htmlFor="builder-chain"><span>Build on</span><select id="builder-chain" ref={chainSelectRef} value={setupChainId}
+          onChange={event => { setSetupChainId(event.target.value as "1" | "4663" | ""); setSetupCopyState("idle"); setConnectionCopyState("idle"); setSetupFallbackText(""); }}>
+          <option value="">Choose a chain</option><option value="1">Ethereum Mainnet</option><option value="4663">Robinhood Chain</option>
+        </select></label>
+        {account ? <div className={styles.walletAssignment}><span>Connected wallet</span><code>{account}</code><button type="button" className={styles.textLink} onClick={openWallet}>Change wallet</button></div> : null}
+      </div> : null}
       {activeSection === "keys" ? (
         <Disclosure ref={guideRef} className={styles.buildGuide} id="custom-hook-guide" open={initialGuideOpen}
           data-manifest-digest={launchContractSetup?.manifestDigest}>
@@ -1560,7 +1571,7 @@ export function DeveloperApiKeysView({
             <ol className={styles.buildSteps}>
               <li><strong>Create an API key</strong><span>Connect your wallet and create a key below, or use one you already saved.</span></li>
               <li><strong>Build your hook</strong><span>Give your builder the instructions and describe your rules. Save the key in its secure settings.</span></li>
-              <li><strong>Review and launch</strong><span>Your builder sends you a review link. Check the launch here, then confirm its transactions in your wallet.</span></li>
+              <li><strong>Review and launch</strong><span>Submit for Programmable review. After approval, open your launch and sign within 24 hours.</span></li>
             </ol>
             <button className={styles.secondaryButton} type="button" onClick={() => void copyAgentSetup(activeKey?.scopes)}>
               {setupCopyState === "copied" ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
@@ -1575,9 +1586,6 @@ export function DeveloperApiKeysView({
         </Disclosure>
       ) : null}
 
-      {activeSection === "history" ? (
-        <RobinhoodFeePolicyDisclosure />
-      ) : null}
 
       {!authReady ? (
         walletSessionTimedOut ? (
@@ -1810,9 +1818,7 @@ export function DeveloperApiKeysView({
                   ) : null}
 
                   {createError ? (
-                    <p className={styles.inlineError} role="alert">
-                      {createError}
-                    </p>
+                    <DeveloperIssue message={createError} retry={() => createButtonRef.current?.click()} connect={openWallet} chainId={setupChainId || undefined} />
                   ) : null}
                 </form>
               </section>
@@ -1903,17 +1909,7 @@ export function DeveloperApiKeysView({
                 {listState === "loading" ? <KeyListSkeleton /> : null}
 
                 {listState === "error" ? (
-                  <div className={styles.statePanel} role="alert">
-                    <h3>Unable to load keys</h3>
-                    <p>{listError}</p>
-                    <button
-                      className={styles.secondaryButton}
-                      type="button"
-                      onClick={refreshApiKeys}
-                    >
-                      Try again
-                    </button>
-                  </div>
+                  <DeveloperIssue message={listError} retry={refreshApiKeys} connect={openWallet} chainId={setupChainId || undefined} />
                 ) : null}
 
                 {listState === "ready" && apiKeys.length === 0 ? (
@@ -1965,12 +1961,22 @@ export function DeveloperApiKeysView({
                                 {status}
                               </span>
                             </div>
-                            <span className={styles.keyPurpose}>{apiKeyPurposeLabel(apiKey.scopes)}</span>
+                            <span className={styles.keyPurpose}>{hasReadOnlyScopes(apiKey.scopes) ? "Read only" : hasStandardScopes(apiKey.scopes) ? "Create and read launches" : apiKeyPurposeLabel(apiKey.scopes)}</span>
+                            <p className={styles.securityNote}>Wallet: <code>{apiKey.controllerWallet ?? account}</code></p>
+                            <p className={styles.securityNote}>Chains: {apiKey.chainRestriction?.allowedChainIds?.map(id => id === "1" ? "Ethereum" : id === "4663" ? "Robinhood" : id).join(", ") ?? "Checked per request (legacy key)"}</p>
                             {status === "Active" && !rotationSupported ? (
                               <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module submissions are closed." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
                             ) : null}
                           </div>
 
+                          {status === "Active" ? <DeveloperConnectionCheck key={`${apiKey.id}:${setupChainId}`} apiKey={apiKey} chainId={setupChainId} connect={openWallet} verify={async () => {
+                            const response = await fetch(`/api/developer/api-keys/v2?walletAddress=${encodeURIComponent(account)}`, { cache: "no-store", headers: await getAuthHeaders(), signal: AbortSignal.timeout(10000) });
+                            const body = await readJson(response);
+                            if (!response.ok) throw new Error(readApiError(response, body, `HTTP ${response.status}`));
+                            const saved = parseApiKeyList(body, account)?.find(item => item.id === apiKey.id);
+                            if (!saved) throw new Error("API_KEY_NOT_FOUND");
+                            return saved;
+                          }} /> : null}
                           <Disclosure className={styles.keyDetails}>
                             <summary>Details <ChevronDown size={14} aria-hidden="true" /></summary>
                             <div className={styles.keyDetailBody}>
@@ -2122,36 +2128,23 @@ export function DeveloperApiKeysView({
                   </>
                 ) : null}
                 {listState === "ready" && listError ? (
-                  <p className={styles.inlineError} role="alert">
-                    {listError}
-                  </p>
+                  <DeveloperIssue message={listError} retry={refreshApiKeys} connect={openWallet} />
                 ) : null}
               </section>
             </div>
           ) : (
-            <>
-            {account && sendUniversalLaunchWalletAction ? <DeveloperUniversalLaunchHistory key={account.toLowerCase()} account={account} initialLaunchId={initialLaunchId}
-              getAccessToken={getAccessToken} getIdentityToken={getIdentityToken} sendWallet={sendUniversalLaunchWalletAction} /> : null}
-            <DeveloperLaunchHistory
-              account={account}
-              initialLaunchId={initialLaunchId}
-              initialLaunchChainId={initialLaunchChainId}
-              getAccessToken={getAccessToken}
-              getIdentityToken={getIdentityToken}
-              sendCustomLaunchWalletAction={sendCustomLaunchWalletAction}
-              sendCustomLaunchWalletActionV4={sendCustomLaunchWalletActionV4}
-              signCustomLaunchFundingAuthorization={
-                signCustomLaunchFundingAuthorization
-              }
-            />
-            </>
+            <DeveloperLaunchWorkspace key={account.toLowerCase()} account={account} initialLaunchId={initialLaunchId}
+              initialLaunchChainId={initialLaunchChainId} getAccessToken={getAccessToken} getIdentityToken={getIdentityToken}
+              sendUniversalLaunchWalletAction={sendUniversalLaunchWalletAction} sendCustomLaunchWalletAction={sendCustomLaunchWalletAction}
+              sendCustomLaunchWalletActionV4={sendCustomLaunchWalletActionV4} signCustomLaunchFundingAuthorization={signCustomLaunchFundingAuthorization}
+              openWallet={openWallet} />
           )}
         </>
       )}
 
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood API guide <ArrowRight size={16} aria-hidden="true" /></a>
-        <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch stamps <ArrowRight size={16} aria-hidden="true" /></Link>
+        {setupChainId !== "1" ? <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {setupChainId !== "4663" ? <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </nav>
 
     </div>
