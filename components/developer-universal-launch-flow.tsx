@@ -186,8 +186,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         setReview(null);
         const sentStep = mode === "recover" ? ownAttempt!.stepId : step?.stepId ?? "multi-role-v2";
         setObservedSubmission({ stepId: sentStep, hash: result });
-        try { await onSubmitted(sentStep, result); }
-        catch { setTrackingError("The transaction is saved. Tracking will retry automatically with the same hash."); }
+        // The single tracking loop submits the saved hash, including after reload.
+        // Do not race it with a second proof request from the click handler.
       } else setReview(result);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not complete the wallet action."); if (mode === "send") setReview(null); }
     finally { actionInFlight.current = false; setBusy(null); }

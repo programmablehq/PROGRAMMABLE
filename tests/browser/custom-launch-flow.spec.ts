@@ -26,6 +26,7 @@ for (const width of [1440, 390]) test(`one visible signing action at ${width}px`
   await sign.evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
   await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.sends())).toBe(1);
   await expect(page.getByText("Transaction saved.", { exact: false })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.proofCalls)).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
