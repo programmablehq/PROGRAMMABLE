@@ -58,9 +58,13 @@ test("wallet cancellation permits a deliberate retry", async ({ page }) => {
 test("an interrupted wallet response never resends automatically", async ({ page }) => {
   await page.goto(origin + "?scenario=lost-response");
   await page.getByRole("button", { name: "Sign and launch", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Recover transaction", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check your wallet", exact: true })).toBeVisible();
+  await page.getByText("I already sent it", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Check transaction", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Recover transaction", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check your wallet", exact: true })).toBeVisible();
+  await page.getByText("I already sent it", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Check transaction", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign and launch", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(1);
 });

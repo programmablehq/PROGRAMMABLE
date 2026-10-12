@@ -153,3 +153,12 @@
 @media (prefers-reduced-motion: no-preference) { .refreshIcon[data-spinning="true"] { animation: refreshSpin 800ms linear infinite; } }
 @media (prefers-reduced-motion: reduce) { .history button { transition: none; } }
 @media (forced-colors: active) { .launchItem, .statePanel, .history button, .transaction pre, .projectLinks a { border-color: CanvasText; } }
+
+/* Keep the owner handoff compact; the complete review remains expandable. */
+.launchItem { width: 100%; max-width: 640px; margin-inline: auto; }
+.launchItem[data-highlighted="true"] { border-color: var(--webde-line); }
+.launchTopline { align-items: flex-start; flex-wrap: wrap; }
+.launchTopline .projectArtwork { width: 64px; height: 64px; flex-basis: 64px; border-radius: 16px; }
+.launchTopline .projectIdentity h3 { font-size: 24px; line-height: 32px; margin: 2px 0; overflow-wrap: anywhere; }
+.launchItem > .walletButton { width: 100%; min-height: 48px; justify-content: center; margin-block: 20px 0; }
+.launchItem > .statusDescription { margin-top: 20px; }
