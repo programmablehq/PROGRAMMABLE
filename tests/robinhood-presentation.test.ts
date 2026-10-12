@@ -3,6 +3,8 @@ import type { RobinhoodLaunch } from "@/lib/robinhood-launches";
 
 const codex = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: codex.read }));
+const codexMetadata = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("@/lib/server/codex-token-metadata", () => ({ readCodexTokenMetadata: codexMetadata.read }));
 const moduleMetadata = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("@/lib/server/module-mode/token-presentation", () => ({ readModuleTokenMetadata: moduleMetadata.read }));
 const storage = vi.hoisted(() => ({ list: vi.fn(), token: vi.fn() }));
@@ -86,10 +88,18 @@ function sourceFetch(metadata: unknown = feed(), observation: unknown = new Map(
   });
 }
 
-beforeEach(() => { vi.clearAllMocks(); codex.read.mockResolvedValue(new Map()); });
+beforeEach(() => { vi.clearAllMocks(); codex.read.mockResolvedValue(new Map()); codexMetadata.read.mockResolvedValue(new Map()); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("Robinhood optional coin presentation", () => {
+  it("uses Codex module artwork without extra blockchain metadata reads", async () => {
+    const token = { ...TOKEN, sourceKind: "module-native-v1" } as unknown as RobinhoodLaunch;
+    const metadata = { imageUrl: "https://example.com/coin.png", description: "Coin", links: [] };
+    codexMetadata.read.mockResolvedValue(new Map([[token.tokenAddress.toLowerCase(), metadata]]));
+    const [value] = await readRobinhoodPresentations([token], new Map());
+    expect(value).toMatchObject(metadata);
+    expect(moduleMetadata.read).not.toHaveBeenCalled();
+  });
   it("joins the committed artwork to the saved launch and keeps exact-pool MC separate from FDV", async () => {
     const fetcher = sourceFetch();
     vi.stubGlobal("fetch", fetcher);

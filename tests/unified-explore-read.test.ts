@@ -13,6 +13,8 @@ vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalo
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumUnifiedExploreCatalog: sources.eth }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: sources.rhMarkets, readRobinhoodPresentations: sources.presentations }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: sources.ethMarkets }));
+const metadata = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/server/codex-token-metadata", () => ({ readCodexTokenMetadata: metadata }));
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { readUnifiedLaunches } from "@/lib/server/unified-explore";
 import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
@@ -28,6 +30,7 @@ const market = (cap: number): RobinhoodCoinMarket => ({ poolId: pool, marketCapU
 
 beforeEach(() => {
   vi.clearAllMocks();
+  metadata.mockResolvedValue(new Map());
   recent.mockResolvedValue([]);
   sources.rh.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [rh], sourceEvidence: { verified: "rh" } });
   sources.eth.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", entries: [eth], sourceEvidence: { verified: "eth" } });
@@ -39,6 +42,14 @@ beforeEach(() => {
 });
 
 describe("Unified verified source adapter", () => {
+  it("enriches only the visible Ethereum identities and keeps artwork when market data is missing", async () => {
+    sources.ethMarkets.mockResolvedValue(new Map());
+    metadata.mockResolvedValue(new Map([[address, { imageUrl: "https://example.com/coin.png", description: null, links: [] }]]));
+    const result = await readUnifiedLaunches();
+    expect(metadata).toHaveBeenCalledWith([address], 1);
+    expect(result.presentations.find(row => row.chainId === 1)).toMatchObject({ imageUrl: "https://example.com/coin.png", market: null });
+    expect(result.presentations.find(row => row.chainId === 4663)?.imageUrl).toBeNull();
+  });
   it("shows a receipt observation before indexing and replaces it by exact chain/token identity", async () => {
     const row = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
       category: "custom" as const, mode: "custom" as const, tokenAddress: other, name: "Fresh", symbol: "NEW",

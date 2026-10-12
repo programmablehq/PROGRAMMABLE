@@ -72,15 +72,13 @@ export async function readRobinhoodToken(address: string) {
   } catch { return { status: "unavailable" as const, updatedAt: null, token: null }; }
 }
 
-/** A direct coin visit shares Explore's exact catalog market cache and observation. */
+/** A direct coin visit fetches only that coin's Codex market. */
 export async function readRobinhoodTokenPresentation(address: string) {
   try {
     const snapshot = await readSnapshot();
     const record = tokenLaunchRecord(snapshot, address);
     if (!record.token) return { ...record, presentation: null };
-    const catalog = exploreCatalog(snapshot).filter(row => isDiscoverableRobinhoodToken(row.tokenAddress)
-      || row.tokenAddress.toLowerCase() === record.token!.tokenAddress.toLowerCase());
-    const markets = await readRobinhoodMarkets(catalog).catch(() => new Map<string, RobinhoodCoinMarket>());
+    const markets = await readRobinhoodMarkets([record.token]).catch(() => new Map<string, RobinhoodCoinMarket>());
     const presentations = await readRobinhoodPresentations([record.token], markets).catch(() => [] as RobinhoodCoinPresentation[]);
     return { ...record, presentation: presentations[0] ?? null };
   } catch {

@@ -1,3 +1,5 @@
+import { mergeCoinMetadata } from "./coin-metadata";
+
 export type RobinhoodCoinMarket = Readonly<{
   poolId: string;
   priceUsd: number | null;
@@ -38,14 +40,15 @@ export function mergeRobinhoodPresentations(
   now = Date.now(),
 ) {
   const key = (item: RobinhoodCoinPresentation) => `${item.chainId ?? 4663}:${item.tokenAddress.toLowerCase()}`;
-  const saved = new Map(previous.map((item) => [key(item), item.market]));
+  const saved = new Map(previous.map((item) => [key(item), item]));
   let delayed = incoming === null;
   function recent(market: RobinhoodCoinMarket | null | undefined) {
     const age = market ? now - Date.parse(market.observedAt) : NaN;
     return age >= 0 && age <= ROBINHOOD_MARKET_MAX_AGE_MS ? market : null;
   }
   const items = (incoming ?? previous.map((item) => ({ ...item, market: null }))).map((item) => {
-    const previousMarket = saved.get(key(item));
+    const previousItem = saved.get(key(item));
+    const previousMarket = previousItem?.market;
     const samePool = !item.market || previousMarket?.poolId.toLowerCase() === item.market.poolId.toLowerCase();
     const savedMarket = samePool ? recent(previousMarket) : null;
     const nextMarket = recent(item.market);
@@ -54,7 +57,7 @@ export function mergeRobinhoodPresentations(
       || (coinValuation(savedMarket).value !== null && coinValuation(nextMarket).value === null))
       ? savedMarket : nextMarket ?? null;
     if (market !== item.market || (previousMarket && !nextMarket)) delayed = true;
-    return market === item.market ? item : { ...item, market };
+    return { ...item, ...mergeCoinMetadata(item, previousItem), market };
   });
   return { items, delayed };
 }

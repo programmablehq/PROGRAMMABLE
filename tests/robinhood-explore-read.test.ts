@@ -137,13 +137,13 @@ describe("Robinhood Explore read model", () => {
     expect(result.page.totalItems).toBe(6);
   });
 
-  it("shares Explore's full catalog market observation on direct coin visits", async () => {
+  it("reads only the requested coin's market on direct visits", async () => {
     const rows = [token(1), token(2)];
     const observations = new Map(rows.map(row => [row.tokenAddress, market(row, 10)]));
     mocks.read.mockResolvedValue({ snapshot: saved(rows) });
     mocks.markets.mockResolvedValue(observations);
     const detail = await readRobinhoodTokenPresentation(rows[1].tokenAddress);
-    expect(mocks.markets).toHaveBeenCalledWith(rows);
+    expect(mocks.markets).toHaveBeenCalledWith([rows[1]]);
     expect(mocks.presentations).toHaveBeenCalledWith([rows[1]], observations);
     expect(detail.token).toEqual(rows[1]);
     expect(detail.presentation?.market).toBe(observations.get(rows[1].tokenAddress));

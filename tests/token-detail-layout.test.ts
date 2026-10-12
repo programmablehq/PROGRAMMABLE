@@ -110,7 +110,7 @@ describe("token detail layout", () => {
     expect(detailSource).not.toMatch(/<TokenTrade|<PreparedTradeReview|<CustomMarketTrade|styles\.tradeShell/);
     expect(detailSource).not.toContain('fetch("/api/trade/prepare"');
     expect(detailSource).not.toMatch(/Launching wallet|Launch transaction/);
-    expect(detailSource).toContain("Dev wallet");
+    expect(detailSource).not.toContain("Dev wallet");
     expect(detailSource).toContain("TokenIdentityActions");
     expect(detailSource).toContain("styles.readOnlyLayout");
     expect(detailStyles).toMatch(/\.layout\.readOnlyLayout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);

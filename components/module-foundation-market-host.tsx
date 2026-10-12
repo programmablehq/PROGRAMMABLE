@@ -201,7 +201,7 @@ function ModuleFoundationMarketContent({ token, transactionHash, initialName, in
         creditedAmount: formatUnits(budget.credited, quote.decimals), paidAmount: formatUnits(budget.claimed, quote.decimals), asOfBlock: details.checkpoint.blockNumber.toString() } };
   });
   return <><FoundationSessionStatus session={session} hideSuccessfulLaunch hideSuccessfulTrade showProgress={false} /><ModuleFoundationMarket tradeOnly={tradeOnly} key={`${session.contextKey}:${session.resultGeneration}:${useNativeEth}`} availability={session.availability} contextKey={session.contextKey}
-    coin={coin} quote={quote} market={market} marketLoading={presentation.loading} marketDelayed={presentation.delayed}
+    coin={coin} quote={quote} metadata={coinPresentation} market={market} marketLoading={presentation.loading} marketDelayed={presentation.delayed}
     tradeCurrency={getAddress(quote.address) !== FOUNDATION_WETH ? { value: tradeCurrency, onChange: setTradeCurrency } : undefined}
     tradeAsset={useNativeEth ? { address: zeroAddress, chainId, name: "Ether", symbol: "ETH", decimals: 18, supported: true, balance: funds?.balance } : quote}
     maximumBuyAmount={useNativeEth ? funds?.maximum : quote.balance}
