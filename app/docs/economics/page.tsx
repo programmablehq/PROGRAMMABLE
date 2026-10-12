@@ -40,7 +40,7 @@ export default function EconomicsDocsPage() {
       <section id="modules">
         <h2>Module Mode</h2>
         <p>The new Foundation releases allocate 0.3% to Programmable on each buy and sell through the launch pool. Creators can add a fee from 0% to 10% in whole percentage points. Selected modules may receive part of that creator fee; they do not reduce the platform&apos;s 0.3%.</p>
-        <p>Both fees are calculated on the gross quote amount and accrue in the quote asset. A 1 WETH trade with a 1% creator fee allocates 0.003 WETH to Programmable and 0.01 WETH to creator and module recipients. The combined fee is 1.3%. Foundation&apos;s initial pool has no additional LP fee. Earlier releases retain their immutable rates, including 0.30%; read the <a href="https://programmable.market/api/module-mode">active engine</a> and launch review for the applicable rate.</p>
+        <p>Both fees are calculated on the gross quote amount and accrue in the quote asset. A 1 WETH trade with a 1% creator fee allocates 0.003 WETH to Programmable and 0.01 WETH to creator and module recipients. The combined fee is 1.3%. Foundation&apos;s initial pool has no additional LP fee. Earlier releases retain their immutable rates, including 1%; read the <a href="https://programmable.market/api/module-mode">active engine</a> and launch review for the applicable rate.</p>
       </section>
       <section id="revenue">
         <h2>Protocol revenue allocation</h2>
