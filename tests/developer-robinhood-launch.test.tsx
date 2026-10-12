@@ -70,9 +70,7 @@ describe("Robinhood API launch website handoff", () => {
     expect(apiKeysSource).not.toContain("DeveloperRobinhoodLaunch");
     expect(apiKeysSource).toContain('searchParams.get("launchId")');
     expect(apiKeysSource).toContain('searchParams.get("start") === "custom"');
-    expect(apiKeysSource).toContain("<DeveloperUniversalLaunchHistory");
-    expect(apiKeysSource).toContain("<DeveloperLaunchHistory");
-    expect(apiKeysSource.match(/<RobinhoodFeePolicyDisclosure \/>/gu)).toHaveLength(1);
+    expect(apiKeysSource).toContain("<DeveloperLaunchWorkspace");
     expect(developerApiKeysInitialSection({ start: "custom", chainId: "4663" })).toBe("history");
     expect(developerApiKeysInitialSection({ start: "custom", chainId: "1" })).toBe("history");
     expect(developerApiKeysInitialSection({ view: "history", launchId: "saved-launch" })).toBe("history");
