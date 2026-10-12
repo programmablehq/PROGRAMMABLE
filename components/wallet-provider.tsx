@@ -238,7 +238,7 @@ type WalletContextValue = {
   sendLaunchPlanTradeWalletAction: (input: LaunchPlanTradeWalletInputV1) => Promise<LaunchPlanTradeWalletReviewV1 | Hex>;
   sendCustomV4SwapWalletAction: (input: CustomV4SwapWalletInput) => Promise<CustomV4SwapWalletReview | Hex>;
   sendLaunchClaimWalletAction: (input: LaunchClaimWalletInputV1) => Promise<LaunchClaimWalletReviewV1 | Hex>;
-  sendUniversalLaunchWalletAction: (input: UniversalLaunchWalletInputV1) => Promise<UniversalLaunchWalletReviewV1 | Hex>;
+  sendUniversalLaunchWalletAction: (input: UniversalLaunchWalletInputV1) => Promise<UniversalLaunchWalletReviewV1 | Hex | null>;
   sendCustomLaunchWalletActionV4: (
     input: CustomLaunchWalletActionInputV4,
   ) => Promise<CustomLaunchWalletActionResultV4>;
@@ -3180,18 +3180,27 @@ function PrivyWalletBridge({
         throw new Error("The wallet session changed. Refresh the wallet review.");
       }
     };
-    if (wallet.chainId !== robinhoodChainHex && input.action !== "review") {
+    if (wallet.chainId !== robinhoodChainHex && input.action !== "review" && input.action !== "discover") {
       await connectedWallet.switchChain(robinhoodChain.id);
       assertCurrentSession();
     }
     const provider = await connectedWallet.getEthereumProvider();
     const { prepareUniversalLaunchWalletV1, recoverUniversalLaunchTransactionV1 } = await import("@/lib/custom-launch/wallet-handoff-plan-v1");
     const { beginLaunchSendV1, readLaunchSendJournalV1, parseLaunchSendAttemptV1, rememberLaunchHashV1, rejectLaunchSendV1 } = await import("@/lib/custom-launch/launch-send-journal-v1");
-    if (input.action === "recover") {
+    if (input.action === "recover" || input.action === "discover") {
       const attempt = parseLaunchSendAttemptV1(readLaunchSendJournalV1(controller), controller);
-      if (!attempt || !input.recoveryHash || attempt.sourceVersion !== input.sourceVersion || attempt.stepId !== input.stepId) throw new Error("The saved launch attempt is unavailable. Restore its original transaction receipt.");
-      const hash = await recoverUniversalLaunchTransactionV1(provider, attempt, input.recoveryHash);
+      if (!attempt || attempt.sourceVersion !== input.sourceVersion || attempt.stepId !== input.stepId
+        || !input.reviewedResource || typeof input.reviewedResource !== "object"
+        || attempt.launchId !== ("planId" in input.reviewedResource ? input.reviewedResource.planId : "launchId" in input.reviewedResource ? input.reviewedResource.launchId : undefined)) {
+        throw new Error("The saved launch attempt is unavailable. Restore its original transaction receipt.");
+      }
+      const { discoverUniversalLaunchTransactionV1 } = await import("@/lib/custom-launch/launch-transaction-discovery-v1");
+      const hash = input.action === "discover"
+        ? await discoverUniversalLaunchTransactionV1(provider, attempt, input.reviewedResource, input.signal)
+        : input.recoveryHash ? await recoverUniversalLaunchTransactionV1(provider, attempt, input.recoveryHash, input.reviewedResource) : null;
+      input.signal?.throwIfAborted();
       assertCurrentSession();
+      if (!hash) return null;
       rememberLaunchHashV1(attempt, hash);
       return hash;
     }

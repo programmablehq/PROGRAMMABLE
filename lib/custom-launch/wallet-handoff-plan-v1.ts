@@ -16,8 +16,9 @@ export type LaunchWalletProviderV1 = { request(input: { method: string; params?:
 export type UniversalLaunchWalletInputV1 = {
   sourceVersion: UniversalLaunchSource; reviewedResource: unknown; stepId?: string;
   loadFreshResource(): Promise<unknown>; loadFreshCapabilities(): Promise<unknown>;
-  action: "review" | "send" | "recover" | "switch_chain"; reviewed?: UniversalLaunchWalletReviewV1;
+  action: "review" | "send" | "recover" | "discover" | "switch_chain"; reviewed?: UniversalLaunchWalletReviewV1;
   recoveryHash?: Hex;
+  signal?: AbortSignal;
 };
 export type UniversalLaunchWalletReviewV1 = {
   sourceVersion: UniversalLaunchSource; launchId: string; stepId: string;
@@ -277,7 +278,7 @@ export async function prepareUniversalLaunchWalletV1(provider: LaunchWalletProvi
 }
 
 /** Recovery never re-simulates or refreshes an expired permit. It checks the original signed call. */
-export async function recoverUniversalLaunchTransactionV1(provider: LaunchWalletProviderV1, attempt: LaunchSendAttemptV1, hash: Hex): Promise<Hex> {
+export async function recoverUniversalLaunchTransactionV1(provider: LaunchWalletProviderV1, attempt: LaunchSendAttemptV1, hash: Hex, resource?: unknown): Promise<Hex> {
   if (!projectionHash(hash)) return fail("Enter the transaction hash from the original wallet activity.");
   if (await provider.request({ method: "eth_chainId" }) !== "0x1237") return fail("Switch to Robinhood Chain to check the original transaction.");
   const value = await provider.request({ method: "eth_getTransactionByHash", params: [hash] });
@@ -288,9 +289,29 @@ export async function recoverUniversalLaunchTransactionV1(provider: LaunchWallet
     || !projectionAddress(value.from) || address(value.from) !== address(attempt.controller)
     || quantity(value.nonce) !== quantity(attempt.nonce) || !targetMatches
     || data(value.input ?? value.data).toLowerCase() !== expected.data.toLowerCase() || quantity(value.value) !== quantity(expected.value)
-    || quantity(value.gas) !== quantity(expected.gas) || value.chainId !== undefined && quantity(value.chainId) !== 4663n
+    || value.chainId !== undefined && quantity(value.chainId) !== 4663n
     || value.type !== undefined && quantity(value.type) > 2n || Array.isArray(value.authorizationList) && value.authorizationList.length > 0) {
     return fail("This transaction does not match the saved launch call and nonce. Keep the launch paused while its original transaction is reconciled.");
+  }
+  if (quantity(value.gas) !== quantity(expected.gas)) {
+    // A confirmed Atomic call may have a larger wallet gas allowance. Its actual
+    // consumption must still fit the original budget; backend proof checks remain mandatory.
+    const plan = attempt.sourceVersion === "custom_launch_plan_v1" && resource ? readLaunchPlanResourceV1(resource) : null;
+    const step = plan?.steps[0];
+    if (!plan || plan.planId !== attempt.launchId || plan.plan.executor !== "atomic_execute_and_stamp_v2"
+      || plan.plan.controller.address.toLowerCase() !== attempt.controller.toLowerCase() || plan.steps.length !== 1
+      || !step || step.stepId !== attempt.stepId || step.transactionDigest !== attempt.binding
+      || step.transaction.data.toLowerCase() !== expected.data.toLowerCase()
+      || step.transaction.to?.toLowerCase() !== expected.to?.toLowerCase() || uint(step.transaction.value) !== quantity(expected.value)
+      || uint(step.transaction.gasLimit) !== quantity(expected.gas) || uint(step.transaction.gasLimit) > uint(plan.plan.budgets.maxTotalGas)
+      || quantity(value.gas) <= quantity(expected.gas)) return fail("This transaction does not match the saved launch gas budget.");
+    const receipt = await provider.request({ method: "eth_getTransactionReceipt", params: [hash] });
+    if (!projectionObject(receipt) || receipt.status !== "0x1" || typeof receipt.transactionHash !== "string"
+      || receipt.transactionHash.toLowerCase() !== hash.toLowerCase() || !projectionHash(value.blockHash)
+      || receipt.blockHash !== value.blockHash || quantity(receipt.blockNumber) !== quantity(value.blockNumber)
+      || quantity(receipt.gasUsed) <= 0n || quantity(receipt.gasUsed) > quantity(expected.gas)) {
+      return fail("The adjusted gas allowance needs a matching successful receipt within the original launch budget.");
+    }
   }
   return hash.toLowerCase() as Hex;
 }
