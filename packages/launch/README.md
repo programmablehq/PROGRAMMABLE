@@ -598,17 +598,16 @@ CLI 4.1.3 also supports explicit `profileVersion: "3.6.0"` and selects the exact
 
 Profile 3.6 keeps the 3.3 static admission baseline, complete metadata and three through sixteen arbitrary exact-source targets. It does not require a canonical fee vault, settlement-dataflow closure or the 3.4/3.5 behavior inputs. Use `schemas/programmable-launch-pack-config-v3.6.json` and the additive [3.6 OpenAPI](https://programmable.market/openapi/custom-launch-v3.6.json). Its closed embedded `programmableTradeFeePolicy` hashes to `sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3` using the policy schema, NUL separator and canonical JSON.
 
-CLI 4.1.6 supports the current fee100 policy: 10000 ppm (100 bps or 1%). Earlier signed 3.6 policies retain 3000 ppm (30 bps). Fresh packs must bind the policy returned by capabilities. Programmable trade collection uses the complete capability policy and separate per-trade evidence. A native30 waiver requires server-verified runtime and accrual for the exact trade; an applicant assertion or getter cannot waive the routed fee. Launch admission does not establish fee collection or guarantee external trade fees. Historical signed obligations and exact retries retain their original interpretation. Direct HTTP clients use the same V3 contract without this CLI.
+CLI 4.1.6 supports the current fee100 policy: 10000 ppm (100 bps or 1%). Earlier signed 3.6 policies retain 3000 ppm (30 bps). Fresh packs must bind the policy returned by capabilities. Programmable trade collection uses the complete capability policy and separate per-trade evidence. A Native100 pool fee replacement requires server-verified runtime and accrual for the exact trade; historical Native30 waivers apply only to their matching older policy; an applicant assertion or getter cannot waive the routed fee. Launch admission does not establish fee collection or guarantee external trade fees. Historical signed obligations and exact retries retain their original interpretation. Direct HTTP clients use the same V3 contract without this CLI.
 
 ### CLI 4.1.4 signing window
 
 Fresh Ethereum profile 3.6 packs use the 24-hour successor router. Approved launches may start and sign until 24 hours after approval; starting never extends approval. Previously packed requests retain their original router and deadlines when validated. Unstarted requests with old bindings must be repacked for a new review.
 
-### Ethereum treasury revision
+### Historical Ethereum treasury revision
 
 The `programmable.ethereum-routed-native-fee.v2` policy sends the 30 bps platform share to
-`0xD88539d3c4C460136a733A3Fd60cf6BF269079da`, matching Module Mode on Ethereum and Robinhood
-and the Robinhood Custom routed policy. Fresh automatic packs use the policy returned by
+`0xD88539d3c4C460136a733A3Fd60cf6BF269079da`, matching the treasury used by earlier Module Mode and Robinhood Custom releases. Their recorded fee rates remain historical. Fresh automatic packs use the policy returned by
 current API capabilities. Exact retries retain the policy in their original request.
 
 The optional `EthereumNative30HookV3` and `EthereumNativeFeeVaultV3` source package is under
