@@ -109,7 +109,7 @@ describe("active Robinhood agent setup and generated documentation", () => {
     expect(docs.programmableHomeMarkdown).toContain("/openapi/custom-launch-v4.1.json");
   });
 
-  it("passes the active setup from the server page to the client component", async () => {
+  it("renders the key page without blocking on a chain-specific setup", async () => {
     await activeDocs("4.1.0");
     vi.doMock("../components/developer-api-keys", () => ({ DeveloperApiKeys: () => null }));
     // This test owns historical setup wiring; the generated setup has its own
@@ -117,7 +117,7 @@ describe("active Robinhood agent setup and generated documentation", () => {
     vi.doMock("../lib/server/custom-launch/launch-contract-setup-v1", () => ({ readLaunchContractSetupV1: async () => null }));
     const { default: Page } = await import("../app/developers/api-keys/page");
     const page = await Page({ searchParams: Promise.resolve({}) });
-    expect(page.props.agentSetupText).toBe(buildProgrammableAgentSetupTextV1("4.1.0"));
+    expect(page.props.agentSetupText).toBeUndefined();
     expect(page.props.initialSection).toBe("keys");
     expect(page.props.launchContractSetup).toBeUndefined();
   });

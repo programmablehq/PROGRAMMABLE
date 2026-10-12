@@ -111,24 +111,28 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
   },
 });
 
-export function buildAgentInstructions(input?: { scopes?: readonly string[]; wallet?: string; intent?: string }) {
+export function buildAgentInstructions(input?: { scopes?: readonly string[]; wallet?: string; intent?: string; chainId?: "1" | "4663" }) {
+  const chain = input?.chainId;
+  const readOnly = input?.scopes?.length === 1 && input.scopes[0] === "custom-launch:read";
   return [
-    "Use this Programmable API key to build custom hooks and read launch status on Ethereum Mainnet (1) or Robinhood Chain (4663). Keep the user's selected chain; if it is missing, ask before building.",
-    `Read ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}. Ethereum uses workflows.customLaunch.ethereum and /v3/capabilities; Robinhood uses workflows.customLaunchPlan and /v4/chains/4663/custom-launch-capabilities. Read the selected chain's current profile, packer and fee policy before preparing a request.`,
+    chain ? `Selected chain: ${chain === "1" ? "Ethereum Mainnet" : "Robinhood Chain"} (${chain}). Use only this chain for this setup.` : "Select Ethereum Mainnet (1) or Robinhood Chain (4663) with the user before building.",
+    readOnly ? "Use this Programmable API key to read launch status on the selected chain." : "Use this Programmable API key to build custom hooks and read launch status on the selected chain.",
+    `Read ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}. ${chain === "1" ? "Use workflows.customLaunch.ethereum and /v3/capabilities." : chain === "4663" ? "Use workflows.customLaunchPlan and /v4/chains/4663/custom-launch-capabilities." : "Follow the selected chain's workflow."} Read its current profile, packer and fee policy before preparing a request.`,
     "Read the API key from PROGRAMMABLE_API_KEY in the environment or your secret store. Send it only in the Authorization header to https://api.programmable.market. Never print the key or put it in a URL, logs or committed files.",
     input?.scopes ? `This connection was issued with: ${input.scopes.join(", ")}. Check current API authorization on each operation; documentation does not add permissions to a key.` : "Use the key's actual permissions. Read-only keys cannot create launch requests.",
     "Launch history can include requests from other keys and linked wallets in the same account. The key is not isolated to one project; its saved chain restrictions still apply. Verify authorization for the selected chain; do not switch chains to work around a denied request.",
     input?.wallet ? `The controller wallet selected for this connection is ${input.wallet}. Verify it against the launch request before preparing wallet actions.` : "Use the controller wallet selected by the user for the launch request.",
-    input?.intent ? `Requested workflow: ${input.intent.trim()}${/[.!?]$/.test(input.intent.trim()) ? "" : "."}` : "Build the custom hook for the user's idea and prepare its launch on the selected chain.",
+    readOnly ? "Read launch history and status only; do not prepare or submit launch requests." : input?.intent ? `Requested workflow: ${input.intent.trim()}${/[.!?]$/.test(input.intent.trim()) ? "" : "."}` : "Build the custom hook for the user's idea and prepare its launch on the selected chain.",
     "Read live capabilities before a write, preserve exact request bytes and idempotency keys on retries, and distinguish submission, review, deployment and public availability. Wallet signing remains a separate action.",
     "For API health use https://api.programmable.market/readyz and the selected chain's capabilities/readiness. The legacy website /api/ops/health response does not describe current Custom Launch API availability.",
-    "For Robinhood plans request Programmable-Launch-Response-Version: 1.2, honor Retry-After on 429/503 and follow the server's continuation. An expired plan needs the documented replan_required flow and a fresh deadline; never reuse an expired wallet permit.",
-    "For a Robinhood hook and pool using an existing token, include that token as an exact-source component with a useExisting action and current runtime evidence. Set publication.primaryComponentId to that token component and publication.primaryMarketId to its pool. This retains the existing token address as the public coin identity; the stamp identifies the verified launch and does not imply the token was newly deployed.",
-  ].join("\n\n");
+    chain !== "1" ? "For Robinhood plans request Programmable-Launch-Response-Version: 1.2, honor Retry-After on 429/503 and follow the server's continuation. An expired plan needs the documented replan_required flow and a fresh deadline; never reuse an expired wallet permit." : "",
+    chain !== "1" ? "For a Robinhood hook and pool using an existing token, include that token as an exact-source component with a useExisting action and current runtime evidence. Set publication.primaryComponentId to that token component and publication.primaryMarketId to its pool. This retains the existing token address as the public coin identity; the stamp identifies the verified launch and does not imply the token was newly deployed." : "",
+    "Programmable manually reviews submissions. The review target is 24 hours; an overdue request stays open. Approval starts a separate 24-hour window to prepare and sign. The API key cannot sign or move funds.",
+  ].filter(Boolean).join("\n\n");
 }
 
 /** Created only in the browser's one-time reveal; never logged, persisted or sent to a server. */
-export function buildAgentConnection(secret: string, input: { scopes: readonly string[]; wallet?: string; launchContract?: { manifestDigest: string; text: string } }) {
+export function buildAgentConnection(secret: string, input: { scopes: readonly string[]; wallet?: string; chainId?: "1" | "4663"; launchContract?: { manifestDigest: string; text: string } }) {
   if (!/^pm_live_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{43}$/.test(secret)) throw new Error("The API key is invalid.");
   return JSON.stringify({
     schemaVersion: "programmable.agent-connection.v1",
@@ -137,9 +141,10 @@ export function buildAgentConnection(secret: string, input: { scopes: readonly s
     apiBaseUrl: PROGRAMMABLE_AGENT_ENTRY.apiBaseUrl,
     guideUrl: PROGRAMMABLE_AGENT_GUIDE_URL,
     discoveryUrl: PROGRAMMABLE_AGENT_DISCOVERY_URL,
+    ...(input.chainId ? { selectedChainId: input.chainId } : {}),
     credential: { environmentVariable: "PROGRAMMABLE_API_KEY", value: secret, scopes: input.scopes, ...(input.wallet ? { wallet: input.wallet } : {}) },
-    instructions: [buildAgentInstructions(input), input.launchContract?.text].filter(Boolean).join("\n\n"),
-    ...(input.launchContract ? { launchContract: { manifestDigest: input.launchContract.manifestDigest,
+    instructions: [buildAgentInstructions(input), input.chainId === "4663" ? input.launchContract?.text : undefined].filter(Boolean).join("\n\n"),
+    ...(input.chainId === "4663" && input.launchContract ? { launchContract: { manifestDigest: input.launchContract.manifestDigest,
       manifestUrl: PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.manifest } } : {}),
   }, null, 2);
 }

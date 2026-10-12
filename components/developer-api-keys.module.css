@@ -261,3 +261,17 @@
 .listPanel :is(.keyList, .skeletonList, .statePanel) { background: transparent; }
 .resourceLinks { justify-content: center; }
 @media (max-width: 760px) { .buildSteps { grid-template-columns: minmax(0, 1fr); } .listPanel { padding: 20px 16px; } }
+.reviewIntro { color: var(--webde-muted); font-size: 14px; line-height: 1.6; margin: 0 auto 24px; max-width: 64ch; text-align: center; }
+.setupBar { display: flex; flex-wrap: wrap; align-items: end; gap: 24px; margin-block: 24px; }
+.setupBar .field { flex: 1 1 220px; }
+.setupBar select { background: var(--webde-control); color: var(--webde-ink); border: 1px solid var(--api-line); border-radius: 10px; min-height: 44px; padding: 10px 12px; font: inherit; width: 100%; }
+.walletAssignment { display: grid; gap: 6px; flex: 2 1 280px; min-width: 0; font-size: 14px; color: var(--webde-muted); }
+.walletAssignment code, .keyIdentity code { overflow-wrap: anywhere; font-size: 12px; }
+.walletAssignment .textLink { min-height: 32px; justify-self: start; }
+.connectionCheck { grid-column: 1 / -1; display: grid; gap: 10px; justify-items: start; font-size: 13px; line-height: 1.6; }
+.connectionCheck ul { padding-inline-start: 20px; }
+.issue { background: var(--api-panel); padding: 20px; border-radius: 14px; display: grid; gap: 10px; margin-block: 16px; overflow-wrap: anywhere; }
+.issue p { margin: 0; color: var(--webde-muted); }
+.issueActions { display: flex; flex-wrap: wrap; gap: 12px; }
+.issue pre { white-space: pre-wrap; font-size: 12px; }
+.issue summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }

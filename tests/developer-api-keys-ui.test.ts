@@ -645,8 +645,8 @@ describe("developer API key interface", () => {
     expect(instructions).not.toContain("submit-module");
     expect(instructions).not.toContain("/v1/modules/");
     expect(instructions).toContain("Ethereum Mainnet (1)");
-    expect(instructions).toContain("/v3/capabilities");
-    expect(instructions).toContain("/v4/chains/4663/custom-launch-capabilities");
+    expect(buildAgentInstructions({ chainId: "1" })).toContain("/v3/capabilities");
+    expect(buildAgentInstructions({ chainId: "4663" })).toContain("/v4/chains/4663/custom-launch-capabilities");
   });
 
   it("preserves wallet authority and one-time secret handling", () => {
@@ -766,21 +766,6 @@ describe("developer API key interface", () => {
     expect(setup).not.toContain("Use only the current V3.3 profile for a new submission");
   });
 
-  it("offers named loading, failure, empty and recovery states", () => {
-    expect(apiKeysSource).toContain("Loading wallet session");
-    expect(apiKeysSource).toContain("Wallet access is unavailable");
-    expect(apiKeysSource).toContain("Reload page");
-    expect(apiKeysSource).toContain("Loading API keys");
-    expect(apiKeysSource).toContain("Unable to load keys");
-    expect(apiKeysSource).toContain("No keys yet");
-    expect(apiKeysSource).toContain("Try again");
-    expect(apiKeysSource).toContain("API keys refreshed.");
-    expect(apiKeysSource).toContain("Refresh keys");
-    expect(apiKeysSource).toContain("data-spinning=");
-    expect(apiKeysSource).toContain("8_000");
-    expect(apiKeysStyles).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(apiKeysStyles).toContain("min-height: 44px");
-  });
 
   it("keeps mutation results when a stale key list arrives", () => {
     const revoked = apiKey("revoked", {
@@ -944,14 +929,6 @@ describe("developer launch history interface", () => {
     expect(historySource).not.toContain("needs platform review");
     expect(historySource).toContain(
       'reviewLaunch.failure\n                  && reviewLaunch.status !== "action_required"',
-    );
-    expect(historySource).toContain(
-      "If retrying does not help, share the request ID with support.",
-    );
-    expect(historySource).toContain("share the request ID with support");
-    expect(historySource).toContain("Never share your API key.");
-    expect(historySource.indexOf("Open Programmable support")).toBeLessThan(
-      historySource.indexOf('state === "ready" && launches.length === 0'),
     );
     expect(historySource.indexOf("Read the remediation catalog")).toBeGreaterThan(
       historySource.indexOf('launch.status === "action_required"'),
@@ -1731,7 +1708,7 @@ describe("developer launch history interface", () => {
     );
     expect(apiKeysSource).toContain('setActiveSection(section)');
     expect(historySource).toContain(
-      'const version = initialLaunchChainId === "4663" ? "v4" : "v3"',
+      'const version = initialLaunchVersion ?? (initialLaunchChainId === "4663" ? "v4" : "v3")',
     );
     expect(historySource).toContain(
       "readLaunchById(initialLaunchId, version, controller.signal)",

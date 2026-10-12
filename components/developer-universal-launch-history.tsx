@@ -1,4 +1,5 @@
 "use client";
+import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import { launchStatusFingerprint, launchStatusUpdateMessage } from "@/lib/custom-launch-status-update";
 
@@ -15,6 +16,7 @@ import styles from "./developer-launch-history.module.css";
 type Entry = { sourceVersion: UniversalLaunchSource; controller: string; resource: Record<string, unknown> };
 type Props = {
   account: string; initialLaunchId?: string | null;
+  sourceOnly?: UniversalLaunchSource; openWallet?: () => void;
   getAccessToken(): Promise<string | null>; getIdentityToken(): Promise<string | null>;
   sendWallet(input: UniversalLaunchWalletInputV1): Promise<UniversalLaunchWalletReviewV1 | Hex | null>;
 };
@@ -26,7 +28,7 @@ export function LaunchHistoryMissingState({ launchId, unavailable }: { launchId:
     <p>{unavailable ? "Keep this launch link and refresh when the service responds. An unavailable source does not mean the launch or its wallet has changed."
       : "Check that your create request returned this launch ID. Sign in with the account that created it, connect its controller wallet, then refresh. This ID may also be invalid or the plan may not have been created."}</p><code>{launchId}</code></div>;
 }
-function parseEntries(value: unknown, account: string): { entries: Entry[]; nextCursor: string | null } {
+export function parseEntries(value: unknown, account: string): { entries: Entry[]; nextCursor: string | null } {
   if (!projectionObject(value) || value.schemaVersion !== "programmable.website-launch-history.v1" || !Array.isArray(value.launches)
     || !(value.nextCursor === null || typeof value.nextCursor === "string")) throw new Error("Launch history is unavailable.");
   const entries = value.launches.map(candidate => {
@@ -70,17 +72,21 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
     const retryAfterMs = response.status === 429 || response.status === 503
       ? Math.min(3_600_000, Math.max(20_000, retryHeader && /^\d+$/.test(retryHeader) ? Number(retryHeader) * 1000 : retryHeader ? Date.parse(retryHeader) - Date.now() || 60_000 : 60_000)) : 0;
     if (retryAfterMs) readCooldown.current = Date.now() + retryAfterMs;
-    if (!response.ok) throw new HistoryReadError(response.status === 401 ? "Sign in again with the account that owns this launch."
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const requestId = typeof body?.error?.requestId === "string" && /^[a-zA-Z0-9._:-]{1,128}$/.test(body.error.requestId) ? body.error.requestId : "";
+      throw new HistoryReadError(( response.status === 401 ? "Sign in again with the account that owns this launch."
       : response.status === 403 ? "This account or controller cannot access the launch. Check the signed-in account and controller wallet."
       : response.status === 404 ? "This launch ID is not in this account's accessible history. Check the account, controller wallet and ID."
-      : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.", response.status, retryAfterMs);
+      : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.") + ` HTTP ${response.status}${requestId ? ` Request ID: ${requestId}` : ""}`, response.status, retryAfterMs);
+    }
     return response.json() as Promise<unknown>;
   }, [account]);
   const loadHistory = useCallback(async (signal: AbortSignal) => {
     const loaders = credentials.current;
     const sharedTokens = Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
 
-    const results = await Promise.allSettled(sources.map(async source => {
+    const results = await Promise.allSettled(sources.filter(source => !props.sourceOnly || source === props.sourceOnly).map(async source => {
       const tokens = await sharedTokens;
       if (props.initialLaunchId) {
         try {
@@ -101,11 +107,12 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
     setCursors(previous => ({ ...previous, ...Object.fromEntries(successful.map(result => [result.source, result.nextCursor])) }));
     const unavailable = results.some(result => result.status === "rejected") || successful.some(result => result.selectedUnavailable);
     setSourceUnavailable(unavailable);
-    setError(unavailable ? successful.some(result => result.entries.length) ? "Some custom launch sources could not be refreshed. Existing records remain available." : "Launch data is temporarily unavailable. Keep this link and refresh to retry." : null);
+    const failed = results.find(result => result.status === "rejected");
+    setError(unavailable ? failed?.status === "rejected" && failed.reason instanceof Error ? failed.reason.message : "Launch data is temporarily unavailable." : null);
     setLoading(false);
     const retry = results.find(result => result.status === "rejected" && result.reason instanceof HistoryReadError && result.reason.retryAfterMs);
     if (retry?.status === "rejected") throw retry.reason;
-  }, [request, account, props.initialLaunchId]);
+  }, [request, account, props.initialLaunchId, props.sourceOnly]);
   useEffect(() => {
     const controller = new AbortController();
     void loadHistory(controller.signal).catch(() => {});
@@ -158,8 +165,9 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
     finally { setLoading(false); }
   }
   return <section className={styles.history} aria-label="Custom project launch history">
-    <div className={styles.heading}><button type="button" className={shared.secondaryButton} onClick={() => setRefresh(value => value + 1)} disabled={loading}>Refresh custom projects</button></div>
-    <p role="status" className={styles.intro}>{loading ? "Loading custom projects…" : error ?? (entries.length ? "" : "No Custom Launch Plan or MultiRole requests for this controller.")}</p>
+    <div className={styles.heading}><button type="button" className={shared.secondaryButton} onClick={() => setRefresh(value => value + 1)} disabled={loading}>{props.initialLaunchId ? "Refresh launch" : "Refresh custom projects"}</button></div>
+    {error ? <DeveloperIssue message={error} retry={() => setRefresh(value => value + 1)} chainId="4663" connect={props.openWallet} /> : null}
+    <p role="status" className={styles.intro}>{loading ? "Loading custom projects…" : error ? "" : (entries.length ? "" : "No Custom Launch Plan or MultiRole requests for this controller.")}</p>
     {launchUpdate ? <p role="status" aria-live="polite" className={styles.intro}>{launchUpdate}</p> : null}
     {props.initialLaunchId && !loading && !entries.some(entry => String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId) ? <LaunchHistoryMissingState launchId={props.initialLaunchId} unavailable={sourceUnavailable} /> : null}
     <ul className={styles.launchList}>{entries.map((entry, index) => <DeveloperUniversalLaunchFlow key={identity(entry)} entry={entry} highlighted={String(entry.resource.planId ?? entry.resource.launchId) === props.initialLaunchId}
