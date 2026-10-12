@@ -58,13 +58,32 @@ test("wallet cancellation permits a deliberate retry", async ({ page }) => {
 test("an interrupted wallet response never resends automatically", async ({ page }) => {
   await page.goto(origin + "?scenario=lost-response");
   await page.getByRole("button", { name: "Sign and launch", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Check your wallet", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Checking your transaction", exact: true })).toBeVisible();
   await page.getByText("I already sent it", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Check transaction", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Check your wallet", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Checking your transaction", exact: true })).toBeVisible();
   await page.getByText("I already sent it", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Check transaction", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign and launch", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(1);
+});
+
+test("a missing wallet hash is discovered and tracked without any new send", async ({ page }, info) => {
+  await page.goto(origin + "?scenario=automatic-recovery");
+  await page.getByRole("button", { name: "Sign and launch", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("wallet response was interrupted");
+  await expect(page.getByRole("heading", { name: "Checking your transaction", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign and launch", exact: true })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.requests.length)).toBeGreaterThan(0);
+  await page.evaluate(() => window.__customLaunchFixture.discoverMined());
+  await expect(page.getByText("Transaction saved.", { exact: false })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.proofCalls)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(1);
+  expect(await page.evaluate(() => window.__customLaunchFixture.requests.filter(call => /send|sign|wallet_/i.test(call.method)).length)).toBe(1);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("automatic-recovery.png"), fullPage: true });
+  await page.evaluate(() => window.__customLaunchFixture.finalize());
+  await page.getByRole("button", { name: "Refresh custom projects", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("programmable:custom-launch-send:v1:4663:0x1111111111111111111111111111111111111111"))).toBeNull();
 });

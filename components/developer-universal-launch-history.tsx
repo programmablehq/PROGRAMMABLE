@@ -16,7 +16,7 @@ type Entry = { sourceVersion: UniversalLaunchSource; controller: string; resourc
 type Props = {
   account: string; initialLaunchId?: string | null;
   getAccessToken(): Promise<string | null>; getIdentityToken(): Promise<string | null>;
-  sendWallet(input: UniversalLaunchWalletInputV1): Promise<UniversalLaunchWalletReviewV1 | Hex>;
+  sendWallet(input: UniversalLaunchWalletInputV1): Promise<UniversalLaunchWalletReviewV1 | Hex | null>;
 };
 const sources = ["custom_launch_plan_v1", "multi_role_v2"] as const;
 const identity = (entry: Entry) => `${entry.sourceVersion}:${entry.resource.planId ?? entry.resource.launchId}`;

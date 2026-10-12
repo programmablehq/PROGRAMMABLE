@@ -20,7 +20,7 @@ export type UniversalLaunchEntryV1 = { sourceVersion: UniversalLaunchSource; con
 type Props = {
   entry: UniversalLaunchEntryV1; highlighted?: boolean; autoPrepare?: boolean;
   load(): Promise<unknown>;
-  sendWallet(input: UniversalLaunchWalletInputV1): Promise<UniversalLaunchWalletReviewV1 | Hex>;
+  sendWallet(input: UniversalLaunchWalletInputV1): Promise<UniversalLaunchWalletReviewV1 | Hex | null>;
   onSubmitted(step: string, hash: Hex): Promise<void>;
   onIndexed?(href: string): void;
 };
@@ -53,8 +53,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const navigated = useRef(false);
   const onSubmittedRef = useRef(onSubmitted);
   useEffect(() => { onSubmittedRef.current = onSubmitted; }, [onSubmitted]);
-  const reviewCallbacks = useRef({ load, sendWallet });
-  useEffect(() => { reviewCallbacks.current = { load, sendWallet }; }, [load, sendWallet]);
+  const reviewCallbacks = useRef({ load, sendWallet, resource });
+  useEffect(() => { reviewCallbacks.current = { load, sendWallet, resource }; }, [load, sendWallet, resource]);
   const rawJournal = useSyncExternalStore(subscribeLaunchSendV1, () => readLaunchSendJournalV1(entry.controller), () => null);
   const legacyRaw = useSyncExternalStore(subscribeLaunchSendV1, () => {
     try { return window.localStorage.getItem(`programmable:launch-submission:4663:${entry.controller.toLowerCase()}:${entry.sourceVersion}:${id}`); }
@@ -84,6 +84,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const pendingStep = plan?.steps.find(item => item.transactionHash && item.status !== "final");
   const observedPending = observedSubmission && !(plan ? plan.steps.find(item => item.stepId === observedSubmission.stepId)?.status === "final" : resource.status === "finalized") ? observedSubmission : null;
   const hash = ownAttempt?.transactionHash ?? pendingStep?.transactionHash ?? legacySubmission?.transactionHash ?? observedPending?.hash ?? null;
+  const visibleError = hash ? trackingError : error ?? trackingError;
   const submittedStepId = ownAttempt?.stepId ?? pendingStep?.stepId ?? legacySubmission?.stepId ?? observedPending?.stepId ?? "multi-role-v2";
   const hasUnresolved = !!rawJournal || !!legacySubmission || !!pendingStep || !!observedPending;
   const unknownSend = !!ownAttempt && !hash;
@@ -123,6 +124,29 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       finalizeLaunchSendV1(bound, { transactionHash: completedHash, transactionDigest: completedDigest, status: "final" });
     } catch { /* The journal stays locked when exact reconciliation cannot be persisted. */ }
   }, [ownAttempt, completedHash, completedDigest]);
+
+  useEffect(() => {
+    if (!ownAttempt || !unknownSend || completedHash) return;
+    const controller = new AbortController();
+    let inFlight = false;
+    const discover = async () => {
+      if (inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const callbacks = reviewCallbacks.current;
+        // Discovery reads the chain and persists only a matching original hash.
+        // The existing proof loop remains responsible for finality and indexing.
+        await callbacks.sendWallet({ action: "discover", sourceVersion: ownAttempt.sourceVersion,
+          reviewedResource: callbacks.resource, stepId: ownAttempt.stepId, signal: controller.signal,
+          loadFreshResource: callbacks.load, loadFreshCapabilities: async () => null });
+      } catch { /* Missing history or a changed wallet leaves the attempt locked; retry in the background. */ }
+      finally { inFlight = false; }
+    };
+    void discover();
+    const timer = window.setInterval(() => void discover(), 20000);
+    document.addEventListener("visibilitychange", discover);
+    return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", discover); };
+  }, [ownAttempt, unknownSend, completedHash]);
 
   useEffect(() => {
     if (!hash || ownStep?.status === "final") return;
@@ -171,7 +195,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       if (mode === "send" && !currentReview) {
         const prepared = await sendWallet({ action: "switch_chain", sourceVersion: entry.sourceVersion, reviewedResource: resource,
           stepId: step?.stepId, loadFreshResource: load, loadFreshCapabilities });
-        if (typeof prepared === "string") throw new Error("Unable to prepare this launch transaction.");
+        if (!prepared || typeof prepared === "string") throw new Error("Unable to prepare this launch transaction.");
         currentReview = prepared;
         setReview(prepared);
       }
@@ -198,8 +222,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         <div><p className={styles.eyebrow}>Robinhood Chain</p><h3 id={`${recoveryId}-title`}>{title}</h3>{symbol ? <p className={styles.ticker}>{symbol.replace(/^\$+/, "")}</p> : null}</div>
       </div>
     </div>
-    <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Your program is ready" : busy === "send" ? "Confirm in your wallet" : unknownSend ? "Check your wallet" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
-      <p>{indexedHref ? "The finalized launch is stored in the website index." : busy === "send" ? "Confirm the launch in your wallet." : unknownSend ? "Your wallet hasn’t returned a result. Check the original request in your wallet before trying again." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div>
+    <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Your program is ready" : busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
+      <p>{indexedHref ? "The finalized launch is stored in the website index." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div>
     {plan?.manualReview && !hasUnresolved && !state.terminal
       ? <CustomLaunchStartButton key={`${id}:${plan.manualReview.revision}`} review={plan.manualReview} launchId={id} onStarted={load} /> : null}
     {journalError ? <p role="alert" className={styles.error}>{journalError} This launch remains paused.</p> : null}
@@ -213,7 +237,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy ? "Confirm in your wallet…" : "Sign and launch"}</button>
     </div> : null}
     {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open program</a> : null}
-    {(error || trackingError) ? <p className={styles.error} role={error ? "alert" : "status"}>{error ?? trackingError}</p> : null}
+    {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{visibleError}</p> : null}
     {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
     <details className={styles.details}><summary>Details and review</summary>
     {plan?.preflight?.findings.length ? <details className={styles.details}><summary>Launch findings</summary><pre>{JSON.stringify(plan.preflight.findings, null, 2)}</pre></details> : null}

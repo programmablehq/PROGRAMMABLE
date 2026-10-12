@@ -135,7 +135,7 @@ type DeveloperApiKeysViewProps = Readonly<{
   sendCustomLaunchWalletAction: (
     input: CustomLaunchWalletActionV1,
   ) => Promise<`0x${string}`>;
-  sendUniversalLaunchWalletAction?: (input: UniversalLaunchWalletInputV1) => Promise<UniversalLaunchWalletReviewV1 | `0x${string}`>;
+  sendUniversalLaunchWalletAction?: (input: UniversalLaunchWalletInputV1) => Promise<UniversalLaunchWalletReviewV1 | `0x${string}` | null>;
   sendCustomLaunchWalletActionV4: (
     input: CustomLaunchWalletActionInputV4,
   ) => Promise<CustomLaunchWalletActionResultV4>;
