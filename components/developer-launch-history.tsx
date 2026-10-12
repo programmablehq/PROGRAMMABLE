@@ -2034,6 +2034,18 @@ export function DeveloperRobinhoodFundingPreview({ resource, cost, now }: Readon
   );
 }
 
+function ProjectLaunchIdentity({ launch, binding }: Readonly<{ launch: LaunchResource; binding: WalletProjectMetadataBindingV1 }>) {
+  const { token, presentation } = binding.projectMetadata;
+  const image = useVerifiedProjectImageV1(presentation.image);
+  return <div className={styles.projectReviewHeading}>
+    <div className={styles.projectArtwork}>{image.state === "verified" && image.objectUrl
+      ? <NextImage alt="" src={image.objectUrl} width={64} height={64} unoptimized referrerPolicy="no-referrer" />
+      : <span aria-hidden="true">{token.symbol.replace(/^\$+/, "").slice(0, 2).toUpperCase()}</span>}</div>
+    <div className={styles.projectIdentity}><span>{launch.routeId === "custom-launch:create:v4" ? "Robinhood Chain" : "Ethereum Mainnet"}</span>
+      <h3>{token.name}</h3><strong>{token.symbol.replace(/^\$+/, "")}</strong></div>
+  </div>;
+}
+
 function ProjectMetadataReview({
   launch,
   binding,
@@ -3700,9 +3712,8 @@ export function DeveloperLaunchHistory({
                 tabIndex={-1}
               >
                 <div className={styles.launchTopline}>
-                  <div>
-                    <h3>{projectMetadataSummary?.projectMetadata.token.name ?? `Launch ${shortId(resourceIdentity)}`}</h3>
-                  </div>
+                  {projectMetadataSummary ? <ProjectLaunchIdentity launch={reviewLaunch} binding={projectMetadataSummary} />
+                    : <h3>Launch {shortId(resourceIdentity)}</h3>}
                   <span className={styles.status} data-status={launch.status}>
                     {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status) ? customLaunchReviewLabel(launch.manualReview) : statusCopy(launch.status)}
                   </span>
@@ -3713,8 +3724,6 @@ export function DeveloperLaunchHistory({
                 </p>
                 {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status)
                   ? <CustomLaunchStartButton key={`${resourceIdentity}:${launch.manualReview.revision}`} review={launch.manualReview} launchId={resourceIdentity} onStarted={refresh} /> : null}
-                <CustomLaunchAssessment value={launch.output?.reviewReadiness} review={launch.manualReview} subjectHash={launch.manualReview?.subjectHash} chainId={launch.manualReview?.chainId} tradeChecks={launch.manualReview?.tradeChecks} />
-                {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
                 {["authorized", "wallet_action_required", "awaiting_wallet_signature", "awaiting_funding_authorization"].includes(launch.status)
                   && (!launch.manualReview || customLaunchReviewAllowsSigning(launch.manualReview)) ? (
                   <button className={styles.walletButton} type="button"
@@ -3733,7 +3742,10 @@ export function DeveloperLaunchHistory({
                   ? <button className={styles.walletButton} type="button" disabled aria-busy="true">Preparing your launch…</button> : null}
                 {launchErrors[key] ? <p className={styles.inlineError} role="alert">{launchErrors[key]}</p> : null}
                 <details className={styles.launchReview}>
-                  <summary>Launch details</summary>
+                  <summary>Details and review</summary>
+                <CustomLaunchAssessment value={launch.output?.reviewReadiness} review={launch.manualReview} subjectHash={launch.manualReview?.subjectHash} chainId={launch.manualReview?.chainId} tradeChecks={launch.manualReview?.tradeChecks} />
+                {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
+
                 <details className={styles.detailDisclosure}>
                   <summary>Request details</summary>
                 <dl className={styles.metadata}>

@@ -1,11 +1,11 @@
-.flow { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: 16px; color: var(--webde-ink); min-width: 0; padding: 24px; }
-.flow[data-highlighted="true"] { border-color: #e786b2; }
-.topline { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.flow { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: 16px; color: var(--webde-ink); min-width: 0; padding: 28px; width: 100%; max-width: 640px; margin-inline: auto; }
+.flow[data-highlighted="true"] { border-color: var(--webde-line); }
+.topline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .eyebrow, .network, .hint { color: var(--webde-muted); font-size: 12px; line-height: 16px; margin: 0; }
 .topline h3 { font-size: 24px; font-weight: 500; line-height: 32px; margin: 4px 0 0; overflow-wrap: anywhere; text-wrap: balance; }
 .description { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 12px 0 0; max-width: 680px; text-wrap: pretty; }
-.progress { margin-top: 24px; }
-.progress h4 { font-size: 18px; font-weight: 500; line-height: 28px; margin: 0; }
+.progress { margin-top: 24px; margin-bottom: 20px; }
+.progress h4 { font-size: 15px; font-weight: 500; line-height: 28px; margin: 0; }
 .progress p, .confirmation p, .notice, .receipt { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 8px 0 0; text-wrap: pretty; }
 .summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
 .summary > div { min-width: 0; }
@@ -17,10 +17,12 @@
 .steps small { display: block; color: var(--webde-muted); font-size: 12px; line-height: 16px; margin-top: 4px; }
 .steps [data-status="final"] .stepNumber { color: var(--success); }
 .steps [aria-current="step"] .stepNumber { border-color: #e786b2; color: #e786b2; }
-.confirmation, .recovery { background: var(--webde-control); border: 1px solid var(--webde-line); border-radius: 12px; padding: 16px; }
+.confirmation { display: grid; gap: 16px; }
+.recovery { background: var(--webde-control); border: 1px solid var(--webde-line); border-radius: 12px; padding: 16px; }
 .confirmation > p:first-child { margin-top: 0; }
 .confirmation strong { color: var(--webde-ink); font-weight: 500; }
-.confirmation button { margin-block: 16px 8px; }
+.confirmation button { margin: 0; width: 100%; min-height: 48px; justify-content: center; }
+.confirmation > p { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
 .recovery { display: grid; gap: 12px; }
 .recovery label { font-size: 14px; line-height: 20px; }
 .recovery input { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: 8px; color: var(--webde-ink); font-family: inherit; font-size: 16px; line-height: 24px; min-height: 48px; min-width: 0; padding: 8px 12px; width: 100%; }
@@ -32,7 +34,7 @@
 .flow code { font-family: var(--font-plex-mono), monospace; font-size: 12px; overflow-wrap: anywhere; }
 .error { color: var(--danger); font-size: 14px; line-height: 20px; margin: 16px 0 0; overflow-wrap: anywhere; }
 .details { margin-top: 16px; }
-.details summary { color: var(--webde-muted); cursor: pointer; font-size: 14px; line-height: 20px; min-height: 44px; padding-block: 12px; }
+.details summary, .recoveryDetails summary { color: var(--webde-muted); cursor: pointer; font-size: 14px; line-height: 20px; min-height: 44px; padding-block: 12px; }
 .details pre { background: var(--webde-control); border: 1px solid var(--webde-line); border-radius: 12px; font-family: var(--font-plex-mono), monospace; font-size: 12px; line-height: 16px; max-height: 320px; overflow: auto; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .programLink { font-size: 16px; font-weight: 500; line-height: 24px; }
 .flow :is(button,input,a,summary):focus-visible { outline: 2px solid #e786b2; outline-offset: 4px; }
@@ -40,3 +42,11 @@
 @media (max-width: 600px) { .flow { padding: 16px; } .summary { gap: 16px; } .confirmation button, .recovery button { width: 100%; } .topline { gap: 8px; } }
 @media (max-width: 360px) { .summary { grid-template-columns: minmax(0, 1fr); } }
 @media (forced-colors: active) { .flow, .stepNumber, .confirmation, .recovery, .recovery input, .details pre { border-color: CanvasText; } }
+
+.identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.identity > div:last-child { min-width: 0; }
+.artwork { display: grid; place-items: center; flex: 0 0 64px; width: 64px; height: 64px; border-radius: 16px; overflow: hidden; background: var(--webde-control); outline: 1px solid oklch(1 0 0 / 0.1); font-size: 20px; }
+.artwork img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ticker { color: var(--webde-muted); font-size: 13px; line-height: 18px; margin: 2px 0 0; overflow-wrap: anywhere; }
+.recoveryDetails { margin-top: 16px; }
+@media (max-width: 600px) { .identity { gap: 12px; } .topline h3 { font-size: 22px; line-height: 28px; } }

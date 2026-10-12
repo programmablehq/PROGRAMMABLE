@@ -10,6 +10,8 @@ export async function createCustomLaunchFlowServer() {
     plugins: [{ name: "local-launch-navigation", setup(plugin) {
       plugin.onResolve({ filter: /\/wallet-provider$/ }, () => ({ path: "wallet", namespace: "fixture-wallet" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture-wallet" }, () => ({ contents: `export const useWallet = () => ({ wallet: { account: '0x1111111111111111111111111111111111111111' }, getAccessToken: async () => 'local-fixture', getIdentityToken: async () => null });` }));
+      plugin.onResolve({ filter: /^next\/image$/ }, () => ({ path: "image", namespace: "fixture-image" }));
+      plugin.onLoad({ filter: /.*/, namespace: "fixture-image" }, () => ({ contents: `import {createElement} from 'react'; export default function Image({unoptimized, ...props}) { return createElement('img', props); }`, resolveDir: root }));
       plugin.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: "navigation", namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: `const router = { push: href => { window.__customLaunchFixture.navigated = href; history.pushState(null, '', href); } }; export const useRouter = () => router;` }));
     } }],
