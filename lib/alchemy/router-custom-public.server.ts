@@ -532,10 +532,13 @@ export function createRouterCustomIdentitySnapshotReaderV1(
   dependencies: RouterCustomIdentitySnapshotDependenciesV1 = {},
 ) {
   const now = dependencies.now ?? Date.now;
-  const readCurrentSource = dependencies.readCurrentSource ??
-    readAllEthereumCustomIdentitySourcesV1;
   const readDurableSnapshot = dependencies.readDurableSnapshot ??
     readDurableRouterCustomIdentitySnapshotV1;
+  const readCurrentSource = dependencies.readCurrentSource ?? (async () => {
+    const saved = await withinDuration(readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS)
+      .catch(() => null);
+    return readAllEthereumCustomIdentitySourcesV1(saved?.entries);
+  });
   const persistDurableSnapshot = dependencies.persistDurableSnapshot ??
     persistDurableRouterCustomIdentitySnapshotV1;
   const currentReadTimeoutMs = dependencies.currentReadTimeoutMs ??
@@ -651,6 +654,7 @@ export function createRouterCustomIdentitySnapshotReaderV1(
           // The current source has independently confirmed this exact boundary
           // and every immutable identity. Keep stable saved proof bytes without
           // misreporting a successful fresh observation as a source outage.
+          snapshotConflict = null;
           return cacheSnapshot(
             Object.freeze({
               ...previous,
