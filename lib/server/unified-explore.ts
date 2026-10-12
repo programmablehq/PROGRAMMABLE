@@ -8,6 +8,7 @@ import { readRobinhoodMarkets, readRobinhoodPresentations } from "./robinhood-pr
 import { readCodexMarkets } from "./codex-market";
 import { readCodexTokenMetadata } from "./codex-token-metadata";
 import { mergeCoinMetadata } from "@/lib/coin-metadata";
+import { marketPool } from "@/lib/market/codex";
 import { isRobinhoodModuleSourceKind } from "@/lib/robinhood-launches";
 import { coinValuation, type RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 import { exploreIdentityKey, selectUnifiedExplorePage } from "@/lib/unified-explore";
@@ -26,7 +27,7 @@ const readers = {
   robinhoodPresentations: readRobinhoodPresentations,
 };
 
-/** Two independently verified catalogs, one global ranking, and at most one market batch per chain per cache window. */
+/** Verified launch identities with shared Codex market batches and one global ranking. */
 export async function readUnifiedLaunches(page = 1, query = "", filters: RobinhoodExploreFilters = { sort: "highest", mode: "all" },
   size: 6 | 8 | 10 | 50 = 10, dependencies: typeof readers = readers) {
   const observations = readConfirmingEthereumLaunches().catch(() => []);
@@ -71,6 +72,20 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const known = new Set([...indexed, ...recentRows.map(exploreIdentityKey)]);
   const confirming = liveLaunchObservations(await observations).filter(row => !known.has(exploreIdentityKey(row)) && isPublicExploreIdentityV1(row, 1)
     && !PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1.some(hidden => hidden.tokenAddress.toLowerCase() === row.tokenAddress.toLowerCase() && hidden.launchId.toLowerCase() === row.launchId.toLowerCase()));
+  // Receipt-backed launches need Codex data immediately too, not only after
+  // the historical catalog catches up. Membership still comes from receipts.
+  const fresh = [...recentRows, ...confirming];
+  await Promise.all(([1, 4663] as const).map(async chainId => {
+    const rows = fresh.filter(row => row.chainId === chainId && typeof row.poolId === "string" && marketPool.test(row.poolId));
+    if (!rows.length) return;
+    const values = await (chainId === 1
+      ? dependencies.ethereumMarkets(rows as { tokenAddress: string; poolId: string }[], 1)
+      : dependencies.robinhoodMarkets(rows as (typeof rhRows)[number][])).catch(() => new Map<string, RobinhoodCoinMarket>());
+    for (const row of rows) {
+      const market = values.get(row.tokenAddress.toLowerCase());
+      if (market) markets.set(exploreIdentityKey(row), market);
+    }
+  }));
   const values = new Map<string, number>();
   for (const [identity, market] of markets) {
     const value = filters.sort === "activity" ? market.volume24hUsd : coinValuation(market).value;
@@ -93,26 +108,37 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   });
   const selectedKeys = new Set(selection.items.map(exploreIdentityKey));
   const selectedRh = rhRows.filter(row => selectedKeys.has(exploreIdentityKey(row)));
-  const selectedEth = selection.items.filter(row => row.chainId === 1 && indexed.has(exploreIdentityKey(row)));
-  const [ethMetadata, rhPresentations] = await Promise.all([
+  const selectedEth = selection.items.filter(row => row.chainId === 1);
+  const selectedRecentRh = recent.filter(item => item.chainId === 4663 && selectedKeys.has(exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress })));
+  const [ethMetadata, [rhMetadata, rhPresentations]] = await Promise.all([
     readCodexTokenMetadata(selectedEth.map(row => row.tokenAddress), 1),
-    dependencies.robinhoodPresentations(selectedRh, rhMarkets)
-    .catch(() => selectedRh.map(row => ({ tokenAddress: row.tokenAddress, imageUrl: null, description: null,
-      links: [], market: rhMarkets.get(row.tokenAddress.toLowerCase()) ?? null }))),
+    readCodexTokenMetadata([...selectedRh, ...selectedRecentRh.map(item => item.row)].map(row => row.tokenAddress), 4663)
+      .then(async metadata => [metadata, await dependencies.robinhoodPresentations(selectedRh, rhMarkets, metadata)
+        .catch(() => selectedRh.map(row => ({ tokenAddress: row.tokenAddress,
+          ...mergeCoinMetadata({ imageUrl: null, description: null, links: [] }, metadata.get(row.tokenAddress.toLowerCase())),
+          market: rhMarkets.get(row.tokenAddress.toLowerCase()) ?? null })))] as const),
   ]);
   const metadata = new Map(eth.entries.map(entry => [exploreIdentityKey({ chainId: 1, tokenAddress: entry.tokenAddress }), entry]));
+  const recentMetadata = new Map(recent.map(item => [exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress }), item.presentation]));
   const presentations = [
     ...rhPresentations.map(presentation => ({ ...presentation, chainId: 4663 as const })),
     ...selectedEth.map(row => {
-      const entry = metadata.get(exploreIdentityKey(row))!;
+      const entry = metadata.get(exploreIdentityKey(row));
+      const saved = recentMetadata.get(exploreIdentityKey(row));
       return { chainId: 1 as const, tokenAddress: row.tokenAddress,
-        ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
-          links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, ethMetadata.get(row.tokenAddress.toLowerCase())),
+        ...mergeCoinMetadata(saved ?? { imageUrl: entry?.imageUrl ?? null, description: entry?.description ?? null,
+          links: (entry?.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, ethMetadata.get(row.tokenAddress.toLowerCase())),
         market: markets.get(exploreIdentityKey(row)) ?? null };
     }),
-    ...recent.filter(item => selection.items.some(row => exploreIdentityKey(row) === exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress })))
-      .map(item => item.presentation),
+    ...selectedRecentRh.map(item => ({ ...item.presentation,
+      ...mergeCoinMetadata(item.presentation, rhMetadata.get(item.row.tokenAddress.toLowerCase())),
+      market: markets.get(exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress })) ?? null,
+    })),
   ];
-  return { scope: "all" as const, status: status === "unavailable" && confirming.length ? "partial" as const : status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence },
-    updatedAt, ...selection, items, presentations };
+  const enrichedItems = items.map(row => {
+    const details = (row.chainId === 1 ? ethMetadata : rhMetadata).get(row.tokenAddress.toLowerCase());
+    return { ...row, name: row.name || details?.name || null, symbol: row.symbol || details?.symbol || null };
+  });
+  return { scope: "all" as const, status: status === "unavailable" && fresh.length ? "partial" as const : status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence },
+    updatedAt, ...selection, items: enrichedItems, presentations };
 }

@@ -217,6 +217,17 @@ describe("Robinhood optional coin presentation", () => {
 });
 
 describe("Robinhood catalog market observations", () => {
+  it("uses complete Codex metadata without another finalized-feed or module-RPC lookup", async () => {
+    const fetcher = sourceFetch(new Error("metadata feed must not be called"));
+    vi.stubGlobal("fetch", fetcher);
+    const details = { imageUrl: "https://example.com/codex.png", description: "Codex description",
+      links: [{ label: "Website", url: "https://example.com/" }] };
+    codexMetadata.read.mockResolvedValue(new Map([[TOKEN.tokenAddress, details]]));
+    const [value] = await readRobinhoodPresentations([TOKEN], new Map());
+    expect(value).toMatchObject(details);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(moduleMetadata.read).not.toHaveBeenCalled();
+  });
   it("does not start another provider when Codex has no observation", async () => {
     const fetcher = sourceFetch(feed(), new Map());
     vi.stubGlobal("fetch", fetcher);
