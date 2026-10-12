@@ -6,7 +6,9 @@ The [Fees and revenue](../economics.md) guide explains the current builder and t
 
 ## Foundation
 
-Foundation charges 30 bps (0.30%) for Programmable on each buy and sell through its pool. Creator fees are additional. Both are calculated on the gross quote amount, and fees accrue in the quote asset. For ETH-funded launches with a WETH quote, the ledger asset is WETH.
+New Foundation releases on Ethereum and Robinhood charge 100 bps (1%) for Programmable on each buy and sell through its pool. Creator fees are additional. Both are calculated on the gross quote amount, and fees accrue in the quote asset. For ETH-funded launches with a WETH quote, the ledger asset is WETH.
+
+Earlier Foundation releases retain their immutable 30 bps (0.30%) rate. Identify the exact release before calculating fees.
 
 Modules can receive an allocation of the creator fee recorded at launch. That allocation does not reduce the platform fee. Foundation's initial pool has a 0% LP fee.
 
@@ -23,13 +25,13 @@ Creator and pool fees are additional. Author rewards are divided equally between
 
 ## Custom launches
 
-Robinhood Native20 charges 20 bps (0.20%) on the gross native ETH amount of each successful buy or sell through its bound pool. Creator and pool fees are separate. For a gross amount of 1 ETH, Programmable earns 0.002 ETH.
+Earlier Robinhood Native20 charges 20 bps (0.20%) on the gross native ETH amount of each successful buy or sell through its bound pool. Creator and pool fees are separate. For a gross amount of 1 ETH, Programmable earns 0.002 ETH.
 
 Native20's rate is not a universal rule for custom contracts. Use the fee configuration and verified fee path of the exact launch and pool. A configured policy or a launch stamp alone does not establish that a fee is enforced. A creator fee of 0% produces no creator earnings from that trade.
 
 ## Ethereum launches
 
-Current Ethereum Mainnet Custom Hook launches use a **0.30% (30 bps)** Programmable platform fee. In parts per million, the rate is **3,000 / 1,000,000**. Project and LP fees are separate. Confirm the deployed contract's assessment base, fee asset, accounting mode, recipient, accrual and claim path before presenting the fee as enforced or collected. A launch stamp alone does not certify fee behavior.
+New Custom Launches on Ethereum Mainnet and Robinhood use a **1% (100 bps)** Programmable platform fee. In parts per million, the rate is **10,000 / 1,000,000**. Project and LP fees are separate. Confirm the deployed contract's assessment base, fee asset, accounting mode, recipient, accrual and claim path before presenting the fee as enforced or collected. A launch stamp alone does not certify fee behavior.
 
 Earlier Classic contracts retain their 0.10% included share. A 1% Classic fee leaves 0.90% for creator rewards. Retained fee-certified Custom API profiles specify an exact 0.10% share; their versioned formats and deployed contracts remain unchanged. These older rates are not the current Ethereum Custom Hook launch policy.
 

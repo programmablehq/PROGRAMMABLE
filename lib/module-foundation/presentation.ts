@@ -248,7 +248,7 @@ export function presentFoundationCatalogV1(input: Environment): readonly Foundat
     // Missing form values and stateful value constraints are resolved when the user prepares their actual configuration.
     errors.push(...sample.diagnostics.filter(issue => !["FOUNDATION_INPUT_INVALID", "FOUNDATION_CONFIGURATION_CONSTRAINT", "FOUNDATION_CONFIGURATION_LIMIT"].includes(issue.code)));
     if (shareEnabled(entry)) fields = [...fields, { key: FOUNDATION_CREATOR_SHARE_FIELD_V1, label: "Share of creator fees (%)", kind: "decimal", required: true, defaultValue: "0",
-      description: "Assign 0% to 100% of the creator fee to this module. The separate 0.3% platform fee is unchanged." }];
+      description: "Assign 0% to 100% of the creator fee to this module. The platform fee shown in your launch review is separate." }];
     const d = entry.runtime.descriptor;
     const conflictsWith = input.catalog.entries.filter(other => other.manifest.packageId !== entry.manifest.packageId && (other.runtime.descriptor.moduleId === d.moduleId
       || (d.exclusiveGroup !== FOUNDATION_ZERO_HASH && d.exclusiveGroup === other.runtime.descriptor.exclusiveGroup))).map(other => other.manifest.packageId);

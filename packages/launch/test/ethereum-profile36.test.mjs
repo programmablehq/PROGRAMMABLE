@@ -12,7 +12,7 @@ import { buildLaunch, packLaunch } from "../src/pack.mjs";
 import { packFreshLaunch } from "../src/pack-current-profile.mjs";
 import { resolveDirectNativeProfile, validateEmbeddedDirectNativeProfile, hashDirectNativeProfile } from "../src/profile-direct-native-v1.mjs";
 import { DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36 as POLICY, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2 as TREASURY_POLICY,
-  directNativeProgrammableTradeFeePolicyHashV36 } from "../src/profile-v36.mjs";
+  DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3 as FEE100_POLICY, directNativeProgrammableTradeFeePolicyHashV36 } from "../src/profile-v36.mjs";
 import { validateLaunchFile } from "../src/validate.mjs";
 import { jsonResponse, validCapabilities, validCapabilities36 as capabilities36 } from "./fixtures/capabilities.mjs";
 
@@ -200,4 +200,23 @@ test("new treasury follows current capabilities and reproduces exactly without c
     fetchImpl: async () => jsonResponse(caps) });
   assert.deepEqual(options.directNativeTradeFeePolicy, TREASURY_POLICY);
   assert.equal(JSON.parse(before.requestBytes).launchProfile.platformFeePolicy.claimAuthority, POLICY.defaultCollection.recipient);
+});
+
+test("fee100 current capabilities pack and reproduce exactly while legacy policy stays 30bps", async t => {
+  const f = await fixture(t);
+  const packed = await packLaunch({ configPath: f.configPath, directNativeTradeFeePolicy: FEE100_POLICY });
+  const validated = await validateLaunchFile({ launchPath: packed.outputPath, configPath: f.configPath });
+  assert.equal(validated.reproducedFromConfig, true);
+  const request = JSON.parse(await readFile(packed.outputPath, "utf8"));
+  assert.equal(request.launchProfile.platformFeePolicy.programmableFeeHundredthsOfBip, "10000");
+  assert.equal(request.launchProfileSelection.platformFeeBinding.programmableFeeHundredthsOfBip, "10000");
+  const caps = capabilities36();
+  caps.programmableTradeFeePolicy.policy = FEE100_POLICY;
+  caps.programmableTradeFeePolicy.policyHash = directNativeProgrammableTradeFeePolicyHashV36(FEE100_POLICY);
+  caps.feePolicy.programmableHundredthsOfBip = "10000";
+  assert.equal((await getLaunchCapabilities({ maxAttempts: 1, fetchImpl: async () => jsonResponse(caps) }))
+    .resource.programmableTradeFeePolicy.policy.rateBps, 100);
+  caps.feePolicy.programmableHundredthsOfBip = "3000";
+  await assert.rejects(getLaunchCapabilities({ maxAttempts: 1, fetchImpl: async () => jsonResponse(caps) }));
+  assert.equal(POLICY.ratePpm, "3000");
 });

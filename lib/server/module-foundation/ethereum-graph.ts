@@ -69,6 +69,7 @@ export async function readFoundationEthereumGraphLaunch(input: {
   // account holding this token's launch record. This binding cannot launch again.
   const binding: FoundationDeploymentBinding = {
     ethereumGraph: source, chainId: 1, factoryVersion: "v3", lpCustodyId: FOUNDATION_LP_CUSTODY_DEAD_ID,
+    platformFeeBps: source.platformFeeBps ?? 30,
     releaseDigest: source.releaseDigest, sourceCommit: source.sourceCommit, startBlock: source.startBlock,
     factory: { address, runtimeCodeHash: source.proxyRuntimeCodeHash },
     hookDeployer: { address: getAddress(ethereum.canonicalStamp.graphFactory.address),

@@ -63,21 +63,21 @@ export function FoundationTransactionSteps({ transactions }: { transactions: rea
   </section>;
 }
 
-export function FoundationFeeDisclosure(props: FoundationCreatorFees & { quoteSymbol: string; side?: "buy" | "sell" }) {
-  const { quoteSymbol, side } = props;
+export function FoundationFeeDisclosure(props: FoundationCreatorFees & { quoteSymbol: string; platformFeeBps?: 30 | 100; side?: "buy" | "sell" }) {
+  const { quoteSymbol, side, platformFeeBps = 30 } = props;
   const rates = foundationCreatorFeeRates(props);
   const selectedFee = side === "sell" ? rates.creatorSellFeeBps : rates.creatorBuyFeeBps;
   const split = !side && rates.creatorBuyFeeBps !== rates.creatorSellFeeBps;
   return <div className={styles.feeDisclosure}>
     <dl className={styles.rows}>
-      <div><dt>Programmable platform fee</dt><dd>0.3% <span className={styles.muted}>fixed</span></dd></div>
+      <div><dt>Programmable platform fee</dt><dd>{platformFeeBps / 100}% <span className={styles.muted}>fixed</span></dd></div>
       <div><dt>{split ? "Creator buy fee" : "Creator fee"}</dt><dd>{selectedFee / 100}%</dd></div>
       {split ? <div><dt>Creator sell fee</dt><dd>{rates.creatorSellFeeBps / 100}%</dd></div> : null}
-      <div className={styles.totalRow}><dt>{split ? "Combined buy fees" : "Combined swap fees"}</dt><dd>{(selectedFee + 30) / 100}%</dd></div>
-      {split ? <div className={styles.totalRow}><dt>Combined sell fees</dt><dd>{(rates.creatorSellFeeBps + 30) / 100}%</dd></div> : null}
+      <div className={styles.totalRow}><dt>{split ? "Combined buy fees" : "Combined swap fees"}</dt><dd>{(selectedFee + platformFeeBps) / 100}%</dd></div>
+      {split ? <div className={styles.totalRow}><dt>Combined sell fees</dt><dd>{(rates.creatorSellFeeBps + platformFeeBps) / 100}%</dd></div> : null}
     </dl>
     <p className={styles.help}>Charged in {quoteSymbol} on {side ? `${side} trades` : "buys and sells"} in this launch pool. Uniswap LP and protocol fees are separate.</p>
-    <details className={styles.transactionDetails}><summary>Platform fee recipient</summary><FoundationAddress value={FOUNDATION_PLATFORM_FEE_RECIPIENT} label="platform fee recipient" /><p className={styles.help}>This additional 0.3% cannot be removed, redirected or used by optional modules.</p></details>
+    <details className={styles.transactionDetails}><summary>Platform fee recipient</summary><FoundationAddress value={FOUNDATION_PLATFORM_FEE_RECIPIENT} label="platform fee recipient" /><p className={styles.help}>This additional {platformFeeBps / 100}% cannot be removed, redirected or used by optional modules.</p></details>
   </div>;
 }
 
@@ -117,7 +117,7 @@ export function ModuleFoundationLaunchReview({ review, contextKey, symbol, busy,
         <p className={styles.help}>The launch also sends {review.roundingInventory.tokenAmount} {symbol} left over from position rounding to this address. These coins cannot be recovered; the token&apos;s total supply stays unchanged.</p>
       </details>
     </section> : null}
-    <FoundationFeeDisclosure {...foundationCreatorFeeFields(review)} quoteSymbol={review.quote.symbol} />
+    <FoundationFeeDisclosure platformFeeBps={review.platformFeeBps} {...foundationCreatorFeeFields(review)} quoteSymbol={review.quote.symbol} />
     <details className={styles.details}><summary>Coin and metadata</summary><div className={styles.detailsBody}><dl className={styles.rows}>
       <div><dt>Coin address</dt><dd><FoundationAddress value={review.tokenAddress} label="coin address" /></dd></div>
       <div><dt>Metadata hash</dt><dd><FoundationAddress value={review.metadataHash} label="metadata hash" /></dd></div>

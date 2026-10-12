@@ -72,6 +72,7 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
       || typeof e.checkedAt !== "string" || !Number.isFinite(Date.parse(e.checkedAt))
       || Math.abs(now - Date.parse(e.checkedAt)) > 120_000 || e.providerCount !== 2
       || b.releaseDigest !== source.releaseDigest || b.chainId !== 1
+      || (source.platformFeeBps === 100 ? b.platformFeeBps !== 100 : b.platformFeeBps !== undefined && b.platformFeeBps !== 30)
       || b.sourceCommit !== source.sourceCommit || b.startBlock !== String(source.startBlock)
       || b.factoryVersion !== "v3" || b.lpCustodyId !== ETHEREUM_MODULE_BINDING.lpCustodyId) throw new Error("Current Ethereum source evidence is unavailable.");
     hash(e.blockHash);
@@ -102,7 +103,11 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
       ? `/v1/modules/foundation/source/release/${hash(b.releaseDigest).toLowerCase()}` : "/v1/modules/foundation/source")) throw new Error("Current verified release evidence is unavailable.");
   for (const field of ["artifactDigest", "decisionDigest", "sourceManifestHash", "deploymentEvidenceDigest", "runtimeVerificationDigest", "finalityEvidenceDigest", "blockHash"]) hash(evidence[field]);
   if (r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V4 && b.chainId !== chainId) throw new Error("The deployment binding belongs to a different network.");
-  const pins = { ...(r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V4 ? { chainId } : {}), releaseDigest: hash(b.releaseDigest), sourceCommit: b.sourceCommit,
+  if (b.platformFeeBps !== undefined && (b.platformFeeBps !== 30 && b.platformFeeBps !== 100
+    || ![FOUNDATION_AVAILABILITY_SCHEMA_V3, FOUNDATION_AVAILABILITY_SCHEMA_V4].includes(r.schemaVersion))) {
+    throw new Error("Unsupported platform fee for this release.");
+  }
+  const pins = { ...(b.platformFeeBps === undefined ? {} : { platformFeeBps: b.platformFeeBps as 30 | 100 }), ...(r.schemaVersion === FOUNDATION_AVAILABILITY_SCHEMA_V4 ? { chainId } : {}), releaseDigest: hash(b.releaseDigest), sourceCommit: b.sourceCommit,
     startBlock: BigInt(b.startBlock), factory: pin(b.factory), hookDeployer: pin(b.hookDeployer) };
   let binding: FoundationDeploymentBinding;
   if (r.schemaVersion !== FOUNDATION_AVAILABILITY_SCHEMA) {

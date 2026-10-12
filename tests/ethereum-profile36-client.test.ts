@@ -51,8 +51,10 @@ describe("additive Ethereum 3.6 public client", () => {
   });
   it("rejects unknown profile versions and keeps collection claims qualified", () => {
     expect(parse(resource("3.7.0"))).toBeNull();
+    expect(walletPlatformFeeDisclosureV3("3.6.0", {behaviorEvidence:{requirements:{vectorSetVersion:"1.3.0"}}})).toBe("1% platform fee on Programmable trades");
+    expect(walletPlatformFeeDisclosureV3("3.6.0", {behaviorEvidence:{requirements:{vectorSetVersion:"1.2.0"}}})).toContain("0.3%");
     expect(walletPlatformFeeDisclosureV3("3.5.0")).toContain("verification required");
-    expect(walletPlatformFeeDisclosureV3("3.6.0")).toContain("server-proven native30");
+    expect(walletPlatformFeeDisclosureV3("3.6.0")).toContain("approved launch policy");
   });
   it("can precede backend activation and leaves fresh selection to public capabilities", () => {
     const api = programmableWellKnownDocumentV1(PRELAUNCH_CUSTOM_REGISTRY_PUBLIC_MANIFEST_V1).customLaunchApi;
@@ -62,15 +64,15 @@ describe("additive Ethereum 3.6 public client", () => {
     expect(api.ethereumProfileSelection).toMatchObject({ capabilitiesUrl: api.capabilitiesUrl,
       selectionRequiredBeforePacking: true, discoveryIsActivationEvidence: false,
       supportedActiveProfileVersions: ["3.3.0", "3.6.0"], unknownProfileDisposition: "fail-closed",
-      cli: { sourceCandidateVersion: "4.1.5", publicationVerified: null,
+      cli: { sourceCandidateVersion: "4.1.6", publicationVerified: null,
         publicationAuthority: "immutable-github-release",
-        releaseTag: "programmable-launch-v4.1.5",
+        releaseTag: "programmable-launch-v4.1.6",
         publishedReleaseAndArtifactVerificationRequired: true },
       profile36: { openApiUrl: "https://programmable.market/openapi/custom-launch-v3.6.json",
         behaviorScenarioInputsRequired: false, mandatoryCanonicalFeeVaultTarget: false,
         launchAdmissionEstablishesFeeCollection: false, applicantWaiverAssertionsAccepted: false } });
     expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1).toContain("use the exact current V3 profile from capabilities");
     expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1).toContain("Historically, pre-3.6 open arbitrary-custom-hook lanes");
-    expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1).toContain("first-party Programmable trade collection at 30 bps with per-trade evidence");
+    expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1).toContain("first-party Programmable trade collection at the exact rate in the selected policy");
   });
 });

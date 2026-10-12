@@ -23,3 +23,10 @@ export const FOUNDATION_INFRASTRUCTURE = Object.fromEntries(
 ) as Record<"poolManager" | "positionManager" | "universalRouter" | "permit2" | "v4Quoter" | "stateView", { address: `0x${string}`; runtimeCodeHash: Hex }>;
 
 export { foundationCreatorFeeBps } from "./creator-fees";
+
+/** Legacy bindings omit the fee; new releases must bind it explicitly and prove the onchain getter. */
+export function foundationPlatformFeeBps(binding: { platformFeeBps?: 30 | 100 }): 30 | 100 {
+  const rate = binding.platformFeeBps ?? FOUNDATION_PLATFORM_BPS;
+  if (rate !== 30 && rate !== 100) throw new Error("The module platform fee policy is unsupported.");
+  return rate;
+}

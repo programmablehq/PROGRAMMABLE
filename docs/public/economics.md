@@ -4,24 +4,24 @@ Programmable earns a platform fee on trades covered by its fee contracts. A crea
 
 ## Module Mode
 
-The current coin builder uses Foundation. Its platform fee is **0.30% on each buy and sell through the launch pool**. You can add a creator fee of **0% to 10% in whole percentage points**. Selected modules may receive part of the creator fee; they do not change the platform's 0.30%.
+The current coin builder uses Foundation. Its platform fee is **1% on each buy and sell through the launch pool**. You can add a creator fee of **0% to 10% in whole percentage points**. Selected modules may receive part of the creator fee; they do not change the platform's 1%.
 
 Both fees are calculated in the asset paired with the coin. For a **1 WETH** trade (wrapped ETH) with a **1% creator fee**:
 
 | Recipient | Amount |
 | --- | --- |
-| Programmable | 0.003 WETH |
+| Programmable | 0.01 WETH |
 | Creator and any selected module recipients | 0.01 WETH |
 
-The combined Foundation fee is **1.30%**. The initial pool has no additional LP fee. Other pools used along a trade route may charge their own fees.
+The combined Foundation fee is **2%**. The initial pool has no additional LP fee. Other pools used along a trade route may charge their own fees.
 
 These percentages apply to trades, not an allocation of the coin's token supply. [Creator earnings](creators/earnings.md) explains how recipients collect their fees.
 
 ## Custom launches
 
-The current platform fee for Ethereum Mainnet Custom Hook launches is **0.30% (30 bps)** on each successful buy or sell through the launch's fee-bearing pool. Project fees and liquidity-provider fees are separate. A 1 ETH trade at this rate allocates 0.003 ETH to Programmable.
+New Custom Launches on Ethereum Mainnet and Robinhood use a **1% (100 bps)** platform fee on Programmable trades. Project fees and liquidity-provider fees are separate. Ethereum's routed fee uses the gross ETH input on buys and gross ETH output on sells. Robinhood's routed fee uses the gross output asset.
 
-Your hook defines how that fee is calculated, which asset it uses and how it accrues. Verify the exact deployed fee path. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
+For fees enforced by a hook, verify its exact assessment base, asset, accrual and claim path. External routes depend on that hook's enforcement. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
 
 ## Platform revenue
 

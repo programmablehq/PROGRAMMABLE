@@ -1,4 +1,5 @@
 "use client";
+import { foundationPlatformFeeBps } from "@/lib/module-foundation/constants";
 import ethereum from "@/contracts/spec/module-foundation/chain-1.v1.json";
 
 import { foundationBindingChainId, foundationChainProfile, type FoundationChainId } from "@/lib/module-foundation/chains";
@@ -33,7 +34,7 @@ import type { FoundationResolution } from "@/lib/module-foundation/result-store"
 import { foundationLaunchPositionPresentation, foundationPoolPresentation, foundationPositionPresentation } from "@/lib/module-foundation/ui-readback";
 import { foundationStepSummary } from "@/lib/module-foundation/wallet";
 import { isFoundationQuotePrice, type FoundationStartPrice } from "@/lib/module-foundation/start-price";
-import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationSelectionErrors, type FoundationImage,
+import { FOUNDATION_PLATFORM_FEE_RECIPIENT, foundationSelectionErrors, type FoundationImage,
   type FoundationLaunchDraft, type FoundationLaunchReview, type FoundationQuoteAsset, type FoundationTransactionResult } from "@/lib/module-foundation/ui-types";
 import styles from "./module-foundation-ui.module.css";
 import studioStyles from "./module-studio/studio.module.css";
@@ -216,7 +217,7 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
         tokenAddress: sequence.result.token, metadataHash: sequence.metadataHash,
         pool: { ...sequence.poolKey, poolId: sequence.result.poolId, poolManager: FOUNDATION_INFRASTRUCTURE.poolManager.address },
         positions, ...custody,
-        platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
+        platformFeeBps: foundationPlatformFeeBps(binding), platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
         ...foundationCreatorFeeFields(sequence.parameters), initialBuy: draft.initialBuy,
         minimumInitialTokens: formatUnits(sequence.parameters.initialBuyMinimumTokenAmount, 18),
         additionalLiquidity: formatUnits(sequence.result.factoryVersion !== "v1" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
@@ -279,6 +280,7 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
           </label>)}
       </fieldset>
     } recoveryAction={inlineRecovery ? sessionStatus : undefined} previousLaunchAction={previousLaunchAction} availability={session.availability} contextKey={session.contextKey}
+    platformFeeBps={foundationPlatformFeeBps(session.envelope?.binding ?? {})}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
     catalog={catalog} quoteAssets={quotes} nativeBalance={launchBalance.balance} onCheckFunding={launchBalance.check} suggestedInitialBuy={suggestedInitialBuy} minimumInitialBuy={minimumInitialBuy} onResolveSuggestedInitialBuy={resolveSuggestedInitialBuy} launchProgress={session.progress} onResolveQuote={resolveQuote} onUploadImage={upload}
     onWarmLaunch={session.account && !session.preparationBlocked ? (draft, signal) => prepare(draft, signal) : undefined}

@@ -4,7 +4,7 @@ import { foundationCreatorFeeFields, foundationCreatorFeeRates, type FoundationC
 import { assertFoundationAtomicEth, assertFoundationLaunchCall, encodeFoundationFundingPath, type FoundationEthFunding } from "./atomic-launch";
 import {
   createPublicClient, decodeFunctionResult, encodeAbiParameters, encodeFunctionData, erc20Abi,
-  fallback, getAddress, getCreate2Address, http, keccak256, multicall3Abi, toHex, zeroAddress,
+  fallback, getAddress, getCreate2Address, http, keccak256, multicall3Abi, parseAbi, toHex, zeroAddress,
   type Address, type Hex, type PublicClient,
 } from "viem";
 import { assertFoundationNativeBalance, assertFoundationWrapRuntime, foundationWrappedAmount, prepareFoundationNativeFunding } from "./native-funding";
@@ -14,7 +14,7 @@ import { moduleTokenMetadata, type ModuleSocialLinks } from "@/lib/module-mode/t
 import { encodeFoundationLaunchEntry, foundationFactoryV2Abi, foundationHookAbi, foundationHookV2Abi, foundationLedgerAbi, foundationMetadataParameters, foundationPermit2Abi, foundationQuoterAbi, foundationTokenAbi,
   type FoundationContractModule, type FoundationLaunchParameters, type FoundationLaunchRecord, type FoundationMetadata } from "./abi";
 import { FOUNDATION_ABI_ID,
-  FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_ZERO_HASH, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_FACTORY_V3_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
+  FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_RECIPIENT, foundationPlatformFeeBps, FOUNDATION_ZERO_HASH, FOUNDATION_DEAD_ADDRESS, FOUNDATION_FACTORY_V2_ID, FOUNDATION_FACTORY_V3_ID, FOUNDATION_LP_CUSTODY_DEAD_ID } from "./constants";
 import { foundationParseAmount, planFoundationPrice } from "./price";
 import { foundationPriceExpiry, parseFoundationStartPrice, planFoundationStartPrice, type FoundationStartPrice } from "./start-price";
 import { buildFoundationExactInput, buildFoundationNativeExactInput, foundationNativeTradePath, foundationPoolId, foundationPoolKey, type FoundationPool } from "./route";
@@ -96,6 +96,11 @@ export async function assertFoundationInfrastructure(client: PublicClient, bindi
     const code = await client.getCode({ address: pin.address, blockNumber: block.number! });
     if (!code || code === "0x" || keccak256(code).toLowerCase() !== pin.runtimeCodeHash.toLowerCase()) throw new Error(`The ${role} runtime does not match this release.`);
   }));
+  if (foundationPlatformFeeBps(binding) === 100) {
+    const rate = await client.readContract({ address: binding.factory.address,
+      abi: parseAbi(["function PLATFORM_FEE_BPS() view returns (uint16)"]), functionName: "PLATFORM_FEE_BPS", blockNumber: block.number });
+    if (rate !== 100) throw new Error("The module release does not enforce the selected platform fee.");
+  }
   // These getters share the same verified code and immutable block. Fetch them together.
   await Promise.all([
     (async () => {

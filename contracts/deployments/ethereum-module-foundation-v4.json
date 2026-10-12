@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "programmable.ethereum-module-deployment.v4",
+  "chainId": 1,
+  "sourceCommit": "80551a93677a5f9d6202e09b5bba677351d71710",
+  "implementation": {
+    "address": "0x10334035B5Cf07842292A9F829566e7401B559Bb",
+    "runtimeCodeHash": "0x4c9bc5d1d9f144fb837b1a1b9156ddb7635af89e0f950f6151e82625117459ad",
+    "transactionHash": "0x7fd3ebd216ab5176e6825ffc5138d445896f3add858155903c6fd0535bf7b008",
+    "blockNumber": "26174610",
+    "blockHash": "0x5427c73d8c352155e5b5681be61a118a388d541072d8d4153602e79f054d23fa",
+    "creationCodeHash": "0x438f8aebd9cb2dc78fff892cb943a7d3966df7ccbbd4cd1a8ad256e6e2ea546b",
+    "constructorArguments": [
+      "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e",
+      "0x4c82d1fbfe28c977cbb58d8c7ff8fcf9f70a2cca",
+      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887",
+      "0x8622DD5bAb44185f2A458ac90384Ac99248f8d56",
+      [
+        "0x785f1014552b7ce7d5fb7d0c970ca60edee94fd00425d7ca21609acac7ce1293",
+        "0x77e36c08b19959a30dde46dec9abe6208e371ff2f56884a56fe1e1a53615528b",
+        "0x70c9ea2b275087aea3d57ae48e2d30e272a07ff5b6c7974bd47c21478b37face",
+        "0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131",
+        "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8"
+      ]
+    ]
+  },
+  "proxyRuntimeCodeHash": "0xfa7455334877286ce363795881871c40626bbf4457b1f2a3cb3ae4c3b3197d00",
+  "stampRouter": "0x8622DD5bAb44185f2A458ac90384Ac99248f8d56",
+  "graphFactory": "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887",
+  "releaseDigest": "0x67eea16fe1bb5593a3e83b4766e1b3d243d46ac194d571a9b16090b51032a8f3",
+  "platformFeeBps": 100,
+  "status": "deployed-runtime-verified-awaiting-activation"
+}

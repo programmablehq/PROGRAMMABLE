@@ -8,7 +8,7 @@ import { readFinalizedRouterCustomIdentitySnapshotCoreV1 } from "@/lib/alchemy/r
 import { readFoundationEthereumGraphLaunch } from "./ethereum-graph";
 import { withFoundationOwnerCatalogV1 } from "./owner-catalog";
 import { readEthereumMissingIndexReason } from "./ethereum-stamp-status";
-import release from "@/contracts/deployments/ethereum-module-release-v2.json";
+import release from "@/contracts/deployments/ethereum-module-release-v4.json";
 
 const reads = new Map<string, { expires: number; value: Promise<unknown> }>();
 export function readEthereumFoundationAvailability(token?: Address): Promise<unknown> {
