@@ -18,10 +18,9 @@ describe("launch pages without a primary asset", () => {
     expect(token.primaryAssetAddress).toBeNull();
     expect(html).toContain('aria-label="Unnamed contract launch"');
     expect(html).toContain("No primary asset is declared for this launch.");
-    expect(html).toContain("Components, markets and assurance");
-    expect(html).toContain("No market is declared in this launch.");
-    expect(html).toContain(`/address/${component}`);
-    expect(html).toContain("Dev wallet");
+    expect(html).not.toContain("Components, markets and assurance");
+    expect(html).toContain(`title="${component}"`);
+    expect(html).not.toContain("Dev wallet");
     expect(html).not.toMatch(/Ticker unavailable|<dt>Price<|Market Cap|Liquidity|24h volume|24h change|price chart|for this coin/);
   });
 

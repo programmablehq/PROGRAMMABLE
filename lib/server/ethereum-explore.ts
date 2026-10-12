@@ -155,7 +155,7 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   return {
     chainId: catalog.chainId, status: catalog.status === "unavailable" && confirming.length ? "partial" as const : catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,
     items: selected,
-    presentations: selectedCanonical.map(entry => ({ chainId: 1 as const, tokenAddress: entry.tokenAddress,
+    presentations: selectedCanonical.map(entry => ({ tokenAddress: entry.tokenAddress,
       ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
         links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
       market: markets.get(entry.tokenAddress.toLowerCase()) ?? null })),
