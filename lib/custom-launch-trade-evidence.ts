@@ -14,7 +14,7 @@ export function customLaunchTradeEvidence(value: unknown, subjectHash?: string, 
     && checks.every(check => ["passed", "failed"].includes(String(check.status)) && ["passed", "failed"].includes(String(record(check.fee).status)));
   const passed = bound && report.status === "passed" && checks.every(check => check.status === "passed" && record(check.fee).status === "passed");
   const failed = bound && report.status === "failed" && checks.some(check => check.status === "failed" || record(check.fee).status === "failed");
-  const currentPlatformFee = passed && report.platformFeeBps === 100 && report.feeCollection === "pool"
+  const currentPlatformFee = passed && report.platformFeeBps === 30 && report.feeCollection === "pool"
     && report.feePolicyVersion === "programmable.custom-launch-pool-fee.v1"
     && report.digestEncoding === "canonical-json-v1";
   return { currentPlatformFee, status: passed ? "passed" : failed ? "failed" : "pending", report: passed || failed ? report : null } as const;

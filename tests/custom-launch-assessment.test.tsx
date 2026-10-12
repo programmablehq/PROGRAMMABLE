@@ -17,16 +17,16 @@ describe("custom launch review evidence", () => {
     const html = render(report);
     expect(html).toContain("Passed on fork: buy, sell and the recorded platform fee collection.");
     expect(html).toContain("Platform fee checked: 0.3%");
-    expect(html).toContain("Historical evidence does not meet the 1% requirement");
+    expect(html).toContain("Historical evidence does not meet the 0.3% requirement");
     expect(html).toContain("block 1234");
     expect(html).not.toContain("Current status: not verified");
     expect(html).toContain("live execution is checked separately");
   });
   it("recognizes current pool fee evidence without relabelling the historical rate", () => {
-    const html = render({ ...report, platformFeeBps: 100, feeCollection: "pool",
+    const html = render({ ...report, platformFeeBps: 30, feeCollection: "pool",
       feePolicyVersion: "programmable.custom-launch-pool-fee.v1", digestEncoding: "canonical-json-v1" });
-    expect(html).toContain("Platform fee checked: 1%");
-    expect(html).toContain("Current 1% pool fee requirement met.");
+    expect(html).toContain("Platform fee checked: 0.3%");
+    expect(html).toContain("Current 0.3% pool fee requirement met.");
     expect(html).not.toContain("Historical evidence");
   });
   it("keeps absent, stale, wrong-chain and inconsistent reports pending", () => {

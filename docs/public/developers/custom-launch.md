@@ -84,9 +84,9 @@ For `action_required`, follow the returned repair instructions, rebuild and subm
 
 ## Fees, funding and liquidity
 
-New approvals on Ethereum Mainnet and Robinhood require **100 bps (1%)** for Programmable on every buy and sell through the launch pool, including the initial buy. The fixed platform recipient is `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Project fees are additional and cannot reduce or disable the platform share. The reviewer records passing checks against your exact submitted contracts before approving.
+New approvals on Ethereum Mainnet and Robinhood require **30 bps (0.3%)** for Programmable on every buy and sell through the launch pool, including the initial buy. The fixed platform recipient is `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Project fees are additional and cannot reduce or disable the platform share. The reviewer records passing checks against your exact submitted contracts before approving.
 
-Use the [Native100 reference source and compiler inputs](https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts). The Ethereum and Robinhood variants bind their own chain and PoolManager. They charge the gross native ETH leg, round up per trade and accrue backed native claims to a fixed-recipient vault. For a gross trade of 1 ETH, the platform accrual is 0.01 ETH. Custom implementations must provide equivalent fee evidence; a routing surcharge alone is insufficient.
+The [Ethereum Native30 reference source and compiler inputs](https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts/ethereum-native30-v3) bind Ethereum and its PoolManager. They charge the gross native ETH leg, round up per trade and accrue backed native claims to a fixed-recipient vault. For a gross trade of 1 ETH, the platform accrual is 0.003 ETH. Custom implementations must provide equivalent fee evidence; a routing surcharge alone is insufficient.
 
 Native20 and Native30 are historical contracts. Their deployed rates remain unchanged; copying them does not meet the current approval requirement.
 

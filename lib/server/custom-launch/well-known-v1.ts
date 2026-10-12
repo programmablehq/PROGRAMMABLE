@@ -51,7 +51,7 @@ const ETHEREUM_PROFILE_SELECTION = Object.freeze({
     exactSettlementDataflowClosureRequired: false as const,
     behaviorScenarioInputsRequired: false as const,
     programmableTradeFeePolicyHash:
-      "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a" as const,
+      "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5" as const,
     programmableTradeFeePolicySource: "capabilities.programmableTradeFeePolicy.policy" as const,
     supportedProgrammableTradeFeePolicyHashes: Object.freeze([
       "sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3",
@@ -59,7 +59,7 @@ const ETHEREUM_PROFILE_SELECTION = Object.freeze({
       "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a",
     ] as const),
     currentTreasurySource: "capabilities.currentTradeFeePolicy.recipient" as const,
-    programmableHundredthsOfBip: "10000" as const,
+    programmableHundredthsOfBip: "3000" as const,
     rateSource: "capabilities.programmableTradeFeePolicy.policy.ratePpm" as const,
     launchAdmissionEstablishesFeeCollection: false as const,
     native30WaiverAuthority: "server-runtime-and-per-trade-accrual-proof" as const,

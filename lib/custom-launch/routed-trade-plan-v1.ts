@@ -96,8 +96,8 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
     }
     // Provenance admission selects the site's current trade policy. It is not
     // a fee assurance claim or evidence that this pool already collects a fee.
-    policyVersion = poolFeeProof ? (poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : poolFeeProof.rateBps === 100 ? ROUTED_FEE_POLICY_V3 : ROUTED_FEE_POLICY_V2) : ROUTED_FEE_POLICY_V3;
-    routedRateBps = poolFeeProof?.rateBps ?? ROUTED_FEE_BPS_V3;
+    policyVersion = poolFeeProof ? (poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : poolFeeProof.rateBps === 100 ? ROUTED_FEE_POLICY_V3 : ROUTED_FEE_POLICY_V2) : ROUTED_FEE_POLICY_V2;
+    routedRateBps = poolFeeProof?.rateBps ?? ROUTED_FEE_BPS_V2;
     obligationId = policyVersion;
   } else {
     const matches = feeClaims.filter(claim => projectionObject(claim.observedValue)

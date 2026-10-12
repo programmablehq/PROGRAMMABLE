@@ -1,4 +1,4 @@
-import { CUSTOM_LAUNCH_ROUTED_FEE_DISCOVERY_V3 } from "./custom-launch/routed-fee-policy-v3";
+import { CUSTOM_LAUNCH_ROUTED_FEE_DISCOVERY_V2 } from "./custom-launch/routed-fee-policy-v2";
 
 export const AGENT_KEY_SCHEMA = "programmable.agent-key-management.v1" as const;
 export const AGENT_SCOPES = ["custom-launch:create", "custom-launch:read", "modules:submit", "modules:read"] as const;
@@ -36,7 +36,7 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
       guide: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md",
       openApi: "https://api.programmable.market/v4/chains/4663/custom-launch-contract/openapi.json",
       capabilities: "https://api.programmable.market/v4/chains/4663/custom-launch-capabilities",
-      tradeFee: CUSTOM_LAUNCH_ROUTED_FEE_DISCOVERY_V3,
+      tradeFee: CUSTOM_LAUNCH_ROUTED_FEE_DISCOVERY_V2,
       indexing: {
         authenticationRequired: false,
         feed: "https://api.programmable.market/v4/chains/4663/finalized-launch-projections",

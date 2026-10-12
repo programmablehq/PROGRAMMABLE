@@ -17,8 +17,8 @@ function sourceOf(entry: typeof previousRelease): FoundationEthereumGraphSource 
     proxyRuntimeCodeHash: entry.payload.proxyRuntimeCodeHash as Hex,
   });
 }
-export const ETHEREUM_MODULE_SOURCE = sourceOf(release);
-export const ETHEREUM_MODULE_SOURCES = Object.freeze([ETHEREUM_MODULE_SOURCE, sourceOf(stampedRelease), sourceOf(previousRelease)]);
+export const ETHEREUM_MODULE_SOURCE = sourceOf(stampedRelease);
+export const ETHEREUM_MODULE_SOURCES = Object.freeze([sourceOf(release), ETHEREUM_MODULE_SOURCE, sourceOf(previousRelease)]);
 
 export function ethereumModuleSourceByRelease(digest: unknown) {
   return typeof digest === "string"
