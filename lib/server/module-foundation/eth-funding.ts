@@ -5,14 +5,26 @@ import { assertFoundationFundingPath, type FoundationEthFunding } from "@/lib/mo
 import { requireAnyQuoteNativeUnlockRouteV1 } from "@/lib/module-engine/any-quote/route";
 import { foundationChainProfile, type FoundationChainId } from "@/lib/module-foundation/chains";
 
+export class FoundationQuoteMarketError extends Error {
+  readonly retryable: boolean;
+  constructor(readonly code: string) {
+    const thin = ["MARKET_PRICE_IMPACT_TOO_HIGH", "MARKET_DEPTH_UNAVAILABLE", "MARKET_LIQUIDITY_UNAVAILABLE"].includes(code);
+    const missing = ["NATIVE_V4_EXECUTABLE_ROUTE_UNAVAILABLE", "MARKET_ROUTE_UNAVAILABLE"].includes(code);
+    const retryable = /PROVIDER|RPC_|CHECKPOINT|EXPIRED/.test(code) && !/MISMATCH|INVALID/.test(code);
+    super(thin ? "The available ETH route has too little liquidity for this quote token. Choose ETH or another pool pair."
+      : missing ? "No supported ETH route was found for this quote token. Choose ETH or another pool pair."
+        : retryable ? "The quote token's market could not be verified. Try again in a moment."
+          : "A verified ETH route is unavailable for this quote token. Choose ETH or another pool pair.");
+    this.retryable = retryable;
+  }
+}
+
 /** The ETH input is a spending ceiling. A 1% output margin leaves any unspent ETH refundable. */
 export async function readFoundationEthFunding(quote: Address, maximumEth: bigint, chainId: FoundationChainId = 4663): Promise<FoundationEthFunding & { priceReference?: AnyQuoteUsdReferenceV1 }> {
   const FOUNDATION_WETH = foundationChainProfile(chainId).wrappedEth.address;
   if (getAddress(quote) === FOUNDATION_WETH) return { maximumEth, quoteAmount: maximumEth, path: [] };
   const result = await assessAnyQuoteAssetV1({ quoteAsset: quote, probeEthAmount: maximumEth }, { chainId });
-  if (result.status !== "compatible") throw new Error(result.status === "inconclusive"
-    ? "The quote token's market could not be verified. Try again in a moment."
-    : "No ETH funding route is available for this amount. Increase the first buy or choose another pool pair.");
+  if (result.status !== "compatible") throw new FoundationQuoteMarketError(result.code);
   const hops = requireAnyQuoteNativeUnlockRouteV1(result.routes.buy, "buy", chainId);
   if (getAddress(hops.at(-1)!.tokenOut) !== getAddress(quote)) throw new Error("The ETH route ends in another quote token.");
   const path = hops.map(hop => ({ intermediateCurrency: hop.tokenIn, fee: hop.key.fee,

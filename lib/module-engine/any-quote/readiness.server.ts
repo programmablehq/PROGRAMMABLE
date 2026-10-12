@@ -130,7 +130,7 @@ async function context(options: AnyQuoteReadinessOptionsV1, verifyAmmInfrastruct
   if (verifyAmmInfrastructure) await verifyAmm();
   let discovery: ReturnType<typeof createAnyQuoteV4InitializeDiscoveryV1> | undefined;
   return { profile, infra, now, checkpoint, block, code, call, pin, verifyAmm,
-    discovery: () => discovery ??= createAnyQuoteV4InitializeDiscoveryV1({ checkpoint, rpcs, chainId: profile.chainId,
+    discovery: () => discovery ??= createAnyQuoteV4InitializeDiscoveryV1({ checkpoint, rpcs, chainId: profile.chainId, maxPoolsPerPair: 4,
       hintRpc: profile.chainId === 1 && !options.rpcs ? foundationMainnetPoolHints() : undefined }) };
 }
 type Context = Awaited<ReturnType<typeof context>>;

@@ -94,7 +94,7 @@ export function parseAnyQuoteV4DiscoveryV1(value: unknown, chainId: FoundationCh
  * providers must independently agree on every hinted log in bounded canonical block ranges.
  * This verifies candidates, not index completeness; absent hints never prove no market.
  * Buy/sell and intermediate searches share one checkpoint, cache and request budget. */
-export function createAnyQuoteV4InitializeDiscoveryV1(input: { checkpoint: AnyQuoteCheckpointV1; rpcs: readonly [TradeRpcV1, TradeRpcV1]; chainId?: FoundationChainId; hintRpc?: TradeRpcV1 }) {
+export function createAnyQuoteV4InitializeDiscoveryV1(input: { checkpoint: AnyQuoteCheckpointV1; rpcs: readonly [TradeRpcV1, TradeRpcV1]; chainId?: FoundationChainId; hintRpc?: TradeRpcV1; maxPoolsPerPair?: number }) {
   const profile = foundationChainProfile(input.chainId), chainId = profile.chainId;
   const infrastructure = profile.infrastructure;
   const ANY_QUOTE_INFRASTRUCTURE = { poolManager: infrastructure.poolManager.address, stateView: infrastructure.stateView.address, stateViewCodeHash: infrastructure.stateView.runtimeCodeHash };
@@ -106,14 +106,17 @@ export function createAnyQuoteV4InitializeDiscoveryV1(input: { checkpoint: AnyQu
   let incompleteCoverage = false;
   const agreed = agreedTradeRpcV1(input.rpcs);
   const cache = new Map<string, Promise<PoolRecord[]>>();
+  const verifiedPools = new Map<string, PoolRecord>();
+  const perPair = input.maxPoolsPerPair ?? MAX_ACTIVE_HINTS;
+  if (!Number.isInteger(perPair) || perPair < 1 || perPair > MAX_ACTIVE_HINTS) throw new AnyQuoteErrorV1("V4_DISCOVERY_CANDIDATE_LIMIT");
   const reserveRequest = () => {
     if (++requests > MAX_LOG_REQUESTS) throw new AnyQuoteErrorV1("V4_DISCOVERY_REQUEST_LIMIT");
   };
   const requireSame = (a: PoolRecord[], b: PoolRecord[]) => {
     if (canonicalBrowserJsonV2(a) !== canonicalBrowserJsonV2(b)) throw new AnyQuoteErrorV1("V4_DISCOVERY_PROVIDER_DISAGREEMENT");
   };
-  const shortlist = async (hints: PoolRecord[]): Promise<PoolRecord[]> => {
-    if (hints.length <= MAX_ACTIVE_HINTS) return hints;
+  const shortlist = async (hints: PoolRecord[], currency: Address): Promise<PoolRecord[]> => {
+    if (hints.length <= perPair) return hints;
     incompleteCoverage = true;
     const block = { blockHash: input.checkpoint.hash, requireCanonical: true };
     const bytes = (value: unknown): Hex => typeof value === "string" && /^0x(?:[0-9a-f]{2})*$/i.test(value)
@@ -146,22 +149,41 @@ export function createAnyQuoteV4InitializeDiscoveryV1(input: { checkpoint: AnyQu
       for (const [index, amount] of amounts.entries()) if (BigInt(amount) > 0n) active.push({ hint: batch[index], liquidity: BigInt(amount) });
     }
     active.sort((a, b) => a.liquidity > b.liquidity ? -1 : a.liquidity < b.liquidity ? 1 : a.hint.poolId.localeCompare(b.hint.poolId));
-    return active.slice(0, MAX_ACTIVE_HINTS).map(value => value.hint);
+    // Raw liquidity is comparable within a currency pair, not between tokens with
+    // different units. Keep each intermediate represented before taking another
+    // pool from the same pair. Four pools per pair also bounds two-hop combinations.
+    const groups = new Map<string, typeof active>();
+    for (const item of active) {
+      const { currency0, currency1 } = item.hint.key;
+      const other = anyQuoteSameAddressV1(currency0, currency) ? currency1 : currency0;
+      const group = groups.get(other.toLowerCase()) ?? [];
+      group.push(item); groups.set(other.toLowerCase(), group);
+    }
+    const selected: PoolRecord[] = [];
+    for (let round = 0; round < perPair && selected.length < MAX_ACTIVE_HINTS; round++) {
+      for (const group of groups.values()) {
+        if (group[round]) selected.push(group[round].hint);
+        if (selected.length === MAX_ACTIVE_HINTS) break;
+      }
+    }
+    return selected;
   };
   const filter = (topics: readonly (Hex | null)[], fromBlock: bigint, end: bigint) =>
     [{ address: ANY_QUOTE_INFRASTRUCTURE.poolManager, fromBlock: toHex(fromBlock), toBlock: toHex(end), topics }];
   const verifyHints = async (allHints: PoolRecord[], currency: Address, otherCurrency: Address | undefined, topics: readonly (Hex | null)[]) => {
     incompleteCoverage = true;
-    const hints = await shortlist(allHints);
+    const hints = await shortlist(allHints, currency);
+    const cached = hints.filter(hint => verifiedPools.has(hint.poolId));
+    for (const hint of cached) requireSame([hint], [verifiedPools.get(hint.poolId)!]);
     // A single-provider empty result may prompt an intermediate search, never an incompatibility verdict.
     const windows: PoolRecord[][] = [];
-    for (const hint of [...hints].sort((a, b) => Number(BigInt(a.blockNumber) - BigInt(b.blockNumber)))) {
+    for (const hint of hints.filter(hint => !verifiedPools.has(hint.poolId)).sort((a, b) => Number(BigInt(a.blockNumber) - BigInt(b.blockNumber)))) {
       const last = windows.at(-1);
       if (last && BigInt(hint.blockNumber) - BigInt(last[0].blockNumber) < MAX_VERIFICATION_BLOCKS) last.push(hint);
       else windows.push([hint]);
     }
     if (requests + windows.length > MAX_LOG_REQUESTS) throw new AnyQuoteErrorV1("V4_DISCOVERY_REQUEST_LIMIT");
-    const result: PoolRecord[] = [];
+    const result: PoolRecord[] = [...cached];
     for (let start = 0; start < windows.length; start += 4) result.push(...(await Promise.all(windows.slice(start, start + 4).map(async window => {
       reserveRequest();
       const fromBlock = BigInt(window[0].blockNumber), end = BigInt(window[window.length - 1].blockNumber);
@@ -176,6 +198,7 @@ export function createAnyQuoteV4InitializeDiscoveryV1(input: { checkpoint: AnyQu
       const selectedIds = new Set(window.map(hint => hint.poolId));
       const selected = verified.filter(pool => selectedIds.has(pool.poolId));
       requireSame(selected, window.sort((a, b) => a.poolId.localeCompare(b.poolId)));
+      for (const pool of selected) verifiedPools.set(pool.poolId, pool);
       return selected;
     }))).flat());
     return result.sort((a, b) => a.poolId.localeCompare(b.poolId));
@@ -195,7 +218,11 @@ export function createAnyQuoteV4InitializeDiscoveryV1(input: { checkpoint: AnyQu
     // Invalid successful responses are terminal, not provider outages eligible for fallback.
     const records = responses.map(response => response.status === "fulfilled"
       ? parseAnyQuoteV4InitializeV1(response.value, { currency, otherCurrency, fromBlock, toBlock: end, chainId }) : null);
-    if (records[0] !== null && records[1] !== null) { requireSame(records[0], records[1]); return shortlist(records[0]); }
+    if (records[0] !== null && records[1] !== null) {
+      requireSame(records[0], records[1]);
+      for (const pool of records[0]) verifiedPools.set(pool.poolId, pool);
+      return shortlist(records[0], currency);
+    }
     const hints = records[0] ?? records[1];
     if (hints !== null) return verifyHints(hints, currency, otherCurrency, topics);
     if (depth >= MAX_RANGE_SPLITS || fromBlock === end) throw new AnyQuoteErrorV1("V4_DISCOVERY_PROVIDER_UNAVAILABLE");

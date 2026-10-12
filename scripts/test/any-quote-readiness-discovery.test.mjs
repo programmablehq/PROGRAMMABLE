@@ -957,3 +957,22 @@ test("explicit hosted discovery rejects custom candidate envelopes and split API
     assert.equal(f.calls.filter(call => call.method === "eth_getLogs").length, 0);
   }
 });
+
+test("popular intermediate pairs fit the shared discovery budget and preserve lower-unit quote pairs", async () => {
+  const pools = [
+    ...Array.from({ length: 20 }, (_, i) => pool(Q, OTHER, { fee: 500 + i, liquidity: 10n ** 25n, block: 10_000n + BigInt(i) * 20_000n })),
+    ...Array.from({ length: 4 }, (_, i) => pool(Q, MID, { fee: 500 + i, liquidity: 10n ** 6n, block: 510_000n + BigInt(i) * 20_000n })),
+    ...Array.from({ length: 100 }, (_, i) => pool(ZERO, OTHER, { fee: 500 + i, block: 610_000n + BigInt(i) * 20_000n })),
+    ...Array.from({ length: 100 }, (_, i) => pool(ZERO, MID, { fee: 500 + i, block: 2_610_000n + BigInt(i) * 20_000n })),
+  ];
+  const f = fixture(pools, { override: quickNodeRangeLimit });
+  const discovery = a.createAnyQuoteV4InitializeDiscoveryV1({ checkpoint: longCheckpoint, rpcs: f.rpcs, maxPoolsPerPair: 4 });
+  await discovery.nativePools(Q);
+  const adjacent = await discovery.adjacentPools(Q);
+  assert.equal(adjacent.length, 8);
+  assert.ok(adjacent.some(p => p.key.currency0 === MID || p.key.currency1 === MID), "Different raw liquidity units cannot starve an intermediate");
+  const [first, second] = await Promise.all([discovery.nativePools(OTHER), discovery.nativePools(MID)]);
+  assert.equal(first.length, 4); assert.equal(second.length, 4);
+  assert.equal(discovery.hasIncompleteCoverage(), true);
+  assert.ok(f.calls.filter(c => c.method === "eth_getLogs").length <= 48, "Both verifiers remain inside the existing 24-request budget");
+});

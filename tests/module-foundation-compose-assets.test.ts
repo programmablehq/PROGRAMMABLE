@@ -19,6 +19,7 @@ import {
   type FoundationModuleDescriptorV1,
 } from "@/lib/module-foundation/manifest";
 import type { FoundationConfiguration, FoundationLaunchDraft, FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
+import { FoundationQuoteMarketError } from "@/lib/server/module-foundation/eth-funding";
 
 const mocks = vi.hoisted(() => ({ availability: vi.fn(), infrastructure: vi.fn(), client: vi.fn(), startPrice: vi.fn(),
   getChainId: vi.fn(), getBlock: vi.fn(), getCode: vi.fn(), readContract: vi.fn(), firstBuyPolicy: vi.fn(), ethFunding: vi.fn() }));
@@ -29,7 +30,9 @@ vi.mock("@/lib/module-foundation/first-buy", async original => ({
 vi.mock("@/lib/module-foundation/atomic-launch", async original => ({
   ...await original<typeof import("@/lib/module-foundation/atomic-launch")>(), assertFoundationAtomicEth: vi.fn(),
 }));
-vi.mock("@/lib/server/module-foundation/eth-funding", () => ({ readFoundationEthFunding: mocks.ethFunding }));
+vi.mock("@/lib/server/module-foundation/eth-funding", async original => ({
+  ...await original<typeof import("@/lib/server/module-foundation/eth-funding")>(), readFoundationEthFunding: mocks.ethFunding,
+}));
 vi.mock("@/lib/server/module-foundation/start-price", () => ({ readFoundationStartPrice: mocks.startPrice }));
 // The fixed server admission boundary and RPC transport are mocked; all source, metadata and asset parsers run.
 vi.mock("@/lib/server/module-foundation/availability", () => ({ readFoundationAvailabilityResponse: mocks.availability }));
@@ -192,6 +195,15 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Foundation compose BFF asset bindings", () => {
+  it.each([["MARKET_PRICE_IMPACT_TOO_HIGH", 422, false], ["V4_DISCOVERY_PROVIDER_UNAVAILABLE", 503, true]] as const)(
+    "preserves %s as a market result instead of an opaque launch error", async (code, status, retryable) => {
+      mocks.ethFunding.mockRejectedValue(new FoundationQuoteMarketError(code));
+      const response = await POST(new Request("https://programmable.example/api/module-foundation/compose", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body()),
+      }));
+      expect(response.status).toBe(status);
+      expect(await response.json()).toMatchObject({ code, retryable });
+    });
   it("retries a provider disagreement before composing the launch once", async () => {
     mocks.availability.mockResolvedValueOnce({ schemaVersion: FOUNDATION_AVAILABILITY_SCHEMA, available: false,
       reason: "MODULE_INDEX_PROVIDER_DISAGREEMENT" }).mockResolvedValue(accepted());

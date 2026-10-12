@@ -22,7 +22,7 @@ import { parseFoundationAssetPinsV1 } from "@/lib/module-foundation/assets";
 import { createFoundationClient, foundationMetadata, prepareFoundationLaunch } from "@/lib/module-foundation/client";
 import { readFoundationQuoteForDisplay, readFoundationFirstBuyPolicyForDisplay } from "@/lib/module-foundation/launch-display-cache";
 import { isFoundationDefaultImage } from "@/lib/module-foundation/default-image";
-import { retryFoundationReadOnlyPreparation } from "@/lib/module-foundation/preparation-retry";
+import { FoundationPreparationUnavailableError, retryFoundationReadOnlyPreparation } from "@/lib/module-foundation/preparation-retry";
 import { foundationSupportsEth } from "@/lib/module-foundation/native-funding";
 import { nativeCanonicalJson, nativeJson } from "@/lib/module-mode/native-catalog";
 import { FOUNDATION_SUPPLY } from "@/lib/module-foundation/constants";
@@ -175,9 +175,14 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
       const tokenSalt = toHex(crypto.getRandomValues(new Uint8Array(32)));
       const response = await fetch("/api/module-foundation/compose", { method: "POST", credentials: "same-origin", redirect: "error",
         signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, releaseDigest: binding.releaseDigest, tokenSalt, draft, launchFlow: "single-eth-v1", chainId }) });
-      const composition = await response.json() as { error?: string; code?: string; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
+      // Gateways can return HTML for a timeout or rate limit. Preserve its retry semantics
+      // instead of turning it into an opaque JSON parsing error.
+      if ([408, 429].includes(response.status) || (response.status >= 500 && (response.status !== 503
+        || !response.headers.get("content-type")?.includes("application/json")))) throw new FoundationPreparationUnavailableError();
+      const composition = await response.json() as { error?: string; code?: string; retryable?: boolean; releaseDigest: Hex; token: Address; modules: FoundationContractModule[];
         moduleAssetPins: unknown; metadata: unknown; startPrice: FoundationStartPrice; ethFunding: { maximumEth: string; quoteAmount: string; path: FoundationFundingHop[] } | null };
       if (response.status === 503 && composition.code === "MODULE_INDEX_PROVIDER_DISAGREEMENT") throw new FoundationProviderDisagreementError();
+      if (response.status === 503 && composition.retryable === true) throw new FoundationPreparationUnavailableError();
       if (!response.ok || composition.error || composition.releaseDigest !== binding.releaseDigest) throw new Error(composition.error ?? "The module composition changed. Review again.");
       const quotePriced = isFoundationQuotePrice(composition.startPrice);
       if (quotePriced !== (draft.quoteValuation !== undefined)
