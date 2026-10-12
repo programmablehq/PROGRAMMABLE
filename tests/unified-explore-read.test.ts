@@ -94,14 +94,23 @@ describe("Unified verified source adapter", () => {
       poolId: customGraphExploreEntry.poolId, quoteAsset: "0x0000000000000000000000000000000000000000",
     });
   });
-  it("includes receipt-confirmed launches before the historical index without requesting their market data", async () => {
+  it.each([1, 4663] as const)("enriches a fresh module on chain %s with Codex before historical indexing", async chainId => {
     const fresh = { ...rh, tokenAddress: other, name: "Fresh", symbol: "FRESH", quoteAsset: address, quoteSymbol: "PAIR",
       transactionHash: pool, blockNumber: "123", launchedAt: "2026-10-04T10:00:00Z" };
-    recent.mockResolvedValue([{ chainId: 1, row: fresh, observedAt: Date.now(),
-      presentation: { chainId: 1, tokenAddress: other, imageUrl: "/fresh.png", description: null, links: [], market: null } }]);
+    recent.mockResolvedValue([{ chainId, row: fresh, observedAt: Date.now(),
+      presentation: { chainId, tokenAddress: other, imageUrl: "/fresh.png", description: null, links: [], market: null } }]);
+    sources.rhMarkets.mockResolvedValue(new Map([[address, market(20)], [other, market(10000)]]));
+    metadata.mockImplementation(async (_addresses, requestedChain) => new Map(requestedChain === chainId ? [[other, {
+      imageUrl: "https://example.com/from-codex.png", description: "New module",
+      links: [{ label: "Website", url: "https://example.com/" }],
+    }]] : []));
     const result = await readUnifiedLaunches();
-    expect(result.items.find(row => row.tokenAddress === other)).toMatchObject({ chainId: 1, mode: "module", confirmation: "confirmed", symbol: "FRESH" });
-    expect(result.presentations.find(row => row.tokenAddress === other)).toMatchObject({ imageUrl: "/fresh.png", market: null });
+    expect(result.items.find(row => row.tokenAddress === other)).toMatchObject({ chainId, mode: "module", confirmation: "confirmed", symbol: "FRESH" });
+    expect(result.items[0].tokenAddress).toBe(other);
+    expect(result.presentations.filter(row => row.tokenAddress === other)).toEqual([expect.objectContaining({
+      chainId, imageUrl: "/fresh.png", description: "New module", market: expect.objectContaining({ marketCapUsd: 10000 }),
+      links: [{ label: "Website", url: "https://example.com/" }],
+    })]);
     expect(recent).toHaveBeenCalledWith(new Set([`1:${address}`, `4663:${address}`]));
     expect(sources.ethMarkets).toHaveBeenCalledWith([eth], 1);
   });

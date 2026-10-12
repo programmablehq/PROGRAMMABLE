@@ -248,21 +248,26 @@ export async function readRobinhoodMarkets(tokens: readonly MarketToken[]): Prom
   }));
 }
 
-export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunch[], knownMarkets?: ReadonlyMap<string, RobinhoodCoinMarket>): Promise<RobinhoodCoinPresentation[]> {
+export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunch[], knownMarkets?: ReadonlyMap<string, RobinhoodCoinMarket>, knownMetadata?: ReadonlyMap<string, Metadata>): Promise<RobinhoodCoinPresentation[]> {
   if (tokens.length === 0) return [];
   if (tokens.length > MAX_TOKENS || tokens.some((token) => !ADDRESS.test(token.tokenAddress) || (token.poolId !== null && !HASH.test(token.poolId)))) {
     throw new Error("Invalid presentation request");
   }
   const ordered = tokens.toSorted((a, b) => a.tokenAddress.toLowerCase().localeCompare(b.tokenAddress.toLowerCase()));
-  const custom = ordered.filter(token => !isRobinhoodModuleSourceKind(token.sourceKind) && !token.launchProjection);
-  const codexMetadata = await readCodexTokenMetadata(ordered.map(token => token.tokenAddress), 4663);
+  const marketRequest = knownMarkets ? Promise.resolve(knownMarkets) : readRobinhoodMarkets(tokens).catch(() => new Map<string, RobinhoodCoinMarket>());
+  const codexMetadata = knownMetadata ?? await readCodexTokenMetadata(ordered.map(token => token.tokenAddress), 4663);
+  const custom = ordered.filter(token => {
+    const details = codexMetadata.get(token.tokenAddress.toLowerCase());
+    return !isRobinhoodModuleSourceKind(token.sourceKind) && !token.launchProjection && !displayOverride(token.tokenAddress.toLowerCase())
+      && !(coinImage(details?.imageUrl) && details?.description && details.links.length);
+  });
   const native = ordered.filter(token => isRobinhoodModuleSourceKind(token.sourceKind)
     && !coinImage(codexMetadata.get(token.tokenAddress.toLowerCase())?.imageUrl));
   const [metadata, moduleMetadata, markets] = await Promise.allSettled([
     // Keep this outside unstable_cache, which disables the shared fetch cache.
     custom.length ? readMetadata(custom) : Promise.resolve(new Map<string, Metadata>()),
     native.length ? readCachedModuleMetadata(native) : Promise.resolve(new Map<string, Metadata>()),
-    knownMarkets ? Promise.resolve(knownMarkets) : readRobinhoodMarkets(tokens),
+    marketRequest,
   ]);
   return tokens.map((token): RobinhoodCoinPresentation => {
     const key = token.tokenAddress.toLowerCase();
