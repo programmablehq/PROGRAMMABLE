@@ -251,7 +251,7 @@ export default function CustomLaunchApiDocsPage() {
           </div>
         </dl>
         <p className={styles.bodyCopy}>
-          Current Robinhood Custom Launch Plans use <strong>30 bps (0.30%)</strong>
+          The new Robinhood Custom Launch policy uses <strong>100 bps (1%)</strong>
           {" "}for buys and sells prepared by Programmable. Creator and pool fees
           are separate. Earlier Native20 pools retain their recorded fees. Read
           the <a href="#fees">fee calculation and claim rules</a>.
@@ -795,10 +795,10 @@ export default function CustomLaunchApiDocsPage() {
         <div className={styles.sectionIntro}>
           <h2>Custom Launch fees</h2>
           <p>
-            Current Robinhood Custom Launch Plans use <strong>30 bps (0.30%)</strong>{" "}
+            The new Robinhood Custom Launch policy uses <strong>100 bps (1%)</strong>{" "}
             on the gross output of swaps prepared by Programmable. The fee is
             deducted in the output asset and rounded down once. Creator and
-            pool LP fees are separate. A gross output of 1 ETH pays 0.003 ETH
+            pool LP fees are separate. A gross output of 1 ETH pays 0.01 ETH
             to Programmable in the same transaction. External routes have
             their own fee behavior.
           </p>
@@ -806,8 +806,8 @@ export default function CustomLaunchApiDocsPage() {
             The fixed platform recipient is{" "}
             <code className={styles.breakableValue}>0xD88539d3c4C460136a733A3Fd60cf6BF269079da</code>.
             Current routed fees are transferred during the swap. Historical
-            signed fee obligations and Native20 pools keep their recorded 0.20%
-            model. A verified existing pool fee adds no second route fee.
+            signed fee obligations and verified immutable pools keep their recorded
+            rates. A verified existing pool fee adds no second route fee.
             Native20 uses PoolManager native claims payable only to its fixed
             recipient. Gas and liquidity deposits are separate.
           </p>

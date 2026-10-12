@@ -36,7 +36,7 @@ export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subj
       <p>Custom hook and pool fees may be additional. The full combined fee is not established here. A hook fee only replaces the route fee after the route verifies it.</p>
     </details> : null}
     {admin && (Object.keys(trading).length > 0 || evidence.report) ? <details open><summary>Trading checks</summary>
-      <p role="status">{evidence.status === "passed" ? "Passed on fork: buy, sell and 0.30% platform fee collection." : evidence.status === "failed" ? "Fork check failed. Review the results before approval." : "Buy, sell and platform fee checks are pending for this version."}</p>
+      <p role="status">{evidence.status === "passed" ? "Passed on fork: buy, sell and the bound platform fee collection." : evidence.status === "failed" ? "Fork check failed. Review the results before approval." : "Buy, sell and platform fee checks are pending for this version."}</p>
       {evidence.report ? <>
         <p>Checked for this exact launch on {chainId === "1" ? "Ethereum" : "Robinhood"}, block {String(evidence.report.forkBlockNumber)}. This records the tested scenario; live execution is checked separately.</p>
         <details><summary>Fork check results</summary><pre>{JSON.stringify(evidence.report, null, 2)}</pre></details>

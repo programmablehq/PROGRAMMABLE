@@ -459,7 +459,7 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
   }
 
   const actionLabel = walletAction?.label ?? (availability.status === "checking" ? "Checking launch…" : phase === "uploading" ? "Saving image…" : phase === "signing" ? launchProgress || "Opening coin…" : phase === "preparing" ? "Preparing launch…" : "Launch coin");
-  if (layout === "studio" && phase !== "result") return <FoundationStudio draft={draft} catalog={catalog} imageSource={imageSource}
+  if (layout === "studio" && phase !== "result") return <FoundationStudio draft={draft} catalog={catalog} imageSource={imageSource} platformFeeBps={platformFeeBps}
     previousLaunchAction={previousLaunchAction} recoveryAction={recoveryAction} networkControl={networkControl} quoteSymbol={quoteSymbol} quoteStatus={quoteStatus}
     initialBuy={initialBuy} actionLabel={actionLabel} disabled={locked || imagePreparing} busy={busy || walletAction?.busy}
     actionDisabled={unavailable || Boolean(submissionBlocked) || walletAction?.busy} status={launchProgress || (availability.status !== "ready" ? availability.reason || actionLabel : undefined)}

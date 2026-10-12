@@ -29,10 +29,11 @@ export default function EthereumCustomHookReference() {
         a launch. Match its chain, Router, Graph Factory, runtime hashes, ABI hash and finality policy. The bundled snapshot is a reference.</p>
     </section>
     <section id="fees"><h2>Platform fee</h2>
-      <p className={styles.bodyCopy}>The current Programmable platform fee for Ethereum Mainnet Custom Hook launches is
-        <strong> 0.30% (30 bps)</strong> on each successful buy or sell through the launch&apos;s fee-bearing pool.
-        Project fees and LP fees are separate. A 1 ETH trade at this rate allocates 0.003 ETH to Programmable.</p>
-      <p className={styles.bodyCopy}>Use integer arithmetic: the rate is <code>3,000 / 1,000,000</code>.
+      <p className={styles.bodyCopy}>The new Ethereum routed policy charges
+        <strong> 1% (100 bps)</strong> on the gross native ETH input of a buy or gross native ETH output of a sell prepared by Programmable.
+        Project and LP fees are separate. A 1 ETH trade at this rate allocates 0.01 ETH to Programmable.</p>
+      <p className={styles.bodyCopy}>Use integer arithmetic: the rate is <code>10,000 / 1,000,000</code>, rounded down once per swap.
+        Read live capabilities and the trade&apos;s bound policy before preparing a transaction. External routes have their own fee behavior.
         Disclose the hook&apos;s fee basis, asset, accounting mode, recipient, rounding, accrual and claim path.
         The launch stamp establishes origin; it does not prove fee enforcement or payment.
         Earlier contracts and exact versioned API profiles retain their recorded rates.</p>
