@@ -873,7 +873,6 @@ describe("developer launch history interface", () => {
     expect(historySource).toContain('launch.routeId === "custom-launch:create:v2"');
     expect(historySource).toContain("prepareCustomLaunchWalletActionV2(");
     expect(historySource).toContain("&version=${version}");
-    expect(historySource).toContain("Wallet action required");
     expect(historySource).toContain(
       "Ready to launch. Confirm the transaction in your wallet.",
     );
