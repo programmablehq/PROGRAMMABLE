@@ -1,7 +1,7 @@
 import "server-only";
 import { createPublicClient, http, isAddressEqual } from "viem";
 import { mainnet } from "viem/chains";
-import { CANONICAL_LAUNCH_STAMP_24H_V1, type LauncherToken } from "../tokens";
+import { CANONICAL_LAUNCH_STAMP_24H_V1, type LauncherToken, type CanonicalTokenExploreEntry } from "../tokens";
 import { getWebsiteReadOnchainDeployment } from "../onchain/config";
 import { readProductionFinalizedCustomLaunchMetadataFeedV1 } from "../server/custom-launch/finalized-custom-launch-metadata-feed-v1";
 import { createLaunchStampReaderV1 } from "./launch-stamp.server";
@@ -18,16 +18,58 @@ const reader = createLaunchStampReaderV1({
 // later presentation metadata continue through the existing market read model.
 const identities = new Map<string, LauncherToken>();
 
+type DiscoveryCandidate = Readonly<{
+  router: `0x${string}`;
+  routerLaunchId: `0x${string}`;
+  token: `0x${string}`;
+  hook: `0x${string}`;
+  poolId: `0x${string}`;
+  finality: Readonly<{ blockNumber: string; blockHash: `0x${string}`; transactionHash: `0x${string}`; logIndex: number }>;
+}>;
+
+/** Saved identities supply discovery hints when optional API metadata disappears.
+ * Every hint still passes the same onchain event, code and finality checks below. */
+export function mergeSuccessorDiscoveryCandidatesV1(
+  feed: readonly DiscoveryCandidate[], saved: readonly CanonicalTokenExploreEntry[], boundary: bigint,
+): readonly DiscoveryCandidate[] {
+  const candidates = new Map<string, DiscoveryCandidate>();
+  const add = (item: DiscoveryCandidate) => {
+    if (!isAddressEqual(item.router, binding.routerAddress) || BigInt(item.finality.blockNumber) > boundary) return;
+    const key = item.routerLaunchId.toLowerCase();
+    const existing = candidates.get(key);
+    const identity = (value: DiscoveryCandidate) => JSON.stringify([
+      value.token.toLowerCase(), value.hook.toLowerCase(), value.poolId.toLowerCase(),
+      value.finality.blockNumber, value.finality.blockHash.toLowerCase(),
+      value.finality.transactionHash.toLowerCase(), value.finality.logIndex,
+    ]);
+    if (existing && identity(existing) !== identity(item)) throw new Error("Conflicting successor launch discovery identities");
+    candidates.set(key, item);
+  };
+  for (const item of feed) add(item);
+  for (const entry of saved) {
+    const stamp = entry.launchStampProvenance;
+    if (stamp?.kind !== "custom-graph" || stamp.chainId !== 1 ||
+      !isAddressEqual(stamp.routerAddress, binding.routerAddress) ||
+      stamp.routerRuntimeCodeHash.toLowerCase() !== binding.routerRuntimeCodeHash.toLowerCase()) continue;
+    add({ router: stamp.routerAddress, routerLaunchId: stamp.launchId, token: entry.tokenAddress,
+      hook: entry.hookAddress, poolId: entry.poolId, finality: { blockNumber: stamp.blockNumber,
+        blockHash: stamp.blockHash, transactionHash: stamp.transactionHash, logIndex: stamp.launchLogIndex } });
+  }
+  if (candidates.size > 10_000) throw new Error("Successor launch discovery exceeds its bound");
+  return [...candidates.values()];
+}
+
 /** The API feed discovers candidate blocks; receipts, getters, code hashes and
  * 64 confirmations independently establish the canonical onchain identity. */
-export async function readAllEthereumCustomIdentitySourcesV1(): Promise<AlchemyRouterCustomIdentitySourceV1> {
+export async function readAllEthereumCustomIdentitySourcesV1(
+  savedEntries: readonly CanonicalTokenExploreEntry[] = [],
+): Promise<AlchemyRouterCustomIdentitySourceV1> {
   const [legacy, feed] = await Promise.all([
     readAlchemyRouterCustomIdentitySourceV1(),
     readProductionFinalizedCustomLaunchMetadataFeedV1(),
   ]);
   const boundary = BigInt(legacy.slice.cursor.blockNumber);
-  const candidates = feed.launches.filter(item => isAddressEqual(item.router, binding.routerAddress)
-    && BigInt(item.finality.blockNumber) <= boundary);
+  const candidates = mergeSuccessorDiscoveryCandidatesV1(feed.launches, savedEntries, boundary);
   if (candidates.length === 0) return legacy;
   const deployment = getWebsiteReadOnchainDeployment("production");
   if (deployment.status !== "ready") throw new Error("Ethereum launch identity reader unavailable");
