@@ -96,7 +96,7 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
     }
     // Provenance admission selects the site's current trade policy. It is not
     // a fee assurance claim or evidence that this pool already collects a fee.
-    policyVersion = poolFeeProof ? (poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : ROUTED_FEE_POLICY_V2) : ROUTED_FEE_POLICY_V3;
+    policyVersion = poolFeeProof ? (poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : poolFeeProof.rateBps === 100 ? ROUTED_FEE_POLICY_V3 : ROUTED_FEE_POLICY_V2) : ROUTED_FEE_POLICY_V3;
     routedRateBps = poolFeeProof?.rateBps ?? ROUTED_FEE_BPS_V3;
     obligationId = policyVersion;
   } else {
@@ -123,7 +123,7 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
   const inputCurrency = request.zeroForOne ? poolKey.currency0 : poolKey.currency1;
   const outputCurrency = request.zeroForOne ? poolKey.currency1 : poolKey.currency0;
   const fee: LaunchPlanFeeBindingV1 = poolFeeProof ? { mode: "pool_enforced", obligationId,
-    policyVersion: poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : ROUTED_FEE_POLICY_V2, scope: "fee_on_proven_pool_paths", rateBps: poolFeeProof.rateBps, routedRateBps: 0,
+    policyVersion: poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : poolFeeProof.rateBps === 100 ? ROUTED_FEE_POLICY_V3 : ROUTED_FEE_POLICY_V2, scope: "fee_on_proven_pool_paths", rateBps: poolFeeProof.rateBps, routedRateBps: 0,
     recipient: ROUTED_FEE_RECIPIENT_V1, base: "not_applicable", rounding: "not_applicable", currency: outputCurrency,
     poolEnforcementWitness: poolFeeProof } : { mode: "programmable_routed", obligationId,
     policyVersion, scope: "fee_on_programmable_routed_trades",

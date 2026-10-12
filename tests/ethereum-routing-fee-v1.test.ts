@@ -5,6 +5,8 @@ import recordingBytes from "./fixtures/ethereum-stamped-swap-rpc.json";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1, ETHEREUM_ROUTING_FEE_POLICY_HASH_V1, ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2, ETHEREUM_ROUTING_FEE_POLICY_V3, type EthereumRoutingFeePolicy,
   parseEthereumRoutingFeePolicyV1, type EthereumFeeClassificationV1 } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
+import { ETHEREUM_NATIVE100_RECIPES_V1 } from "@/lib/custom-launch/ethereum-native100-recipes-v1";
+import { ethereumPoolFeeMatchesPolicy } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
 import { ETHEREUM_NATIVE30_RECIPES_V2 } from "@/lib/custom-launch/ethereum-native30-recipes-v2";
 import { ETHEREUM_NATIVE30_RECIPES_V1 } from "@/lib/custom-launch/ethereum-native30-recipes-v1";
 import { materializeEthereumNative30RuntimeWordsV1, proveEthereumNative30RuntimeV1, rebuildEthereumNative30RuntimeProofV1,
@@ -180,7 +182,7 @@ describe("Ethereum 3.6 routing fee", () => {
 });
 
 describe("Ethereum Native30 exact runtime waiver", () => {
-  function proofFixture(recipe = ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2 as { hook: typeof ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2.hook | typeof ETHEREUM_NATIVE30_RECIPES_V2.native30_fee_kernel_v3.hook; vault: typeof ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2.vault | typeof ETHEREUM_NATIVE30_RECIPES_V2.native30_fee_kernel_v3.vault }) {
+  function proofFixture(recipe = ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2 as { hook: typeof ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2.hook | typeof ETHEREUM_NATIVE30_RECIPES_V2.native30_fee_kernel_v3.hook | typeof ETHEREUM_NATIVE100_RECIPES_V1.native100_fee_kernel_v1.hook; vault: typeof ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2.vault | typeof ETHEREUM_NATIVE30_RECIPES_V2.native30_fee_kernel_v3.vault | typeof ETHEREUM_NATIVE100_RECIPES_V1.native100_fee_kernel_v1.vault }) {
     const hooks = "0x12340000000000000000000000000000000020cc" as Address;
     const vault = getContractAddress({ from: hooks, nonce: 1n });
     const market: EthereumNative30MarketV1 = { chainId: "1", poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90",
@@ -193,6 +195,16 @@ describe("Ethereum Native30 exact runtime waiver", () => {
     const vaultCode = materializeEthereumNative30RuntimeWordsV1(recipe.vault, { poolManager: word(market.poolManager), kernel: word(hooks), creatorRecipient: word("0x1111000000000000000000000000000000000000") });
     return { market, codes: { [hooks.toLowerCase()]: hook, [vault.toLowerCase()]: vaultCode } };
   }
+  it("recognizes the exact 1% pool and keeps the historical 0.3% proof separate", () => {
+    const f = proofFixture(ETHEREUM_NATIVE100_RECIPES_V1.native100_fee_kernel_v1);
+    const proof = proveEthereumNative30RuntimeV1(f.market, f.codes)!;
+    expect(proof.rateBps).toBe(100);
+    expect(rebuildEthereumNative30RuntimeProofV1(JSON.parse(JSON.stringify(proof)), f.market)).toEqual(proof);
+    expect(ethereumPoolFeeMatchesPolicy(ETHEREUM_ROUTING_FEE_POLICY_V3, proof)).toBe(true);
+    const old = proofFixture(ETHEREUM_NATIVE30_RECIPES_V2.native30_fee_kernel_v3);
+    expect(ethereumPoolFeeMatchesPolicy(ETHEREUM_ROUTING_FEE_POLICY_V3, proveEthereumNative30RuntimeV1(old.market,old.codes)!)).toBe(false);
+    expect(ethereumPoolFeeMatchesPolicy(ETHEREUM_ROUTING_FEE_POLICY_V2, proof)).toBe(false);
+  });
   it("recognizes the separately compiled V3 treasury and rejects mixed custody versions", () => {
     const current = proofFixture(ETHEREUM_NATIVE30_RECIPES_V2.native30_fee_kernel_v3);
     const old = proofFixture();

@@ -6,7 +6,7 @@ import { customTradePermit2Abi, customTradeRouterAbi, customTradeTokenAbi } from
 import { parsePreparedTransaction, type PreparedTradeTransaction } from "@/lib/prepared-transaction";
 import { isLaunchStampProvenanceV1, type CanonicalTokenExploreEntry, type LaunchStampProvenanceV1 } from "@/lib/tokens";
 import { computeOfficialV4PoolId } from "@/lib/uniswap/liquidity-launcher-sdk";
-import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1,
+import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1, ethereumPoolFeeMatchesPolicy,
   validateEthereumFeeClassificationV1, type EthereumFeeClassificationV1 } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
 import { assertIssuedEthereumNative30RuntimeProofV1, rebuildEthereumNative30RuntimeProofV1,
   type EthereumNative30RuntimeProofV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
@@ -48,7 +48,7 @@ export interface EthereumStampedSwapRequest {
 export interface EthereumSwapRuntimeBinding { address: Address; runtimeCodeHash: Hex }
 export interface EthereumSwapFeeV1 {
   policyHash: `sha256:${string}`;
-  mode: "programmable_routed" | "pool_enforced_native30";
+  mode: "programmable_routed" | "pool_enforced_native30" | "pool_enforced_native100";
   rateBps: 30 | 100;
   routedRateBps: 0 | 30 | 100;
   recipient: Address;
@@ -159,7 +159,7 @@ function swapTransaction(route: EthereumStampedSwapRoute, request: EthereumStamp
   native30Proof?: EthereumNative30RuntimeProofV1): PreparedTradeTransaction {
   if (native30Proof) assertIssuedEthereumNative30RuntimeProofV1(native30Proof, ethereumNative30Market(route));
   const feePolicy = ethereumRouteRequiresFee(route) ? ethereumRouteFeePolicy(route) : null;
-  if (native30Proof && feePolicy) requireValue(same(native30Proof.recipient, feePolicy.policy.native30Waiver?.recipient ?? ""), "The pool fee recipient differs from the launch policy.");
+  if (native30Proof && feePolicy) requireValue(ethereumPoolFeeMatchesPolicy(feePolicy.policy, native30Proof), "The pool fee recipient differs from the launch policy.");
   const charge = feePolicy !== null && !native30Proof;
   const upfrontFee = charge && request.side === "buy" ? BigInt(request.amountIn) * BigInt(feePolicy!.policy.rateBps) / 10_000n : 0n;
   const amountIn = BigInt(request.amountIn) - upfrontFee;
@@ -227,9 +227,11 @@ export function validateEthereumStampedPreparation(value: unknown, route: Ethere
     requireValue(fee && fee.policyHash === feePolicy.policyHash && fee.rateBps === feePolicy.policy.rateBps
       && same(fee.recipient, feePolicy!.policy.defaultCollection.recipient)
       && [fee.grossNativeAmount, fee.platformFeeAmount, fee.netNativeAmount].every(amount => typeof amount === "string" && /^(0|[1-9][0-9]{0,77})$/.test(amount)), "The platform fee is invalid.");
-    if (fee.mode === "pool_enforced_native30") {
+    if (fee.mode === "pool_enforced_native30" || fee.mode === "pool_enforced_native100") {
       native30Proof = rebuildEthereumNative30RuntimeProofV1(fee.native30Proof, ethereumNative30Market(route));
-      requireValue(fee.routedRateBps === 0 && native30Proof.runtimeBindings.every(expected => evidence.runtimeBindings.some(binding => same(binding.address, expected.address)
+      requireValue(ethereumPoolFeeMatchesPolicy(feePolicy.policy, native30Proof)
+        && fee.mode === (native30Proof.rateBps === 100 ? "pool_enforced_native100" : "pool_enforced_native30")
+        && fee.routedRateBps === 0 && native30Proof.runtimeBindings.every(expected => evidence.runtimeBindings.some(binding => same(binding.address, expected.address)
         && same(binding.runtimeCodeHash, expected.runtimeCodeHash))), "The pool fee runtime is incomplete.");
     } else requireValue(fee.mode === "programmable_routed" && fee.routedRateBps === feePolicy.policy.defaultCollection.routedRateBps && fee.native30Proof === null && fee.accrual === null, "The platform fee mode is invalid.");
     const gross = BigInt(fee.grossNativeAmount), platform = BigInt(fee.platformFeeAmount);
@@ -240,7 +242,7 @@ export function validateEthereumStampedPreparation(value: unknown, route: Ethere
       if (native30Proof) {
         const accrued = fee.accrual;
         requireValue(object(accrued) && accrued.proofDigest === native30Proof.proofDigest && accrued.vault === native30Proof.feeVault
-          && accrued.recipient === native30Proof.recipient && accrued.rateBps === 30 && accrued.currency === NATIVE
+          && accrued.recipient === native30Proof.recipient && accrued.rateBps === native30Proof.rateBps && accrued.currency === NATIVE
           && accrued.assessmentBase === "gross_native_leg" && accrued.rounding === "ceil_per_trade"
           && accrued.grossNativeAmount === fee.grossNativeAmount && accrued.platformAccruedIncrease === fee.platformFeeAmount
           && digest(accrued.callbackTraceDigest) && digest(accrued.recordTraceDigest), "The pool fee accrual is invalid.");

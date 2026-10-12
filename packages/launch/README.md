@@ -226,6 +226,11 @@ audit or guarantee of safety, honeypot absence, liquidity, tradeability, or fee 
 
 ## Platform fee policy
 
+New approvals require a **1% (100 bps)** platform fee collected by the launch pool on buys and sells, including the initial buy, to `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Operator checks must prove this for the exact submitted contracts before approval. Router-only charges and historical 30bps checks do not qualify.
+
+The production source tree adds `contracts/ethereum-native100-v1` and `contracts/robinhood-native100-v1` reference kits with complete Standard JSON compiler inputs. Compile with exact Solidity 0.8.26 and the supplied settings. These source kits do not change already published CLI tarballs; retrieve them from the production repository. Use the current general Custom Launch packing path. Historical Native20/Native30 profiles keep their original definitions and cannot be relabeled as 1%.
+
+
 The live general V3 profile is public on Ethereum Mainnet only (`chainId: "1"`). Pending `3.4.0` remains
 preparatory even though the immutable profile payload contains `productionLaunchAuthorized: true`; discovery and the
 backend are the activation authorities.

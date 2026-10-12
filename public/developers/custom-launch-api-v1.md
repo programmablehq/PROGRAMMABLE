@@ -38,6 +38,8 @@ The 4.1 funding and CLI instructions below apply to that existing profile; Multi
 
 ## Fees and analytics
 
+New approvals require contracts that collect **100 bps (1%)** for the platform on pool buys and sells, including the initial buy. The recipient is `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Passing operator checks must bind the exact review and subject; historical 0.3% evidence and website-only surcharges do not qualify. Native100 source kits for both chains are available in the [public repository](https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts).
+
 New Custom Launches use a versioned policy: Programmable-routed trades on Ethereum and Robinhood charge **100 bps (1%)** for the platform, separately from creator and pool fees. External routing is a separate capability and does not imply this fee is hook-enforced everywhere. Historical Robinhood Native20 contracts retain their deployed 20 bps fee model. The [fees guide](https://programmable.market/docs/economics) defines the calculation and claim path. The [Dune dashboard](https://dune.com/programmablehq/analytics) reports finalized Custom Launch stamps, creator rewards in ETH and protocol revenue in ETH. Fee totals include unclaimed accruals from supported native fee events; gas, liquidity, withdrawals and historical fee models without those events are excluded. The dashboard refreshes every 24 hours.
 
 ## Start with the launch details

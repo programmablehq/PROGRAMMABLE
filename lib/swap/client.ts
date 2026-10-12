@@ -333,7 +333,7 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     const prepared = await fetchPrepared(), tx = prepared.transaction, swap = prepared.status === "ready";
     return seal(display(input, { kind: swap ? "swap" : "approval", amountOut: swap ? BigInt(prepared.quote.amountOut) : null,
       minimumOutput: swap ? BigInt(prepared.quote.amountOutMinimum) : null, expiresAt: BigInt(prepared.quote.validUntil),
-      ...(swap && prepared.fee ? { platformFee: { amount: BigInt(prepared.fee.platformFeeAmount), rateBps: prepared.fee.rateBps, includedInPool: prepared.fee.mode === "pool_enforced_native30" } } : {}),
+      ...(swap && prepared.fee ? { platformFee: { amount: BigInt(prepared.fee.platformFeeAmount), rateBps: prepared.fee.rateBps, includedInPool: prepared.fee.mode === "pool_enforced_native30" || prepared.fee.mode === "pool_enforced_native100" } } : {}),
       gasEstimate: BigInt(tx.gasLimit!), ...(swap ? {} : { approvalLabel: `Approve ${input.descriptor.token.symbol}` }) }), {
       transaction: { from: account, to: tx.to, data: tx.data, value: tx.value, preparedBlock: prepared.quote.blockNumber },
       refresh: async () => {
