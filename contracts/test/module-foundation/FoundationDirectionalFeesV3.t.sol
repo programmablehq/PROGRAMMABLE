@@ -58,7 +58,11 @@ abstract contract FoundationForkBaseV3 is Test {
     ];
 
     function _configureNetwork() internal virtual { }
-    function _platformFeeBps() internal pure virtual returns (uint16) { return 30; }
+
+    function _platformFeeBps() internal pure virtual returns (uint16) {
+        return 30;
+    }
+
     function _hookDeployerArtifact() internal pure virtual returns (string memory) {
         return "FoundationHookDeployerV2.sol:FoundationHookDeployerV2";
     }

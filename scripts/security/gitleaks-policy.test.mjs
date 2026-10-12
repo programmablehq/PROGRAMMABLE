@@ -366,3 +366,15 @@ test("Classic discovery permits only the exact historical public address assignm
   assertFiles(scan(t, { [path]: `const apiKey = "${value}";` }, { raw: true }), [path]);
   assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
 });
+
+test("fee100 compiler export permits exact public source hashes, not nearby credentials", t => {
+  const path = "contracts/spec/module-foundation/ethereum-graph-bytecode.v4.json";
+  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  for (const name of ["FoundationTokenV1.sol", "PoolKey.sol"]) {
+    const line = source.split("\n").find(value => value.includes(`${name}\":`));
+    assert.ok(line);
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    assertFiles(scan(t, { [path]: line.replace(/0x[0-9a-f]{64}/, material) }, { raw: true }), [path]);
+    assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+  }
+});
