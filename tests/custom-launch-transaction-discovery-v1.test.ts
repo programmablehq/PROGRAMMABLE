@@ -53,6 +53,14 @@ describe("automatic recovery of the original launch transaction", () => {
     expect(pending.request).toHaveBeenCalledTimes(3);
     expect(attempt.transactionHash).toBeNull();
   });
+  it("accepts wallet adapters that normalize transaction counts to safe numbers", async () => {
+    const rpc = provider(), original = rpc.request;
+    rpc.request = async input => {
+      const value = await original(input);
+      return input.method === "eth_getTransactionCount" ? Number(BigInt(String(value))) : value;
+    };
+    await expect(discoverUniversalLaunchTransactionV1(rpc, attempt, resource)).resolves.toBe(hash);
+  });
   it("rejects a different call consuming the same nonce and ignores a reorganized block", async () => {
     await expect(discoverUniversalLaunchTransactionV1(provider({ transaction: { ...transaction, input: "0x1234" } }), attempt, resource)).rejects.toThrow(/does not match/);
     await expect(discoverUniversalLaunchTransactionV1(provider({ reorg: true }), attempt, resource)).resolves.toBeNull();

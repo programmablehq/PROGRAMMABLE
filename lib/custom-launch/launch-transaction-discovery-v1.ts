@@ -4,6 +4,7 @@ import type { LaunchSendAttemptV1 } from "./launch-send-journal-v1";
 import { recoverUniversalLaunchTransactionV1, type LaunchWalletProviderV1 } from "./wallet-handoff-plan-v1";
 
 const quantity = (value: unknown): bigint => {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
   if (typeof value !== "string" || !/^0x[0-9a-f]+$/i.test(value)) throw new Error("Transaction history is temporarily unavailable.");
   return BigInt(value);
 };
