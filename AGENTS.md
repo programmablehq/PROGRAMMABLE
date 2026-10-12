@@ -40,6 +40,9 @@
 - Merge one coherent change into `production`. `Publish website UI` builds and publishes it automatically using the existing production configuration. Do not run `npm run verify`, a local production build, the manual staging workflow, or a second deploy for these edits.
 - `npm run ship:ui:plan` shows the outstanding changes since the live deployment. `npm run ship:ui` is the single recovery entry point from a clean production checkout with the existing Vercel and GitHub access.
 - Verify the requested appearance at the relevant viewport. Do not add tests for reversible text, spacing, color or image edits. Do not repeat checks that already passed for the exact commit.
+- Before functional interface work, use `npm run verify:interface:plan` with the base/head commits. Run the affected checks once; do not add a local full-suite/build pass before identical CI coverage. CI reuses successful exact-tree PR verification for ordinary interface changes.
+- Do not run historical launch/finality rehearsals, module CLI checks or wallet browser suites for unrelated display changes. Do not add tests asserting CSS values, layout source strings or exact marketing copy. Keep behavioral tests for money movement, permissions, contract bindings and API response contracts.
+- Verification-only changes do not need a Vercel deployment when application source and production configuration are unchanged. Do not delete deployment journals or rollback evidence as test cleanup.
 - Logic, account, signing, fee, contract, route, API, deployment configuration and dependency changes keep their relevant functional release route. The presentation publisher rejects mixed outstanding changes, stale branches and concurrent production changes.
 
 See [docs/PROJECT-STRUCTURE.md](docs/PROJECT-STRUCTURE.md) for the directory map.

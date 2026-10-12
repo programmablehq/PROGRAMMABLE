@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join, relative } from "node:path";
+import { tmpdir } from "node:os";
+import { interfacePlan, relatedInputs } from "./interface-plan.mjs";
+
+test("coin metadata does not run unrelated wallet, migration, CLI or activation checks", () => {
+  const plan = interfacePlan(["lib/server/codex-token-metadata.ts", "lib/coin-metadata.ts"]);
+  assert.equal(plan.full, false);
+  assert.deepEqual(plan.browser, []);
+  for (const key of ["wallet", "migration", "moduleTools", "activation"]) assert.equal(plan[key], false);
+});
+
+test("affected trading, launch and wallet behavior retains its browser coverage", () => {
+  assert.deepEqual(interfacePlan(["components/robinhood-market-view.tsx"]).browser,
+    ["trade-panel", "foundation-swap-recovery"]);
+  for (const path of ["components/wallet-provider.tsx", "lib/wallet-operation.ts"])
+    assert.ok(interfacePlan([path]).browser.includes("wallet-request-lock"));
+  assert.ok(interfacePlan(["components/module-foundation-launch.tsx"]).browser.includes("module-signing"));
+  assert.equal(interfacePlan(["scripts/programmable-v41-api-activation.mjs"]).activation, true);
+  assert.equal(interfacePlan(["packages/classic-modules/index.mjs"]).moduleTools, true);
+});
+
+test("missing history, unknown configuration and CI changes keep complete coverage", () => {
+  for (const paths of [null, ["package-lock.json"], [".github/workflows/verify.yml"],
+    ["scripts/ci/interface-plan.mjs"], ["unexpected-new-input"]]) {
+    const plan = interfacePlan(paths);
+    for (const key of ["full", "wallet", "migration", "moduleTools", "activation"]) assert.equal(plan[key], true);
+  }
+});
+
+test("related selection follows transitive source imports and includes dynamic filesystem tests", () => {
+  const root = mkdtempSync(join(tmpdir(), "interface-dependencies-"));
+  try {
+    mkdirSync(join(root, "tests"));
+    const sources = { "source.ts": "export const value=1", "middle.ts": "export { value } from './source'",
+      "tests/behavior.test.ts": "import {value} from '../middle'", "tests/other.test.ts": "import {value} from '../other'",
+      "tests/files.test.ts": "import {readFileSync} from 'node:fs'; readFileSync(dynamicPath)", "other.ts": "export const value=2" };
+    for (const [path, source] of Object.entries(sources)) writeFileSync(join(root, path), source);
+    const paths = Object.keys(sources).map(path => relative(process.cwd(), join(root, path)));
+    const selected = relatedInputs([paths[0]], paths);
+    assert.ok(selected.includes(paths[1]));
+    assert.ok(selected.includes(paths[2]));
+    assert.ok(selected.includes(paths[4]));
+    assert.equal(selected.includes(paths[3]), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

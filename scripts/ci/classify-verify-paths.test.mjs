@@ -544,7 +544,7 @@ test("wires successor activation and exact evidence validation into protected Ve
   assert.match(workflow, /git show "\$BASE_SHA:scripts\/ci\/classify-verify-paths\.mjs"/u);
   for (const version of ["v4", "v41"]) {
     const activation = step(`Verify ${version === "v4" ? "V4" : "V4.1"} public API activation evidence`);
-    assert.match(activation, /if: needs\.scope\.outputs\.interface_presentation_only != 'true'/u);
+    assert.match(activation, /needs\.scope\.outputs\.interface_activation == 'true'/u);
     assert.match(activation, /GH_TOKEN: \$\{\{ github\.token \}\}/u);
     assert.ok(activation.includes(`node --test scripts/test/programmable-${version}-api-activation.test.mjs`));
     assert.ok(activation.includes(`node scripts/programmable-${version}-api-activation.mjs audit --repository-root "$GITHUB_WORKSPACE"`));

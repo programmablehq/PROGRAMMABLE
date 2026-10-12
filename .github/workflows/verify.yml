@@ -24,10 +24,19 @@ concurrency:
 
 jobs:
   scope:
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     name: Change scope
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      interface_maintenance: ${{ steps.scope.outputs.interface_maintenance }}
+      interface_reuse_run: ${{ steps.reuse.outputs.interface_reuse_run }}
+      interface_wallet: ${{ steps.interface-plan.outputs.wallet }}
+      interface_migration: ${{ steps.interface-plan.outputs.migration }}
+      interface_activation: ${{ steps.interface-plan.outputs.activation }}
       contracts: ${{ steps.scope.outputs.contracts }}
       custom_v2: ${{ steps.scope.outputs.custom_v2 }}
       database: ${{ steps.scope.outputs.database }}
@@ -131,7 +140,43 @@ jobs:
             echo 'robinhood_v414_runtime_evidence=false' >> "$RUNNER_TEMP/verify-scope.txt"
             echo 'robinhood_v414_runtime_evidence_exact=false' >> "$RUNNER_TEMP/verify-scope.txt"
           fi
+          if [ "$VERIFICATION_MODE" = change ]; then
+            node scripts/ci/interface-maintenance.mjs "$RUNNER_TEMP/verify-scope.txt"
+          fi
           cat "$RUNNER_TEMP/verify-scope.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Plan affected interface checks
+        id: interface-plan
+        env:
+          PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PROGRAMMABLE_VERIFY_FULL_INTERFACE: ${{ steps.scope.outputs.custom_v2 }}
+          PROGRAMMABLE_VERIFY_MAINTENANCE: ${{ steps.scope.outputs.interface_maintenance }}
+        run: |
+          node --input-type=module - <<'NODE' >> "$GITHUB_OUTPUT"
+          import { changedPaths, interfacePlan } from './scripts/ci/interface-plan.mjs';
+          const plan = interfacePlan(process.env.PROGRAMMABLE_VERIFY_MAINTENANCE === 'true' ? [] : process.env.PROGRAMMABLE_VERIFY_FULL_INTERFACE === 'true' ? null : changedPaths());
+          for (const key of ['wallet', 'migration', 'activation']) console.log(`${key}=${plan[key]}`);
+          NODE
+
+      - name: Reuse successful verification of the identical interface tree
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          VERIFICATION_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.verification_mode || 'change' }}
+          VERIFY_SCOPE_FILE: ${{ runner.temp }}/verify-scope.txt
+        run: node scripts/ci/reuse-interface-verification.mjs
+
+      - name: Record the exact checkout verified by this pull request
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: interface-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/interface-source.json
+          if-no-files-found: error
+          retention-days: 7
 
   secret-scan:
     name: Credential leak gate
@@ -248,45 +293,57 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      PROGRAMMABLE_VERIFY_FULL_INTERFACE: ${{ needs.scope.outputs.custom_v2 }}
+      PROGRAMMABLE_VERIFY_MAINTENANCE: ${{ needs.scope.outputs.interface_maintenance }}
+
     steps:
       - name: Check out repository
+        if: needs.scope.outputs.interface_reuse_run == ''
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
+        if: needs.scope.outputs.interface_reuse_run == ''
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24.14.0
           cache: npm
 
       - name: Install dependencies
-        if: needs.scope.outputs.interface_presentation_only != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only != 'true')
         run: npm ci --no-audit --no-fund
 
       - name: Audit production dependencies
-        if: needs.scope.outputs.interface == 'true' && needs.scope.outputs.dependencies == 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface == 'true' && needs.scope.outputs.dependencies == 'true')
         run: |
           node --test scripts/ci/run-production-dependency-audit.test.mjs
           npm run audit:prod
 
       - name: Verify interface quality and tests
-        if: needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true')
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true'))
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run verify:interface:quality:ci
 
       - name: Verify exact guide URL changes and their direct consumers
-        if: needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true')
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run verify:interface:guidance:ci
 
       - name: Use build coverage for presentation changes
-        if: needs.scope.outputs.interface_presentation_only == 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only == 'true')
         run: echo "Only styles, images or copy changed. No unrelated interface test suites required."
+
+      - name: Use the completed checks for this exact source tree
+        if: needs.scope.outputs.interface_reuse_run != ''
+        env:
+          VERIFIED_RUN: ${{ needs.scope.outputs.interface_reuse_run }}
+        run: echo "Checks already passed for the identical tree in run $VERIFIED_RUN."
 
   interface-browser-build:
     # Browser fixtures and the production build share mutable local output.
@@ -301,45 +358,52 @@ jobs:
       attestations: read
       contents: read
 
+    env:
+      PROGRAMMABLE_VERIFY_FULL_INTERFACE: ${{ needs.scope.outputs.custom_v2 }}
+      PROGRAMMABLE_VERIFY_MAINTENANCE: ${{ needs.scope.outputs.interface_maintenance }}
+
     steps:
       - name: Check out repository
+        if: needs.scope.outputs.interface_reuse_run == ''
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
+        if: needs.scope.outputs.interface_reuse_run == ''
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24.14.0
           cache: npm
 
       - name: Install dependencies
+        if: needs.scope.outputs.interface_reuse_run == ''
         run: npm ci --no-audit --no-fund
 
       - name: Install pinned Chromium for wallet interaction tests
-        if: needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true')
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_wallet == 'true' || needs.scope.outputs.interface_migration == 'true'))
         run: npx playwright install --with-deps chromium
 
       - name: Verify interface browser interactions and production build
-        if: needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true')
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true'))
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run verify:interface:browser-build:ci
 
       - name: Build the complete production interface for guide URL changes
-        if: needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true')
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run build
 
       - name: Build presentation changes
-        if: needs.scope.outputs.interface_presentation_only == 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only == 'true')
         run: npm run build
 
       - name: Require complete Git history for the V4 release audit
-        if: needs.scope.outputs.interface_presentation_only != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_activation == 'true')
         shell: bash
         run: |
           set -euo pipefail
@@ -349,11 +413,11 @@ jobs:
           test "$(git rev-parse --is-shallow-repository)" = false
 
       - name: Verify V4 clean-room no-broadcast release gate
-        if: needs.scope.outputs.interface_presentation_only != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_activation == 'true')
         run: npm run release:custom-launch:v4:clean-room:test
 
       - name: Verify V4 public API activation evidence
-        if: needs.scope.outputs.interface_presentation_only != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_activation == 'true')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -361,7 +425,7 @@ jobs:
           node scripts/programmable-v4-api-activation.mjs audit --repository-root "$GITHUB_WORKSPACE"
 
       - name: Verify V4.1 public API activation evidence
-        if: needs.scope.outputs.interface_presentation_only != 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_activation == 'true')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -369,8 +433,14 @@ jobs:
           node scripts/programmable-v41-api-activation.mjs audit --repository-root "$GITHUB_WORKSPACE"
 
       - name: Verify affected read-model operations contract
-        if: needs.scope.outputs.read_model == 'true'
+        if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.read_model == 'true')
         run: npm run perf:read-model:ops-gate
+
+      - name: Use the completed checks for this exact source tree
+        if: needs.scope.outputs.interface_reuse_run != ''
+        env:
+          VERIFIED_RUN: ${{ needs.scope.outputs.interface_reuse_run }}
+        run: echo "Checks already passed for the identical tree in run $VERIFIED_RUN."
 
   interface:
     # Preserve the required check and production-proof result while both
