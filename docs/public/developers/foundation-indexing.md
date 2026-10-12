@@ -88,7 +88,7 @@ event FoundationSwap(
 );
 ```
 
-For factory V3 launches, read `creatorBuyFeeBps()` and `creatorSellFeeBps()` from the hook. V1 and V2 launches use `creatorFeeBps()` for both directions. Each rate is fixed at launch, from 0 to 1,000 basis points in steps of 100. The current fee100 release adds 100 basis points (1%) per direction. Earlier immutable releases retain 30 basis points. Resolve the verified launch source before computing fees; a factory version label alone does not select the rate. Module shares divide the creator fee.
+For factory V3 launches, read `creatorBuyFeeBps()` and `creatorSellFeeBps()` from the hook. V1 and V2 launches use `creatorFeeBps()` for both directions. Each rate is fixed at launch, from 0 to 1,000 basis points in steps of 100. The current launch release adds 30 basis points (0.3%) per direction. Retained fee100 contracts keep their immutable 100 basis point (1%) fee. Resolve the verified launch source before computing fees; a factory version label alone does not select the rate. Module shares divide the creator fee.
 
 `router` identifies the caller, which may differ from the trader. Deduplicate by log position and reconcile swaps in receipt order. Read actual fee amounts and ledger credits to account for rounding. Hook fees are additional to the PoolKey's LP fee, so `fee: 0` still permits hook fees. A later claim withdraws accrued fees and adds no new trade volume or revenue.
 
