@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import { MODULE_TOKEN_FALLBACK_IMAGE } from "./robinhood-coin-artwork";
 import { RobinhoodMarketView } from "./robinhood-market-view";
 import { TokenLaunchModules } from "./token-launch-modules";
-import { LaunchProjectionDetails } from "./launch-projection-details";
 import { SwapPanel } from "./swap-panel";
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
 import { isRobinhoodFoundationLaunch, isRobinhoodModuleLaunch, robinhoodModuleManageHref, type RobinhoodLaunch } from "@/lib/robinhood-launches";
@@ -40,6 +39,5 @@ export function RobinhoodTokenView({ address, token, status, initialPresentation
     manageHref={moduleLaunch ? robinhoodModuleManageHref(moduleLaunch) : null} fallbackImageUrl={moduleLaunch ? MODULE_TOKEN_FALLBACK_IMAGE : undefined}
     trade={<SwapPanel key={`4663:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={4663} tokenSymbol={token.symbol ?? undefined} />}>
     {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}
-    {token.launchProjection ? <LaunchProjectionDetails projection={token.launchProjection} /> : null}
   </RobinhoodMarketView>;
 }

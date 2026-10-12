@@ -8,7 +8,7 @@ vi.mock("@/components/use-robinhood-presentation", () => ({ useRobinhoodPresenta
 vi.mock("@/components/swap-panel", () => ({ SwapPanel: () => null }));
 vi.mock("@/components/responsive-trade-panel", () => ({ ResponsiveTradePanel: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/components/launch-pair-modules", () => ({ LaunchPairModules: () => null }));
-vi.mock("@/components/robinhood-chart", () => ({ TokenPoolChart: () => null }));
+vi.mock("@/components/robinhood-chart", () => ({ RobinhoodChart: () => null }));
 import { EthereumTokenView } from "@/components/ethereum-token-view";
 
 const token = { ...customGraphExploreEntry, description: "Old description", imageUrl: "https://example.com/old.png",
@@ -25,11 +25,11 @@ describe("Ethereum live public presentation", () => {
     expect(html).toContain('href="https://x.com/new"'); expect(html).toContain("Current description");
     expect(html).not.toContain("Old description"); expect(token.name).toBe(customGraphExploreEntry.name);
   });
-  it("honors clearing metadata instead of reintroducing the old description, links and image", () => {
+  it("keeps known metadata when a partial refresh omits its description, links and image", () => {
     display.items = [{ ...presentation, description: null, imageUrl: null, links: [] }];
     const html = render();
-    expect(html).not.toContain("Old description"); expect(html).not.toContain("https://example.com/old");
-    expect(html).not.toContain("https://example.com/old.png");
+    expect(html).toContain("Old description"); expect(html).toContain("https://example.com/old");
+    expect(html).toContain("https://example.com/old.png");
   });
   it("does not borrow display data from a different token or chain", () => {
     display.items = [{ ...presentation, chainId: 4663 }, { ...presentation, tokenAddress: "0x3333333333333333333333333333333333333333" }];

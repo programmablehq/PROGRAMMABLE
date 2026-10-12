@@ -7,10 +7,12 @@ import { readClassicLaunchCatalogV1 } from "@/lib/market-data/classic-launch-cat
 import { PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1, publicExploreCatalogEntriesV1, publicExplorePresentationEntryV1 } from "@/lib/public-explore-catalog-v1";
 import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
 import { readCodexMarkets } from "./codex-market";
+import { readCodexTokenMetadata } from "./codex-token-metadata";
+import { mergeCoinMetadata } from "@/lib/coin-metadata";
 import { ETHEREUM_EXPLORE_FILTERS } from "@/lib/ethereum-explore";
 import type { CanonicalTokenExploreEntry } from "@/lib/tokens";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
-import { readEthereumPublicTokenMetadata } from "./ethereum-public-token-metadata";
+import type { readEthereumPublicTokenMetadata } from "./ethereum-public-token-metadata";
 
 type SourceStatus = "current" | "last-known-good" | "unavailable";
 type SourceEvidence = {
@@ -30,7 +32,6 @@ type Dependencies = {
   metadata?: typeof readEthereumPublicTokenMetadata;
 };
 const readers: Dependencies = {
-  metadata: readEthereumPublicTokenMetadata,
   classic: async () => {
     const catalog = await readClassicLaunchCatalogV1();
     return { ...catalog, entries: catalog.entries.filter((entry): entry is CanonicalTokenExploreEntry => entry.exploreKind === "token"),
@@ -147,12 +148,17 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   const selected = filtered.slice((number - 1) * pageSize, number * pageSize);
   const keys = new Set(selected.map(row => row.tokenAddress.toLowerCase()));
   const selectedCanonical = visible.filter(entry => keys.has(entry.tokenAddress.toLowerCase()));
-  const markets = await readCodexMarkets(selectedCanonical, 1).catch(() => new Map<string, RobinhoodCoinMarket>());
+  const [markets, metadata] = await Promise.all([
+    readCodexMarkets(selectedCanonical, 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
+    readCodexTokenMetadata(selectedCanonical.map(entry => entry.tokenAddress), 1),
+  ]);
   return {
     chainId: catalog.chainId, status: catalog.status === "unavailable" && confirming.length ? "partial" as const : catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,
     items: selected,
-    presentations: selectedCanonical.map(entry => ({ tokenAddress: entry.tokenAddress, imageUrl: entry.imageUrl ?? null,
-      description: entry.description ?? null, links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })), market: markets.get(entry.tokenAddress.toLowerCase()) ?? null })),
+    presentations: selectedCanonical.map(entry => ({ chainId: 1 as const, tokenAddress: entry.tokenAddress,
+      ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
+        links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
+      market: markets.get(entry.tokenAddress.toLowerCase()) ?? null })),
     page: { number, size: pageSize, totalItems: filtered.length, totalPages, hasMore: number < totalPages },
   };
 }
@@ -187,10 +193,13 @@ export async function readEthereumTokenPresentation(address: string) {
   const record = await readEthereumToken(address);
   if (!record.token) return { ...record, presentation: null };
   const entry = record.token;
-  const markets = await readCodexMarkets([entry], 1).catch(() => new Map<string, RobinhoodCoinMarket>());
+  const [markets, metadata] = await Promise.all([
+    readCodexMarkets([entry], 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
+    readCodexTokenMetadata([entry.tokenAddress], 1),
+  ]);
   return { ...record, presentation: { chainId: 1 as const, tokenAddress: entry.tokenAddress,
     name: entry.name, symbol: entry.symbol,
-    imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
-    links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })),
+    ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
+      links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
     market: markets.get(entry.tokenAddress.toLowerCase()) ?? null } };
 }

@@ -18,7 +18,7 @@ import styles from "./robinhood-token-view.module.css";
 const EXPLORER = "https://robinhoodchain.blockscout.com";
 
 /** Shared market presentation; each launch family supplies its own verified trade adapter. */
-export function RobinhoodMarketView({ address, name, symbol, creator, launch, presentation, loading = false,
+export function RobinhoodMarketView({ address, name, symbol, launch, presentation, loading = false,
   chainId = 4663, delayed = false, hasAsset = true, manageHref, fallbackImageUrl, trade, children }: {
   chainId?: 1 | 4663;
   address: string;
@@ -59,14 +59,13 @@ export function RobinhoodMarketView({ address, name, symbol, creator, launch, pr
             </div>
             {launch ? <LaunchPairModules launch={launch} chainId={chainId} market={market} showPair={false} className={styles.launchProperties} /> : null}
             {description && description.toLowerCase() !== name.trim().toLowerCase() ? <p className={styles.bio}>{description}</p> : null}
+            <div className={styles.headerActions}>
+              <button className={`${styles.secondaryButton} ${styles.copyButton}`} onClick={copyAddress} type="button" title={address}>
+                {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+                {copied ? "Copied" : "Copy address"}
+              </button>
+            </div>
           </div>
-        </div>
-        <div className={styles.headerActions}>
-          <button className={`${styles.secondaryButton} ${styles.copyButton}`} onClick={copyAddress} type="button" title={address}>
-            {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-            {copied ? "Copied" : "Copy address"}
-          </button>
-          {creator && /^0x(?!0{40}$)[\da-f]{40}$/i.test(creator) ? <Link className={styles.secondaryButton} href={`/profile?account=${creator}&chain=${chainId}`} prefetch={false} title={`Dev wallet: ${creator}`}>Dev wallet</Link> : null}
         </div>
       </header>
       <p className="sr-only" role="status">{copied ? "Contract address copied" : ""}</p>

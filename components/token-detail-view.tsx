@@ -1548,7 +1548,7 @@ function MetricGrid({ metrics }: { metrics: TokenMetric[] }) {
   );
 }
 
-function TokenIdentityActions({ address, creator, chainId, copied, onCopy }: {
+function TokenIdentityActions({ address, chainId, copied, onCopy }: {
   address?: string;
   creator?: string;
   chainId: number;
@@ -1560,7 +1560,6 @@ function TokenIdentityActions({ address, creator, chainId, copied, onCopy }: {
     {address ? <button className={styles.tokenHeaderButton} type="button" onClick={onCopy} title={address}>
       {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}{copied ? "Copied" : "Copy address"}
     </button> : null}
-    {creator && isAddress(creator) ? <Link className={styles.tokenHeaderButton} href={`/profile?account=${creator}&chain=${chainId}`} title={`Dev wallet: ${creator}`}>Dev wallet</Link> : null}
     {address && explorer ? <a className={styles.tokenHeaderButton} href={`${explorer}/token/${address}`} target="_blank" rel="noreferrer">Explorer <ExternalLink size={16} aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a> : null}
     <span className="sr-only" role="status">{copied ? "Token address copied" : ""}</span>
   </div>;
@@ -1822,8 +1821,8 @@ function TokenDetailContent({
               {token.description?.trim() ? (
                 <p className={styles.description}>{token.description.trim()}</p>
               ) : null}
+              <TokenIdentityActions address={token.tokenAddress} creator={creatorAddress} chainId={chainId} copied={copied} onCopy={() => void copyAddress()} />
             </div>
-            <TokenIdentityActions address={token.tokenAddress} creator={creatorAddress} chainId={chainId} copied={copied} onCopy={() => void copyAddress()} />
           </div>
 
           <div className={styles.marketChart}>
@@ -2128,8 +2127,8 @@ function CustomProjectDetailContent({
             {project.description?.trim() ? (
               <p className={styles.description}>{project.description.trim()}</p>
             ) : null}
+            <TokenIdentityActions address={project.tokenAddress} creator={project.launchingWallet.namespace === `eip155:${chainId}` ? project.launchingWallet.value : undefined} chainId={chainId} copied={copied} onCopy={() => void copyAddress()} />
           </div>
-          <TokenIdentityActions address={project.tokenAddress} creator={project.launchingWallet.namespace === `eip155:${chainId}` ? project.launchingWallet.value : undefined} chainId={chainId} copied={copied} onCopy={() => void copyAddress()} />
         </section>
 
         {project.tokenAddress ? (

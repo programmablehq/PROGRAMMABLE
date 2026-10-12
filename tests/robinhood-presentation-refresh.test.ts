@@ -12,6 +12,16 @@ const saved: RobinhoodCoinPresentation = {
 };
 
 describe("Robinhood market refresh", () => {
+  it("keeps real artwork and links through missing/default metadata without carrying them across chains", () => {
+    const previous = { ...saved, imageUrl: "https://example.com/coin.png", description: "Coin description",
+      links: [{ label: "X", url: "https://x.com/coin" }] };
+    for (const imageUrl of [null, "/brand/loop/programmable-module-token-default-dark.png"]) {
+      const next = { ...saved, imageUrl };
+      const item = mergeRobinhoodPresentations([previous], [next], now).items[0];
+      expect(item).toMatchObject({ imageUrl: previous.imageUrl, description: previous.description, links: previous.links });
+      expect(mergeRobinhoodPresentations([previous], [{ ...next, chainId: 1 }], now).items[0].imageUrl).toBe(imageUrl);
+    }
+  });
   it("keeps a recent complete valuation when a newer partial response omits supply data, without refreshing its age", () => {
     const incomplete = { ...saved, market: { ...saved.market!, marketCapUsd: null, fdvUsd: null,
       priceUsd: .004, observedAt: new Date(now).toISOString() } };

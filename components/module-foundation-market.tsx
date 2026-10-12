@@ -5,7 +5,6 @@ import { RefreshCw, Settings2 } from "lucide-react";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { parseUnits, type Address } from "viem";
 import { foundationDecimalError, foundationPublicUrl, foundationReviewError, type FoundationAvailability, type FoundationPoolIdentity, type FoundationPositionIdentity, type FoundationQuoteAsset, type FoundationTradeDraft, type FoundationTradeReview, type FoundationTransactionResult, type FoundationWalletAction } from "@/lib/module-foundation/ui-types";
-import { FoundationPoolDetails } from "./module-foundation-review";
 import { RobinhoodMarketView } from "./robinhood-market-view";
 import { TradeAssetBadge } from "./trade-asset-badge";
 import { TradeWalletButton } from "./responsive-trade-panel";
@@ -14,6 +13,7 @@ import { scheduleVisibleQuoteRefresh } from "./quote-refresh";
 import type { FoundationCreatorFees } from "@/lib/module-foundation/creator-fees";
 import { FOUNDATION_DEFAULT_IMAGE } from "@/lib/module-foundation/default-image";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
+import { mergeCoinMetadata, type CoinMetadata } from "@/lib/coin-metadata";
 import styles from "./module-foundation-ui.module.css";
 import tradeStyles from "./swap-panel.module.css";
 
@@ -31,6 +31,7 @@ export type ModuleFoundationMarketProps = FoundationCreatorFees & {
   pool: FoundationPoolIdentity;
   positions?: readonly FoundationPositionIdentity[];
   market?: RobinhoodCoinMarket | null;
+  metadata?: CoinMetadata | null;
   marketLoading?: boolean;
   marketDelayed?: boolean;
   walletAction?: FoundationWalletAction;
@@ -63,7 +64,7 @@ export function foundationTradeQuoteExpiresAt(review: FoundationTradeReview, rec
 }
 
 export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
-  const { availability, contextKey, coin, quote, tradeAsset = quote, maximumBuyAmount, pool, positions = [], walletAction, submissionBlocked, onPrepareTrade, onConfirmTrade, onRefreshResult, moduleActions, feeLedger } = props;
+  const { availability, contextKey, coin, quote, tradeAsset = quote, maximumBuyAmount, pool, walletAction, submissionBlocked, onPrepareTrade, onConfirmTrade, onRefreshResult, moduleActions, feeLedger } = props;
   const [draft, setDraft] = useState<FoundationTradeDraft>({ side: "buy", amount: "", slippageBps: 300 });
   const [result, setResult] = useState<FoundationTransactionResult | null>(null);
   const [busy, setBusy] = useState<"connect" | "prepare" | "confirm" | "refresh" | null>(null);
@@ -235,10 +236,12 @@ export function ModuleFoundationMarket(props: ModuleFoundationMarketProps) {
 
   return <RobinhoodMarketView chainId={availability.chainId === 1 ? 1 : 4663} address={coin.address} name={coin.name} symbol={coin.symbol} creator={coin.creator}
     launch={{ tokenAddress: coin.address, sourceKind: "module-foundation-v1", poolId: pool.poolId, quoteAsset: quote.address, quoteSymbol: quote.symbol }}
-    presentation={{ tokenAddress: coin.address, imageUrl: imageURI, description: coin.description, links: socialLinks, market: props.market ?? null }}
+    presentation={{ tokenAddress: coin.address,
+      ...mergeCoinMetadata(props.metadata ?? { imageUrl: null, description: null, links: [] },
+        { imageUrl: imageURI, description: coin.description, links: socialLinks }), market: props.market ?? null }}
     loading={props.marketLoading} delayed={props.marketDelayed} fallbackImageUrl={FOUNDATION_DEFAULT_IMAGE.url}
     trade={trade}>
-      <div className={`${styles.marketScope} ${styles.marketExtras}`}><FoundationPoolDetails pool={pool} positions={positions} />
+      <div className={`${styles.marketScope} ${styles.marketExtras}`}>
         {feeLedger || moduleActions ? <details className={styles.details}><summary>Manage coin</summary><div className={styles.detailsBody}>
         {feeLedger ? <section className={styles.feeLedger}><h2>Fees in {quote.symbol}</h2><dl className={styles.rows}><div><dt>Platform credited</dt><dd>{feeLedger.platformCredited} {quote.symbol}</dd></div><div><dt>Platform paid out</dt><dd>{feeLedger.platformPaid} {quote.symbol}</dd></div><div><dt>Creator credited</dt><dd>{feeLedger.creatorCredited} {quote.symbol}</dd></div><div><dt>Creator paid out</dt><dd>{feeLedger.creatorPaid} {quote.symbol}</dd></div></dl><p className={styles.help}>Read at block {feeLedger.asOfBlock}. A fee credit is not a completed payout.</p></section> : null}
         {moduleActions}

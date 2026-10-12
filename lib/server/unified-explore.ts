@@ -6,6 +6,8 @@ import { readRobinhoodExploreCatalog } from "./robinhood-index/read";
 import { readEthereumUnifiedExploreCatalog } from "./ethereum-explore";
 import { readRobinhoodMarkets, readRobinhoodPresentations } from "./robinhood-presentation";
 import { readCodexMarkets } from "./codex-market";
+import { readCodexTokenMetadata } from "./codex-token-metadata";
+import { mergeCoinMetadata } from "@/lib/coin-metadata";
 import { isRobinhoodModuleSourceKind } from "@/lib/robinhood-launches";
 import { coinValuation, type RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 import { exploreIdentityKey, selectUnifiedExplorePage } from "@/lib/unified-explore";
@@ -91,16 +93,21 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   });
   const selectedKeys = new Set(selection.items.map(exploreIdentityKey));
   const selectedRh = rhRows.filter(row => selectedKeys.has(exploreIdentityKey(row)));
-  const rhPresentations = await dependencies.robinhoodPresentations(selectedRh, rhMarkets)
+  const selectedEth = selection.items.filter(row => row.chainId === 1 && indexed.has(exploreIdentityKey(row)));
+  const [ethMetadata, rhPresentations] = await Promise.all([
+    readCodexTokenMetadata(selectedEth.map(row => row.tokenAddress), 1),
+    dependencies.robinhoodPresentations(selectedRh, rhMarkets)
     .catch(() => selectedRh.map(row => ({ tokenAddress: row.tokenAddress, imageUrl: null, description: null,
-      links: [], market: rhMarkets.get(row.tokenAddress.toLowerCase()) ?? null })));
+      links: [], market: rhMarkets.get(row.tokenAddress.toLowerCase()) ?? null }))),
+  ]);
   const metadata = new Map(eth.entries.map(entry => [exploreIdentityKey({ chainId: 1, tokenAddress: entry.tokenAddress }), entry]));
   const presentations = [
     ...rhPresentations.map(presentation => ({ ...presentation, chainId: 4663 as const })),
-    ...selection.items.filter(row => row.chainId === 1 && indexed.has(exploreIdentityKey(row))).map(row => {
+    ...selectedEth.map(row => {
       const entry = metadata.get(exploreIdentityKey(row))!;
-      return { chainId: 1 as const, tokenAddress: row.tokenAddress, imageUrl: entry.imageUrl ?? null,
-        description: entry.description ?? null, links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })),
+      return { chainId: 1 as const, tokenAddress: row.tokenAddress,
+        ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
+          links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, ethMetadata.get(row.tokenAddress.toLowerCase())),
         market: markets.get(exploreIdentityKey(row)) ?? null };
     }),
     ...recent.filter(item => selection.items.some(row => exploreIdentityKey(row) === exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress })))

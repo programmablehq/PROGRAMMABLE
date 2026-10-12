@@ -19,7 +19,7 @@ export function RobinhoodCoinArtwork({ imageUrl, fallbackImageUrl = MODULE_TOKEN
   const safeFallback = safePublicImageUrl(fallbackImageUrl);
   const source = safeSource ? getTokenCardImageSource(safeSource) : null;
   const fallback = safeFallback ? getTokenCardImageSource(safeFallback) : null;
-  return <ArtworkImage key={`${source}:${fallback}`} source={source ?? fallback} fallback={fallback} loading={loading} eager={eager} className={className} />;
+  return <ArtworkImage key={`${source}:${fallback}`} source={source ?? (loading ? null : fallback)} fallback={fallback} loading={loading} eager={eager} className={className} />;
 }
 
 function ArtworkImage({ source, fallback, loading, eager, className }: {

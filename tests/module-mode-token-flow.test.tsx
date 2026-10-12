@@ -39,8 +39,8 @@ describe("Module Mode token identity and navigation", () => {
     expect(html).toContain("Module 1"); expect(html).toContain("Module 2");
     expect(html).toContain(`/launch/modules/manage/${token.tokenAddress}`);
     expect(html).not.toContain(`#trade`);
-    expect(html).toContain(`/profile?account=${token.creator}&amp;chain=4663`);
-    expect(html).toContain("Dev wallet");
+    expect(html).not.toContain(`/profile?account=${token.creator}&amp;chain=4663`);
+    expect(html).not.toContain("Dev wallet");
     expect(html).not.toContain(`/tx/${token.transactionHash}`);
     expect(html).not.toMatch(/Trade coin|Launch wallet|Launch transaction/);
     expect(html).not.toMatch(/Custom|launch stamp/);

@@ -80,7 +80,7 @@
 .layout.readOnlyLayout.classicLayout { grid-template-areas: "identity" "chart" "deep"; }
 .readOnlyLayout .customMarketPanel { grid-area: facts; }
 .readOnlyLayout .identity { align-items: start; grid-template-columns: 132px minmax(0, 1fr) auto; }
-.tokenHeaderActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.tokenHeaderActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin-top: 12px; }
 .tokenHeaderButton { align-items: center; background: transparent; border: 1px solid var(--webde-line); border-radius: 8px; color: var(--webde-ink); cursor: pointer; display: inline-flex; font: inherit; font-size: 14px; gap: 8px; justify-content: center; min-height: 44px; padding: 8px 12px; text-decoration: none; }
 .tokenHeaderButton svg { flex: none; }
 .tokenHeaderButton:focus-visible { outline: 2px solid var(--webde-ink); outline-offset: 4px; }
