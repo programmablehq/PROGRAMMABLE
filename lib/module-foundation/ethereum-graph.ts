@@ -37,6 +37,7 @@ const nonzeroHash = (value: string) => /^0x[0-9a-f]{64}$/i.test(value) && BigInt
 /** Supplied by source admission, never by a token's metadata or a browser request. */
 export interface FoundationEthereumGraphSource {
   chainId: 1;
+  platformFeeBps?: 30 | 100;
   releaseDigest: Hex;
   sourceCommit: string;
   startBlock: bigint;

@@ -2360,7 +2360,7 @@ function assertProfile36Capabilities(value) {
     && release.mandatoryCanonicalFeeVaultTarget === false && release.exactSettlementDataflowClosureRequired === false
     && release.selectionIsFeeExecutionProof === false && release.websiteBoundarySupportMustPrecedeSelection === true,
     "profile36Release");
-  assertCapabilitiesField(isPlainObject(value.feePolicy) && value.feePolicy.programmableHundredthsOfBip === "3000"
+  assertCapabilitiesField(isPlainObject(value.feePolicy) && value.feePolicy.programmableHundredthsOfBip === report.policy.ratePpm
     && value.feePolicy.denominator === "1000000" && value.feePolicy.requiredForProfileVersion === "3.6.0"
     && value.feePolicy.releaseModule === null, "feePolicy");
   assertCapabilitiesField(value.graph?.minimumTargets === 3 && value.graph?.maximumTargets === 16, "graph");

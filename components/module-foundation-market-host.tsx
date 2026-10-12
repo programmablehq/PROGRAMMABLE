@@ -1,4 +1,5 @@
 "use client";
+import { foundationPlatformFeeBps } from "@/lib/module-foundation/constants";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { decodeEventLog, formatUnits, getAddress, zeroAddress, type Address, type Hex } from "viem";
@@ -22,7 +23,7 @@ import { foundationStepSummary } from "@/lib/module-foundation/wallet";
 import { foundationLedgerAbi } from "@/lib/module-foundation/abi";
 import { foundationChainProfile, type FoundationChainId } from "@/lib/module-foundation/chains";
 import type { AnyQuoteReadinessV1 } from "@/lib/module-engine/any-quote/types";
-import { FOUNDATION_PLATFORM_FEE_BPS, FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationTradeDraft,
+import { FOUNDATION_PLATFORM_FEE_RECIPIENT, type FoundationTradeDraft,
   type FoundationTradeReview, type FoundationTransactionResult, type FoundationModuleSelection } from "@/lib/module-foundation/ui-types";
 import { foundationCreatorFeeFields } from "@/lib/module-foundation/creator-fees";
 import { useRobinhoodPresentation } from "./use-robinhood-presentation";
@@ -148,7 +149,7 @@ function ModuleFoundationMarketContent({ token, transactionHash, initialName, in
       expiresAt: Number(sequence.expiresAt), simulationBlock: sequence.checkpoint.blockNumber.toString(), inputAmount: draft.amount,
       outputAmount: formatUnits(sequence.amountOut, outputDecimals), minimumOutput: formatUnits(sequence.minimumOutput, outputDecimals),
       platformFeeAmount: formatUnits(fees.platformQuote, details.quote.decimals), creatorFeeAmount: formatUnits(fees.creatorQuote, details.quote.decimals),
-      ...(externalRoute ? {} : { lpFeeAmount: "0" }), platformFeeBps: FOUNDATION_PLATFORM_FEE_BPS, platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
+      ...(externalRoute ? {} : { lpFeeAmount: "0" }), platformFeeBps: foundationPlatformFeeBps(current), platformFeeRecipient: FOUNDATION_PLATFORM_FEE_RECIPIENT,
       universalRouter: FOUNDATION_INFRASTRUCTURE.universalRouter.address, transactions: sequence.steps.map(step => foundationStepSummary(step, chainId)) };
     trades.current.set(review, sequence); return review;
   }

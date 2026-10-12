@@ -180,7 +180,7 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
 
   const requiresFee = ethereumRouteRequiresFee(route);
   const feePolicy = requiresFee ? ethereumRouteFeePolicy(route) : null;
-  if (native30Proof && feePolicy && !same(native30Proof.recipient, feePolicy.policy.native30Waiver.recipient)) return unavailable("ETHEREUM_POOL_FEE_RECIPIENT_MISMATCH");
+  if (native30Proof && feePolicy && !same(native30Proof.recipient, feePolicy.policy.native30Waiver?.recipient ?? "")) return unavailable("ETHEREUM_POOL_FEE_RECIPIENT_MISMATCH");
   const recipient = getAddress(feePolicy?.policy.defaultCollection.recipient ?? ETHEREUM_ROUTING_FEE_POLICY_V1.defaultCollection.recipient);
   const recipientBefore = requiresFee && !native30Proof
     ? same(request.owner, recipient) ? nativeBalance : await rpc("eth_getBalance", [recipient, reference], value => quantityV1(value).toString()) : "0";
@@ -188,7 +188,7 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
     ? await rpc("eth_getBalance", [getAddress(protocol.router.address), reference], value => quantityV1(value).toString()) : "0";
   let fee: EthereumSwapFeeV1 | undefined = requiresFee ? {
     policyHash: feePolicy!.policyHash, mode: native30Proof ? "pool_enforced_native30" : "programmable_routed",
-    rateBps: 30, routedRateBps: native30Proof ? 0 : 30, recipient,
+    rateBps: feePolicy!.policy.rateBps, routedRateBps: native30Proof ? 0 : feePolicy!.policy.defaultCollection.routedRateBps, recipient,
     grossNativeAmount: "0", platformFeeAmount: "0", netNativeAmount: "0", native30Proof: native30Proof ?? null, accrual: null,
   } : undefined;
   const reached = new Set(runtimeBindings.map(binding => binding.address.toLowerCase()));
@@ -235,14 +235,14 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
       // V4Router skips a zero-value TAKE_PORTION. Tiny positive outputs may
       // therefore contain only the trader's take, with a rounded fee of zero.
       const zeroFeeTake = takes.length === 1 && same(takes[0]!.recipient, request.owner)
-        && takes[0]!.amount > 0n && takes[0]!.amount * 30n / 10_000n === 0n;
+        && takes[0]!.amount > 0n && takes[0]!.amount * BigInt(feePolicy!.policy.rateBps) / 10_000n === 0n;
       if (!zeroFeeTake && (takes.length !== 2 || !same(takes[0]!.recipient, recipient) || !same(takes[1]!.recipient, request.owner))) {
         return unavailable("ETHEREUM_FEE_TRANSFER_UNPROVEN");
       }
       traderOutput = takes[zeroFeeTake ? 0 : 1]!.amount;
       const paidFee = zeroFeeTake ? 0n : takes[0]!.amount;
       grossNative = paidFee + traderOutput;
-      platform = grossNative * 30n / 10_000n;
+      platform = grossNative * BigInt(feePolicy!.policy.rateBps) / 10_000n;
       if (paidFee !== platform || outputIncrease !== traderOutput + (same(request.owner, recipient) ? platform : 0n)) {
         return unavailable("ETHEREUM_FEE_TRANSFER_UNPROVEN");
       }
@@ -250,7 +250,7 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
       return unavailable("ETHEREUM_SWAP_SETTLEMENT_UNPROVEN");
     }
     if (charge && request.side === "buy") {
-      platform = grossNative * 30n / 10_000n;
+      platform = grossNative * BigInt(feePolicy!.policy.rateBps) / 10_000n;
       const payments = successfulTradeFramesV1(simulation.trace).filter(frame => frame.type === "CALL"
         && frame.to && same(frame.to, recipient) && same(frame.from, protocol.router.address)
         && frame.input === "0x" && BigInt(frame.value) > 0n);

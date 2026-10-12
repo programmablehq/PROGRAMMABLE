@@ -349,7 +349,7 @@ export function resolveDirectNativeProfile(selection, options = {}) {
       normalized.accountingMode,
       normalized.assessmentBase,
       normalized.feeCurrency,
-      [DIRECT_NATIVE_PROFILE_VERSION_V35, DIRECT_NATIVE_PROFILE_VERSION_V36].includes(profileVersion) ? "3000" : PLATFORM_FEE_RATE_PPM,
+      profileVersion === DIRECT_NATIVE_PROFILE_VERSION_V36 ? tradeFeePolicy.ratePpm : profileVersion === DIRECT_NATIVE_PROFILE_VERSION_V35 ? "3000" : PLATFORM_FEE_RATE_PPM,
       recipient,
     ),
     ...(profileVersion === DIRECT_NATIVE_PROFILE_VERSION_V36
@@ -419,8 +419,10 @@ export function buildDirectNativeProfileBinding(selection, context) {
     "selectionSchema",
     "direct-native launchProfile identity is not supported",
   );
-  const ratePpm = [DIRECT_NATIVE_PROFILE_VERSION_V35, DIRECT_NATIVE_PROFILE_VERSION_V36]
-    .includes(context.profile?.profileVersion ?? context.profileVersion) ? "3000" : PLATFORM_FEE_RATE_PPM;
+  const selectedVersion = profile?.profileVersion ?? context.profileVersion;
+  const ratePpm = selectedVersion === DIRECT_NATIVE_PROFILE_VERSION_V36
+    ? assertDirectNativeProgrammableTradeFeePolicyV36(profile?.programmableTradeFeePolicy ?? DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36).ratePpm
+    : selectedVersion === DIRECT_NATIVE_PROFILE_VERSION_V35 ? "3000" : PLATFORM_FEE_RATE_PPM;
   const byId = new Map(context.graphBundle.targets.map((target) => [target.targetId, target]));
   const predictions = new Map(context.predictions.map((prediction) => [
     prediction.targetId,

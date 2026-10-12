@@ -1,6 +1,6 @@
 import type { Address, Hex, PublicClient } from "viem";
 export interface Source {
-  chainId: 1; releaseDigest: Hex; sourceCommit: string; startBlock: bigint;
+  chainId: 1; platformFeeBps?: 30 | 100; releaseDigest: Hex; sourceCommit: string; startBlock: bigint;
   implementation: { address: Address; runtimeCodeHash: Hex }; proxyRuntimeCodeHash: Hex;
 }
 export interface Metadata { name: string; symbol: string; description: string; imageURI: string; website: string; socialData: Hex }

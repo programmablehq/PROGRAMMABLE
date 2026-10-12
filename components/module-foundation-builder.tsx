@@ -42,6 +42,7 @@ export interface ModuleFoundationBuilderProps {
   networkControl?: ReactNode;
   availability: FoundationAvailability;
   /** Custody of the currently verified launch factory; unknown while availability loads. */
+  platformFeeBps?: 30 | 100;
   factoryVersion?: "v1" | "v2" | "v3";
   /** Changes whenever the authenticated wallet, chain or source release changes. */
   contextKey: string;
@@ -96,7 +97,7 @@ function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes
     initialBuy: initial?.initialBuy ?? "", ...(initial?.quoteValuation !== undefined ? { quoteValuation: initial.quoteValuation } : {}), additionalLiquidity: "0", modules: initial?.modules ?? EMPTY_MODULES };
 }
 
-export function ModuleFoundationBuilder({ layout = "form", previousLaunchAction, recoveryAction, networkControl, availability, contextKey, catalog, quoteAssets, nativeBalance, onCheckFunding, onResolveQuote, onResolveSuggestedInitialBuy, onUploadImage, onPrepareLaunch, onWarmLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, persistDraft = false, suggestedInitialBuy, minimumInitialBuy, launchProgress, submissionBlocked }: ModuleFoundationBuilderProps) {
+export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", previousLaunchAction, recoveryAction, networkControl, availability, contextKey, catalog, quoteAssets, nativeBalance, onCheckFunding, onResolveQuote, onResolveSuggestedInitialBuy, onUploadImage, onPrepareLaunch, onWarmLaunch, onConfirmLaunch, onRefreshResult, onBack, onRetryAvailability, walletAction, initialDraft, persistDraft = false, suggestedInitialBuy, minimumInitialBuy, launchProgress, submissionBlocked }: ModuleFoundationBuilderProps) {
   const [restored] = useState(() => persistDraft && !initialDraft ? readFoundationLaunchDraft(availability.chainId) : null);
   const [draft, setDraft] = useState<EditableDraft>(() => restored?.draft ?? initialForm(initialDraft, quoteAssets, availability.chainId));
   const [buyEdited, setBuyEdited] = useState(restored?.buyEdited ?? (initialDraft?.initialBuy !== undefined));
@@ -458,7 +459,7 @@ export function ModuleFoundationBuilder({ layout = "form", previousLaunchAction,
   }
 
   const actionLabel = walletAction?.label ?? (availability.status === "checking" ? "Checking launch…" : phase === "uploading" ? "Saving image…" : phase === "signing" ? launchProgress || "Opening coin…" : phase === "preparing" ? "Preparing launch…" : "Launch coin");
-  if (layout === "studio" && phase !== "result") return <FoundationStudio draft={draft} catalog={catalog} imageSource={imageSource}
+  if (layout === "studio" && phase !== "result") return <FoundationStudio draft={draft} catalog={catalog} imageSource={imageSource} platformFeeBps={platformFeeBps}
     previousLaunchAction={previousLaunchAction} recoveryAction={recoveryAction} networkControl={networkControl} quoteSymbol={quoteSymbol} quoteStatus={quoteStatus}
     initialBuy={initialBuy} actionLabel={actionLabel} disabled={locked || imagePreparing} busy={busy || walletAction?.busy}
     actionDisabled={unavailable || Boolean(submissionBlocked) || walletAction?.busy} status={launchProgress || (availability.status !== "ready" ? availability.reason || actionLabel : undefined)}
@@ -531,7 +532,7 @@ export function ModuleFoundationBuilder({ layout = "form", previousLaunchAction,
               })}</div> : null}
               {errors.modules ? <p className={styles.error} role="alert">{errors.modules}</p> : null}
               <div className={styles.feesBuyRow}>
-                <CreatorFeeField value={draft.creatorFeeBps} error={errors.creatorFeeBps} onChange={value => update("creatorFeeBps", value)} />
+                <CreatorFeeField platformFeeBps={platformFeeBps} value={draft.creatorFeeBps} error={errors.creatorFeeBps} onChange={value => update("creatorFeeBps", value)} />
                 <Field label="First buy · min. $2" id="foundation-initial-buy" error={errors.initialBuy}><div className={styles.amountInput}><input id="foundation-initial-buy" name="initialBuy" inputMode="decimal" autoComplete="off" required value={initialBuy} placeholder="ETH amount" aria-invalid={Boolean(errors.initialBuy) || undefined} aria-describedby={errors.initialBuy ? "foundation-initial-buy-error" : undefined} onChange={event => update("initialBuy", event.target.value)} /><span>ETH</span></div></Field>
               </div>
             </section>
@@ -565,9 +566,9 @@ function Field({ label, id, error, hint, children }: { label: React.ReactNode; i
   return <div className={styles.field}><label htmlFor={id}>{label}</label>{children}{hint ? <p id={`${id}-help`} className={styles.help}>{hint}</p> : null}{error ? <p id={`${id}-error`} className={styles.error}>{error}</p> : null}</div>;
 }
 
-function CreatorFeeField({ value, error, onChange }: { value: number; error?: string; onChange: (value: number) => void }) {
+function CreatorFeeField({ value, error, onChange, platformFeeBps }: { platformFeeBps: 30 | 100; value: number; error?: string; onChange: (value: number) => void }) {
   const id = "foundation-creator-fee";
-  return <Field label="Creator fees" id={id} hint="Buy & Sell (Platform Fee 0.3%)" error={error}><div className={styles.feeControls}>
+  return <Field label="Creator fees" id={id} hint={`Buy & Sell (Platform Fee ${platformFeeBps / 100}%)`} error={error}><div className={styles.feeControls}>
     <button type="button" aria-label="Decrease creator fee" disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 100))}><MinusIcon size={16} aria-hidden="true" /></button>
     <div><input id={id} name="creatorFeeBps" type="number" min={0} max={10} step={1} value={value / 100} aria-invalid={Boolean(error) || undefined} aria-describedby={[`${id}-help`, error ? `${id}-error` : ""].filter(Boolean).join(" ")} onChange={event => onChange(Number(event.target.value) * 100)} /><span>%</span></div>
     <button type="button" aria-label="Increase creator fee" disabled={value >= 1000} onClick={() => onChange(Math.min(1000, value + 100))}><PlusIcon size={16} aria-hidden="true" /></button>

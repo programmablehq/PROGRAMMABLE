@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { decodeAbiParameters, decodeFunctionData, getContractAddress, parseAbiParameters, toHex, type Address, type Hex } from "viem";
 import recordingBytes from "./fixtures/ethereum-stamped-swap-rpc.json";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
-import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1, ETHEREUM_ROUTING_FEE_POLICY_HASH_V1, ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2, type EthereumRoutingFeePolicy,
+import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1, ETHEREUM_ROUTING_FEE_POLICY_HASH_V1, ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2, ETHEREUM_ROUTING_FEE_POLICY_V3, type EthereumRoutingFeePolicy,
   parseEthereumRoutingFeePolicyV1, type EthereumFeeClassificationV1 } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
 import { ETHEREUM_NATIVE30_RECIPES_V2 } from "@/lib/custom-launch/ethereum-native30-recipes-v2";
 import { ETHEREUM_NATIVE30_RECIPES_V1 } from "@/lib/custom-launch/ethereum-native30-recipes-v1";
@@ -53,6 +53,22 @@ function commands(tx: ReturnType<typeof ethereumStampedSwapTransaction>) {
 }
 
 describe("Ethereum 3.6 routing fee", () => {
+  it("encodes the signed 100bps policy on buys and sells without rewriting 30bps bindings", () => {
+    const f = fixture(ETHEREUM_ROUTING_FEE_POLICY_V3), legacy = fixture(ETHEREUM_ROUTING_FEE_POLICY_V2);
+    expect(parseEthereumRoutingFeePolicyV1(f.policy)).toEqual(f.policy);
+    expect(f.policy.policyHash).not.toBe(legacy.policy.policyHash);
+    const buy = commands(ethereumStampedSwapTransaction(f.route, f.request, 10000n));
+    expect(decodeAbiParameters(parseAbiParameters("address,address,uint256"), buy[1][0]!)).toEqual([
+      zero, ETHEREUM_ROUTING_FEE_POLICY_V3.defaultCollection.recipient, BigInt(f.request.amountIn) * 100n / 10000n,
+    ]);
+    const sell = commands(ethereumStampedSwapTransaction(f.route, { ...f.request, side: "sell" }, 99100n));
+    const [, actions] = decodeAbiParameters(parseAbiParameters("bytes,bytes[]"), sell[1][0]!);
+    expect(decodeAbiParameters(parseAbiParameters("address,address,uint256"), actions[2]!)).toEqual([
+      zero, ETHEREUM_ROUTING_FEE_POLICY_V3.defaultCollection.recipient, 100n,
+    ]);
+    expect(() => parseEthereumRoutingFeePolicyV1({ ...f.policy, policy: ETHEREUM_ROUTING_FEE_POLICY_V2 })).toThrow();
+  });
+
   it("binds the new treasury independently while preserving exact legacy calldata", () => {
     const old = fixture(), current = fixture(ETHEREUM_ROUTING_FEE_POLICY_V2);
     expect(parseEthereumRoutingFeePolicyV1(current.policy)).toEqual(current.policy);

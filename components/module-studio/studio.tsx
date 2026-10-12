@@ -13,6 +13,7 @@ import { StudioCanvas } from "./studio-canvas";
 import styles from "./studio.module.css";
 
 export interface FoundationStudioProps {
+  platformFeeBps?: 30 | 100;
   previousLaunchAction?: ReactNode;
   recoveryAction?: ReactNode;
   networkControl?: ReactNode;
@@ -197,7 +198,7 @@ export function FoundationStudio({ formRef, imageInput, ...props }: FoundationSt
             <label className={styles.largeNumber}><span>Buy & sell</span><div><input id="foundation-creator-fee" type="number" min={0} max={10} step={1} value={draft.creatorFeeBps / 100} onChange={event => props.onUpdate("creatorFeeBps", Number(event.target.value) * 100)} /><span>%</span></div></label>
             <input aria-label="Creator fees" className={styles.range} type="range" min={0} max={10} step={1} value={draft.creatorFeeBps / 100} onChange={event => props.onUpdate("creatorFeeBps", Number(event.target.value) * 100)} />
             <div className={styles.presets}>{[0, 1, 3, 5].map(value => <button type="button" key={value} aria-pressed={draft.creatorFeeBps === value * 100} onClick={() => props.onUpdate("creatorFeeBps", value * 100)}>{value}%</button>)}</div>
-            <div className={styles.settingStatus}>Platform fee <strong>0.3%</strong></div>{errors.creatorFeeBps ? <div className={styles.error}>{errors.creatorFeeBps}</div> : null}
+            <div className={styles.settingStatus}>Platform fee <strong>{(props.platformFeeBps ?? 30) / 100}%</strong></div>{errors.creatorFeeBps ? <div className={styles.error}>{errors.creatorFeeBps}</div> : null}
           </> : panel === "modules" ? draft.modules.map(item => <button type="button" className={styles.summaryButton} key={item.id} onClick={() => focusPanel(item.id)}><ModuleLogo category={catalog.find(module => module.id === item.id)?.studio?.category ?? "other"} />{catalog.find(module => module.id === item.id)?.name ?? "Module"}</button>) : selected ? <>
             <p className={styles.moduleDescription}>{moduleDescriptions[selected.id] ?? selected.description}</p>
             {selected.fields.map(configField => <div className={styles.settingCard} data-kind={configField.kind} key={configField.key}><ModuleFoundationConfigField compact field={configField} id={`foundation-module-${encodeURIComponent(selected.id)}-${encodeURIComponent(configField.key)}`} value={inspectedSelection!.configuration[configField.key]} showErrors={Boolean(errors.modules)} onChange={value => {

@@ -13,7 +13,7 @@ import { MODULE_ENGINE_SHARED_QUOTE_ENVIRONMENT_V1 } from "@/lib/module-mode/rev
 import { MODULE_ENGINE_POSITION_MANAGER_ENVIRONMENT_V1 } from "@/lib/module-mode/review-engine-position-manager";
 import { computeModuleModeReleaseDigest, moduleHash, moduleRecord, MODULE_MODE_SOURCE_VERSION_V2 } from "@/lib/module-mode/release";
 import { isReviewId, parseReviewAttempt, parseReviewJob, parseReviewPlan, parseReviewSourceCorrection, reviewDigest, reviewRecord, parseReviewQueueItem, type ReviewDetail,
-  FOUNDATION_SETTINGS_V1, FOUNDATION_HOST_V1, FOUNDATION_BUILD_SCHEMA_V1, FOUNDATION_PROTOCOL_BUILD_V1, FOUNDATION_PROTOCOL_BUILD_V2, FOUNDATION_PROTOCOL_EXTENSION_V1, FOUNDATION_PROTOCOL_EXTENSION_V2, FOUNDATION_LP_CUSTODY_ID_V2,
+  FOUNDATION_SETTINGS_V1, FOUNDATION_HOST_V1, FOUNDATION_BUILD_SCHEMA_V1, FOUNDATION_PROTOCOL_BUILD_V1, FOUNDATION_PROTOCOL_BUILD_V2, FOUNDATION_PROTOCOL_BUILD_V3, FOUNDATION_PROTOCOL_EXTENSION_V3, FOUNDATION_PROTOCOL_EXTENSION_FEE100_V1, FOUNDATION_PROTOCOL_EXTENSION_V1, FOUNDATION_PROTOCOL_EXTENSION_V2, FOUNDATION_LP_CUSTODY_ID_V2,
   isFoundationProtocolArtifact, foundationProtocolReviewManifest, foundationProtocolReviewManifestHash, type FoundationBuildArtifactV1, type FoundationProtocolBuildV1,
   type FoundationProtocolBuildV2, type AnyFoundationProtocolBuild } from "@/lib/module-mode/review-contract";
 import { createFoundationModuleManifestV1, hashFoundationModuleManifestV1, readFoundationPackageExtensionV1, encodeFoundationConfigurationV1, encodeFoundationActionV1 } from "@/lib/module-foundation/manifest";
@@ -85,11 +85,15 @@ export function verifyFoundationReviewSource(artifact: FoundationBuildArtifactV1
     || artifact.compiler.completeInputHash !== reviewDigest("programmable.modules.compiler-input.v1", standard)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
   if (isFoundationProtocolArtifact(artifact)) {
     const v2 = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2;
-    const extension = reviewRecord(descriptor.extensions?.[v2 ? FOUNDATION_PROTOCOL_EXTENSION_V2 : FOUNDATION_PROTOCOL_EXTENSION_V1],
-      ["hostAdapterId", "sourceCommit", "platformBps", "platformRecipient", ...(v2 ? ["factoryVersion", "lpCustodyId"] : [])]);
-    if (v2 && (artifact.factoryVersion !== "v2" || artifact.lpCustodyId !== FOUNDATION_LP_CUSTODY_ID_V2)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    const v3 = artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V3;
+    const fee100 = descriptor.extensions?.[FOUNDATION_PROTOCOL_EXTENSION_FEE100_V1] !== undefined;
+    if (v3 && (fee100 && descriptor.extensions?.[FOUNDATION_PROTOCOL_EXTENSION_V3] !== undefined
+      || artifact.platformBps !== (fee100 ? 100 : 30))) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+    const extension = reviewRecord(descriptor.extensions?.[v3 ? fee100 ? FOUNDATION_PROTOCOL_EXTENSION_FEE100_V1 : FOUNDATION_PROTOCOL_EXTENSION_V3 : v2 ? FOUNDATION_PROTOCOL_EXTENSION_V2 : FOUNDATION_PROTOCOL_EXTENSION_V1],
+      ["hostAdapterId", "sourceCommit", "platformBps", "platformRecipient", ...(v2 || v3 ? ["factoryVersion", "lpCustodyId"] : [])]);
+    if ((v2 || v3) && (artifact.factoryVersion !== (v3 ? "v3" : "v2") || artifact.lpCustodyId !== FOUNDATION_LP_CUSTODY_ID_V2)) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
     if (!same(extension, { hostAdapterId: artifact.hostAdapterId, sourceCommit: artifact.sourceCommit, platformBps: artifact.platformBps, platformRecipient: artifact.platformRecipient,
-      ...(v2 ? { factoryVersion: artifact.factoryVersion, lpCustodyId: artifact.lpCustodyId } : {}) })) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
+      ...(v2 || v3 ? { factoryVersion: artifact.factoryVersion, lpCustodyId: artifact.lpCustodyId } : {}) })) fail(502, "MODULE_REVIEW_SOURCE_MISMATCH");
     return;
   }
   const manifest = createFoundationModuleManifestV1(descriptor, artifact.subject.requestDigest), extension = readFoundationPackageExtensionV1(manifest);

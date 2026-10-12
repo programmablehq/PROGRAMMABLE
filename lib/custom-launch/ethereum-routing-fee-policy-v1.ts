@@ -51,10 +51,20 @@ export const ETHEREUM_ROUTING_FEE_POLICY_V2 = {
     vault: "EthereumNativeFeeVaultV3",
   },
 } as const;
-export type EthereumRoutingFeePolicy = typeof ETHEREUM_ROUTING_FEE_POLICY_V1 | typeof ETHEREUM_ROUTING_FEE_POLICY_V2;
+/** Additive 100-bps policy. Historical 30-bps launch bindings remain exact. */
+export const ETHEREUM_ROUTING_FEE_POLICY_V3 = Object.freeze({
+  ...ETHEREUM_ROUTING_FEE_POLICY_V2,
+  policyVersion: "programmable.ethereum-routed-native-fee.v3" as const,
+  ratePpm: "10000" as const,
+  rateBps: 100 as const,
+  defaultCollection: Object.freeze({ ...ETHEREUM_ROUTING_FEE_POLICY_V2.defaultCollection, routedRateBps: 100 as const }),
+  native30Waiver: null,
+});
+
+export type EthereumRoutingFeePolicy = typeof ETHEREUM_ROUTING_FEE_POLICY_V1 | typeof ETHEREUM_ROUTING_FEE_POLICY_V2 | typeof ETHEREUM_ROUTING_FEE_POLICY_V3;
 export const ETHEREUM_ROUTING_FEE_POLICY_HASH_V2 = canonicalBrowserSha256V2(ETHEREUM_ROUTING_FEE_POLICY_V2.schemaVersion, ETHEREUM_ROUTING_FEE_POLICY_V2);
 export function isEthereumRoutingFeePolicy(policy: unknown, policyHash: unknown): policy is EthereumRoutingFeePolicy {
-  return [ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2].some(expected =>
+  return [ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2, ETHEREUM_ROUTING_FEE_POLICY_V3].some(expected =>
     policyHash === canonicalBrowserSha256V2(expected.schemaVersion, expected)
     && canonicalBrowserJsonV2(policy) === canonicalBrowserJsonV2(expected));
 }

@@ -38,7 +38,7 @@ The 4.1 funding and CLI instructions below apply to that existing profile; Multi
 
 ## Fees and analytics
 
-Current Programmable-routed Custom Launch trades on Ethereum and Robinhood charge **30 bps (0.30%)** for the platform, separately from creator and pool fees. External routing is a separate capability and does not imply this fee is hook-enforced everywhere. Historical Robinhood Native20 contracts retain their deployed 20 bps fee model. The [fees guide](https://programmable.market/docs/economics) defines the calculation and claim path. The [Dune dashboard](https://dune.com/programmablehq/analytics) reports finalized Custom Launch stamps, creator rewards in ETH and protocol revenue in ETH. Fee totals include unclaimed accruals from supported native fee events; gas, liquidity, withdrawals and historical fee models without those events are excluded. The dashboard refreshes every 24 hours.
+New Custom Launches use a versioned policy: Programmable-routed trades on Ethereum and Robinhood charge **100 bps (1%)** for the platform, separately from creator and pool fees. External routing is a separate capability and does not imply this fee is hook-enforced everywhere. Historical Robinhood Native20 contracts retain their deployed 20 bps fee model. The [fees guide](https://programmable.market/docs/economics) defines the calculation and claim path. The [Dune dashboard](https://dune.com/programmablehq/analytics) reports finalized Custom Launch stamps, creator rewards in ETH and protocol revenue in ETH. Fee totals include unclaimed accruals from supported native fee events; gas, liquidity, withdrawals and historical fee models without those events are excluded. The dashboard refreshes every 24 hours.
 
 ## Start with the launch details
 

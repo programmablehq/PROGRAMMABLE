@@ -15,7 +15,7 @@ const review: CustomLaunchReview = { schemaVersion: "programmable.custom-launch-
 describe("custom launch review evidence", () => {
   it("shows the exact saved fork result instead of the generic not-verified status", () => {
     const html = render(report);
-    expect(html).toContain("Passed on fork: buy, sell and 0.30% platform fee collection.");
+    expect(html).toContain("Passed on fork: buy, sell and the bound platform fee collection.");
     expect(html).toContain("block 1234");
     expect(html).not.toContain("Current status: not verified");
     expect(html).toContain("live execution is checked separately");

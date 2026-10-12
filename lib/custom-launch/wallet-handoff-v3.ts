@@ -1571,7 +1571,7 @@ function assertBehaviorEvidenceSummaryV3(value: unknown) {
     || exactSha256(summary.subjectSha256) !== summary.subjectSha256
     || requirements.schemaVersion
       !== "programmable.custom-launch-behavior-requirements.v1"
-    || !["1.1.0", "1.2.0"].includes(String(requirements.vectorSetVersion))
+    || !["1.1.0", "1.2.0", "1.3.0"].includes(String(requirements.vectorSetVersion))
     || !Number.isInteger(requirements.hookPermissionMask)
     || Number(requirements.hookPermissionMask) < 0
     || Number(requirements.hookPermissionMask) > 16_383

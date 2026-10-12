@@ -1178,6 +1178,7 @@ function routerTransactionReview(launch: LaunchResource) {
 
 export function walletPlatformFeeDisclosureV3(
   launchProfileVersion: LaunchResource["launchProfileVersion"],
+  output?: unknown,
 ) {
   if (launchProfileVersion === "3.3.0") {
     return "No automatic Programmable fee claim";
@@ -1189,7 +1190,11 @@ export function walletPlatformFeeDisclosureV3(
     return "30 bps · exact settlement fee-path verification required";
   }
   if (launchProfileVersion === "3.6.0") {
-    return "30 bps (0.3%) on Programmable trades · server-proven native30 avoids an additional routed fee";
+    const evidence = isRecord(output) && isRecord(output.behaviorEvidence) ? output.behaviorEvidence : null;
+    const version = evidence && isRecord(evidence.requirements) ? evidence.requirements.vectorSetVersion : null;
+    if (version === "1.3.0") return "1% platform fee on Programmable trades";
+    if (version === "1.2.0") return "0.3% platform fee · original launch policy";
+    return "As specified in your approved launch policy";
   }
   return "Defined by the bound launch profile";
 }
@@ -3965,6 +3970,7 @@ export function DeveloperLaunchHistory({
                         <dd>
                           {walletPlatformFeeDisclosureV3(
                             reviewLaunch.launchProfileVersion,
+                            reviewLaunch.output,
                           )}
                         </dd>
                       </div>

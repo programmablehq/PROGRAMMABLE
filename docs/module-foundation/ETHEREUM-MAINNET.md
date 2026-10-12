@@ -16,7 +16,7 @@ The new execution route is `CustomGraph` in the canonical ABI. It creates a Modu
 
 The Router deploys the graph and writes the canonical stamp in one transaction. If deployment, market verification or stamping fails, the entire transaction reverts. The implementation cannot be used as a launch account itself. Historical V1 coins retain their original source for trading and fee claims. The immutable V1 contracts remain callable, but a direct V1 factory deployment does not acquire a Programmable stamp.
 
-The launch wallet receives the initial buy and any native refund. Base liquidity and rounding inventory retain the existing irreversible DEAD custody. Platform fees remain 30 basis points. Directional creator fees and module callbacks retain their existing semantics. The Ethereum wallet-cap factory binds the Ethereum Universal Router; the module's implementation and configuration remain shared.
+The launch wallet receives the initial buy and any native refund. Base liquidity and rounding inventory retain the existing irreversible DEAD custody. New fee100 launches charge 100 basis points (1%). Earlier immutable releases retain 30 basis points. Directional creator fees and module callbacks retain their existing semantics. The Ethereum wallet-cap factory binds the Ethereum Universal Router; the module's implementation and configuration remain shared.
 
 The Studio uses one UI on both networks. Chain profiles select infrastructure, WETH, quote discovery, RPC clients and finality. Prepared actions, pending transactions, results and caches include chain identity. Changing networks remounts the launch session. Ethereum Any Quote discovery uses Ethereum V4 pools and the Ethereum price feed; it does not borrow Robinhood routes or stock feeds.
 

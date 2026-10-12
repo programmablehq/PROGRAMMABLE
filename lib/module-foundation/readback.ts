@@ -18,7 +18,7 @@ import {
   type FoundationCheckpoint, type FoundationDeploymentBinding, type FoundationPreparedStep, type FoundationTransaction,
 } from "./client";
 import {
-  FOUNDATION_ABI_ID, FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_BPS,
+  FOUNDATION_ABI_ID, FOUNDATION_INT128_MAX, FOUNDATION_PLATFORM_BPS, foundationPlatformFeeBps,
   FOUNDATION_PLATFORM_RECIPIENT, FOUNDATION_SUPPLY, FOUNDATION_TICK_SPACING, foundationCreatorFeeBps,
   FOUNDATION_DEAD_ADDRESS, FOUNDATION_LP_CUSTODY_DEAD_ID,
 } from "./constants";
@@ -98,13 +98,14 @@ async function assertCanonical(client: PublicClient, checkpoint: FoundationCheck
 }
 
 /** Exact carry arithmetic for an explicitly known gross amount. A net amount does not identify a unique gross. */
-export function foundationFeesFromGross(grossQuote: bigint, creatorFeeBps: number, carry: FoundationFeeCarry) {
+export function foundationFeesFromGross(grossQuote: bigint, creatorFeeBps: number, carry: FoundationFeeCarry, platformBps: 30 | 100 = FOUNDATION_PLATFORM_BPS) {
   foundationCreatorFeeBps(creatorFeeBps);
+  foundationPlatformFeeBps({ platformFeeBps: platformBps });
   if (grossQuote <= 0n || grossQuote > FOUNDATION_INT128_MAX
     || [carry.platform, carry.creator].some(value => !Number.isInteger(value) || value < 0 || value >= 10_000)) {
     throw new Error("Invalid gross quote amount or fee carry.");
   }
-  const platform = grossQuote * BigInt(FOUNDATION_PLATFORM_BPS) + BigInt(carry.platform);
+  const platform = grossQuote * BigInt(platformBps) + BigInt(carry.platform);
   const creator = grossQuote * BigInt(creatorFeeBps) + BigInt(carry.creator);
   const platformQuote = platform / 10_000n, creatorQuote = creator / 10_000n;
   const netQuote = grossQuote - platformQuote - creatorQuote;
@@ -291,7 +292,7 @@ export async function readFoundationPoolDetails(input: {
         originalPrincipal: record.baseTokenPrincipal, originalRoundingInventory: record.baseTokenRounding },
       creator: creatorPosition ? { ...creatorPosition, custody: record.factoryVersion !== "v1" ? "dead-v1" as const : "wallet-owned-v1" as const } : null },
     ledger: { address: getAddress(ledger), quote: pool.quote, claimBacking, outstandingBacking, unallocatedCreatorDust,
-      platform: { ...platform, received: platformReceived, beneficiary: FOUNDATION_PLATFORM_RECIPIENT, bps: FOUNDATION_PLATFORM_BPS },
+      platform: { ...platform, received: platformReceived, beneficiary: FOUNDATION_PLATFORM_RECIPIENT, bps: foundationPlatformFeeBps(binding) },
       creator: { ...creator, received: creatorReceived, beneficiary: getAddress(provenance.creator), shareBps: creatorShareBps },
       moduleClaimedTotal, modules },
     feeCarry: { buy: { platform: buyCarry[0], creator: buyCarry[1] }, sell: { platform: sellCarry[0], creator: sellCarry[1] } },
@@ -484,7 +485,7 @@ export async function simulateFoundationTradeFees(input: {
     const event = decodeEventLog({ abi: foundationReadbackAbi, eventName: "FoundationSwap", data: log.data, topics: log.topics, strict: true }).args;
     if (!sameHex(event.poolId, pool.poolId)) throw new Error("The simulated fee event belongs to a foreign pool.");
     const side = event.buy ? "buy" : "sell";
-    const fees = foundationFeesFromGross(event.grossQuote, event.buy ? rates.creatorBuyFeeBps : rates.creatorSellFeeBps, carries[side]);
+    const fees = foundationFeesFromGross(event.grossQuote, event.buy ? rates.creatorBuyFeeBps : rates.creatorSellFeeBps, carries[side], foundationPlatformFeeBps(binding));
     if (!fees.positiveNet || fees.platformQuote !== event.platformQuote || fees.creatorQuote !== event.creatorQuote) {
       throw new Error("The simulated swap fees disagree with the bound carry arithmetic.");
     }
@@ -499,7 +500,7 @@ export async function simulateFoundationTradeFees(input: {
   }
   await assertCanonical(client, checkpoint);
   return { evidence: "simulated-ledger-delta" as const, checkpoint, pool, ledger: record.ledger,
-    quote: pool.quote, platformRecipient: FOUNDATION_PLATFORM_RECIPIENT, platformBps: FOUNDATION_PLATFORM_BPS,
+    quote: pool.quote, platformRecipient: FOUNDATION_PLATFORM_RECIPIENT, platformBps: foundationPlatformFeeBps(binding),
     ...foundationCreatorFeeFields(provenance), platformQuote, creatorQuote, totalQuote: platformQuote + creatorQuote,
     grossQuote: swaps.length > 0 ? swaps.reduce((sum, swap) => sum + swap.grossQuote, 0n) : null,
     grossEvidence: swaps.length > 0 ? "canonical-hook-swap-events" as const : null, swaps,

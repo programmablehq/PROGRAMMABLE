@@ -1,0 +1,1119 @@
+{
+  "fixtureOnly": true,
+  "backendCommit": "ca8912c3d84340c3185b9ec816e15c697c8fc21b",
+  "authority": "Unit transport only; no protected execution, review approval or deployment",
+  "cases": [
+    {
+      "source": {
+        "format": "programmable.modules.submission.v0.1",
+        "descriptor": {
+          "author": "0x1111111111111111111111111111111111111111",
+          "components": [
+            {
+              "id": "factory",
+              "runtime": "programmable.module-foundation.protocol-solidity@1",
+              "sourcePath": "UnitFoundation.sol",
+              "entrypoint": "UnitFoundationFactory"
+            },
+            {
+              "id": "hook-deployer",
+              "runtime": "programmable.module-foundation.protocol-solidity@1",
+              "sourcePath": "UnitFoundation.sol",
+              "entrypoint": "UnitFoundationHookDeployer"
+            }
+          ],
+          "configuration": {
+            "fields": {
+              "cap": {
+                "bits": 64,
+                "max": "999",
+                "min": "1",
+                "type": "uint"
+              }
+            },
+            "required": [
+              "cap"
+            ],
+            "type": "record"
+          },
+          "constraints": [],
+          "documentation": "README.md",
+          "familySalt": "0x1212121212121212121212121212121212121212121212121212121212121212",
+          "format": "programmable.classic.source-package.v0.1",
+          "management": {
+            "actions": [],
+            "reads": [],
+            "summary": "Bounded service-owned test fixture."
+          },
+          "name": "foundation-protocol-v3-unit-fixture",
+          "ports": {
+            "inputs": {},
+            "outputs": {}
+          },
+          "requiresHost": [
+            "programmable.module-foundation.host@1"
+          ],
+          "rewardWallet": "0x2222222222222222222222222222222222222222",
+          "source": {
+            "files": [
+              {
+                "path": "UnitFoundation.sol",
+                "sha256": "954ba84fac9f14de062d9248ab8256bdd8159c47aceea736dd3556bd7bfa405a"
+              },
+              {
+                "path": "README.md",
+                "sha256": "ec46bbd7abd4e4ced6af295f4ac00753322097f038d676287bc552123381152c"
+              }
+            ]
+          },
+          "version": "1.0.0",
+          "extensions": {
+            "programmable.module-foundation.protocol@3": {
+              "hostAdapterId": "programmable.module-foundation.host@1",
+              "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+              "factoryVersion": "v3",
+              "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+              "platformBps": 30,
+              "platformRecipient": "0xd88539d3c4c460136a733a3fd60cf6bf269079da"
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "UnitFoundation.sol",
+            "sha256": "954ba84fac9f14de062d9248ab8256bdd8159c47aceea736dd3556bd7bfa405a",
+            "encoding": "base64",
+            "bytes": "Ly8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IE1JVApwcmFnbWEgc29saWRpdHkgMC44LjI2OwovLyBVbml0IGFkYXB0ZXIgZml4dHVyZSBvbmx5LiBJdCBpcyBpbnRlbnRpb25hbGx5IG5vdCB0aGUgbGF1bmNoIHByb3RvY29sIGFuZCBjYW5ub3QgcGFzcyBwcm90b2NvbCBjb25mb3JtYW5jZS4KY29udHJhY3QgVW5pdEZvdW5kYXRpb25GYWN0b3J5IHsKIHVpbnQyNTYgcHVibGljIGltbXV0YWJsZSBjaGFpbklkOwogYWRkcmVzcyBwdWJsaWMgaW1tdXRhYmxlIHBvb2xNYW5hZ2VyOwogYWRkcmVzcyBwdWJsaWMgaW1tdXRhYmxlIHBvc2l0aW9uTWFuYWdlcjsKIGFkZHJlc3MgcHVibGljIGltbXV0YWJsZSB1bml2ZXJzYWxSb3V0ZXI7CiBhZGRyZXNzIHB1YmxpYyBpbW11dGFibGUgcGVybWl0MjsKIGFkZHJlc3MgcHVibGljIGltbXV0YWJsZSBob29rRGVwbG95ZXI7CiBieXRlczMyIHB1YmxpYyBpbW11dGFibGUgcG9vbE1hbmFnZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSBwb3NpdGlvbk1hbmFnZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSB1bml2ZXJzYWxSb3V0ZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSBwZXJtaXQyQ29kZUhhc2g7CiBieXRlczMyIHB1YmxpYyBpbW11dGFibGUgaG9va0RlcGxveWVyQ29kZUhhc2g7CiBjb25zdHJ1Y3RvcihhZGRyZXNzWzVdIG1lbW9yeSBhZGRyZXNzZXMsYnl0ZXMzMls1XSBtZW1vcnkgaGFzaGVzKSB7CiBjaGFpbklkPWJsb2NrLmNoYWluaWQ7IHBvb2xNYW5hZ2VyPWFkZHJlc3Nlc1swXTtwb3NpdGlvbk1hbmFnZXI9YWRkcmVzc2VzWzFdO3VuaXZlcnNhbFJvdXRlcj1hZGRyZXNzZXNbMl07cGVybWl0Mj1hZGRyZXNzZXNbM107aG9va0RlcGxveWVyPWFkZHJlc3Nlc1s0XTsKIHBvb2xNYW5hZ2VyQ29kZUhhc2g9aGFzaGVzWzBdO3Bvc2l0aW9uTWFuYWdlckNvZGVIYXNoPWhhc2hlc1sxXTt1bml2ZXJzYWxSb3V0ZXJDb2RlSGFzaD1oYXNoZXNbMl07cGVybWl0MkNvZGVIYXNoPWhhc2hlc1szXTtob29rRGVwbG95ZXJDb2RlSGFzaD1oYXNoZXNbNF07CiB9Cn0KY29udHJhY3QgVW5pdEZvdW5kYXRpb25Ib29rRGVwbG95ZXIgeyBmdW5jdGlvbiBmaXh0dXJlT25seSgpIGV4dGVybmFsIHB1cmUgcmV0dXJucyhib29sKSB7IHJldHVybiB0cnVlOyB9IH0K"
+          },
+          {
+            "path": "README.md",
+            "sha256": "ec46bbd7abd4e4ced6af295f4ac00753322097f038d676287bc552123381152c",
+            "encoding": "base64",
+            "bytes": "U2VydmljZS1vd25lZCBwcm90b2NvbCBhZGFwdGVyIHVuaXQgZml4dHVyZS4gTm8gYXBwcm92YWwgb3IgbGF1bmNoIHByb3RvY29sLg=="
+          }
+        ]
+      },
+      "plan": {
+        "schemaVersion": "programmable.modules.foundation-protocol-build-plan.v3",
+        "submissionId": "11111111-1111-4111-8111-111111111112",
+        "requestDigest": "0x9ee70ec5820be4039a43ede45efb48fe01ed0a85355350d80e60fbe4b91f4ada",
+        "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+        "factoryComponentId": "factory",
+        "hookDeployerComponentId": "hook-deployer",
+        "factoryImmutableBindings": [
+          {
+            "id": "3",
+            "field": "chainId"
+          },
+          {
+            "id": "5",
+            "field": "poolManager"
+          },
+          {
+            "id": "7",
+            "field": "positionManager"
+          },
+          {
+            "id": "9",
+            "field": "universalRouter"
+          },
+          {
+            "id": "11",
+            "field": "permit2"
+          },
+          {
+            "id": "13",
+            "field": "hookDeployer"
+          },
+          {
+            "id": "15",
+            "field": "poolManagerCodeHash"
+          },
+          {
+            "id": "17",
+            "field": "positionManagerCodeHash"
+          },
+          {
+            "id": "19",
+            "field": "universalRouterCodeHash"
+          },
+          {
+            "id": "21",
+            "field": "permit2CodeHash"
+          },
+          {
+            "id": "23",
+            "field": "hookDeployerCodeHash"
+          }
+        ]
+      },
+      "artifact": {
+        "schemaVersion": "programmable.modules.foundation-protocol-build.v3",
+        "authority": "programmable.module-review.foundation-protocol-build.v3",
+        "factoryVersion": "v3",
+        "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+        "subject": {
+          "submissionId": "11111111-1111-4111-8111-111111111112",
+          "principalId": "00000000-0000-4000-8000-000000000002",
+          "author": "0x1111111111111111111111111111111111111111",
+          "requestDigest": "0x9ee70ec5820be4039a43ede45efb48fe01ed0a85355350d80e60fbe4b91f4ada"
+        },
+        "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+        "packageId": "0xfc4bfba4b37dcbff0bcd8b35602854ae0463e3e07826e04fb56b72b6156af0a6",
+        "familyId": "0x346cea54dbdb8405c0ceae7702e0a6dc3743140f49a1c6edc28b1c29597c7cda",
+        "rewardWallet": "0x2222222222222222222222222222222222222222",
+        "sourceManifestHash": "0xeda505cc2227a48afb65594a82e5917775fb1f2f054d2d5ba6af033788a7582c",
+        "planDigest": "0x6baac9f7e6165c2b52a70fc81eda172af58493ead4c7f37843d2701753385ed0",
+        "hostAdapterId": "programmable.module-foundation.host@1",
+        "platformBps": 30,
+        "platformRecipient": "0xd88539d3c4c460136a733a3fd60cf6bf269079da",
+        "compiler": {
+          "version": "0.8.26+commit.8a97fa7a",
+          "binarySha256": "sha256:35ba6661f3bdaed995fc7af14c405502290cf681b3fd062fe8738cfdf6db14ed",
+          "imageDigest": "sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
+          "settingsHash": "0x3f09bc3e507e276bd9206765ea8307e543caf1c2b36cca70bf12849ded71d80e",
+          "completeInputHash": "0x115f0aa81dd7f60f91fd5f4352eff9f04e40a47c2eb209d2a2f6d471746df338",
+          "reproducible": true
+        },
+        "factory": {
+          "componentId": "factory",
+          "sourcePath": "UnitFoundation.sol",
+          "contractName": "UnitFoundationFactory",
+          "abi": [
+            {
+              "inputs": [
+                {
+                  "internalType": "address[5]",
+                  "name": "addresses",
+                  "type": "address[5]"
+                },
+                {
+                  "internalType": "bytes32[5]",
+                  "name": "hashes",
+                  "type": "bytes32[5]"
+                }
+              ],
+              "stateMutability": "nonpayable",
+              "type": "constructor"
+            },
+            {
+              "inputs": [],
+              "name": "chainId",
+              "outputs": [
+                {
+                  "internalType": "uint256",
+                  "name": "",
+                  "type": "uint256"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "hookDeployer",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "hookDeployerCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "permit2",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "permit2CodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "poolManager",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "poolManagerCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "positionManager",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "positionManagerCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "universalRouter",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "universalRouterCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            }
+          ],
+          "creationBytecode": "0x6101e060405234610171576105168038038061001a81610195565b928339810190610140818303126101715781601f820112156101715760a09061004282610195565b81830193818186116101715783905b8682106101755750508060bf840112156101715761006e84610195565b9461014086940191821161017157945b8186106101615746608090815283516001600160a01b039081168752602080860151821660c052604080870151831660e052606080880151841661010052878501519093166101205287516101405290870151610160528087015161018052908601516101a052908501516101c052516103479086826101cf83396080518261012e0152518160aa015260c051816101a0015260e0518161029c015261010051816102e00152610120518161021e015261014051816101e6015261016051816103240152610180518160f401526101a0518161016801526101c051816102640152f35b855181526020958601950161007e565b5f80fd5b81516001600160a01b038116810361017157815260209182019101610051565b6040519190601f01601f191682016001600160401b038111838210176101ba57604052565b634e487b7160e01b5f52604160045260245ffdfe6080806040526004361015610012575f80fd5b5f3560e01c908163028541ed1461030f5750806312261ee7146102cb57806335a9e4df146102875780634ac38ac11461024d5780634e7fe09a1461020957806375d30ce4146101cf578063791b98bc1461018b5780638b452cf6146101515780639a8a0592146101175780639c984e6b146100dd5763dc4c90d314610095575f80fd5b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576020907f00000000000000000000000000000000000000000000000000000000000000008152f3",
+          "creationCodeHash": "0x27ef441031fa09708be061e9034745879297f4aab5946dc17679870575e4d009",
+          "runtimeTemplate": "0x6080806040526004361015610012575f80fd5b5f3560e01c908163028541ed1461030f5750806312261ee7146102cb57806335a9e4df146102875780634ac38ac11461024d5780634e7fe09a1461020957806375d30ce4146101cf578063791b98bc1461018b5780638b452cf6146101515780639a8a0592146101175780639c984e6b146100dd5763dc4c90d314610095575f80fd5b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576020907f00000000000000000000000000000000000000000000000000000000000000008152f3",
+          "runtimeTemplateHash": "0xfa19121aa9aaee3f0737bcb51944f406eb28e34f07224755a62f59f586095b90",
+          "immutableReferences": [
+            {
+              "id": "11",
+              "ranges": [
+                {
+                  "start": 736,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "13",
+              "ranges": [
+                {
+                  "start": 542,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "15",
+              "ranges": [
+                {
+                  "start": 486,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "17",
+              "ranges": [
+                {
+                  "start": 804,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "19",
+              "ranges": [
+                {
+                  "start": 244,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "21",
+              "ranges": [
+                {
+                  "start": 360,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "23",
+              "ranges": [
+                {
+                  "start": 612,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "3",
+              "ranges": [
+                {
+                  "start": 302,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "5",
+              "ranges": [
+                {
+                  "start": 170,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "7",
+              "ranges": [
+                {
+                  "start": 416,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "9",
+              "ranges": [
+                {
+                  "start": 668,
+                  "length": 32
+                }
+              ]
+            }
+          ]
+        },
+        "hookDeployer": {
+          "componentId": "hook-deployer",
+          "sourcePath": "UnitFoundation.sol",
+          "contractName": "UnitFoundationHookDeployer",
+          "abi": [
+            {
+              "inputs": [],
+              "name": "fixtureOnly",
+              "outputs": [
+                {
+                  "internalType": "bool",
+                  "name": "",
+                  "type": "bool"
+                }
+              ],
+              "stateMutability": "pure",
+              "type": "function"
+            }
+          ],
+          "creationBytecode": "0x60808060405234601357603e908160188239f35b5f80fdfe60808060405260043610156011575f80fd5b5f3560e01c635cded48a146023575f80fd5b34603a575f366003190112603a5780600160209252f35b5f80fd",
+          "creationCodeHash": "0xce4bd1a00fc2d40bd1775a1af3d883c7028b4c82f2b4a0ce1c92b5f7b307245a",
+          "runtimeTemplate": "0x60808060405260043610156011575f80fd5b5f3560e01c635cded48a146023575f80fd5b34603a575f366003190112603a5780600160209252f35b5f80fd",
+          "runtimeTemplateHash": "0x5b72ddcd31024ec7d0ff5d2bb2f7e0a045f043ad1d41bb06ce972e30a7406b76",
+          "immutableReferences": []
+        },
+        "factoryImmutableBindings": [
+          {
+            "field": "chainId",
+            "id": "3"
+          },
+          {
+            "field": "poolManager",
+            "id": "5"
+          },
+          {
+            "field": "positionManager",
+            "id": "7"
+          },
+          {
+            "field": "universalRouter",
+            "id": "9"
+          },
+          {
+            "field": "permit2",
+            "id": "11"
+          },
+          {
+            "field": "hookDeployer",
+            "id": "13"
+          },
+          {
+            "field": "poolManagerCodeHash",
+            "id": "15"
+          },
+          {
+            "field": "positionManagerCodeHash",
+            "id": "17"
+          },
+          {
+            "field": "universalRouterCodeHash",
+            "id": "19"
+          },
+          {
+            "field": "permit2CodeHash",
+            "id": "21"
+          },
+          {
+            "field": "hookDeployerCodeHash",
+            "id": "23"
+          }
+        ],
+        "tests": {
+          "schemaVersion": "programmable.modules.foundation-protocol-test-results.v3",
+          "requestDigest": "0x9ee70ec5820be4039a43ede45efb48fe01ed0a85355350d80e60fbe4b91f4ada",
+          "planDigest": "0x6baac9f7e6165c2b52a70fc81eda172af58493ead4c7f37843d2701753385ed0",
+          "harnessDigest": "0xacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac",
+          "execution": "isolated-docker-anvil",
+          "checks": {
+            "officialInfrastructure": true,
+            "bothTokenOrders": true,
+            "zeroCreatorQuoteLaunch": true,
+            "metadataSupplyAndPoolIdentity": true,
+            "initialBuyAtomicity": true,
+            "directDeadPositionCustody": true,
+            "universalRouterFourForms": true,
+            "quoteFeeAccounting30Bps": true,
+            "fixedPlatformRecipientPayout": true,
+            "settlementAndAllowances": true,
+            "roundingInventoryToDead": true,
+            "receiptRegistryAndRefundBinding": true,
+            "independentCreatorFees": true
+          },
+          "allRequiredChecksPassed": true
+        },
+        "reviewRequired": [
+          "foundation-standard-token-fixed-supply-no-transfer-tax",
+          "foundation-immutable-30bps-platform-quote-fee",
+          "foundation-poolmanager-account-and-currency-deltas",
+          "foundation-official-router-empty-hookdata-four-forms",
+          "foundation-one-sided-price-direct-dead-nft-custody-and-no-vault",
+          "foundation-immutable-host-module-capabilities",
+          "foundation-reentrancy-partialfill-and-quote-transfer-adversaries",
+          "foundation-source-runtime-and-deployment-binding",
+          "foundation-dead-rounding-inventory-and-quote-refund-conservation",
+          "foundation-independent-buy-sell-creator-fees"
+        ],
+        "approved": false,
+        "registryApproved": false,
+        "available": false,
+        "artifactDigest": "0x646dd7b08510637a7a394f259bab1a1b1daa861c680afaada0a3d13e371e40c2"
+      },
+      "hostManifestHash": "0x55382368a83fdcae2f13edec2a07546e71c110678917b63827df90a67bb8dd78"
+    },
+    {
+      "source": {
+        "format": "programmable.modules.submission.v0.1",
+        "descriptor": {
+          "author": "0x1111111111111111111111111111111111111111",
+          "components": [
+            {
+              "id": "factory",
+              "runtime": "programmable.module-foundation.protocol-solidity@1",
+              "sourcePath": "UnitFoundation.sol",
+              "entrypoint": "UnitFoundationFactory"
+            },
+            {
+              "id": "hook-deployer",
+              "runtime": "programmable.module-foundation.protocol-solidity@1",
+              "sourcePath": "UnitFoundation.sol",
+              "entrypoint": "UnitFoundationHookDeployer"
+            }
+          ],
+          "configuration": {
+            "fields": {
+              "cap": {
+                "bits": 64,
+                "max": "999",
+                "min": "1",
+                "type": "uint"
+              }
+            },
+            "required": [
+              "cap"
+            ],
+            "type": "record"
+          },
+          "constraints": [],
+          "documentation": "README.md",
+          "familySalt": "0x1212121212121212121212121212121212121212121212121212121212121212",
+          "format": "programmable.classic.source-package.v0.1",
+          "management": {
+            "actions": [],
+            "reads": [],
+            "summary": "Bounded service-owned test fixture."
+          },
+          "name": "foundation-protocol-v3-unit-fixture",
+          "ports": {
+            "inputs": {},
+            "outputs": {}
+          },
+          "requiresHost": [
+            "programmable.module-foundation.host@1"
+          ],
+          "rewardWallet": "0x2222222222222222222222222222222222222222",
+          "source": {
+            "files": [
+              {
+                "path": "UnitFoundation.sol",
+                "sha256": "954ba84fac9f14de062d9248ab8256bdd8159c47aceea736dd3556bd7bfa405a"
+              },
+              {
+                "path": "README.md",
+                "sha256": "ec46bbd7abd4e4ced6af295f4ac00753322097f038d676287bc552123381152c"
+              }
+            ]
+          },
+          "version": "1.0.0",
+          "extensions": {
+            "programmable.module-foundation.protocol-fee100@1": {
+              "hostAdapterId": "programmable.module-foundation.host@1",
+              "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+              "factoryVersion": "v3",
+              "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+              "platformBps": 100,
+              "platformRecipient": "0xd88539d3c4c460136a733a3fd60cf6bf269079da"
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "UnitFoundation.sol",
+            "sha256": "954ba84fac9f14de062d9248ab8256bdd8159c47aceea736dd3556bd7bfa405a",
+            "encoding": "base64",
+            "bytes": "Ly8gU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IE1JVApwcmFnbWEgc29saWRpdHkgMC44LjI2OwovLyBVbml0IGFkYXB0ZXIgZml4dHVyZSBvbmx5LiBJdCBpcyBpbnRlbnRpb25hbGx5IG5vdCB0aGUgbGF1bmNoIHByb3RvY29sIGFuZCBjYW5ub3QgcGFzcyBwcm90b2NvbCBjb25mb3JtYW5jZS4KY29udHJhY3QgVW5pdEZvdW5kYXRpb25GYWN0b3J5IHsKIHVpbnQyNTYgcHVibGljIGltbXV0YWJsZSBjaGFpbklkOwogYWRkcmVzcyBwdWJsaWMgaW1tdXRhYmxlIHBvb2xNYW5hZ2VyOwogYWRkcmVzcyBwdWJsaWMgaW1tdXRhYmxlIHBvc2l0aW9uTWFuYWdlcjsKIGFkZHJlc3MgcHVibGljIGltbXV0YWJsZSB1bml2ZXJzYWxSb3V0ZXI7CiBhZGRyZXNzIHB1YmxpYyBpbW11dGFibGUgcGVybWl0MjsKIGFkZHJlc3MgcHVibGljIGltbXV0YWJsZSBob29rRGVwbG95ZXI7CiBieXRlczMyIHB1YmxpYyBpbW11dGFibGUgcG9vbE1hbmFnZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSBwb3NpdGlvbk1hbmFnZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSB1bml2ZXJzYWxSb3V0ZXJDb2RlSGFzaDsKIGJ5dGVzMzIgcHVibGljIGltbXV0YWJsZSBwZXJtaXQyQ29kZUhhc2g7CiBieXRlczMyIHB1YmxpYyBpbW11dGFibGUgaG9va0RlcGxveWVyQ29kZUhhc2g7CiBjb25zdHJ1Y3RvcihhZGRyZXNzWzVdIG1lbW9yeSBhZGRyZXNzZXMsYnl0ZXMzMls1XSBtZW1vcnkgaGFzaGVzKSB7CiBjaGFpbklkPWJsb2NrLmNoYWluaWQ7IHBvb2xNYW5hZ2VyPWFkZHJlc3Nlc1swXTtwb3NpdGlvbk1hbmFnZXI9YWRkcmVzc2VzWzFdO3VuaXZlcnNhbFJvdXRlcj1hZGRyZXNzZXNbMl07cGVybWl0Mj1hZGRyZXNzZXNbM107aG9va0RlcGxveWVyPWFkZHJlc3Nlc1s0XTsKIHBvb2xNYW5hZ2VyQ29kZUhhc2g9aGFzaGVzWzBdO3Bvc2l0aW9uTWFuYWdlckNvZGVIYXNoPWhhc2hlc1sxXTt1bml2ZXJzYWxSb3V0ZXJDb2RlSGFzaD1oYXNoZXNbMl07cGVybWl0MkNvZGVIYXNoPWhhc2hlc1szXTtob29rRGVwbG95ZXJDb2RlSGFzaD1oYXNoZXNbNF07CiB9Cn0KY29udHJhY3QgVW5pdEZvdW5kYXRpb25Ib29rRGVwbG95ZXIgeyBmdW5jdGlvbiBmaXh0dXJlT25seSgpIGV4dGVybmFsIHB1cmUgcmV0dXJucyhib29sKSB7IHJldHVybiB0cnVlOyB9IH0K"
+          },
+          {
+            "path": "README.md",
+            "sha256": "ec46bbd7abd4e4ced6af295f4ac00753322097f038d676287bc552123381152c",
+            "encoding": "base64",
+            "bytes": "U2VydmljZS1vd25lZCBwcm90b2NvbCBhZGFwdGVyIHVuaXQgZml4dHVyZS4gTm8gYXBwcm92YWwgb3IgbGF1bmNoIHByb3RvY29sLg=="
+          }
+        ]
+      },
+      "plan": {
+        "schemaVersion": "programmable.modules.foundation-protocol-build-plan.v3",
+        "submissionId": "11111111-1111-4111-8111-111111111112",
+        "requestDigest": "0x895f4d79f3088c35533c7d2affad6e58b9a1464349721cc765c06589c348caef",
+        "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+        "factoryComponentId": "factory",
+        "hookDeployerComponentId": "hook-deployer",
+        "factoryImmutableBindings": [
+          {
+            "id": "3",
+            "field": "chainId"
+          },
+          {
+            "id": "5",
+            "field": "poolManager"
+          },
+          {
+            "id": "7",
+            "field": "positionManager"
+          },
+          {
+            "id": "9",
+            "field": "universalRouter"
+          },
+          {
+            "id": "11",
+            "field": "permit2"
+          },
+          {
+            "id": "13",
+            "field": "hookDeployer"
+          },
+          {
+            "id": "15",
+            "field": "poolManagerCodeHash"
+          },
+          {
+            "id": "17",
+            "field": "positionManagerCodeHash"
+          },
+          {
+            "id": "19",
+            "field": "universalRouterCodeHash"
+          },
+          {
+            "id": "21",
+            "field": "permit2CodeHash"
+          },
+          {
+            "id": "23",
+            "field": "hookDeployerCodeHash"
+          }
+        ]
+      },
+      "artifact": {
+        "schemaVersion": "programmable.modules.foundation-protocol-build.v3",
+        "authority": "programmable.module-review.foundation-protocol-build.v3",
+        "factoryVersion": "v3",
+        "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+        "subject": {
+          "submissionId": "11111111-1111-4111-8111-111111111112",
+          "principalId": "00000000-0000-4000-8000-000000000002",
+          "author": "0x1111111111111111111111111111111111111111",
+          "requestDigest": "0x895f4d79f3088c35533c7d2affad6e58b9a1464349721cc765c06589c348caef"
+        },
+        "sourceCommit": "fafafafafafafafafafafafafafafafafafafafa",
+        "packageId": "0xdbeb247c6f3d1b64d6a19aed596b0a789954ae5ad0393c835780149dafa233ae",
+        "familyId": "0x346cea54dbdb8405c0ceae7702e0a6dc3743140f49a1c6edc28b1c29597c7cda",
+        "rewardWallet": "0x2222222222222222222222222222222222222222",
+        "sourceManifestHash": "0x47e3482625afd97b4912711b413d33f6c54da954bed08172e0c1d00e8ebc704f",
+        "planDigest": "0x48fedbae691e9c43bdd32f0cc66a803efe3992306099ad82b383fa4a1fbeed9b",
+        "hostAdapterId": "programmable.module-foundation.host@1",
+        "platformBps": 100,
+        "platformRecipient": "0xd88539d3c4c460136a733a3fd60cf6bf269079da",
+        "compiler": {
+          "version": "0.8.26+commit.8a97fa7a",
+          "binarySha256": "sha256:35ba6661f3bdaed995fc7af14c405502290cf681b3fd062fe8738cfdf6db14ed",
+          "imageDigest": "sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8",
+          "settingsHash": "0x3f09bc3e507e276bd9206765ea8307e543caf1c2b36cca70bf12849ded71d80e",
+          "completeInputHash": "0x115f0aa81dd7f60f91fd5f4352eff9f04e40a47c2eb209d2a2f6d471746df338",
+          "reproducible": true
+        },
+        "factory": {
+          "componentId": "factory",
+          "sourcePath": "UnitFoundation.sol",
+          "contractName": "UnitFoundationFactory",
+          "abi": [
+            {
+              "inputs": [
+                {
+                  "internalType": "address[5]",
+                  "name": "addresses",
+                  "type": "address[5]"
+                },
+                {
+                  "internalType": "bytes32[5]",
+                  "name": "hashes",
+                  "type": "bytes32[5]"
+                }
+              ],
+              "stateMutability": "nonpayable",
+              "type": "constructor"
+            },
+            {
+              "inputs": [],
+              "name": "chainId",
+              "outputs": [
+                {
+                  "internalType": "uint256",
+                  "name": "",
+                  "type": "uint256"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "hookDeployer",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "hookDeployerCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "permit2",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "permit2CodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "poolManager",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "poolManagerCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "positionManager",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "positionManagerCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "universalRouter",
+              "outputs": [
+                {
+                  "internalType": "address",
+                  "name": "",
+                  "type": "address"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            },
+            {
+              "inputs": [],
+              "name": "universalRouterCodeHash",
+              "outputs": [
+                {
+                  "internalType": "bytes32",
+                  "name": "",
+                  "type": "bytes32"
+                }
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            }
+          ],
+          "creationBytecode": "0x6101e060405234610171576105168038038061001a81610195565b928339810190610140818303126101715781601f820112156101715760a09061004282610195565b81830193818186116101715783905b8682106101755750508060bf840112156101715761006e84610195565b9461014086940191821161017157945b8186106101615746608090815283516001600160a01b039081168752602080860151821660c052604080870151831660e052606080880151841661010052878501519093166101205287516101405290870151610160528087015161018052908601516101a052908501516101c052516103479086826101cf83396080518261012e0152518160aa015260c051816101a0015260e0518161029c015261010051816102e00152610120518161021e015261014051816101e6015261016051816103240152610180518160f401526101a0518161016801526101c051816102640152f35b855181526020958601950161007e565b5f80fd5b81516001600160a01b038116810361017157815260209182019101610051565b6040519190601f01601f191682016001600160401b038111838210176101ba57604052565b634e487b7160e01b5f52604160045260245ffdfe6080806040526004361015610012575f80fd5b5f3560e01c908163028541ed1461030f5750806312261ee7146102cb57806335a9e4df146102875780634ac38ac11461024d5780634e7fe09a1461020957806375d30ce4146101cf578063791b98bc1461018b5780638b452cf6146101515780639a8a0592146101175780639c984e6b146100dd5763dc4c90d314610095575f80fd5b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576020907f00000000000000000000000000000000000000000000000000000000000000008152f3",
+          "creationCodeHash": "0x27ef441031fa09708be061e9034745879297f4aab5946dc17679870575e4d009",
+          "runtimeTemplate": "0x6080806040526004361015610012575f80fd5b5f3560e01c908163028541ed1461030f5750806312261ee7146102cb57806335a9e4df146102875780634ac38ac11461024d5780634e7fe09a1461020957806375d30ce4146101cf578063791b98bc1461018b5780638b452cf6146101515780639a8a0592146101175780639c984e6b146100dd5763dc4c90d314610095575f80fd5b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d95760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346100d9575f3660031901126100d9576020907f00000000000000000000000000000000000000000000000000000000000000008152f3",
+          "runtimeTemplateHash": "0xfa19121aa9aaee3f0737bcb51944f406eb28e34f07224755a62f59f586095b90",
+          "immutableReferences": [
+            {
+              "id": "11",
+              "ranges": [
+                {
+                  "start": 736,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "13",
+              "ranges": [
+                {
+                  "start": 542,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "15",
+              "ranges": [
+                {
+                  "start": 486,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "17",
+              "ranges": [
+                {
+                  "start": 804,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "19",
+              "ranges": [
+                {
+                  "start": 244,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "21",
+              "ranges": [
+                {
+                  "start": 360,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "23",
+              "ranges": [
+                {
+                  "start": 612,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "3",
+              "ranges": [
+                {
+                  "start": 302,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "5",
+              "ranges": [
+                {
+                  "start": 170,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "7",
+              "ranges": [
+                {
+                  "start": 416,
+                  "length": 32
+                }
+              ]
+            },
+            {
+              "id": "9",
+              "ranges": [
+                {
+                  "start": 668,
+                  "length": 32
+                }
+              ]
+            }
+          ]
+        },
+        "hookDeployer": {
+          "componentId": "hook-deployer",
+          "sourcePath": "UnitFoundation.sol",
+          "contractName": "UnitFoundationHookDeployer",
+          "abi": [
+            {
+              "inputs": [],
+              "name": "fixtureOnly",
+              "outputs": [
+                {
+                  "internalType": "bool",
+                  "name": "",
+                  "type": "bool"
+                }
+              ],
+              "stateMutability": "pure",
+              "type": "function"
+            }
+          ],
+          "creationBytecode": "0x60808060405234601357603e908160188239f35b5f80fdfe60808060405260043610156011575f80fd5b5f3560e01c635cded48a146023575f80fd5b34603a575f366003190112603a5780600160209252f35b5f80fd",
+          "creationCodeHash": "0xce4bd1a00fc2d40bd1775a1af3d883c7028b4c82f2b4a0ce1c92b5f7b307245a",
+          "runtimeTemplate": "0x60808060405260043610156011575f80fd5b5f3560e01c635cded48a146023575f80fd5b34603a575f366003190112603a5780600160209252f35b5f80fd",
+          "runtimeTemplateHash": "0x5b72ddcd31024ec7d0ff5d2bb2f7e0a045f043ad1d41bb06ce972e30a7406b76",
+          "immutableReferences": []
+        },
+        "factoryImmutableBindings": [
+          {
+            "field": "chainId",
+            "id": "3"
+          },
+          {
+            "field": "poolManager",
+            "id": "5"
+          },
+          {
+            "field": "positionManager",
+            "id": "7"
+          },
+          {
+            "field": "universalRouter",
+            "id": "9"
+          },
+          {
+            "field": "permit2",
+            "id": "11"
+          },
+          {
+            "field": "hookDeployer",
+            "id": "13"
+          },
+          {
+            "field": "poolManagerCodeHash",
+            "id": "15"
+          },
+          {
+            "field": "positionManagerCodeHash",
+            "id": "17"
+          },
+          {
+            "field": "universalRouterCodeHash",
+            "id": "19"
+          },
+          {
+            "field": "permit2CodeHash",
+            "id": "21"
+          },
+          {
+            "field": "hookDeployerCodeHash",
+            "id": "23"
+          }
+        ],
+        "tests": {
+          "schemaVersion": "programmable.modules.foundation-protocol-test-results.v3",
+          "requestDigest": "0x895f4d79f3088c35533c7d2affad6e58b9a1464349721cc765c06589c348caef",
+          "planDigest": "0x48fedbae691e9c43bdd32f0cc66a803efe3992306099ad82b383fa4a1fbeed9b",
+          "harnessDigest": "0xacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac",
+          "execution": "isolated-docker-anvil",
+          "checks": {
+            "officialInfrastructure": true,
+            "bothTokenOrders": true,
+            "zeroCreatorQuoteLaunch": true,
+            "metadataSupplyAndPoolIdentity": true,
+            "initialBuyAtomicity": true,
+            "directDeadPositionCustody": true,
+            "universalRouterFourForms": true,
+            "quoteFeeAccounting100Bps": true,
+            "fixedPlatformRecipientPayout": true,
+            "settlementAndAllowances": true,
+            "roundingInventoryToDead": true,
+            "receiptRegistryAndRefundBinding": true,
+            "independentCreatorFees": true
+          },
+          "allRequiredChecksPassed": true
+        },
+        "reviewRequired": [
+          "foundation-standard-token-fixed-supply-no-transfer-tax",
+          "foundation-immutable-100bps-platform-quote-fee",
+          "foundation-poolmanager-account-and-currency-deltas",
+          "foundation-official-router-empty-hookdata-four-forms",
+          "foundation-one-sided-price-direct-dead-nft-custody-and-no-vault",
+          "foundation-immutable-host-module-capabilities",
+          "foundation-reentrancy-partialfill-and-quote-transfer-adversaries",
+          "foundation-source-runtime-and-deployment-binding",
+          "foundation-dead-rounding-inventory-and-quote-refund-conservation",
+          "foundation-independent-buy-sell-creator-fees"
+        ],
+        "approved": false,
+        "registryApproved": false,
+        "available": false,
+        "artifactDigest": "0xd0af57362ec7eddfc06d4dc8753139a8202cc510563263ae1f57a9d33f01f632"
+      },
+      "hostManifestHash": "0x9f7dccfcf9685b27a038daee5cc74747c064cab877a6fc173deaea8de7dc6256"
+    }
+  ]
+}

@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
+import {gunzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import test from 'node:test';
+import test,{after} from 'node:test';
 import Ajv2020 from 'ajv/dist/2020.js';
 import * as client from '../programmable-launch-v415-release-binding.mjs';
 import {releaseBindingTools} from '../programmable-launch-release-assets.mjs';
-const repositoryRoot=fileURLToPath(new URL('../../',import.meta.url));
+const repositoryRoot=mkdtempSync(join(tmpdir(),'fee100-v415-history-'));
+after(()=>rmSync(repositoryRoot,{recursive:true,force:true}));
+const snapshot=readFileSync(new URL('./fixtures/programmable-launch-v415-source.json.gz',import.meta.url));
+assert.equal(createHash('sha256').update(snapshot).digest('hex'),'25f079a449a3422079d3289a3a3fe381742fb3dd66ff001f9fc032688160a233');
+for(const [path,bytes] of Object.entries(JSON.parse(gunzipSync(snapshot)))){const file=join(repositoryRoot,path);mkdirSync(dirname(file),{recursive:true});writeFileSync(file,bytes);}
 test('4.1.5 binds both treasury policies and packaged V3 artifacts without changing historical API identity',()=>{
  const result=client.auditV415ClientSource({repositoryRoot});
  assert.equal(result.productionEvidenceVerified,false);

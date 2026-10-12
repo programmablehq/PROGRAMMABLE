@@ -9,6 +9,7 @@ export type FoundationFactoryVersion = "v1" | "v2" | "v3";
 export type FoundationFactoryIdentity = { factoryVersion?: "v1"; lpCustodyId?: never }
   | { factoryVersion: "v2" | "v3"; lpCustodyId: Hex };
 export type FoundationDeploymentBinding = FoundationFactoryIdentity & {
+  platformFeeBps?: 30 | 100;
   ethereumGraph?: import("./ethereum-graph").FoundationEthereumGraphSource;
   chainId?: FoundationChainId; releaseDigest: Hex; sourceCommit: string; startBlock: bigint;
   factory: { address: Address; runtimeCodeHash: Hex };
@@ -21,7 +22,7 @@ const same = (a: Address, b: Address) => getAddress(a) === getAddress(b);
 
 /** A missing discriminator belongs only to the structurally validated original V1 binding. */
 export function foundationFactoryVersion(binding: FoundationDeploymentBinding): FoundationFactoryVersion {
-  if (!binding || !hash(binding.releaseDigest) || !/^[0-9a-f]{40}$/.test(binding.sourceCommit)
+  if (!binding || (binding.platformFeeBps !== undefined && binding.platformFeeBps !== 30 && binding.platformFeeBps !== 100) || !hash(binding.releaseDigest) || !/^[0-9a-f]{40}$/.test(binding.sourceCommit)
     || typeof binding.startBlock !== "bigint" || binding.startBlock <= 0n
     || !binding.factory || !binding.hookDeployer
     || !nonzero(binding.factory.address) || !hash(binding.factory.runtimeCodeHash)

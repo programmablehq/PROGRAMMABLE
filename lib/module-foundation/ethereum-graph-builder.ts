@@ -3,6 +3,7 @@ import {
   keccak256, parseAbiParameters, stringToHex, toHex, type AbiParameter, type Address, type Hex,
 } from "viem";
 import bytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v1.json";
+import fee100Bytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v4.json";
 import stampedBytecode from "@/contracts/spec/module-foundation/ethereum-graph-bytecode.v2.json";
 import ethereum from "@/contracts/spec/module-foundation/chain-1.v1.json";
 import type { FoundationLaunchParametersV3 } from "./abi";
@@ -21,15 +22,22 @@ const namespace = hash("programmable.module-foundation.ethereum-graph.v1");
 const topology = hash("engine-token-hook.v1");
 const nonceDomain = hash("programmable.module-foundation.ethereum-graph-nonce.v1");
 const launchDomain = hash("programmable.module-foundation.ethereum-launch-id.v1");
-const contracts = { ...bytecode.contracts, FoundationEthereumGraphProxyV2: stampedBytecode.contracts.FoundationEthereumGraphProxyV2 };
+const contracts = { ...bytecode.contracts, FoundationEthereumGraphProxyV2: stampedBytecode.contracts.FoundationEthereumGraphProxyV2, FoundationHookV4: fee100Bytecode.contracts.FoundationHookV4 };
 type ContractName = keyof typeof contracts;
 // Only locally mined proofs are retained. Funding, deadlines and authorization are rebuilt every time.
 const minedHooks = new Map<string, Readonly<{ address: Address; applicantSalt: Hex }>>();
 
 export function foundationEthereumProxyContract(source: FoundationEthereumGraphSource) {
+  if (source.sourceCommit === fee100Bytecode.sourceCommit && source.platformFeeBps === 100) return "FoundationEthereumGraphProxyV2" as const;
+  if (source.platformFeeBps !== undefined && source.platformFeeBps !== 30) throw new Error("The Ethereum fee policy has no installed compiler artifact.");
   if (source.sourceCommit === stampedBytecode.sourceCommit) return "FoundationEthereumGraphProxyV2" as const;
   if (source.sourceCommit === bytecode.sourceCommit) return "FoundationEthereumGraphProxyV1" as const;
   throw new Error("The Ethereum module source has no installed compiler artifact.");
+}
+
+export function foundationEthereumHookContract(source: FoundationEthereumGraphSource) {
+  foundationEthereumProxyContract(source);
+  return source.sourceCommit === fee100Bytecode.sourceCommit ? "FoundationHookV4" as const : "FoundationHookV2" as const;
 }
 
 function creation(name: ContractName, args: readonly unknown[]): Hex {
@@ -127,7 +135,7 @@ export async function buildFoundationEthereumGraph(input: {
     throw new Error("The ETH budget does not cover the initial funding.");
   }
   const predicted = predictFoundationEthereumAccounts({ source: input.source, account, tokenSalt: p.tokenSalt, metadata: p.metadata });
-  const hookTarget = target("hook", creation("FoundationHookV2", [ethereum.contracts.poolManager.address,
+  const hookTarget = target("hook", creation(foundationEthereumHookContract(input.source), [ethereum.contracts.poolManager.address,
     predicted.engine, predicted.token, p.quote, account, p.initialTick, p.creatorBuyFeeBps, p.creatorSellFeeBps, p.modules]));
   const mined = await mineFoundationEthereumHook({ identity: predicted.identity, initCode: hookTarget.initCode, signal: input.signal });
   input.signal?.throwIfAborted();

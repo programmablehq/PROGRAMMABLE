@@ -58,6 +58,14 @@ abstract contract FoundationForkBaseV3 is Test {
     ];
 
     function _configureNetwork() internal virtual { }
+
+    function _platformFeeBps() internal pure virtual returns (uint16) {
+        return 30;
+    }
+
+    function _hookDeployerArtifact() internal pure virtual returns (string memory) {
+        return "FoundationHookDeployerV2.sol:FoundationHookDeployerV2";
+    }
     IPoolManager internal manager = IPoolManager(MANAGER);
     IPositionManager internal positions = IPositionManager(POSM);
     IAllowanceTransfer internal permits = IAllowanceTransfer(PERMIT2);
@@ -81,7 +89,7 @@ abstract contract FoundationForkBaseV3 is Test {
         assertEq(POSM.codehash, expectedInfrastructureHashes[1]);
         assertEq(ROUTER.codehash, expectedInfrastructureHashes[2]);
         assertEq(PERMIT2.codehash, expectedInfrastructureHashes[3]);
-        deployer = FoundationHookDeployerV2(deployCode("FoundationHookDeployerV2.sol:FoundationHookDeployerV2"));
+        deployer = FoundationHookDeployerV2(deployCode(_hookDeployerArtifact()));
         bytes32[5] memory hashes =
             [MANAGER.codehash, POSM.codehash, ROUTER.codehash, PERMIT2.codehash, address(deployer).codehash];
         factory = FoundationFactoryV3(
@@ -198,14 +206,14 @@ abstract contract FoundationForkBaseV3 is Test {
         uint256 platform = FoundationLedgerV1(r.ledger).platformReceived() - beforePlatform;
         uint256 creator = FoundationLedgerV1(r.ledger).creatorReceived() - beforeCreator;
         uint256 gross = buy ? spent : received + platform + creator;
-        assertEq(platform, (gross * 30 + carryP) / 10_000);
+        assertEq(platform, (gross * _platformFeeBps() + carryP) / 10_000);
         assertEq(creator, (gross * _creatorFee(hook, buy) + carryC) / 10_000);
         assertEq(
             manager.balanceOf(r.ledger, uint256(uint160(address(quote)))),
             FoundationLedgerV1(r.ledger).outstandingBacking()
         );
         (uint16 nextP, uint16 nextC) = hook.feeCarry(buy);
-        assertEq(nextP, (gross * 30 + carryP) % 10_000);
+        assertEq(nextP, (gross * _platformFeeBps() + carryP) % 10_000);
         assertEq(nextC, (gross * _creatorFee(hook, buy) + carryC) % 10_000);
         _assertClean(r);
     }

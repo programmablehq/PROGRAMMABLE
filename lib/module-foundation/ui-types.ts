@@ -134,7 +134,7 @@ interface FoundationLaunchReviewCommon {
   metadataHash: Hex;
   pool: FoundationPoolIdentity;
   positions: readonly FoundationPositionIdentity[];
-  platformFeeBps: typeof FOUNDATION_PLATFORM_FEE_BPS;
+  platformFeeBps: 30 | 100;
   platformFeeRecipient: typeof FOUNDATION_PLATFORM_FEE_RECIPIENT;
   initialBuy: string;
   minimumInitialTokens: string;
@@ -209,7 +209,7 @@ export interface FoundationTradeReview {
   platformFeeAmount: string;
   creatorFeeAmount: string;
   lpFeeAmount?: string;
-  platformFeeBps: typeof FOUNDATION_PLATFORM_FEE_BPS;
+  platformFeeBps: 30 | 100;
   platformFeeRecipient: typeof FOUNDATION_PLATFORM_FEE_RECIPIENT;
   universalRouter: Address;
   transactions: readonly FoundationTransactionSummary[];
@@ -233,7 +233,7 @@ export function foundationPublicUrl(value: string): boolean {
 export function foundationReviewError(review: Pick<FoundationLaunchReview, "contextKey" | "expiresAt" | "platformFeeBps" | "platformFeeRecipient">, contextKey: string, now = Date.now()): string | null {
   if (review.contextKey !== contextKey) return "Your wallet or launch version changed. Review again.";
   if (!Number.isFinite(review.expiresAt) || review.expiresAt * 1_000 <= now) return "This review expired. Review again for a current simulation.";
-  if (review.platformFeeBps !== FOUNDATION_PLATFORM_FEE_BPS || review.platformFeeRecipient.toLowerCase() !== FOUNDATION_PLATFORM_FEE_RECIPIENT.toLowerCase()) return "The platform fee could not be verified. Review again.";
+  if (![30, 100].includes(review.platformFeeBps) || review.platformFeeRecipient.toLowerCase() !== FOUNDATION_PLATFORM_FEE_RECIPIENT.toLowerCase()) return "The platform fee could not be verified. Review again.";
   return null;
 }
 

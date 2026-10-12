@@ -23,6 +23,7 @@ import type { FoundationLaunchDraft } from "@/lib/module-foundation/ui-types";
 import { readFoundationStartPrice } from "@/lib/server/module-foundation/start-price";
 import { parseFoundationStartPrice } from "@/lib/module-foundation/start-price";
 import { foundationInitialBuyError, readFoundationFirstBuyPolicy } from "@/lib/module-foundation/first-buy";
+import { foundationPlatformFeeBps } from "@/lib/module-foundation/constants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -152,7 +153,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ chainId, releaseDigest: binding.releaseDigest, token, metadata, moduleAssetPins, modules: composition.modules,
       startPrice: parseFoundationStartPrice(startPrice, quote),
       ethFunding: ethFunding ? { maximumEth: ethFunding.maximumEth.toString(), quoteAmount: ethFunding.quoteAmount.toString(), path: ethFunding.path } : null,
-      compositionHash: composition.compositionHash, totals: composition.totals }, { headers });
+      compositionHash: composition.compositionHash,
+      totals: { ...composition.totals, platformBps: foundationPlatformFeeBps(binding) } }, { headers });
   } catch (error) {
     const message = error instanceof Error && error.message.length < 240 ? error.message : "This launch could not be prepared. Check its details and retry.";
     return NextResponse.json({ error: message }, { status: 400, headers });

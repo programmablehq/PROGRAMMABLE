@@ -48,8 +48,15 @@ export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2 = deepF
     hook: "EthereumNative30HookV3", vault: "EthereumNativeFeeVaultV3" },
 });
 
+export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3 = deepFreeze({
+  ...DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2,
+  policyVersion: "programmable.ethereum-routed-native-fee.v3", ratePpm: "10000", rateBps: 100,
+  defaultCollection: { ...DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2.defaultCollection, routedRateBps: 100 },
+  native30Waiver: null,
+});
+
 export function assertDirectNativeProgrammableTradeFeePolicyV36(value) {
-  if (![DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
+  if (![DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
     throw new TypeError("PROFILE_36_PROGRAMMABLE_TRADE_FEE_POLICY_MISMATCH");
   }
   return value;

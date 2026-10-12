@@ -49,8 +49,8 @@ export interface EthereumSwapRuntimeBinding { address: Address; runtimeCodeHash:
 export interface EthereumSwapFeeV1 {
   policyHash: `sha256:${string}`;
   mode: "programmable_routed" | "pool_enforced_native30";
-  rateBps: 30;
-  routedRateBps: 0 | 30;
+  rateBps: 30 | 100;
+  routedRateBps: 0 | 30 | 100;
   recipient: Address;
   grossNativeAmount: string;
   platformFeeAmount: string;
@@ -159,9 +159,9 @@ function swapTransaction(route: EthereumStampedSwapRoute, request: EthereumStamp
   native30Proof?: EthereumNative30RuntimeProofV1): PreparedTradeTransaction {
   if (native30Proof) assertIssuedEthereumNative30RuntimeProofV1(native30Proof, ethereumNative30Market(route));
   const feePolicy = ethereumRouteRequiresFee(route) ? ethereumRouteFeePolicy(route) : null;
-  if (native30Proof && feePolicy) requireValue(same(native30Proof.recipient, feePolicy.policy.native30Waiver.recipient), "The pool fee recipient differs from the launch policy.");
+  if (native30Proof && feePolicy) requireValue(same(native30Proof.recipient, feePolicy.policy.native30Waiver?.recipient ?? ""), "The pool fee recipient differs from the launch policy.");
   const charge = feePolicy !== null && !native30Proof;
-  const upfrontFee = charge && request.side === "buy" ? BigInt(request.amountIn) * 30n / 10_000n : 0n;
+  const upfrontFee = charge && request.side === "buy" ? BigInt(request.amountIn) * BigInt(feePolicy!.policy.rateBps) / 10_000n : 0n;
   const amountIn = BigInt(request.amountIn) - upfrontFee;
   requireValue(minimum > 0n && minimum <= UINT128_MAX, "The swap returned no usable output.");
   const planner = new V4Planner();
@@ -169,7 +169,7 @@ function swapTransaction(route: EthereumStampedSwapRoute, request: EthereumStamp
     amountIn: amountIn.toString(), amountOutMinimum: minimum.toString(), hookData: "0x" }], URVersion.V2_0);
   planner.addAction(Actions.SETTLE_ALL, [request.side === "buy" ? NATIVE : request.token, amountIn.toString()], URVersion.V2_0);
   if (charge && request.side === "sell") planner.addAction(Actions.TAKE_PORTION,
-    [NATIVE, feePolicy!.policy.defaultCollection.recipient, 30], URVersion.V2_0);
+    [NATIVE, feePolicy!.policy.defaultCollection.recipient, feePolicy!.policy.defaultCollection.routedRateBps], URVersion.V2_0);
   planner.addAction(Actions.TAKE_ALL, [request.side === "buy" ? request.token : NATIVE, minimum.toString()], URVersion.V2_0);
   const plannerRoute = new RoutePlanner();
   if (upfrontFee > 0n) plannerRoute.addCommand(CommandType.TRANSFER,
@@ -224,16 +224,16 @@ export function validateEthereumStampedPreparation(value: unknown, route: Ethere
   let native30Proof: EthereumNative30RuntimeProofV1 | undefined;
   if (ethereumRouteRequiresFee(route)) {
     const fee = prepared.fee, feePolicy = ethereumRouteFeePolicy(route);
-    requireValue(fee && fee.policyHash === feePolicy.policyHash && fee.rateBps === 30
+    requireValue(fee && fee.policyHash === feePolicy.policyHash && fee.rateBps === feePolicy.policy.rateBps
       && same(fee.recipient, feePolicy!.policy.defaultCollection.recipient)
       && [fee.grossNativeAmount, fee.platformFeeAmount, fee.netNativeAmount].every(amount => typeof amount === "string" && /^(0|[1-9][0-9]{0,77})$/.test(amount)), "The platform fee is invalid.");
     if (fee.mode === "pool_enforced_native30") {
       native30Proof = rebuildEthereumNative30RuntimeProofV1(fee.native30Proof, ethereumNative30Market(route));
       requireValue(fee.routedRateBps === 0 && native30Proof.runtimeBindings.every(expected => evidence.runtimeBindings.some(binding => same(binding.address, expected.address)
         && same(binding.runtimeCodeHash, expected.runtimeCodeHash))), "The pool fee runtime is incomplete.");
-    } else requireValue(fee.mode === "programmable_routed" && fee.routedRateBps === 30 && fee.native30Proof === null && fee.accrual === null, "The platform fee mode is invalid.");
+    } else requireValue(fee.mode === "programmable_routed" && fee.routedRateBps === feePolicy.policy.defaultCollection.routedRateBps && fee.native30Proof === null && fee.accrual === null, "The platform fee mode is invalid.");
     const gross = BigInt(fee.grossNativeAmount), platform = BigInt(fee.platformFeeAmount);
-    requireValue(BigInt(fee.netNativeAmount) === gross - platform && platform === (gross * 30n + (native30Proof ? 9999n : 0n)) / 10000n, "The platform fee amount is invalid.");
+    requireValue(BigInt(fee.netNativeAmount) === gross - platform && platform === (gross * BigInt(feePolicy.policy.rateBps) + (native30Proof ? 9999n : 0n)) / 10000n, "The platform fee amount is invalid.");
     if (transaction.kind === "swap") {
       requireValue(gross > 0n && (request.side !== "buy" || gross === BigInt(request.amountIn))
         && (request.side !== "sell" || native30Proof || BigInt(fee.netNativeAmount) === BigInt(quote.amountOut)), "The platform fee does not match the trade.");

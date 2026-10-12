@@ -8,8 +8,8 @@ import type { ModuleEngineBuildArtifactV1, ModuleEngineBuildPlanV1 } from "./rev
 import { parseModuleEngineConfigurationAbi } from "../module-engine/configuration";
 import type { ModuleEngineConfigurationArgument as ModuleEngineConfigurationArgumentV1 } from "../module-engine/catalog";
 export type { ModuleReviewDecisionCommandV1, ModuleReviewDecisionRecordV1 };
-export type AnyFoundationProtocolPlan = FoundationProtocolPlanV1 | FoundationProtocolPlanV2;
-export type AnyFoundationProtocolBuild = FoundationProtocolBuildV1 | FoundationProtocolBuildV2;
+export type AnyFoundationProtocolPlan = FoundationProtocolPlanV1 | FoundationProtocolPlanV2 | FoundationProtocolPlanV3;
+export type AnyFoundationProtocolBuild = FoundationProtocolBuildV1 | FoundationProtocolBuildV2 | FoundationProtocolBuildV3;
 export type AnyReviewPlan = ReviewPlan | ModuleEngineBuildPlanV1 | FoundationBuildPlanV1 | AnyFoundationProtocolPlan;
 export type AnyReviewBuildArtifact = ReviewBuildArtifact | ModuleEngineBuildArtifactV1 | FoundationBuildArtifactV1 | AnyFoundationProtocolBuild;
 export const MODULE_REVIEW_STATES = ["awaiting_plan", "queued", "running", "built", "build_failed", "changes_requested", "accepted", "rejected"] as const;
@@ -98,6 +98,7 @@ export function parseReviewPlan(value: unknown, subject: ReviewSubject): AnyRevi
   if (schema === FOUNDATION_PLAN_SCHEMA_V1) return validateFoundationBuildPlanV1(raw, subject);
   if (schema === FOUNDATION_PROTOCOL_PLAN_V1) return validateFoundationProtocolPlanV1(raw, subject);
   if (schema === FOUNDATION_PROTOCOL_PLAN_V2) return validateFoundationProtocolPlanV2(raw, subject);
+  if (schema === FOUNDATION_PROTOCOL_PLAN_V3) return validateFoundationProtocolPlanV3(raw, subject);
   return schema === "programmable.modules.engine-build-plan.v1"
     ? validateModuleEngineBuildPlanV1(raw, subject) : parseNativeReviewPlan(raw, subject);
 }
@@ -124,7 +125,7 @@ export function parseNativeReviewPlan(value: unknown, subject: ReviewSubject): R
 }
 export function parseReviewArtifact(value: unknown, subject: ReviewSubject): AnyReviewBuildArtifact {
   const schema = reviewRecord(value).schemaVersion;
-  if (schema === FOUNDATION_BUILD_SCHEMA_V1 || schema === FOUNDATION_PROTOCOL_BUILD_V1 || schema === FOUNDATION_PROTOCOL_BUILD_V2) return parseFoundationReviewArtifact(value, subject);
+  if (schema === FOUNDATION_BUILD_SCHEMA_V1 || schema === FOUNDATION_PROTOCOL_BUILD_V1 || schema === FOUNDATION_PROTOCOL_BUILD_V2 || schema === FOUNDATION_PROTOCOL_BUILD_V3) return parseFoundationReviewArtifact(value, subject);
   return schema === "programmable.modules.engine-build.v1"
     ? parseEngineReviewArtifact(value, subject) : parseNativeReviewArtifact(value, subject);
 }
@@ -219,7 +220,7 @@ export function reviewArtifactCheckCount(artifact: AnyReviewBuildArtifact): numb
 
 /** Discriminates already parsed artifacts; untrusted input must pass parseReviewArtifact first. */
 export function isFoundationProtocolArtifact(artifact: AnyReviewBuildArtifact | null | undefined): artifact is AnyFoundationProtocolBuild {
-  return artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 || artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2;
+  return artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 || artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2 || artifact?.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V3;
 }
 
 /** Review binds immutable source/build facts; release, deployment and activation are separate authorities. */
@@ -241,23 +242,35 @@ export function foundationProtocolReviewManifestV2(artifact: FoundationProtocolB
 export function foundationProtocolReviewManifestHashV2(artifact: FoundationProtocolBuildV2): Hex {
   return reviewDigest("programmable.module-foundation.protocol-host-manifest.v2", foundationProtocolReviewManifestV2(artifact));
 }
+export function foundationProtocolReviewManifestV3(artifact: FoundationProtocolBuildV3) {
+  return { hostAdapterId: artifact.hostAdapterId, factoryVersion: artifact.factoryVersion, lpCustodyId: artifact.lpCustodyId,
+    sourceCommit: artifact.sourceCommit, sourceManifestHash: artifact.sourceManifestHash, compiler: artifact.compiler,
+    platformBps: artifact.platformBps, platformRecipient: artifact.platformRecipient,
+    factory: artifact.factory, hookDeployer: artifact.hookDeployer, factoryImmutableBindings: artifact.factoryImmutableBindings };
+}
+export function foundationProtocolReviewManifestHashV3(artifact: FoundationProtocolBuildV3): Hex {
+  return reviewDigest("programmable.module-foundation.protocol-host-manifest.v3", foundationProtocolReviewManifestV3(artifact));
+}
 export function foundationProtocolReviewManifest(artifact: AnyFoundationProtocolBuild) {
+  if (artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V3) return foundationProtocolReviewManifestV3(artifact);
   return artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2 ? foundationProtocolReviewManifestV2(artifact) : foundationProtocolReviewManifestV1(artifact);
 }
 export function foundationProtocolReviewManifestHash(artifact: AnyFoundationProtocolBuild): Hex {
+  if (artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V3) return foundationProtocolReviewManifestHashV3(artifact);
   return artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2 ? foundationProtocolReviewManifestHashV2(artifact) : foundationProtocolReviewManifestHashV1(artifact);
 }
 
 export function parseFoundationReviewArtifact(value: unknown, subject: ReviewSubject, suppliedPlan?: AnyReviewPlan): FoundationBuildArtifactV1 | AnyFoundationProtocolBuild {
   const raw = reviewRecord(nativeJson(value));
   const protocolV2 = raw.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2;
-  const protocol = raw.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 || protocolV2;
+  const protocolV3 = raw.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V3;
+  const protocol = raw.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V1 || protocolV2 || protocolV3;
   reviewRecord(raw, ["schemaVersion", "authority", "subject", "packageId", "familyId", "rewardWallet", "sourceManifestHash", "planDigest", "hostAdapterId", "compiler", "factory", "tests", "reviewRequired", "approved", "registryApproved", "available", "artifactDigest",
-    ...(protocolV2 ? ["factoryVersion", "lpCustodyId"] : []),
+    ...(protocolV2 || protocolV3 ? ["factoryVersion", "lpCustodyId"] : []),
     ...(protocol ? ["sourceCommit", "platformBps", "platformRecipient", "hookDeployer", "factoryImmutableBindings"] : ["manifestHash", "descriptor", "descriptorHash", "configurationSchemaHash", "configurationCodec", "configurationAbi", "module", "cases"])]);
   const { artifactDigest, ...contents } = raw;
-  requireValue(raw.schemaVersion === (protocolV2 ? FOUNDATION_PROTOCOL_BUILD_V2 : protocol ? FOUNDATION_PROTOCOL_BUILD_V1 : FOUNDATION_BUILD_SCHEMA_V1)
-    && raw.authority === (protocolV2 ? "programmable.module-review.foundation-protocol-build.v2" : protocol ? "programmable.module-review.foundation-protocol-build.v1" : "programmable.module-review.foundation-build.v1")
+  requireValue(raw.schemaVersion === (protocolV3 ? FOUNDATION_PROTOCOL_BUILD_V3 : protocolV2 ? FOUNDATION_PROTOCOL_BUILD_V2 : protocol ? FOUNDATION_PROTOCOL_BUILD_V1 : FOUNDATION_BUILD_SCHEMA_V1)
+    && raw.authority === (protocolV3 ? "programmable.module-review.foundation-protocol-build.v3" : protocolV2 ? "programmable.module-review.foundation-protocol-build.v2" : protocol ? "programmable.module-review.foundation-protocol-build.v1" : "programmable.module-review.foundation-build.v1")
     && isReviewDigest(artifactDigest) && artifactDigest === reviewDigest(String(raw.schemaVersion), contents), "Foundation artifact digest");
   requireValue(nativeCanonicalJson(parseReviewSubject(raw.subject)) === nativeCanonicalJson(subject) && raw.hostAdapterId === FOUNDATION_HOST_V1
     && raw.approved === false && raw.registryApproved === false && raw.available === false && typeof raw.rewardWallet === "string" && ADDRESS.test(raw.rewardWallet), "Foundation artifact authority");
@@ -265,7 +278,7 @@ export function parseFoundationReviewArtifact(value: unknown, subject: ReviewSub
   const compiler = reviewRecord(raw.compiler, ["version", "binarySha256", "imageDigest", "settingsHash", "completeInputHash", "reproducible"]);
   requireValue(Object.entries(ENGINE_REVIEW_COMPILER).every(([key, value]) => compiler[key] === value) && compiler.reproducible === true
     && compiler.settingsHash === reviewDigest("programmable.modules.compiler-settings.v1", FOUNDATION_SETTINGS_V1) && isReviewDigest(compiler.completeInputHash), "Foundation compiler profile");
-  requireValue(nativeCanonicalJson(raw.reviewRequired) === nativeCanonicalJson(protocolV2 ? FOUNDATION_PROTOCOL_REVIEW_AREAS_V2 : protocol ? FOUNDATION_PROTOCOL_REVIEW_AREAS_V1 : FOUNDATION_REVIEW_AREAS_V1)
+  requireValue(nativeCanonicalJson(raw.reviewRequired) === nativeCanonicalJson(protocolV3 ? foundationProtocolReviewAreasV3(raw.platformBps === 100 ? 100 : 30) : protocolV2 ? FOUNDATION_PROTOCOL_REVIEW_AREAS_V2 : protocol ? FOUNDATION_PROTOCOL_REVIEW_AREAS_V1 : FOUNDATION_REVIEW_AREAS_V1)
     && new TextEncoder().encode(nativeCanonicalJson(raw)).length <= 2 * 1024 * 1024, "Foundation review coverage");
   const target = (contract: { componentId: string; sourcePath: string; contractName: string }) => {
     requireValue(typeof contract.componentId === "string" && ID.test(contract.componentId) && typeof contract.sourcePath === "string" && contract.sourcePath.length <= 512
@@ -274,10 +287,11 @@ export function parseFoundationReviewArtifact(value: unknown, subject: ReviewSub
   };
   if (protocol) {
     const artifact = raw as unknown as AnyFoundationProtocolBuild;
-    const plan = (protocolV2 ? validateFoundationProtocolPlanV2 : validateFoundationProtocolPlanV1)({ schemaVersion: protocolV2 ? FOUNDATION_PROTOCOL_PLAN_V2 : FOUNDATION_PROTOCOL_PLAN_V1, submissionId: subject.submissionId, requestDigest: subject.requestDigest,
+    const plan = (protocolV3 ? validateFoundationProtocolPlanV3 : protocolV2 ? validateFoundationProtocolPlanV2 : validateFoundationProtocolPlanV1)({ schemaVersion: protocolV3 ? FOUNDATION_PROTOCOL_PLAN_V3 : protocolV2 ? FOUNDATION_PROTOCOL_PLAN_V2 : FOUNDATION_PROTOCOL_PLAN_V1, submissionId: subject.submissionId, requestDigest: subject.requestDigest,
       sourceCommit: artifact.sourceCommit, factoryComponentId: artifact.factory.componentId, hookDeployerComponentId: artifact.hookDeployer.componentId, factoryImmutableBindings: artifact.factoryImmutableBindings }, subject);
-    requireValue(artifact.platformBps === 30 && artifact.platformRecipient === "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "Foundation protocol economics");
+    requireValue((artifact.platformBps === 30 || protocolV3 && artifact.platformBps === 100) && artifact.platformRecipient === "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "Foundation protocol economics");
     if (artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V2) requireValue(artifact.factoryVersion === "v2" && artifact.lpCustodyId === FOUNDATION_LP_CUSTODY_ID_V2, "Foundation protocol custody");
+    if (artifact.schemaVersion === FOUNDATION_PROTOCOL_BUILD_V3) requireValue(artifact.factoryVersion === "v3" && artifact.lpCustodyId === FOUNDATION_LP_CUSTODY_ID_V2, "Foundation protocol custody");
     for (const [contract, bindings] of [[artifact.factory, plan.factoryImmutableBindings], [artifact.hookDeployer, []]] as const) {
       requireValue(Array.isArray(contract.immutableReferences) && contract.immutableReferences.length <= 11, "Foundation immutable references");
       const rebuilt = foundationProtocolContractArtifact({ abi: contract.abi, evm: { bytecode: { object: contract.creationBytecode.slice(2) }, deployedBytecode: { object: contract.runtimeTemplate.slice(2),
@@ -285,8 +299,8 @@ export function parseFoundationReviewArtifact(value: unknown, subject: ReviewSub
       requireValue(nativeCanonicalJson(contract) === nativeCanonicalJson(rebuilt), "Foundation protocol contract");
     }
     const tests = reviewRecord(artifact.tests, ["schemaVersion", "requestDigest", "planDigest", "harnessDigest", "execution", "checks", "allRequiredChecksPassed"]);
-    const checks = reviewRecord(tests.checks, protocolV2 ? FOUNDATION_PROTOCOL_CHECKS_V2 : FOUNDATION_PROTOCOL_CHECKS_V1);
-    requireValue(tests.schemaVersion === (protocolV2 ? "programmable.modules.foundation-protocol-test-results.v2" : "programmable.modules.foundation-protocol-test-results.v1") && tests.requestDigest === subject.requestDigest && tests.planDigest === artifact.planDigest
+    const checks = reviewRecord(tests.checks, protocolV3 ? foundationProtocolChecksV3(artifact.platformBps) : protocolV2 ? FOUNDATION_PROTOCOL_CHECKS_V2 : FOUNDATION_PROTOCOL_CHECKS_V1);
+    requireValue(tests.schemaVersion === (protocolV3 ? "programmable.modules.foundation-protocol-test-results.v3" : protocolV2 ? "programmable.modules.foundation-protocol-test-results.v2" : "programmable.modules.foundation-protocol-test-results.v1") && tests.requestDigest === subject.requestDigest && tests.planDigest === artifact.planDigest
       && isReviewDigest(tests.harnessDigest) && tests.execution === "isolated-docker-anvil" && tests.allRequiredChecksPassed === true && Object.values(checks).every(value => value === true), "Foundation protocol tests");
     requireValue(artifact.planDigest === reviewDigest(plan.schemaVersion, plan) && (!suppliedPlan || nativeCanonicalJson(suppliedPlan) === nativeCanonicalJson(plan)), "Foundation protocol plan");
     return artifact;
@@ -471,6 +485,29 @@ export interface FoundationProtocolBuildV2 extends Omit<FoundationProtocolBuildV
   readonly factoryVersion: "v2"; readonly lpCustodyId: Hex;
   readonly tests: FoundationProtocolTestResultV2;
 }
+export const FOUNDATION_PROTOCOL_PLAN_V3 = "programmable.modules.foundation-protocol-build-plan.v3" as const;
+export const FOUNDATION_PROTOCOL_BUILD_V3 = "programmable.modules.foundation-protocol-build.v3" as const;
+export const FOUNDATION_PROTOCOL_EXTENSION_V3 = "programmable.module-foundation.protocol@3" as const;
+export const FOUNDATION_PROTOCOL_EXTENSION_FEE100_V1 = "programmable.module-foundation.protocol-fee100@1" as const;
+export const FOUNDATION_PROTOCOL_CHECKS_V3 = Object.freeze([...FOUNDATION_PROTOCOL_CHECKS_V2, "independentCreatorFees"] as const);
+export const FOUNDATION_PROTOCOL_REVIEW_AREAS_V3 = Object.freeze([...FOUNDATION_PROTOCOL_REVIEW_AREAS_V2, "foundation-independent-buy-sell-creator-fees"] as const);
+export const foundationProtocolChecksV3 = (bps: 30 | 100) => FOUNDATION_PROTOCOL_CHECKS_V3.map(check =>
+  bps === 100 && check === "quoteFeeAccounting30Bps" ? "quoteFeeAccounting100Bps" as const : check);
+export const foundationProtocolReviewAreasV3 = (bps: 30 | 100) => FOUNDATION_PROTOCOL_REVIEW_AREAS_V3.map(area =>
+  bps === 100 && area === "foundation-immutable-30bps-platform-quote-fee" ? "foundation-immutable-100bps-platform-quote-fee" : area);
+export interface FoundationProtocolPlanV3 extends Omit<FoundationProtocolPlanV1, "schemaVersion"> {
+  readonly schemaVersion: typeof FOUNDATION_PROTOCOL_PLAN_V3;
+}
+export interface FoundationProtocolTestResultV3 extends Omit<FoundationProtocolTestResultV1, "schemaVersion" | "checks"> {
+  readonly schemaVersion: "programmable.modules.foundation-protocol-test-results.v3";
+  readonly checks: Readonly<Record<Exclude<typeof FOUNDATION_PROTOCOL_CHECKS_V3[number], "quoteFeeAccounting30Bps">, true> & { quoteFeeAccounting30Bps?: true; quoteFeeAccounting100Bps?: true }>;
+}
+export interface FoundationProtocolBuildV3 extends Omit<FoundationProtocolBuildV1, "schemaVersion" | "authority" | "tests" | "platformBps"> {
+  readonly schemaVersion: typeof FOUNDATION_PROTOCOL_BUILD_V3;
+  readonly authority: "programmable.module-review.foundation-protocol-build.v3";
+  readonly factoryVersion: "v3"; readonly lpCustodyId: Hex; readonly platformBps: 30 | 100;
+  readonly tests: FoundationProtocolTestResultV3;
+}
 export const FOUNDATION_SETTINGS_V1 = Object.freeze({ optimizer: { enabled: true, runs: 200 }, evmVersion: "cancun", viaIR: true, metadata: { bytecodeHash: "none", appendCBOR: false } });
 export const FOUNDATION_REVIEW_AREAS_V1 = Object.freeze([
   "complete-configuration-and-action-domain", "host-only-callbacks-and-bound-context",
@@ -544,6 +581,23 @@ export function validateFoundationProtocolPlanV1(value: unknown, subject: Review
     ids.add(b.id); fields.add(b.field);
   }
   return JSON.parse(json(value)) as FoundationProtocolPlanV1;
+}
+export function validateFoundationProtocolPlanV3(value: unknown, subject: ReviewSubject): FoundationProtocolPlanV3 {
+  exact(subject, ["submissionId", "principalId", "author", "requestDigest"]);
+  need(UUID.test(subject.submissionId) && UUID.test(subject.principalId) && /^0x(?!0{40}$)[0-9a-f]{40}$/u.test(subject.author) && HASH.test(subject.requestDigest), "PROTOCOL_SUBJECT_INVALID");
+  const p = exact(value, ["schemaVersion", "submissionId", "requestDigest", "sourceCommit", "factoryComponentId", "hookDeployerComponentId", "factoryImmutableBindings"]);
+  need(p.schemaVersion === FOUNDATION_PROTOCOL_PLAN_V3 && p.submissionId === subject.submissionId && p.requestDigest === subject.requestDigest
+    && typeof p.sourceCommit === "string" && /^(?!0{40}$)[0-9a-f]{40}$/u.test(p.sourceCommit), "PROTOCOL_SOURCE_INVALID");
+  for (const field of ["factoryComponentId", "hookDeployerComponentId"]) need(typeof p[field] === "string" && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(p[field]), "PROTOCOL_TARGET_INVALID");
+  need(p.factoryComponentId !== p.hookDeployerComponentId && Array.isArray(p.factoryImmutableBindings) && p.factoryImmutableBindings.length === FOUNDATION_PROTOCOL_FIELDS_V1.length, "PROTOCOL_IMMUTABLES_INVALID");
+  const ids = new Set<string>(), fields = new Set<string>();
+  for (const raw of p.factoryImmutableBindings) {
+    const b = exact(raw, ["id", "field"]);
+    need(typeof b.id === "string" && /^(0|[1-9][0-9]{0,9})$/u.test(b.id) && !ids.has(b.id)
+      && typeof b.field === "string" && FOUNDATION_PROTOCOL_FIELDS_V1.includes(b.field as Field) && !fields.has(b.field), "PROTOCOL_IMMUTABLES_INVALID");
+    ids.add(b.id); fields.add(b.field);
+  }
+  return JSON.parse(json(value)) as FoundationProtocolPlanV3;
 }
 export function validateFoundationProtocolPlanV2(value: unknown, subject: ReviewSubject): FoundationProtocolPlanV2 {
   exact(subject, ["submissionId", "principalId", "author", "requestDigest"]);
