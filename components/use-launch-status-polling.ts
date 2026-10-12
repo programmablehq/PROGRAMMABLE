@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 /** Status reads only. Never retries a wallet send or overlaps a slow request. */
 export function useLaunchStatusPolling(scope: string, enabled: boolean,
-  refresh: (signal: AbortSignal) => Promise<void> | void, intervalMs = 20_000) {
+  refresh: (signal: AbortSignal) => Promise<void> | void, intervalMs = 20_000, immediate = false) {
   const latest = useRef(refresh);
   useEffect(() => { latest.current = refresh; }, [refresh]);
   useEffect(() => {
@@ -12,7 +12,7 @@ export function useLaunchStatusPolling(scope: string, enabled: boolean,
     let stopped = false;
     let active: AbortController | null = null;
     let timer: ReturnType<typeof setTimeout>;
-    let nextReadAt = Date.now() + intervalMs;
+    let nextReadAt = Date.now() + (immediate ? 0 : intervalMs);
     const schedule = () => { timer = setTimeout(() => void run(), Math.max(0, nextReadAt - Date.now())); };
     const run = async () => {
       if (stopped || active || document.visibilityState !== "visible") return;
@@ -42,5 +42,5 @@ export function useLaunchStatusPolling(scope: string, enabled: boolean,
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("focus", resume);
     };
-  }, [scope, enabled, intervalMs]);
+  }, [scope, enabled, intervalMs, immediate]);
 }

@@ -1,4 +1,5 @@
 "use client";
+import { CustomLaunchProgress } from "./custom-launch-progress";
 import { DeveloperIssue } from "./developer-issue";
 import { CustomLaunchAssessment } from "./custom-launch-assessment";
 import { CustomLaunchDiscussion } from "./custom-launch-discussion";
@@ -1088,13 +1089,13 @@ function statusCopy(status: LaunchStatus) {
     case "awaiting_funding_authorization": return "Funding signature required";
     case "funding_authorization_verified": return "Funding verified";
     case "simulating": return "Simulating";
-    case "authorized": return "Wallet action required";
-    case "awaiting_wallet_signature": return "Wallet action required";
-    case "wallet_action_required": return "Wallet action required";
+    case "authorized": return "Ready to launch";
+    case "awaiting_wallet_signature": return "Ready to launch";
+    case "wallet_action_required": return "Ready to launch";
     case "submitted": return "Confirming onchain";
     case "sequencer_soft_confirmed": return "Sequencer confirmed";
     case "ethereum_posted": return "Posted to Ethereum";
-    case "finalized": return "Finalized";
+    case "finalized": return "Launch complete";
     case "failed": return "Failed";
     case "cancelled": return "Cancelled";
   }
@@ -1116,7 +1117,7 @@ function statusDescription(status: LaunchStatus) {
     case "submitted": return "The wallet transaction is being tracked onchain.";
     case "sequencer_soft_confirmed": return "Robinhood Chain reported a soft confirmation. Ethereum posting and finality are still pending.";
     case "ethereum_posted": return "The transaction was posted to Ethereum. Finality is still pending.";
-    case "finalized": return "The Router launch reached 64+ confirmations. Source, liquidity, custody and trading remain separate states.";
+    case "finalized": return "Your launch is confirmed onchain.";
     case "failed": return "This request did not complete.";
     case "cancelled": return "This request was cancelled.";
   }
@@ -3695,6 +3696,8 @@ export function DeveloperLaunchHistory({
                 reviewLaunch,
                 currentTimeMs ?? Number.NaN,
               );
+            const showReviewStatus = launch.manualReview && !customLaunchReviewAllowsSigning(launch.manualReview)
+              && !["submitted", "sequencer_soft_confirmed", "ethereum_posted", "finalized", "failed", "cancelled"].includes(launch.status);
             return (
               <li
                 id={`custom-launch-${resourceIdentity}`}
@@ -3709,12 +3712,13 @@ export function DeveloperLaunchHistory({
                   {projectMetadataSummary ? <ProjectLaunchIdentity launch={reviewLaunch} binding={projectMetadataSummary} />
                     : <h3>Launch {shortId(resourceIdentity)}</h3>}
                   <span className={styles.status} data-status={launch.status}>
-                    {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status) ? customLaunchReviewLabel(launch.manualReview) : statusCopy(launch.status)}
+                    {showReviewStatus ? customLaunchReviewLabel(launch.manualReview!) : statusCopy(launch.status)}
                   </span>
                 </div>
+                <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : "1"} />
                 <p className={styles.statusDescription}>
-                  {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status)
-                    ? customLaunchReviewDescription(launch.manualReview) : statusDescription(launch.status)}
+                  {showReviewStatus
+                    ? customLaunchReviewDescription(launch.manualReview!) : statusDescription(launch.status)}
                 </p>
                 {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status)
                   ? <CustomLaunchStartButton key={`${resourceIdentity}:${launch.manualReview.revision}`} review={launch.manualReview} launchId={resourceIdentity} onStarted={refresh} /> : null}

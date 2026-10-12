@@ -90,6 +90,19 @@ describe("24-hour review and launch windows", () => {
     expect((await route(new Request("https://programmable.market/api/custom-launch-reviews/start", { method: "POST", body: JSON.stringify({ chainId: "1", launchId: review.reviewId, walletAddress: WEBSITE_ADMIN_WALLET }) }))).status).toBe(403);
     expect(fetchBackend).toHaveBeenCalledTimes(1);
   });
+  it("preserves preparation backoff and does not disguise authentication failures as transient", async () => {
+    const owner = "0x2222222222222222222222222222222222222222" as const;
+    const fetchBackend = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(null, { status: 503, headers: { "Retry-After": "45" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    const route = createManualReviewStartBridgeV1({ authenticator: { authenticate: async () => ({ privyUserId: "did:privy:owner", privySessionId: "session", wallets: [owner] }) },
+      backendBaseUrl: "https://api.programmable.market", websiteToken: "w".repeat(43), bffAssertionKeyV2: "b".repeat(43), fetchBackend });
+    const request = () => new Request("https://programmable.market/api/custom-launch-reviews/start", { method: "POST",
+      body: JSON.stringify({ chainId: "4663", launchId: review.reviewId, walletAddress: owner }) });
+    const unavailable = await route(request());
+    expect(unavailable.status).toBe(503); expect(unavailable.headers.get("Retry-After")).toBe("45");
+    const unauthorized = await route(request());
+    expect(unauthorized.status).toBe(401); expect(unauthorized.headers.get("Retry-After")).toBeNull();
+  });
 });
 
 

@@ -26,7 +26,8 @@ export function createManualReviewStartBridgeV1(input: { authenticator: WalletPr
   if (base.protocol !== "https:" || base.username || base.password) throw new Error("Invalid review backend");
   const assertionKey = requireWalletAdminBffAssertionKeyV2(input.bffAssertionKeyV2, input.websiteToken);
   return async (request: Request) => {
-    const respond = (status: number, body: unknown) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", Vary: "Authorization, X-Privy-Identity-Token" } });
+    const respond = (status: number, body: unknown, retryAfter?: string | null) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", Vary: "Authorization, X-Privy-Identity-Token",
+      ...(retryAfter && retryAfter.length <= 100 && (/^\d+$/.test(retryAfter) || Number.isFinite(Date.parse(retryAfter))) ? { "Retry-After": retryAfter } : {}) } });
     try {
       const url = new URL(request.url);
       if (request.method !== "POST" || url.search || request.headers.get("origin") && request.headers.get("origin") !== url.origin) return respond(400, { error: "Invalid launch start request." });
@@ -47,7 +48,10 @@ export function createManualReviewStartBridgeV1(input: { authenticator: WalletPr
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.websiteToken}`,
           "X-Programmable-Privy-User-Id": principal.privyUserId, "X-Programmable-Wallet-Address": getAddress(value.walletAddress), ...assertion },
         cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(15000)]) });
-      if (!response.ok) return respond([400, 403, 404, 409, 429].includes(response.status) ? response.status : 503, { error: response.status === 409 ? "This approval is no longer active. Refresh your launch." : "Could not start this launch. Refresh and try again." });
+      if (!response.ok) return respond([400, 401, 403, 404, 409, 429].includes(response.status) ? response.status : 503, { error: response.status === 409 ? "This approval is no longer active. Refresh your launch."
+        : response.status === 401 ? "Sign in again to prepare your launch."
+        : response.status === 403 ? "Connect the wallet that submitted this launch."
+        : "Launch preparation is temporarily unavailable." }, response.headers.get("Retry-After"));
       const result = JSON.parse(await readBoundedBody(response, 1024 * 1024));
       return respond(200, { review: parseCustomLaunchReview(result.review) });
     } catch (error) { return respond(error instanceof WalletPrincipalAuthenticationErrorV1 || error instanceof StartInputError ? error.status : 503, { error: "Could not start this launch. Reconnect your wallet and try again." }); }

@@ -29,9 +29,9 @@ for (const width of [1440, 390]) test(`one visible signing action at ${width}px`
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
-test("approval prepares automatically without sending, and retry recovers a preparation error", async ({ page }) => {
+test("approval prepares and retries a temporary error without a click or wallet send", async ({ page }) => {
   await page.goto(origin + "?scenario=approved-retry");
-  await page.getByRole("button", { name: "Retry preparation" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Preparation will retry automatically" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign and launch", exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(2);
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
@@ -70,6 +70,7 @@ test("an interrupted wallet response never resends automatically", async ({ page
 });
 
 test("a missing wallet hash is discovered and tracked without any new send", async ({ page }, info) => {
+  await page.clock.install();
   await page.goto(origin + "?scenario=automatic-recovery");
   await page.getByRole("button", { name: "Sign and launch", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("wallet response was interrupted");
@@ -77,6 +78,7 @@ test("a missing wallet hash is discovered and tracked without any new send", asy
   await expect(page.getByRole("button", { name: "Sign and launch", exact: true })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.requests.length)).toBeGreaterThan(0);
   await page.evaluate(() => window.__customLaunchFixture.discoverMined());
+  await page.clock.fastForward(20000);
   await expect(page.getByText("Transaction saved.", { exact: false })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.proofCalls)).toBeGreaterThan(0);
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(1);
@@ -84,6 +86,24 @@ test("a missing wallet hash is discovered and tracked without any new send", asy
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("automatic-recovery.png"), fullPage: true });
   await page.evaluate(() => window.__customLaunchFixture.finalize());
-  await page.getByRole("button", { name: "Refresh custom projects", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh launch", exact: true }).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("programmable:custom-launch-send:v1:4663:0x1111111111111111111111111111111111111111"))).toBeNull();
+});
+
+test("an approval conflict requires attention and is not retried in the background", async ({ page }) => {
+  await page.goto(origin + "?scenario=approved-conflict");
+  await expect(page.getByRole("button", { name: "Retry preparation" })).toBeVisible();
+  expect(await page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(1);
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+});
+
+test("finality continues into indexing on the same launch link", async ({ page }) => {
+  await page.clock.install();
+  await page.goto(origin + "?scenario=indexing");
+  await expect(page.getByRole("heading", { name: "Opening your coin", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.__customLaunchFixture.navigated)).toBe("");
+  await page.evaluate(() => window.__customLaunchFixture.setIndexed());
+  await page.clock.fastForward(15000);
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.navigated)).toContain("?chain=4663");
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });

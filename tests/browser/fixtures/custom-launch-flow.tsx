@@ -88,6 +88,7 @@ window.fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
   if (url.pathname === "/api/custom-launch-reviews/start") {
     control.startCalls += 1;
+    if (mode === "approved-conflict") return Response.json({ error: "This approval is no longer active." }, { status: 409 });
     if (mode === "approved-retry" && control.startCalls === 1) return Response.json({ error: "Preparation temporarily unavailable." }, { status: 503 });
     record = { ...record, status: base.status, steps: base.steps,
       manualReview: { ...record.manualReview!, launchRequestedAt: new Date().toISOString(), launchDeadline: record.manualReview!.expiresAt } };

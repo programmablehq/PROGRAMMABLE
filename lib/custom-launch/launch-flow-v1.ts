@@ -32,17 +32,17 @@ export function launchFlowStepsV1(record: LaunchPlanRecordV1): LaunchFlowStepV1[
 export function launchFlowStateV1(record: LaunchPlanRecordV1): { title: string; description: string; terminal: boolean } {
   const atomic = record.plan.executor === "atomic_execute_and_stamp_v2";
   if (["final", "source_verified", "indexed", "publicly_visible"].includes(record.status)) return {
-    title: "Confirming website indexing", description: "Your launch is final onchain. Programmable is checking the saved website record before opening your program.", terminal: true,
+    title: "Opening your coin", description: "Your launch is confirmed. It will open automatically when it appears on Explore.", terminal: true,
   };
   const waiting = record.steps.find(step => step.status === "broadcast" || step.status === "mined" || step.transactionHash && step.status !== "final" && step.status !== "failed");
   if (waiting) return { title: waiting.status === "mined" ? "Waiting for finality" : "Transaction submitted", description: atomic
-    ? "Tracking your combined launch and Stamp automatically. Your program opens after independent finality and website indexing."
+    ? "Your transaction is saved. We’ll open your coin when confirmation and indexing finish."
     : "Tracking continues automatically. The next wallet step becomes available after this transaction is independently final.", terminal: false };
   if (record.continuation?.status === "replan_required" && (!record.manualReview || customLaunchReviewLabel(record.manualReview) === "Approved")) return { title: "Team action: refresh preparation",
     description: "Ask your bot to replan this request with current bindings. Keep completed transactions. Your existing approval deadline still applies.", terminal: false };
   if (record.manualReview && customLaunchReviewNeedsStart(record.manualReview)
     && !record.steps.some(step => step.transactionHash)) return {
-    title: "Approved", description: customLaunchReviewDescription(record.manualReview), terminal: false,
+    title: "Preparing your launch", description: customLaunchReviewDescription(record.manualReview), terminal: false,
   };
   if (record.status === "expired") return { title: "Preparation expired", description: "Ask your bot to replan this launch using its existing completed steps. Keep this launch ID and every transaction receipt; completed deployments must be reused.", terminal: false };
   if (record.steps.some(step => step.status === "failed") || record.status === "action_required") return {
@@ -61,7 +61,7 @@ export function launchFlowStateV1(record: LaunchPlanRecordV1): { title: string; 
     title: "Confirming launch evidence", description: "The combined transaction is final. Programmable is reconciling its launch and Stamp evidence before website indexing.", terminal: false,
   };
   if (record.steps.length && record.steps.every(step => step.status === "final")) return { title: "Preparing your Stamp", description: "Your contract steps are final. The issuer is preparing the bound Programmable Stamp. Keep this page or reopen the same launch link.", terminal: false };
-  return { title: "Preparing your launch", description: "Programmable is checking the source and exact execution bytes. Your next wallet step will appear here automatically.", terminal: false };
+  return { title: "Preparing your launch", description: "Your launch button will appear automatically when the checks finish.", terminal: false };
 }
 
 /** A saved hash outranks a lagging ready response for presentation only. It never supplies
