@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { DeveloperUniversalLaunchHistory } from "../../../components/developer-universal-launch-history";
 import { beginLaunchSendV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "../../../lib/custom-launch/launch-send-journal-v1";
+import { discoverUniversalLaunchTransactionV1 } from "../../../lib/custom-launch/launch-transaction-discovery-v1";
 import { canonicalBrowserSha256V2 as digest } from "../../../lib/custom-launch/browser-authority-v2";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "../../../lib/custom-launch/wallet-handoff-plan-v1";
 import type { LaunchPlanRecordV1, LaunchWalletStepV1 } from "../../../lib/custom-launch/launch-plan-v1";
@@ -35,6 +36,8 @@ if (atomic) record = atomicRecordFixture(record);
 if (mode === "atomic-mismatch") record = { ...record, steps: [bindStep({ ...record.steps[0], transaction: { ...record.steps[0].transaction, to: component } })] };
 const control = {
   mode, indexed: false, proofCalls: 0, startCalls: 0, navigated: "", requests: [] as { method: string; params: readonly unknown[] }[],
+  mined: false,
+  discoverMined: () => { control.mined = true; document.dispatchEvent(new Event("visibilitychange")); },
   sends: () => Number(localStorage.getItem("fixture:launch-sends") ?? 0),
   finalize: () => {
     const steps: LaunchWalletStepV1[] = record.steps.map(step => ({ ...step, status: "final", transactionHash: hash }));
@@ -75,7 +78,7 @@ const review = (): UniversalLaunchWalletReviewV1 => {
       gas: `0x${BigInt(step.transaction.gasLimit).toString(16)}`, nonce: `0x${BigInt(step.transaction.nonce).toString(16)}` },
     valueWei: "0", maxGasCostWei: "21000000000000", deadline: plan.budgets.deadline, preconditions: [], postconditions: [], ...(decodedOperation ? { decodedOperation } : {}) };
 };
-if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
+if (["unknown", "automatic-recovery", "release-change-unknown", "release-change-known"].includes(mode)
   && !localStorage.getItem(`programmable:custom-launch-send:v1:4663:${controller}`)) {
   const attempt = beginLaunchSendV1(review());
   if (mode === "release-change-known") rememberLaunchHashV1(attempt, hash);
@@ -108,6 +111,22 @@ window.fetch = async (input) => {
 async function sendWallet(input: UniversalLaunchWalletInputV1) {
   if (mode === "wrong-chain" && input.action === "review") throw new Error("Connect the exact controller account on Robinhood Chain before continuing.");
   if (input.action === "review" || input.action === "switch_chain") return review();
+  if (input.action === "discover") {
+    if (mode !== "automatic-recovery") return null;
+    const attempt = JSON.parse(localStorage.getItem(`programmable:custom-launch-send:v1:4663:${controller}`)!);
+    const found = await discoverUniversalLaunchTransactionV1({ request: async ({ method, params = [] }) => {
+      control.requests.push({ method, params });
+      if (method === "eth_chainId") return "0x1237";
+      if (method === "eth_blockNumber") return "0x64";
+      if (method === "eth_getTransactionCount") return control.mined && BigInt(String(params[1])) >= 100n ? "0x8" : "0x7";
+      const tx = { ...attempt.transaction, hash, input: attempt.transaction.data };
+      if (method === "eth_getBlockByNumber") return { number: "0x64", hash, transactions: [tx] };
+      if (method === "eth_getTransactionByHash") return tx;
+      throw new Error(`Unexpected recovery method ${method}`);
+    } }, attempt, record, input.signal);
+    if (found) rememberLaunchHashV1(attempt, found);
+    return found;
+  }
   if (input.action === "recover") {
     if (input.recoveryHash !== hash) throw new Error("This transaction does not match the saved launch call and nonce.");
     rememberLaunchHashV1(JSON.parse(localStorage.getItem(`programmable:custom-launch-send:v1:4663:${controller}`)!), hash);
