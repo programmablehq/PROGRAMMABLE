@@ -4,24 +4,24 @@ Programmable earns a platform fee on trades covered by its fee contracts. A crea
 
 ## Module Mode
 
-The current coin builder uses Foundation. Its platform fee is **1% on each buy and sell through the launch pool**. You can add a creator fee of **0% to 10% in whole percentage points**. Selected modules may receive part of the creator fee; they do not change the platform's 1%.
+The current coin builder uses Foundation. Its platform fee is **0.3% on each buy and sell through the launch pool**. You can add a creator fee of **0% to 10% in whole percentage points**. Selected modules may receive part of the creator fee; they do not change the platform's 0.3%.
 
 Both fees are calculated in the asset paired with the coin. For a **1 WETH** trade (wrapped ETH) with a **1% creator fee**:
 
 | Recipient | Amount |
 | --- | --- |
-| Programmable | 0.01 WETH |
+| Programmable | 0.003 WETH |
 | Creator and any selected module recipients | 0.01 WETH |
 
-The combined Foundation fee is **2%**. The initial pool has no additional LP fee. Other pools used along a trade route may charge their own fees.
+The combined Foundation fee is **1.3%**. The initial pool has no additional LP fee. Other pools used along a trade route may charge their own fees.
 
 These percentages apply to trades, not an allocation of the coin's token supply. [Creator earnings](creators/earnings.md) explains how recipients collect their fees.
 
 ## Custom launches
 
-New Custom Launch approvals on Ethereum Mainnet and Robinhood require a **1% (100 bps)** platform fee on buys and sells through the launch pool, including the initial buy. The fee must be enforced by the submitted contracts and paid or accrued to `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. A website-only surcharge does not meet this requirement. Project fees and liquidity-provider fees are separate. Ethereum's routed fee uses the gross ETH input on buys and gross ETH output on sells. Robinhood's routed fee uses the gross output asset.
+New Custom Launch approvals on Ethereum Mainnet and Robinhood require a **0.3% (30 bps)** platform fee on buys and sells through the launch pool, including the initial buy. The fee must be enforced by the submitted contracts and paid or accrued to `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. A website-only surcharge does not meet this requirement. Project fees and liquidity-provider fees are separate. Ethereum's routed fee uses the gross ETH input on buys and gross ETH output on sells. Robinhood's routed fee uses the gross output asset.
 
-Before approval, Programmable records buy and sell checks for the exact submitted source and configuration, including the fee asset, assessment base, fixed recipient, backing and claim path. The Native100 reference contracts use the gross native ETH leg and round up per trade. External routes depend on that hook's enforcement. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
+Before approval, Programmable records buy and sell checks for the exact submitted source and configuration, including the fee asset, assessment base, fixed recipient, backing and claim path. The Ethereum Native30 reference contracts use the gross native ETH leg and round up per trade. External routes depend on that hook's enforcement. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
 
 ## Platform revenue
 

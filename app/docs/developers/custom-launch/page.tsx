@@ -251,7 +251,7 @@ export default function CustomLaunchApiDocsPage() {
           </div>
         </dl>
         <p className={styles.bodyCopy}>
-          The new Robinhood Custom Launch policy uses <strong>100 bps (1%)</strong>
+          The new Robinhood Custom Launch policy uses <strong>30 bps (0.3%)</strong>
           {" "}for buys and sells prepared by Programmable. Creator and pool fees
           are separate. Earlier Native20 pools retain their recorded fees. Read
           the <a href="#fees">fee calculation and claim rules</a>.
@@ -795,7 +795,7 @@ export default function CustomLaunchApiDocsPage() {
         <div className={styles.sectionIntro}>
           <h2>Custom Launch fees</h2>
           <p>
-            The new Robinhood Custom Launch policy uses <strong>100 bps (1%)</strong>{" "}
+            The new Robinhood Custom Launch policy uses <strong>30 bps (0.3%)</strong>{" "}
             on the gross output of swaps prepared by Programmable. The fee is
             deducted in the output asset and rounded down once. Creator and
             pool LP fees are separate. A gross output of 1 ETH pays 0.01 ETH

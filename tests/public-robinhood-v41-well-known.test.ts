@@ -44,14 +44,14 @@ describe("profile-selected Robinhood well-known discovery", () => {
     expect(original.customLaunchApi.ethereumProfileSelection).toMatchObject({
       discoveryIsActivationEvidence: false,
       profile36: {
-        programmableHundredthsOfBip: "10000",
-        programmableTradeFeePolicyHash: "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a",
+        programmableHundredthsOfBip: "3000",
+        programmableTradeFeePolicyHash: "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
         rateSource: "capabilities.programmableTradeFeePolicy.policy.ratePpm",
       },
       cli: { sourceCandidateVersion: "4.1.6", publicationVerified: null },
     });
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
-      .toBe("167e128ace3e149de845d1f675b0d5dca08e477f015e618feb3dd80524d1558c");
+      .toBe("2513a0b2765d81a963f3ffe0dc7ae6327f7e2c0b1d944a6dff7c7ce3fe5aedd9");
   });
 
   it("publishes successor fee and funding rules while pending authority stays closed", async () => {

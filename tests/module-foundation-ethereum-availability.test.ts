@@ -33,8 +33,9 @@ it("reports a missing stamp without granting authority or polling for index reco
   expect(parseFoundationAvailability(missing).stampMissing).toBeUndefined();
 });
 
-it("preserves the original stamped release for existing coins without admitting it for new launches", () => {
-  const original = ethereumModuleBinding(ETHEREUM_MODULE_SOURCES[1]);
+it("preserves other stamped releases for existing coins without admitting them for new launches", () => {
+  for (const historical of ETHEREUM_MODULE_SOURCES.filter(source => source.releaseDigest !== binding.releaseDigest)) {
+  const original = ethereumModuleBinding(historical);
   const token = "0x1111111111111111111111111111111111111111";
   const value = envelope();
   value.binding = JSON.parse(JSON.stringify({ ...original, factory: { address: token,
@@ -44,6 +45,7 @@ it("preserves the original stamped release for existing coins without admitting 
   expect(() => parseFoundationAvailability(value)).toThrow();
   expect(() => parseFoundationAvailability({ ...value, token,
     binding: { ...value.binding, releaseDigest: binding.releaseDigest } })).toThrow();
+  }
 });
 
 it("identifies both generations by their stamped runtime and deployment block", () => {
