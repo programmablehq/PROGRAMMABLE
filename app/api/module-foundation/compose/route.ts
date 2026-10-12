@@ -24,6 +24,7 @@ import { readFoundationStartPrice } from "@/lib/server/module-foundation/start-p
 import { parseFoundationStartPrice } from "@/lib/module-foundation/start-price";
 import { foundationInitialBuyError, readFoundationFirstBuyPolicy } from "@/lib/module-foundation/first-buy";
 import { foundationPlatformFeeBps } from "@/lib/module-foundation/constants";
+import { FoundationPreparationUnavailableError, isTemporaryFoundationPreparationError } from "@/lib/module-foundation/preparation-retry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -158,6 +159,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch (error) {
     if (error instanceof FoundationQuoteMarketError) return NextResponse.json({ error: error.message, code: error.code, retryable: error.retryable },
       { status: error.retryable ? 503 : 422, headers });
+    if (isTemporaryFoundationPreparationError(error)) return NextResponse.json({
+      error: new FoundationPreparationUnavailableError().message, code: "MODULE_PREPARATION_UNAVAILABLE", retryable: true,
+    }, { status: 503, headers });
     const message = error instanceof Error && error.message.length < 240 ? error.message : "This launch could not be prepared. Check its details and retry.";
     return NextResponse.json({ error: message }, { status: 400, headers });
   }
