@@ -65,6 +65,7 @@ const NON_PUBLIC_TOKEN_ADDRESSES = new Set(
 // Owner-requested discovery exclusions are separate from release canaries.
 // A matching address on another chain and future verified launches stay visible.
 export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
+  Object.freeze({ chainId: 4663, identity: "0xfc65fb2ad4fe188d6529ba23f8083fc34e5961b7" }), // Owned Native100 release check; review 5929e544-4ee3-485d-802a-98b6270a3249
   Object.freeze({ chainId: 1, identity: "0x9e7791ac645e902da1fa94451d3034e351e1aae7" }), // Owned fee100 Module Mode release check; deterministic token in platform-fee100-20261012
   Object.freeze({ chainId: 4663, identity: "0xb1e6e441214d3bfb7a073f8095632ab20b9d2b42" }), // Owned fee-policy release check; review 2e2537d8-a5a8-49df-8ef1-43d6f54c260e
   Object.freeze({ chainId: 4663, identity: "0x7e76d9b7c153fd29e87ef0b339ba44e84be5f276" }), // Owned runtime-continuation release check; bound to review 36942122-37fb-4ecd-ad0c-0ddfce50d051
