@@ -12,16 +12,24 @@ export function useLaunchStatusPolling(scope: string, enabled: boolean,
     let stopped = false;
     let active: AbortController | null = null;
     let timer: ReturnType<typeof setTimeout>;
-    const schedule = () => { timer = setTimeout(() => void run(), intervalMs); };
+    let nextReadAt = Date.now() + intervalMs;
+    const schedule = () => { timer = setTimeout(() => void run(), Math.max(0, nextReadAt - Date.now())); };
     const run = async () => {
       if (stopped || active || document.visibilityState !== "visible") return;
       clearTimeout(timer);
+      if (Date.now() < nextReadAt) { schedule(); return; }
       const controller = new AbortController(); active = controller;
       const timeout = setTimeout(() => controller.abort(), 15_000);
+      let retryDelay = intervalMs;
       try { await latest.current(controller.signal); }
-      catch { /* Keep the last verified state and retry the read. */ }
+      catch (error) {
+        // Preserve the last verified view, including across focus changes.
+        const requested = error && typeof error === "object" && "retryAfterMs" in error ? error.retryAfterMs : null;
+        if (typeof requested === "number" && Number.isFinite(requested)) retryDelay = Math.max(intervalMs, Math.min(3_600_000, requested));
+      }
       finally {
         clearTimeout(timeout); active = null;
+        nextReadAt = Date.now() + retryDelay;
         if (!stopped) schedule();
       }
     };

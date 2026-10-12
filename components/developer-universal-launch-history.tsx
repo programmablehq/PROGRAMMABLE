@@ -4,6 +4,7 @@ import { launchStatusFingerprint, launchStatusUpdateMessage } from "@/lib/custom
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Hex } from "viem";
+import { parseLaunchSendAttemptV1, readLaunchSendJournalV1, reconcileFinalizedLaunchSendV1 } from "@/lib/custom-launch/launch-send-journal-v1";
 import { projectionObject } from "@/lib/custom-launch/launch-projection-v1";
 import { multiRoleOriginalTransactionHintV3 } from "@/lib/custom-launch/multi-role-finality-version-v3";
 import { readLaunchPlanResourceV1, type UniversalLaunchSource, type UniversalLaunchWalletInputV1, type UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
@@ -19,7 +20,7 @@ type Props = {
 };
 const sources = ["custom_launch_plan_v1", "multi_role_v2"] as const;
 const identity = (entry: Entry) => `${entry.sourceVersion}:${entry.resource.planId ?? entry.resource.launchId}`;
-class HistoryReadError extends Error { constructor(message: string, readonly status: number) { super(message); } }
+class HistoryReadError extends Error { constructor(message: string, readonly status: number, readonly retryAfterMs = 0) { super(message); } }
 export function LaunchHistoryMissingState({ launchId, unavailable }: { launchId: string; unavailable: boolean }) {
   return <div className={styles.statePanel}><h3>{unavailable ? "Launch data is temporarily unavailable" : "This launch could not be found"}</h3>
     <p>{unavailable ? "Keep this launch link and refresh when the service responds. An unavailable source does not mean the launch or its wallet has changed."
@@ -48,62 +49,90 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   const [launchUpdate, setLaunchUpdate] = useState("");
   const [sourceUnavailable, setSourceUnavailable] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const readCooldown = useRef(0);
+  useEffect(() => { readCooldown.current = 0; }, [account]);
   const credentials = useRef({ getAccessToken, getIdentityToken });
   useEffect(() => { credentials.current = { getAccessToken, getIdentityToken }; }, [getAccessToken, getIdentityToken]);
   const request = useCallback(async (source: UniversalLaunchSource, id?: string, init?: RequestInit, suffix = "", cursor?: string,
     sharedTokens?: readonly [string | null, string | null]) => {
+    if (!init?.method && Date.now() < readCooldown.current) throw new HistoryReadError("Status reads will resume automatically.", 429, readCooldown.current - Date.now());
     const loaders = credentials.current;
     const [access, identityToken] = sharedTokens ?? await Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
     if (!access) throw new Error("Sign in again to load your launch history.");
     const query = new URLSearchParams({ walletAddress: account, source });
     if (cursor) query.set("cursor", cursor);
     const response = await fetch(`/api/developer/custom-launch-plans${id ? `/${encodeURIComponent(id)}` : ""}${suffix}?${query}`, {
-      ...init, cache: "no-store", redirect: "error", signal: init?.signal ?? AbortSignal.timeout(15000),
+      ...init, cache: "no-store", redirect: "error", signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
       headers: { Accept: "application/json", Authorization: `Bearer ${access}`,
         ...(identityToken ? { "X-Privy-Identity-Token": identityToken } : {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) },
     });
+    const retryHeader = response.headers.get("Retry-After");
+    const retryAfterMs = response.status === 429 || response.status === 503
+      ? Math.min(3_600_000, Math.max(20_000, retryHeader && /^\d+$/.test(retryHeader) ? Number(retryHeader) * 1000 : retryHeader ? Date.parse(retryHeader) - Date.now() || 60_000 : 60_000)) : 0;
+    if (retryAfterMs) readCooldown.current = Date.now() + retryAfterMs;
     if (!response.ok) throw new HistoryReadError(response.status === 401 ? "Sign in again with the account that owns this launch."
       : response.status === 403 ? "This account or controller cannot access the launch. Check the signed-in account and controller wallet."
       : response.status === 404 ? "This launch ID is not in this account's accessible history. Check the account, controller wallet and ID."
-      : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.", response.status);
+      : "The launch service is temporarily unavailable. Your existing launch is saved; refresh to retry.", response.status, retryAfterMs);
     return response.json() as Promise<unknown>;
   }, [account]);
-  useEffect(() => {
-    const controller = new AbortController();
+  const loadHistory = useCallback(async (signal: AbortSignal) => {
     const loaders = credentials.current;
     const sharedTokens = Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
 
-    void Promise.allSettled(sources.map(async source => {
+    const results = await Promise.allSettled(sources.map(async source => {
       const tokens = await sharedTokens;
       if (props.initialLaunchId) {
         try {
           return { source, selectedUnavailable: false,
-            ...parseEntries(await request(source, props.initialLaunchId, { signal: controller.signal }, "", undefined, tokens), account) };
+            ...parseEntries(await request(source, props.initialLaunchId, { signal }, "", undefined, tokens), account) };
         } catch (caught) {
           if (caught instanceof HistoryReadError && caught.status === 404) return { source, selectedUnavailable: false, entries: [], nextCursor: null };
           throw caught;
         }
       }
       return { source, selectedUnavailable: false,
-        ...parseEntries(await request(source, undefined, { signal: controller.signal }, "", undefined, tokens), account) };
-    })).then(results => {
-      if (controller.signal.aborted) return;
-      const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
-      setEntries(previous => [...new Map([...previous, ...successful.flatMap(result => result.entries)].map(entry => [identity(entry), entry])).values()]
-        .sort((a, b) => Number(String(b.resource.planId ?? b.resource.launchId) === props.initialLaunchId) - Number(String(a.resource.planId ?? a.resource.launchId) === props.initialLaunchId) || Date.parse(String(b.resource.createdAt)) - Date.parse(String(a.resource.createdAt))));
-      setCursors(previous => ({ ...previous, ...Object.fromEntries(successful.map(result => [result.source, result.nextCursor])) }));
-      const unavailable = results.some(result => result.status === "rejected") || successful.some(result => result.selectedUnavailable);
-      setSourceUnavailable(unavailable);
-      setError(unavailable ? successful.some(result => result.entries.length) ? "Some custom launch sources could not be refreshed. Existing records remain available." : "Launch data is temporarily unavailable. Keep this link and refresh to retry." : null);
-      setLoading(false);
-
-    });
-    return () => { controller.abort(); };
-  }, [request, account, props.initialLaunchId, refresh]);
+        ...parseEntries(await request(source, undefined, { signal }, "", undefined, tokens), account) };
+    }));
+    if (signal.aborted) return;
+    const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+    setEntries(previous => [...new Map([...previous, ...successful.flatMap(result => result.entries)].map(entry => [identity(entry), entry])).values()]
+      .sort((a, b) => Number(String(b.resource.planId ?? b.resource.launchId) === props.initialLaunchId) - Number(String(a.resource.planId ?? a.resource.launchId) === props.initialLaunchId) || Date.parse(String(b.resource.createdAt)) - Date.parse(String(a.resource.createdAt))));
+    setCursors(previous => ({ ...previous, ...Object.fromEntries(successful.map(result => [result.source, result.nextCursor])) }));
+    const unavailable = results.some(result => result.status === "rejected") || successful.some(result => result.selectedUnavailable);
+    setSourceUnavailable(unavailable);
+    setError(unavailable ? successful.some(result => result.entries.length) ? "Some custom launch sources could not be refreshed. Existing records remain available." : "Launch data is temporarily unavailable. Keep this link and refresh to retry." : null);
+    setLoading(false);
+    const retry = results.find(result => result.status === "rejected" && result.reason instanceof HistoryReadError && result.reason.retryAfterMs);
+    if (retry?.status === "rejected") throw retry.reason;
+  }, [request, account, props.initialLaunchId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadHistory(controller.signal).catch(() => {});
+    return () => controller.abort();
+  }, [loadHistory, refresh]);
+  async function reconcilePrevious(signal: AbortSignal) {
+    const attempt = parseLaunchSendAttemptV1(readLaunchSendJournalV1(account), account);
+    if (!attempt || attempt.sourceVersion !== "custom_launch_plan_v1") return;
+    const loaded = entries.find(entry => entry.sourceVersion === attempt.sourceVersion && entry.resource.planId === attempt.launchId);
+    if (loaded) { reconcileFinalizedLaunchSendV1(attempt, loaded.resource); return; }
+    const prior = parseEntries(await request(attempt.sourceVersion, attempt.launchId, { signal }), account).entries[0];
+    if (!signal.aborted && prior) reconcileFinalizedLaunchSendV1(attempt, prior.resource);
+  }
+  useEffect(() => {
+    const controller = new AbortController();
+    void reconcilePrevious(controller.signal).catch(() => {});
+    return () => controller.abort();
+  // A refreshed history also retries an earlier still-confirming transaction.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, request, refresh]);
   useLaunchStatusPolling(account, !loading, async signal => {
+    if (sourceUnavailable) await loadHistory(signal);
+    await reconcilePrevious(signal);
     for (const entry of entries) {
       if (signal.aborted) return;
-      if (["expired", "publicly_visible"].includes(String(entry.resource.status)) && !entry.resource.manualReview) continue;
+      if (entry.resource.status === "publicly_visible" || entry.resource.status === "finalized"
+        || entry.resource.status === "expired" && !entry.resource.manualReview) continue;
       const id = String(entry.resource.planId ?? entry.resource.launchId);
       const updated = parseEntries(await request(entry.sourceVersion, id, { signal }), account).entries
         .find(candidate => identity(candidate) === identity(entry));

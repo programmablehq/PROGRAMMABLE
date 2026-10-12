@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getContractAddress, keccak256, type Hex } from "viem";
-import { beginLaunchSendV1, finalizeLaunchSendV1, parseLaunchSendAttemptV1, readLaunchSendJournalV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "@/lib/custom-launch/launch-send-journal-v1";
+import { beginLaunchSendV1, reconcileFinalizedLaunchSendV1, finalizeLaunchSendV1, parseLaunchSendAttemptV1, readLaunchSendJournalV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "@/lib/custom-launch/launch-send-journal-v1";
 import { launchFlowStepsV1 } from "@/lib/custom-launch/launch-flow-v1";
 import { launchPlanWalletUrlV1, prepareUniversalLaunchWalletV1, readLaunchPlanResourceV1, recoverUniversalLaunchTransactionV1, type LaunchWalletProviderV1, type UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import { canonicalBrowserSha256V2 as digest } from "@/lib/custom-launch/browser-authority-v2";
@@ -42,6 +42,18 @@ describe("durable custom launch send recovery", () => {
     expect(readLaunchSendJournalV1(controller, storage)).not.toBeNull();
     finalizeLaunchSendV1(attempt, final, storage);
     expect(readLaunchSendJournalV1(controller, storage)).toBeNull();
+  });
+  it("releases a previous launch from its exact finalized owner resource, including a missing local hash", () => {
+    const storage = store(); const attempt = beginLaunchSendV1(review(), storage);
+    const base = recordFixture();
+    const resource = { ...base, steps: base.steps.map(step => ({ ...step, status: "final", transactionHash: hash })) };
+    expect(reconcileFinalizedLaunchSendV1(attempt, { ...resource, planId: "20000000-0000-4000-8000-000000000002" }, storage)).toBe(false);
+    expect(reconcileFinalizedLaunchSendV1(attempt, { ...resource, steps: resource.steps.map(step => ({ ...step, status: "mined" })) }, storage)).toBe(false);
+    expect(readLaunchSendJournalV1(controller, storage)).not.toBeNull();
+    expect(reconcileFinalizedLaunchSendV1(attempt, resource, storage)).toBe(true);
+    expect(readLaunchSendJournalV1(controller, storage)).toBeNull();
+    const next = beginLaunchSendV1({ ...review(), launchId: "20000000-0000-4000-8000-000000000002" }, storage);
+    expect(next.launchId).not.toBe(attempt.launchId);
   });
   it("recovers only original bytes and does not treat an absent hash or another nonce transaction as no-send proof", async () => {
     const storage = store(); const attempt = beginLaunchSendV1(review(), storage);
