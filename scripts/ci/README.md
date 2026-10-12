@@ -8,42 +8,36 @@ binds the exact source commit, workflow, run, attempt, and closed job inventory.
 
 ## Interface
 
-Ordinary interface changes run the complete quality/test command and the
-browser/build command in independent checkouts. Browser fixtures and Next.js
-builds remain sequential within one checkout because they share ports and
-mutable build output. The full local entry point is `npm run verify:interface:ci`.
+Run `npm run verify:interface:plan` with `PROGRAMMABLE_CI_BASE_SHA` and
+`PROGRAMMABLE_CI_HEAD_SHA` to see the checks selected for a change.
 
-One narrow exception replaces the global lint, full Vitest batch (439 files at
-introduction), and 74 unrelated wallet/late-migration browser cases with scoped
-lint and 15 direct docs, discovery, and API-key UI test files. It requires an
-actual URL-only change in one or both of these existing literals:
+- CSS, images and proven copy edits use the existing presentation publisher.
+- Application changes lint affected files and run related Vitest tests. The
+  dependency graph includes literal file references; dynamic filesystem tests
+  remain in the conservative set. Deleted modules and unknown build inputs use
+  the full application suite.
+- Browser suites follow the changed feature: trading, wallet sessions, module
+  launches, profiles, navigation or Explore. A metadata-only change does not
+  run wallet or migration fixtures.
+- Module SDK/CLI checks run for those tools. Historical API activation audits
+  run for release, binding or activation changes, not ordinary page changes.
+- Verification-only maintenance runs the pipeline's own regression checks.
+  This lane rejects changed application code, dependencies, contract jobs,
+  protected aggregates and production-proof jobs. Existing application builds
+  do not need rebuilding when only interface tests and their runner change.
 
-- `guideUrl` in `lib/custom-launch/v4-public-contract-discovery.ts`
-- `robinhoodGuide` in `tests/public-robinhood-v41-agent-docs.test.ts`
+For ordinary interface changes, production reuses a successful PR run when its
+recorded checkout tree, workflow, base commit and repository match exactly.
+The PR run and required jobs must all have succeeded within six hours. Missing,
+stale or mismatched evidence falls back to running checks. Contract, database,
+indexer, read-model and Custom V2 releases retain fresh verification. The source
+record is stored in the PR run's `interface-source-*` artifact; the production
+run links the reused run in its summary.
 
-Only a plain `/developers/*.md` path under the unchanged site origin may
-change. The trusted-base classifier reads both Git blobs, requires an existing
-regular file modified without a mode change, and compares every byte outside
-the single literal. Escapes, interpolation, other code edits, unknown paths,
-missing history, deletion, and renaming select full coverage. Changes to the
-two exact existing companion Markdown files listed in the classifier may
-accompany the literal edit. Markdown alone does not select this exception.
-
-Every functional mixed scope, including Custom V2, selects full Interface
-coverage. A trusted base without the new output also selects full coverage.
-`npm run verify:interface:guidance:ci` retains all existing Interface Node
-contracts and runs the 15 direct Vitest files, including the information-architecture
-contract that reads the allowed companion Markdown. The browser/build worker still
-runs the entire production build, complete-history V4 clean-room gate, and
-both V4 and V4.1 activation audits. The aggregate explicitly rejects a guidance
-claim combined with any functional scope.
-
-When Custom V2 and full Interface are both required in the same run, the latter
-already supplies identical global lint, 12 Custom V2 Vitest files, and the
-production build. The Custom V2 worker runs its remaining typecheck/Node
-contracts and any required operations gate. Both protected results are required
-by the final aggregate and production proof. Custom V2 alone retains its full
-original command. Guidance coverage cannot satisfy this shared-work condition.
+The production build and bundle credential checks remain. Custom V2 plus
+Interface still selects full application coverage before sharing results.
+Do not repeat successful checks locally and then run the same full suite again
+for every small edit. Visual wording and CSS do not need source-string tests.
 
 ## Contracts
 
