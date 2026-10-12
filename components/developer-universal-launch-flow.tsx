@@ -1,6 +1,8 @@
 "use client";
 
 import NextImage from "next/image";
+import { CustomLaunchProgress } from "./custom-launch-progress";
+import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import { safePublicImageUrl } from "@/lib/safe-public-image-url";
 import { CustomLaunchAssessment } from "./custom-launch-assessment";
 import { CustomLaunchDiscussion } from "./custom-launch-discussion";
@@ -125,65 +127,43 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     } catch { /* The journal stays locked when exact reconciliation cannot be persisted. */ }
   }, [ownAttempt, completedHash, completedDigest]);
 
-  useEffect(() => {
-    if (!ownAttempt || !unknownSend || completedHash) return;
-    const controller = new AbortController();
-    let inFlight = false;
-    const discover = async () => {
-      if (inFlight || document.visibilityState === "hidden") return;
-      inFlight = true;
-      try {
-        const callbacks = reviewCallbacks.current;
-        // Discovery reads the chain and persists only a matching original hash.
-        // The existing proof loop remains responsible for finality and indexing.
-        await callbacks.sendWallet({ action: "discover", sourceVersion: ownAttempt.sourceVersion,
-          reviewedResource: callbacks.resource, stepId: ownAttempt.stepId, signal: controller.signal,
-          loadFreshResource: callbacks.load, loadFreshCapabilities: async () => null });
-      } catch { /* Missing history or a changed wallet leaves the attempt locked; retry in the background. */ }
-      finally { inFlight = false; }
-    };
-    void discover();
-    const timer = window.setInterval(() => void discover(), 20000);
-    document.addEventListener("visibilitychange", discover);
-    return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", discover); };
-  }, [ownAttempt, unknownSend, completedHash]);
+  useLaunchStatusPolling(`${entry.controller}:${id}:discovery`, !!ownAttempt && unknownSend && !completedHash, async signal => {
+    if (!ownAttempt) return;
+    const callbacks = reviewCallbacks.current;
+    await callbacks.sendWallet({ action: "discover", sourceVersion: ownAttempt.sourceVersion,
+      reviewedResource: callbacks.resource, stepId: ownAttempt.stepId, signal,
+      loadFreshResource: callbacks.load, loadFreshCapabilities: async () => null });
+  }, 20000, true);
 
-  useEffect(() => {
-    if (!hash || ownStep?.status === "final") return;
-    let active = true; let inFlight = false;
-    const track = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try { await onSubmittedRef.current(submittedStepId, hash); if (active) setTrackingError(null); }
-      catch { if (active) setTrackingError("The transaction is saved. Tracking will retry automatically with the same hash."); }
-      finally { inFlight = false; }
-    };
-    void track(); const timer = window.setInterval(() => void track(), 60000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [hash, submittedStepId, ownStep?.status]);
+  useLaunchStatusPolling(`${entry.controller}:${id}:${submittedStepId}:${hash ?? ""}`, !!hash && ownStep?.status !== "final", async signal => {
+    if (!hash) return;
+    try { await onSubmittedRef.current(submittedStepId, hash); if (!signal.aborted) setTrackingError(null); }
+    catch (caught) {
+      if (!signal.aborted) setTrackingError("Your transaction is saved. Confirmation will update automatically.");
+      throw caught;
+    }
+  }, 60000, true);
 
-  useEffect(() => {
-    if (!state.terminal) return;
-    const controller = new AbortController();
-    const check = async () => {
-      try {
-        const response = await fetch(`/api/launch-projections/${encodeURIComponent(id)}?source=${entry.sourceVersion}`, { cache: "no-store", redirect: "error", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
-        if (response.status === 202) return;
-        if (!response.ok) throw new Error("Website indexing is temporarily unavailable. Your completed launch is saved; this page will keep checking.");
-        const body: unknown = await response.json();
-        if (!projectionObject(body) || body.schemaVersion !== "programmable.website-indexed-launch.v1" || body.status !== "indexed") throw new Error("The website index has not confirmed this launch yet.");
-        const projection = parseLaunchProjectionV1(body.projection);
-        const address = projectionToRobinhoodLaunch(projection).tokenAddress;
-        const href = `/token/${address}?chain=4663`;
-        if (projection.launchId !== id || projection.sourceVersion !== entry.sourceVersion || projection.controller.toLowerCase() !== entry.controller.toLowerCase()
-          || plan && (projection.planHash !== plan.planHash || projection.manifestDigest !== plan.manifestDigest) || body.href !== href) throw new Error("The indexed program does not match this launch. Keep this page open while it is reconciled.");
-        setIndexedHref(href); setTrackingError(null);
-        if (highlighted && !navigated.current) { navigated.current = true; if (onIndexed) onIndexed(href); else router.push(href); }
-      } catch (caught) { if (!controller.signal.aborted) setTrackingError(caught instanceof Error ? caught.message : "Website indexing is pending."); }
-    };
-    void check(); const timer = window.setInterval(() => void check(), 15000);
-    return () => { controller.abort(); window.clearInterval(timer); };
-  }, [state.terminal, id, entry.sourceVersion, entry.controller, plan, highlighted, onIndexed, router]);
+  useLaunchStatusPolling(`${entry.controller}:${entry.sourceVersion}:${id}:index`, state.terminal && !indexedHref, async signal => {
+    try {
+      const response = await fetch(`/api/launch-projections/${encodeURIComponent(id)}?source=${entry.sourceVersion}`, { cache: "no-store", redirect: "error", signal });
+      if (response.status === 202) return;
+      if (!response.ok) throw new Error("Your launch is confirmed. We’re waiting for it to appear on Explore.");
+      const body: unknown = await response.json();
+      if (!projectionObject(body) || body.schemaVersion !== "programmable.website-indexed-launch.v1" || body.status !== "indexed") throw new Error("The website index has not confirmed this launch yet.");
+      const projection = parseLaunchProjectionV1(body.projection);
+      const address = projectionToRobinhoodLaunch(projection).tokenAddress;
+      const href = `/token/${address}?chain=4663`;
+      if (projection.launchId !== id || projection.sourceVersion !== entry.sourceVersion || projection.controller.toLowerCase() !== entry.controller.toLowerCase()
+        || plan && (projection.planHash !== plan.planHash || projection.manifestDigest !== plan.manifestDigest) || body.href !== href) throw new Error("The indexed program does not match this launch. Keep this page open while it is reconciled.");
+      if (signal.aborted) return;
+      setIndexedHref(href); setTrackingError(null);
+      if (highlighted && !navigated.current) { navigated.current = true; if (onIndexed) onIndexed(href); else router.push(href); }
+    } catch (caught) {
+      if (!signal.aborted) setTrackingError(caught instanceof Error ? caught.message : "Website indexing is pending.");
+      throw caught;
+    }
+  }, 15000, true);
 
   async function action(mode: "review" | "send" | "recover" | "switch_chain") {
     if (mode === "recover" && !/^0x[0-9a-f]{64}$/i.test(recoveryHash)) { setError("Enter the transaction hash from the original wallet activity."); recoveryInput.current?.focus(); return; }
@@ -206,8 +186,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         setReview(null);
         const sentStep = mode === "recover" ? ownAttempt!.stepId : step?.stepId ?? "multi-role-v2";
         setObservedSubmission({ stepId: sentStep, hash: result });
-        try { await onSubmitted(sentStep, result); }
-        catch { setTrackingError("The transaction is saved. Tracking will retry automatically with the same hash."); }
+        // The single tracking loop submits the saved hash, including after reload.
+        // Do not race it with a second proof request from the click handler.
       } else setReview(result);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not complete the wallet action."); if (mode === "send") setReview(null); }
     finally { actionInFlight.current = false; setBusy(null); }
@@ -222,8 +202,9 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         <div><p className={styles.eyebrow}>Robinhood Chain</p><h3 id={`${recoveryId}-title`}>{title}</h3>{symbol ? <p className={styles.ticker}>{symbol.replace(/^\$+/, "")}</p> : null}</div>
       </div>
     </div>
-    <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Your program is ready" : busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
-      <p>{indexedHref ? "The finalized launch is stored in the website index." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div>
+    <CustomLaunchProgress status={String(resource.status)} review={plan?.manualReview} launchId={id} chainId="4663" indexed={!!indexedHref} />
+    <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Launch complete" : busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
+      <p>{indexedHref ? "Your coin is live on Explore." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div>
     {plan?.manualReview && !hasUnresolved && !state.terminal
       ? <CustomLaunchStartButton key={`${id}:${plan.manualReview.revision}`} review={plan.manualReview} launchId={id} onStarted={load} /> : null}
     {journalError ? <p role="alert" className={styles.error}>{journalError} This launch remains paused.</p> : null}
@@ -231,11 +212,12 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     {unknownSend && busy !== "send" ? <details className={styles.recoveryDetails}><summary>I already sent it</summary><form className={styles.recovery} onSubmit={event => { event.preventDefault(); void action("recover"); }}><label htmlFor={recoveryId}>Paste the transaction ID from your wallet</label><input ref={recoveryInput} id={recoveryId} value={recoveryHash} onChange={event => setRecoveryHash(event.target.value.trim())} autoComplete="off" spellCheck={false} placeholder="0x…" aria-describedby={`${recoveryId}-nonce`} />
       <p id={`${recoveryId}-nonce`}>We’ll check the original transaction and continue tracking it.</p><button type="submit" className={shared.primaryButton} disabled={!!busy}>{busy === "recover" ? "Checking transaction…" : "Check transaction"}</button>
       <a href={`https://robinhoodchain.blockscout.com/address/${entry.controller}`} target="_blank" rel="noreferrer">View wallet activity</a></form></details> : null}
-    {hash ? <p className={styles.receipt}>Transaction saved. <a href={`https://robinhoodchain.blockscout.com/tx/${hash}`} target="_blank" rel="noreferrer"><code>{hash}</code></a></p> : null}
+    {hash ? <p className={styles.receipt}>Transaction saved. <a href={`https://robinhoodchain.blockscout.com/tx/${hash}`} target="_blank" rel="noreferrer">View transaction</a></p> : null}
     {ready && !hasUnresolved ? <div className={styles.confirmation}>
       {visibleReview ? <p>Estimated total: <strong>{formatEther(BigInt(visibleReview.valueWei) + BigInt(visibleReview.maxGasCostWei))} ETH</strong></p> : null}
       <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy ? "Confirm in your wallet…" : "Sign and launch"}</button>
     </div> : null}
+    {plan?.manualReview?.expiresAt && ready && !hasUnresolved ? <p className={styles.notice}>Launch by {new Date(plan.manualReview.expiresAt).toLocaleString()}.</p> : null}
     {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open program</a> : null}
     {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{visibleError}</p> : null}
     {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
