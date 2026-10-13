@@ -4,9 +4,9 @@
 
 [Website analytics](https://programmable.market/analytics) displays volume, collected revenue, buybacks and project burns. Its server reads the latest completed query results with the private `DUNE_API_KEY` and an hourly cache. Page visits never execute SQL. A checked-in snapshot preserves the last verified values and their original timestamps if a source is unavailable. Query execution schedules are managed separately in Dune within the owner's existing credit budget.
 
-The website's [project burn source](https://dune.com/queries/8941418) covers transfers from the three project wallets for the current Robinhood token and historical Ethereum token. The token generations are never summed together. Buyback query 8677080 additionally publishes `buyback_events_v1`, a timestamped transaction list for the website's history and date filters.
+The website's [project burn source](https://dune.com/queries/8941418) covers transfers from the three project wallets for the current Robinhood token and historical Ethereum token. The token generations are never summed together. Buyback query 8677080 additionally publishes `buyback_events_v1`, a timestamped transaction list for the website's history. The page always shows all-time figures across both chains, with V4 totals referring to the current token.
 
-The public policy allocates 80% of eligible collected fee revenue to manual V4 buybacks and burns, with 20% for treasury and operations. The allocation is not evidence of a purchase. Queries count completed transactions independently.
+The public policy allocates 100% of collected 0.3% platform fees from launches on either chain to manual Programmable (V4) buybacks. The allocation is not evidence of a purchase. Queries count completed transactions independently.
 
 ## Queries
 
@@ -30,7 +30,7 @@ The three project wallets are:
 - Recognized factory and router generations discover subsequent launches automatically. New contract generations require an update to `sources.json`.
 - Custom plans use their stamped markets. The XILO opening block is backfilled from its successful pool initialization transaction, which is included in its finalized plan evidence. Other multi-step plans use their stamp block until an earlier opening transaction is verified.
 - Finality is applied once to the combined facts after onchain discovery. Each fact retains the block proving its source, so an unfinalized source cannot admit older activity. An unavailable finality response fails the query instead of silently omitting Robinhood.
-- Missing historical prices remain unavailable. The priced subtotal must not be presented as a complete total when `ecosystem_unpriced_swaps` or `total_unpriced_claims` is positive.
+- Missing historical prices remain unavailable. USD figures are priced subtotals; the page discloses that activity without price data is excluded.
 - Collected fees exclude ordinary incoming transfers, unclaimed accruals and liquidity principal. Nonstandard fee interfaces require a verified adapter before they contribute to the collected-fee total.
 - V4 received directly as own liquidity fees is excluded from cash buyback revenue and purchased V4. It can still contribute to actual burns.
 - Burns to `0x000000000000000000000000000000000000dEaD` do not reduce the token contract's `totalSupply`.
