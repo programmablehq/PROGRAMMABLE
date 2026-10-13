@@ -1,4 +1,5 @@
 "use client";
+import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 import { isGitHubUrl } from "@/lib/public-link-visibility";
 
@@ -3534,7 +3535,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
                 ref={bannerInputRef}
                 hidden
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept={TOKEN_IMAGE_ACCEPT}
                 onChange={selectBanner}
               />
               <button
@@ -3613,7 +3614,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
                     ref={fileInputRef}
                     hidden
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept={TOKEN_IMAGE_ACCEPT}
                     onChange={selectAvatar}
                   />
                   <div className={styles.imageActions}>

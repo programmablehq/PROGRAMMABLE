@@ -1,4 +1,5 @@
 "use client";
+import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 /**
  * @deprecated Retired GitHub-intake interface retained for compatibility tests
@@ -3129,7 +3130,7 @@ function CustomLaunchRuntime({
                   <span>Project image</span>
                   <label className={styles.imageButton} aria-busy={imageUploading}>
                     {imageUploading ? <><LoaderCircle aria-hidden="true" className={styles.spin} size={22} /><span>Preparing image</span></> : isProgrammableTokenImageUrl(presentation.imagePreview) ? <Image src={getTokenCardImageSource(presentation.imagePreview)} alt="Project image preview" width={150} height={150} unoptimized /> : <><ImagePlus aria-hidden="true" size={22} /><span>Choose image</span></>}
-                    <input className={styles.visuallyHidden} type="file" aria-label={presentation.image ? "Change project image" : "Choose project image"} accept="image/png,image/jpeg,image/webp" onChange={(event) => void selectImage(event)} />
+                    <input className={styles.visuallyHidden} type="file" aria-label={presentation.image ? "Change project image" : "Choose project image"} accept={TOKEN_IMAGE_ACCEPT} onChange={(event) => void selectImage(event)} />
                   </label>
                   {presentation.image ? <button className={styles.removeImageButton} type="button" onClick={() => setPresentation((current) => ({ ...current, image: null, imagePreview: "", imageUploadReceipt: null }))}>Remove image</button> : null}
                 </div>

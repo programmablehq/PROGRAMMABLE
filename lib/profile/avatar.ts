@@ -1,3 +1,4 @@
+import { canvasToWebp, loadPhoto } from "../token-image";
 import {
   getAvatarDimensionsError,
   getAvatarFileError,
@@ -7,12 +8,13 @@ import {
 const avatarOutputSize = 512;
 const bannerMaximumDimension = 1800;
 
-function loadImage(source: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new window.Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("The image could not be opened"));
-    image.src = source;
+async function canvasDataUrl(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const blob = await canvasToWebp(canvas, context);
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("The image could not be prepared"));
+    reader.readAsDataURL(blob);
   });
 }
 
@@ -23,7 +25,7 @@ export async function prepareAvatarImage(file: File) {
   const objectUrl = URL.createObjectURL(file);
 
   try {
-    const image = await loadImage(objectUrl);
+    const image = await loadPhoto(objectUrl, /hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name));
     const dimensionsError = getAvatarDimensionsError(
       image.naturalWidth,
       image.naturalHeight,
@@ -54,7 +56,7 @@ export async function prepareAvatarImage(file: File) {
       avatarOutputSize,
     );
 
-    const dataUrl = canvas.toDataURL("image/webp", 0.86);
+    const dataUrl = await canvasDataUrl(canvas, context);
     if (!isSafeAvatarDataUrl(dataUrl)) {
       throw new Error("The prepared image is too large to store");
     }
@@ -71,7 +73,7 @@ export async function prepareProfileBannerImage(file: File) {
 
   const objectUrl = URL.createObjectURL(file);
   try {
-    const image = await loadImage(objectUrl);
+    const image = await loadPhoto(objectUrl, /hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name));
     const dimensionsError = getAvatarDimensionsError(
       image.naturalWidth,
       image.naturalHeight,
@@ -92,7 +94,7 @@ export async function prepareProfileBannerImage(file: File) {
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/webp", 0.82);
+    const dataUrl = await canvasDataUrl(canvas, context);
     if (!isSafeAvatarDataUrl(dataUrl)) {
       throw new Error("The prepared banner is too large to store");
     }

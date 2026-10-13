@@ -1,4 +1,5 @@
 "use client";
+import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 import Image from "next/image";
 import { ImagePlus, Link as LinkIcon, Upload, X } from "lucide-react";
@@ -52,12 +53,12 @@ export function ModuleModeImagePicker({ image, resource, onChange, onBusyChange,
       <div className={`${styles.imagePicker} ${compact === "row" ? styles.imagePickerRow : ""}`}>
         {compact === "row" ? <button type="button" className={styles.imageUploadRow} aria-label={source ? "Change image" : "Choose image"} disabled={preparing} aria-busy={preparing} data-invalid={Boolean(message)} aria-describedby={`module-token-image-help${message ? " module-token-image-error" : ""}`} onClick={() => input.current?.click()}><span className={styles.imageRowThumbnail}>{source ? <Image src={source} alt="Your selected token image" fill sizes="48px" unoptimized onError={() => setImageLoadError("The image could not load. Choose another image." )} /> : <ImagePlus size={22} aria-hidden="true" />}</span><span>{source ? "Change image" : "Choose image"}</span></button> : compact ? <button type="button" className={`${styles.imageThumbnail} ${styles.imageUploadTile}`} disabled={preparing} aria-label={source ? "Change coin image" : "Choose coin image"} aria-busy={preparing} data-invalid={Boolean(message)} aria-describedby={`module-token-image-help${message ? " module-token-image-error" : ""}`} onClick={() => input.current?.click()}>{source ? <Image src={source} alt="Your selected token image" fill sizes="112px" unoptimized onError={() => setImageLoadError("The image preview could not load. Choose another image." )} /> : <><ImagePlus size={24} aria-hidden="true" /><span>Add image</span></>}</button> : <div className={styles.imageThumbnail}>{source ? <Image src={source} alt="Your selected token image" fill sizes="80px" unoptimized onError={() => setImageLoadError("The image preview could not load. Check the public link or choose a file.")} /> : <ImagePlus size={24} aria-hidden="true" />}</div>}
         <div className={styles.imagePickerContent}>
-          <input ref={input} id="module-token-image-file" className={styles.liveRegion} type="file" accept="image/jpeg,image/png,image/webp" disabled={preparing} tabIndex={-1} aria-label="Choose token image file" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void choose(file); }} />
+          <input ref={input} id="module-token-image-file" className={styles.liveRegion} type="file" accept={TOKEN_IMAGE_ACCEPT} disabled={preparing} tabIndex={-1} aria-label="Choose token image file" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void choose(file); }} />
           <div className={styles.imagePickerActions}>
             <button type="button" className={styles.secondaryButton} hidden={Boolean(compact)} disabled={preparing} aria-busy={preparing} data-invalid={Boolean(message)} aria-describedby={`module-token-image-help${preparing ? " module-token-image-status" : ""}${message ? " module-token-image-error" : ""}`} onClick={() => input.current?.click()}><Upload size={16} aria-hidden="true" />{image.kind === "local" ? "Change image" : "Choose image"}</button>
             {image.kind !== "none" ? <button type="button" className={styles.iconButton} disabled={preparing} aria-label="Remove token image" onClick={() => { onChange({ kind: "none" }, null, true); setPreparationError(""); setImageLoadError(""); }}><X size={18} aria-hidden="true" /></button> : null}
           </div>
-          <p id="module-token-image-help" className={styles.help}>JPG, PNG or WebP · Up to 8 MB</p>
+          <p id="module-token-image-help" className={styles.help}>JPG, PNG, WebP or HEIC · Up to 20 MB</p>
           <p id="module-token-image-status" className={preparing ? styles.help : styles.liveRegion} role="status">{preparing ? "Preparing image…" : ""}</p>
         </div>
       </div>

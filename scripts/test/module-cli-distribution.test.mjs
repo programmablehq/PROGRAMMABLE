@@ -14,6 +14,8 @@ import { localServer, sourceRequest, TEST_KEY, IDEMPOTENCY_KEY, SUBMISSION_ID } 
   '../../packages/classic-modules/test/open-client-fixture.mjs';
 import { reviewHandler, reviewStatus } from '../../packages/classic-modules/test/open-review-fixture.mjs';
 
+import { verifyPublishedModuleCli } from '../check-module-cli.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const execAsync = promisify(execFile);
@@ -219,4 +221,42 @@ test('the copied standalone file submits pinned source and reads it through a re
   assert.ok(seen.filter((request) => request.url.endsWith('/capabilities'))
     .every((request) => request.headers.authorization === undefined));
   assert.deepEqual((await fs.readdir(isolated)).sort(), [path.basename(download), 'request.json'].sort());
+});
+
+
+test('website-only lock additions preserve the published CLI while altered code and outputs fail', async (t) => {
+  const root = await fixture(t);
+  const written = await buildModuleCli({ root, write: true });
+  git(root, ['add', '--', MODULE_CLI_RELEASE_ROOT]);
+  git(root, ['commit', '--quiet', '-m', 'Published fixture CLI']);
+  const lockPath = path.join(root, 'package-lock.json');
+  const lock = JSON.parse(await fs.readFile(lockPath, 'utf8'));
+  lock.packages['node_modules/unrelated-browser-image-library'] = { version: '1.0.0', integrity: 'sha512-fixture' };
+  await fs.writeFile(lockPath, JSON.stringify(lock));
+  git(root, ['add', '--', 'package-lock.json']);
+  git(root, ['commit', '--quiet', '-m', 'Website image dependency']);
+  const compatible = await verifyPublishedModuleCli(root);
+  assert.equal(compatible.sha256, written.sha256);
+  await assert.rejects(buildModuleCli({ root }), { code: 'VERSION_ALREADY_BOUND' });
+  const artifact = path.join(root, written.artifactPath), original = await fs.readFile(artifact);
+  await fs.appendFile(artifact, '\n// Unexpected content');
+  await assert.rejects(verifyPublishedModuleCli(root), /published bytes changed/);
+  await fs.writeFile(artifact, original);
+  const manifest = JSON.parse(await fs.readFile(path.join(root, written.manifestPath), 'utf8'));
+  const dependency = manifest.dependencies[0];
+  const integrity = lock.packages[dependency.lockPath].integrity;
+  lock.packages[dependency.lockPath].integrity = 'sha512-changed';
+  await fs.writeFile(lockPath, JSON.stringify(lock));
+  git(root, ['add', '--', 'package-lock.json']);
+  git(root, ['commit', '--quiet', '-m', 'Changed CLI dependency lock']);
+  await assert.rejects(verifyPublishedModuleCli(root), /CLI dependency changed/);
+  lock.packages[dependency.lockPath].integrity = integrity;
+  await fs.writeFile(lockPath, JSON.stringify(lock));
+  git(root, ['add', '--', 'package-lock.json']);
+  git(root, ['commit', '--quiet', '-m', 'Restore CLI dependency lock']);
+  const sourcePath = 'packages/classic-modules/src/cli.mjs';
+  await fs.appendFile(path.join(root, sourcePath), '\n// Changed CLI source');
+  git(root, ['add', '--', sourcePath]);
+  git(root, ['commit', '--quiet', '-m', 'Changed CLI input']);
+  await assert.rejects(verifyPublishedModuleCli(root), /CLI input changed/);
 });

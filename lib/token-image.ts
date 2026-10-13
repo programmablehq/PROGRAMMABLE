@@ -1,5 +1,5 @@
 export const TOKEN_IMAGE_OUTPUT_SIZE = 1_000;
-export const MAX_TOKEN_IMAGE_SOURCE_BYTES = 8_000_000;
+export const MAX_TOKEN_IMAGE_SOURCE_BYTES = 20_000_000;
 export const MAX_TOKEN_IMAGE_UPLOAD_BYTES = 1_000_000;
 export const PROGRAMMABLE_TOKEN_IMAGE_HOST =
   "k2uoipt9wchjtz3h.public.blob.vercel-storage.com";
@@ -11,7 +11,11 @@ const acceptedTokenImageTypes = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ]);
+
+export const TOKEN_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif";
 
 export function canOptimizeTokenImage(source: string) {
   return source.startsWith("/") && !source.startsWith("//");
@@ -68,13 +72,17 @@ export function applyTokenImageFallback(
   return true;
 }
 
-export function getTokenImageFileError(file: Pick<File, "size" | "type">) {
-  if (!acceptedTokenImageTypes.has(file.type)) {
-    return "Choose a JPG, PNG or WebP image";
+export function getTokenImageFileError(file: Pick<File, "size" | "type"> & Partial<Pick<File, "name">>) {
+  const type = file.type.toLowerCase();
+  // Mobile file providers sometimes omit MIME metadata. The image decoder still
+  // validates the contents before we produce the WebP checked by the server.
+  const knownExtension = /\.(jpe?g|png|webp|hei[cf])$/i.test(file.name ?? "");
+  if (!acceptedTokenImageTypes.has(type) && !((!type || type === "application/octet-stream") && knownExtension)) {
+    return "Choose a JPG, PNG, WebP or HEIC image";
   }
   if (file.size === 0) return "Choose a non-empty image";
   if (file.size > MAX_TOKEN_IMAGE_SOURCE_BYTES) {
-    return "Choose an image smaller than 8 MB";
+    return "Choose an image smaller than 20 MB";
   }
   return "";
 }
@@ -96,29 +104,41 @@ export async function readTokenImageUploadResponse(
   }
 }
 
-function loadImage(source: string) {
+export function loadPhoto(source: string, isHeic = false) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new window.Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("The image could not be opened"));
+    const fail = () => reject(new Error(isHeic
+      ? "This browser cannot open this HEIC photo. Choose a JPG or PNG copy."
+      : "The image could not be opened. Choose another photo."));
+    const timer = window.setTimeout(() => {
+      image.onload = image.onerror = null;
+      image.src = "";
+      fail();
+    }, 20_000);
+    image.onload = () => { clearTimeout(timer); resolve(image); };
+    image.onerror = () => { clearTimeout(timer); fail(); };
     image.src = source;
   });
 }
 
-function canvasToWebp(canvas: HTMLCanvasElement) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error("The image could not be prepared"));
-          return;
-        }
-        resolve(blob);
-      },
-      "image/webp",
-      0.84,
-    );
+export async function canvasToWebp(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const native = await new Promise<Blob | null>(resolve => {
+    const timer = window.setTimeout(() => resolve(null), 5_000);
+    try {
+      canvas.toBlob(blob => { clearTimeout(timer); resolve(blob); }, "image/webp", 0.84);
+    } catch { clearTimeout(timer); resolve(null); }
   });
+  // Safari may silently return PNG for an unsupported canvas encoder. Never
+  // relabel those bytes: image receipts bind the actual uploaded WebP digest.
+  if (native?.type === "image/webp" && native.size <= MAX_TOKEN_IMAGE_UPLOAD_BYTES) return native;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      import("./token-image-webp").then(({ encodeTokenImageWebp }) =>
+        encodeTokenImageWebp(context.getImageData(0, 0, canvas.width, canvas.height))),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Image preparation timed out. Please try again.")), 30_000); }),
+    ]);
+  } finally { clearTimeout(timer); }
 }
 
 export async function prepareTokenImage(file: File) {
@@ -127,7 +147,10 @@ export async function prepareTokenImage(file: File) {
 
   const objectUrl = URL.createObjectURL(file);
   try {
-    const image = await loadImage(objectUrl);
+    const image = await loadPhoto(objectUrl, /hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name));
+    if (image.naturalWidth * image.naturalHeight > 60_000_000) {
+      throw new Error("Choose a photo smaller than 60 megapixels");
+    }
     if (image.naturalWidth < 256 || image.naturalHeight < 256) {
       throw new Error("Choose an image at least 256 × 256 pixels");
     }
@@ -156,7 +179,7 @@ export async function prepareTokenImage(file: File) {
       TOKEN_IMAGE_OUTPUT_SIZE,
     );
 
-    const blob = await canvasToWebp(canvas);
+    const blob = await canvasToWebp(canvas, context);
     if (blob.size > MAX_TOKEN_IMAGE_UPLOAD_BYTES) {
       throw new Error("The prepared image is still too large");
     }

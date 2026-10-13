@@ -1,17 +1,20 @@
+import { getTokenImageFileError, MAX_TOKEN_IMAGE_SOURCE_BYTES } from "../token-image";
+
 export const PROFILE_STORAGE_PREFIX = "programmable-profile";
 export const PROFILE_UPDATED_EVENT = "programmable:profile-updated";
-export const MAXIMUM_AVATAR_FILE_BYTES = 8 * 1024 * 1024;
+export const MAXIMUM_AVATAR_FILE_BYTES = MAX_TOKEN_IMAGE_SOURCE_BYTES;
 export const MAXIMUM_AVATAR_DATA_URL_CHARACTERS = 1_500_000;
 export const MAXIMUM_AVATAR_DIMENSION = 12_000;
-export const MAXIMUM_AVATAR_PIXELS = 48_000_000;
+export const MAXIMUM_AVATAR_PIXELS = 60_000_000;
 
 export const ACCEPTED_AVATAR_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ] as const;
 
-const acceptedAvatarTypes = new Set<string>(ACCEPTED_AVATAR_TYPES);
 const ethereumAddressPattern = /^0x[a-f0-9]{40}$/;
 const usernamePattern = /^[A-Za-z0-9]{3,12}$/;
 const safeAvatarDataUrlPattern =
@@ -32,6 +35,7 @@ export type LocalProfile = {
 type ProfileStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 type AvatarFileMetadata = {
+  name?: string;
   size: number;
   type: string;
 };
@@ -85,19 +89,8 @@ export function getProfileUsernameError(username: string) {
 }
 
 export function getAvatarFileError(file: AvatarFileMetadata) {
-  if (!acceptedAvatarTypes.has(file.type)) {
-    return "Choose a JPG, PNG or WebP image";
-  }
-
-  if (!Number.isSafeInteger(file.size) || file.size <= 0) {
-    return "Choose a non-empty image";
-  }
-
-  if (file.size > MAXIMUM_AVATAR_FILE_BYTES) {
-    return "Keep the image under 8 MB";
-  }
-
-  return "";
+  if (!Number.isSafeInteger(file.size) || file.size <= 0) return "Choose a non-empty image";
+  return getTokenImageFileError(file);
 }
 
 export function getAvatarDimensionsError(width: number, height: number) {
@@ -115,7 +108,7 @@ export function getAvatarDimensionsError(width: number, height: number) {
     height > MAXIMUM_AVATAR_DIMENSION ||
     width * height > MAXIMUM_AVATAR_PIXELS
   ) {
-    return "Choose an image under 48 megapixels";
+    return "Choose an image under 60 megapixels";
   }
 
   return "";

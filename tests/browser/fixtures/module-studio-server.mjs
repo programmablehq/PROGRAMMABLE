@@ -8,6 +8,9 @@ export async function createModuleStudioServer() {
   const root = process.cwd();
   const entry = `
     import React, {useEffect, useRef, useState} from 'react';
+    import {prepareTokenImage} from './lib/token-image';
+    import {prepareAvatarImage,prepareProfileBannerImage} from './lib/profile/avatar';
+    window.photoTools={prepareTokenImage,prepareAvatarImage,prepareProfileBannerImage};
     import {createRoot} from 'react-dom/client';
     import {FoundationSessionStatus as RealSessionStatus} from './components/module-foundation-session';
     import {FOUNDATION_PENDING_EVENT,readFoundationPending,recoverFoundationPending,readFoundationLaunchRetry} from './lib/module-foundation/wallet';
@@ -150,6 +153,10 @@ export async function createModuleStudioServer() {
   return createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (files.has(url.pathname)) { response.setHeader("Content-Type", url.pathname.endsWith(".css") ? "text/css" : "text/javascript"); response.end(files.get(url.pathname)); return; }
+    if (/^\/webp_enc(?:_simd)?\.wasm$/.test(url.pathname)) {
+      response.setHeader("Content-Type", "application/wasm");
+      response.end(await readFile(resolve(root, "node_modules/@jsquash/webp/codec/enc", url.pathname.slice(1)))); return;
+    }
     if (url.pathname.startsWith("/api/")) { response.writeHead(403); response.end("Financial actions disabled in this fixture"); return; }
     if (url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/brand/")) {
       const base = resolve(root, "public"), file = resolve(base, "." + url.pathname);

@@ -8,8 +8,8 @@ export default defineConfig({
   retries: 0,
   reporter: "line",
   use: {
-    browserName: "chromium",
-    channel: process.env.CI ? undefined : "chrome",
+    browserName: process.env.PROGRAMMABLE_TEST_BROWSER === "webkit" ? "webkit" : "chromium",
+    channel: process.env.CI || process.env.PROGRAMMABLE_TEST_BROWSER === "webkit" ? undefined : "chrome",
     headless: true,
     trace: "retain-on-failure",
   },
