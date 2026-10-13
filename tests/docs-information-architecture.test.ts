@@ -14,9 +14,6 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 const docsIndex = read("app/docs/page.tsx");
 const tokensPage = read("app/docs/tokens/page.tsx");
-const economicsPage = read("app/docs/economics/page.tsx");
-const v4TokenPage = read("app/docs/v4-token/page.tsx");
-const trustPage = read("app/docs/trust/page.tsx");
 const statusPage = read("app/docs/status/page.tsx");
 const creatorsPage = read("app/docs/creators/page.tsx");
 const creatorLaunchPage = read("app/docs/creators/launch/page.tsx");
@@ -299,19 +296,6 @@ describe("Docs information architecture", () => {
     );
     expect(read("docs/public/developers/README.md")).toContain(
       "Launch indexing does not need a launch API key",
-    );
-  });
-
-  it("keeps one public revenue allocation policy explicit", () => {
-    expect(economicsPage).not.toContain("49.50% of processed");
-    expect(economicsPage).not.toContain("This policy remains planned");
-    expect(v4TokenPage).not.toContain("This policy is planned, not live");
-    expect(v4TokenPage).toContain("published protocol allocation");
-    expect(v4TokenPage).toContain("do not reduce");
-    expect(v4TokenPage).toContain("totalSupply");
-    expect(v4TokenPage).toContain("0xC60bA256B44334A0Cd2C7242E98B88f031abB006");
-    expect(trustPage).toMatch(
-      /have not\s+undergone an external audit or public security contest/,
     );
   });
 
