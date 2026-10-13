@@ -1,0 +1,776 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "99b2974f00c6638f02c302db5d221272984b38b1",
+  "sources": [
+    {
+      "chainId": 1,
+      "id": "custom-router-8622DD",
+      "address": "0x8622dd5bab44185f2a458ac90384ac99248f8d56",
+      "startBlock": 25717612,
+      "eventSignature": "ProgrammableLaunchStampedV1(bytes32,address,address,address,bytes32,bytes32)",
+      "topic0": "0x6cf479a102f1eebc9244f48f8d68f6aa52b4c5a4516318df58ba46614a5b14f2",
+      "tokenTopic": 2,
+      "category": "custom"
+    },
+    {
+      "chainId": 1,
+      "id": "custom-router-BE4bF6",
+      "address": "0xbe4bf6ac8c6f012e1c8f25747a9fbccb2fdac4c3",
+      "startBlock": 26152286,
+      "eventSignature": "ProgrammableLaunchStampedV1(bytes32,address,address,address,bytes32,bytes32)",
+      "topic0": "0x6cf479a102f1eebc9244f48f8d68f6aa52b4c5a4516318df58ba46614a5b14f2",
+      "tokenTopic": 2,
+      "category": "custom"
+    },
+    {
+      "chainId": 4663,
+      "id": "custom-router-34965F",
+      "address": "0x34965f2a2ee9254522232c32f02056e92be0c98a",
+      "startBlock": 50469365,
+      "eventSignature": "ProgrammableLaunchStampedV1(bytes32,address,address,address,bytes32,bytes32)",
+      "topic0": "0x6cf479a102f1eebc9244f48f8d68f6aa52b4c5a4516318df58ba46614a5b14f2",
+      "tokenTopic": 2,
+      "category": "custom"
+    },
+    {
+      "chainId": 4663,
+      "id": "legacy-custom-v2-9fd629",
+      "address": "0x9fd629cd1eb47fb20813c2403153714b523f681e",
+      "startBlock": 50469365,
+      "topic0": "0x4916167b998f441a46d1e4bc734a855746d34935136a4b3bc2575f7cf5682e1e",
+      "tokenTopic": 2,
+      "category": "custom",
+      "topicEvidence": {
+        "query": "https://dune.com/queries/8631499",
+        "note": "Topic and indexed token slot from the existing live Robinhood custom query; not inferred from an ABI signature."
+      }
+    },
+    {
+      "chainId": 4663,
+      "id": "legacy-custom-v2-4b5cec",
+      "address": "0x4b5cec6e715c3bcd7e6837e9e307c40c9acc2b2e",
+      "startBlock": 50469365,
+      "topic0": "0x4916167b998f441a46d1e4bc734a855746d34935136a4b3bc2575f7cf5682e1e",
+      "tokenTopic": 2,
+      "category": "custom",
+      "topicEvidence": {
+        "query": "https://dune.com/queries/8631499",
+        "note": "Topic and indexed token slot from the existing live Robinhood custom query; not inferred from an ABI signature."
+      }
+    },
+    {
+      "chainId": 4663,
+      "id": "module-native-v1",
+      "address": "0x351cb006f7aaf61374be4be4de8572d62d89fd83",
+      "startBlock": 56160214,
+      "eventSignature": "ModuleNativeLaunched(bytes32,address,address,bytes32,bytes32,address,address,uint256,uint256,uint256)",
+      "topic0": "0x6570caeda0af26be073c30ae27c5f864331d28dab3bf14b31aa3e5bf64793e85",
+      "tokenTopic": 3,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "module-native-v2",
+      "address": "0x362dac28ac64ce11989a90e0da6715313e0162c5",
+      "startBlock": 57167553,
+      "eventSignature": "ModuleNativeLaunched(bytes32,address,address,bytes32,bytes32,address,address,uint256,uint256,uint256)",
+      "topic0": "0x6570caeda0af26be073c30ae27c5f864331d28dab3bf14b31aa3e5bf64793e85",
+      "tokenTopic": 3,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "foundation-v1-32897c",
+      "address": "0x32897c76e4e87d72f404f33f01e4ef2a76931286",
+      "startBlock": 64005092,
+      "eventSignature": "FoundationLaunched(address,address,bytes32,address,address,address,address,uint256,uint256,bytes32,bytes32,uint256,uint256)",
+      "topic0": "0xb49f0564306d89078cb0b3ba713483e150fb77b5a00026fd9be477c471383d34",
+      "tokenTopic": 1,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "foundation-v2-c02a2b",
+      "address": "0xc02a2bebecb60c8d2e9e0176a4438845eae66a5c",
+      "startBlock": 66023586,
+      "eventSignature": "FoundationLaunchedV2(address,address,bytes32,address,address,address,bytes32,bytes32,bytes32,uint256,(address,address,address,bytes32,address,address,address,uint256,uint256,uint256,uint128,uint128,uint128,uint256))",
+      "topic0": "0x6170d19d4db2409523b652a3bf190bc7629b0a1af2e5118536ecd4b62364b099",
+      "tokenTopic": 1,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "foundation-v2-31bce4",
+      "address": "0x31bce40a6d28db69bf0b6cd0abc5d8f506626acc",
+      "startBlock": 66969916,
+      "eventSignature": "FoundationLaunchedV2(address,address,bytes32,address,address,address,bytes32,bytes32,bytes32,uint256,(address,address,address,bytes32,address,address,address,uint256,uint256,uint256,uint128,uint128,uint128,uint256))",
+      "topic0": "0x6170d19d4db2409523b652a3bf190bc7629b0a1af2e5118536ecd4b62364b099",
+      "tokenTopic": 1,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "foundation-v2-18cab1",
+      "address": "0x18cab14c69d0fe6df4a96256318b51c51c98da3f",
+      "startBlock": 67353984,
+      "eventSignature": "FoundationLaunchedV2(address,address,bytes32,address,address,address,bytes32,bytes32,bytes32,uint256,(address,address,address,bytes32,address,address,address,uint256,uint256,uint256,uint128,uint128,uint128,uint256))",
+      "topic0": "0x6170d19d4db2409523b652a3bf190bc7629b0a1af2e5118536ecd4b62364b099",
+      "tokenTopic": 1,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "module-engine-v1",
+      "address": "0x4ee5822de7296df5959085b95762f8c1c63da614",
+      "startBlock": 57168845,
+      "eventSignature": "EngineLaunchBound(bytes32,address,address,address,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32)",
+      "topic0": "0xff4443f26f19ee686578c2ab781ba148b352618958c1a84339db55de60a9a471",
+      "tokenTopic": 2,
+      "category": "module"
+    },
+    {
+      "chainId": 4663,
+      "id": "module-engine-any-quote-eth-v1",
+      "address": "0xcec7d7a0fd6dabe473f3aff998eb054f161924e2",
+      "startBlock": 60331314,
+      "eventSignature": "EngineLaunchBound(bytes32,address,address,address,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32)",
+      "topic0": "0xff4443f26f19ee686578c2ab781ba148b352618958c1a84339db55de60a9a471",
+      "tokenTopic": 2,
+      "category": "module"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-classic-v1",
+      "address": "0x51d702731db281ee223904a4663e05bfca26c775",
+      "startBlock": 25622048,
+      "eventSignature": "MemeTokenLaunched(address,address,bytes32,address,address,uint256,uint16,bytes32)",
+      "topic0": "0x54f861f401872200b25acd4a9f53153ac06a7be4562b3e43025a4a85740a5675",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-classic-v2",
+      "address": "0xd240d06f8586eb799f20056054e5b527405e6bad",
+      "startBlock": 25624128,
+      "eventSignature": "MemeTokenLaunched(address,address,bytes32,address,address,uint256,uint16,bytes32)",
+      "topic0": "0x54f861f401872200b25acd4a9f53153ac06a7be4562b3e43025a4a85740a5675",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-classic-v3",
+      "address": "0xc3bd04aac2fb2ba58efd7eb673e544e0b80de770",
+      "startBlock": 25639596,
+      "eventSignature": "MemeTokenLaunchedV2(address,address,bytes32,address,address,address,uint256,uint16,uint16,bytes32,bytes32)",
+      "topic0": "0xf23bd7fdf96caf9195ba5982de473632f59015abc714915dfbbe06cbd8e255e5",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-classic-v4",
+      "address": "0xbbdf30a2fe1394e4aa864ac269c6cf09b518e699",
+      "startBlock": 25853086,
+      "eventSignature": "MemeTokenLaunchedV2(address,address,bytes32,address,address,address,uint256,uint16,uint16,bytes32,bytes32)",
+      "topic0": "0xf23bd7fdf96caf9195ba5982de473632f59015abc714915dfbbe06cbd8e255e5",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-stock-paired-v1",
+      "address": "0x195750f33cad5ef2df857a53226b421297a1e79e",
+      "startBlock": 25637469,
+      "eventSignature": "StockPairedTokenLaunched(address,address,address,bytes32,address,address,uint256,bytes32)",
+      "topic0": "0xe33bd69b6e794281bc106d622fbe0c587aeabf86d1ca4d1afcd583cf8a3e8935",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-stock-paired-v2",
+      "address": "0x5ea6be24838061ba45dbe8d82de1b267dc240daf",
+      "startBlock": 25640338,
+      "eventSignature": "StockPairedTokenLaunched(address,address,address,bytes32,address,address,uint256,bytes32)",
+      "topic0": "0xe33bd69b6e794281bc106d622fbe0c587aeabf86d1ca4d1afcd583cf8a3e8935",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "mainnet-stock-paired-v3",
+      "address": "0x0573879f72d8ee8b0e5a4ec5e8bcdb2fcab9e51c",
+      "startBlock": 25642745,
+      "eventSignature": "StockPairedTokenLaunched(address,address,address,bytes32,address,address,uint256,bytes32)",
+      "topic0": "0xe33bd69b6e794281bc106d622fbe0c587aeabf86d1ca4d1afcd583cf8a3e8935",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "legacy-deep-v1",
+      "address": "0x7aef9a4038fabb1d477bbfd3a106f81b93eb5aeb",
+      "startBlock": 25632886,
+      "eventSignature": "LiquidityGrowthFullRangeTokenLaunched(address,address,bytes32,address,address,address,address,address,uint256,uint16,uint16,bytes32,bytes32)",
+      "topic0": "0x4c037a8fed83af4d4d43f2ce482432dda5126aa3209ce74a6ae90c37fbab7681",
+      "tokenTopic": 2,
+      "category": "classic"
+    },
+    {
+      "chainId": 1,
+      "id": "registry-v1",
+      "address": "0x17e18c88bda9bfb73924cdc989c07b0707e72671",
+      "startBlock": 25701139,
+      "eventSignature": "CustomLaunchRegisteredV1(bytes32,bytes32,address,uint64,uint256,uint64,bytes32,bytes32,address,bytes32,bytes32,uint64)",
+      "topic0": "0x8ee074138114415a92a0797b4f1f4c6353f8bd15d8031433abf0cc42c2dc274a",
+      "tokenTopic": 3,
+      "category": "registry"
+    },
+    {
+      "chainId": 4663,
+      "id": "foundation-v3-a3479c",
+      "address": "0xa3479cb16fdb71b706b8961dc50be6404c05c7ea",
+      "startBlock": 86465251,
+      "topic0": "0xc3c5d5e4abbd15966e584a111dd56b7568327d03138a9bb801993be4c37618c1",
+      "tokenTopic": 1,
+      "category": "module",
+      "releaseDigest": "0x3367338aac4a124cd14b258ee906a863d894d76c4f16357132684c3fdadc32db"
+    }
+  ],
+  "technicalExclusions": [
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0xb382f738a99820276fd66efb94b75eca104c2b4d"
+    },
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0xfa5d9694d9f8fa47b8a6c15df4510b76cb844e2c"
+    },
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0x3a778578b3a21dd842c29be3d1816b1af37d54f3"
+    },
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0x3c82787014931bd11b9edb789e42f92d792dd07f"
+    },
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0x369f5fa21942560c42ba9fdb8a156f5c962bd2ec"
+    },
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0x2c348590cb56fcc5984f035d57bdb01e32c945d5"
+    },
+    {
+      "chainId": 1,
+      "reason": "documented-release-canary",
+      "address": "0x9deeb39d2590b0cad5fc473f755c5f97dcc8f7ce"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned review-cache release check; bound to review d2c8670e-dc49-4c57-9030-d3174d09fae4",
+      "address": "0xc657ade283727d6ad1ae85cdb888c47d751e8ab8"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned child-effect release check; deterministic token bound to review 14057e62-580a-4f99-9406-7c33b426f84d",
+      "address": "0x0e6990f83be3b72adbece8a870b7264510ce3e46"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned API readiness release check; deterministic token bound to review 946ba9ca-ca89-49be-b4f0-8306f2e0680e",
+      "address": "0x40ad95a531caf7657fc40c50c3d6dbdad6f70baf"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned launch-operations release check; deterministic token bound to review 00adf0c8-0054-4075-83b9-d88d617f83f7",
+      "address": "0xe5335f382444efdedbe23ef6b0b91ea385812b57"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Preparation-feedback release check; tx 0x05572442b8ea459bf2ee2e2583bfa5f8d66fe9a065e40aac562fdbabef1713d9",
+      "address": "0xe0a557b41a13dd0ff3378c13ac700d7515cc79e8"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Manual-review checkpoint release check",
+      "address": "0x734b0dc83c29b9da80d5c733815f705a8b6f9d5e"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Source-verification release check",
+      "address": "0x8b69fd6e401039e45444eea5d99e59a4122d859a"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Replacement admission API release check",
+      "address": "0xf9261d85c503927bf70916a6594a33979e614ec3"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Economic module API release check",
+      "address": "0x2a0836901fd30be8de47b9c199c6acf2ba372305"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Compiler and atomic-stamp release canary",
+      "address": "0x76f71862c7646c3f6a54312a0889097a7334a8c0"
+    },
+    {
+      "chainId": 1,
+      "reason": "ETH 3.6 release canary",
+      "address": "0x705f60fadb9728ca976e727ae9d746cc4d303be2"
+    },
+    {
+      "chainId": 1,
+      "reason": "Atomic module-stamp release canary",
+      "address": "0xbb73f3bb5cfae5629f0a6a58bb10ab1e35e4c11a"
+    },
+    {
+      "chainId": 1,
+      "reason": "WECWDCWDE",
+      "address": "0x2bbc1677a495746a7fad51851dcba8bc37c5a213"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned reconciliation release check; review addee5f6-aea1-4ced-8b41-3d01233ec4b7",
+      "address": "0xb9338137dcc772944c4e357441d55a4bce49b49b"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned 0.3% restoration release check",
+      "address": "0x7570dafbde30dab0ed05c6a49330c2d2552e8a93"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned source-publication recovery check; review caba5178-61c2-4ab0-82a7-64e26b2b1f60",
+      "address": "0xf1c780d1db22fab8124f85abd3132df4299c3f9a"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned Native100 release check; review 5929e544-4ee3-485d-802a-98b6270a3249",
+      "address": "0xfc65fb2ad4fe188d6529ba23f8083fc34e5961b7"
+    },
+    {
+      "chainId": 1,
+      "reason": "Owned fee100 Module Mode release check; deterministic token in platform-fee100-20261012",
+      "address": "0x9e7791ac645e902da1fa94451d3034e351e1aae7"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned fee-policy release check; review 2e2537d8-a5a8-49df-8ef1-43d6f54c260e",
+      "address": "0xb1e6e441214d3bfb7a073f8095632ab20b9d2b42"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Owned runtime-continuation release check; bound to review 36942122-37fb-4ecd-ad0c-0ddfce50d051",
+      "address": "0x7e76d9b7c153fd29e87ef0b339ba44e84be5f276"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 373ac34d-65b1-44e9-9b28-86bf1a908845",
+      "address": "0x4140515cbe7bd50d4416a5950f290b76ac9c4026"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch d04ab673-abba-4b56-9f4a-f6dc9470fa1a",
+      "address": "0xf75c25a0d60572c41f3fdcc8ae4b119c8a142164"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 00f3cfe2-f227-471b-993b-5045fb55968e",
+      "address": "0x103a04145c9fa7093e639ad15183170304c42eb0"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 00884d72-77ae-4910-8462-12907e2e3bcb",
+      "address": "0x6008c81e34ec10c13897876653077d768bcacfb5"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 0f5e87fc-c523-456f-bc06-2a165d3d280f",
+      "address": "0xcd3a24f0e88d0d90ff5b1ce91c4ac78e7ee66b05"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 0ebd7cc3-322a-4dcb-9358-9df76589166c",
+      "address": "0x8e7667d01b670b117b84c5086d45e93eee1f715d"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch b109b6a2-0ad7-4742-b83a-4f373c6be9b8",
+      "address": "0x6bf4415e1155d177f9f5968f1059bf084b72b9d4"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch e6d3690a-8585-484d-b604-2b3ab4e20fc8",
+      "address": "0x64de4965ddd715fb011cebd727b1458fc820bd34"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 7dcd888f-ba36-4894-a35a-8dfecdb6989d",
+      "address": "0x226d0014c0fbd6be0dfce5322102b25680db9500"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 15d3e5fa-13bf-446d-bab3-081bf4dbabd8",
+      "address": "0xd5cead34df9db8537e88d9ffdf522664dee7cdac"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 1bb21b7f-0534-4496-a914-276ef0f4d041",
+      "address": "0x3f4c4ab2bfecebfcab9c578b38a0311dfb56033e"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch d6a45864-1b42-4337-ae7b-b4839bf61dd8",
+      "address": "0x95f47fb6345edf26bf0d887afc31f57524905afc"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 39ace269-d277-434b-a980-0aae8e75df58",
+      "address": "0xca9ed02b0e26297fc85cb498937a0777f5ac0da6"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 1f46ce7e-eee3-4559-b2bf-8788bcf46718",
+      "address": "0xe56bb223925e011ff5f1127c0b1f143da04f9860"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch ec874b3f-01c2-46b1-907b-de5f8ec960aa",
+      "address": "0xfa93f84c314aecd360ad8ddda623f0def086a3b5"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch d6f07f42-0631-4646-b9d3-e58e4525f3ad",
+      "address": "0x7a73888170d3de8e10ebd78d4e6a685eaa92c9f4"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch a5481233-7ef5-4f67-96a6-699ff5783a67",
+      "address": "0xc250ff0cb3004175fca0e0f32caea34f2c085650"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch b7f89444-19ac-4fdc-bfbf-db20e4f385e6",
+      "address": "0x41619a44332e85bde1df2a4d3e3bf9777212ea59"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 4c06d2b2-3638-414a-afdf-0c55e6562420",
+      "address": "0x34d83256b9bc41a807615899a09035b1f03f2b7a"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch ea43f73c-a4e0-480f-8b05-83c1c21412d2",
+      "address": "0x371eca3375d9f83ef6b2fe5166f9be8590732d86"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 4ac3842a-3529-41a2-9340-ff4028dccb4a",
+      "address": "0xe02253f8f47cdbfd88d0b75284c9ddfbab4f6778"
+    },
+    {
+      "chainId": 4663,
+      "reason": "Project technical release or reference launch 312b9b12-4fba-4147-b039-cc164fd580dc",
+      "address": "0xd9320af2762e711918358422594684756ad760cc"
+    }
+  ],
+  "mainCoin": {
+    "chainId": 4663,
+    "fromBlock": 0,
+    "address": "0xc60ba256b44334a0cd2c7242e98b88f031abb006"
+  },
+  "poolManagers": {
+    "1": "0x000000000004444c5dc75cb358380d2e3de08a90",
+    "4663": "0x8366a39cc670b4001a1121b8f6a443a643e40951"
+  },
+  "ethereumFoundationEventTopics": [
+    "0x6170d19d4db2409523b652a3bf190bc7629b0a1af2e5118536ecd4b62364b099",
+    "0xc3c5d5e4abbd15966e584a111dd56b7568327d03138a9bb801993be4c37618c1"
+  ],
+  "registryFinalizedTopic": "0xab930c1c165bba36257b8079ae38b6869f604910f6ffa40c956e31eb1b8ce38f",
+  "ethereumModuleProxies": [
+    {
+      "startBlock": 26125550,
+      "runtimeCodeHash": "0xbcd79a29bbf85a76fd696e196516bfd23aae5e00b56a1dc21cc3e6b2599c40cf",
+      "source": "contracts/deployments/ethereum-module-release-v1.json"
+    },
+    {
+      "startBlock": 26163972,
+      "runtimeCodeHash": "0x30eb0ae1b6114acce98f33d53a9c93d392d39cbddd2f5ed9d716f1c2b2777888",
+      "source": "contracts/deployments/ethereum-module-release-v2.json"
+    },
+    {
+      "startBlock": 26174610,
+      "runtimeCodeHash": "0xfa7455334877286ce363795881871c40626bbf4457b1f2a3cb3ae4c3b3197d00",
+      "source": "contracts/deployments/ethereum-module-release-v4.json"
+    }
+  ],
+  "componentStampedTopic": "0x8147265e7396d6400cee8d049456a1f7438fdfbe2a7c81c976d51ba67e52ff4b",
+  "scope": {
+    "mainCoin": "Current V4 on Robinhood; the retired Ethereum V4 contract is not a current-main-coin anchor.",
+    "volume": "One executed pool swap event, one priced leg; no aggregator summaries, fee transfers or liquidity deposits.",
+    "newLaunches": "Automatically discovered from these installed launch sources; new factory/router generations require a source manifest update.",
+    "externalVenues": "Additional venues covered by Dune dex.trades; unsupported venues are not represented."
+  },
+  "planStampSources": [
+    {
+      "chainId": 4663,
+      "address": "0xe21827818fea1f14d59929cae36a93c0b44e0ae1",
+      "startBlock": 0,
+      "stampTopic": "0x15ceb1b49fa6ac04c745019a219162db39b20faa1ca2ffe9bbd5f588ee833f36",
+      "marketTopic": "0x098e8758005424f77cde00555884a6409aa31ecea0025b32b6f767ed199a2f87",
+      "componentTopic": "0x1dfc3e9bdf26ebc4d1d63607a4201889c3ee884f57830f78c271eb25cc1027bc",
+      "source": "public custom-launch-capabilities retained releases"
+    },
+    {
+      "chainId": 4663,
+      "address": "0xb2a5eba2554aae969bc513a59c1d676e3400e11e",
+      "startBlock": 0,
+      "stampTopic": "0x6b7bc0903feed213f29c6f4f1707d5961d2609db0666a511204ec69b1e0931e8",
+      "marketTopic": "0x63ebf2f745324f15273949b24ca7b06788717f4f11d5110a512b2d325f6fee27",
+      "componentTopic": "0xb212a385de739a6a3bd51dadd2e23dddbf51b36083effd98c0648d2f081097f3",
+      "source": "public custom-launch-capabilities retained releases"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x3d3470550c2d14c61e4611c5a010c5d7c53f16fe",
+      "startBlock": 0,
+      "stampTopic": "0x6b7bc0903feed213f29c6f4f1707d5961d2609db0666a511204ec69b1e0931e8",
+      "marketTopic": "0x63ebf2f745324f15273949b24ca7b06788717f4f11d5110a512b2d325f6fee27",
+      "componentTopic": "0xb212a385de739a6a3bd51dadd2e23dddbf51b36083effd98c0648d2f081097f3",
+      "source": "public custom-launch-capabilities retained releases"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x0ad35ef4aa70d4c31a2a44fb3cc8ebfcb253275e",
+      "startBlock": 0,
+      "stampTopic": "0x15ceb1b49fa6ac04c745019a219162db39b20faa1ca2ffe9bbd5f588ee833f36",
+      "marketTopic": "0x098e8758005424f77cde00555884a6409aa31ecea0025b32b6f767ed199a2f87",
+      "componentTopic": "0x1dfc3e9bdf26ebc4d1d63607a4201889c3ee884f57830f78c271eb25cc1027bc",
+      "source": "public custom-launch-capabilities retained releases"
+    }
+  ],
+  "sourceCheckedAt": "2026-10-13",
+  "technicalControllers": [
+    {
+      "chainId": 4663,
+      "address": "0x0dbe4f551b318fbba7e7a1975c3a62b9392b8595",
+      "reason": "Owned release-verification wallet; technical launches are not public product adoption."
+    }
+  ],
+  "planMarketStarts": [
+    {
+      "chainId": 4663,
+      "stamp": "0xb2a5eba2554aae969bc513a59c1d676e3400e11e",
+      "launchId": "0x9cf7593503ebc94cbeb4b095752d8d19413daf15051e61e46e50e359c1e98e9c",
+      "poolId": "0x42ec1363a3799fa48e951ccff51628ff8338223d16d5a11bc99be33d4f77afa7",
+      "firstBlock": 87259720,
+      "transactionHash": "0x4128aaf60f7888bc3c295a75f5c82b9cebe22adf0e496e140fe6592a4a63043b",
+      "evidence": "Successful pool Initialize receipt included in the finalized XILO plan 6350a868-2215-4c3f-83aa-b934c45a52af. Stamp follows at block 87420739."
+    }
+  ],
+  "technicalPlans": [
+    {
+      "chainId": 4663,
+      "launchId": "0xec2dcdc92cec6caadc6058484e12e3121f27d097978d1040f4a346112280e099",
+      "sourceLaunchId": "c92e4e2d-f5d8-4dff-b5cd-7098df50a6b8"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x8a0c8d6aae04037d2d32247d388775f132108040d6fadf1907ddc26c4d4902dc",
+      "sourceLaunchId": "5db817e3-44af-4095-8c4b-7fdc2ee926f1"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xa0df00238f6c95ff31e7c3f3509762b8c2774be56e5d5a26117fb8b138633389",
+      "sourceLaunchId": "91ad20b9-1fcb-4ce1-8736-b450c177e4b4"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x08bf6c9517414bab06abebd4996b286348a7465f0d998039750a0f51a7212453",
+      "sourceLaunchId": "84ee1dd3-967f-4c70-85c1-90d426f84708"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x1765503dabc79696c44f4ccbeb806d37bfe4907fa3c9b8d12dcba69f2a50475f",
+      "sourceLaunchId": "3a42124e-6fe9-4829-8083-6b8040c46efa"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xcbde105b83d40806228dcbdcd7e67d1320e0c1b8c5737b062c6ffabdbae299f9",
+      "sourceLaunchId": "52512bf5-6987-46e6-bdce-1edd4c39759a"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x4f0df26a594cd001b04edd5be71efaea1d6103f9f06f5a1a161b0d2974159ba5",
+      "sourceLaunchId": "6aabac19-db71-4931-8d7c-0f5f5a0d0dea"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xad5bcbc86ac653d42e7617907f1dedeede415fa449ad2e8f08ef1c0e514a0d7d",
+      "sourceLaunchId": "cedc9598-3f16-4cfa-a3e7-acf12bc6f95c"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xcf3ed6846e0b96b34fd26e26b11621432e9027ac92b5ff33414517f0dd29ded8",
+      "sourceLaunchId": "48dd6b6b-c6ab-40b6-87b5-a372b6502da8"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x3370fa3b5a2013086c5a730aa80e93dadc77c33d74fb7de63199c49e7df2f593",
+      "sourceLaunchId": "f2a9e3ef-adb8-49b2-8c17-becbea2daffc"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x91f6dde615c7275de46860a12e12bec94539d5097b39a1ad021dffcaaa3b956f",
+      "sourceLaunchId": "3b5d6a04-058c-4917-b5ac-999d6cca3b5e"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x3c20e172df4556c2e4758c6d5f780097c9074ca2f12f68102fd91f92beb38ea1",
+      "sourceLaunchId": "373ac34d-65b1-44e9-9b28-86bf1a908845"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x606de74d15163f5945c5062dc1a03549e09515a3716ea46d216862e6e55840d7",
+      "sourceLaunchId": "7c18972c-2eec-4a29-b5ee-90af7cd24184"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xf1ffedaaff5bf1f4f4a3d9abaf4875da090e04d00529cac5536d73b61159c035",
+      "sourceLaunchId": "d04ab673-abba-4b56-9f4a-f6dc9470fa1a"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x37aa5acab4a6adbd4f2ac9b912d32d157f2a62be1933eaf9ac3a50cd491f25f2",
+      "sourceLaunchId": "00f3cfe2-f227-471b-993b-5045fb55968e"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xaff475e3e2a16f92433275e1997e4be8c6b390074a33a0c2d3967ef15bde5f75",
+      "sourceLaunchId": "00884d72-77ae-4910-8462-12907e2e3bcb"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xcd36439d583ec5ef86669e2a3d461c8cdaf7a15dd9141d10d62dd24c414d19c1",
+      "sourceLaunchId": "0f5e87fc-c523-456f-bc06-2a165d3d280f"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xf8445df9dc31ea7d6792ccf0afb980c16f04f7f5cbb0f21f43720c085939014e",
+      "sourceLaunchId": "0ebd7cc3-322a-4dcb-9358-9df76589166c"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x5e5c042f09d1b8d80bd3a625b634f13cbe22b87cf021f83aaac4dbcd842c6c72",
+      "sourceLaunchId": "b109b6a2-0ad7-4742-b83a-4f373c6be9b8"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x52a97bd5b3897829ebbf9085e464dab50fa11b713fee13b17b9110c1790945cd",
+      "sourceLaunchId": "60e2fe6b-eba7-4002-ab3a-fe8f5ded5923"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x1a6ff418e0b6a685c93eab8ffd5a59b4fc8ed244b351b3de8caff345ac484b72",
+      "sourceLaunchId": "e33e3a56-7926-439e-8bb1-b3f81d17ee9b"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x6c922ffeafc2dec1cfd5627bd96a5799d75d40d1cd0c8ba5d38ef99caf4f8082",
+      "sourceLaunchId": "e6d3690a-8585-484d-b604-2b3ab4e20fc8"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x1435c2783b7143cd8bc1c7c705661aa0a628a2f1ce0b53b0bd8877e4f3e7f57f",
+      "sourceLaunchId": "7dcd888f-ba36-4894-a35a-8dfecdb6989d"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xf3bdc020d7f16e36568979e318e294e859328e92d41eb1951083d0ac0276db9c",
+      "sourceLaunchId": "15d3e5fa-13bf-446d-bab3-081bf4dbabd8"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x88d846e99698522283edb96eb8522898ce71d6f472b7f7cdb8da3e5e58fa5793",
+      "sourceLaunchId": "1bb21b7f-0534-4496-a914-276ef0f4d041"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x03d19398c0c834fca29a8e4d8d721be6c389a5436e3de5301ccc8736e83b9c9c",
+      "sourceLaunchId": "d6a45864-1b42-4337-ae7b-b4839bf61dd8"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x804945c9bd6057086215d68fa0d2e1c267568c2176e0ec5efe88a082523cd833",
+      "sourceLaunchId": "39ace269-d277-434b-a980-0aae8e75df58"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xf0afa8c53abe4fcd007ef7b597d9e4580f0c17692868bd8fbf438b1cd2220397",
+      "sourceLaunchId": "1f46ce7e-eee3-4559-b2bf-8788bcf46718"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xc63620a3b5cd8f9d9b8afc1cf351b1e447947bcb96f2b34bd583f9d70b18d88b",
+      "sourceLaunchId": "ec874b3f-01c2-46b1-907b-de5f8ec960aa"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xcfe7f13e573f397c9537301cbecc1dc9336040a4d68eb6960313341f44190180",
+      "sourceLaunchId": "748120d7-4578-4ade-a854-e9d559afa751"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x9cffa820cf12a6fa5048a927fa59a3bc83bd5a94d6d7f8d6387d8c92ace49b3c",
+      "sourceLaunchId": "0c9eb9f5-60d1-4385-9e68-dc631350a96c"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x5234ead87283fa8a223684716afd48438977d560212d82e0ea17735752afad6d",
+      "sourceLaunchId": "d6f07f42-0631-4646-b9d3-e58e4525f3ad"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xaf38a2e5efe672815c7a617bf1add9c00fd77ae5f223b6ce01fa0fa8ef4b73f0",
+      "sourceLaunchId": "a5481233-7ef5-4f67-96a6-699ff5783a67"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x4065c43dc4482a0e03b7806ac193bb09be234624a3119497ef9f83166f6af312",
+      "sourceLaunchId": "b7f89444-19ac-4fdc-bfbf-db20e4f385e6"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x79801800ebe99eb528f27e400274102d943f788f4a5d419968d0d77c4a8f809d",
+      "sourceLaunchId": "4c06d2b2-3638-414a-afdf-0c55e6562420"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x1039bd4aa55e8f78273a426963473dd164ab8125efcd709bf1eaa09357c4ed55",
+      "sourceLaunchId": "ea43f73c-a4e0-480f-8b05-83c1c21412d2"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0xfbacd0ec84c9b1bb05a5b5fb15db088a1d1e3c0ad372ee4d1423b7e661fac151",
+      "sourceLaunchId": "4ac3842a-3529-41a2-9340-ff4028dccb4a"
+    },
+    {
+      "chainId": 4663,
+      "launchId": "0x95557fcecdc5e11abf38aa93ca3af8baf146c34670f4affe41f2efe28b02044b",
+      "sourceLaunchId": "312b9b12-4fba-4147-b039-cc164fd580dc"
+    }
+  ]
+}
