@@ -86,7 +86,7 @@ WITH fixed_sources(chain_id,address,kind,asset) AS (VALUES (1,0xadf955a44fd7f009
  UNION ALL SELECT *,'own_lp_fee' FROM lp_token_claims
  UNION ALL SELECT *,'own_lp_fee' FROM lp_native_claims
  ), finality_boundary AS (
- SELECT max(from_base(substr(json_extract_scalar(json_parse(http_post('https://rpc.mainnet.chain.robinhood.com','{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["finalized",false]}',ARRAY['Content-Type: application/json'])),'$.result.number'),3),16)) AS block_number
+ SELECT max(from_base(coalesce(substr(json_extract_scalar(json_parse(http_post('https://rpc.mainnet.chain.robinhood.com','{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["finalized",false]}',ARRAY['Content-Type: application/json'])),'$.result.number'),3),'FINALITY_UNAVAILABLE'),16)) AS block_number
  ), finalized_heads AS (
  SELECT max(CASE WHEN h.chain_id=1 THEN h.through_block END) AS ethereum_through_block,
  least(max(CASE WHEN h.chain_id=4663 THEN h.through_block END),max(b.block_number)) AS robinhood_through_block

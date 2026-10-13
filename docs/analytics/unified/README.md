@@ -25,6 +25,7 @@ The three project wallets are:
 - The source manifest defines which launches belong to Programmable. Hiding a real token in Explore does not remove its history. Documented technical release launches are excluded.
 - Recognized factory and router generations discover subsequent launches automatically. New contract generations require an update to `sources.json`.
 - Custom plans use their stamped markets. The XILO opening block is backfilled from its successful pool initialization transaction, which is included in its finalized plan evidence. Other multi-step plans use their stamp block until an earlier opening transaction is verified.
+- Finality is applied once to the combined facts after onchain discovery. Each fact retains the block proving its source, so an unfinalized source cannot admit older activity. An unavailable finality response fails the query instead of silently omitting Robinhood.
 - Missing historical prices remain unavailable. The priced subtotal must not be presented as a complete total when `ecosystem_unpriced_swaps` or `total_unpriced_claims` is positive.
 - Collected fees exclude ordinary incoming transfers, unclaimed accruals and liquidity principal. Nonstandard fee interfaces require a verified adapter before they contribute to the collected-fee total.
 - V4 received directly as own liquidity fees is excluded from cash buyback revenue and purchased V4. It can still contribute to actual burns.
