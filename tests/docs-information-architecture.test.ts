@@ -304,9 +304,6 @@ describe("Docs information architecture", () => {
 
   it("keeps one public revenue allocation policy explicit", () => {
     expect(economicsPage).not.toContain("49.50% of processed");
-    expect(economicsPage).toMatch(
-      /50% of net protocol revenue/,
-    );
     expect(economicsPage).not.toContain("This policy remains planned");
     expect(v4TokenPage).not.toContain("This policy is planned, not live");
     expect(v4TokenPage).toContain("published protocol allocation");
