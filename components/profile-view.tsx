@@ -28,6 +28,7 @@ import rewardDialogStyles from "@/components/profile-launch-rewards.module.css";
 import { GenericLaunchClaims } from "@/components/generic-launch-claims";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import {
+  ProfileRewardReceiverSettings,
   ProfileProjectsSection,
   creatorProjectPageSize,
   rewardReceiverActionKeyV1,
@@ -4920,6 +4921,10 @@ export function ProfileAccountWorkspace({
       <div
         className={`${styles.profileWorkspace} liquid-glass-surface`}
       >
+        <ProfileRewardReceiverSettings account={account}
+          rewards={classicReady ? classicV3Rewards.rewards.filter(reward => !tokenAddress || reward.tokenAddress.toLowerCase() === tokenAddress.toLowerCase()) : []}
+          actionStates={classicV3ActionStates}
+          onChangeRewardReceiver={(reward, newReceiver, allocationIndex) => onClassicV3Action(reward, "update-payout", newReceiver, allocationIndex)} />
         {!tokenAddress ? <FeeEarningsPanel
           nativeEarned={claimSubmissionAllowed ? nativeEarned : null}
           nativeClaimable={claimSubmissionAllowed ? nativeClaimable : null}

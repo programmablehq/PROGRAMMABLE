@@ -159,17 +159,13 @@ describe("My projects editor opening", () => {
   });
 
   it("remounts authenticated projects when the connected wallet changes", () => {
-    const source = readFileSync(
-      join(process.cwd(), "components/profile-view.tsx"),
-      "utf8",
-    );
     const projectsSource = readFileSync(
       join(process.cwd(), "components/profile-projects.tsx"),
       "utf8",
     );
 
-    expect(source).toContain(
-      'key={account?.toLowerCase() ?? "disconnected"}',
+    expect(readFileSync(join(process.cwd(), "components/robinhood-launches-view.tsx"), "utf8")).toContain(
+      'key={props.account.toLowerCase()}',
     );
     expect(projectsSource).toContain(
       "const [projectPage, setProjectPage] = useState(1);",

@@ -55,11 +55,11 @@ describe("shared wallet profile", () => {
     expect(html).toContain(`Profile wallet ${creator}`);
     expect(html).toContain('href="/profile">My profile</a>');
     expect(html).toContain("another wallet");
-    expect(html).toContain("Ethereum module launches");
-    expect(html).toContain("Robinhood launches");
+    expect(html).toContain('>Launches</h2>');
+    expect(html).not.toContain("Ethereum module launches");
+    expect(html).not.toContain("Robinhood launches");
+    expect(html).not.toContain("Custom launch claims");
     expect(html).not.toContain("Edit profile");
-    if (viewChainId === 4663) expect(html).toContain("Custom launch claims");
-    else expect(html).not.toContain("Custom launch claims");
     expect(html).not.toContain("Review claim");
     expect(html).not.toContain("Confirm claim in wallet");
   });
