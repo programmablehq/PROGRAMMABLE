@@ -4,6 +4,9 @@ export type Row = Record<string, unknown>;
 export type QueryResult = { updatedAt: string; rows: Row[]; available: boolean; stale?: boolean };
 export type AnalyticsData = { volume: QueryResult; revenue: QueryResult; buybacks: QueryResult; burns: QueryResult };
 export const PROJECT_WALLETS = ["0x4957f49620aff3adbbe8195a4f633e49cc93376c", "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "0x39544a7023081b56d7405c1af0bfaf72da7e24f6"];
+// Original supply of the current Robinhood V4; the public contract is recorded in the analytics supply evidence.
+// Transfers to a burn address do not reduce this original-supply denominator.
+export const V4_INITIAL_SUPPLY = 1_000_000_000;
 export const QUERY_IDS = { volume: 8940969, revenue: 8940998, buybacks: 8677080, burns: 8941418 } as const;
 export const QUERY_COLUMNS = {
   volume: ["day","chain","category","volume_usd","unpriced_swaps","launched_tokens"],
@@ -73,6 +76,7 @@ export function summarize(data: AnalyticsData, chain: Chain, period: Period, now
     unpricedClaims: total(feeRows,"unpriced_claims"),
     bought: chain === "Ethereum" ? legacyBought : currentBought,
     burned: chain === "Ethereum" ? legacyBurned : currentBurned,
+    burnedSupplyPercent: chain === "Ethereum" || currentBurned === null ? null : currentBurned / V4_INITIAL_SUPPLY * 100,
     legacyBought, legacyBurned,
     launches: number(data.volume.rows[0]?.launched_tokens),
     activity,
