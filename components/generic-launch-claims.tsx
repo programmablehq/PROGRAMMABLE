@@ -5,15 +5,16 @@ import { isBoundLaunchClaimDescriptorV1, projectionObject, projectionUint } from
 import type { LaunchClaimReadV1, LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import styles from "./generic-launch-claims.module.css";
 
-type Props = { account: string; sendWallet?: (input: LaunchClaimWalletInputV1) => Promise<LaunchClaimWalletReviewV1 | Hex> };
+type Props = { account: string; launchId?: string; compact?: boolean; sendWallet?: (input: LaunchClaimWalletInputV1) => Promise<LaunchClaimWalletReviewV1 | Hex> };
 type ClaimPage = { claims: LaunchClaimReadV1[]; nextCursor: string | null };
-async function readClaims(account: string, signal?: AbortSignal, cursor?: string): Promise<ClaimPage> {
-  const response = await fetch(`/api/profile/robinhood/claims?account=${encodeURIComponent(account)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { cache: "no-store", signal: signal ?? AbortSignal.timeout(15000) });
+async function readClaims(account: string, signal?: AbortSignal, cursor?: string, launchId?: string): Promise<ClaimPage> {
+  const response = await fetch(`/api/profile/robinhood/claims?account=${encodeURIComponent(account)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}${launchId ? `&launchId=${encodeURIComponent(launchId)}` : ""}`, { cache: "no-store", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
   const value: unknown = await response.json();
   if (!response.ok || !projectionObject(value) || value.schemaVersion !== "programmable.launch-claim-page.v1" || value.account !== account.toLowerCase()
+    || (launchId && value.launchId !== launchId)
     || !Array.isArray(value.claims) || value.claims.length > 20 || !(value.nextCursor === null || typeof value.nextCursor === "string" && /^[1-9][0-9]{0,6}$/.test(value.nextCursor))) throw new Error("Claim balances are temporarily unavailable.");
   const claims = value.claims.map(item => {
-    if (!projectionObject(item) || typeof item.launchId !== "string" || !isBoundLaunchClaimDescriptorV1(item.descriptor)
+    if (!projectionObject(item) || typeof item.launchId !== "string" || (launchId && item.launchId !== launchId) || !isBoundLaunchClaimDescriptorV1(item.descriptor)
       || !(item.claimableRaw === null || projectionUint(item.claimableRaw)) || !["ready", "analysis_pending"].includes(String(item.status))
       || !(item.blockNumber === null || projectionUint(item.blockNumber))
       || ![item.descriptor.requiredController, item.descriptor.beneficiary].some(address => address.toLowerCase() === account.toLowerCase())) throw new Error("Invalid bound claim.");
@@ -21,26 +22,26 @@ async function readClaims(account: string, signal?: AbortSignal, cursor?: string
   });
   return { claims, nextCursor: value.nextCursor as string | null };
 }
-export function GenericLaunchClaims({ account, sendWallet }: Props) {
+export function GenericLaunchClaims({ account, sendWallet, launchId, compact = false }: Props) {
   const [claims, setClaims] = useState<LaunchClaimReadV1[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null); const [loadingMore, setLoadingMore] = useState(false);
   const [message, setMessage] = useState("Loading claim balances…"); const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    void readClaims(account, controller.signal).then(page => {
-      if (controller.signal.aborted) return; setClaims(page.claims); setNextCursor(page.nextCursor); setMessage(page.claims.length ? "" : "No bound claim positions are attached to these launches.");
+    void readClaims(account, controller.signal, undefined, launchId).then(page => {
+      if (controller.signal.aborted) return; setClaims(page.claims); setNextCursor(page.nextCursor); setMessage(page.claims.length ? "" : "No claimable rewards are available.");
     }).catch(() => { if (!controller.signal.aborted) setMessage("Claim balances are temporarily unavailable. Refresh to retry."); });
     return () => controller.abort();
-  }, [account, refresh]);
+  }, [account, launchId, refresh]);
   async function more() {
     if (!nextCursor) return; setLoadingMore(true);
-    try { const page = await readClaims(account, undefined, nextCursor);
+    try { const page = await readClaims(account, undefined, nextCursor, launchId);
       setClaims(previous => [...new Map([...previous, ...page.claims].map(item => [`${item.launchId}:${item.descriptor.accrualContract}:${item.descriptor.claimId}`, item])).values()]); setNextCursor(page.nextCursor);
     } catch { setMessage("More claims could not be loaded. Try again."); } finally { setLoadingMore(false); }
   }
   async function freshClaim(claim: LaunchClaimReadV1) {
     let cursor: string | undefined; const seen = new Set<string>();
-    for (;;) { const page = await readClaims(account, undefined, cursor);
+    for (;;) { const page = await readClaims(account, undefined, cursor, launchId);
       const found = page.claims.find(item => item.launchId === claim.launchId && item.descriptor.claimId === claim.descriptor.claimId && item.descriptor.accrualContract.toLowerCase() === claim.descriptor.accrualContract.toLowerCase());
       if (found) return found; if (!page.nextCursor || seen.has(page.nextCursor)) throw new Error("The bound claim is no longer available.");
       seen.add(page.nextCursor); cursor = page.nextCursor;
@@ -48,12 +49,12 @@ export function GenericLaunchClaims({ account, sendWallet }: Props) {
   }
   return <div className={styles.claims}><p role="status">{message}</p>
     {claims.map(claim => <Claim key={`${claim.descriptor.accrualContract}:${claim.descriptor.claimId}`} claim={claim} sendWallet={sendWallet}
-      fresh={() => freshClaim(claim)} />)}
+      compact={compact} fresh={() => freshClaim(claim)} />)}
     {nextCursor ? <button type="button" disabled={loadingMore} onClick={() => void more()}>{loadingMore ? "Loading more claims…" : "Load more claims"}</button> : null}
     <button type="button" onClick={() => setRefresh(value => value + 1)}>Refresh claims</button>
   </div>;
 }
-function Claim({ claim, sendWallet, fresh }: { claim: LaunchClaimReadV1; sendWallet: Props["sendWallet"]; fresh(): Promise<LaunchClaimReadV1> }) {
+function Claim({ claim, sendWallet, fresh, compact }: { compact: boolean; claim: LaunchClaimReadV1; sendWallet: Props["sendWallet"]; fresh(): Promise<LaunchClaimReadV1> }) {
   const [review, setReview] = useState<LaunchClaimWalletReviewV1 | null>(null);
   const reviewButton = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [submitted, setSubmitted] = useState<Hex | null>(null);
@@ -68,12 +69,12 @@ function Claim({ claim, sendWallet, fresh }: { claim: LaunchClaimReadV1; sendWal
     } catch (error) { setMessage(error instanceof Error ? error.message : "The claim could not be prepared."); }
     finally { setBusy(false); }
   }
-  return <article><h3>{claim.name || "Custom launch"}</h3><dl>
+  return <article>{!compact ? <h3>{claim.name || "Custom launch"}</h3> : null}<details open={!compact}><summary>Reward details</summary><dl>
     <div><dt>Claimable</dt><dd>{claim.claimableRaw === null ? "Read pending" : `${claim.claimableRaw} raw units`}{claim.blockNumber ? <small>Block {claim.blockNumber}</small> : null}</dd></div>
     <div><dt>Asset</dt><dd><code>{descriptor.asset}</code></dd></div><div><dt>Accrual contract</dt><dd><code>{descriptor.accrualContract}</code></dd></div>
     <div><dt>Recipient</dt><dd><code>{descriptor.immutableRecipient ?? descriptor.beneficiary}</code><small>{descriptor.immutableRecipient ? "Immutable recipient" : "Bound beneficiary snapshot"}</small></dd></div>
-    <div><dt>Required controller</dt><dd><code>{descriptor.requiredController}</code></dd></div></dl>
-    {sendWallet && !submitted ? <button ref={reviewButton} type="button" disabled={busy || claim.status !== "ready" || claim.claimableRaw === "0"} onClick={() => void act("review")}>Review claim</button> : null}
+    <div><dt>Required controller</dt><dd><code>{descriptor.requiredController}</code></dd></div></dl></details>
+    {sendWallet && !submitted ? <button ref={reviewButton} type="button" disabled={busy || claim.status !== "ready" || claim.claimableRaw === "0"} onClick={() => void act("review")}>Claim rewards</button> : null}
     {review ? <><p>Transaction value: 0 ETH. Gas estimate at the current rate: {formatEther(BigInt(review.maxGasCostWei))} ETH.</p>
       <details><summary>Exact claim call and proof</summary><pre>{JSON.stringify({ transaction: review.transaction, descriptor: review.descriptor }, null, 2)}</pre></details>
       <div className={styles.reviewActions}>

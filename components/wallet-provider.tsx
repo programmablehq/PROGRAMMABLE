@@ -1257,6 +1257,7 @@ function PrivyWalletBridge({
   } | null>(null);
   const [error, setError] = useState("");
   const [providerTimedOut, setProviderTimedOut] = useState(false);
+  const [walletReloginRequest, setWalletReloginRequest] = useState<string | null>(null);
   const [selectedWallet, setSelectedWallet] = useState<{
     userId: string;
     address: string;
@@ -1265,6 +1266,11 @@ function PrivyWalletBridge({
   useLayoutEffect(() => {
     sdkSessionRef.current = { ready, authenticated, user, userId: user?.id ?? null, sessionSuppressed, disconnecting };
   }, [authenticated, disconnecting, ready, sessionSuppressed, user]);
+  const walletIdentityGenerationRef = useRef(0);
+  const walletRequestSessionRef = useRef<{
+    authenticated: boolean; privyUserId: string | null; account: Address | null;
+    chainId: string | null; walletCapability: (typeof wallets)[number] | null;
+  }>({ authenticated: false, privyUserId: null, account: null, chainId: null, walletCapability: null });
   const walletLoginIntentRef = useRef<"login" | "connect" | "link" | null>(null);
   const walletConnectionAttemptRef = useRef<{ userId: string } | null>(null);
   const githubLinkUserRef = useRef<string | null>(null);
@@ -1357,9 +1363,15 @@ function PrivyWalletBridge({
       }
       settleWalletLoginAttempt();
       if (!owned) {
+        // A user-selected wallet needs its own session, never the previous
+        // account's permissions. Continue through logout and a fresh login.
+        walletRequestSessionRef.current.authenticated = false;
+        walletIdentityGenerationRef.current += 1;
+        setSelectedWallet({ userId: attempt.userId, address: reconnectedWallet.address });
         setWalletAccountMismatch(true);
-        setError("This wallet is not linked to your signed-in account.");
-        setDialogOpen(true);
+        setError("");
+        setDialogOpen(false);
+        setWalletReloginRequest(attempt.userId);
         return;
       }
       setSelectedWallet({ userId: attempt.userId, address: reconnectedWallet.address });
@@ -1409,7 +1421,17 @@ function PrivyWalletBridge({
         || session.sessionSuppressed || session.disconnecting) return;
       if (walletLink) settleWalletLoginAttempt();
       else githubLinkUserRef.current = null;
-      setWalletAccountMismatch(walletLink && errorCode === "linked_to_another_user");
+      if (walletLink && errorCode === "linked_to_another_user") {
+        walletRequestSessionRef.current.authenticated = false;
+        walletIdentityGenerationRef.current += 1;
+        setSelectedWallet({ userId: ownerId, address: "" });
+        setWalletAccountMismatch(true);
+        setError("");
+        setDialogOpen(false);
+        setWalletReloginRequest(ownerId);
+        return;
+      }
+      setWalletAccountMismatch(false);
       const message = getWalletLoginErrorMessage(errorCode);
       if (!message) return;
       setError(message);
@@ -1576,16 +1598,8 @@ function PrivyWalletBridge({
   const walletSessionGenerationRef = useRef(0);
   // SDK method wrappers can change without changing the authenticated account.
   // Network verification pins the underlying provider separately from these wrappers.
-  const walletIdentityGenerationRef = useRef(0);
   const walletNetworkGenerationRef = useRef(0);
   const observedWalletNetworkRef = useRef<string | null>(null);
-  const walletRequestSessionRef = useRef({
-    authenticated: activeAuthenticated && ready && walletsReady && !disconnecting,
-    privyUserId: user?.id ?? null,
-    account: wallet?.account ?? null,
-    chainId: wallet?.chainId ?? null,
-    walletCapability: connectedWallet ?? null,
-  });
   useLayoutEffect(() => {
     const previous = walletRequestSessionRef.current;
     const current = {
@@ -1654,9 +1668,7 @@ function PrivyWalletBridge({
       setSelectedWallet({ userId: owner, address: address ?? "" });
       const owned = address !== null && ownedWalletAddresses.has(address.toLowerCase());
       setWalletAccountMismatch(address !== null && !owned);
-      setError(address !== null && !owned
-        ? "Verify this wallet to use it with your account, or sign in with it."
-        : "");
+      setError("");
       setWalletLoginStatus("");
     };
     const chainChanged = (value: unknown) => {
@@ -2051,6 +2063,10 @@ function PrivyWalletBridge({
 
   const openWallet = useCallback(() => {
     setError("");
+    if (walletAccountMismatch && ownerUserId && !wallet) {
+      setWalletReloginRequest(ownerUserId);
+      return;
+    }
     setWalletAccountMismatch(false);
 
     const action = getWalletOpenAction(sessionAction, wallet !== null, hasLinkedWallet);
@@ -2079,7 +2095,7 @@ function PrivyWalletBridge({
     }
 
     startLogin();
-  }, [addWallet, hasLinkedWallet, providerTimedOut, reconnectWallet, sessionAction, startLogin, wallet]);
+  }, [addWallet, hasLinkedWallet, ownerUserId, providerTimedOut, reconnectWallet, sessionAction, startLogin, wallet, walletAccountMismatch]);
 
   const openWalletWithError = useCallback((message: string) => {
     setError(message);
@@ -2157,6 +2173,23 @@ function PrivyWalletBridge({
     }
   }, [applicantRefreshUserGate, authenticated, logout, settleWalletLoginAttempt, wallets]);
 
+
+  useEffect(() => {
+    if (!walletReloginRequest || disconnecting) return;
+    const timeout = window.setTimeout(() => {
+      const session = sdkSessionRef.current;
+      setWalletReloginRequest(null);
+      if (!session.ready || !session.authenticated || session.userId !== walletReloginRequest
+        || session.sessionSuppressed || session.disconnecting) return;
+      walletAccountSelectionRequestedRef.current = false;
+      setAccountSwitchRequested(true);
+      void disconnect().then(succeeded => {
+        if (!succeeded) setAccountSwitchRequested(false);
+      });
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [disconnect, disconnecting, walletReloginRequest]);
+
   const accountSelectionPendingRef = useRef(false);
   const selectAccountWallet = useCallback(async (requestedAccount?: Address) => {
     if (accountSelectionPendingRef.current || disconnecting || !ownerUserId) return;
@@ -2194,8 +2227,13 @@ function PrivyWalletBridge({
         const owned = ownedWalletAddresses.has(address.toLowerCase());
         setWalletAccountMismatch(!owned);
         setVerifiedWalletNetwork(null);
-        setError(owned ? "" : "Verify this wallet to use it with your account, or sign in with it.");
-        setDialogOpen(!owned);
+        setError("");
+        setDialogOpen(false);
+        if (!owned) {
+          walletRequestSessionRef.current.authenticated = false;
+          walletIdentityGenerationRef.current += 1;
+          setWalletReloginRequest(owner);
+        }
       } else {
         setSelectedWallet({ userId: owner, address: candidate.address });
         setWalletAccountMismatch(false);
@@ -3858,11 +3896,7 @@ function WalletDialog({
           <p className={styles.copy}>
             {!sessionReady
               ? "Your wallet session is still updating. Reload the page to continue."
-              : authenticated && hasLinkedWallet
-                ? "Connect a wallet linked to your account."
-                : authenticated
-                  ? "Connect a wallet to your account."
-                  : "Choose a wallet to sign in with Privy."}
+              : "Choose your wallet to connect."}
           </p>
         ) : null}
         {status ? <p className={styles.copy}>{status}</p> : null}
@@ -3871,9 +3905,9 @@ function WalletDialog({
           {copied ? "Address copied" : ""}
         </span>
         <div className={styles.actions}>
-          {hasSession && sessionReady && !accountMismatch ? (
+          {wallet && sessionReady ? (
             <button className={styles.signOut} type="button" disabled={disconnecting} onClick={onSwitchAccount}>
-              Switch account
+              Switch wallet
             </button>
           ) : null}
           <button
@@ -3883,22 +3917,11 @@ function WalletDialog({
             onClick={!sessionReady
               ? () => window.location.reload()
               : accountMismatch ? onSwitchAccount
-                : wallet ? error ? onReconnectWallet : onAddWallet : connect}
+                : wallet ? onAddWallet : connect}
           >
-            {!sessionReady ? "Reload page" : accountMismatch ? "Sign in with this wallet"
-              : wallet ? error ? "Reconnect wallet" : "Add wallet" : "Connect wallet"}
+            {!sessionReady ? "Reload page" : wallet ? "Add wallet" : "Connect wallet"}
           </button>
-          {accountMismatch && sessionReady ? (
-            <button className={styles.signOut} type="button" disabled={disconnecting} onClick={onAddWallet}>
-              Verify this wallet
-            </button>
-          ) : null}
-          {accountMismatch && sessionReady ? (
-            <button className={styles.signOut} type="button" disabled={disconnecting} onClick={onReconnectWallet}>
-              Connect linked wallet
-            </button>
-          ) : null}
-          {hasSession && !accountMismatch ? (
+          {hasSession ? (
             <button
               className={styles.signOut}
               type="button"
@@ -3906,7 +3929,7 @@ function WalletDialog({
               onClick={() => void onLogout()}
             >
               <LogOut aria-hidden="true" size={16} />
-              {disconnecting ? "Signing out" : "Sign out"}
+              {disconnecting ? "Disconnecting" : "Disconnect"}
             </button>
           ) : null}
         </div>
@@ -4005,7 +4028,6 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
     username,
     avatarDataUrl,
     authenticated,
-    hasSession,
     connecting,
     openingWallet,
     disconnecting,
@@ -4056,13 +4078,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
         ? "Loading wallet"
         : wallet
           ? username || shortenAddress(wallet.account)
-          : authenticated
-            ? "Connect wallet"
-            : hasSession
-              ? "Reconnect"
-              : compact
-                ? "Connect"
-                : "Connect wallet";
+          : compact ? "Connect" : "Connect wallet";
 
   const button = (
     <button

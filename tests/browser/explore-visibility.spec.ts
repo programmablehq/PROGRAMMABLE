@@ -55,3 +55,28 @@ test('Ethereum cards retain the unified index mode instead of Robinhood source h
     await expect(card.getByRole('img', {name: 'Ethereum'})).toBeVisible();
   }
 });
+
+for (const width of [1440, 390]) {
+  test(`one profile list combines chains and clears the previous wallet at ${width}px`, async ({page}, testInfo) => {
+    const errors: string[]=[]; page.on('pageerror',error=>errors.push(error.message));
+    await page.setViewportSize({width,height:900});
+    await page.goto(origin+'?profile&chain=1');
+    await expect(page.getByRole('heading',{name:'Launches',exact:true})).toHaveCount(1);
+    await expect(page.locator('article')).toHaveCount(10);
+    await expect(page.getByRole('img',{name:'Ethereum',exact:true}).first()).toBeVisible();
+    await expect(page.getByRole('img',{name:'Robinhood Chain',exact:true}).first()).toBeVisible();
+    await expect(page.getByRole('link',{name:'Launch a coin',exact:true})).toHaveAttribute('href','/launch/modules/foundation?chainId=1');
+    await page.screenshot({path:testInfo.outputPath(`unified-profile-${width}.png`),fullPage:true});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.getByRole('button',{name:'Next page',exact:true}).click();
+    await expect(page.locator('article')).toHaveCount(2);
+    await expect(page.getByRole('link',{name:/Launch 11/})).toBeVisible();
+    await page.getByRole('button',{name:'Switch fixture wallet',exact:true}).click();
+    await expect(page.locator('article')).toHaveCount(1);
+    await expect(page.getByRole('link',{name:/Other wallet 1/})).toBeVisible();
+    await expect(page.getByRole('link',{name:/Launch 11/})).toHaveCount(0);
+    await page.goto(origin+'?profile&chain=4663');
+    await expect(page.getByRole('link',{name:'Launch a coin',exact:true})).toHaveAttribute('href','/launch/modules/foundation?chainId=4663');
+    expect(errors).toEqual([]);
+  });
+}

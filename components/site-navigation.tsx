@@ -110,12 +110,12 @@ function shortenAddress(address: string) {
 }
 
 function MenuWalletButton({ onOpen }: Readonly<{ onOpen: () => void }>) {
-  const { wallet, hasSession, connecting, openingWallet, disconnecting, openWallet, preloadWallet } = useWallet();
+  const { wallet, connecting, openingWallet, disconnecting, openWallet, preloadWallet } = useWallet();
   const label = disconnecting
     ? "Disconnecting"
     : connecting
       ? openingWallet ? "Opening wallet" : "Loading wallet"
-      : hasSession ? "Reconnect wallet" : "Connect wallet";
+      : "Connect wallet";
 
   if (wallet) return null;
 
