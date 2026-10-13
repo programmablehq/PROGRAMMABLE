@@ -101,6 +101,7 @@ import {
   prepareTokenImage,
   readTokenImageUploadResponse,
 } from "@/lib/token-image";
+import { withTokenImageUploadDeadline } from "@/lib/token-image-upload";
 import {
   browserWalletRequestIsPending,
   subscribeToBrowserWalletRequest,
@@ -3073,35 +3074,41 @@ function TokenStep({
       const controller = new AbortController();
       imageUploadAbort.current = controller;
       const isCurrent = () => selection === imageRequest.current && imageUploadAbort.current === controller;
-      const timeout = setTimeout(() => controller.abort(new Error("Image upload timed out. Please try again.")), 30_000);
       updateImageState({
         status: "uploading",
         message: "Uploading image",
       });
 
       try {
-        const accessToken = await getAccessToken();
-        if (!isCurrent()) return;
-        if (!accessToken) {
-          throw new Error("Connect your wallet to upload the image");
-        }
+        const uploaded = await withTokenImageUploadDeadline(async signal => {
+          const accessToken = await getAccessToken();
+          signal.throwIfAborted();
+          if (!isCurrent()) return null;
+          if (!accessToken) {
+            throw new Error("Connect your wallet to upload the image");
+          }
 
-        const form = new FormData();
-        form.append(
-          "file",
-          new File([image], "token-image.webp", {
-            type: "image/webp",
-          }),
-        );
-        const response = await fetch("/api/token-image", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: form,
-          signal: controller.signal,
-        });
-        const body = await readTokenImageUploadResponse(response);
+          const form = new FormData();
+          form.append(
+            "file",
+            new File([image], "token-image.webp", {
+              type: "image/webp",
+            }),
+          );
+          const response = await fetch("/api/token-image", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: form,
+            signal,
+          });
+          const body = await readTokenImageUploadResponse(response);
+          signal.throwIfAborted();
+          return { response, body };
+        }, controller.signal);
+        if (!uploaded) return;
+        const { response, body } = uploaded;
         if (!isCurrent()) return;
         if (body === null) {
           throw new Error("Image uploads are temporarily unavailable. Try again.");
@@ -3133,7 +3140,7 @@ function TokenStep({
               ? caught.message
               : "The image could not be uploaded",
         });
-      } finally { clearTimeout(timeout); }
+      }
     },
     [getAccessToken, updateImageState, updateTokenDraft],
   );

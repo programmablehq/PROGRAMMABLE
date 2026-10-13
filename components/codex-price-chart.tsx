@@ -10,10 +10,10 @@ const stamp = (time: number) => new Date(time).toLocaleString("en-GB", { day: "n
 export function CodexPriceChart({ tokenAddress, chainId, name, market }: { tokenAddress: string; chainId: 1 | 4663; name: string; market?: RobinhoodCoinMarket | null }) {
   const [range, setRange] = useState<CodexChartRange>("1D");
   const key = `${chainId}:${tokenAddress.toLowerCase()}:${range}`;
-  const [state, setState] = useState<{ key: string; chart?: CodexChart; failed: boolean }>({ key, chart: codexChartCache.peek(tokenAddress, chainId, range), failed: false });
+  const [state, setState] = useState<{ key: string; chart?: CodexChart; failed: boolean }>(() => ({ key, chart: codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), failed: false }));
   const [now, setNow] = useState(() => Date.now());
   const [hover, setHover] = useState<number | null>(null);
-  const chart = state.key === key ? state.chart : codexChartCache.peek(tokenAddress, chainId, range);
+  const chart = state.key === key ? state.chart : codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range);
   useEffect(() => {
     let disposed = false, active = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -25,7 +25,7 @@ export function CodexPriceChart({ tokenAddress, chainId, name, market }: { token
         const value = await codexChartCache.load(tokenAddress, chainId, range);
         if (disposed) return;
         setState({ key, chart: value, failed: false });
-      } catch { if (!disposed) setState(current => ({ key, chart: current.key === key ? current.chart : codexChartCache.peek(tokenAddress, chainId, range), failed: true })); }
+      } catch { if (!disposed) setState(current => ({ key, chart: current.key === key ? current.chart : codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), failed: true })); }
       finally { active = false; if (!disposed) setNow(Date.now()); if (!disposed && visibleNow()) timer = setTimeout(load, Math.max(1_000, codexChartCache.waitMs(tokenAddress, chainId, range))); }
     }
     const visible = () => { clearTimeout(timer); if (visibleNow()) void load(); };

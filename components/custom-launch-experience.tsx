@@ -113,6 +113,7 @@ import {
   readTokenImageUploadResponse,
   TOKEN_IMAGE_OUTPUT_SIZE,
 } from "@/lib/token-image";
+import { withTokenImageUploadDeadline } from "@/lib/token-image-upload";
 
 export const CUSTOM_LAUNCH_PLATFORM_FEE_RECIPIENT =
   "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c";
@@ -2081,29 +2082,36 @@ function CustomLaunchRuntime({
     try {
       const image = await prepareTokenImage(file);
       if (!isCurrent()) return;
-      const session = await getSession();
-      if (!isCurrent()) return;
-      const form = new FormData();
-      form.append("file", new File([image], "custom-launch.webp", { type: "image/webp" }));
-      form.append("receiptScope", canonicalBrowserJsonV2({
-        applicationId: selected.applicationId,
-        applicationHandle: selected.applicationHandle,
-        grantId: descriptor.grantId,
-        grantBindingHash: descriptor.grantBindingHash,
-      }));
-      const response = await fetch("/api/token-image", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${session.accessToken}`,
-          "x-privy-identity-token": session.identityToken,
-        },
-        body: form,
-        cache: "no-store",
-        credentials: "same-origin",
-        redirect: "error",
-        signal: imageController.signal,
-      });
-      const body = await readTokenImageUploadResponse(response);
+      const uploaded = await withTokenImageUploadDeadline(async signal => {
+        const session = await getSession();
+        signal.throwIfAborted();
+        if (!isCurrent()) return null;
+        const form = new FormData();
+        form.append("file", new File([image], "custom-launch.webp", { type: "image/webp" }));
+        form.append("receiptScope", canonicalBrowserJsonV2({
+          applicationId: selected.applicationId,
+          applicationHandle: selected.applicationHandle,
+          grantId: descriptor.grantId,
+          grantBindingHash: descriptor.grantBindingHash,
+        }));
+        const response = await fetch("/api/token-image", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${session.accessToken}`,
+            "x-privy-identity-token": session.identityToken,
+          },
+          body: form,
+          cache: "no-store",
+          credentials: "same-origin",
+          redirect: "error",
+          signal,
+        });
+        const body = await readTokenImageUploadResponse(response);
+        signal.throwIfAborted();
+        return { response, body };
+      }, imageController.signal);
+      if (!uploaded) return;
+      const { response, body } = uploaded;
       if (body === null) throw new Error("Unable to upload image. Try again.");
       if (!isCurrent()) return;
       if (!response.ok) {

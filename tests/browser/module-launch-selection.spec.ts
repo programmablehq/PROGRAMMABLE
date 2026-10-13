@@ -579,3 +579,30 @@ test("editing coin details while a mobile photo prepares keeps the selected phot
     await expect(page.getByRole("button", { name: "Change image", exact: true })).toBeEnabled();
   } finally { studio.close(); }
 });
+
+test("leaving the image editor ignores a photo that finishes later", async ({ page }) => {
+  const studio = await createModuleStudioServer(); studio.listen(0, "127.0.0.1"); await once(studio, "listening");
+  const address = studio.address(); if (!address || typeof address === "string") throw new Error("Fixture did not start");
+  try {
+    await page.goto(`http://127.0.0.1:${address.port}/?mode=image-unmount`);
+    const bytes = await page.evaluate(async () => {
+      const c = document.createElement("canvas"); c.width = c.height = 300;
+      const original = HTMLCanvasElement.prototype.toBlob;
+      const photo = await new Promise<Blob>(resolve => original.call(c, b => resolve(b!), "image/png"));
+      HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+        original.call(this, blob => { (window as unknown as { finishPickerPhoto: () => void }).finishPickerPhoto = () => callback(blob); }, type, quality);
+      };
+      return [...new Uint8Array(await photo.arrayBuffer())];
+    });
+    await page.getByLabel("Choose token image file").setInputFiles({ name: "phone.png", mimeType: "image/png", buffer: Buffer.from(bytes) });
+    await page.waitForFunction(() => typeof (window as unknown as { finishPickerPhoto?: unknown }).finishPickerPhoto === "function");
+    await page.getByRole("button", { name: "Leave image editor" }).click();
+    const events = await page.evaluate(async () => {
+      const fixture = window as unknown as { finishPickerPhoto: () => void; pickerEvents: { changes: number } };
+      fixture.finishPickerPhoto();
+      await new Promise(resolve => setTimeout(resolve, 250));
+      return fixture.pickerEvents;
+    });
+    expect(events.changes).toBe(0);
+  } finally { studio.close(); }
+});

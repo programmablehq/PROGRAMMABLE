@@ -19,6 +19,7 @@ export async function createModuleStudioServer() {
     import {FoundationStudio} from './components/module-studio/studio';
     import {ModuleFoundationLaunchHost} from './components/module-foundation-launch-host';
     import {ModuleFoundationBuilder} from './components/module-foundation-builder';
+    import {ModuleModeImagePicker} from './components/module-mode-image';
     import {FOUNDATION_PLATFORM_FEE_RECIPIENT} from './lib/module-foundation/ui-types';
     import {SiteHeader} from './components/site-navigation';
     import styles from './components/module-studio/studio.module.css';
@@ -110,6 +111,13 @@ export async function createModuleStudioServer() {
             throw Object.assign(new Error('Fixture wallet rejected. No transaction was sent.'),{walletRequestAttempted:false});}}/>
       </>;
     }
+    function ImageUnmountFixture() {
+      const [visible,setVisible]=useState(true);
+      const [events]=useState(()=>window.pickerEvents={changes:0,busy:false});
+      return <main><button onClick={()=>setVisible(false)}>Leave image editor</button>{visible ?
+        <ModuleModeImagePicker image={{kind:'none'}} resource={null}
+          onChange={()=>{events.changes++;}} onBusyChange={busy=>{events.busy=busy;}}/> : <p>Editor closed</p>}</main>;
+    }
     function App() {
       const mode = new URLSearchParams(location.search).get('mode');
       const [draft,setDraft] = useState({name:'',symbol:'COIN',description:'',image:null,socialLinks:{},quoteAsset:'',
@@ -117,6 +125,7 @@ export async function createModuleStudioServer() {
       const [customQuote,setCustomQuote] = useState(false);
       const [errors,setErrors] = useState(new URLSearchParams(location.search).get('mode')==='error'?{name:'Enter a coin name'}:{});
       const imageInput = useRef(null);
+      if(mode==='image-unmount') return <ImageUnmountFixture/>;
       if(mode==='pending-recovery') return <PendingRecoveryFixture/>;
       if(mode==='draft-navigation') return <DraftNavigationFixture/>;
       if(mode==='launch-speed'||mode==='open-quote'||mode==='wallet-recovery'||mode==='availability') return <LaunchSpeedFixture/>;

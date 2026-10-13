@@ -3,7 +3,7 @@ import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 import Image from "next/image";
 import { ImagePlus, Link as LinkIcon, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sha256 } from "viem";
 
 import { prepareTokenImage } from "@/lib/token-image";
@@ -27,6 +27,12 @@ export function ModuleModeImagePicker({ image, resource, onChange, onBusyChange,
   compact?: boolean | "row";
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const active = useRef(true);
+  const imageRequest = useRef(0);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; imageRequest.current += 1; };
+  }, []);
   const [preparing, setPreparing] = useState(false);
   const [preparationError, setPreparationError] = useState("");
   const [imageLoadError, setImageLoadError] = useState("");
@@ -35,16 +41,19 @@ export function ModuleModeImagePicker({ image, resource, onChange, onBusyChange,
 
   async function choose(file: File | undefined) {
     if (!file) return;
+    const request = ++imageRequest.current;
+    const isCurrent = () => active.current && request === imageRequest.current;
     setPreparing(true); onBusyChange(true); setPreparationError("");
     try {
       const blob = await prepareTokenImage(file);
       if (blob.type !== "image/webp") throw new Error("This browser could not prepare a WebP image. Use a public image link instead.");
       const digest = sha256(new Uint8Array(await blob.arrayBuffer()));
+      if (!isCurrent()) return;
       const objectUrl = URL.createObjectURL(blob);
       onChange({ kind: "local", sha256: digest, mimeType: "image/webp", bytes: blob.size }, { blob, objectUrl }, true);
       setImageLoadError("");
-    } catch (caught) { setPreparationError(caught instanceof Error ? caught.message : "The image could not be prepared. Your previous image is kept."); }
-    finally { setPreparing(false); onBusyChange(false); }
+    } catch (caught) { if (isCurrent()) setPreparationError(caught instanceof Error ? caught.message : "The image could not be prepared. Your previous image is kept."); }
+    finally { if (isCurrent()) { setPreparing(false); onBusyChange(false); } }
   }
 
   return (

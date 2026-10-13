@@ -26,6 +26,13 @@ export function createCodexChartCache({ fetcher = (input, init) => fetch(input, 
       const chart = saved.get(keyFor(token, chain, range))?.chart;
       return chart && acceptsCodexChart(chart, token, chain, range, now()) ? chart : undefined;
     },
+    lastKnown(token: string, chain: number, range: CodexChartRange) {
+      // Only previously validated history is retained for display during an outage.
+      // It is never accepted as a fresh response or used for quotes/transactions.
+      const chart = saved.get(keyFor(token, chain, range))?.chart;
+      const age = chart ? now() - Date.parse(chart.observedAt) : Infinity;
+      return chart && age >= -30_000 && age <= 3_600_000 ? chart : undefined;
+    },
     waitMs(token: string, chain: number, range: CodexChartRange) {
       return Math.max(0, (saved.get(keyFor(token, chain, range))?.nextAttemptAt ?? 0) - now());
     },
