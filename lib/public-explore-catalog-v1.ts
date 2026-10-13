@@ -45,6 +45,20 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
   // Owner-supplied artwork and social link for this verified, finalized launch.
   // This display correction never creates or changes launch provenance.
   if (provenance?.chainId === 1 &&
+    entry.tokenAddress.toLowerCase() === "0x0f8b5b82a8a62137e4ea563a3709fe4ca1ff1a2d" &&
+    provenance.launchId.toLowerCase() === "0xe9be322b6fa0eb33eb6978f837e32a9241286d92ea8fb99dc351a1677926e28d" &&
+    provenance.stampHash.toLowerCase() === "0x4b6a9c84746647079d7489ca817c8be9145a87329f6293a89b526e17bb5dc21b") {
+    return Object.freeze({
+      ...entry,
+      imageUrl: "/token-images/temo.png",
+      links: [
+        ...(entry.links ?? []).filter(link => link.kind !== "website" && link.kind !== "x"),
+        { kind: "website", url: "https://temo.family/" },
+        { kind: "x", url: "https://x.com/temoonchain" },
+      ],
+    }) as T;
+  }
+  if (provenance?.chainId === 1 &&
     entry.tokenAddress.toLowerCase() === "0xab40efbaff5a67ec3e273b746ae7bac7d1bc4ae3" &&
     provenance.launchId.toLowerCase() === "0xa0525234d1e19bc5aaaa389652233bd56cc76fabdbb37f4d986966f239861718" &&
     provenance.stampHash.toLowerCase() === "0xeda4426986cb163bf32e262504d3f56deb1c492760ba50be0b03760fcad7ca02") {

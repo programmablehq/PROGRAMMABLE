@@ -111,6 +111,7 @@ export async function readEthereumExploreCatalog(dependencies: Dependencies = re
   if (dependencies.metadata && custom.status === "fulfilled" && custom.value.evidence?.source === "canonical-launch-stamp-router") {
     entries = [...await dependencies.metadata(entries, custom.value.evidence).catch(() => entries)];
   }
+  entries = entries.map(publicExplorePresentationEntryV1);
   const status = accepted.length === 0 ? "unavailable" as const
     : accepted.length !== 2 ? "partial" as const
       : accepted.some(source => source.status !== "current") ? "stale" as const : "ready" as const;
@@ -178,7 +179,7 @@ export async function readEthereumToken(address: string, dependencies?: Dependen
     const metadata = (tokenReaders ?? readers).metadata;
     const boundary = catalog.sourceEvidence.custom;
     if (token && metadata && boundary?.source === "canonical-launch-stamp-router") {
-      token = (await metadata([token], boundary).catch(() => [token!]))[0] ?? token;
+      token = publicExplorePresentationEntryV1((await metadata([token], boundary).catch(() => [token!]))[0] ?? token);
     }
     return { chainId: catalog.chainId, status: catalog.status, sources: catalog.sources, updatedAt: catalog.updatedAt,
       // The verified snapshot uses null-prototype proof records. React requires
