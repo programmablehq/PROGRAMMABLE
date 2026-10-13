@@ -86,11 +86,12 @@ describe("wallet-scoped local profile", () => {
 
   it("rejects invalid or excessive decoded image dimensions", () => {
     expect(getAvatarDimensionsError(512, 512)).toBe("");
+    expect(getAvatarDimensionsError(8064, 6048)).toBe("");
     expect(getAvatarDimensionsError(0, 512)).toBe(
       "The image has invalid dimensions",
     );
-    expect(getAvatarDimensionsError(10_000, 5_000)).toBe(
-      "Choose an image under 48 megapixels",
+    expect(getAvatarDimensionsError(10_000, 7_000)).toBe(
+      "Choose an image under 60 megapixels",
     );
   });
 

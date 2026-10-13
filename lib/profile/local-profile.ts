@@ -5,7 +5,7 @@ export const PROFILE_UPDATED_EVENT = "programmable:profile-updated";
 export const MAXIMUM_AVATAR_FILE_BYTES = MAX_TOKEN_IMAGE_SOURCE_BYTES;
 export const MAXIMUM_AVATAR_DATA_URL_CHARACTERS = 1_500_000;
 export const MAXIMUM_AVATAR_DIMENSION = 12_000;
-export const MAXIMUM_AVATAR_PIXELS = 48_000_000;
+export const MAXIMUM_AVATAR_PIXELS = 60_000_000;
 
 export const ACCEPTED_AVATAR_TYPES = [
   "image/jpeg",
@@ -108,7 +108,7 @@ export function getAvatarDimensionsError(width: number, height: number) {
     height > MAXIMUM_AVATAR_DIMENSION ||
     width * height > MAXIMUM_AVATAR_PIXELS
   ) {
-    return "Choose an image under 48 megapixels";
+    return "Choose an image under 60 megapixels";
   }
 
   return "";
