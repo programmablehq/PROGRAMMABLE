@@ -37,6 +37,22 @@ describe("price-only quote references", () => {
     await expect(readAnyQuoteUsdPriceV1({ quoteAsset }, { chainId: 1, rpcs: [stale, stale], now })).rejects.toMatchObject({ code: "PRICE_FEED_UNAVAILABLE" });
   });
 
+  it.each([1, 4663] as const)("uses launch valuation timing only for the explicit %i launch purpose", async chainId => {
+    const quoteAsset = foundationChainProfile(chainId).wrappedEth.address;
+    const a = provider(quoteAsset, 2500n * 10n ** 8n, now - 100n, now - 30n, chainId);
+    const options = { chainId, rpcs: [a, a] as const, now };
+    const trade = await readAnyQuoteUsdPriceV1({ quoteAsset }, options);
+    const launch = await readAnyQuoteUsdPriceV1({ quoteAsset }, { ...options, pricePurpose: "module-launch" });
+    expect(trade.price.validUntil).toBe(String(now + 45n));
+    expect(launch.price.validUntil).toBe(String(now + (chainId === 1 ? 90n : 45n)));
+    // The oracle's own expiry is never extended by the launch purpose.
+    const almostExpired = provider(quoteAsset, 2500n * 10n ** 8n,
+      now - (chainId === 1 ? 7200n : 86400n) + 5n, now - 30n, chainId);
+    const fresh = await readAnyQuoteUsdPriceV1({ quoteAsset }, { ...options,
+      rpcs: [almostExpired, almostExpired], pricePurpose: "module-launch" });
+    expect(fresh.price.validUntil).toBe(String(now + 5n));
+  });
+
   it("rejects a Robinhood provider pair for an Ethereum price before reading token or oracle data", async () => {
     const quoteAsset = foundationChainProfile(1).wrappedEth.address, wrong = provider(quoteAsset);
     await expect(readAnyQuoteUsdPriceV1({ quoteAsset }, { chainId: 1, rpcs: [wrong, wrong], now })).rejects.toMatchObject({ code: "PROVIDER_CHAIN_MISMATCH" });

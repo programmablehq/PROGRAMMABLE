@@ -2,6 +2,7 @@ import { formatUnits, getAddress, type Address, type Hex } from "viem";
 import type { AnyQuoteCheckpointV1, AnyQuotePriceEvidenceV1 } from "@/lib/module-engine/any-quote/types";
 import { moduleHash, moduleRecord } from "@/lib/module-mode/release";
 import { foundationChainProfile, type FoundationChainId } from "./chains";
+import { foundationPriceCheckpointMaxAge, foundationPriceLifetime } from "./price-freshness";
 import { planFoundationPrice } from "./price";
 
 export const FOUNDATION_START_MARKET_CAP_USD = 5_000n;
@@ -39,6 +40,7 @@ function positive(value: unknown, digits = 256): bigint {
 /** Bind either a verified USD reference or explicit quote valuation to the current token and checkpoint. */
 export function parseFoundationStartPrice(value: unknown, quote: { address: Address; decimals: number; codeHash: Hex; chainId?: FoundationChainId }, now = BigInt(Math.floor(Date.now() / 1_000))): FoundationStartPrice {
   try {
+    const lifetime = foundationPriceLifetime(quote.chainId), checkpointMaxAge = foundationPriceCheckpointMaxAge(quote.chainId);
     if (value && typeof value === "object" && "mode" in value && value.mode === "quote") {
       const data = moduleRecord(value, ["mode", "chainId", "quoteAsset", "quoteCodeHash", "decimals", "valuationQuoteRaw", "checkpoint", "validUntil"], "foundation.quotePrice");
       const checkpoint = moduleRecord(data.checkpoint, ["number", "hash", "timestamp"], "foundation.quotePrice.checkpoint");
@@ -49,7 +51,7 @@ export function parseFoundationStartPrice(value: unknown, quote: { address: Addr
         || typeof data.quoteAsset !== "string" || getAddress(data.quoteAsset) !== getAddress(quote.address)
         || moduleHash(data.quoteCodeHash, "foundation.quotePrice.codeHash") !== quote.codeHash
         || data.decimals !== quote.decimals || !Number.isInteger(quote.decimals) || quote.decimals < 0 || quote.decimals > 36
-        || stamp > now + 10n || now - stamp > 60n || expiry <= now || expiry > now + 45n || expiry > stamp + 45n) throw new Error(PRICE_UNAVAILABLE);
+        || stamp > now + 10n || now - stamp > checkpointMaxAge || expiry <= now || expiry > now + lifetime || expiry > stamp + lifetime) throw new Error(PRICE_UNAVAILABLE);
       return data as unknown as FoundationQuoteStartPrice;
     }
     const data = moduleRecord(value, ["chainId", "quoteAsset", "quoteCodeHash", "decimals", "targetMarketCapUsd", "checkpoint", "price"], "foundation.startPrice");
@@ -67,8 +69,9 @@ export function parseFoundationStartPrice(value: unknown, quote: { address: Addr
       || (quote.chainId === 1 && price.source === "robinhood-stock-rest")
       || typeof price.heartbeatSeconds !== "number" || !Number.isInteger(price.heartbeatSeconds)
       || price.heartbeatSeconds < 1 || price.heartbeatSeconds > 604_800
-      || stamp > now + 10n || now - stamp > 60n || observed > now || now - observed > BigInt(price.heartbeatSeconds)
-      || expiry <= now || expiry > now + 45n || expiry > observed + BigInt(price.heartbeatSeconds)) throw new Error(PRICE_UNAVAILABLE);
+      || (price.source === "qualified-amm" && BigInt(price.heartbeatSeconds) > lifetime)
+      || stamp > now + 10n || now - stamp > checkpointMaxAge || observed > now || now - observed > BigInt(price.heartbeatSeconds)
+      || expiry <= now || expiry > now + lifetime || expiry > observed + BigInt(price.heartbeatSeconds)) throw new Error(PRICE_UNAVAILABLE);
     return data as unknown as FoundationUsdStartPrice;
   } catch { throw new Error(PRICE_UNAVAILABLE); }
 }

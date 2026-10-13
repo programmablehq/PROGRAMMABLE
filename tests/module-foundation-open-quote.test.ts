@@ -24,12 +24,12 @@ describe("quotes with no existing market", () => {
     }
   });
 
-  it("rejects identity changes, invented USD evidence, invalid amounts and expired checkpoints", () => {
-    const valid = reference();
-    for (const mutation of [{ quoteAsset: low }, { chainId: 4663 }, { decimals: 6 }, { quoteCodeHash: toHex(2, { size: 32 }) },
+  it.each([1, 4663] as const)("rejects identity changes, invented USD evidence, invalid amounts and expired checkpoints on %i", chainId => {
+    const valid = reference(high, 18, chainId);
+    for (const mutation of [{ quoteAsset: low }, { chainId: chainId === 1 ? 4663 : 1 }, { decimals: 6 }, { quoteCodeHash: toHex(2, { size: 32 }) },
       { valuationQuoteRaw: "0" }, { valuationQuoteRaw: "1.5" }, { valuationQuoteRaw: (1n << 127n).toString() },
-      { validUntil: String(now) }, { validUntil: String(now + 46n) }, { targetMarketCapUsd: "5000" },
-      { checkpoint: { ...valid.checkpoint, timestamp: String(now - 61n) } }, { price: { usd: { numerator: "1", denominator: "1" } } }]) {
+      { validUntil: String(now) }, { validUntil: String(now + (chainId === 1 ? 91n : 46n)) }, { targetMarketCapUsd: "5000" },
+      { checkpoint: { ...valid.checkpoint, timestamp: String(now - (chainId === 1 ? 91n : 61n)) } }, { price: { usd: { numerator: "1", denominator: "1" } } }]) {
       expect(() => parseFoundationStartPrice({ ...valid, ...mutation }, asset(valid), now)).toThrow();
     }
   });

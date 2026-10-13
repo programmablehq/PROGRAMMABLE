@@ -35,14 +35,14 @@ describe("one verified market for funding and launch valuation", () => {
     expect(funding.quoteAmount).toBe(990000n);
     expect(start.price).toEqual(ref.price);
     expect(start.checkpoint).toEqual(ref.checkpoint);
-    expect(mocks.assess).toHaveBeenCalledExactlyOnceWith({ quoteAsset: address, probeEthAmount: maximumEth }, { chainId });
+    expect(mocks.assess).toHaveBeenCalledExactlyOnceWith({ quoteAsset: address, probeEthAmount: maximumEth }, { chainId, pricePurpose: "module-launch" });
     expect(mocks.price).not.toHaveBeenCalled();
   });
 
   it("still reads a fresh price when there is no funding assessment", async () => {
     mocks.price.mockResolvedValue(reference(1));
     await readFoundationStartPrice(quote, 1);
-    expect(mocks.price).toHaveBeenCalledExactlyOnceWith({ quoteAsset: address }, { chainId: 1 });
+    expect(mocks.price).toHaveBeenCalledExactlyOnceWith({ quoteAsset: address }, { chainId: 1, pricePurpose: "module-launch" });
   });
 
   it("rejects stale or mismatched shared evidence instead of silently fetching a replacement", async () => {
