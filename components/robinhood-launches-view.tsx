@@ -1,6 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { ProfileLaunchRewards } from "@/components/profile-launch-rewards";
+import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
+import type { FoundationProfileLaunch } from "@/lib/profile/module-launches";
+import type { Hex } from "viem";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
@@ -22,7 +26,8 @@ import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projectio
 import { isPinnedRobinhoodToken } from "@/lib/robinhood-explore-policy";
 import styles from "@/components/robinhood-launches-view.module.css";
 
-type Launch = LaunchPresentationSource & {
+export type Launch = LaunchPresentationSource & {
+  foundationClaim?: FoundationProfileLaunch;
   chainId?: ViewChainId;
   launchProjection?: import("@/lib/custom-launch/launch-plan-v1").LaunchProjectionV1;
   launchId: string;
@@ -42,6 +47,7 @@ type Launch = LaunchPresentationSource & {
 };
 
 type LaunchResponse = {
+  account?: string;
   chainId?: ViewChainId;
   scope?: "all";
   status: "ready" | "syncing" | "stale" | "partial" | "unavailable";
@@ -70,8 +76,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const ROBINHOOD_WEBSITE_FILTERS: RobinhoodExploreFilters = { ...DEFAULT_EXPLORE_FILTERS, sort: "highest" };
 
 // Public, browser-only navigation state. Nothing is written during server rendering.
-const rememberedSnapshots = new Map<ExploreScope, { value: Snapshot; savedAt: number }>();
-function readRememberedSnapshot(chainId: ExploreScope) {
+const rememberedSnapshots = new Map<ExploreScope | string, { value: Snapshot; savedAt: number }>();
+function readRememberedSnapshot(chainId: ExploreScope | string) {
   const rememberedSnapshot = rememberedSnapshots.get(chainId);
   if (typeof window === "undefined" || !rememberedSnapshot || Date.now() - rememberedSnapshot.savedAt >= 300_000) return null;
   const value = rememberedSnapshot.value;
@@ -81,7 +87,7 @@ function readRememberedSnapshot(chainId: ExploreScope) {
 }
 function rememberSnapshot(value: Snapshot) {
   value = { ...value, data: { ...value.data, items: liveLaunchObservations(value.data.items) } };
-  if (typeof window !== "undefined") rememberedSnapshots.set(value.data.scope ?? value.data.chainId!, { value, savedAt: Date.now() });
+  if (typeof window !== "undefined") rememberedSnapshots.set(value.data.account ? `profile:${value.data.account.toLowerCase()}` : value.data.scope ?? value.data.chainId!, { value, savedAt: Date.now() });
   return value;
 }
 
@@ -114,7 +120,11 @@ function isLaunch(value: unknown, chainId: ViewChainId): value is Launch {
       && Number(value.decimals) >= 0 && Number(value.decimals) <= 255));
 }
 
-function readResponse(value: unknown, chainId: ExploreScope): LaunchResponse {
+export function readLaunchListResponse(value: unknown, chainId: ExploreScope, account?: string): LaunchResponse {
+  if (account && (!isObject(value) || value.account !== account.toLowerCase() || !Array.isArray(value.items)
+    || value.items.some(item => !isObject(item) || typeof item.creator !== "string" || item.creator.toLowerCase() !== account.toLowerCase()))) {
+    throw new Error("Invalid profile owner");
+  }
   const validLaunch = (item: unknown) => chainId === "all"
     ? isObject(item) && (item.chainId === 1 || item.chainId === 4663) && isLaunch(item, item.chainId)
     : isLaunch(item, chainId);
@@ -152,7 +162,20 @@ export function UnifiedLaunchesView({ embedded = false }: { embedded?: boolean }
   return <IndexedLaunchList chainId="all" embedded={embedded} enabled />;
 }
 
-function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; enabled: boolean; chainId: ExploreScope }) {
+type ProfileListOptions = {
+  account: string;
+  launchChainId: ViewChainId;
+  enableClaims?: boolean;
+  sendWallet?: (input: LaunchClaimWalletInputV1) => Promise<LaunchClaimWalletReviewV1 | Hex>;
+  onEthereumClaim?: (token: string) => void;
+  onAllRewards?: () => void;
+};
+
+export function UnifiedProfileLaunches(props: ProfileListOptions) {
+  return <IndexedLaunchList key={props.account.toLowerCase()} chainId="all" embedded enabled profile={props} />;
+}
+
+function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: boolean; enabled: boolean; chainId: ExploreScope; profile?: ProfileListOptions }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(!embedded);
   const readEnabled = enabled && (!embedded || inView);
@@ -169,13 +192,16 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
     return () => observer.disconnect();
   }, [embedded]);
   const chainName = chainId === "all" ? "Programmable" : chainId === 4663 ? "Robinhood" : "Ethereum";
-  const defaultFilters = chainId !== 1 ? ROBINHOOD_WEBSITE_FILTERS : ETHEREUM_EXPLORE_FILTERS;
+  const defaultFilters = profile ? DEFAULT_EXPLORE_FILTERS : chainId !== 1 ? ROBINHOOD_WEBSITE_FILTERS : ETHEREUM_EXPLORE_FILTERS;
   const headingId = useId();
   const searchId = useId();
   const statusId = useId();
   const listId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
-  const [initial] = useState(() => readRememberedSnapshot(chainId));
+  const profileAccount = profile?.account;
+  const refreshInterval = profileAccount ? 30_000 : REFRESH_MS;
+  const cacheKey = profile ? `profile:${profile.account.toLowerCase()}` : chainId;
+  const [initial] = useState(() => readRememberedSnapshot(cacheKey));
   const [search, setSearch] = useState(initial?.request.q ?? "");
   const [request, setRequest] = useState<Request>(initial?.request ?? { page: 1, q: "", ...defaultFilters });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(initial);
@@ -203,13 +229,13 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
     let controller: AbortController | null = null;
     let refreshTimer: number | undefined;
     const isVisible = () => document.visibilityState !== "hidden";
-    const remembered = readRememberedSnapshot(chainId);
+    const remembered = readRememberedSnapshot(cacheKey);
     let lastAttemptAt = remembered && sameRobinhoodExploreRequest(remembered.request, request)
       ? remembered.fetchedAt : 0;
 
     function schedule() {
       window.clearTimeout(refreshTimer);
-      if (!disposed && isVisible()) refreshTimer = window.setTimeout(load, Math.max(0, REFRESH_MS - (Date.now() - lastAttemptAt)));
+      if (!disposed && isVisible()) refreshTimer = window.setTimeout(load, Math.max(0, refreshInterval - (Date.now() - lastAttemptAt)));
     }
 
     async function load() {
@@ -222,14 +248,15 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
       try {
         const query = new URLSearchParams({ page: String(request.page), pageSize: String(ROBINHOOD_EXPLORE_PAGE_SIZE),
           q: request.q, sort: request.sort, mode: request.mode ?? "all" });
-        const endpoint = chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 4663 ? "robinhood" : "ethereum"}`;
+        if (profileAccount) query.set("account", profileAccount);
+        const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 4663 ? "robinhood" : "ethereum"}`;
         const response = await fetch(`${endpoint}?${query}`, {
           signal: activeController.signal,
           cache: "no-store",
           headers: { accept: "application/json" },
         });
         if (!response.ok) throw new Error("Launch request failed");
-        const data = readResponse(await response.json(), chainId);
+        const data = readLaunchListResponse(await response.json(), chainId, profileAccount);
         if (disposed || activeController.signal.aborted) return;
         setSnapshot((current) => {
           const sameRequest = sameRobinhoodExploreRequest(current?.request, request);
@@ -270,7 +297,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
       if (isVisible()) schedule();
     }
 
-    if (lastAttemptAt > 0 && Date.now() - lastAttemptAt < REFRESH_MS) schedule();
+    if (lastAttemptAt > 0 && Date.now() - lastAttemptAt < refreshInterval) schedule();
     else void load();
     document.addEventListener("visibilitychange", visibilityChanged);
     return () => {
@@ -279,7 +306,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
       window.clearTimeout(refreshTimer);
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
-  }, [chainId, readEnabled, request]);
+  }, [chainId, cacheKey, profileAccount, readEnabled, refreshInterval, request]);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -340,13 +367,17 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
         : snapshot?.request.q || hasFilters ? "No matching launches" : "No launches yet";
 
   return (
-    <div ref={listRef} className={`${styles.page} page-width`}>
-      <header className={styles.heading}>
-        <Heading data-explore-heading id={headingId} tabIndex={-1}>Explore</Heading>
+    <div ref={listRef} className={`${styles.page} ${profile ? styles.profilePage : "page-width"}`}>
+      <header className={profile ? styles.profileHeading : styles.heading}>
+        <Heading data-explore-heading id={headingId} tabIndex={-1}>{profile ? "Launches" : "Explore"}</Heading>
+        {profile?.enableClaims ? <div className={styles.profileActions}>
+          {profile.onAllRewards ? <button className={styles.rewardsButton} type="button" onClick={profile.onAllRewards}>Claim rewards</button> : null}
+          <Link className={styles.launchButton} href={`/launch/modules/foundation?chainId=${profile.launchChainId}`}>Launch a coin</Link>
+        </div> : null}
       </header>
 
       <section className={styles.body} aria-labelledby={headingId}>
-        <div className={styles.toolbar} role="group" aria-label="Explore controls">
+        <div className={styles.toolbar} role="group" aria-label={profile ? "Launches controls" : "Explore controls"}>
           <form className={styles.search} role="search" onSubmit={submitSearch}>
             <Search aria-hidden="true" size={18} />
             <label className="sr-only" htmlFor={searchId}>Search {chainName} launches by name, symbol or address</label>
@@ -437,6 +468,7 @@ function IndexedLaunchList({ embedded, enabled, chainId }: { embedded: boolean; 
                 </Link>
                 {details?.links.length ? <RobinhoodProjectLinks links={details.links}
                   name={launch.name?.trim() || (hasAsset ? "Token" : "Project")} className={styles.socials} /> : null}
+                {profile?.enableClaims ? <ProfileLaunchRewards launch={launch} account={profile.account} chainId={launchChainId} sendWallet={profile.sendWallet} onEthereumClaim={profile.onEthereumClaim} /> : null}
                 </article>
               </li>
             );})}

@@ -840,6 +840,28 @@ function formatRewardShareV1(shareBps: number) {
   }).format(shareBps / 100)}%`;
 }
 
+export function ProfileRewardReceiverSettings({ rewards, account, actionStates, onChangeRewardReceiver }: {
+  rewards: readonly ClassicV3Reward[];
+  account?: string;
+  actionStates: Readonly<Record<string, CreatorProjectRewardReceiverActionStateV1>>;
+  onChangeRewardReceiver: (reward: ClassicV3Reward, newReceiver: string, allocationIndex: number) => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const manageable = manageableClassicRewardsByTokenV1(rewards, account?.toLowerCase() ?? null);
+  const reward = selected ? manageable.get(selected) : undefined;
+  const state = reward ? actionStates[rewardReceiverActionKeyV1(reward.vaultAddress)] : undefined;
+  if (!manageable.size) return null;
+  return <details><summary>Reward settings</summary>
+    {[...manageable].map(([token, item]) => <button className={styles.refresh} type="button" key={token} onClick={() => setSelected(token)}>
+      Change reward receiver · {item.tokenName}
+    </button>)}
+    {reward ? <RewardReceiverDialog reward={reward} project={{ chainId: 1, tokenAddress: reward.tokenAddress,
+      name: reward.tokenName, symbol: reward.tokenSymbol, imageUrl: null, source: "envio-classic-v3", article: null }}
+      actionState={state?.account.toLowerCase() === account?.toLowerCase() ? state : undefined}
+      onClose={() => setSelected(null)} onSubmit={(receiver, index) => onChangeRewardReceiver(reward, receiver, index)} /> : null}
+  </details>;
+}
+
 function RewardReceiverDialog({
   actionState,
   onClose,

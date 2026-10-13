@@ -1,6 +1,5 @@
 "use client";
 import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
-
 import { isGitHubUrl } from "@/lib/public-link-visibility";
 
 import Image from "next/image";
@@ -24,18 +23,15 @@ import { useWallet } from "@/components/wallet-provider";
 import type { ViewChainId } from "@/lib/view-chain";
 import { ProfileLoadingSkeleton } from "@/components/profile-skeleton";
 export { ProfileLoadingSkeleton } from "@/components/profile-skeleton";
-import { RobinhoodProfileLaunches } from "@/components/robinhood-profile-launches";
-import { EthereumProfileLaunches } from "@/components/ethereum-profile-launches";
+import { UnifiedProfileLaunches } from "@/components/robinhood-launches-view";
+import rewardDialogStyles from "@/components/profile-launch-rewards.module.css";
 import { GenericLaunchClaims } from "@/components/generic-launch-claims";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import {
-  ProfileProjects,
-  ProfileProjectsLoadingState,
+  ProfileRewardReceiverSettings,
   ProfileProjectsSection,
   creatorProjectPageSize,
   rewardReceiverActionKeyV1,
-  type CreatorProjectMarketCapV1,
-  type CreatorProjectSummaryV1,
 } from "@/components/profile-projects";
 import { useLiveDataRefresh } from "@/components/use-live-data-refresh";
 import { formatMarketCapMetric } from "@/components/animated-market-cap";
@@ -88,8 +84,6 @@ import {
   canOptimizeTokenImage,
   getTokenCardImageSource,
 } from "@/lib/token-image";
-import { PROGRAMMABLE_MAIN_TOKEN_ADDRESS } from
-  "@/lib/creator-article/programmable-example-v1";
 import {
   getProfileStorageKey,
   profileDraftBelongsToAccount,
@@ -1412,7 +1406,8 @@ export function formatBannerPositionStatus(position: {
 }
 
 export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProps = {}) {
-  const ethereumView = viewChainId === 1;
+  const [rewardSelection, setRewardSelection] = useState<{ account: string; token: string } | null>(null);
+  const rewardDialogRef = useRef<HTMLDialogElement>(null);
   const {
     wallet,
     openWallet,
@@ -1433,6 +1428,13 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
     startY: number;
   } | null>(null);
   const account = wallet?.account;
+  const selectedRewardToken = rewardSelection?.account === account?.toLowerCase() ? rewardSelection?.token : null;
+  const ethereumView = viewChainId === 1 || Boolean(selectedRewardToken);
+  useEffect(() => {
+    const dialog = rewardDialogRef.current;
+    if (selectedRewardToken && !dialog?.open) dialog?.showModal();
+    else if (!selectedRewardToken && dialog?.open) dialog.close();
+  }, [selectedRewardToken]);
   const activeAccountRef = useRef(account);
   const transactionPollControllersRef = useRef<Set<AbortController>>(
     new Set(),
@@ -2231,34 +2233,6 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
       ? requestedOnchainData
       : loadingProfileData(account)
     : UNAVAILABLE_PROFILE_DATA;
-  const creatorProjectMarketCaps = useMemo<readonly CreatorProjectMarketCapV1[]>(
-    () => scopedOnchainData.tokens.map((token) => ({
-      tokenAddress: token.address,
-      usdWad: token.fdvUsdWad ?? null,
-      ethWei: token.marketCapEthWei ?? null,
-      label: profileTokenMarketCapLabel(token),
-    })),
-    [scopedOnchainData.tokens],
-  );
-  const creatorWalletProjects = useMemo<readonly CreatorProjectSummaryV1[]>(
-    () => scopedOnchainData.tokens.map((token) => ({
-      chainId: 1 as const,
-      tokenAddress: token.address,
-      name: token.name,
-      symbol: token.symbol || null,
-      imageUrl: token.imageUrl ?? null,
-      ...(token.partnerAttribution
-        ? { partnerAttribution: token.partnerAttribution }
-        : {}),
-      source: token.address.toLowerCase() === PROGRAMMABLE_MAIN_TOKEN_ADDRESS
-        ? "official-main-token" as const
-        : token.launchProvenance === "canonical-router"
-          ? "canonical-launch-stamp-router" as const
-          : "envio-classic-v3" as const,
-      article: null,
-    })),
-    [scopedOnchainData.tokens],
-  );
   const scopedClassicV3Rewards = useMemo<ClassicV3ProfileRewards>(() => {
     if (!account || !classicV3ReleaseAvailable) {
       return EMPTY_CLASSIC_V3_PROFILE;
@@ -3823,31 +3797,16 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
         </div>
       </section>
 
-      <EthereumProfileLaunches account={account} enableClaims />
-      <RobinhoodProfileLaunches key={account.toLowerCase()} account={account} enableClaims />
-      {ethereumView ? <>
-      {creatorWalletProjects.length > 0 || (scopedClassicV3Rewards.status === "ready" && scopedClassicV3Rewards.rewards.length > 0) ? <ProfileProjects
-        key={account?.toLowerCase() ?? "disconnected"}
-        classicRewards={
-          scopedClassicV3Rewards.status === "ready"
-            ? scopedClassicV3Rewards.rewards
-            : []
-        }
-        marketCaps={creatorProjectMarketCaps}
-        walletProjects={creatorWalletProjects}
-        rewardReceiverActionStates={classicV3ActionStates}
-        onChangeRewardReceiver={(reward, newReceiver, allocationIndex) =>
-          void submitClassicV3Action(
-            reward,
-            "update-payout",
-            newReceiver,
-            allocationIndex,
-          )}
-        onRefresh={retryProfileData}
-        refreshing={profileRefreshing}
-      /> : null}
+      <UnifiedProfileLaunches account={account} enableClaims launchChainId={wallet?.chainId === "0x1" ? 1 : 4663}
+        sendWallet={sendLaunchClaimWalletAction} onAllRewards={() => setRewardSelection({ account: account.toLowerCase(), token: "all" })}
+        onEthereumClaim={token => setRewardSelection({ account: account.toLowerCase(), token })} />
+      <dialog ref={rewardDialogRef} className={rewardDialogStyles.dialog} aria-labelledby="ethereum-rewards-title"
+        onCancel={event => { event.preventDefault(); setRewardSelection(null); }}>
+        <header><h2 id="ethereum-rewards-title">Claim rewards</h2><button type="button" aria-label="Close rewards" onClick={() => setRewardSelection(null)}><X size={20} aria-hidden="true" /></button></header>
+        {selectedRewardToken ? <>
       <ProfileAccountWorkspace
-        key={account.toLowerCase()}
+        key={`${account.toLowerCase()}:${selectedRewardToken}`}
+        tokenAddress={selectedRewardToken === "all" ? undefined : selectedRewardToken ?? undefined}
         connected={Boolean(account)}
         data={scopedOnchainData}
         account={account}
@@ -3870,9 +3829,9 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
         refreshStatusMessage={profileRefreshStatusMessage}
         terminalErrorReady={terminalErrorReady}
       />
-      </> : <>
-        <RobinhoodProfileRewards account={account} sendWallet={sendLaunchClaimWalletAction} />
-      </>}
+          {selectedRewardToken === "all" ? <GenericLaunchClaims key={account.toLowerCase()} account={account} compact sendWallet={sendLaunchClaimWalletAction} /> : null}
+        </> : null}
+      </dialog>
     </div>
   );
 }
@@ -4685,57 +4644,6 @@ export function PublicCreatorProfile({
   viewChainId: ViewChainId;
   onChangeChain?: (chain: ViewChainId) => void;
 }) {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [data, setData] = useState<ProfileOnchainData>(() =>
-    loadingProfileData(account)
-  );
-  const [refreshingAccount, setRefreshingAccount] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (viewChainId !== 1) return;
-    let disposed = false;
-    let timedOut = false;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, 10_000);
-    queueMicrotask(() => {
-      if (disposed) return;
-      setRefreshingAccount(account.toLowerCase());
-      setData((current) => beginPublicProfileRefresh(current, account));
-    });
-    void fetchCreatorProfile(account, controller.signal).then(
-      (profile) => {
-        if (!controller.signal.aborted) setData(profile);
-      },
-      (caught) => {
-        if (disposed) return;
-        setData((current) => resolveCreatorProfileReadFailure(
-          beginPublicProfileRefresh(current, account), account,
-          timedOut ? new ProfileResponseError("Launches took too long to load", "temporary") : caught,
-        ));
-      },
-    ).finally(() => {
-      window.clearTimeout(timeout);
-      if (!disposed) setRefreshingAccount(null);
-    });
-    return () => {
-      disposed = true;
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [account, refreshKey, viewChainId]);
-
-  const scopedData = data.status === "ready" ? beginPublicProfileRefresh(data, account)
-    : isProfileDataForAccount(data, account) ? data : loadingProfileData(account);
-  const refreshing = refreshingAccount === account.toLowerCase();
-  const entries = scopedData.status === "ready"
-    ? profileRouterLaunchEntries(
-        buildProfilePortfolio(scopedData.tokens, [], []),
-      )
-    : [];
-
   return (
     <div className={`${styles.page} page-width`}>
       <section className={`${styles.hero} ${styles.publicHero}`} aria-labelledby="public-profile-title">
@@ -4760,41 +4668,7 @@ export function PublicCreatorProfile({
         </div>
       </section>
 
-      <EthereumProfileLaunches account={account} />
-      <RobinhoodProfileLaunches key={account.toLowerCase()} account={account} />
-      {viewChainId === 4663 ? <RobinhoodProfileRewards account={account} /> : scopedData.status === "loading" ? (
-        <ProfileProjectsLoadingState />
-      ) : scopedData.status === "error" ? (
-        <section
-          className={`${styles.launchesPanel} ${styles.publicProfileState}`}
-          aria-live="polite"
-        >
-          <h2>Launches unavailable</h2>
-          <p>Unable to load this public profile. Try again.</p>
-          <button
-            className={styles.retryButton}
-            type="button"
-            onClick={() => setRefreshKey((current) => current + 1)}
-          >
-            Try again
-          </button>
-        </section>
-      ) : entries.length ? (
-        <>
-          <ProfileRouterLaunches entries={entries} key={account.toLowerCase()} refreshing={refreshing} onRefresh={() => setRefreshKey((value) => value + 1)} />
-          {scopedData.sourceQuality === "stale" && !refreshing ? <p className={styles.publicRefreshNote} role="status">
-            Couldn’t refresh launches.
-            <button className={styles.retryButton} type="button" onClick={() => setRefreshKey((current) => current + 1)}>Try again</button>
-          </p> : null}
-        </>
-      ) : (
-        <section
-          className={`${styles.launchesPanel} ${styles.publicProfileState}`}
-        >
-          <h2>No finalized launches yet</h2>
-          <p>Finalized Router launches will appear here.</p>
-        </section>
-      )}
+      <UnifiedProfileLaunches account={account} launchChainId={viewChainId} />
     </div>
   );
 }
@@ -4820,6 +4694,7 @@ export function RobinhoodProfileRewards({ account, sendWallet }: { account?: str
 }
 
 export function ProfileAccountWorkspace({
+  tokenAddress,
   connected,
   data,
   account,
@@ -4842,6 +4717,7 @@ export function ProfileAccountWorkspace({
   refreshStatusMessage,
   terminalErrorReady,
 }: {
+  tokenAddress?: string;
   connected: boolean;
   data: ProfileOnchainData;
   account?: string;
@@ -4957,7 +4833,7 @@ export function ProfileAccountWorkspace({
     deepReady ? deepRewards.rewards : [],
     deepV3Ready ? deepV3Profile.tokens : [],
     stockPairedReady ? stockPairedRewards.rewards : [],
-  );
+  ).filter(entry => !tokenAddress || entry.token.address.toLowerCase() === tokenAddress.toLowerCase());
   const actionStates: ProfileActionStateCollections = {
     claim: claimActionStates,
     classicV3: classicV3ActionStates,
@@ -5045,11 +4921,15 @@ export function ProfileAccountWorkspace({
       <div
         className={`${styles.profileWorkspace} liquid-glass-surface`}
       >
-        <FeeEarningsPanel
+        <ProfileRewardReceiverSettings account={account}
+          rewards={classicReady ? classicV3Rewards.rewards.filter(reward => !tokenAddress || reward.tokenAddress.toLowerCase() === tokenAddress.toLowerCase()) : []}
+          actionStates={classicV3ActionStates}
+          onChangeRewardReceiver={(reward, newReceiver, allocationIndex) => onClassicV3Action(reward, "update-payout", newReceiver, allocationIndex)} />
+        {!tokenAddress ? <FeeEarningsPanel
           nativeEarned={claimSubmissionAllowed ? nativeEarned : null}
           nativeClaimable={claimSubmissionAllowed ? nativeClaimable : null}
           nativeClaimed={claimSubmissionAllowed ? nativeClaimed : null}
-        />
+        /> : null}
 
         <section
           className={styles.claimablePanel}

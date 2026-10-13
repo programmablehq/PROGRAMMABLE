@@ -42,6 +42,22 @@ beforeEach(() => {
 });
 
 describe("Unified verified source adapter", () => {
+  it("combines both chains for one creator and filters other wallets before market reads", async () => {
+    const owner = `0x${"33".repeat(20)}`;
+    sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [
+      { ...rh, creator: owner }, { ...rh, creator: other, tokenAddress: other },
+    ], sourceEvidence: {} });
+    sources.eth.mockResolvedValue({ status: "ready", updatedAt: null, entries: [
+      { ...eth, creatorAddress: owner }, { ...eth, creatorAddress: other, tokenAddress: other },
+    ], sourceEvidence: {} });
+    recent.mockResolvedValue([{ chainId: 1, row: { ...rh, creator: other, tokenAddress: other }, presentation: { links: [] } }]);
+    const result = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all" }, 10, undefined, owner.toUpperCase().replace("0X", "0x"));
+    expect(result.page.totalItems).toBe(2);
+    expect(result.items.map(item => item.chainId).sort()).toEqual([1, 4663]);
+    expect(result.items.every(item => item.creator === owner)).toBe(true);
+    expect(sources.rhMarkets.mock.calls[0][0]).toEqual([expect.objectContaining({ creator: owner })]);
+    expect(sources.ethMarkets.mock.calls[0][0]).toEqual([expect.objectContaining({ creatorAddress: owner })]);
+  });
   it("enriches only the visible Ethereum identities and keeps artwork when market data is missing", async () => {
     sources.ethMarkets.mockResolvedValue(new Map());
     metadata.mockResolvedValue(new Map([[address, { imageUrl: "https://example.com/coin.png", description: null, links: [] }]]));

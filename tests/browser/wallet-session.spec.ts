@@ -317,7 +317,7 @@ for (const width of [1440, 390, 320]) {
     const close = dialog.getByRole("button", { name: "Close wallet dialog", exact: true });
     await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
-    await expect(dialog.getByRole("button", { name: "Sign out", exact: true })).toBeFocused();
+    await expect(dialog.getByRole("button", { name: "Disconnect", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(close).toBeFocused();
     // Native modal focus cannot be moved into the underlying page.
@@ -340,11 +340,11 @@ for (const width of [1440, 390, 320]) {
     await expectMethods(page, ["linkWallet"]);
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await page.getByRole("button", { name: "Reject linking foreign account", exact: true }).click();
-    await expect(dialog.getByRole("alert")).toHaveText("This wallet is linked to another account. Switch accounts to use it.");
-    await expect(dialog.getByRole("button", { name: "Sign in with this wallet", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Connect linked wallet", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "SDK wallet dialog", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Selected account", { exact: true })).toHaveText("none");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expectMethods(page, ["linkWallet", "logout", "disconnect-provider", "disconnect-provider", "login"]);
+
   });
 }
 
@@ -376,7 +376,9 @@ test("only an authenticated account without a linked wallet starts the SDK link 
   await expectMethods(page, ["linkWallet"]);
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.getByRole("button", { name: "Reject linking foreign account", exact: true }).click();
-  await expect(page.getByRole("alert")).toHaveText("This wallet is linked to another account. Switch accounts to use it.");
+  await expect(page.getByRole("dialog", { name: "SDK wallet dialog", exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expectMethods(page, ["linkWallet", "logout", "login"]);
 });
 
 for (const width of [1440, 390]) {
@@ -388,12 +390,10 @@ for (const width of [1440, 390]) {
     await page.getByRole("button", { name: "Open account", exact: true }).click();
     await page.getByRole("button", { name: "Complete wallet B reconnect", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Connect wallet", exact: true });
-    await expect(dialog.getByRole("alert")).toHaveText("This wallet is not linked to your signed-in account.");
     await expect(page.getByLabel("Selected account", { exact: true })).toHaveText("none");
-    await expectMethods(page, ["connectWallet", "refreshUser"]);
-    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(`wallet-account-recovery-${width}.png`) });
-    await dialog.getByRole("button", { name: "Sign in with this wallet", exact: true }).click();
     await expect(page.getByLabel("Session authenticated", { exact: true })).toHaveText("false");
     expect((await calls(page)).filter((call) => call.method === "login")).toHaveLength(0);
     await page.getByRole("button", { name: "Finish logout readback", exact: true }).click();
@@ -511,7 +511,7 @@ test("switching to a previously linked MetaMask account does not log out or sign
   await scenario(page, "both-owned");
   await page.getByRole("button", { name: "Choose wallet B in permissions", exact: true }).click();
   await page.getByRole("button", { name: "Open account", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Switch account", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Switch wallet", exact: true }).click();
   await expect(page.getByLabel("Selected account", { exact: true })).toHaveText(accountB);
   await expect(page.getByLabel("Session authenticated", { exact: true })).toHaveText("true");
   await expect(page.getByRole("dialog")).toHaveCount(0);

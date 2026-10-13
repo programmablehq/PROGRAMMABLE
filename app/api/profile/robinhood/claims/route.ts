@@ -6,13 +6,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams; const account = query.get("account");
-  const cursor = query.get("cursor");
-  if (!account || !/^0x[0-9a-f]{40}$/i.test(account) || [...query.keys()].some(key => !["account", "cursor"].includes(key))
+  const cursor = query.get("cursor"); const launchId = query.get("launchId");
+  if (!account || !/^0x[0-9a-f]{40}$/i.test(account) || [...query.keys()].some(key => !["account", "cursor", "launchId"].includes(key))
+    || query.getAll("launchId").length > 1 || (launchId !== null && !/^[a-zA-Z0-9_-]{1,256}$/.test(launchId))
     || query.getAll("account").length !== 1 || query.getAll("cursor").length > 1 || cursor !== null && !/^(0|[1-9][0-9]{0,6})$/.test(cursor)) {
     return Response.json({ error: "invalid_request" }, { status: 400 });
   }
   try {
-    const descriptors = await readRobinhoodProfileClaimDescriptors(account);
+    const descriptors = (await readRobinhoodProfileClaimDescriptors(account)).filter(item => !launchId || item.launchId === launchId);
     const client = createPublicClient({ chain: robinhoodChain, transport: http(undefined, { retryCount: 0, timeout: 5000 }) });
     const block = descriptors.length ? await client.getBlock({ blockTag: "latest" }) : null;
     const start = Number(cursor ?? 0);
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
         return { ...item, status: "ready", claimableRaw: BigInt(result.data).toString(), blockNumber: block!.number.toString() };
       } catch { return { ...item, status: "analysis_pending", claimableRaw: null, blockNumber: null }; }
     }));
-    return Response.json({ schemaVersion: "programmable.launch-claim-page.v1", account: account.toLowerCase(), claims,
+    return Response.json({ schemaVersion: "programmable.launch-claim-page.v1", account: account.toLowerCase(), launchId, claims,
       nextCursor: start + page.length < descriptors.length ? String(start + page.length) : null },
       { headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } });
   } catch { return Response.json({ error: "claims_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } }); }

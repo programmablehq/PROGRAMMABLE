@@ -379,7 +379,7 @@ describe("profile workspace loading state", () => {
     expect(profileViewSource).toContain("You’re viewing another wallet’s profile.");
     expect(profileViewSource).toContain('href="/profile">My profile</Link>');
     expect(profileViewSource).toContain(
-      "<ProfileRouterLaunches entries={entries}",
+      "<UnifiedProfileLaunches account={account} launchChainId={viewChainId} />",
     );
     expect(profileViewSource).not.toContain(
       "<PublicCreatorProfile account={account}",
@@ -566,7 +566,6 @@ describe("profile workspace loading state", () => {
     expect(profileExperienceCss).toMatch(
       /@media \(max-width:\s*620px\)[\s\S]*?\.profileSkeletonBanner\s*\{[^}]*height:\s*108px;/s,
     );
-    expect(profileViewSource).toContain("<ProfileProjectsLoadingState />");
     expect(profileSkeletonSource).toContain(
       "Array.from({ length: 4 }, (_, item)",
     );
