@@ -23,6 +23,10 @@ The three project wallets are:
 - `0x39544A7023081B56D7405c1af0bFaf72da7e24F6`: own V4 liquidity fees and project burns.
 - `0x4957f49620AFf3Adbbe8195a4f633E49cc93376c`: earlier Ethereum fee contracts.
 
+The current V4 burn percentage uses the original 1,000,000,000-token supply of `0xc60ba256b44334a0cd2c7242e98b88f031abb006`. The amount remains derived from verified burn events, not a manually entered dashboard value. The onchain supply and burn-address balance were reconciled with the stored Dune results on 14 October 2026.
+
+Buybacks count executed purchases delivered to the tracked wallet group. Burns count V4 that the group sends to burn addresses, including tokens received as fees or from other sources. These are separate events and their totals need not match. Transfers between the three wallets do not create a new purchase. A direct-to-burn purchase must retain verified transaction-level attribution rather than being treated as a wallet transfer.
+
 ## Interpretation
 
 - Volume counts one pool swap once. It excludes claims, transfers and liquidity deposits. Raw Uniswap v4 swap logs take precedence over matching curated DEX rows.

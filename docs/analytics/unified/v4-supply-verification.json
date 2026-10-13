@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-10-13T22:43:48.194Z",
+  "chainId": 4663,
+  "referenceSupply": "1000000000",
+  "referenceSupplyRaw": "0x0000000000000000000000000000000000000000033b2e3c9fd0803ce8000000",
+  "supplyReadTag": "latest",
+  "wallets": [
+    "0x4957f49620aff3adbbe8195a4f633e49cc93376c",
+    "0xd88539d3c4c460136a733a3fd60cf6bf269079da",
+    "0x39544a7023081b56d7405c1af0bfaf72da7e24f6"
+  ],
+  "projectBurnAmountRaw": "63023398353592155845740168",
+  "projectBurnAmount": 63023398.35359216,
+  "projectBurnPercent": 6.302339835359216,
+  "allHolderBurnAmountRaw": "63023416462155873533240168",
+  "otherHolderBurnAmount": 18.108563717687503,
+  "verifiedCurrentTokenBuybackReceipts": 13,
+  "currentTokenBuybackRecipients": {
+    "0x4957f49620aff3adbbe8195a4f633e49cc93376c": 3,
+    "0xd88539d3c4c460136a733a3fd60cf6bf269079da": 9,
+    "0x39544a7023081b56d7405c1af0bfaf72da7e24f6": 1
+  },
+  "verifiedProjectBurnReceipts": 17,
+  "internalTransfersCountAsPurchases": false,
+  "sources": {
+    "buybacks": 8677080,
+    "projectBurns": 8941418,
+    "allHolderBurns": 8626416
+  },
+  "notes": [
+    "Project burn logs match successful receipts exactly.",
+    "All-holder burn logs reconcile to the onchain burn-address balance.",
+    "Buyback amounts reconcile to net V4 received by the combined wallet group.",
+    "Burns can include tokens received as fees or other holdings; buying and burning are different events."
+  ],
+  "contractAddress": "0xc60ba256b44334a0cd2c7242e98b88f031abb006"
+}
