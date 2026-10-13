@@ -38,6 +38,9 @@ export function ProfileLaunchRewards({ launch, account, chainId, sendWallet, onE
     else if (!open && dialog.current?.open) dialog.current.close();
   }, [open]);
   if (account.toLowerCase() !== launch.creator.toLowerCase()) return null;
+  // Arbitrary Ethereum hooks do not have a universal claim entry point.
+  // Offer the action only for a bound module ledger or a supported legacy model.
+  if (chainId === 1 && !foundation && launch.mode !== "classic") return null;
   return <>
     <button className={styles.claimButton} type="button" onClick={() => {
       if (chainId === 1 && !foundation) onEthereumClaim?.(launch.tokenAddress);
