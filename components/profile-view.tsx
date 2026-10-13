@@ -122,6 +122,9 @@ const profileEnvironment =
     : "production";
 const classicV3ReleaseAvailable =
   isConfiguredClassicV3ReleaseReady(profileEnvironment);
+// This read endpoint was retired during the index cutover and always returns
+// 503. Current module claims verify their own ledgers; legacy sources stay separate.
+const legacyCreatorProfileReadAvailable = false;
 const deepReleaseAvailable = false;
 const deepV3ReleaseAvailable = false;
 const stockPairedReleaseAvailable =
@@ -1559,7 +1562,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
       const refreshId = ++profileRefreshSequenceRef.current;
       if (manual && account) {
         const pending = new Set<ProfileRefreshSource>();
-        if (!onchainData) pending.add("creator");
+        if (!onchainData && legacyCreatorProfileReadAvailable) pending.add("creator");
         if (classicV3ReleaseAvailable) pending.add("classic-v3");
         if (deepReleaseAvailable) pending.add("deep");
         if (deepV3ReleaseAvailable) pending.add("deep-v3");
@@ -1683,7 +1686,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
   }, [profileLoadKey]);
 
   useEffect(() => {
-    if (onchainData) return;
+    if (onchainData || !legacyCreatorProfileReadAvailable) return;
     if (!account || !ethereumView) return;
 
     const controller = new AbortController();
@@ -2228,7 +2231,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
   const requestedOnchainData = withoutClosedDeepProfileData(
     onchainData ?? remoteOrCachedOnchainData,
   );
-  const scopedOnchainData = account
+  const scopedOnchainData = !onchainData && !legacyCreatorProfileReadAvailable ? UNAVAILABLE_PROFILE_DATA : account
     ? isProfileDataForAccount(requestedOnchainData, account)
       ? requestedOnchainData
       : loadingProfileData(account)
@@ -3807,6 +3810,7 @@ export function ProfileView({ onchainData, viewChainId = 4663 }: ProfileViewProp
       <ProfileAccountWorkspace
         key={`${account.toLowerCase()}:${selectedRewardToken}`}
         tokenAddress={selectedRewardToken === "all" ? undefined : selectedRewardToken ?? undefined}
+        showTotals={false}
         connected={Boolean(account)}
         data={scopedOnchainData}
         account={account}
@@ -4694,6 +4698,7 @@ export function RobinhoodProfileRewards({ account, sendWallet }: { account?: str
 }
 
 export function ProfileAccountWorkspace({
+  showTotals = true,
   tokenAddress,
   connected,
   data,
@@ -4718,6 +4723,7 @@ export function ProfileAccountWorkspace({
   terminalErrorReady,
 }: {
   tokenAddress?: string;
+  showTotals?: boolean;
   connected: boolean;
   data: ProfileOnchainData;
   account?: string;
@@ -4925,7 +4931,7 @@ export function ProfileAccountWorkspace({
           rewards={classicReady ? classicV3Rewards.rewards.filter(reward => !tokenAddress || reward.tokenAddress.toLowerCase() === tokenAddress.toLowerCase()) : []}
           actionStates={classicV3ActionStates}
           onChangeRewardReceiver={(reward, newReceiver, allocationIndex) => onClassicV3Action(reward, "update-payout", newReceiver, allocationIndex)} />
-        {!tokenAddress ? <FeeEarningsPanel
+        {showTotals && !tokenAddress ? <FeeEarningsPanel
           nativeEarned={claimSubmissionAllowed ? nativeEarned : null}
           nativeClaimable={claimSubmissionAllowed ? nativeClaimable : null}
           nativeClaimed={claimSubmissionAllowed ? nativeClaimed : null}
