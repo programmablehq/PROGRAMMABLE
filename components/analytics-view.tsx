@@ -19,8 +19,8 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
   return <section className={styles.page}>
     <header className={styles.header}>
       <h1>Analytics</h1>
-      <p className={styles.intro}>All-time activity across Ethereum and Robinhood. 100% of our 0.3% platform fees go to Programmable buybacks.</p>
-      <p className={styles.dataNote}>Figures may lag. USD totals exclude missing prices. <a href="https://dune.com/programmablehq/analytics" target="_blank" rel="noreferrer">Our Dune dashboard</a></p>
+      <p className={styles.intro}>100% of our 0.3% platform fees across Ethereum and Robinhood fund V4 buybacks. Our V4 liquidity position earns ETH on buys and V4 on sells. We burn the V4 fees too.</p>
+      <p className={styles.dataNote}>Burns include purchased V4 and V4 collected as liquidity fees. <a href="https://dune.com/programmablehq/analytics" target="_blank" rel="noreferrer">Our Dune dashboard</a></p>
     </header>
     <div className={styles.grid}>
       <Metric label="Trading Volume" value={compact(s.volume, true)} detail={`${exact(s.volume)} USD${s.unpricedSwaps ? " · priced subtotal" : ""}`} />
