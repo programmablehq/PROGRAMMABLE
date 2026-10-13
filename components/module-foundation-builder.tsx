@@ -424,10 +424,14 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
       const receipt = await onConfirmLaunch(prepared);
       if (active.current) { submittedContext.current = context; setResult(receipt); setPhase("result"); }
     } catch (caught) {
-      launchPreparation.current.invalidate();
-      if (active.current) {
+      if (active.current && generation.current === request) {
+        setPhase("editing");
+        // Context changes already invalidate the old preparation. Its late failure must
+        // not cancel the new wallet's preparation or announce an unrelated error.
+        if (currentContext.current !== context) return;
+        launchPreparation.current.invalidate();
         // Funding messages follow the live balance, so a deposit clears them without a reload.
-        setError(caught instanceof FoundationLaunchBalanceError ? "" : cleanError(caught, errorStage)); setPhase("editing");
+        setError(caught instanceof FoundationLaunchBalanceError ? "" : cleanError(caught, errorStage));
         const failure = caught as { code?: number; walletRequestAttempted?: boolean; walletRequestRejected?: boolean } | null;
         if (errorStage === "wallet" && (failure?.code === 4001 || failure?.walletRequestAttempted === false || failure?.walletRequestRejected === true)) setWarmRetry(value => value + 1);
       }

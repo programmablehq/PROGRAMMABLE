@@ -79,7 +79,7 @@ export type FoundationLaunchDraft = FoundationCreatorFees & {
   image: FoundationImage;
   socialLinks: ModuleSocialLinks;
   quoteAsset: Address;
-  /** Creator-selected total starting valuation in quote units, without a USD claim or ETH first buy. */
+  /** Creator-selected total starting valuation in quote units, without a USD claim. */
   quoteValuation?: string;
   /** Native ETH spending ceiling in the single-eth-v1 launch form. */
   initialBuy: string;

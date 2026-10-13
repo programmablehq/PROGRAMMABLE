@@ -228,8 +228,8 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
         additionalLiquidity: formatUnits(sequence.result.factoryVersion !== "v1" ? sequence.result.creatorQuotePrincipal : sequence.price.creator?.principal ?? 0n, quote.decimals), supply: formatUnits(FOUNDATION_SUPPLY, 18),
         actualStartMarketCapUsd: sequence.price.actualMarketCapUsd,
         actualStartMarketCapQuote: sequence.price.actualMarketCapQuote,
-        transactions: sequence.steps.map(step => foundationStepSummary(step, chainId)), notes: [draft.quoteValuation !== undefined ? "The coin launches in one transaction." : "The coin launch and first buy use one transaction.",
-          draft.quoteValuation !== undefined ? "You set the starting valuation in quote tokens. No dollar value is assumed, and no first buy is included."
+        transactions: sequence.steps.map(step => foundationStepSummary(step, chainId)), notes: ["The coin launch and first buy use one transaction.",
+          draft.quoteValuation !== undefined ? "You set the starting valuation in quote tokens. No dollar value is assumed."
             : "The starting market cap is set automatically to approximately $5,000. This is a valuation, not a deposit."] };
       prepared.current.set(review, sequence);
       if (acknowledgedResult) acknowledged.current.add(review);

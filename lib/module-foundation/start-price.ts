@@ -28,7 +28,12 @@ export interface FoundationQuoteStartPrice {
 }
 export type FoundationStartPrice = FoundationUsdStartPrice | FoundationQuoteStartPrice;
 export const isFoundationQuotePrice = (value: FoundationStartPrice): value is FoundationQuoteStartPrice => "mode" in value && value.mode === "quote";
-export const foundationPriceExpiry = (value: FoundationStartPrice) => BigInt(isFoundationQuotePrice(value) ? value.validUntil : value.price.validUntil);
+export function foundationPriceExpiry(value: FoundationStartPrice): bigint {
+  const priceExpiry = BigInt(isFoundationQuotePrice(value) ? value.validUntil : value.price.validUntil);
+  // The review cache must refresh before either condition in the price validator expires.
+  const checkpointExpiry = BigInt(value.checkpoint.timestamp) + foundationPriceCheckpointMaxAge(value.chainId);
+  return priceExpiry < checkpointExpiry ? priceExpiry : checkpointExpiry;
+}
 const displayValuation = (value: { numerator: bigint; denominator: bigint }, decimals: number) => formatUnits(value.numerator * 100_000_000n / value.denominator, decimals + 8);
 
 const PRICE_UNAVAILABLE = "The automatic starting price is unavailable or expired. Review again to refresh it.";
