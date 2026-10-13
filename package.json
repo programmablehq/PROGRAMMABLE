@@ -234,7 +234,7 @@
     "classic-modules:test": "node --test packages/classic-modules/test/*.test.mjs && vitest run tests/classic-modules-provenance.test.ts && cd contracts && forge test --match-path 'test/classic-modules/*.t.sol'",
     "classic-modules:cli": "node packages/classic-modules/bin/programmable-classic-modules.mjs",
     "modules:sdk:test": "node --test packages/classic-modules/test/*.test.mjs",
-    "modules:cli:check": "node scripts/build-module-cli.mjs",
+    "modules:cli:check": "node scripts/check-module-cli.mjs",
     "modules:cli:test": "node --test scripts/test/module-cli-distribution.test.mjs",
     "modules:starter:test": "bash contracts/test/module-mode/starter/run-tests.sh -vv && node --test packages/classic-modules/examples/native-program/tools/package.test.mjs && node packages/classic-modules/examples/native-program/tools/check-sdk.mjs && forge test --root packages/classic-modules/examples/engine-program --offline -vv && node packages/classic-modules/examples/engine-program/tools/check-build.mjs && node --test packages/classic-modules/examples/engine-program/tools/package.test.mjs && node packages/classic-modules/examples/engine-program/tools/prepare.mjs --fixture && node packages/classic-modules/examples/engine-program/tools/check-sdk.mjs",
     "test:economic-modules": "node --test ops/economic-modules/*.test.mjs",
