@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getAddress, toHex } from "viem";
-import { parseFoundationStartPrice, planFoundationStartPrice, type FoundationUsdStartPrice as FoundationStartPrice } from "@/lib/module-foundation/start-price";
+import { foundationPriceExpiry, parseFoundationStartPrice, planFoundationStartPrice, type FoundationUsdStartPrice as FoundationStartPrice } from "@/lib/module-foundation/start-price";
 
 const low = getAddress("0x1000000000000000000000000000000000000000");
 const high = getAddress("0x9000000000000000000000000000000000000000");
@@ -14,6 +14,22 @@ function reference(address = high, decimals = 18, numerator = "3000", denominato
 const asset = (value: FoundationStartPrice) => ({ address: value.quoteAsset, decimals: value.decimals, codeHash: value.quoteCodeHash });
 
 describe("automatic Foundation starting market cap", () => {
+  it.each([{ chainId: 1 as const, lifetime: 90n, maxAge: 90n }, { chainId: 4663 as const, lifetime: 45n, maxAge: 60n }])(
+    "expires a $chainId review before its checkpoint becomes unusable", ({ chainId, lifetime, maxAge }) => {
+      const valid = reference();
+      valid.chainId = chainId;
+      valid.checkpoint.timestamp = String(now - 30n);
+      valid.price.validUntil = String(now + lifetime);
+      const quote = { ...asset(valid), chainId };
+      const expiry = foundationPriceExpiry(valid);
+      expect(expiry).toBe(now - 30n + maxAge);
+      expect(parseFoundationStartPrice(valid, quote, expiry - 1n)).toEqual(valid);
+      expect(() => parseFoundationStartPrice(valid, quote, expiry + 1n)).toThrow("expired");
+      // A shorter oracle lifetime must still win over the checkpoint limit.
+      valid.price.validUntil = String(now + 10n);
+      expect(foundationPriceExpiry(valid)).toBe(now + 10n);
+    });
+
   it.each([0, 6, 8, 18, 36])("keeps USD 5000 through 60-tick rounding with %i quote decimals in either sort order", decimals => {
     for (const [token, quote] of [[low, high], [high, low]]) {
       const startPrice = reference(quote, decimals);

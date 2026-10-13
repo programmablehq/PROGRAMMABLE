@@ -85,7 +85,9 @@ export async function createModuleStudioServer() {
       const warm = async (draft,signal) => {
         launchEvents.preparations++; launchEvents.startedAt=performance.now(); launchEvents.lastDraft=draft;
         signal.addEventListener('abort',()=>{launchEvents.aborts++;},{once:true});
-        await new Promise(resolve=>setTimeout(resolve,1200)); signal.throwIfAborted();
+        if(new URLSearchParams(location.search).has('holdPreparation')) await new Promise(resolve=>{window.finishFixturePreparation=resolve;});
+        else await new Promise(resolve=>setTimeout(resolve,1200));
+        signal.throwIfAborted();
         launchEvents.readyAt=performance.now();
         return {id:String(launchEvents.preparations),contextKey:context,expiresAt:Math.floor(Date.now()/1000)+120,
           quote:{...quote,address:draft.quoteAsset},chainId,platformFeeBps:30,platformFeeRecipient:FOUNDATION_PLATFORM_FEE_RECIPIENT,creatorFeeBps:draft.creatorFeeBps,

@@ -110,6 +110,34 @@ test("a click joins pending launch work once, and wallet switches cancel the old
   } finally { const closed = once(studio, "close"); studio.close(); studio.closeAllConnections(); await closed; }
 });
 
+for (const chainId of [1, 4663]) {
+  test(`switching wallets during ${chainId} launch preparation discards the old failure`, async ({ page }) => {
+    const studio = await createModuleStudioServer(); studio.listen(0, "127.0.0.1"); await once(studio, "listening");
+    const address = studio.address(); if (!address || typeof address === "string") throw new Error("Fixture did not start");
+    const events = () => page.evaluate(() => (window as unknown as { launchEvents: { preparations: number; walletRequests: number; readyAt?: number; walletContext?: string } }).launchEvents);
+    try {
+      await page.goto(`http://127.0.0.1:${address.port}/?mode=launch-speed&chainId=${chainId}&holdWallet=1&holdPreparation=1`);
+      await page.getByLabel("Name", { exact: true }).fill("My coin");
+      await page.getByLabel("Ticker", { exact: true }).fill("COIN");
+      await page.getByRole("button", { name: "Launch coin", exact: true }).click();
+      await expect.poll(async () => (await events()).preparations).toBe(1);
+      await page.getByTestId("wallet-switch").click();
+      await expect(page.getByRole("button", { name: "Launch coin", exact: true })).toBeEnabled();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(page.getByLabel("Name", { exact: true })).toHaveValue("My coin");
+      await expect.poll(async () => (await events()).preparations).toBe(2);
+      await page.evaluate(() => (window as unknown as { finishFixturePreparation: () => void }).finishFixturePreparation());
+      await expect.poll(async () => (await events()).readyAt ?? 0).toBeGreaterThan(0);
+      expect((await events()).walletRequests).toBe(0);
+      await page.getByRole("button", { name: "Launch coin", exact: true }).click();
+      await expect.poll(async () => (await events()).walletRequests).toBe(1);
+      expect((await events()).walletContext).toBe(`other-wallet:${chainId}:release`);
+      await page.evaluate(() => (window as unknown as { rejectFixtureWallet: () => void }).rejectFixtureWallet());
+      await expect(page.getByRole("alert")).toContainText("Fixture wallet rejected");
+    } finally { const closed = once(studio, "close"); studio.close(); studio.closeAllConnections(); await closed; }
+  });
+}
+
 test("restoring a completed launch keeps the new draft open without background recovery reads", async ({ page }) => {
   const studio = await createModuleStudioServer(); studio.listen(0, "127.0.0.1"); await once(studio, "listening");
   const address = studio.address(); if (!address || typeof address === "string") throw new Error("Fixture did not start");
