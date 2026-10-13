@@ -44,6 +44,33 @@ describe("automatic Foundation starting market cap", () => {
     expect(result.creator!.principal).toBeLessThanOrEqual(1_000_000_000_000_000_000n);
   });
 
+  it("keeps an Ethereum AMM reference valid through two-block lag and launch preparation", () => {
+    const valid = reference();
+    valid.chainId = 1;
+    valid.checkpoint.timestamp = String(now - 30n);
+    valid.price = { ...valid.price, source: "qualified-amm", observedAt: String(now - 30n),
+      validUntil: String(now + 60n), heartbeatSeconds: 90 };
+    const quote = { ...asset(valid), chainId: 1 as const };
+    // Eight seconds composing plus twenty seconds authorizing/simulating used to exhaust 45s.
+    expect(parseFoundationStartPrice(valid, quote, now + 28n)).toEqual(valid);
+    expect(() => parseFoundationStartPrice(valid, quote, now + 60n)).toThrow("expired");
+    expect(() => parseFoundationStartPrice({ ...valid, price: { ...valid.price,
+      validUntil: String(now + 61n) } }, quote, now + 28n)).toThrow("expired");
+    expect(() => parseFoundationStartPrice({ ...valid, price: { ...valid.price,
+      heartbeatSeconds: 91 } }, quote, now + 28n)).toThrow("expired");
+    expect(() => parseFoundationStartPrice({ ...valid, chainId: 4663 }, asset(valid), now + 28n)).toThrow("expired");
+  });
+
+  it("gives manual Ethereum valuations the same bounded preparation time", () => {
+    const quote = { address: high, decimals: 18, codeHash: hash, chainId: 1 as const };
+    const valid = { mode: "quote", chainId: 1, quoteAsset: high, quoteCodeHash: hash,
+      decimals: 18, valuationQuoteRaw: "5000000000000000000000",
+      checkpoint: { number: "123", hash, timestamp: String(now - 30n) }, validUntil: String(now + 60n) };
+    expect(parseFoundationStartPrice(valid, quote, now + 28n)).toEqual(valid);
+    expect(() => parseFoundationStartPrice(valid, quote, now + 60n)).toThrow("expired");
+    expect(() => parseFoundationStartPrice({ ...valid, validUntil: String(now + 61n) }, quote, now)).toThrow("expired");
+  });
+
   it("rejects custom valuation, wrong asset identity, changed precision and changed runtime", () => {
     const valid = reference();
     for (const changed of [

@@ -14,6 +14,7 @@ import { ANY_QUOTE_V4_MAX_POOL_CANDIDATES, anyQuoteV4CandidateHopV1, createAnyQu
 import { enumerateAnyQuoteV4PathsV1 } from "./path-enumeration.server";
 
 import { foundationChainProfile, type FoundationChainId } from "@/lib/module-foundation/chains";
+import { foundationPriceLifetime } from "@/lib/module-foundation/price-freshness";
 import { foundationMainnetRpcs } from "@/lib/server/module-foundation/rpc";
 import { foundationMainnetPoolHints } from "@/lib/server/module-foundation/pool-hints";
 
@@ -41,6 +42,8 @@ const quantity = (v: unknown): bigint => {
 const min = (...v: bigint[]) => v.reduce((a, b) => a < b ? a : b);
 export type AnyQuoteReadinessOptionsV1 = {
   chainId?: FoundationChainId;
+  /** Server-owned launch valuation policy; execution route quotes keep their own short expiry. */
+  pricePurpose?: "module-launch";
   /** Server configuration only. Never put this key into an API response, URL, evidence or cache key. */
   apiKey?: string;
   /** Keyless verified pool discovery is the default. Hosted discovery is an explicit
@@ -130,6 +133,7 @@ async function context(options: AnyQuoteReadinessOptionsV1, verifyAmmInfrastruct
   if (verifyAmmInfrastructure) await verifyAmm();
   let discovery: ReturnType<typeof createAnyQuoteV4InitializeDiscoveryV1> | undefined;
   return { profile, infra, now, checkpoint, block, code, call, pin, verifyAmm,
+    priceLifetime: options.pricePurpose === "module-launch" ? foundationPriceLifetime(profile.chainId) : ROUTE_LIFETIME,
     discovery: () => discovery ??= createAnyQuoteV4InitializeDiscoveryV1({ checkpoint, rpcs, chainId: profile.chainId, maxPoolsPerPair: 4,
       hintRpc: profile.chainId === 1 && !options.rpcs ? foundationMainnetPoolHints() : undefined }) };
 }
@@ -358,7 +362,7 @@ async function chainlink(feed: Address, heartbeatSeconds: number, ctx: Context):
   ]);
   const [roundId, answer, , updatedAt, answeredInRound] = round as readonly [bigint, bigint, bigint, bigint, bigint];
   const usd = validateAnyQuoteFeedRoundV1({ roundId, answer, updatedAt, answeredInRound, decimals: Number(decimalValue), heartbeatSeconds, now: ctx.now });
-  const validUntil = min(ctx.now + ROUTE_LIFETIME, updatedAt + BigInt(heartbeatSeconds));
+  const validUntil = min(ctx.now + ctx.priceLifetime, updatedAt + BigInt(heartbeatSeconds));
   return { usd, source: "chainlink", observedAt: updatedAt.toString(), validUntil: validUntil.toString(), heartbeatSeconds,
     evidenceHash: anyQuoteEvidenceHashV1({ feed, roundId: String(roundId), answer: String(answer), updatedAt: String(updatedAt), checkpoint: ctx.checkpoint, heartbeatSeconds }) };
 }
@@ -507,7 +511,7 @@ async function assessWithContext(input: { quoteAsset: string; probeEthAmount?: b
       qualifyAnyQuoteDepthV1(smallIn, smallOut, largeIn, largeOut);
       qualifyAnyQuoteDepthV1(smallOut, reverseSmall, smallOut * 100n, reverseLarge);
       const usd = marketUsd;
-      price = { usd, source: "qualified-amm", observedAt: ctx.checkpoint.timestamp, validUntil: min(ctx.now + ROUTE_LIFETIME, BigInt(ctx.checkpoint.timestamp) + 45n, BigInt(ethPrice.validUntil)).toString(), heartbeatSeconds: 45,
+      price = { usd, source: "qualified-amm", observedAt: ctx.checkpoint.timestamp, validUntil: min(ctx.now + ctx.priceLifetime, BigInt(ctx.checkpoint.timestamp) + ctx.priceLifetime, BigInt(ethPrice.validUntil)).toString(), heartbeatSeconds: Number(ctx.priceLifetime),
         evidenceHash: anyQuoteEvidenceHashV1({ policy: "any-quote.depth-usd-1-100.impact-200bps.v1", spot, ethPrice, checkpoint: ctx.checkpoint,
           buy: buy.evidenceHash, sell: sell.evidenceHash, smallIn: smallIn.toString(), smallOut: smallOut.toString(), largeIn: largeIn.toString(), largeOut: largeOut.toString(),
           reverseSmall: reverseSmall.toString(), reverseLarge: reverseLarge.toString(), feeTreatment: "Pool spot price excludes swap fees; execution probes include all observed pool and hook fees." }) };

@@ -23,7 +23,7 @@ export class FoundationQuoteMarketError extends Error {
 export async function readFoundationEthFunding(quote: Address, maximumEth: bigint, chainId: FoundationChainId = 4663): Promise<FoundationEthFunding & { priceReference?: AnyQuoteUsdReferenceV1 }> {
   const FOUNDATION_WETH = foundationChainProfile(chainId).wrappedEth.address;
   if (getAddress(quote) === FOUNDATION_WETH) return { maximumEth, quoteAmount: maximumEth, path: [] };
-  const result = await assessAnyQuoteAssetV1({ quoteAsset: quote, probeEthAmount: maximumEth }, { chainId });
+  const result = await assessAnyQuoteAssetV1({ quoteAsset: quote, probeEthAmount: maximumEth }, { chainId, pricePurpose: "module-launch" });
   if (result.status !== "compatible") throw new FoundationQuoteMarketError(result.code);
   const hops = requireAnyQuoteNativeUnlockRouteV1(result.routes.buy, "buy", chainId);
   if (getAddress(hops.at(-1)!.tokenOut) !== getAddress(quote)) throw new Error("The ETH route ends in another quote token.");

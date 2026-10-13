@@ -1,3 +1,4 @@
+import { foundationPriceLifetime } from "@/lib/module-foundation/price-freshness";
 import { predictFoundationEthereumAccounts } from "@/lib/module-foundation/ethereum-graph-builder";
 import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
 import { FoundationQuoteMarketError, readFoundationEthFunding } from "@/lib/server/module-foundation/eth-funding";
@@ -124,7 +125,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         ? parseFoundationStartPrice({ mode: "quote", chainId, quoteAsset: quote.address, quoteCodeHash: quote.codeHash, decimals: quote.decimals,
           valuationQuoteRaw: foundationParseAmount(draft.quoteValuation, quote.decimals, false).toString(),
           checkpoint: { number: checkpoint.blockNumber.toString(), hash: checkpoint.blockHash, timestamp: checkpoint.timestamp.toString() },
-          validUntil: (checkpoint.timestamp + 45n).toString() }, { ...quote, chainId })
+          validUntil: (checkpoint.timestamp + foundationPriceLifetime(chainId)).toString() }, { ...quote, chainId })
         : readFoundationStartPrice(quote, chainId, ethFunding?.priceReference),
     ]);
     const moduleAssetPins = resolved.pins;
