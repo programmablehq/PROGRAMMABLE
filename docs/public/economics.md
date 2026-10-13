@@ -25,19 +25,29 @@ Before approval, Programmable records buy and sell checks for the exact submitte
 
 ## Platform revenue
 
-Programmable's revenue policy allocates its platform fees as follows:
+Programmable allocates fee revenue after it has actually been collected. This includes its platform fees and the quote-asset fees collected from its own V4 liquidity position.
 
 | Use | Share |
 | --- | --- |
-| Buy V4 and burn the purchased tokens | 50% |
-| Programmable treasury | 50% |
+| Manual V4 buybacks and burns | 80% |
+| Programmable treasury and operating costs | 20% |
 
-Creator fees and module rewards are excluded. The policy calls for daily buybacks and burns; completed transactions show what has actually been processed.
+For example, collecting 1 ETH of eligible fee revenue allocates 0.8 ETH to V4 buybacks and 0.2 ETH to the treasury. Creator fees, module rewards, customer funds, liquidity principal and transfers between Programmable wallets are excluded. Unclaimed fees do not create a buyback budget yet.
 
-V4 received as fees from Programmable's own V4/ETH liquidity position is also burned. This is separate from buying V4 with platform revenue. The [V4 token page](v4-token.md) explains the token and its liquidity.
+Buybacks and burns are executed manually. There is no automatic purchase on each trade or fixed daily execution schedule. The 80% allocation is a spending policy; only confirmed transactions count as completed buybacks or burns.
+
+Fee tracking covers these Programmable wallets together on Ethereum and Robinhood:
+
+| Wallet | Main role |
+| --- | --- |
+| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Current platform fees from Module Mode and Custom Launches |
+| `0x39544A7023081B56D7405c1af0bFaf72da7e24F6` | V4 liquidity fees and the project's burn wallet |
+| `0x4957f49620AFf3Adbbe8195a4f633E49cc93376c` | Fees from earlier Ethereum contracts |
+
+V4 received directly as fees from Programmable's own V4/ETH liquidity position is also burned. Those tokens are reported separately from purchased V4, so the same tokens are not counted as both a buyback and a liquidity-fee collection. The [V4 token page](v4-token.md) explains the token and its liquidity.
 
 ## Check the records
 
-The [Dune dashboard](https://dune.com/programmablehq/analytics) reports the launches, fees and burns covered by its queries. It refreshes every 24 hours and links completed burns to their transactions.
+The [Dune dashboard](https://dune.com/programmablehq/analytics) reports the launches, fees and burns covered by its queries. Check each query's covered contracts, chains and indexed-through time. Collected fee revenue, the 80% buyback allocation, completed purchases and completed burns are separate measurements.
 
 Earned fees can still be unclaimed. Withdrawing them is not new revenue. Gas, liquidity deposits and funds reserved for module behavior are excluded from platform fee revenue.

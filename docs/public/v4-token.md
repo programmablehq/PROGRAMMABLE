@@ -17,8 +17,10 @@ Programmable's liquidity is held in a [locked position](https://robinhoodchain.b
 
 ## Buybacks and burns
 
-Part of Programmable's platform fee revenue is used to buy V4 and burn the purchased tokens. V4 collected from its own liquidity fees is also burned. [Fees and revenue](economics.md#platform-revenue) explains the allocation and excludes creator fees and module rewards.
+Programmable allocates **80% of its collected fee revenue** to manual V4 buybacks and burns. The remaining 20% goes to its treasury and operating costs. This includes collected platform fees and quote-asset fees from its own liquidity position; creator fees and module rewards are excluded. There is no automatic buyback on each trade or fixed daily schedule. [Fees and revenue](economics.md#platform-revenue) explains the collection basis and tracked wallets.
 
-Burns send V4 to `0x000000000000000000000000000000000000dEaD`. These tokens are excluded from circulation, while the contract's reported total supply remains one billion. Completed burns and their transactions are available on the [Dune dashboard](https://dune.com/programmablehq/analytics).
+V4 collected directly from Programmable's own liquidity fees is also burned. It is recorded separately from V4 bought with fee revenue.
+
+The project's burn wallet is `0x39544A7023081B56D7405c1af0bFaf72da7e24F6`. Burns send V4 to `0x000000000000000000000000000000000000dEaD`. These tokens are excluded from circulation, while the contract's reported total supply remains one billion. The [Dune dashboard](https://dune.com/programmablehq/analytics) links recorded burns to their transactions and distinguishes project burns from burns by other holders.
 
 V4 does not give holders company ownership or a right to platform revenue. Buybacks and burns do not guarantee a price or return. This token is separate from Programmable's earlier Ethereum tokens.
