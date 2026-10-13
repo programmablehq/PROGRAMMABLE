@@ -1,0 +1,11 @@
+{
+  "chainId": 4663,
+  "address": "0x9f9424BbCCe8a865f70155fe40Fb22A103eBEc63",
+  "sourceProvider": "https://sourcify.dev/server/v2/contract/4663/0x9f9424BbCCe8a865f70155fe40Fb22A103eBEc63",
+  "matchId": "47099650",
+  "runtimeMatch": "match",
+  "sourcePath": "lib/liquidity-launcher/src/periphery/PositionFeesForwarder.sol",
+  "sourceSha256": "e466bf283af6a135a305a77f46c35e335bad1274efa986e5a6375d39522aac70",
+  "readOnlyFeeRecipient": "0x39544A7023081B56D7405c1af0bFaf72da7e24F6",
+  "observation": "collectFees uses zero DECREASE_LIQUIDITY and TAKE_PAIR to feeRecipient. PoolManager pays the recipient directly; the locker does not forward an intermediate token balance."
+}

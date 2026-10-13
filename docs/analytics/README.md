@@ -1,8 +1,10 @@
-# Custom Launch analytics
+# Analytics
+
+The current cross-chain work is documented in [Ecosystem analytics](unified/README.md). The query below is the retained historical Robinhood Custom Launch query; its coverage and accrual totals are narrower than the combined ecosystem.
 
 [Public dashboard](https://dune.com/programmablehq/analytics) · [Dune query 8631499](https://dune.com/queries/8631499)
 
-The dashboard refreshes every 24 hours. The query includes a finalized block and timestamp so readers can distinguish refresh time from the chain checkpoint.
+Check the dashboard's current refresh setting. The query includes a finalized block and timestamp so readers can distinguish refresh time from the chain checkpoint.
 
 `custom-launch-robinhood.sql` counts canonical V1 and V2 Launch Stamp Router events on chain 4663, including reference launches. It combines Dune history with a recent public RPC overlap, checks the chain and finalized head, and deduplicates logs by block hash, transaction hash and log index. RPC errors fail the query instead of supplying zero fees.
 
