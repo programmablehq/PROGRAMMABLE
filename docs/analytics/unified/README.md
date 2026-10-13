@@ -2,6 +2,10 @@
 
 [Dashboard](https://dune.com/programmablehq/analytics)
 
+[Website analytics](https://programmable.market/analytics) displays volume, collected revenue, buybacks and project burns. Its server reads the latest completed query results with the private `DUNE_API_KEY` and an hourly cache. Page visits never execute SQL. A checked-in snapshot preserves the last verified values and their original timestamps if a source is unavailable. Query execution schedules are managed separately in Dune within the owner's existing credit budget.
+
+The website's [project burn source](https://dune.com/queries/8941418) covers transfers from the three project wallets for the current Robinhood token and historical Ethereum token. The token generations are never summed together. Buyback query 8677080 additionally publishes `buyback_events_v1`, a timestamped transaction list for the website's history and date filters.
+
 The public policy allocates 80% of eligible collected fee revenue to manual V4 buybacks and burns, with 20% for treasury and operations. The allocation is not evidence of a purchase. Queries count completed transactions independently.
 
 ## Queries
