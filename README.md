@@ -22,7 +22,7 @@ Start with the [quickstart](https://programmable.market/docs/developers/custom-l
 
 API credentials grant scoped preparation and read access. The controller wallet reviews and signs the authorized transaction separately. Finality, source verification, indexing and trading support each have their own evidence. An unchanged retry preserves the original request bytes and idempotency key.
 
-Robinhood Native20 charges **20 bps (0.20%)** of gross native ETH per successful buy or sell for Programmable. Creator fees and pool fees are additional. A zero creator fee earns zero creator rewards. Module Mode and Ethereum deployments retain their own fee contracts; [Fees and revenue](docs/public/economics.md) covers rates, recipients, version differences and the 50% buyback-and-burn allocation policy.
+Robinhood Native20 charges **20 bps (0.20%)** of gross native ETH per successful buy or sell for Programmable. Creator fees and pool fees are additional. A zero creator fee earns zero creator rewards. Module Mode and Ethereum deployments retain their own fee contracts; [Fees and revenue](docs/public/economics.md) covers rates, recipients, version differences and the policy allocating 80% of collected fee revenue to manual V4 buybacks and burns.
 
 ## Modules and indexing
 

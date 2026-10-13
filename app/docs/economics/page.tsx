@@ -44,12 +44,12 @@ export default function EconomicsDocsPage() {
       </section>
       <section id="revenue">
         <h2>Protocol revenue allocation</h2>
-        <p>The revenue policy assigns 50% of net protocol revenue to V4 buybacks and burns and 50% to the treasury, with daily processing. Net revenue excludes creator, module author and other third-party liabilities. Half of a 30 bps platform share is equivalent to 15 bps of the qualifying trading amount.</p>
-        <p>Collected V4 from the project&apos;s main-token LP fees is also assigned to daily burns. Finalized transactions establish what was processed. A policy, an accrued balance and a completed burn must not be counted as the same event. Read <Link href="/docs/v4-token">V4 token</Link> for token identity and burn accounting.</p>
+        <p>The revenue policy allocates 80% of fee revenue actually collected by Programmable to manual V4 buybacks and burns, and 20% to the treasury and operating costs. This includes platform fees and quote-asset fees from the project&apos;s own liquidity position. Creator fees, module rewards, customer funds, liquidity principal and internal wallet transfers are excluded. Collecting 1 ETH of eligible fees allocates 0.8 ETH to buybacks and 0.2 ETH to the treasury.</p>
+        <p>Buybacks and burns are manual, with no automatic purchase on each trade or fixed daily schedule. V4 collected directly from the project&apos;s LP fees is also burned and reported separately from purchased V4. Finalized transactions establish what was processed. Unclaimed fees, the buyback allocation, completed purchases and burns are separate records. Read <Link href="/docs/v4-token">V4 token</Link> for token identity and burn accounting.</p>
       </section>
       <section id="analytics">
         <h2>Analytics</h2>
-        <p>The <a href="https://dune.com/programmablehq/analytics">Dune dashboard</a> refreshes every 24 hours and separates launch counts, creator rewards, protocol revenue and burns. Custom fees are counted when <code>NativeFeesAccrued</code> credits the recipient, including unclaimed balances. Claiming later does not create new revenue. Gas, liquidity deposits and LP fees are excluded from those Custom totals.</p>
+        <p>The <a href="https://dune.com/programmablehq/analytics">Dune dashboard</a> reports the sources covered by each query and its indexed-through time. Track the project wallets 0xD885…79da, 0x3954…24F6 and 0x4957…376c together across Ethereum and Robinhood. Accrued fees, collected fee revenue, the 80% buyback allocation, actual purchases and actual burns are separate measurements. A claim does not create revenue a second time, and a transfer between project wallets is not another collection.</p>
       </section>
     </DocsShell>
   );

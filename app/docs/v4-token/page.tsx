@@ -31,12 +31,12 @@ export default function V4TokenDocsPage() {
       </section>
       <section id="allocation">
         <h2>Revenue allocation</h2>
-        <p>The published protocol allocation assigns 50% of net protocol revenue to V4 buybacks and burns and 50% to the treasury, with daily processing. Creator and module author rewards are separate liabilities. V4 collected from the project&apos;s LP fees is also allocated to daily burns.</p>
+        <p>The revenue policy allocates 80% of Programmable&apos;s collected fee revenue to manual V4 buybacks and burns, and 20% to its treasury and operating costs. This includes platform fees and quote-asset fees from the project&apos;s own liquidity position. Creator fees and module rewards are excluded. There is no automatic buyback on each trade or fixed daily schedule. V4 collected directly from the project&apos;s LP fees is also burned and reported separately from purchased V4.</p>
         <p>Read <Link href="/docs/economics">Fees and revenue</Link> for the rates and contract versions. An allocation policy and an executed claim, purchase or burn are different records. Use <a href="https://dune.com/programmablehq/analytics">Dune</a> to inspect observed execution.</p>
       </section>
       <section id="burns">
         <h2>Burn accounting</h2>
-        <p>Burns transfer V4 to <code>0x000000000000000000000000000000000000dEaD</code>, removing it from circulation. This token has no supply-reducing burn function, so the transfers do not reduce <code>totalSupply</code>. Report the burn-address balance separately.</p>
+        <p>The project&apos;s burn wallet is <code>0x39544A7023081B56D7405c1af0bFaf72da7e24F6</code>. Burns transfer V4 to <code>0x000000000000000000000000000000000000dEaD</code>, removing it from circulation. This token has no supply-reducing burn function, so the transfers do not reduce <code>totalSupply</code>. Report the burn-address balance separately and distinguish project burns from burns by other holders.</p>
         <p>More qualifying volume can generate more fees and tokens available to burn. The amount depends on trading direction and the position&apos;s liquidity share. Holding V4 creates no equity or claim on protocol revenue, and buybacks or burns do not guarantee a price or return.</p>
       </section>
     </DocsShell>
