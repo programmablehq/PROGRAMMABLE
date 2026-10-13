@@ -194,6 +194,18 @@ function allowsReviewedRegistryV1IndexerCompatibility(
   );
 }
 
+// Historical analytics must retain this registry's actual launch events.
+// This permits its address only in the two data sources, not in product code.
+function allowsHistoricalRegistryAnalytics(repositoryPath, source, pattern) {
+  return pattern === applicantCardPatterns[8]
+    && ["docs/analytics/unified/sources.json", "docs/analytics/unified/ecosystem-volume.sql"].includes(repositoryPath)
+    && containsEvery(source, [
+      "registry-v1",
+      applicantCardMarkers[8],
+      "0x8ee074138114415a92a0797b4f1f4c6353f8bd15d8031433abf0cc42c2dc274a",
+    ]);
+}
+
 async function exists(path) {
   try {
     await stat(path);
@@ -309,6 +321,11 @@ for (const absolutePath of discovered) {
         pattern,
       ) &&
       !allowsReviewedRegistryV1IndexerCompatibility(
+        repositoryPath,
+        source,
+        pattern,
+      ) &&
+      !allowsHistoricalRegistryAnalytics(
         repositoryPath,
         source,
         pattern,

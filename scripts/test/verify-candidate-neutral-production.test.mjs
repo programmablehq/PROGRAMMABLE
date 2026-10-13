@@ -48,6 +48,16 @@ test("rejects candidate identities in production source", async () => {
   assert.match(result.stderr, /components\/launch-console\.tsx/u);
 });
 
+test("historical registry analytics permits only the data address, not candidate or runtime exceptions", async () => {
+  const source = ["registry-v1", "0x17e18c88bda9bfb73924cdc989c07b0707e72671",
+    "0x8ee074138114415a92a0797b4f1f4c6353f8bd15d8031433abf0cc42c2dc274a"].join("\n");
+  for (const path of ["docs/analytics/unified/sources.json", "docs/analytics/unified/ecosystem-volume.sql"]) {
+    assert.equal(verify(await fixture({ [path]: source })).status, 0);
+    assert.equal(verify(await fixture({ [path]: source + ["\nHook", "emon"].join("") })).status, 1);
+  }
+  assert.equal(verify(await fixture({ "lib/registry.ts": source })).status, 1);
+});
+
 test("allows only the exact reviewed Router adapter evidence path", async () => {
   const projectName = ["sh", "ards"].join("");
   const runtimeMarkers = [
