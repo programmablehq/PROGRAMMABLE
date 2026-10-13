@@ -1,4 +1,5 @@
 "use client";
+import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
 
 import Image from "next/image";
@@ -121,6 +122,7 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
   const form = useRef<HTMLFormElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
+  const imageGeneration = useRef(0);
   const quoteGeneration = useRef(0);
   const active = useRef(true);
   const currentContext = useRef(contextKey);
@@ -161,7 +163,7 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
   useEffect(() => {
     active.current = true;
     const preparation = launchPreparation.current;
-    return () => { active.current = false; generation.current += 1; quoteGeneration.current += 1; preparation.invalidate(); };
+    return () => { active.current = false; imageGeneration.current += 1; generation.current += 1; quoteGeneration.current += 1; preparation.invalidate(); };
   }, []);
   useEffect(() => () => { if (localImage) URL.revokeObjectURL(localImage.preview); }, [localImage]);
 
@@ -213,20 +215,22 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
 
   async function chooseImage(file: File | undefined) {
     if (!file || locked) return;
-    const request = ++generation.current;
+    const request = ++imageGeneration.current;
+    generation.current += 1;
+    launchPreparation.current.invalidate();
     setImagePreparing(true); setImageError("");
     try {
       const blob = await prepareTokenImage(file);
       if (blob.type !== "image/webp") throw new Error("This browser could not prepare a WebP image. Try a different browser.");
       const digest = sha256(new Uint8Array(await blob.arrayBuffer()));
-      if (!active.current || generation.current !== request) return;
+      if (!active.current || imageGeneration.current !== request) return;
       const preview = URL.createObjectURL(blob);
       setLocalImage({ blob, preview, sha256: digest });
       setDraft(current => ({ ...current, image: null }));
       setErrors(current => { const next = { ...current }; delete next.image; return next; });
       setAnnouncement("Image selected.");
-    } catch (caught) { if (active.current && generation.current === request) setImageError(cleanError(caught, "image")); }
-    finally { if (active.current) setImagePreparing(false); }
+    } catch (caught) { if (active.current && imageGeneration.current === request) setImageError(cleanError(caught, "image")); }
+    finally { if (active.current && imageGeneration.current === request) setImagePreparing(false); }
   }
 
   const resolveQuote = useCallback((): Promise<FoundationQuoteAsset | undefined> => {
@@ -465,14 +469,14 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
   const actionLabel = walletAction?.label ?? (availability.status === "checking" ? "Checking launch…" : phase === "uploading" ? "Saving image…" : phase === "signing" ? launchProgress || "Opening coin…" : phase === "preparing" ? "Preparing launch…" : "Launch coin");
   if (layout === "studio" && phase !== "result") return <FoundationStudio draft={draft} catalog={catalog} imageSource={imageSource} platformFeeBps={platformFeeBps}
     previousLaunchAction={previousLaunchAction} recoveryAction={recoveryAction} networkControl={networkControl} quoteSymbol={quoteSymbol} quoteStatus={quoteStatus}
-    initialBuy={initialBuy} actionLabel={actionLabel} disabled={locked || imagePreparing} busy={busy || walletAction?.busy}
-    actionDisabled={unavailable || Boolean(submissionBlocked) || walletAction?.busy} status={launchProgress || (availability.status !== "ready" ? availability.reason || actionLabel : undefined)}
+    initialBuy={initialBuy} actionLabel={actionLabel} imagePreparing={imagePreparing} disabled={locked} busy={busy || walletAction?.busy}
+    actionDisabled={imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} status={launchProgress || (availability.status !== "ready" ? availability.reason || actionLabel : undefined)}
     error={error || (recoveryAction ? undefined : submissionBlocked)} errors={{ ...errors, ...(imageError ? { image: imageError } : {}) }}
     customQuote={customQuote} canResolveQuote={canResolveQuote} modulesLoading={availability.status === "checking" && !catalog.length} formRef={form} imageInput={imageInput}
     onSocialChange={updateSocial} onImageError={() => setImageError("The image could not load. Choose another image.")}
     onEnableQuote={() => chooseMarket(true)} onRetryAvailability={availability.status === "unavailable" ? onRetryAvailability : undefined}
     emptyModulesMessage={availability.status === "checking" ? "Loading modules…" : availability.status === "unavailable" ? "Modules could not load." : "No modules available"}
-    onUpdate={update} onChooseImage={file => void chooseImage(file)} onRemoveImage={() => { setLocalImage(null); update("image", null); setImageError(""); }}
+    onUpdate={update} onChooseImage={file => void chooseImage(file)} onRemoveImage={() => { imageGeneration.current += 1; setImagePreparing(false); setLocalImage(null); update("image", null); setImageError(""); }}
     onQuoteChange={address => { if (!customQuote) { quoteGeneration.current += 1; pendingQuote.current = null; setCustomQuote(true); setQuoteLookup(null); } update("quoteAsset", address); }}
     onDefaultQuote={() => chooseMarket(false)} onSubmit={event => void prepare(event)} onBack={onBack} />;
   return <div className={`${styles.page} ${styles.builderPage}`}>
@@ -493,7 +497,7 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
                 </button>
                 <div className={styles.imageCopy}><button type="button" className={styles.secondaryButton} onClick={() => imageInput.current?.click()} disabled={locked || imagePreparing}>{imagePreparing ? "Preparing image…" : imageSource ? "Change image" : "Add image"}</button></div>
                 {imageSource ? <button type="button" className={styles.iconButton} aria-label="Remove coin image" disabled={locked || imagePreparing} onClick={() => { setLocalImage(null); update("image", null); setImageError(""); }}><XIcon size={18} aria-hidden="true" /></button> : null}
-                <input ref={imageInput} className={styles.srOnly} type="file" tabIndex={-1} aria-label="Coin image file" accept="image/jpeg,image/png,image/webp" disabled={locked || imagePreparing} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void chooseImage(file); }} />
+                <input ref={imageInput} className={styles.srOnly} type="file" tabIndex={-1} aria-label="Coin image file" accept={TOKEN_IMAGE_ACCEPT} disabled={locked || imagePreparing} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void chooseImage(file); }} />
               </div>
               <p className={styles.error} id="foundation-image-error">{errors.image || imageError || ""}</p>
               <div className={styles.nameFields}><Field label="Name" id="foundation-name" error={errors.name}><input id="foundation-name" name="name" autoComplete="off" maxLength={48} value={draft.name} placeholder="Coin name" aria-invalid={Boolean(errors.name) || undefined} aria-describedby={errors.name ? "foundation-name-error" : undefined} onChange={event => update("name", event.target.value)} /></Field><Field label="Ticker" id="foundation-symbol" error={errors.symbol}><input id="foundation-symbol" name="symbol" autoComplete="off" spellCheck={false} maxLength={12} value={draft.symbol} placeholder="COIN" aria-invalid={Boolean(errors.symbol) || undefined} aria-describedby={errors.symbol ? "foundation-symbol-error" : undefined} onChange={event => update("symbol", event.target.value.toUpperCase())} /></Field></div>

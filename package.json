@@ -243,6 +243,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.4",
+    "@jsquash/webp": "1.5.0",
     "@metamask/delegation-abis": "1.1.0",
     "@metamask/delegation-core": "2.2.1",
     "@metamask/smart-accounts-kit": "1.7.0",

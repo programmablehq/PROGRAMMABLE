@@ -71,7 +71,7 @@ describe("wallet-scoped local profile", () => {
   it("rejects unsafe avatar types, empty files and oversized files", () => {
     expect(getAvatarFileError({ type: "image/jpeg", size: 1 })).toBe("");
     expect(getAvatarFileError({ type: "image/svg+xml", size: 1 })).toBe(
-      "Choose a JPG, PNG or WebP image",
+      "Choose a JPG, PNG, WebP or HEIC image",
     );
     expect(getAvatarFileError({ type: "image/png", size: 0 })).toBe(
       "Choose a non-empty image",
@@ -79,9 +79,9 @@ describe("wallet-scoped local profile", () => {
     expect(
       getAvatarFileError({
         type: "image/webp",
-        size: 8 * 1024 * 1024 + 1,
+        size: 20_000_001,
       }),
-    ).toBe("Keep the image under 8 MB");
+    ).toBe("Choose an image smaller than 20 MB");
   });
 
   it("rejects invalid or excessive decoded image dimensions", () => {

@@ -1,4 +1,5 @@
 "use client";
+import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 import Image from "next/image";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
@@ -20,6 +21,7 @@ export interface FoundationStudioProps {
   draft: FoundationStudioDraft;
   catalog: readonly FoundationModuleDescriptor[];
   imageSource?: string;
+  imagePreparing?: boolean;
   quoteSymbol: string;
   quoteStatus?: string;
   initialBuy: string;
@@ -159,8 +161,9 @@ export function FoundationStudio({ formRef, imageInput, ...props }: FoundationSt
         <div className={styles.panelHeading}><h2>{panel === "coin" ? "Coin details" : panel === "quote" ? "Any Quote Pool" : panel === "fees" ? "Creator fees" : panel === "modules" ? "Selected modules" : selected?.name ?? "Settings"}</h2></div>
         <div className={styles.inspectorContent} key={panel}>
           {panel === "coin" ? <>
-            <div className={styles.imageControl}><button type="button" data-invalid={Boolean(errors.image) || undefined} aria-describedby={errors.image ? "foundation-image-error" : undefined} onClick={() => imageInput?.current?.click()}><ImagePlus size={20} />{props.imageSource ? "Change image" : "Add image"}</button>{props.imageSource ? <button type="button" aria-label="Remove coin image" onClick={props.onRemoveImage}><X size={18} /></button> : null}<input className={styles.hiddenInput} ref={imageInput} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Coin image file" onChange={event => { props.onChooseImage(event.target.files?.[0]); event.target.value = ""; }} /></div>
-            {errors.image ? <div id="foundation-image-error" className={styles.error}>{errors.image}</div> : null}
+            <div className={styles.imageControl}><button type="button" disabled={disabled || props.imagePreparing} data-invalid={Boolean(errors.image) || undefined} aria-describedby={errors.image ? "foundation-image-error" : undefined} onClick={() => imageInput?.current?.click()}><ImagePlus size={20} />{props.imagePreparing ? "Preparing image…" : props.imageSource ? "Change image" : "Add image"}</button>{props.imageSource ? <button type="button" aria-label="Remove coin image" disabled={disabled} onClick={props.onRemoveImage}><X size={18} /></button> : null}<input className={styles.hiddenInput} ref={imageInput} type="file" disabled={disabled || props.imagePreparing} accept={TOKEN_IMAGE_ACCEPT} aria-label="Coin image file" onChange={event => { props.onChooseImage(event.target.files?.[0]); event.target.value = ""; }} /></div>
+            {props.imagePreparing ? <span role="status">Preparing image…</span> : null}
+            {errors.image ? <div id="foundation-image-error" className={styles.error} role="alert">{errors.image}</div> : null}
             {field("name", "Name", "Coin name", 48)}{field("symbol", "Ticker", "COIN", 12)}
             <section className={styles.baseSection} aria-label="Launch settings"><h3>Launch settings</h3>
               <div className={styles.launchFields}>

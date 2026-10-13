@@ -8,7 +8,7 @@ export function createContentSecurityPolicy(isDevelopment: boolean) {
     "frame-ancestors 'none'",
     "form-action 'self'",
     [
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
       isDevelopment ? "'unsafe-eval'" : "",
       "https://auth.privy.io",
       "https://*.privy.io",

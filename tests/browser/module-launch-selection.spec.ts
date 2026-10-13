@@ -503,3 +503,79 @@ for (const [width, chainId] of [[1440, 1], [390, 4663]]) {
     } finally { const closed = once(studio, "close"); studio.close(); studio.closeAllConnections(); await closed; }
   });
 }
+
+
+test("phone photos become verified WebP even when the browser falls back to PNG", async ({ page }) => {
+  const studio = await createModuleStudioServer(); studio.listen(0, "127.0.0.1"); await once(studio, "listening");
+  const address = studio.address(); if (!address || typeof address === "string") throw new Error("Fixture did not start");
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Enforce the actual production WASM policy, including its restriction on JS eval.
+    await page.route("http://127.0.0.1:*/**", async route => {
+      const response = await route.fetch();
+      await route.fulfill({ response, headers: { ...response.headers(),
+        "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'" } });
+    });
+    await page.goto(`http://127.0.0.1:${address.port}/?mode=launch-speed`);
+    const result = await page.evaluate(async () => {
+      const tools = (window as unknown as { photoTools: {
+        prepareTokenImage(file: File): Promise<Blob>;
+        prepareAvatarImage(file: File): Promise<string>;
+        prepareProfileBannerImage(file: File): Promise<string>;
+      } }).photoTools;
+      const canvas = document.createElement("canvas"); canvas.width = 1800; canvas.height = 1200;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#f17629"; context.fillRect(0, 0, canvas.width, canvas.height);
+      const original = HTMLCanvasElement.prototype.toBlob;
+      const photo = await new Promise<Blob>(resolve => original.call(canvas, blob => resolve(blob!), "image/jpeg"));
+      // A file selected through a phone's Files provider can have no MIME type.
+      const file = new File([photo], "IMG_1234.JPG", { type: "" });
+      HTMLCanvasElement.prototype.toBlob = function (callback) { original.call(this, callback, "image/png"); };
+      try {
+        const blob = await tools.prepareTokenImage(file);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const bitmap = await createImageBitmap(blob);
+        const dimensions = [bitmap.width, bitmap.height]; bitmap.close();
+        return { type: blob.type, size: blob.size, signature: String.fromCharCode(...bytes.slice(8, 12)), dimensions,
+          avatar: (await tools.prepareAvatarImage(file)).slice(0, 23), banner: (await tools.prepareProfileBannerImage(file)).slice(0, 23) };
+      } finally { HTMLCanvasElement.prototype.toBlob = original; }
+    });
+    expect(result.type).toBe("image/webp");
+    expect(result.signature).toBe("WEBP");
+    expect(result.size).toBeLessThanOrEqual(1_000_000);
+    expect(result.dimensions).toEqual([1000, 1000]);
+    expect(result.avatar).toBe("data:image/webp;base64,");
+    expect(result.banner).toBe("data:image/webp;base64,");
+  } finally { studio.close(); }
+});
+
+test("editing coin details while a mobile photo prepares keeps the selected photo", async ({ page }) => {
+  const studio = await createModuleStudioServer(); studio.listen(0, "127.0.0.1"); await once(studio, "listening");
+  const address = studio.address(); if (!address || typeof address === "string") throw new Error("Fixture did not start");
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`http://127.0.0.1:${address.port}/?mode=launch-speed`);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const bytes = await page.evaluate(async () => {
+      const c = document.createElement("canvas"); c.width = c.height = 300;
+      const original = HTMLCanvasElement.prototype.toBlob;
+      const blob = await new Promise<Blob>(resolve => original.call(c, b => resolve(b!), "image/png"));
+      HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+        original.call(this, blob => setTimeout(() => callback(blob), 500), type, quality);
+      };
+      return [...new Uint8Array(await blob.arrayBuffer())];
+    });
+    const chooserEvent = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Add image", exact: true }).click();
+    const chooser = await chooserEvent;
+    await chooser.setFiles({ name: "photo.png", mimeType: "image/png", buffer: Buffer.from(bytes) });
+    await expect(page.getByRole("button", { name: "Preparing image…", exact: true })).toBeDisabled();
+    await page.getByLabel("Name", { exact: true }).fill("Phone launch");
+    await expect(page.getByRole("button", { name: "Change image", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Remove coin image" })).toBeVisible();
+    await page.getByRole("button", { name: "Remove coin image" }).click();
+    await expect(page.getByRole("button", { name: "Add image", exact: true })).toBeVisible();
+    await page.getByLabel("Coin image file").setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: Buffer.from(bytes) });
+    await expect(page.getByRole("button", { name: "Change image", exact: true })).toBeEnabled();
+  } finally { studio.close(); }
+});

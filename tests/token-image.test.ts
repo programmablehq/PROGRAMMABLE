@@ -46,6 +46,14 @@ describe("token image policy", () => {
     ).toBe("");
   });
 
+  it("accepts phone photos and file providers without MIME metadata", () => {
+    expect(getTokenImageFileError({ name: "IMG_1234.HEIC", type: "image/heic", size: 12_000_000 })).toBe("");
+    expect(getTokenImageFileError({ name: "photo.JPG", type: "", size: 1_000_000 })).toBe("");
+    expect(getTokenImageFileError({ name: "photo.png", type: "application/octet-stream", size: 1_000_000 })).toBe("");
+    expect(getTokenImageFileError({ name: "photo.svg", type: "", size: 100 })).not.toBe("");
+    expect(getTokenImageFileError({ name: "photo.jpg", type: "image/svg+xml", size: 100 })).not.toBe("");
+  });
+
   it("rejects unsupported and oversized source files", () => {
     expect(
       getTokenImageFileError({
@@ -55,10 +63,10 @@ describe("token image policy", () => {
     ).toContain("JPG");
     expect(
       getTokenImageFileError({
-        size: 8_000_001,
+        size: 20_000_001,
         type: "image/webp",
       }),
-    ).toContain("smaller than 8 MB");
+    ).toContain("smaller than 20 MB");
   });
 
   it("fully decodes only a structurally valid 1000 by 1000 WebP", async () => {

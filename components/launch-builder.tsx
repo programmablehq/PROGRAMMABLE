@@ -1,4 +1,5 @@
 "use client";
+import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 import Link from "next/link";
 import {
@@ -3032,6 +3033,8 @@ function TokenStep({
   const { getAccessToken, openWallet, wallet } = useWallet();
   const imageInputRef = useRef<HTMLInputElement>(null);
   const previewObjectUrlRef = useRef("");
+  const imageRequest = useRef(0);
+  const imageUploadAbort = useRef<AbortController | null>(null);
   const [imagePreview, setImagePreview] = useState(draft.tokenImage);
   const [pendingImage, setPendingImage] = useState<Blob | null>(null);
   const [imageState, setImageState] =
@@ -3055,6 +3058,8 @@ function TokenStep({
 
   useEffect(
     () => () => {
+      imageRequest.current += 1;
+      imageUploadAbort.current?.abort();
       if (previewObjectUrlRef.current) {
         URL.revokeObjectURL(previewObjectUrlRef.current);
       }
@@ -3063,7 +3068,12 @@ function TokenStep({
   );
 
   const uploadTokenImage = useCallback(
-    async (image: Blob) => {
+    async (image: Blob, selection = imageRequest.current) => {
+      imageUploadAbort.current?.abort();
+      const controller = new AbortController();
+      imageUploadAbort.current = controller;
+      const isCurrent = () => selection === imageRequest.current && imageUploadAbort.current === controller;
+      const timeout = setTimeout(() => controller.abort(new Error("Image upload timed out. Please try again.")), 30_000);
       updateImageState({
         status: "uploading",
         message: "Uploading image",
@@ -3071,6 +3081,7 @@ function TokenStep({
 
       try {
         const accessToken = await getAccessToken();
+        if (!isCurrent()) return;
         if (!accessToken) {
           throw new Error("Connect your wallet to upload the image");
         }
@@ -3088,8 +3099,10 @@ function TokenStep({
             Authorization: `Bearer ${accessToken}`,
           },
           body: form,
+          signal: controller.signal,
         });
         const body = await readTokenImageUploadResponse(response);
+        if (!isCurrent()) return;
         if (body === null) {
           throw new Error("Image uploads are temporarily unavailable. Try again.");
         }
@@ -3112,6 +3125,7 @@ function TokenStep({
           message: "Image ready",
         });
       } catch (caught) {
+        if (!isCurrent()) return;
         updateImageState({
           status: "error",
           message:
@@ -3119,7 +3133,7 @@ function TokenStep({
               ? caught.message
               : "The image could not be uploaded",
         });
-      }
+      } finally { clearTimeout(timeout); }
     },
     [getAccessToken, updateImageState, updateTokenDraft],
   );
@@ -3128,6 +3142,8 @@ function TokenStep({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const selection = ++imageRequest.current;
+    imageUploadAbort.current?.abort();
 
     updateImageState({
       status: "preparing",
@@ -3136,6 +3152,7 @@ function TokenStep({
 
     try {
       const prepared = await prepareTokenImage(file);
+      if (selection !== imageRequest.current) return;
       if (previewObjectUrlRef.current) {
         URL.revokeObjectURL(previewObjectUrlRef.current);
       }
@@ -3153,8 +3170,9 @@ function TokenStep({
         return;
       }
 
-      await uploadTokenImage(prepared);
+      await uploadTokenImage(prepared, selection);
     } catch (caught) {
+      if (selection !== imageRequest.current) return;
       updateImageState({
         status: "error",
         message:
@@ -3166,6 +3184,8 @@ function TokenStep({
   }
 
   function removeTokenImage() {
+    imageRequest.current += 1;
+    imageUploadAbort.current?.abort();
     if (previewObjectUrlRef.current) {
       URL.revokeObjectURL(previewObjectUrlRef.current);
       previewObjectUrlRef.current = "";
@@ -3222,7 +3242,7 @@ function TokenStep({
             ref={imageInputRef}
             hidden
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={TOKEN_IMAGE_ACCEPT}
             onChange={selectTokenImage}
           />
           <button
@@ -3255,7 +3275,7 @@ function TokenStep({
               }
               role={imageState.status === "error" ? "alert" : undefined}
             >
-              {imageState.message || "JPG, PNG or WebP"}
+              {imageState.message || "JPG, PNG, WebP or HEIC"}
             </span>
             <div>
               {(imageState.status === "error" ||
