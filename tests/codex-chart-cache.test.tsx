@@ -59,6 +59,22 @@ describe("Shared chart navigation cache", () => {
     expect(cache.peek(token, 4663, "1D")).toBeUndefined();
     expect(cache.peek(token, 1, "1H")).toBeUndefined();
   });
+  it("retains previously verified history for a delayed display while rejecting stale network responses", async () => {
+    let now = time;
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(chart()));
+    const cache = createCodexChartCache({ fetcher, now: () => now });
+    await cache.load(token, 4663, "1D");
+    now += 180_001;
+    fetcher.mockResolvedValue(Response.json(chart()));
+    await expect(cache.load(token, 4663, "1D")).rejects.toThrow();
+    expect(cache.peek(token, 4663, "1D")).toBeUndefined();
+    expect(cache.lastKnown(token, 4663, "1D")).toEqual(chart());
+    expect(cache.lastKnown(token, 1, "1D")).toBeUndefined();
+    expect(cache.lastKnown(token, 4663, "1H")).toBeUndefined();
+    expect(cache.lastKnown(`0x${"cd".repeat(20)}`, 4663, "1D")).toBeUndefined();
+    now = time + 3_600_001;
+    expect(cache.lastKnown(token, 4663, "1D")).toBeUndefined();
+  });
   it("keeps the chart controls minimal with a minute option", () => {
     const html = renderToStaticMarkup(<CodexPriceChart tokenAddress={token} chainId={4663} name="Coin" />);
     expect(html).toContain('title="One-minute candles over the last 30 minutes"'); expect(html).toContain(">1m</button>");

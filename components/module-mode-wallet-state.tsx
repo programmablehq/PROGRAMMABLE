@@ -9,6 +9,7 @@ import type { ModuleNativeWalletTransaction, PreparedModuleNativeTransaction } f
 import type { PreparedModuleEngineTransaction } from "@/lib/module-engine/client";
 import type { FoundationWalletPreparation } from "@/lib/module-foundation/wallet";
 import { isProgrammableTokenImageUrl, readTokenImageUploadResponse } from "@/lib/token-image";
+import { withTokenImageUploadDeadline } from "@/lib/token-image-upload";
 import { beginModuleModeOperation, clearModuleModeOperation, moduleModeOperationSnapshot, parseModuleModeOperation, rememberModuleModeTransactionHash, subscribeToModuleModeOperation, type ModuleModeOperation, type ModuleModeRecoveryPreparation } from "@/lib/module-mode-operation-store";
 
 export type PreparedModuleModeTransaction = PreparedModuleNativeTransaction | PreparedModuleEngineTransaction | FoundationWalletPreparation;
@@ -106,26 +107,32 @@ export async function uploadModuleModeImage(input: {
 }): Promise<{ uri: string; sourceSha256?: Hex }> {
   input.assertCurrentSession();
   if (input.image.kind === "uri") return { uri: input.image.uri };
+  const image = input.image;
   const blob = input.blob;
   if (!blob || blob.type !== input.image.mimeType || blob.size !== input.image.bytes) {
     throw new Error("The prepared image does not match your draft. Choose the image again.");
   }
-  const digest = sha256(new Uint8Array(await blob.arrayBuffer()));
-  if (digest !== input.image.sha256) throw new Error("The image changed after review. Choose the image again before launching.");
-  input.assertCurrentSession();
-  const accessToken = await input.getAccessToken();
-  input.assertCurrentSession();
-  if (!accessToken) throw new Error("Reconnect your wallet to upload the token image.");
-  const form = new FormData();
-  form.append("file", new File([blob], "token-image.webp", { type: "image/webp" }));
-  const response = await (input.fetcher ?? fetch)("/api/token-image", {
-    method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, body: form,
-    credentials: "same-origin", redirect: "error", signal: input.signal,
-  });
-  const body = await readTokenImageUploadResponse(response);
-  input.assertCurrentSession();
-  if (!response.ok || typeof body?.url !== "string" || !isProgrammableTokenImageUrl(body.url)) {
-    throw new Error(response.status === 401 ? "Your session expired. Reconnect your wallet before preparing again." : "The token image could not be published. Your draft and original image are kept; try preparing again.");
-  }
-  return { uri: body.url, sourceSha256: digest };
+  return withTokenImageUploadDeadline(async signal => {
+    const digest = sha256(new Uint8Array(await blob.arrayBuffer()));
+    signal.throwIfAborted();
+    if (digest !== image.sha256) throw new Error("The image changed after review. Choose the image again before launching.");
+    input.assertCurrentSession();
+    const accessToken = await input.getAccessToken();
+    signal.throwIfAborted();
+    input.assertCurrentSession();
+    if (!accessToken) throw new Error("Reconnect your wallet to upload the token image.");
+    const form = new FormData();
+    form.append("file", new File([blob], "token-image.webp", { type: "image/webp" }));
+    const response = await (input.fetcher ?? fetch)("/api/token-image", {
+      method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, body: form,
+      credentials: "same-origin", redirect: "error", signal,
+    });
+    const body = await readTokenImageUploadResponse(response);
+    signal.throwIfAborted();
+    input.assertCurrentSession();
+    if (!response.ok || typeof body?.url !== "string" || !isProgrammableTokenImageUrl(body.url)) {
+      throw new Error(response.status === 401 ? "Your session expired. Reconnect your wallet before preparing again." : "The token image could not be published. Your draft and original image are kept; try preparing again.");
+    }
+    return { uri: body.url, sourceSha256: digest };
+  }, input.signal);
 }

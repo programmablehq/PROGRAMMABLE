@@ -87,6 +87,26 @@ describe("Module Mode wallet boundary", () => {
     expect(guard.mock.calls.length).toBeGreaterThan(2);
   });
 
+  it("releases a stalled image upload without publishing after a late login result", async () => {
+    const blob = new Blob(["image"], { type: "image/webp" });
+    const image = { kind: "local" as const, sha256: sha256(new Uint8Array(await blob.arrayBuffer())), bytes: blob.size, mimeType: "image/webp" as const };
+    let finishLogin!: (value: string) => void;
+    const getAccessToken = () => new Promise<string>(resolve => { finishLogin = resolve; });
+    const fetcher = vi.fn<typeof fetch>();
+    vi.useFakeTimers();
+    try {
+      let outcome = "pending";
+      const pending = uploadModuleModeImage({ image, blob, getAccessToken, assertCurrentSession: () => {}, fetcher })
+        .then(() => { outcome = "published"; }, error => { outcome = error.message; });
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(outcome).toContain("timed out");
+      finishLogin("late-token");
+      await pending;
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
   it("never uploads changed bytes, an unauthenticated image, or a URI draft", async () => {
     const blob = new Blob(["original"], { type: "image/webp" });
     const image = { kind: "local" as const, sha256: sha256(new Uint8Array(await blob.arrayBuffer())), bytes: blob.size, mimeType: "image/webp" as const };
