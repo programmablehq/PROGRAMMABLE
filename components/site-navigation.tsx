@@ -32,6 +32,7 @@ const desktopNavItems = [
 const menuNavItems = [
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/docs", label: "Docs" },
+  { href: "/analytics", label: "Analytics" },
 ];
 
 const mobileNavItems = [desktopNavItems[0], ...menuNavItems];
