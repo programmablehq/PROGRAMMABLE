@@ -1,6 +1,9 @@
 "use client";
 import { CustomLaunchProgress } from "./custom-launch-progress";
 import { DeveloperIssue } from "./developer-issue";
+import { CustomLaunchCompletion } from "./custom-launch-completion";
+import { launchFeedback } from "@/lib/launch-feedback";
+import { safeDeveloperDetails } from "@/lib/developer-access-feedback";
 import { CustomLaunchAssessment } from "./custom-launch-assessment";
 import { CustomLaunchDiscussion } from "./custom-launch-discussion";
 import { CustomLaunchStartButton } from "./custom-launch-start-button";
@@ -1083,7 +1086,7 @@ function statusCopy(status: LaunchStatus) {
   switch (status) {
     case "received": return "Received";
     case "validating": return "Validating";
-    case "pending_review": return "Admission checks running";
+    case "pending_review": return "Preparing launch";
     case "action_required": return "Changes required";
     case "prepared": return "Prepared";
     case "awaiting_funding_authorization": return "Funding signature required";
@@ -1093,8 +1096,8 @@ function statusCopy(status: LaunchStatus) {
     case "awaiting_wallet_signature": return "Ready to launch";
     case "wallet_action_required": return "Ready to launch";
     case "submitted": return "Confirming onchain";
-    case "sequencer_soft_confirmed": return "Sequencer confirmed";
-    case "ethereum_posted": return "Posted to Ethereum";
+    case "sequencer_soft_confirmed": return "Confirming launch";
+    case "ethereum_posted": return "Confirming launch";
     case "finalized": return "Launch complete";
     case "failed": return "Failed";
     case "cancelled": return "Cancelled";
@@ -1103,9 +1106,9 @@ function statusCopy(status: LaunchStatus) {
 
 function statusDescription(status: LaunchStatus) {
   switch (status) {
-    case "received": return "The API accepted this request.";
-    case "validating": return "The API is validating the request.";
-    case "pending_review": return "Exact-source checks and the bounded static baseline are still running.";
+    case "received": return "Your launch request is saved.";
+    case "validating": return "Preparing your launch. This updates automatically.";
+    case "pending_review": return "Preparing your launch. This updates automatically.";
     case "action_required": return "Fix the reported source or configuration finding, then rebuild and submit a new immutable request.";
     case "prepared": return "The launch transaction has been prepared.";
     case "awaiting_funding_authorization": return "Review and sign the exact USDC funding authorization. This does not send a transaction.";
@@ -1115,8 +1118,8 @@ function statusDescription(status: LaunchStatus) {
     case "awaiting_wallet_signature":
     case "wallet_action_required": return "Ready to launch. Confirm the transaction in your wallet.";
     case "submitted": return "The wallet transaction is being tracked onchain.";
-    case "sequencer_soft_confirmed": return "Robinhood Chain reported a soft confirmation. Ethereum posting and finality are still pending.";
-    case "ethereum_posted": return "The transaction was posted to Ethereum. Finality is still pending.";
+    case "sequencer_soft_confirmed": return "Your transaction is saved. Waiting for the network’s final confirmation.";
+    case "ethereum_posted": return "Your transaction is saved. Waiting for the network’s final confirmation.";
     case "finalized": return "Your launch is confirmed onchain.";
     case "failed": return "This request did not complete.";
     case "cancelled": return "This request was cancelled.";
@@ -3702,6 +3705,8 @@ export function DeveloperLaunchHistory({
               <li
                 id={`custom-launch-${resourceIdentity}`}
                 className={styles.launchItem}
+                data-status={launch.status}
+                data-review-blocked={showReviewStatus}
                 data-highlighted={
                   highlightedLaunchId === resourceIdentity ? "true" : "false"
                 }
@@ -3715,7 +3720,6 @@ export function DeveloperLaunchHistory({
                     {showReviewStatus ? customLaunchReviewLabel(launch.manualReview!) : statusCopy(launch.status)}
                   </span>
                 </div>
-                <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : "1"} />
                 <p className={styles.statusDescription}>
                   {showReviewStatus
                     ? customLaunchReviewDescription(launch.manualReview!) : statusDescription(launch.status)}
@@ -3738,9 +3742,14 @@ export function DeveloperLaunchHistory({
                 {["received", "validating", "pending_review", "prepared", "simulating", "funding_authorization_verified"].includes(launch.status)
                   && launch.manualReview && customLaunchReviewAllowsSigning(launch.manualReview)
                   ? <button className={styles.walletButton} type="button" disabled aria-busy="true">Preparing your launch…</button> : null}
-                {launchErrors[key] ? <p className={styles.inlineError} role="alert">{launchErrors[key]}</p> : null}
+                {launchErrors[key] ? <p className={styles.inlineError} role="alert">{launchFeedback(launchErrors[key])}</p> : null}
+                {launch.status === "finalized" ? <CustomLaunchCompletion chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : "1"}
+                  launchId={launch.onchainLaunchId} controller={launch.ownerWallet} transactionHash={transactionHash}
+                  openAutomatically={detailOnly || highlightedLaunchId === resourceIdentity} /> : null}
                 <details className={styles.launchReview}>
                   <summary>Details and review</summary>
+                <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : "1"} />
+                {launchErrors[key] ? <pre>{safeDeveloperDetails(launchErrors[key],launch.routeId === "custom-launch:create:v4" ? "4663" : "1")}</pre> : null}
                 <CustomLaunchAssessment value={launch.output?.reviewReadiness} review={launch.manualReview} subjectHash={launch.manualReview?.subjectHash} chainId={launch.manualReview?.chainId} tradeChecks={launch.manualReview?.tradeChecks} />
                 {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
 

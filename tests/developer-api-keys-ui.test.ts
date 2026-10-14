@@ -901,7 +901,6 @@ describe("developer launch history interface", () => {
     expect(historySource).toContain(
       "10 bps · exact fee-path verification required",
     );
-    expect(historySource).toContain("Admission checks running");
     expect(historySource).toContain("Changes required");
     expect(historySource).toContain("Fix source or configuration");
     expect(historySource).toContain(

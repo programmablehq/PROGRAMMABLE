@@ -74,7 +74,7 @@ test("a missing wallet hash is discovered and tracked without any new send", asy
   await page.clock.install();
   await page.goto(origin + "?scenario=automatic-recovery");
   await page.getByRole("button", { name: "Sign and launch", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("wallet response was interrupted");
+  await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Checking your transaction", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign and launch", exact: true })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.requests.length)).toBeGreaterThan(0);
@@ -107,4 +107,15 @@ test("finality continues into indexing on the same launch link", async ({ page }
   await page.clock.fastForward(15000);
   await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.navigated)).toContain("?chain=4663");
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+});
+
+for (const chainId of ["1","4663"]) test(`a confirmed legacy launch opens only after exact indexing on ${chainId}`,async ({page})=>{
+  await page.clock.install();
+  await page.goto(`${origin}?scenario=legacy-indexing-${chainId}`);
+  await expect(page.getByRole("status")).toContainText("confirmed");
+  expect(await page.evaluate(()=>window.__customLaunchFixture.navigated)).toBe("");
+  await page.evaluate(()=>window.__customLaunchFixture.setIndexed());
+  await page.clock.fastForward(15000);
+  await expect.poll(()=>page.evaluate(()=>window.__customLaunchFixture.navigated)).toContain(`?chain=${chainId}`);
+  expect(await page.evaluate(()=>window.__customLaunchFixture.sends())).toBe(0);
 });

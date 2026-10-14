@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { DeveloperUniversalLaunchHistory } from "../../../components/developer-universal-launch-history";
+import { CustomLaunchCompletion } from "../../../components/custom-launch-completion";
 import { beginLaunchSendV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "../../../lib/custom-launch/launch-send-journal-v1";
 import { discoverUniversalLaunchTransactionV1 } from "../../../lib/custom-launch/launch-transaction-discovery-v1";
 import { canonicalBrowserSha256V2 as digest } from "../../../lib/custom-launch/browser-authority-v2";
@@ -86,6 +87,11 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
 
 window.fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
+  if (url.pathname === "/api/launch-destination") return control.indexed ? Response.json({
+    schemaVersion:"programmable.website-launch-destination.v1",status:"indexed",chainId:mode.endsWith("-1")?"1":"4663",
+    launchId:`0x${"9".repeat(64)}`,controller,transactionHash:hash,tokenAddress:component,
+    href:`/token/${component}?chain=${mode.endsWith("-1")?"1":"4663"}`,
+  }) : Response.json({status:"pending"},{status:202});
   if (url.pathname === "/api/custom-launch-reviews/start") {
     control.startCalls += 1;
     if (mode === "approved-conflict") return Response.json({ error: "This approval is no longer active." }, { status: 409 });
@@ -165,4 +171,5 @@ createRoot(document.getElementById("root")!).render(<main className={`${styles.p
     record = { ...record, manualReview: { ...record.manualReview!, state: "rejected", revision: 2,
       reason: "Please clarify liquidity ownership before approval." } };
   }}>Fixture: request changes</button> : null}
-  {mode === "session-refresh" ? <SessionRefreshFixture /> : <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId} getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} sendWallet={sendWallet} />}</main>);
+  {mode.startsWith("legacy-indexing") ? <CustomLaunchCompletion chainId={mode.endsWith("-1")?"1":"4663"} launchId={`0x${"9".repeat(64)}`} controller={controller} transactionHash={hash} openAutomatically />
+    : mode === "session-refresh" ? <SessionRefreshFixture /> : <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId} getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} sendWallet={sendWallet} />}</main>);

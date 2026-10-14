@@ -17,6 +17,8 @@ import { finalizeLaunchSendV1, parseLaunchSendAttemptV1, readLaunchSendJournalV1
 import { launchPlanWalletUrlV1, readLaunchPlanResourceV1, type UniversalLaunchSource, type UniversalLaunchWalletInputV1, type UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import shared from "./developer-api-keys.module.css";
 import styles from "./developer-universal-launch-flow.module.css";
+import { launchFeedback } from "@/lib/launch-feedback";
+import { safeDeveloperDetails } from "@/lib/developer-access-feedback";
 
 export type UniversalLaunchEntryV1 = { sourceVersion: UniversalLaunchSource; controller: string; resource: Record<string, unknown> };
 type Props = {
@@ -202,9 +204,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         <div><p className={styles.eyebrow}>Robinhood Chain</p><h3 id={`${recoveryId}-title`}>{title}</h3>{symbol ? <p className={styles.ticker}>{symbol.replace(/^\$+/, "")}</p> : null}</div>
       </div>
     </div>
-    <CustomLaunchProgress status={String(resource.status)} review={plan?.manualReview} launchId={id} chainId="4663" indexed={!!indexedHref} />
-    <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Launch complete" : busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
-      <p>{indexedHref ? "Your coin is live on Explore." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div>
+    {(!ready || hasUnresolved || busy === "send") ? <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Launch complete" : busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
+      <p>{indexedHref ? "Your coin is live on Explore." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div> : null}
     {plan?.manualReview && !hasUnresolved && !state.terminal
       ? <CustomLaunchStartButton key={`${id}:${plan.manualReview.revision}`} review={plan.manualReview} launchId={id} onStarted={load} /> : null}
     {journalError ? <p role="alert" className={styles.error}>{journalError} This launch remains paused.</p> : null}
@@ -218,10 +219,12 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy ? "Confirm in your wallet…" : "Sign and launch"}</button>
     </div> : null}
     {plan?.manualReview?.expiresAt && ready && !hasUnresolved ? <p className={styles.notice}>Launch by {new Date(plan.manualReview.expiresAt).toLocaleString()}.</p> : null}
-    {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open program</a> : null}
-    {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{visibleError}</p> : null}
+    {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open coin</a> : null}
+    {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{hash ? "Your transaction is saved. Confirmation will update automatically." : launchFeedback(visibleError)}</p> : null}
     {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
     <details className={styles.details}><summary>Details and review</summary>
+    <CustomLaunchProgress status={String(resource.status)} review={plan?.manualReview} launchId={id} chainId="4663" indexed={!!indexedHref} />
+    {visibleError ? <pre>{safeDeveloperDetails(visibleError,"4663")}</pre> : null}
     {plan?.preflight?.findings.length ? <details className={styles.details}><summary>Launch findings</summary><pre>{JSON.stringify(plan.preflight.findings, null, 2)}</pre></details> : null}
     <dl className={styles.summary}><div><dt>Controller wallet</dt><dd><span title={entry.controller}>{shortAddress(entry.controller)}</span></dd></div><div><dt>Wallet transactions</dt><dd>{steps.length} including Stamp</dd></div>
       <div><dt>{visibleReview ? "Current transaction value" : "Launch value limit"}</dt><dd>{formatEther(BigInt(visibleReview?.valueWei ?? plan?.plan.budgets.maxTotalValue ?? "0"))} ETH</dd></div>
