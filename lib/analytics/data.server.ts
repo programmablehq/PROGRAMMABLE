@@ -1,6 +1,8 @@
 import "server-only";
 import { decodeResult, pickColumns, QUERY_IDS, QUERY_COLUMNS, type AnalyticsData, type QueryResult } from "./model";
 import snapshot from "./snapshot.json";
+import { activityPriceRequests } from "./activity-values";
+import { readActivityValues } from "./activity-values.server";
 
 export async function getAnalytics(): Promise<AnalyticsData> {
   const entries = await Promise.all(Object.entries(QUERY_IDS).map(async ([kind, id]) => {
@@ -22,5 +24,11 @@ export async function getAnalytics(): Promise<AnalyticsData> {
       return [kind, { ...fallback, stale: true }] as const;
     }
   }));
-  return Object.fromEntries(entries) as Record<keyof AnalyticsData, QueryResult>;
+  const data = Object.fromEntries(entries) as Record<"volume"|"revenue"|"buybacks"|"burns", QueryResult>;
+  const fallbackValues = (snapshot as unknown as AnalyticsData).activityValues ?? {};
+  try {
+    return { ...data, renderedAt:Date.now(), activityValues:{ ...fallbackValues,...await readActivityValues(activityPriceRequests(data)) } };
+  } catch {
+    return { ...data, renderedAt:Date.now(), activityValues:fallbackValues };
+  }
 }

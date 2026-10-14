@@ -2,13 +2,15 @@
 
 [Dashboard](https://dune.com/programmablehq/analytics)
 
-[Website analytics](https://programmable.market/analytics) displays trading volume, historical USD spent on buybacks and project burns. Its server reads the latest completed query results with the private `DUNE_API_KEY` and an hourly cache. Page visits never execute SQL. A checked-in snapshot preserves the last verified values and their original timestamps if a source is unavailable. Query execution schedules are managed separately in Dune within the owner's existing credit budget.
+[Website analytics](https://programmable.market/analytics) displays trading volume, historical USD spent on buybacks and project burns. Activity rows show V4 amounts, approximate historical dollar values, the chain and relative transaction times. Its server reads the latest completed query results with the private `DUNE_API_KEY` and an hourly cache. Page visits never execute SQL. A checked-in snapshot preserves the last verified values and their original timestamps if a source is unavailable. Query execution schedules are managed separately in Dune within the owner's existing credit budget.
 
 The website's [project burn source](https://dune.com/queries/8941418) covers transfers from the three project wallets for the current Robinhood token and historical Ethereum token. The token generations are never summed together. Buyback query 8677080 additionally publishes `buyback_events_v1`, a timestamped transaction list for the website's history. The page always shows all-time figures across both chains, with V4 totals referring to the current token.
 
-The public policy allocates 100% of collected 0.3% platform fees from launches on either chain to manual Programmable (V4) buybacks. The allocation is not evidence of a purchase. Queries count completed transactions independently.
+The public policy allocates 80% of collected fee revenue to manual Programmable (V4) buybacks and burns. The remaining 20% is for treasury and operating costs. Eligible revenue includes the 0.3% platform fees from launches on both chains and collected quote-asset fees from the project’s own liquidity position. The allocation is not evidence of a purchase. Queries count completed transactions independently.
 
 The buyback dollar amount is the sum of actual purchase costs on both chains, valued using the historical price at each purchase. It is not the current value of the tokens bought and excludes transaction gas. `buybacks_usd` is displayed only when `unpriced_buybacks` is zero; a priced subtotal is never substituted for a complete total. V4 amounts and burn percentages still refer to the current Robinhood token so different token generations are not added together.
+
+Buyback activity values use the verified transaction audit: actual native ETH/WETH spent plus priced other-asset costs. Codex supplies the historical ETH price. Burn activity values use the historical price of the burned V4 token. Quotes must match the chain and token and precede the transaction by no more than 24 hours. Missing quotes remain unavailable. These row estimates do not replace the independently calculated Dune buyback total. Historical prices are cached for 24 hours, and relative times update every minute in the browser.
 
 ## Queries
 
