@@ -25,6 +25,13 @@ export async function codexQuery(query: string, variables: Record<string, unknow
 }
 
 type Identity = { tokenAddress: string; poolId: string };
+type MarketRead = Promise<RobinhoodCoinMarket | undefined>;
+const marketReads = new Map<string, MarketRead>();
+const marketObservations = new Map<string, { expiresAt: number; market: RobinhoodCoinMarket }>();
+const marketIdentity = (token: Identity, chainId: number) => `${chainId}:${token.tokenAddress}:${token.poolId}`;
+const copyMarket = (market: RobinhoodCoinMarket): RobinhoodCoinMarket => ({ ...market,
+  ...(market.quoteAsset ? { quoteAsset: { ...market.quoteAsset } } : {}),
+});
 const pending = new Map<string, Promise<unknown>>();
 const failedUntil = new Map<string, number>();
 // Coalesce cold reads and briefly back off failures, without automatic provider retries.
@@ -107,17 +114,51 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
   // One HTTP request for token stats and exact-pool liquidity per 100 verified identities.
   const deadline = Date.now() + 8_000;
   for (let offset = 0; offset < identities.length && Date.now() < deadline; offset += 400) {
-    const settled = await Promise.allSettled(Array.from({ length: Math.ceil(Math.min(400, identities.length - offset) / 100) }, (_, index) => {
-      const batch = identities.slice(offset + index * 100, offset + (index + 1) * 100);
+    const wave = identities.slice(offset, offset + 400);
+    const reads = new Map<string, MarketRead>();
+    const missing: Identity[] = [];
+    for (const token of wave) {
+      const key = marketIdentity(token, chainId), observation = marketObservations.get(key);
+      if (observation && Date.now() < observation.expiresAt) {
+        result.set(token.tokenAddress, copyMarket(observation.market));
+      } else {
+        marketObservations.delete(key);
+        const active = marketReads.get(key);
+        if (active) reads.set(token.tokenAddress, active);
+        else missing.push(token);
+      }
+    }
+    for (let index = 0; index < missing.length; index += 100) {
+      const batch = missing.slice(index, index + 100);
       // A stable cache key lets Next serve the last observation while refreshing.
       // A time bucket here creates a cold blocking request every 30 seconds.
-      return sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId));
-    }));
-    for (const batch of settled) if (batch.status === "fulfilled") for (const [address, market] of batch.value) {
-      const token = identities.find(token => token.tokenAddress === address)!;
-      const age = Date.now() - Date.parse(market.observedAt);
-      if (age >= 0 && age <= 180_000) result.set(address, { ...market, poolId: token.poolId });
+      const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId)).then(entries => new Map(entries));
+      for (const token of batch) {
+        const key = marketIdentity(token, chainId);
+        const request: MarketRead = batchRead.then(entries => {
+          const value = entries.get(token.tokenAddress);
+          if (!value) return;
+          const observedAt = Date.parse(value.observedAt), age = Date.now() - observedAt;
+          if (!(age >= 0 && age <= 180_000)) return;
+          const market = { ...value, poolId: token.poolId };
+          // Reuse catalog observations on coin pages without extending their age.
+          // Chain and exact pool are part of the key; failures are never saved.
+          if (age < 30_000) {
+            marketObservations.delete(key);
+            marketObservations.set(key, { expiresAt: observedAt + 30_000, market });
+            while (marketObservations.size > 2_048) marketObservations.delete(marketObservations.keys().next().value!);
+          }
+          return market;
+        }).finally(() => { if (marketReads.get(key) === request) marketReads.delete(key); });
+        marketReads.set(key, request);
+        reads.set(token.tokenAddress, request);
+      }
     }
+    const addresses = [...reads.keys()];
+    const settled = await Promise.allSettled(reads.values());
+    settled.forEach((read, index) => {
+      if (read.status === "fulfilled" && read.value) result.set(addresses[index], copyMarket(read.value));
+    });
   }
   return result;
 }

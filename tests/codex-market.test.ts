@@ -52,6 +52,56 @@ describe("Codex price history", () => {
 });
 
 describe("Codex server market adapter", () => {
+  it("reuses exact-pool catalog observations on single-coin pages without extending their age", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const other = { tokenAddress: `0x${"cd".repeat(20)}`, poolId: `0x${"12".repeat(32)}` };
+    const fetcher = vi.fn(async (_url, request) => Response.json({ data: {
+      filterTokens: { results: JSON.parse(request.body).variables.tokens.map((id: string) =>
+        ({ ...row(), token: { address: id.split(":")[0], networkId: 4663 } })) }, filterPairs: { results: [] },
+    } }));
+    vi.stubGlobal("fetch", fetcher);
+    const catalog = await readCodexMarkets([{ tokenAddress: address, poolId }, other]);
+    const observedAt = catalog.get(address)!.observedAt;
+    catalog.get(address)!.priceUsd = 42;
+    vi.setSystemTime(Date.now() + 20_000);
+    expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).get(address))
+      .toMatchObject({ priceUsd: .001, observedAt });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 10_001);
+    await readCodexMarkets([{ tokenAddress: address, poolId }]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("shares pending identities between overlapping catalog and coin requests", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    let finish!: () => void;
+    const gate = new Promise<void>(resolve => { finish = resolve; });
+    const fetcher = vi.fn(async () => { await gate; return Response.json({ data: {
+      filterTokens: { results: [row()] }, filterPairs: { results: [] },
+    } }); });
+    vi.stubGlobal("fetch", fetcher);
+    const catalog = readCodexMarkets([{ tokenAddress: address, poolId },
+      { tokenAddress: `0x${"cd".repeat(20)}`, poolId: `0x${"12".repeat(32)}` }]);
+    const coin = readCodexMarkets([{ tokenAddress: address, poolId }]);
+    finish();
+    const results = await Promise.all([catalog, coin]);
+    expect(results.every(result => result.has(address))).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps cached observations separate for each chain and pool", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn(async (_url, request) => {
+      const chainId = Number(JSON.parse(request.body).variables.tokens[0].split(":")[1]);
+      return Response.json({ data: { filterTokens: { results: [{ ...row(), token: { address, networkId: chainId } }] }, filterPairs: { results: [] } } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await readCodexMarkets([{ tokenAddress: address, poolId }], 4663);
+    await readCodexMarkets([{ tokenAddress: address, poolId }], 1);
+    await readCodexMarkets([{ tokenAddress: address, poolId: `0x${"12".repeat(32)}` }], 4663);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it.each([4663, 1])("reads the paired ticker in the existing batch on chain %s", async chainId => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const quote = `0x${"cd".repeat(20)}`;

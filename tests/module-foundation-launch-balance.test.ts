@@ -47,10 +47,25 @@ describe("early launch funding feedback", () => {
     const pending = balance.read();
     await vi.advanceTimersByTimeAsync(3_000);
     expect(await pending).toBeUndefined();
-    expect(await balance.read()).toBe(20n);
+    expect(await balance.read()).toBeUndefined();
+    expect(read).toHaveBeenCalledTimes(1);
+    // An explicit launch retry can recover immediately; focus events cannot
+    // start a second slow provider request after the display timeout.
+    expect(await balance.read(true)).toBe(20n);
     finish(0n);
     await Promise.resolve();
     expect(await balance.read()).toBe(20n);
     expect(await new FoundationLaunchBalance(async () => { throw new Error("offline"); }).read()).toBeUndefined();
+  });
+
+  it("retries a failed background read after the cooldown", async () => {
+    vi.useFakeTimers();
+    const read = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(30n);
+    const balance = new FoundationLaunchBalance(read);
+    expect(await balance.read()).toBeUndefined();
+    expect(await balance.read()).toBeUndefined();
+    expect(read).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await balance.read()).toBe(30n);
   });
 });

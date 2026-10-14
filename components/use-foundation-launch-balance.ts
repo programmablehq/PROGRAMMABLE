@@ -16,12 +16,13 @@ export function useFoundationLaunchBalance(client: PublicClient, account: Addres
   useEffect(() => {
     void refresh();
     const visible = () => {
-      if (document.visibilityState === "visible") void refresh(true);
+      if (document.visibilityState === "visible") void refresh();
     };
-    // Detect deposits without requiring a page reload. Positive balances use the reader's short cache.
+    // Reuse the same short cache for empty wallets and focus/visibility events.
+    // Clicking Launch still refreshes an insufficient balance immediately.
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refresh(reader?.getSnapshot() === 0n);
-    }, 5_000);
+      if (document.visibilityState === "visible") void refresh();
+    }, 15_000);
     window.addEventListener("focus", visible);
     document.addEventListener("visibilitychange", visible);
     return () => {
