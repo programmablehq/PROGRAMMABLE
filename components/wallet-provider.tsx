@@ -1665,10 +1665,12 @@ function PrivyWalletBridge({
     void pendingProvider.then(candidate => {
       if (disposed) return;
       const provider = candidate as InjectedEthereumProvider;
-      if (!provider?.on || !provider.removeListener) return;
+      if (!provider || typeof provider.request !== "function") return;
       observedProviderRef.current = { userId: owner, provider };
     let accountRevision = 0;
     let chainRevision = 0;
+    let accountReadPending = false;
+    let chainReadPending = false;
     const isCurrent = () => {
       const current = sdkSessionRef.current;
       return !disposed && current.authenticated && current.userId === owner
@@ -1710,8 +1712,11 @@ function PrivyWalletBridge({
       setVerifiedWalletNetwork({ userId: owner, account: current.account,
         chainId, walletSnapshot: current.walletCapability });
     };
-    provider.on("accountsChanged", accountsChanged);
-    provider.on("chainChanged", chainChanged);
+    const supportsEvents = typeof provider.on === "function" && typeof provider.removeListener === "function";
+    if (supportsEvents) {
+      provider.on!("accountsChanged", accountsChanged);
+      provider.on!("chainChanged", chainChanged);
+    }
     // One local read covers events that occurred before hydration. Returning
     // to the tab rechecks selection without polling or opening a wallet prompt.
     const readSelectedAccount = () => {
@@ -1719,25 +1724,37 @@ function PrivyWalletBridge({
       const revision = accountRevision;
       const networkRevision = chainRevision;
       const generation = walletSessionGenerationRef.current;
-      void provider.request({ method: "eth_accounts" }).then(accounts => {
-        if (isCurrent() && revision === accountRevision) accountsChanged(accounts);
-      }).catch(() => { /* Never prompt from a background read. */ });
+      if (!accountReadPending) {
+        accountReadPending = true;
+        void readWalletProviderValue(() => provider.request({ method: "eth_accounts" })).then(accounts => {
+          if (isCurrent() && revision === accountRevision) accountsChanged(accounts);
+        }).catch(() => { /* Never prompt from a background read. */ })
+          .finally(() => { accountReadPending = false; });
+      }
       // A remembered injected provider may outlive the SDK connection during
       // reconnect. It can report accounts, but cannot yet verify this session's chain.
-      if (!walletRequestSessionRef.current.authenticated || !walletRequestSessionRef.current.walletCapability) return;
-      void provider.request({ method: "eth_chainId" }).then(chainId => {
+      if (chainReadPending || !walletRequestSessionRef.current.authenticated || !walletRequestSessionRef.current.walletCapability) return;
+      chainReadPending = true;
+      void readWalletProviderValue(() => provider.request({ method: "eth_chainId" })).then(chainId => {
         // Network reads must not hold up account updates. Newer events and
         // explicit switches win over a read started before either one.
         if (isCurrent() && !networkSwitchPendingRef.current && generation === walletSessionGenerationRef.current
           && networkRevision === chainRevision) chainChanged(chainId);
-      }).catch(() => { /* Retain the last observed network until the next event. */ });
+      }).catch(() => { /* Retain the last observed network until the next event. */ })
+        .finally(() => { chainReadPending = false; });
     };
     readSelectedAccount();
     document.addEventListener("visibilitychange", readSelectedAccount);
+    window.addEventListener("focus", readSelectedAccount);
+    window.addEventListener("pageshow", readSelectedAccount);
     unsubscribe = () => {
       document.removeEventListener("visibilitychange", readSelectedAccount);
-      provider.removeListener?.("accountsChanged", accountsChanged);
-      provider.removeListener?.("chainChanged", chainChanged);
+      window.removeEventListener("focus", readSelectedAccount);
+      window.removeEventListener("pageshow", readSelectedAccount);
+      if (supportsEvents) {
+        provider.removeListener!("accountsChanged", accountsChanged);
+        provider.removeListener!("chainChanged", chainChanged);
+      }
     };
     }).catch(() => { /* A failed observation never prompts or changes ownership. */ });
     return () => { disposed = true; unsubscribe(); };

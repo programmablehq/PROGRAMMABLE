@@ -408,6 +408,9 @@ export function FixtureControls() {
       getEthereumProvider: () => candidate.getEthereumProvider(), switchChain: chainId => candidate.switchChain(chainId),
     })) })}>Refresh SDK methods without changing provider</button>
     <button onClick={() => update({ wallets: state.wallets.map(candidate => ({ ...candidate, walletClientType: "coinbase_wallet", connectorType: "wallet_connect" })) })}>Use Coinbase fixture wallet</button>
+    <button onClick={() => update({ wallets: state.wallets.map(candidate => ({ ...candidate,
+      getEthereumProvider: async () => ({ request: (await candidate.getEthereumProvider()).request }),
+    })) })}>Use provider without event listeners</button>
     <button onClick={() => update({ wallets: state.wallets.map(candidate => ({ ...candidate, walletClientType: "privy", connectorType: "embedded" })) })}>Use embedded fixture wallet</button>
     <button onClick={() => update({ isOpen: true })}>Open SDK modal</button>
     <button onClick={() => update({ isOpen: false })}>Close SDK modal</button>
@@ -431,6 +434,7 @@ export function FixtureControls() {
       pending?.reject(Object.assign(new Error("User rejected network switch"), { code: 4001 }));
     }}>Reject network switch</button>
     <button onClick={() => update({ providerAccountOverride: accountC })}>Return a different provider account</button>
+    <button onClick={() => update({ providerAccountOverride: accountB })}>Select wallet B without an event</button>
     <button onClick={() => update({ unresponsiveProviderAccounts: true })}>Stop answering account reads</button>
     <button onClick={() => {
       update({ providerAccountOverride: accountB, providerLocked: false });
