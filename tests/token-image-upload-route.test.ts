@@ -58,6 +58,16 @@ beforeAll(async () => {
 });
 
 describe("token image upload route", () => {
+  it("does not ask users to reconnect when the authentication provider is temporarily unavailable", async () => {
+    const putBlob = vi.fn<Dependencies["putBlob"]>();
+    const handler = createTokenImageUploadHandlerV1(dependencies({
+      authenticateSession: async () => { throw Object.assign(new Error("unavailable"), { status: 503 }); }, putBlob,
+    }));
+    const response = await handler(request(webp));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Wallet access is temporarily unavailable. Try the upload again shortly." });
+    expect(putBlob).not.toHaveBeenCalled();
+  });
   it("returns a JSON session error before reading or writing image data", async () => {
     const putBlob = vi.fn<Dependencies["putBlob"]>();
     const handler = createTokenImageUploadHandlerV1(dependencies({

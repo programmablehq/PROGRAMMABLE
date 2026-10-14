@@ -54,7 +54,12 @@ export function createManualReviewStartBridgeV1(input: { authenticator: WalletPr
         : "Launch preparation is temporarily unavailable." }, response.headers.get("Retry-After"));
       const result = JSON.parse(await readBoundedBody(response, 1024 * 1024));
       return respond(200, { review: parseCustomLaunchReview(result.review) });
-    } catch (error) { return respond(error instanceof WalletPrincipalAuthenticationErrorV1 || error instanceof StartInputError ? error.status : 503, { error: "Could not start this launch. Reconnect your wallet and try again." }); }
+    } catch (error) {
+      const status = error instanceof WalletPrincipalAuthenticationErrorV1 || error instanceof StartInputError ? error.status : 503;
+      return respond(status, { error: status === 401 ? "Your session expired. Connect your wallet again."
+        : status === 403 ? "Connect the wallet that submitted this launch."
+        : "Launch preparation is temporarily unavailable. Your request is saved. Try again shortly." }, status === 503 ? "5" : null);
+    }
   };
 }
 

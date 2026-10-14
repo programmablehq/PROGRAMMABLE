@@ -114,6 +114,15 @@ function custom(input: Readonly<{
 }
 
 describe("creator article wallet principal", () => {
+  it.each([[429, 503], [503, 503], [401, 401]])("preserves provider error %s as HTTP %s", async (providerStatus, status) => {
+    const authenticator = createWalletPrincipalAuthenticatorFromBoundaryV1({ appId: "app", boundary: {
+      verifyAccessToken: async () => ({ appId: "app", userId: "did:privy:user", sessionId: "session" }),
+      verifyIdentityToken: async () => ({ userId: "did:privy:user", sessionId: "session" }),
+      getCurrentUser: async () => { throw Object.assign(new Error("provider failure"), { status: providerStatus }); },
+    } });
+    await expect(authenticator.authenticate(request())).rejects.toMatchObject({ status });
+  });
+
   it("binds both Privy tokens and returns unique Ethereum wallets", async () => {
     const authenticator = createWalletPrincipalAuthenticatorFromBoundaryV1({
       appId: "app",

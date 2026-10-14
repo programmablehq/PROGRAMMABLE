@@ -1,6 +1,6 @@
 import "server-only";
 
-import { PrivyClient } from "@privy-io/node";
+import { privyReadClient, readCurrentPrivyUser, privyReadUnavailable } from "../privy-read-client";
 import { getAddress, isAddress } from "viem";
 
 import { parseStrictJson, type JsonValue } from
@@ -39,7 +39,7 @@ export interface PrivyWalletAuthorityBoundaryV1 {
 }
 
 export class WalletPrincipalAuthenticationErrorV1 extends Error {
-  constructor(readonly status: 401 | 403, readonly code: string) {
+  constructor(readonly status: 401 | 403 | 503, readonly code: string) {
     super(code);
     this.name = "WalletPrincipalAuthenticationErrorV1";
   }
@@ -49,7 +49,7 @@ export function createPrivyWalletPrincipalAuthenticatorV1():
 WalletPrincipalAuthenticatorV1 {
   const appId = requiredEnvironment("NEXT_PUBLIC_PRIVY_APP_ID");
   const appSecret = requiredEnvironment("PRIVY_APP_SECRET");
-  const privy = new PrivyClient({ appId, appSecret });
+  const privy = privyReadClient(appId, appSecret);
   return createWalletPrincipalAuthenticatorFromBoundaryV1({
     appId,
     boundary: Object.freeze({
@@ -68,7 +68,7 @@ WalletPrincipalAuthenticatorV1 {
         return claims;
       },
       async getCurrentUser(userId: string) {
-        const user = await privy.users()._get(userId);
+        const user = await readCurrentPrivyUser(privy, userId);
         return Object.freeze({
           id: user.id,
           linkedAccounts: Object.freeze(user.linked_accounts.map((account) => {
@@ -150,6 +150,7 @@ export function createWalletPrincipalAuthenticatorFromBoundaryV1(
         });
       } catch (error) {
         if (error instanceof WalletPrincipalAuthenticationErrorV1) throw error;
+        if (privyReadUnavailable(error)) throw new WalletPrincipalAuthenticationErrorV1(503, "wallet_session_unavailable");
         throw new WalletPrincipalAuthenticationErrorV1(401, "privy_session_rejected");
       }
     },

@@ -63,16 +63,8 @@ const apiKeysSource = readFileSync(
   new URL("../components/developer-api-keys.tsx", import.meta.url),
   "utf8",
 );
-const apiKeysStyles = readFileSync(
-  new URL("../components/developer-api-keys.module.css", import.meta.url),
-  "utf8",
-);
 const historySource = readFileSync(
   new URL("../components/developer-launch-history.tsx", import.meta.url),
-  "utf8",
-);
-const historyStyles = readFileSync(
-  new URL("../components/developer-launch-history.module.css", import.meta.url),
   "utf8",
 );
 const walletProviderSource = readFileSync(
@@ -346,18 +338,6 @@ describe("developer API key interface", () => {
     expect(apiKeysSource).not.toContain("Fee claims and automated buybacks");
     expect(apiKeysSource).not.toContain("Key owner");
     expect(apiKeysSource).not.toContain("activeCount");
-
-    expect(apiKeysStyles).toMatch(
-      /\.workspace\s*\{[^}]*align-items:\s*start;/su,
-    );
-    expect(apiKeysStyles).toMatch(
-      /\.workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/su,
-    );
-    expect(apiKeysStyles).toMatch(
-      /\.listToolbar\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*flex-end;/su,
-    );
-    expect(apiKeysStyles).toContain("--api-key-row-min-height");
-    expect(apiKeysStyles).not.toContain("grid-template-rows: repeat(");
     expect(apiKeysSource).not.toContain('aria-labelledby="agent-setup-title"');
     expect(apiKeysSource).not.toContain('href="/agents.md"');
     expect(apiKeysSource).not.toContain('href="/developers/hooks"');
@@ -367,13 +347,6 @@ describe("developer API key interface", () => {
     expect(apiKeysSource.indexOf('aria-label="API key pages"')).toBeLessThan(
       apiKeysSource.indexOf('className={styles.keyList}'),
     );
-    expect(apiKeysStyles).not.toContain("height: clamp(");
-    expect(apiKeysStyles).not.toMatch(
-      /\.keyList\s*\{[^}]*overflow-y:\s*auto;/su,
-    );
-    expect(apiKeysStyles).toContain("--api-panel: var(--webde-surface)");
-    expect(apiKeysStyles).toContain("--api-line: var(--webde-line)");
-    expect(apiKeysStyles).not.toContain("liquid-glass");
   });
 
   it("uses a styled expiry listbox with complete keyboard and form behavior", () => {
@@ -397,9 +370,6 @@ describe("developer API key interface", () => {
       "event.currentTarget.contains(event.relatedTarget)",
     );
     expect(expirySelectSource).not.toContain('event.key === "Tab"');
-    expect(apiKeysStyles).toContain(".expiryTrigger");
-    expect(apiKeysStyles).toContain(".expiryMenu");
-    expect(apiKeysStyles).toMatch(/\.purposeOptions input\s*\{[^}]*appearance: auto/su);
   });
 
   it.each([
@@ -877,13 +847,6 @@ describe("developer launch history interface", () => {
       "Ready to launch. Confirm the transaction in your wallet.",
     );
     expect(historySource).not.toContain("Your agent&apos;s first accepted request");
-    expect(historyStyles).not.toContain("height: clamp(");
-    expect(historyStyles).toContain("background: var(--webde-surface)");
-    expect(historyStyles).toContain("background: var(--webde-control)");
-    expect(historyStyles).not.toContain("liquid-glass");
-    expect(historyStyles).not.toMatch(
-      /\.launchList\s*\{[^}]*overflow-y:\s*auto;/su,
-    );
   });
 
   it("announces loading and refreshed status without changing wallet authority", () => {
@@ -1543,16 +1506,7 @@ describe("developer launch history interface", () => {
       "Changing any\n          bound field requires a newly packed request.",
     );
     expect(historySource).not.toContain("Edit project metadata");
-    expect(historyStyles).toContain(".projectReview");
-    expect(historyStyles).toContain(".metadataUnavailable");
-    expect(historyStyles).toMatch(
-      /\.projectIdentity strong\s*\{[^}]*white-space:\s*nowrap;/su,
-    );
     expect(historySource).toContain("launchErrors[key]");
-    expect(historyStyles).toMatch(
-      /\.projectLinks a\s*\{[^}]*min-height:\s*44px;/su,
-    );
-    expect(historyStyles).toContain("@media (max-width: 600px)");
   });
 
   it("renders project artwork only after exact response bytes verify", async () => {

@@ -46,25 +46,8 @@ import {
   assertCustomLaunchWalletActionV1,
   type CustomLaunchWalletActionV1,
 } from "@/lib/custom-launch/wallet-handoff-v1";
-import {
-  assertCustomLaunchFundingAuthorizationV3,
-  customLaunchFundingReviewFingerprintV3,
-  serializeCustomLaunchFundingTypedDataV3,
-  verifyCustomLaunchFundingSignatureV3,
-  type CustomLaunchFundingAuthorizationV3,
-} from "@/lib/custom-launch/wallet-handoff-v3";
-import {
-  deriveCustomLaunchWalletExpectedV4,
-  prepareCustomLaunchWalletReviewV4,
-  revalidateCustomLaunchWalletRequestV4,
-} from "@/lib/custom-launch/wallet-handoff-v4";
-import {
-  estimateRobinhoodLaunchCostV1,
-  parseRobinhoodFundingReviewV1,
-  robinhoodCostMatchesReviewV1,
-  robinhoodCostRequiresReviewV1,
-  type RobinhoodLaunchCostV1,
-} from "@/lib/custom-launch/robinhood-funding-review-v1";
+import type { CustomLaunchFundingAuthorizationV3 } from "@/lib/custom-launch/wallet-handoff-v3";
+import type { RobinhoodLaunchCostV1 } from "@/lib/custom-launch/robinhood-funding-review-v1";
 import { parseLocalProfile } from "@/lib/profile/local-profile";
 import { robinhoodChain } from "@/lib/chains";
 import { normalizeWalletChainId, walletChainIdsEqual } from "@/lib/wallet-chain-id";
@@ -120,7 +103,9 @@ import {
   loginConnectedEthereumWalletWithSiwe,
   selectInjectedEthereumProvider,
   WalletAccountSelectionError,
+  type InjectedEthereumProvider,
 } from "../lib/wallet-siwe-login";
+import { createWalletSessionCredentials } from "@/lib/wallet-session-credentials";
 import styles from "./wallet-dialog.module.css";
 
 type WalletState = {
@@ -676,31 +661,41 @@ export function getWalletDisconnectOutcome(succeeded: boolean) {
       };
 }
 
+async function settleWalletCleanup<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([operation, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Wallet cleanup timed out")), timeoutMs);
+    })]);
+  } finally { clearTimeout(timer!); }
+}
+
 export async function executeWalletDisconnect(input: {
   authenticated: boolean;
   logout: () => Promise<unknown>;
   disconnectProviderWallets: () => Promise<boolean>;
   markAppDisconnected: () => void;
+  cleanupTimeoutMs?: number;
 }) {
   if (input.authenticated) {
     try {
-      await input.logout();
+      await settleWalletCleanup(input.logout(), 8_000);
     } catch {
       return false;
     }
 
     try {
-      await input.disconnectProviderWallets();
+      await settleWalletCleanup(input.disconnectProviderWallets(), input.cleanupTimeoutMs ?? 1_500);
     } catch {
       // Privy logout is the authoritative session boundary. Provider cleanup is
-      // best effort, but it must settle before a new login can begin.
+      // best effort. A stalled extension cannot keep a logged-out user stuck.
     }
     input.markAppDisconnected();
     return true;
   }
 
   try {
-    const providersDisconnected = await input.disconnectProviderWallets();
+    const providersDisconnected = await settleWalletCleanup(input.disconnectProviderWallets(), input.cleanupTimeoutMs ?? 1_500);
     if (!providersDisconnected) return false;
     input.markAppDisconnected();
     return true;
@@ -1271,6 +1266,19 @@ function PrivyWalletBridge({
     authenticated: boolean; privyUserId: string | null; account: Address | null;
     chainId: string | null; walletCapability: (typeof wallets)[number] | null;
   }>({ authenticated: false, privyUserId: null, account: null, chainId: null, walletCapability: null });
+  const [sessionCredentials] = useState(() => createWalletSessionCredentials());
+  useLayoutEffect(() => {
+    sessionCredentials.setSources({
+      session: () => {
+        const current = sdkSessionRef.current;
+        return { userId: current.userId, revision: walletIdentityGenerationRef.current,
+          active: current.ready && current.authenticated && !current.sessionSuppressed && !current.disconnecting };
+      },
+      accessToken: getAccessToken,
+      identityToken: getPrivyIdentityToken,
+      cachedIdentityToken: () => applicantIdentityTokenRef.current,
+    });
+  }, [sessionCredentials, getAccessToken, getPrivyIdentityToken]);
   const walletLoginIntentRef = useRef<"login" | "connect" | "link" | null>(null);
   const walletConnectionAttemptRef = useRef<{ userId: string } | null>(null);
   const githubLinkUserRef = useRef<string | null>(null);
@@ -1633,20 +1641,32 @@ function PrivyWalletBridge({
   }, []);
   // Provider events update selection, never account ownership. Only wallets
   // already linked to the current Privy user can become transaction-capable.
-  const injectedOwnerRef = useRef<string | null>(null);
-  const connectedWalletClientType = connectedWallet?.walletClientType;
+  const observedProviderRef = useRef<{ userId: string; provider: InjectedEthereumProvider } | null>(null);
+  const connectedProviderGetter = connectedWallet?.getEthereumProvider;
+  const connectedWalletConnector = connectedWallet?.connectorType;
   useEffect(() => {
     if (!activeAuthenticated || !ready || !walletsReady || !user?.id || disconnecting) {
-      injectedOwnerRef.current = null;
+      observedProviderRef.current = null;
       return;
     }
-    if (connectedWalletClientType === "metamask") injectedOwnerRef.current = user.id;
-    else if (connectedWalletClientType) injectedOwnerRef.current = null;
-    if (injectedOwnerRef.current !== user.id) return;
-    const provider = selectInjectedEthereumProvider(window.ethereum);
-    if (!provider?.isMetaMask || !provider.on || !provider.removeListener) return;
     const owner = user.id;
     let disposed = false;
+    let unsubscribe = () => {};
+    if (connectedWalletConnector === "embedded") {
+      observedProviderRef.current = null;
+      return;
+    }
+    // Listen to the selected connector itself. window.ethereum may belong to
+    // another extension, and WalletConnect/Phantom are not MetaMask providers.
+    const remembered = observedProviderRef.current;
+    const pendingProvider = connectedProviderGetter && connectedWalletConnector !== "embedded"
+      ? readWalletProviderValue(connectedProviderGetter) : remembered?.userId === owner ? Promise.resolve(remembered.provider) : null;
+    if (!pendingProvider) return;
+    void pendingProvider.then(candidate => {
+      if (disposed) return;
+      const provider = candidate as InjectedEthereumProvider;
+      if (!provider?.on || !provider.removeListener) return;
+      observedProviderRef.current = { userId: owner, provider };
     let accountRevision = 0;
     let chainRevision = 0;
     const isCurrent = () => {
@@ -1714,13 +1734,14 @@ function PrivyWalletBridge({
     };
     readSelectedAccount();
     document.addEventListener("visibilitychange", readSelectedAccount);
-    return () => {
-      disposed = true;
+    unsubscribe = () => {
       document.removeEventListener("visibilitychange", readSelectedAccount);
       provider.removeListener?.("accountsChanged", accountsChanged);
       provider.removeListener?.("chainChanged", chainChanged);
     };
-  }, [activeAuthenticated, connectedWalletClientType, disconnecting,
+    }).catch(() => { /* A failed observation never prompts or changes ownership. */ });
+    return () => { disposed = true; unsubscribe(); };
+  }, [activeAuthenticated, connectedProviderGetter, connectedWalletConnector, disconnecting,
     ownedWalletAddresses, ready, user?.id, walletsReady]);
   const providerSettled = isWalletProviderSettled(
     ready && !sessionSuppressed && authenticated === Boolean(user),
@@ -1732,14 +1753,8 @@ function PrivyWalletBridge({
   const hasLinkedWallet = activeAuthenticated && Boolean(user?.linkedAccounts.some((account) =>
     account.type === "wallet" && account.chainType === "ethereum" && isEthereumAddress(account.address)));
   const sessionAction = getWalletSessionAction(providerSettled, activeAuthenticated);
-  const getCurrentIdentityToken = useCallback(
-    () => resolveWalletIdentityToken({
-      authenticated: activeAuthenticated,
-      cachedIdentityToken: identityToken,
-      loadIdentityToken: getPrivyIdentityToken,
-    }),
-    [activeAuthenticated, getPrivyIdentityToken, identityToken],
-  );
+  const getCurrentIdentityToken = sessionCredentials.getIdentityToken;
+  const getSessionAccessToken = sessionCredentials.getAccessToken;
   const applicantLinkedAccountsFingerprint = useMemo(
     () => applicantLinkedAccountsFingerprintV1(user?.linkedAccounts),
     [user?.linkedAccounts],
@@ -1788,7 +1803,7 @@ function PrivyWalletBridge({
         authenticated: activeAuthenticated && ready,
         readCurrentAuthority: () => applicantAuthorityRef.current,
         refreshUser: () => applicantRefreshUserGate.refresh(authorityKey),
-        getAccessToken,
+        getAccessToken: getSessionAccessToken,
         // `refreshUser()` already performs Privy's `/users/me` read and updates
         // its identity-token store. Calling the exported global
         // `getIdentityToken()` here would perform a second `/users/me` read and
@@ -1803,7 +1818,7 @@ function PrivyWalletBridge({
     [
       activeAuthenticated,
       applicantRefreshUserGate,
-      getAccessToken,
+      getSessionAccessToken,
       ready,
     ],
   );
@@ -3293,6 +3308,11 @@ function PrivyWalletBridge({
       }
     };
     try {
+      const [{ deriveCustomLaunchWalletExpectedV4, prepareCustomLaunchWalletReviewV4, revalidateCustomLaunchWalletRequestV4 },
+        { estimateRobinhoodLaunchCostV1, parseRobinhoodFundingReviewV1, robinhoodCostMatchesReviewV1, robinhoodCostRequiresReviewV1 }] = await Promise.all([
+        import("@/lib/custom-launch/wallet-handoff-v4"), import("@/lib/custom-launch/robinhood-funding-review-v1"),
+      ]);
+      assertCurrentSession();
       const expected = deriveCustomLaunchWalletExpectedV4(input.reviewedResource);
       const funding = parseRobinhoodFundingReviewV1(input.reviewedResource);
       if (!funding) throw new Error("Load the exact Robinhood funding details before continuing.");
@@ -3381,6 +3401,9 @@ function PrivyWalletBridge({
         throw new Error("The wallet session changed. Reconnect and try again");
       }
     };
+    const { assertCustomLaunchFundingAuthorizationV3, customLaunchFundingReviewFingerprintV3,
+      serializeCustomLaunchFundingTypedDataV3, verifyCustomLaunchFundingSignatureV3 } = await import("@/lib/custom-launch/wallet-handoff-v3");
+    assertCurrentSession();
     let checked = assertCustomLaunchFundingAuthorizationV3(
       input,
       wallet.account,
@@ -3552,7 +3575,7 @@ function PrivyWalletBridge({
       openWalletWithError,
       switchNetwork: switchWalletNetwork,
       disconnect,
-      getAccessToken,
+      getAccessToken: getSessionAccessToken,
       getIdentityToken: getCurrentIdentityToken,
       refreshApplicantSession,
       githubConnected,
@@ -3592,7 +3615,7 @@ function PrivyWalletBridge({
       connectGithub,
       disconnect,
       disconnecting,
-      getAccessToken,
+      getSessionAccessToken,
       getCurrentIdentityToken,
       githubConnected,
       githubUserId,
