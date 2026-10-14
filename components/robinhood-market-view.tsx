@@ -45,7 +45,7 @@ export function RobinhoodMarketView({ address, name, symbol, launch, presentatio
   const { copied, copyUnavailable, copyAddress } = useWalletAddressCopy(address);
 
   return <div className={`${styles.page} page-width`}>
-    <Link className={styles.back} href="/explore"><ArrowLeft aria-hidden="true" size={16} /> Explore</Link>
+    <Link className={styles.back} href="/explore" prefetch><ArrowLeft aria-hidden="true" size={16} /> Explore</Link>
     <section className={styles.market} aria-label={`${name} ${hasAsset ? "market" : "launch"}`}>
       <header className={styles.header}>
         <div className={styles.identity}>
@@ -83,7 +83,7 @@ export function RobinhoodMarketView({ address, name, symbol, launch, presentatio
             {change != null && Number.isFinite(change) ? `${change > 0 ? "+" : ""}${change.toFixed(2)}%` : "—"}
           </dd></div>
         </dl>
-        {delayed && !loading ? <p className={styles.notice} role="status">{market ? "Price updates are delayed." : "Market data is temporarily unavailable."}</p> : null}
+        {delayed && !loading && !market ? <p className={styles.notice} role="status">Market data is temporarily unavailable.</p> : null}
         <div className={styles.tradingLayout}>
           {launch?.poolId ? <RobinhoodChart chainId={chainId} tokenAddress={address} poolId={launch.poolId} name={name} market={market} /> : <div className={styles.chart} aria-busy={loading}><p className={styles.chartState} role="status">{loading ? "Loading chart…" : "No trading market is verified for this coin."}</p></div>}
           <ResponsiveTradePanel symbol={symbol ?? undefined}>{trade}</ResponsiveTradePanel>

@@ -50,7 +50,7 @@ describe("Market cap chart", () => {
       expect(html).not.toContain("recorded prices");
     } finally { vi.unstubAllGlobals(); }
   });
-  it("shows known history with a delay label when returning during a provider outage", async () => {
+  it("preserves known history when returning during a provider outage", async () => {
     const token = `0x${"bc".repeat(20)}`, now = Date.now();
     const chart = { tokenAddress: token, chainId: 4663, range: "1D", source: "codex", observedAt: new Date(now).toISOString(), points: [{ time: now - 60_000, price: .01 }, { time: now, price: .02 }] };
     vi.useFakeTimers(); vi.setSystemTime(now);
@@ -64,7 +64,6 @@ describe("Market cap chart", () => {
       await expect(freshCache.load(token, 4663, "1D")).rejects.toThrow();
       const html = renderToStaticMarkup(<FreshChart tokenAddress={token} chainId={4663} name="Known coin" market={market} />);
       expect(html).toContain("2 recorded prices");
-      expect(html).toContain("Price updates delayed");
       expect(html).not.toContain("Chart is temporarily unavailable");
     } finally { vi.unstubAllGlobals(); vi.useRealTimers(); }
   });

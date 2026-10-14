@@ -354,6 +354,8 @@
 }
 
 .profilePage { min-height: 0; padding-bottom: 24px; }
+.profilePage .toolbar { justify-content: flex-end; }
+.profileLoading { color: var(--webde-muted); font-size: 14px; margin: 16px 0; }
 .profileHeading { align-items: center; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; margin-bottom: 20px; }
 .profileHeading h2 { font-size: 24px; font-weight: 500; margin: 0; }
 .launchButton { align-items: center; background: var(--webde-ink); border-radius: var(--webde-radius-control); color: var(--webde-surface); display: inline-flex; min-height: 44px; padding: 8px 16px; text-decoration: none; }

@@ -43,6 +43,15 @@
 .ranges button { border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--webde-muted); padding: 7px 9px; font: inherit; font-size: 12px; cursor: pointer; }
 .ranges button[aria-pressed="true"] { border-color: var(--webde-line); background: var(--panel-fill-control); color: var(--webde-ink); }
 .ranges button:focus-visible { outline: 2px solid var(--webde-ink); outline-offset: 2px; }
+.ranges { border-radius: 12px; background: var(--panel-fill-control); padding: 4px; }
+.ranges button { min-width: 44px; min-height: 44px; transition: color 150ms ease, background-color 150ms ease, opacity 150ms ease; }
+.ranges button[aria-pressed="true"] { border-color: transparent; background: var(--panel-fill-hover); }
+.ranges button[data-pending="true"] { opacity: .55; }
+.figure[aria-busy="true"] .plot { opacity: .6; }
+.plot { transition: opacity 150ms ease; }
+@keyframes chartReveal { from { opacity: .4; } to { opacity: 1; } }
+@media(prefers-reduced-motion:no-preference) { .svg { animation: chartReveal 160ms ease-out; } }
 .skeleton { width: 100%; height: 2px; border-radius: 2px; background: var(--webde-line); animation: chartLoading 1.2s ease-in-out infinite; }
 @keyframes chartLoading { 50% { opacity: .25; } }
 @media(prefers-reduced-motion:reduce) { .skeleton { animation: none; } }
+@media(prefers-reduced-motion:reduce) { .ranges button, .plot { transition: none; } }

@@ -1,13 +1,26 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { acceptsCodexChart, createCodexChartCache } from "@/lib/market/codex-chart-cache";
-import { CodexPriceChart } from "@/components/codex-price-chart";
+import { chartForNavigation, CodexPriceChart } from "@/components/codex-price-chart";
 import type { CodexChart } from "@/lib/market/codex";
 
 const token = `0x${"ab".repeat(20)}`, time = Date.parse("2026-10-03T09:30:00Z");
 const chart = (range: CodexChart["range"] = "1D", now = time): CodexChart => ({ tokenAddress: token, chainId: 4663, range, source: "codex", observedAt: new Date(now).toISOString(), points: [{ time: now - 60_000, price: .001 }, { time: now, price: .002 }] });
 
 describe("Shared chart navigation cache", () => {
+  it("keeps the previous period visible until the requested history arrives", () => {
+    const previous = chart("1D");
+    expect(chartForNavigation(undefined, previous, token, 4663, time)).toBe(previous);
+    const requested = { ...chart("1W"), points: [] };
+    expect(chartForNavigation(requested, previous, token, 4663, time)).toBe(requested);
+  });
+  it("never carries history across tokens, chains or an expired observation", () => {
+    const previous = chart();
+    expect(chartForNavigation(undefined, previous, `0x${"cd".repeat(20)}`, 4663, time)).toBeUndefined();
+    expect(chartForNavigation(undefined, previous, token, 1, time)).toBeUndefined();
+    expect(chartForNavigation({ ...previous, chainId: 1 }, undefined, token, 4663, time)).toBeUndefined();
+    expect(chartForNavigation(undefined, previous, token, 4663, time + 3_600_001)).toBeUndefined();
+  });
   it("coalesces requests across mounts and reuses periods during rapid navigation", async () => {
     let now = time;
     const fetcher = vi.fn(async (input: Parameters<typeof fetch>[0]) => Response.json(chart(new URL(String(input), "https://example.com").searchParams.get("range") as CodexChart["range"], now)));

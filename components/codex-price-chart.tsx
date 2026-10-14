@@ -7,13 +7,17 @@ import { chartMarketCap } from "@/lib/market/chart-presentation";
 import styles from "./robinhood-live-chart.module.css";
 
 const stamp = (time: number) => new Date(time).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+export function chartForNavigation(requested: CodexChart | undefined, previous: CodexChart | undefined, tokenAddress: string, chainId: number, now = Date.now()) {
+  if (requested?.tokenAddress.toLowerCase() === tokenAddress.toLowerCase() && requested.chainId === chainId) return requested;
+  const age = previous ? now - Date.parse(previous.observedAt) : Infinity;
+  return previous?.tokenAddress.toLowerCase() === tokenAddress.toLowerCase() && previous.chainId === chainId && age >= -30_000 && age <= 3_600_000 ? previous : undefined;
+}
 export function CodexPriceChart({ tokenAddress, chainId, name, market }: { tokenAddress: string; chainId: 1 | 4663; name: string; market?: RobinhoodCoinMarket | null }) {
   const [range, setRange] = useState<CodexChartRange>("1D");
   const key = `${chainId}:${tokenAddress.toLowerCase()}:${range}`;
   const [state, setState] = useState<{ key: string; chart?: CodexChart; failed: boolean }>(() => ({ key, chart: codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), failed: false }));
-  const [now, setNow] = useState(() => Date.now());
   const [hover, setHover] = useState<number | null>(null);
-  const chart = state.key === key ? state.chart : codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range);
+  const chart = chartForNavigation(state.key === key ? state.chart : codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), state.chart, tokenAddress, chainId);
   useEffect(() => {
     let disposed = false, active = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -25,8 +29,8 @@ export function CodexPriceChart({ tokenAddress, chainId, name, market }: { token
         const value = await codexChartCache.load(tokenAddress, chainId, range);
         if (disposed) return;
         setState({ key, chart: value, failed: false });
-      } catch { if (!disposed) setState(current => ({ key, chart: current.key === key ? current.chart : codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), failed: true })); }
-      finally { active = false; if (!disposed) setNow(Date.now()); if (!disposed && visibleNow()) timer = setTimeout(load, Math.max(1_000, codexChartCache.waitMs(tokenAddress, chainId, range))); }
+      } catch { if (!disposed) setState(current => ({ key, chart: chartForNavigation(codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), current.chart, tokenAddress, chainId), failed: true })); }
+      finally { active = false; if (!disposed && visibleNow()) timer = setTimeout(load, Math.max(1_000, codexChartCache.waitMs(tokenAddress, chainId, range))); }
     }
     const visible = () => { clearTimeout(timer); if (visibleNow()) void load(); };
     void load();
@@ -54,11 +58,13 @@ export function CodexPriceChart({ tokenAddress, chainId, name, market }: { token
   }).join(" ");
   const selected = hover !== null ? coordinates[hover] : undefined;
   const failed = state.key === key && state.failed;
-  const delayed = chart && now - Date.parse(chart.observedAt) > 180_000;
-  return <figure className={styles.figure} aria-label={`${name} market cap chart`}>
+  const displayedRange = chart?.range ?? range;
+  const changingRange = displayedRange !== range && !failed;
+  const warmRange = (value: CodexChartRange) => { if (value !== displayedRange) void codexChartCache.load(tokenAddress, chainId, value).catch(() => {}); };
+  return <figure className={styles.figure} aria-label={`${name} market cap chart`} aria-busy={changingRange}>
     <header className={styles.header}><div><p className={styles.price} aria-label="Market capitalization in USD" title={inspected ? "Based on the current token supply" : valuation.title}>{marketCap != null ? coinDollars(marketCap) : "—"}</p>
-      {chart && (failed || delayed) ? <p className={styles.status} role="status">Price updates delayed</p> : null}</div>
-      <nav className={styles.ranges} aria-label="Chart period">{(Object.keys(CODEX_CHART_RANGES) as CodexChartRange[]).map(value => <button key={value} type="button" title={CODEX_CHART_RANGES[value].label} aria-pressed={range === value} onClick={() => { setHover(null); setRange(value); }}>{value}</button>)}</nav>
+      {failed && displayedRange !== range ? <p className={styles.status} role="status">Couldn’t load {range}. Showing {displayedRange}.</p> : null}</div>
+      <nav className={styles.ranges} aria-label="Chart period">{(Object.keys(CODEX_CHART_RANGES) as CodexChartRange[]).map(value => <button key={value} type="button" title={CODEX_CHART_RANGES[value].label} aria-pressed={displayedRange === value} data-pending={changingRange && range === value || undefined} onPointerEnter={() => warmRange(value)} onFocus={() => warmRange(value)} onPointerDown={() => warmRange(value)} onClick={() => { setHover(null); setRange(value); }}>{value}</button>)}</nav>
     </header>
     <div className={styles.plot} onPointerLeave={() => setHover(null)} onPointerMove={event => {
       if (!points.length) return;
@@ -67,7 +73,7 @@ export function CodexPriceChart({ tokenAddress, chainId, name, market }: { token
       let nearest = 0; for (let index = 1; index < points.length; index++) if (Math.abs(points[index].time - time) < Math.abs(points[nearest].time - time)) nearest = index;
       setHover(nearest);
     }}>
-      {points.length ? <svg className={styles.svg} viewBox="0 0 800 320" preserveAspectRatio="none" role="img" aria-label={`${name}: ${points.length} recorded prices from ${stamp(points[0].time)} to ${stamp(last!.time)} UTC.`}>
+      {points.length ? <svg key={displayedRange} className={styles.svg} viewBox="0 0 800 320" preserveAspectRatio="none" role="img" aria-label={`${name}, ${displayedRange}: ${points.length} recorded prices from ${stamp(points[0].time)} to ${stamp(last!.time)} UTC.`}>
 
         <path className={styles.line} d={path} vectorEffect="non-scaling-stroke" />
         {selected ? <circle className={styles.point} cx={selected.x} cy={selected.y} r="4" /> : null}
