@@ -39,6 +39,11 @@ export function operationTokenHref(row: Pick<OperationsLaunch, "chainId" | "toke
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown) => typeof value === "string" ? value.slice(0, 200) : "";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const failedLaunchStatuses = new Set(["failed", "cancelled", "expired"]);
+function hasReadyLaunchStatus(status: string, stage: string) {
+  return ["authorized", "wallet_action_ready", "awaiting_wallet_signature", "wallet_action_required"].includes(status)
+    || (!status || status === "not recorded") && stage === "router-transaction-required";
+}
 export function reviewOperations(review: Pick<CustomLaunchReview, "reviewId" | "chainId" | "subjectHash">, value: unknown) {
   const v = object(value), current = object(v.current);
   if (v.schemaVersion !== "programmable.custom-launch-review-operations.v1" || v.reviewId !== review.reviewId
@@ -98,7 +103,8 @@ export function buildOperationsRows(reviews: OperationsReview[], snapshot: Opera
     if (label === "Approval expired") return { ...base, group: "attention", status: "Window ended · launch unconfirmed", next: "Check launch status before offering another approval. An absent feed entry does not prove no transaction was sent." };
     if (operations?.current?.replanRequired) return { ...base, group: "waiting", owner: "Team", status: "Refresh launch preparation",
       next: "The team must replan with its own API key on the current release. The existing approval deadline still applies." };
-    if (["authorized", "wallet_action_ready", "awaiting_wallet_signature", "wallet_action_required"].includes(savedStatus) || operations?.current?.stage === "router-transaction-required") return { ...base,
+    if (failedLaunchStatuses.has(savedStatus) || savedStatus === "action_required") return { ...base, ...describeStoredLaunchStatus({}, operations), group: "attention" };
+    if (hasReadyLaunchStatus(savedStatus, operations?.current?.stage ?? "")) return { ...base,
       group: "waiting", owner: "Team", status: "Ready · waiting for team signature", next: "The team should open this launch with its submitting wallet and sign within the approval window." };
     const started = review.launchRequestedAt ? Date.parse(review.launchRequestedAt) : null;
     if (started !== null && operations?.current) {
@@ -144,9 +150,10 @@ export function describeStoredLaunchStatus(value: unknown, operations?: ReturnTy
   if (["submitted", "broadcast", "mined", "sequencer_soft_confirmed", "ethereum_posted"].includes(status)) return { owner: "Blockchain", status: "Waiting for confirmation", next: "Track the recorded transaction before sending anything else. No new launch or approval is needed." };
   if (operations?.current?.replanRequired) return { owner: "Team", status: "Refresh launch preparation",
     next: "Replan with the team's own API key and current bindings. Keep all completed transactions. The existing approval deadline still applies." };
+  if (failedLaunchStatuses.has(status)) return { owner: "Team", status: "Launch needs attention", next: "Read the current finding and its repair instructions. Reconcile any wallet transaction before preparing a replacement." };
   if (codes.some(code => /(?:PROVIDER|COMPILER)_UNAVAILABLE|ADMISSION_PENDING/u.test(code))) return { owner: "Programmable", status: "Waiting for Programmable preparation", next: "Check the compiler, simulation or permit service. The team should keep this request and poll its status." };
-  if (["authorized", "wallet_action_ready", "awaiting_wallet_signature", "wallet_action_required"].includes(status) || stage === "router-transaction-required") return { owner: "Team", status: "Ready · waiting for team signature", next: "Open the current launch with the submitting wallet and sign within its approval window." };
+  if (hasReadyLaunchStatus(status, stage)) return { owner: "Team", status: "Ready · waiting for team signature", next: "Open the current launch with the submitting wallet and sign within its approval window." };
   if (["accepted", "analysis_pending", "prepared", "simulating", "validating", "reserved", "preflight_complete"].includes(status)) return { owner: "Programmable", status: "Preparing launch", next: "Programmable is checking the launch and preparing its wallet transaction. Keep this request; no signature is ready yet." };
-  if (["failed", "cancelled", "expired", "action_required"].includes(status)) return { owner: "Team", status: "Launch needs attention", next: "Read the current finding and its repair instructions. Reconcile any wallet transaction before preparing a replacement." };
+  if (status === "action_required") return { owner: "Team", status: "Launch needs attention", next: "Read the current finding and its repair instructions. Reconcile any wallet transaction before preparing a replacement." };
   return { owner: "Programmable", status: "Status needs checking", next: "Refresh this request and inspect its saved progress before asking the team to retry." };
 }
