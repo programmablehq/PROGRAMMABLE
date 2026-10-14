@@ -13,8 +13,10 @@ Run `npm run verify:interface:plan` with `PROGRAMMABLE_CI_BASE_SHA` and
 
 - CSS, images and proven copy edits use the existing presentation publisher.
 - Application changes lint affected files and run related Vitest tests. The
-  dependency graph includes literal file references; dynamic filesystem tests
-  remain in the conservative set. Deleted modules and unknown build inputs use
+  dependency graph includes literal file references. Tests that read known source
+  files follow those dependencies; only unresolved filesystem readers stay in
+  the conservative set. Changes to the Interface selector run its own regression
+  checks alongside the affected application checks. Deleted modules and unknown build inputs use
   the full application suite.
 - Browser suites follow the changed feature: trading, wallet sessions, module
   launches, profiles, navigation or Explore. A metadata-only change does not

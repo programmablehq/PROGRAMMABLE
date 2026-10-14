@@ -3,6 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve, relative } from "node:path";
 
 const root = process.cwd();
+export const interfaceVerificationPaths = new Set([
+  "scripts/ci/interface-plan.mjs", "scripts/ci/interface-plan.test.mjs",
+  "scripts/ci/verify-interface.mjs", "scripts/ci/classify-verify-paths.test.mjs",
+  "scripts/ci/README.md",
+]);
 const globalInput = /^(?:package(?:-lock)?\.json|[^/]*config\.[^/]+|tsconfig[^/]*\.json|\.github\/|scripts\/ci\/|lib\/vendor\/)/u;
 const sourceInput = /^(?:app|components|lib|tests|public|assets)\//u;
 const browserGroups = [
@@ -28,8 +33,8 @@ export function changedPaths(env = process.env) {
 }
 
 export function interfacePlan(paths) {
-  const full = !paths || paths.some(path => globalInput.test(path)
-    || (!sourceInput.test(path) && !/^(?:docs\/|scripts\/|packages\/|contracts\/|config\/|ops\/|supabase\/|indexer\/|AGENTS\.md|README\.md)/u.test(path)));
+  const full = !paths || paths.some(path => !interfaceVerificationPaths.has(path) && (globalInput.test(path)
+    || (!sourceInput.test(path) && !/^(?:docs\/|scripts\/|packages\/|contracts\/|config\/|ops\/|supabase\/|indexer\/|AGENTS\.md|README\.md)/u.test(path))));
   const any = (pattern) => full || paths.some(path => pattern.test(path));
   const browser = [...new Set(browserGroups.filter(([pattern]) => any(pattern)).flatMap(([, specs]) => specs))];
   for (const path of paths ?? []) {
@@ -38,6 +43,7 @@ export function interfacePlan(paths) {
   }
   return {
     full,
+    verificationTools: Boolean(paths?.some(path => interfaceVerificationPaths.has(path))),
     browser,
     wallet: browser.length > 0,
     migration: any(/(?:migration|wallet-provider|wallet-operation|chain-switch|app\/layout|app-shell)/u),
@@ -71,9 +77,11 @@ export function relatedInputs(paths, files, read = file => readFileSync(file, "u
       }
     }
     readers.push({ file, references });
-    // Source-reading tests often assemble paths at runtime. Keep these in the
-    // conservative set; ordinary import-based tests use the dependency graph.
-    if (readsFiles && /(?:tests\/|\.test\.)/u.test(file)) inputs.add(file);
+    // A known source-file reader follows the same dependency graph as an
+    // import. Only genuinely unresolved readers require conservative coverage.
+    const knownFileRead = [...references].some(path =>
+      !/(?:^|\/)tests\//u.test(path) && !/\.test\.[cm]?[jt]sx?$/u.test(path));
+    if (readsFiles && !knownFileRead && /(?:tests\/|\.test\.)/u.test(file)) inputs.add(file);
   }
   let expanded = true;
   while (expanded) {

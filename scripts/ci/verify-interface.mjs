@@ -29,7 +29,7 @@ if (mode === "browser-build") {
   if (plan.migration) npm("test:browser:late-migration");
   npm("build");
 } else {
-  if (plan.full) npm("test:ci-scope");
+  if (plan.full || plan.verificationTools) npm("test:ci-scope");
   const lint = paths?.filter(file => /\.[cm]?[jt]sx?$/u.test(file) && existsSync(file)) ?? [];
   if (plan.full) npm("lint");
   else if (lint.length) run("npx", ["--no-install", "eslint", ...lint]);

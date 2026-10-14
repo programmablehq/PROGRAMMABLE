@@ -24,7 +24,7 @@ test("affected trading, launch and wallet behavior retains its browser coverage"
 
 test("missing history, unknown configuration and CI changes keep complete coverage", () => {
   for (const paths of [null, ["package-lock.json"], [".github/workflows/verify.yml"],
-    ["scripts/ci/interface-plan.mjs"], ["unexpected-new-input"]]) {
+    ["unexpected-new-input"]]) {
     const plan = interfacePlan(paths);
     for (const key of ["full", "wallet", "migration", "moduleTools", "activation"]) assert.equal(plan[key], true);
   }
@@ -45,4 +45,28 @@ test("related selection follows transitive source imports and includes dynamic f
     assert.ok(selected.includes(paths[4]));
     assert.equal(selected.includes(paths[3]), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+ test("known file readers stay scoped while unresolved readers remain conservative", () => {
+  const root = mkdtempSync(join(tmpdir(), "interface-readers-"));
+  try {
+    mkdirSync(join(root, "tests"));
+    const names = ["source.ts", "other.ts", "tests/source.test.ts", "tests/other.test.ts", "tests/dynamic.test.ts"];
+    const paths = names.map(name => relative(process.cwd(), join(root, name)));
+    const source = ["export const x=1", "export const x=2",
+      `readFileSync('${paths[0]}', 'utf8')`, `readFileSync('${paths[1]}', 'utf8')`, "readFileSync(dynamicPath)"];
+    paths.forEach((path, index) => writeFileSync(path, source[index]));
+    const selected = relatedInputs([paths[0]], paths);
+    assert.ok(selected.includes(paths[2]));
+    assert.ok(selected.includes(paths[4]));
+    assert.equal(selected.includes(paths[3]), false);
+  } finally { rmSync(root, { recursive:true, force:true }); }
+});
+
+test("Interface selector maintenance keeps affected wallet coverage without full contract work", () => {
+  const plan = interfacePlan(["scripts/ci/interface-plan.mjs", "components/wallet-provider.tsx"]);
+  assert.equal(plan.full, false);
+  assert.equal(plan.verificationTools, true);
+  assert.ok(plan.browser.includes("wallet-session"));
+  assert.equal(plan.activation, false);
 });
