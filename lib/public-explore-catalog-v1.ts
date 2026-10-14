@@ -45,6 +45,19 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
   // Owner-supplied artwork and social link for this verified, finalized launch.
   // This display correction never creates or changes launch provenance.
   if (provenance?.chainId === 1 &&
+    entry.tokenAddress.toLowerCase() === "0x6c700ba19bdcd7eb530e6ed43f21abd37e8f2888" &&
+    provenance.launchId.toLowerCase() === "0xabd6b492d7325ac78c64233fbcb2baf1d7154065d83326a7dc23b673f6213b3f" &&
+    provenance.stampHash.toLowerCase() === "0x4f7c13a3cc3aef9a49e15428720eaec2609a4a018611f8656a8d42c5b61e96af") {
+    return Object.freeze({
+      ...entry,
+      imageUrl: "/token-images/devil.png",
+      links: [
+        ...(entry.links ?? []).filter(link => link.kind !== "x"),
+        { kind: "x", url: "https://x.com/devil_v4" },
+      ],
+    }) as T;
+  }
+  if (provenance?.chainId === 1 &&
     entry.tokenAddress.toLowerCase() === "0x0f8b5b82a8a62137e4ea563a3709fe4ca1ff1a2d" &&
     provenance.launchId.toLowerCase() === "0xe9be322b6fa0eb33eb6978f837e32a9241286d92ea8fb99dc351a1677926e28d" &&
     provenance.stampHash.toLowerCase() === "0x4b6a9c84746647079d7489ca817c8be9145a87329f6293a89b526e17bb5dc21b") {
