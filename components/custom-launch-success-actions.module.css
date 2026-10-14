@@ -21,10 +21,11 @@
   font-weight: 500;
   line-height: 22px;
   text-decoration: none;
-  transition: background-color 120ms ease;
+  transition: background-color 160ms var(--webde-ease), transform 160ms var(--webde-ease);
 }
 
 .actions .teamTag { font-size: 14px; }
+.actions a:active { transform: scale(0.96); }
 .teamTag img { display: block; flex: none; width: 36px; height: 36px; }
 .actions a:focus-visible { outline: 2px solid var(--brand-ivory); outline-offset: 4px; }
 
@@ -37,7 +38,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .actions a { transition: none; }
+  .actions a { transition: none; transform: none; }
 }
 
 @media (forced-colors: active) {
