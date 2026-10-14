@@ -145,12 +145,12 @@ function customCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
     const words = readEthereumNative30RuntimeWordsV1(recipe.hook, runtime);
     if (!words || !eq(addressWord(words, "poolManager"), key.poolManager)
       || !eq(addressWord(words, "TOKEN"), key.currency1)) continue;
-    if (recipeId === "duelis_native30_v1") {
+    if (recipeId !== "brownie_native30_v1") {
       if (numberWord(words, "LP_FEE") !== BigInt(key.fee) || numberWord(words, "SPACING") !== BigInt(key.tickSpacing)) continue;
     } else if (!eq(addressWord(words, "QUOTE"), ZERO) || numberWord(words, "QUOTE_ID") !== 0n
       || numberWord(words, "QUOTE_IS_0") !== 1n || numberWord(words, "PLATFORM_BPS") !== 30n
       || !eq(addressWord(words, "PLATFORM_RECIPIENT"), recipe.recipient)) continue;
-    return { key, words, recipe, recipeId, vault: recipeId === "duelis_native30_v1"
+    return { key, words, recipe, recipeId, vault: recipeId !== "brownie_native30_v1"
       ? getContractAddress({ from: key.hooks, nonce: 1n }) : key.hooks };
   }
   return null;
@@ -170,10 +170,10 @@ function buildCustomProof(market: EthereumNative30MarketV1, codes: Readonly<Reco
   const bindings: EthereumNative30RuntimeBindingV1[] = [
     { role: "hook", address: key.hooks, runtimeCodeHash: keccak256(hookCode), immutableWords: words },
   ];
-  if (recipeId === "duelis_native30_v1") {
+  if (recipeId !== "brownie_native30_v1") {
     const vaultCode = code(vault);
     if (!vaultCode) return null;
-    const vaultWords = readEthereumNative30RuntimeWordsV1(customRecipes.duelis_native30_v1.vault, vaultCode);
+    const vaultWords = readEthereumNative30RuntimeWordsV1(customRecipes[recipeId].vault, vaultCode);
     if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
       || !eq(addressWord(vaultWords, "kernel"), key.hooks)
       || !eq(addressWord(vaultWords, "creatorRecipient"), addressWord(words, "OWNER"))) return null;
@@ -247,7 +247,7 @@ export function rebuildEthereumNative30RuntimeProofV1(value: unknown, market: Et
       if (!binding || !isAddress(binding.address) || Object.hasOwn(codes, binding.address.toLowerCase())
         || (binding.role !== "hook" && binding.role !== "vault")) return fail();
       codes[binding.address.toLowerCase()] = materializeEthereumNative30RuntimeWordsV1(binding.role === "hook"
-        ? customRecipes[recipeId].hook : customRecipes.duelis_native30_v1.vault, binding.immutableWords!);
+        ? customRecipes[recipeId].hook : recipeId === "brownie_native30_v1" ? fail() : customRecipes[recipeId].vault, binding.immutableWords!);
     }
     const proof = buildCustomProof(market, codes);
     if (!proof || canonical(proof) !== canonical(supplied)) return fail();
