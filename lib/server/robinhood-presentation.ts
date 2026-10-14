@@ -13,6 +13,7 @@ import { MODULE_DEFAULT_TOKEN_IMAGE } from "@/lib/module-mode/token-metadata";
 import { readModuleTokenMetadata } from "@/lib/server/module-mode/token-presentation";
 import { projectionPublicUrl } from "@/lib/custom-launch/launch-projection-v1";
 import { projectLinkLabel } from "@/lib/project-link-label";
+import { readApprovedLaunchPresentations } from "./approved-launch-presentation";
 // @ts-expect-error -- the canonical launch package is ESM JavaScript.
 import { hashProjectMetadata, validateProjectMetadata } from "@/packages/launch/src/project-metadata.mjs";
 
@@ -255,6 +256,7 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
   }
   const ordered = tokens.toSorted((a, b) => a.tokenAddress.toLowerCase().localeCompare(b.tokenAddress.toLowerCase()));
   const marketRequest = knownMarkets ? Promise.resolve(knownMarkets) : readRobinhoodMarkets(tokens).catch(() => new Map<string, RobinhoodCoinMarket>());
+  const approvedRequest = readApprovedLaunchPresentations(tokens,4663);
   const codexMetadata = knownMetadata ?? await readCodexTokenMetadata(ordered.map(token => token.tokenAddress), 4663);
   const custom = ordered.filter(token => {
     const details = codexMetadata.get(token.tokenAddress.toLowerCase());
@@ -263,11 +265,12 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
   });
   const native = ordered.filter(token => isRobinhoodModuleSourceKind(token.sourceKind)
     && !coinImage(codexMetadata.get(token.tokenAddress.toLowerCase())?.imageUrl));
-  const [metadata, moduleMetadata, markets] = await Promise.allSettled([
+  const [metadata, moduleMetadata, markets, approved] = await Promise.allSettled([
     // Keep this outside unstable_cache, which disables the shared fetch cache.
     custom.length ? readMetadata(custom) : Promise.resolve(new Map<string, Metadata>()),
     native.length ? readCachedModuleMetadata(native) : Promise.resolve(new Map<string, Metadata>()),
     marketRequest,
+    approvedRequest,
   ]);
   return tokens.map((token): RobinhoodCoinPresentation => {
     const key = token.tokenAddress.toLowerCase();
@@ -278,7 +281,8 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
       description: typeof publication?.description === "string" ? publication.description.slice(0, 4096) : null,
       links: Array.isArray(publication?.links) ? publication.links.flatMap(link => { const url = projectionPublicUrl(link); return url ? [{ label: projectLinkLabel(url), url }] : []; }) : [],
     } : source.status === "fulfilled" ? source.value.get(key) : undefined;
-    const presentation = mergeCoinMetadata(published ?? { imageUrl: null, description: null, links: [] }, codexMetadata.get(key));
+    const presentation = mergeCoinMetadata(mergeCoinMetadata(published ?? { imageUrl: null, description: null, links: [] },
+      approved.status === "fulfilled" ? approved.value.get(key) : null), codexMetadata.get(key));
     const main = key === MAIN_TOKEN;
     const override = displayOverride(key);
     const links = [...(override?.links ?? presentation?.links ?? [])];

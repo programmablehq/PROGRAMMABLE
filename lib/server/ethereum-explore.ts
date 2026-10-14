@@ -9,6 +9,7 @@ import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
 import { readCodexMarkets } from "./codex-market";
 import { readCodexTokenMetadata } from "./codex-token-metadata";
 import { mergeCoinMetadata } from "@/lib/coin-metadata";
+import { readApprovedLaunchPresentations, type ApprovedPresentationIdentity } from "./approved-launch-presentation";
 import { ETHEREUM_EXPLORE_FILTERS } from "@/lib/ethereum-explore";
 import type { CanonicalTokenExploreEntry } from "@/lib/tokens";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
@@ -149,16 +150,20 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   const selected = filtered.slice((number - 1) * pageSize, number * pageSize);
   const keys = new Set(selected.map(row => row.tokenAddress.toLowerCase()));
   const selectedCanonical = visible.filter(entry => keys.has(entry.tokenAddress.toLowerCase()));
-  const [markets, metadata] = await Promise.all([
-    readCodexMarkets(selectedCanonical, 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
-    readCodexTokenMetadata(selectedCanonical.map(entry => entry.tokenAddress), 1),
+  const selectedIdentities = [...selectedCanonical, ...confirming.filter(entry => keys.has(entry.tokenAddress.toLowerCase()))];
+  const [markets, metadata, approved] = await Promise.all([
+    readCodexMarkets(selectedIdentities, 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
+    readCodexTokenMetadata(selectedIdentities.map(entry => entry.tokenAddress), 1),
+    readApprovedLaunchPresentations(selectedIdentities,1),
   ]);
   return {
     chainId: catalog.chainId, status: catalog.status === "unavailable" && confirming.length ? "partial" as const : catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,
     items: selected,
-    presentations: selectedCanonical.map(entry => ({ tokenAddress: entry.tokenAddress,
-      ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
-        links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
+    presentations: selectedIdentities.map(entry => ({ tokenAddress: entry.tokenAddress,
+      ...mergeCoinMetadata(mergeCoinMetadata({ imageUrl: "imageUrl" in entry ? entry.imageUrl ?? null : null,
+        description: "description" in entry ? entry.description ?? null : null,
+        links: ("links" in entry ? entry.links ?? [] : []).map(link => ({ label: link.kind, url: link.url })) },
+        approved.get(entry.tokenAddress.toLowerCase())), metadata.get(entry.tokenAddress.toLowerCase())),
       market: markets.get(entry.tokenAddress.toLowerCase()) ?? null })),
     page: { number, size: pageSize, totalItems: filtered.length, totalPages, hasMore: number < totalPages },
   };
@@ -202,17 +207,18 @@ export async function readEthereumTokenPresentation(address: string) {
 }
 
 /** Display data for a receipt-backed identity, without creating finality or trading proof. */
-export async function presentEthereumToken(entry: {
+export async function presentEthereumToken(entry: ApprovedPresentationIdentity & {
   tokenAddress: string; poolId: string; name: string | null; symbol: string | null;
   imageUrl?: string; description?: string; links?: CanonicalTokenExploreEntry["links"];
 }) {
-  const [markets, metadata] = await Promise.all([
+  const [markets, metadata, approved] = await Promise.all([
     readCodexMarkets([entry], 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
     readCodexTokenMetadata([entry.tokenAddress], 1),
+    readApprovedLaunchPresentations([entry],1),
   ]);
   return { chainId: 1 as const, tokenAddress: entry.tokenAddress,
     name: entry.name ?? undefined, symbol: entry.symbol,
-    ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
-      links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
+    ...mergeCoinMetadata(mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
+      links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, approved.get(entry.tokenAddress.toLowerCase())), metadata.get(entry.tokenAddress.toLowerCase())),
     market: markets.get(entry.tokenAddress.toLowerCase()) ?? null };
 }

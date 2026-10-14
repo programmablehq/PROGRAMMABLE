@@ -912,7 +912,7 @@ describe("finalized Custom launch metadata feed v1", () => {
     expect(result.entries[0]).toMatchObject({ imageUrl: expected });
   });
 
-  it("does not auto-load a mutable third-party HTTPS presentation image", async () => {
+  it("displays the approved public HTTPS image without changing the launch identity", async () => {
     const result = await enrichRouterCustomSnapshotWithFinalizedMetadataV1(
       routerSnapshot(),
       {
@@ -926,7 +926,7 @@ describe("finalized Custom launch metadata feed v1", () => {
       description: "A finalized Custom Graph project.",
       projectMetadataStatus: "current",
     });
-    expect(result.entries[0]?.imageUrl).toBeUndefined();
+    expect(result.entries[0]?.imageUrl).toBe("https://assets.example.com/mutable-project.webp");
   });
 
   it("keeps Router identity and drops an untrusted image URL", async () => {

@@ -14,6 +14,8 @@ vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumUnifiedExploreCata
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: sources.rhMarkets, readRobinhoodPresentations: sources.presentations }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: sources.ethMarkets }));
 const metadata = vi.hoisted(() => vi.fn());
+const approved = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/server/approved-launch-presentation", () => ({ readApprovedLaunchPresentations: approved }));
 vi.mock("@/lib/server/codex-token-metadata", () => ({ readCodexTokenMetadata: metadata }));
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { readUnifiedLaunches } from "@/lib/server/unified-explore";
@@ -31,6 +33,7 @@ const market = (cap: number): RobinhoodCoinMarket => ({ poolId: pool, marketCapU
 beforeEach(() => {
   vi.clearAllMocks();
   metadata.mockResolvedValue(new Map());
+  approved.mockResolvedValue(new Map());
   recent.mockResolvedValue([]);
   sources.rh.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [rh], sourceEvidence: { verified: "rh" } });
   sources.eth.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", entries: [eth], sourceEvidence: { verified: "eth" } });
@@ -80,6 +83,17 @@ describe("Unified verified source adapter", () => {
     expect(canonical[0]).not.toHaveProperty("confirmation");
     vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([{ ...row, tokenAddress: OWNER_HIDDEN_EXPLORE_IDENTITIES_V1.find(item => item.chainId === 1)!.identity }]);
     expect((await readUnifiedLaunches(1, "NEW")).items).toEqual([]);
+  });
+  it("shows the approved image and links before Codex has metadata for a new receipt", async () => {
+    const row = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now()+30_000,
+      category:"custom" as const,mode:"custom" as const,tokenAddress:other,name:"New project",symbol:"NEW",hookAddress:address,
+      launchId:pool,creator:address,transactionHash:pool,blockHash:pool,blockNumber:"123",poolId:pool,quoteAsset:address,launchedAt:"2026-10-14T20:00:00Z",decimals:18 };
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([row]);
+    approved.mockResolvedValueOnce(new Map([[other,{imageUrl:"https://project.example/approved.png",description:"Approved",links:[{label:"x",url:"https://x.com/project"}]}]]));
+    const result=await readUnifiedLaunches(1,"NEW");
+    expect(result.items).toHaveLength(1);
+    expect(result.presentations).toEqual([expect.objectContaining({tokenAddress:other,imageUrl:"https://project.example/approved.png",description:"Approved",links:[{label:"x",url:"https://x.com/project"}]} )]);
+    expect(approved).toHaveBeenCalledWith([expect.objectContaining({tokenAddress:other,hookAddress:address,creator:address})],1);
   });
   it("preserves the exact pair ticker independently of optional price data", async () => {
     sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [{ ...rh, quoteAsset: other }], sourceEvidence: {} });
