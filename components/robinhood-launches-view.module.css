@@ -362,5 +362,8 @@
 .launchButton:focus-visible { outline: 2px solid var(--webde-ink); outline-offset: 3px; }
 
 .profileActions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.profileCardActions { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; }
+.profileCardRewards { flex: 1; min-width: 0; }
+.profileCardRewards > button { margin-top: 0; }
 .rewardsButton { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: var(--webde-radius-control); color: var(--webde-ink); cursor: pointer; font: inherit; min-height: 44px; padding: 8px 16px; }
 .rewardsButton:focus-visible { outline: 2px solid var(--webde-ink); outline-offset: 3px; }

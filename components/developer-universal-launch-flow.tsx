@@ -201,8 +201,8 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         <div><p className={styles.eyebrow}>Robinhood Chain</p><h3 id={`${recoveryId}-title`}>{title}</h3>{symbol ? <p className={styles.ticker}>{symbol.replace(/^\$+/, "")}</p> : null}</div>
       </div>
     </div>
-    {(!ready || hasUnresolved || busy === "send") ? <div className={styles.progress} aria-live="polite">{!indexedHref ? <h4>{busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4> : null}
-      <p>{indexedHref ? "Your coin is live on Explore." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div> : null}
+    {!indexedHref && (!ready || hasUnresolved || busy === "send") ? <div className={styles.progress} aria-live="polite"><h4>{busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
+      <p>{busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div> : null}
     {plan?.manualReview && !hasUnresolved && !state.terminal
       ? <CustomLaunchStartButton key={`${id}:${plan.manualReview.revision}`} review={plan.manualReview} launchId={id} onStarted={load} /> : null}
     {journalError ? <p role="alert" className={styles.error}>{journalError} This launch remains paused.</p> : null}

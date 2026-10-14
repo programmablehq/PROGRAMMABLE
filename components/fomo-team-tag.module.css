@@ -1,0 +1,20 @@
+.trigger { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; padding: 0; border: 1px solid var(--webde-line); border-radius: 10px; background: var(--webde-surface-raised); color: var(--webde-ink); cursor: pointer; }
+.trigger img { display: block; width: 36px; height: 36px; }
+.trigger:focus-visible { outline: 2px solid var(--brand-ivory); outline-offset: 3px; }
+.dialog { padding: 0; margin: auto; width: 560px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; border: 1px solid #ddd; border-radius: 24px; background: #fff; color: #111; font-family: var(--font-instrument, Arial), sans-serif; }
+.dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.content { position: relative; padding: 36px 32px 32px; }
+.close { position: absolute; inset-block-start: 8px; inset-inline-end: 8px; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 10px; background: transparent; color: #111; cursor: pointer; }
+.content h2 { margin: 0; padding-inline-end: 16px; font-size: 30px; font-weight: 650; line-height: 1.2; letter-spacing: -0.025em; text-wrap: balance; }
+.intro { margin: 14px 0 28px; color: #636363; font-size: 20px; line-height: 1.4; }
+.features { display: grid; gap: 24px; }
+.feature { display: flex; align-items: flex-start; gap: 16px; }
+.icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px; background: #f3f3f3; }
+.feature h3 { margin: 0 0 6px; font-size: 19px; font-weight: 600; line-height: 1.35; }
+.feature p { margin: 0; color: #636363; font-size: 17px; line-height: 1.5; text-wrap: pretty; }
+.setup { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 56px; margin-top: 32px; padding: 12px 20px; border-radius: 14px; background: #111; color: #fff; font-size: 18px; font-weight: 600; line-height: 1.4; text-decoration: none; }
+.dialog :is(button, a):focus-visible { outline: 2px solid #111; outline-offset: 4px; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .trigger:hover { background: var(--webde-control); } .close:hover { background: #f3f3f3; } .setup:hover { background: #2b2b2b; color: #fff; } }
+@media (max-width: 480px) { .content { padding: 36px 20px 20px; } .content h2 { font-size: 26px; } .intro { font-size: 18px; } .feature { gap: 12px; } .feature h3 { font-size: 17px; } .feature p { font-size: 15px; } }
+@media (forced-colors: active) { .trigger, .dialog, .setup { border: 1px solid ButtonText; } }

@@ -158,7 +158,7 @@
 
 /* Keep the owner handoff compact; the complete review remains expandable. */
 .launchItem { width: 100%; max-width: 640px; margin-inline: auto; }
-.completeTitle { margin: 0 0 24px; font-size: 32px; font-weight: 600; line-height: 38px; letter-spacing: -0.02em; text-wrap: balance; }
+.completeTitle { margin: 0 0 24px; font-size: 32px; font-weight: 600; line-height: 38px; letter-spacing: -0.02em; text-align: center; text-wrap: balance; }
 .launchItem[data-highlighted="true"] { border-color: var(--webde-line); }
 .launchTopline { align-items: flex-start; flex-wrap: wrap; }
 .launchTopline .projectArtwork { width: 64px; height: 64px; flex-basis: 64px; border-radius: 16px; }
