@@ -12,12 +12,14 @@ const CALLBACKS = parseAbi([
 ]);
 const RECORD = parseAbi(["function recordFees(uint256 platformAmount,uint256 creatorAmount)"]);
 const READ = parseAbi(["function platformAccrued() view returns(uint256)", "function creatorAccrued() view returns(uint256)", "function balanceOf(address,uint256) view returns(uint256)"]);
+const BROWNIE_READ = parseAbi(["function platformOwed() view returns(uint256)", "function harvestable() view returns(uint256)",
+  "function moduleBudget() view returns(uint256)", "function launchTaxOwed() view returns(uint256)"]);
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /** Trace arguments fix the gross native fee base; exact vault and ERC-6909
  * post-state readbacks establish both the liability and its actual backing. */
 export async function proveEthereumNative30TradeAccrualV1(input: Readonly<{
-  proof: EthereumNative30RuntimeProofV1; request: { zeroForOne: boolean; amountIn: string; hookData: Hex }; router: Address; trace: TradeTraceV1;
+  proof: EthereumNative30RuntimeProofV1; request: { zeroForOne: boolean; amountIn: string; nativeInput?: string; hookData: Hex }; router: Address; trace: TradeTraceV1;
   post: Record<string, Record<string, unknown>>;
   call(to: Address, data: Hex, overrides?: Record<string, Record<string, unknown>>): Promise<Hex>;
 }>) {
@@ -42,9 +44,35 @@ export async function proveEthereumNative30TradeAccrualV1(input: Readonly<{
   if (afterDecoded.functionName !== "afterSwap") return pendingTradeV1("POOL_FEE_CALLBACK_SCOPE_UNPROVEN");
   const nativeDelta = BigInt.asIntN(128, afterDecoded.args[3] >> 128n);
   if (request.zeroForOne ? nativeDelta >= 0n : nativeDelta <= 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
-  const grossNative = request.zeroForOne ? BigInt(request.amountIn) : nativeDelta < 0n ? -nativeDelta : nativeDelta;
-  const platform = (grossNative * BigInt(proof.rateBps) + 9999n) / 10000n;
-  if (grossNative <= 0n || platform <= 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
+  const grossNative = request.zeroForOne ? BigInt(request.nativeInput ?? request.amountIn) : nativeDelta;
+  const platform = (grossNative * BigInt(proof.rateBps) + (proof.rounding === "ceil_per_trade" ? 9999n : 0n)) / 10000n;
+  if (grossNative <= 0n || platform < 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
+  if (proof.recipeId === "brownie_native30_v1") {
+    const read = async (name: "platformOwed" | "harvestable" | "moduleBudget" | "launchTaxOwed", afterState: boolean) => {
+      const raw = await call(proof.feeVault, encodeFunctionData({ abi: BROWNIE_READ, functionName: name }), afterState ? post : undefined);
+      if (!/^0x[0-9a-f]{64}$/i.test(raw)) return pendingTradeV1("POOL_FEE_LEDGER_READ_PENDING");
+      return BigInt(raw);
+    };
+    const ledger = async (afterState: boolean) => {
+      const [platform, ...project] = await Promise.all([read("platformOwed", afterState), read("harvestable", afterState),
+        read("moduleBudget", afterState), read("launchTaxOwed", afterState)]);
+      const raw = await call(proof.market.poolManager, encodeFunctionData({ abi: READ, functionName: "balanceOf", args: [proof.feeVault, 0n] }), afterState ? post : undefined);
+      if (!/^0x[0-9a-f]{64}$/i.test(raw)) return pendingTradeV1("POOL_FEE_LEDGER_READ_PENDING");
+      return { platform: platform!, creator: project.reduce((sum, value) => sum + value, 0n), backing: BigInt(raw) };
+    };
+    const [before, after] = await Promise.all([ledger(false), ledger(true)]);
+    if (after.platform - before.platform !== platform || before.backing < before.platform + before.creator
+      || after.backing < after.platform + after.creator
+      || after.backing - before.backing !== platform + after.creator - before.creator) return pendingTradeV1("POOL_FEE_BACKING_UNPROVEN");
+    return { proofDigest: proof.proofDigest, vault: proof.feeVault, currency: ZERO, recipient: proof.recipient, rateBps: proof.rateBps,
+      assessmentBase: proof.assessmentBase, rounding: proof.rounding, grossNativeAmount: grossNative.toString(), nativePoolDelta: nativeDelta.toString(),
+      platformAccruedIncrease: platform.toString(), platformAccruedBefore: before.platform.toString(), platformAccruedAfter: after.platform.toString(),
+      creatorAccruedBefore: before.creator.toString(), creatorAccruedAfter: after.creator.toString(), creatorAccruedIncrease: (after.creator - before.creator).toString(),
+      backingBefore: before.backing.toString(), backingAfter: after.backing.toString(), backingIncrease: (after.backing - before.backing).toString(),
+      callbackTraceDigest: canonicalBrowserSha256V2("programmable.immutable-pool-fee-callback-trace.v1", callbacks.map(c => c.frame)),
+      recordTraceDigest: canonicalBrowserSha256V2("programmable.brownie-fee-ledger.v1", { before: { platform: before.platform.toString(), creator: before.creator.toString(), backing: before.backing.toString() },
+        after: { platform: after.platform.toString(), creator: after.creator.toString(), backing: after.backing.toString() } }) };
+  }
   const recorded = frames.filter(frame => frame.type === "CALL" && frame.to && same(frame.to, proof.feeVault)
     && same(frame.from, proof.feeRecorder)).flatMap(frame => {
       try { return [{ frame, args: decodeFunctionData({ abi: RECORD, data: frame.input }).args }]; } catch { return []; }
@@ -63,7 +91,7 @@ export async function proveEthereumNative30TradeAccrualV1(input: Readonly<{
     || backingAfter - backingBefore !== platform + recorded[0]!.args[1]
     || backingBefore < platformBefore + creatorBefore || backingAfter < platformAfter + creatorAfter) return pendingTradeV1("POOL_FEE_BACKING_UNPROVEN");
   return { proofDigest: proof.proofDigest, vault: proof.feeVault, currency: ZERO, recipient: proof.recipient, rateBps: proof.rateBps,
-    assessmentBase: "gross_native_leg", rounding: "ceil_per_trade", grossNativeAmount: grossNative.toString(),
+    assessmentBase: "gross_native_leg", rounding: proof.rounding, grossNativeAmount: grossNative.toString(),
     nativePoolDelta: nativeDelta.toString(), platformAccruedIncrease: platform.toString(),
     platformAccruedBefore: platformBefore.toString(), platformAccruedAfter: platformAfter.toString(),
     creatorAccruedBefore: creatorBefore.toString(), creatorAccruedAfter: creatorAfter.toString(), creatorAccruedIncrease: (creatorAfter - creatorBefore).toString(),

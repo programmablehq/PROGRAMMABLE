@@ -3,6 +3,7 @@ import { ETHEREUM_NATIVE30_RECIPES_V1 } from "./ethereum-native30-recipes-v1";
 
 import { ETHEREUM_NATIVE30_RECIPES_V2 } from "./ethereum-native30-recipes-v2";
 import { ETHEREUM_NATIVE100_RECIPES_V1 } from "./ethereum-native100-recipes-v1";
+import { ETHEREUM_CUSTOM_NATIVE30_RECIPES_V1 as customRecipes } from "./ethereum-custom-native30-recipes-v1";
 const recipes = {
   ...ETHEREUM_NATIVE100_RECIPES_V1,
   native30_fee_kernel_v2: { ...ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2, recipient: "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c" },
@@ -17,7 +18,7 @@ export const ETHEREUM_NATIVE30_RECIPIENT_V1 = "0x4957f49620AFf3Adbbe8195a4f633E4
 export const ETHEREUM_NATIVE30_MANAGER_V1 = "0x000000000004444c5dc75cB358380D2e3dE08A90" as Address;
 export type EthereumNative30MarketV1 = Readonly<{ chainId: "1"; poolManager: Address; currency0: Address;
   currency1: Address; fee: number; tickSpacing: number; hooks: Address }>;
-export type EthereumNative30RecipeIdV1 = keyof typeof recipes;
+export type EthereumNative30RecipeIdV1 = keyof typeof recipes | keyof typeof customRecipes;
 type Recipe = Readonly<{ runtimeTemplateHex: Hex;
   immutableWords: readonly Readonly<{ name: string; byteOffsets: readonly number[] }>[] }>;
 export type EthereumNative30RuntimeBindingV1 = Readonly<{ role: "hook" | "vault" | "module";
@@ -33,7 +34,7 @@ export interface EthereumNative30RuntimeProofV1 {
   readonly scope: "exact_pool_key";
   readonly feeCurrency: "native";
   readonly assessmentBase: "gross_native_leg";
-  readonly rounding: "ceil_per_trade";
+  readonly rounding: "ceil_per_trade" | "floor_per_trade";
   readonly accrual: "backed_pool_manager_native_claims";
   readonly claim: "permissionless_fixed_recipient";
   readonly feeVault: Address;
@@ -62,8 +63,7 @@ function marketKey(market: EthereumNative30MarketV1): EthereumNative30MarketV1 {
     || !eq(market.poolManager, ETHEREUM_NATIVE30_MANAGER_V1) || !eq(market.currency0, ZERO)
     || eq(market.currency1, ZERO) || eq(market.hooks, ZERO) || !Number.isSafeInteger(market.fee)
     || !(market.fee >= 0 && (market.fee <= 1000000 || market.fee === 0x800000))
-    || !Number.isSafeInteger(market.tickSpacing) || market.tickSpacing <= 0 || market.tickSpacing > 32767
-    || (BigInt(market.hooks) & 0x3fffn) !== 0x20ccn) return fail();
+    || !Number.isSafeInteger(market.tickSpacing) || market.tickSpacing <= 0 || market.tickSpacing > 32767) return fail();
   return { ...market, poolManager: getAddress(market.poolManager), currency0: getAddress(market.currency0),
     currency1: getAddress(market.currency1), hooks: getAddress(market.hooks) };
 }
@@ -109,7 +109,8 @@ export function materializeEthereumNative30RuntimeWordsV1(recipe: Recipe, words:
 
 function hookCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
   const key = marketKey(market);
-  const match = (Object.keys(recipes) as EthereumNative30RecipeIdV1[]).map(recipeId => ({
+  if ((BigInt(key.hooks) & 0x3fffn) !== 0x20ccn) return null;
+  const match = (Object.keys(recipes) as (keyof typeof recipes)[]).map(recipeId => ({
     recipeId, recipe: recipes[recipeId], words: readEthereumNative30RuntimeWordsV1(recipes[recipeId].hook, runtime),
   })).find(candidate => candidate.words !== null);
   if (!match?.words) return null;
@@ -127,9 +128,66 @@ function hookCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
 }
 export function ethereumNative30RequiredAddressesV1(market: EthereumNative30MarketV1, hookRuntime: Hex): readonly Address[] | null {
   try {
+    const custom = customCandidate(market, hookRuntime);
+    if (custom) return frozen([...new Set([custom.key.hooks, custom.vault])]);
     const candidate = hookCandidate(market, hookRuntime); if (!candidate) return null;
     return frozen([candidate.key.hooks, candidate.vault, ...(eq(candidate.feeModule, ZERO) ? [] : [candidate.feeModule])]);
   } catch { return null; }
+}
+
+/** These templates establish only fee custody. Admission, project fees and
+ * the actual swap still have to pass their independent checks. */
+function customCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
+  const key = marketKey(market);
+  for (const recipeId of Object.keys(customRecipes) as (keyof typeof customRecipes)[]) {
+    const recipe = customRecipes[recipeId];
+    if ((BigInt(key.hooks) & 0x3fffn) !== BigInt(recipe.hookFlags)) continue;
+    const words = readEthereumNative30RuntimeWordsV1(recipe.hook, runtime);
+    if (!words || !eq(addressWord(words, "poolManager"), key.poolManager)
+      || !eq(addressWord(words, "TOKEN"), key.currency1)) continue;
+    if (recipeId === "duelis_native30_v1") {
+      if (numberWord(words, "LP_FEE") !== BigInt(key.fee) || numberWord(words, "SPACING") !== BigInt(key.tickSpacing)) continue;
+    } else if (!eq(addressWord(words, "QUOTE"), ZERO) || numberWord(words, "QUOTE_ID") !== 0n
+      || numberWord(words, "QUOTE_IS_0") !== 1n || numberWord(words, "PLATFORM_BPS") !== 30n
+      || !eq(addressWord(words, "PLATFORM_RECIPIENT"), recipe.recipient)) continue;
+    return { key, words, recipe, recipeId, vault: recipeId === "duelis_native30_v1"
+      ? getContractAddress({ from: key.hooks, nonce: 1n }) : key.hooks };
+  }
+  return null;
+}
+
+function buildCustomProof(market: EthereumNative30MarketV1, codes: Readonly<Record<string, Hex>>): EthereumNative30RuntimeProofV1 | null {
+  const code = (address: Address) => {
+    const matches = Object.entries(codes).filter(([key]) => eq(key, address)).map(([, value]) => value);
+    if (matches.some(value => value !== matches[0])) return fail();
+    return matches[0];
+  };
+  const hookCode = code(market.hooks);
+  if (!hookCode) return null;
+  const candidate = customCandidate(market, hookCode);
+  if (!candidate) return null;
+  const { key, words, recipe, recipeId, vault } = candidate;
+  const bindings: EthereumNative30RuntimeBindingV1[] = [
+    { role: "hook", address: key.hooks, runtimeCodeHash: keccak256(hookCode), immutableWords: words },
+  ];
+  if (recipeId === "duelis_native30_v1") {
+    const vaultCode = code(vault);
+    if (!vaultCode) return null;
+    const vaultWords = readEthereumNative30RuntimeWordsV1(customRecipes.duelis_native30_v1.vault, vaultCode);
+    if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
+      || !eq(addressWord(vaultWords, "kernel"), key.hooks)
+      || !eq(addressWord(vaultWords, "creatorRecipient"), addressWord(words, "OWNER"))) return null;
+    bindings.push({ role: "vault", address: vault, runtimeCodeHash: keccak256(vaultCode), immutableWords: vaultWords });
+  }
+  const body = { schemaVersion: ETHEREUM_NATIVE30_PROOF_SCHEMA_V1, recipeId, sourceArtifactHash: recipe.sourceArtifactHash,
+    market: key, recipient: getAddress(recipe.recipient), rateBps: 30 as const, denominator: 10000 as const,
+    scope: "exact_pool_key" as const, feeCurrency: "native" as const, assessmentBase: "gross_native_leg" as const,
+    rounding: recipeId === "brownie_native30_v1" ? "floor_per_trade" as const : "ceil_per_trade" as const,
+    accrual: "backed_pool_manager_native_claims" as const, claim: "permissionless_fixed_recipient" as const,
+    feeVault: vault, feeRecorder: key.hooks, runtimeBindings: bindings };
+  const proof = frozen({ ...body, proofDigest: keccak256(stringToHex(`${ETHEREUM_NATIVE30_PROOF_SCHEMA_V1}\n${canonical(body)}`)) });
+  issued.add(proof);
+  return proof;
 }
 
 function buildProof(market: EthereumNative30MarketV1, codes: Readonly<Record<string, Hex>>, rebuildSourceOnly: boolean) {
@@ -169,7 +227,7 @@ function buildProof(market: EthereumNative30MarketV1, codes: Readonly<Record<str
  * still proves where/when those exact bytes were observed independently. */
 export function proveEthereumNative30RuntimeV1(market: EthereumNative30MarketV1,
   codes: Readonly<Record<string, Hex>>): EthereumNative30RuntimeProofV1 | null {
-  try { return buildProof(market, codes, false); } catch { return null; }
+  try { return buildCustomProof(market, codes) ?? buildProof(market, codes, false); } catch { return null; }
 }
 export function assertIssuedEthereumNative30RuntimeProofV1(proof: EthereumNative30RuntimeProofV1, market: EthereumNative30MarketV1): void {
   if (!issued.has(proof) || canonical(proof.market) !== canonical(marketKey(market))) return fail();
@@ -181,6 +239,20 @@ export function assertIssuedEthereumNative30RuntimeProofV1(proof: EthereumNative
 export function rebuildEthereumNative30RuntimeProofV1(value: unknown, market: EthereumNative30MarketV1): EthereumNative30RuntimeProofV1 {
   if (!value || typeof value !== "object" || Array.isArray(value)) return fail();
   const supplied = value as EthereumNative30RuntimeProofV1;
+  if (Object.hasOwn(customRecipes, supplied.recipeId)) {
+    const recipeId = supplied.recipeId as keyof typeof customRecipes;
+    if (!Array.isArray(supplied.runtimeBindings) || supplied.runtimeBindings.length !== (recipeId === "brownie_native30_v1" ? 1 : 2)) return fail();
+    const codes: Record<string, Hex> = {};
+    for (const binding of supplied.runtimeBindings) {
+      if (!binding || !isAddress(binding.address) || Object.hasOwn(codes, binding.address.toLowerCase())
+        || (binding.role !== "hook" && binding.role !== "vault")) return fail();
+      codes[binding.address.toLowerCase()] = materializeEthereumNative30RuntimeWordsV1(binding.role === "hook"
+        ? customRecipes[recipeId].hook : customRecipes.duelis_native30_v1.vault, binding.immutableWords!);
+    }
+    const proof = buildCustomProof(market, codes);
+    if (!proof || canonical(proof) !== canonical(supplied)) return fail();
+    return proof;
+  }
   if (!Object.hasOwn(recipes, supplied.recipeId) || !Array.isArray(supplied.runtimeBindings)
     || supplied.runtimeBindings.length < 2 || supplied.runtimeBindings.length > 3) return fail();
   const codes: Record<string, Hex> = {}, roles = new Set<string>(), addresses = new Set<string>();
@@ -190,7 +262,7 @@ export function rebuildEthereumNative30RuntimeProofV1(value: unknown, market: Et
     roles.add(binding.role); addresses.add(binding.address.toLowerCase());
     if (binding.role === "module") { if (binding.immutableWords !== null) return fail(); }
     else codes[binding.address.toLowerCase()] = materializeEthereumNative30RuntimeWordsV1(
-      binding.role === "hook" ? recipes[supplied.recipeId].hook : recipes[supplied.recipeId].vault,
+      binding.role === "hook" ? recipes[supplied.recipeId as keyof typeof recipes].hook : recipes[supplied.recipeId as keyof typeof recipes].vault,
       binding.immutableWords!,
     );
   }
