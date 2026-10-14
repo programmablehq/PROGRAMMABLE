@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { FomoTeamTagButton } from "./fomo-team-tag";
+import { ProfileLaunchRewards } from "./profile-launch-rewards";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import type { FoundationProfileLaunch } from "@/lib/profile/module-launches";
 import type { Hex } from "viem";
@@ -463,6 +465,11 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
                 </Link>
                 {details?.links.length ? <RobinhoodProjectLinks links={details.links}
                   name={launch.name?.trim() || (hasAsset ? "Token" : "Project")} className={styles.socials} /> : null}
+                {profile?.enableClaims && profile.account.toLowerCase() === launch.creator.toLowerCase() ? <div className={styles.profileCardActions}>
+                  <div className={styles.profileCardRewards}><ProfileLaunchRewards launch={launch} account={profile.account} chainId={launchChainId}
+                    sendWallet={profile.sendWallet} onEthereumClaim={profile.onEthereumClaim} /></div>
+                  <FomoTeamTagButton name={launch.name?.trim() || "your coin"} />
+                </div> : null}
                 </article>
               </li>
             );})}

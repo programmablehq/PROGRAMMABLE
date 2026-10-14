@@ -49,6 +49,7 @@ test('Ethereum cards retain the unified index mode instead of Robinhood source h
     page: {number: 1, size: 10, totalItems: 3, totalPages: 1, hasMore: false},
   }}));
   await page.goto(origin + '?standalone');
+  await expect(page.getByRole('button', {name:/Set up a fomo team tag/})).toHaveCount(0);
   for (const [index, label] of ['Module', 'Custom', 'Classic'].entries()) {
     const card = page.getByRole('link', {name: new RegExp(`Ethereum fixture ${index}`)});
     await expect(card).toContainText(label);
@@ -57,6 +58,25 @@ test('Ethereum cards retain the unified index mode instead of Robinhood source h
 });
 
 for (const width of [1440, 390]) {
+  test(`profile owner can open and dismiss the fomo team-tag dialog at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width,height:900});
+    await page.goto(origin+'?profile&chain=1');
+    const trigger = page.getByRole('button', {name:'Set up a fomo team tag for Launch 1',exact:true});
+    await trigger.click();
+    const dialog = page.getByRole('dialog', {name:'Reach your holders on fomo',exact:true});
+    await expect(dialog).toBeVisible();
+    const setup = dialog.getByRole('link', {name:'Set up on fomo (opens in a new tab)',exact:true});
+    await expect(setup).toHaveAttribute('href','https://fomo.family/team-tag-form');
+    await expect(setup).toHaveAttribute('target','_blank');
+    await expect(dialog.getByRole('button', {name:'Close fomo team tag',exact:true})).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(setup).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  });
+
   test(`one profile list combines chains and clears the previous wallet at ${width}px`, async ({page}, testInfo) => {
     const errors: string[]=[]; page.on('pageerror',error=>errors.push(error.message));
     await page.setViewportSize({width,height:900});
