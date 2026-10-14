@@ -42,6 +42,29 @@ function fixture(side: RecordedCase = "buy", change?: (value: unknown, method: s
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("automatic stamped Ethereum swaps", () => {
+  it("reuses identical pinned reads only within one preparation", async () => {
+    const f = fixture();
+    await f.prepare();
+    for (const rpc of f.rpcs) {
+      const calls = vi.mocked(rpc).mock.calls.filter(([method, params]) =>
+        ["eth_call", "eth_getCode", "eth_getBalance"].includes(method)
+        && typeof params[1] === "object" && params[1] !== null && "blockHash" in params[1]);
+      expect(new Set(calls.map(call => JSON.stringify(call))).size).toBe(calls.length);
+    }
+    const before = f.rpcs.map(rpc => vi.mocked(rpc).mock.calls.length);
+    await f.prepare();
+    f.rpcs.forEach((rpc, index) => expect(vi.mocked(rpc).mock.calls.length).toBe(before[index] * 2));
+  });
+  it("still performs a fresh canonical-block check after both simulations", async () => {
+    const reads = [0, 0];
+    const checkpoint = recording.buy.rpcs[0].find(item => item.method === "eth_getBlockByNumber" && item.params[0] !== "latest")!.params[0];
+    const f = fixture("buy", (value, method, params, provider) => {
+      if (method === "eth_getBlockByNumber" && params[0] === checkpoint
+        && ++reads[provider] > 1) return { ...(value as object), hash: `0x${"77".repeat(32)}` };
+      return value;
+    });
+    await expect(f.prepare()).rejects.toMatchObject({ code: "ETHEREUM_SWAP_CHECKPOINT_CHANGED" });
+  });
   it("simulates the actual owner's complete buy and binds both current proxy implementations", async () => {
     const f = fixture(), prepared = await f.prepare();
     expect(validateEthereumStampedPreparation(prepared, f.route, f.request, f.now())).toEqual(prepared);

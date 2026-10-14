@@ -79,6 +79,25 @@ export interface EthereumSwapDependencies {
   readFeeClassification?: typeof readEthereumFeeClassificationV1;
 }
 
+/** Reuse only identical reads pinned to a canonical block, within one
+ * preparation. A later preparation and the final canonical-block check stay fresh. */
+function reusePinnedReads(read: TradeRpcV1): TradeRpcV1 {
+  const saved = new Map<string, Promise<unknown>>();
+  return (method, params) => {
+    const reference = params[1];
+    if (!["eth_call", "eth_getCode", "eth_getBalance"].includes(method)
+      || !reference || typeof reference !== "object" || Array.isArray(reference)
+      || !("blockHash" in reference) || typeof reference.blockHash !== "string"
+      || !("requireCanonical" in reference) || reference.requireCanonical !== true) return read(method, params);
+    const key = canonicalBrowserJsonV2([method, params]);
+    const existing = saved.get(key);
+    if (existing) return existing;
+    const pending = read(method, params).catch(error => { saved.delete(key); throw error; });
+    saved.set(key, pending);
+    return pending;
+  };
+}
+
 export async function prepareEthereumStampedSwap(value: unknown, dependencies: EthereumSwapDependencies = {}): Promise<EthereumStampedSwapPreparation> {
   const request = parseEthereumStampedSwapRequest(value);
   if (dependencies.rpcs || dependencies.readSnapshot || dependencies.now || dependencies.readFeeClassification) return prepare(request, dependencies);
@@ -101,7 +120,9 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
   // no execution authority: recheck its canonical launch block and stamp, then
   // simulate the actual transaction against fresh independent RPC state.
   if (!route || route.routeBindingHash !== request.routeBindingHash) return unavailable("ETHEREUM_LAUNCH_ROUTE_CHANGED");
-  const rpcs = dependencies.rpcs ?? productionEthereumSwapRpcs(), rpc = agreedTradeRpcV1(rpcs);
+  const providers = dependencies.rpcs ?? productionEthereumSwapRpcs();
+  const rpcs = [reusePinnedReads(providers[0]), reusePinnedReads(providers[1])] as const;
+  const rpc = agreedTradeRpcV1(rpcs);
   const [chainId, tips] = await Promise.all([
     rpc("eth_chainId", [], value => quantityV1(value).toString()),
     Promise.all(rpcs.map(async read => tradeBlockV1(await read("eth_getBlockByNumber", ["latest", false])))),
@@ -114,8 +135,6 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
   if (BigInt(request.deadline) <= now() || BigInt(request.deadline) > BigInt(block.timestamp) + 300n) throw new EthereumStampedSwapError("Get a fresh swap quote.", "ETHEREUM_DEADLINE_INVALID", 400);
   const reference = { blockHash: block.hash, requireCanonical: true }, stamp = route.stamp;
   if (height < BigInt(stamp.blockNumber) + 64n) return unavailable("ETHEREUM_LAUNCH_NOT_FINALIZED");
-  const launchBlock = await rpc("eth_getBlockByNumber", [toHex(BigInt(stamp.blockNumber)), false], tradeBlockV1);
-  if (!same(launchBlock.hash, stamp.blockHash) || launchBlock.number !== stamp.blockNumber) return unavailable("ETHEREUM_LAUNCH_CHECKPOINT_CHANGED");
   const call = async (address: Address, data: Hex, overrides?: Record<string, Record<string, unknown>>) =>
     bytesV1(await rpc("eth_call", [{ from: request.owner, to: address, data }, reference, ...(overrides ? [overrides] : [])], bytesV1));
   const tokenUint = async (functionName: "balanceOf" | "allowance", args: readonly Address[], overrides?: Record<string, Record<string, unknown>>) => {
@@ -125,32 +144,44 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
   };
   const runtimeBindings = [...ethereumStampedRuntimeBindings(route)];
   const runtimeCodes: Record<string, Hex> = {};
-  await Promise.all(runtimeBindings.map(async expected => {
-    const code = bytesV1(await rpc("eth_getCode", [expected.address, reference], bytesV1));
-    if (code === "0x" || !same(keccak256(code), expected.runtimeCodeHash)) return unavailable("ETHEREUM_LAUNCH_RUNTIME_CHANGED");
-    runtimeCodes[expected.address.toLowerCase()] = code;
-  }));
-  let native30Proof: EthereumNative30RuntimeProofV1 | undefined;
-  if (ethereumRouteRequiresFee(route)) {
-    const market = ethereumNative30Market(route);
-    const required = ethereumNative30RequiredAddressesV1(market, runtimeCodes[market.hooks.toLowerCase()] ?? "0x");
-    if (required) {
-      for (const address of required) if (!runtimeCodes[address.toLowerCase()]) {
+  const [launchBlock] = await Promise.all([
+    rpc("eth_getBlockByNumber", [toHex(BigInt(stamp.blockNumber)), false], tradeBlockV1),
+    Promise.all(runtimeBindings.map(async expected => {
+      const code = bytesV1(await rpc("eth_getCode", [expected.address, reference], bytesV1));
+      if (code === "0x" || !same(keccak256(code), expected.runtimeCodeHash)) return unavailable("ETHEREUM_LAUNCH_RUNTIME_CHANGED");
+      runtimeCodes[expected.address.toLowerCase()] = code;
+    })),
+  ]);
+  if (!same(launchBlock.hash, stamp.blockHash) || launchBlock.number !== stamp.blockNumber) return unavailable("ETHEREUM_LAUNCH_CHECKPOINT_CHANGED");
+  const router = getAddress(stamp.routerAddress);
+  const [native30Proof, [proofData, poolData, recordData, decimalsData], [nativeBalance, gasPrice]] = await Promise.all([
+    (async (): Promise<EthereumNative30RuntimeProofV1 | undefined> => {
+      if (!ethereumRouteRequiresFee(route)) return;
+      const market = ethereumNative30Market(route);
+      const required = ethereumNative30RequiredAddressesV1(market, runtimeCodes[market.hooks.toLowerCase()] ?? "0x");
+      if (!required) return;
+      const extra = await Promise.all(required.filter(address => !runtimeCodes[address.toLowerCase()]).map(async address => {
         const code = bytesV1(await rpc("eth_getCode", [address, reference], bytesV1));
         if (code === "0x") return unavailable("ETHEREUM_POOL_FEE_RUNTIME_PENDING");
         runtimeCodes[address.toLowerCase()] = code;
-        runtimeBindings.push({ address, runtimeCodeHash: keccak256(code) });
-      }
-      native30Proof = proveEthereumNative30RuntimeV1(market, runtimeCodes) ?? undefined;
-      if (!native30Proof) return unavailable("ETHEREUM_POOL_FEE_RUNTIME_PENDING");
-    }
-  }
-  const router = getAddress(stamp.routerAddress);
-  const [proofData, poolData, recordData, decimalsData] = await Promise.all([
-    call(router, encodeFunctionData({ abi: launchStampRouterReadAbi, functionName: "stampProof", args: [request.token] })),
-    call(router, encodeFunctionData({ abi: launchStampRouterReadAbi, functionName: "launchIdByPool", args: [getAddress(stamp.poolManagerAddress), stamp.poolId] })),
-    call(router, encodeFunctionData({ abi: launchStampRouterReadAbi, functionName: "launchStamp", args: [stamp.launchId] })),
-    call(request.token, encodeFunctionData({ abi: parseAbi(["function decimals() view returns (uint8)"]), functionName: "decimals" })),
+        return { address, runtimeCodeHash: keccak256(code) };
+      }));
+      runtimeBindings.push(...extra);
+      const proof = proveEthereumNative30RuntimeV1(market, runtimeCodes);
+      if (!proof) return unavailable("ETHEREUM_POOL_FEE_RUNTIME_PENDING");
+      return proof;
+    })(),
+    Promise.all([
+      call(router, encodeFunctionData({ abi: launchStampRouterReadAbi, functionName: "stampProof", args: [request.token] })),
+      call(router, encodeFunctionData({ abi: launchStampRouterReadAbi, functionName: "launchIdByPool", args: [getAddress(stamp.poolManagerAddress), stamp.poolId] })),
+      call(router, encodeFunctionData({ abi: launchStampRouterReadAbi, functionName: "launchStamp", args: [stamp.launchId] })),
+      call(request.token, encodeFunctionData({ abi: parseAbi(["function decimals() view returns (uint8)"]), functionName: "decimals" })),
+    ]),
+    Promise.all([
+      rpc("eth_getBalance", [request.owner, reference], value => quantityV1(value).toString()),
+      Promise.all(rpcs.map(async read => quantityV1(await read("eth_gasPrice", []))))
+        .then(prices => prices.reduce((maximum, price) => price > maximum ? price : maximum, 0n).toString()),
+    ]),
   ]);
   const proof = decodeFunctionResult({ abi: launchStampRouterReadAbi, functionName: "stampProof", data: proofData });
   const record = decodeFunctionResult({ abi: launchStampRouterReadAbi, functionName: "launchStamp", data: recordData });
@@ -161,11 +192,6 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
   if (record.kind !== 1 || !same(proof[0], stamp.launchId) || !same(proof[1], stamp.stampHash) || !same(poolData, stamp.launchId)
     || Object.entries(fields).some(([key, expected]) => !same(record[key as keyof typeof record] as string, expected))
     || BigInt(decimalsData) !== BigInt(route.tokenDecimals)) return unavailable("ETHEREUM_STAMP_READBACK_CHANGED");
-  const [nativeBalance, gasPrice] = await Promise.all([
-    rpc("eth_getBalance", [request.owner, reference], value => quantityV1(value).toString()),
-    Promise.all(rpcs.map(async read => quantityV1(await read("eth_gasPrice", []))))
-      .then(prices => prices.reduce((maximum, price) => price > maximum ? price : maximum, 0n).toString()),
-  ]);
   let transaction: PreparedTradeTransaction | undefined;
   if (request.side === "sell") {
     const [balance, allowance, permitData] = await Promise.all([
@@ -183,10 +209,11 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
   const feePolicy = requiresFee ? ethereumRouteFeePolicy(route) : null;
   if (native30Proof && feePolicy && !ethereumPoolFeeMatchesPolicy(feePolicy.policy, native30Proof)) return unavailable("ETHEREUM_POOL_FEE_RECIPIENT_MISMATCH");
   const recipient = getAddress(feePolicy?.policy.defaultCollection.recipient ?? ETHEREUM_ROUTING_FEE_POLICY_V1.defaultCollection.recipient);
-  const recipientBefore = requiresFee && !native30Proof
-    ? same(request.owner, recipient) ? nativeBalance : await rpc("eth_getBalance", [recipient, reference], value => quantityV1(value).toString()) : "0";
-  const routerNativeBefore = requiresFee
-    ? await rpc("eth_getBalance", [getAddress(protocol.router.address), reference], value => quantityV1(value).toString()) : "0";
+  const [recipientBefore, routerNativeBefore] = await Promise.all([
+    requiresFee && !native30Proof
+      ? same(request.owner, recipient) ? nativeBalance : rpc("eth_getBalance", [recipient, reference], value => quantityV1(value).toString()) : "0",
+    requiresFee ? rpc("eth_getBalance", [getAddress(protocol.router.address), reference], value => quantityV1(value).toString()) : "0",
+  ]);
   let fee: EthereumSwapFeeV1 | undefined = requiresFee ? {
     policyHash: feePolicy!.policyHash, mode: native30Proof ? native30Proof.rateBps === 100 ? "pool_enforced_native100" : "pool_enforced_native30" : "programmable_routed",
     rateBps: feePolicy!.policy.rateBps, routedRateBps: native30Proof ? 0 : feePolicy!.policy.defaultCollection.routedRateBps, recipient,
@@ -282,7 +309,10 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
     amountOut = await readSettlement(await simulate(ethereumStampedProbeTransaction(route, request, native30Proof)));
     transaction = ethereumStampedSwapTransaction(route, request, amountOut, native30Proof);
   }
-  const finalSimulation = await simulate(transaction);
+  const [finalSimulation, estimatedGas] = await Promise.all([
+    simulate(transaction),
+    readTradeGasEstimateV1(rpcs, { from: request.owner, to: transaction.to, data: transaction.data, value: toHex(BigInt(transaction.value)) }, tag),
+  ]);
   if (transaction.kind === "swap") {
     if (await readSettlement(finalSimulation) !== amountOut) return unavailable("ETHEREUM_SWAP_QUOTE_CHANGED");
   } else if (transaction.kind === "token-to-permit2") {
@@ -302,7 +332,7 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
   }));
   runtimeBindings.push(...observed.filter((binding): binding is EthereumSwapRuntimeBinding => binding !== null));
   runtimeBindings.sort((a, b) => a.address.toLowerCase().localeCompare(b.address.toLowerCase()));
-  const gas = BigInt(await readTradeGasEstimateV1(rpcs, { from: request.owner, to: transaction.to, data: transaction.data, value: toHex(BigInt(transaction.value)) }, tag));
+  const gas = BigInt(estimatedGas);
   if (gas < finalSimulation.gasUsed || gas > 2_000_000n || BigInt(gasPrice) <= 0n) return unavailable("ETHEREUM_SWAP_GAS_INVALID");
   const gasLimit = (gas * 120n + 99n) / 100n, gasReserve = (gasLimit * BigInt(gasPrice) * 125n + 99n) / 100n;
   if (BigInt(nativeBalance) < BigInt(transaction.value) + gasReserve) throw new EthereumStampedSwapError("Keep some ETH in your wallet for gas.", "ETHEREUM_NATIVE_BALANCE", 400);
