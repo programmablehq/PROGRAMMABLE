@@ -14,6 +14,7 @@ export function foundationLaunchBalanceError(balance: bigint | undefined, initia
 export class FoundationLaunchBalance {
   private snapshot?: { value: bigint; time: number };
   private pending?: Promise<bigint | undefined>;
+  private lastAttemptAt = -Infinity;
   private listeners = new Set<() => void>();
 
   getSnapshot = (): bigint | undefined => this.snapshot?.value;
@@ -27,6 +28,8 @@ export class FoundationLaunchBalance {
   read(refresh = false): Promise<bigint | undefined> {
     if (this.pending) return this.pending;
     if (!refresh && this.snapshot && Date.now() - this.snapshot.time < 15_000) return Promise.resolve(this.snapshot.value);
+    if (!refresh && !this.snapshot && Date.now() - this.lastAttemptAt < 15_000) return Promise.resolve(undefined);
+    this.lastAttemptAt = Date.now();
     const request = new Promise<bigint | undefined>(resolve => {
       // A slow provider must not add another long wait to the normal launch checks.
       const timer = setTimeout(() => resolve(undefined), 3_000);

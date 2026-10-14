@@ -42,7 +42,7 @@ export function useRobinhoodPresentation(query: string, enabled = true, initialP
     }
     function schedule() {
       clearTimeout(timer);
-      const interval = misses > 0 && misses <= 3 ? 5_000 : 20_000;
+      const interval = misses > 0 && misses <= 3 ? 5_000 : 30_000;
       if (!disposed && isVisible()) timer = setTimeout(load, Math.max(0, interval - (Date.now() - lastAttemptAt)));
     }
     async function load() {

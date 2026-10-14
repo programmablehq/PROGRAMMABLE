@@ -71,7 +71,7 @@ type Snapshot = { request: Request; data: LaunchResponse; fetchedAt: number };
 
 const ADDRESS = /^0x[0-9a-f]{40}$/i;
 const HASH = /^0x[0-9a-f]{64}$/i;
-const REFRESH_MS = 10_000;
+const REFRESH_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const ROBINHOOD_WEBSITE_FILTERS: RobinhoodExploreFilters = { ...DEFAULT_EXPLORE_FILTERS, sort: "highest" };
 
