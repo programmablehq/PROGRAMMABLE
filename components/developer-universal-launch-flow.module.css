@@ -1,5 +1,6 @@
 .flow { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: 16px; color: var(--webde-ink); min-width: 0; padding: 28px; width: 100%; max-width: 640px; margin-inline: auto; }
 .flow[data-highlighted="true"] { border-color: var(--webde-line); }
+.completeTitle { margin: 0 0 24px; font-size: 32px; font-weight: 600; line-height: 38px; letter-spacing: -0.02em; text-wrap: balance; }
 .topline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .eyebrow, .network, .hint { color: var(--webde-muted); font-size: 12px; line-height: 16px; margin: 0; }
 .topline h3 { font-size: 24px; font-weight: 500; line-height: 32px; margin: 4px 0 0; overflow-wrap: anywhere; text-wrap: balance; }

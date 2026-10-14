@@ -1,14 +1,13 @@
 "use client";
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { CustomLaunchSuccessActions } from "./custom-launch-success-actions";
 import { launchDestinationIdentity, parseLaunchDestination } from "@/lib/launch-destination";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import styles from "./custom-launch-completion.module.css";
 
-export function CustomLaunchCompletion({chainId,launchId,controller,transactionHash,openAutomatically}: {
-  chainId:"1"|"4663";launchId:string|null;controller:string;transactionHash:string|null;openAutomatically:boolean;
+export function CustomLaunchCompletion({chainId,launchId,controller,transactionHash}: {
+  chainId:"1"|"4663";launchId:string|null;controller:string;transactionHash:string|null;
 }) {
-  const router=useRouter(), navigated=useRef(false);
   const query=new URLSearchParams({chainId,launchId:launchId??"",controller,transactionHash:transactionHash??""});
   const identity=launchDestinationIdentity(query);
   const [resolved,setResolved]=useState<{scope:string;href:string}|null>(null);
@@ -21,10 +20,9 @@ export function CustomLaunchCompletion({chainId,launchId,controller,transactionH
     const destination=parseLaunchDestination(await response.json(),identity);
     if (!destination || signal.aborted) return;
     setResolved({scope,href:destination.href});
-    if (openAutomatically&&!navigated.current) {navigated.current=true;router.push(destination.href);}
   },15000,true);
   return <div className={styles.completion}>
-    <p role="status">{href?"Your coin is live on Explore.":"Your launch is confirmed. Your coin will open as soon as it appears on Explore."}</p>
-    {href?<a href={href}>Open coin</a>:null}
+    <p role="status">{href?"Your coin is live on Explore.":"Your launch is confirmed. Your coin will appear here once it is indexed on Explore."}</p>
+    {href?<CustomLaunchSuccessActions href={href} />:null}
   </div>;
 }

@@ -98,24 +98,29 @@ test("an approval conflict requires attention and is not retried in the backgrou
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 
-test("finality continues into indexing on the same launch link", async ({ page }) => {
+test("finality keeps the completed launch open with coin and team-tag actions", async ({ page }) => {
   await page.clock.install();
   await page.goto(origin + "?scenario=indexing");
   await expect(page.getByRole("heading", { name: "Opening your coin", exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__customLaunchFixture.navigated)).toBe("");
   await page.evaluate(() => window.__customLaunchFixture.setIndexed());
   await page.clock.fastForward(15000);
-  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.navigated)).toContain("?chain=4663");
+  await expect(page.getByRole("heading", { name: "Launch complete", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open coin", exact: true })).toHaveAttribute("href", /\?chain=4663$/);
+  await expect(page.getByRole("link", { name: "Setup Team Tag on fomo (opens in a new tab)", exact: true })).toHaveAttribute("href", "https://fomo.family/team-tag-form");
+  expect(await page.evaluate(() => window.__customLaunchFixture.navigated)).toBe("");
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 
-for (const chainId of ["1","4663"]) test(`a confirmed legacy launch opens only after exact indexing on ${chainId}`,async ({page})=>{
+for (const chainId of ["1","4663"]) test(`a confirmed legacy launch offers both actions after exact indexing on ${chainId}`,async ({page})=>{
   await page.clock.install();
   await page.goto(`${origin}?scenario=legacy-indexing-${chainId}`);
   await expect(page.getByRole("status")).toContainText("confirmed");
   expect(await page.evaluate(()=>window.__customLaunchFixture.navigated)).toBe("");
   await page.evaluate(()=>window.__customLaunchFixture.setIndexed());
   await page.clock.fastForward(15000);
-  await expect.poll(()=>page.evaluate(()=>window.__customLaunchFixture.navigated)).toContain(`?chain=${chainId}`);
+  await expect(page.getByRole("link", { name: "Open coin", exact: true })).toHaveAttribute("href", new RegExp(`\\?chain=${chainId}$`));
+  await expect(page.getByRole("link", { name: "Setup Team Tag on fomo (opens in a new tab)", exact: true })).toHaveAttribute("target", "_blank");
+  expect(await page.evaluate(()=>window.__customLaunchFixture.navigated)).toBe("");
   expect(await page.evaluate(()=>window.__customLaunchFixture.sends())).toBe(0);
 });

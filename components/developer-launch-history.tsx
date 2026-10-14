@@ -3713,12 +3713,13 @@ export function DeveloperLaunchHistory({
                 key={key}
                 tabIndex={-1}
               >
+                {launch.status === "finalized" ? <h2 className={styles.completeTitle}>Launch complete</h2> : null}
                 <div className={styles.launchTopline}>
                   {projectMetadataSummary ? <ProjectLaunchIdentity launch={reviewLaunch} binding={projectMetadataSummary} />
                     : <h3>Launch {shortId(resourceIdentity)}</h3>}
-                  <span className={styles.status} data-status={launch.status}>
+                  {launch.status !== "finalized" ? <span className={styles.status} data-status={launch.status}>
                     {showReviewStatus ? customLaunchReviewLabel(launch.manualReview!) : statusCopy(launch.status)}
-                  </span>
+                  </span> : null}
                 </div>
                 <p className={styles.statusDescription}>
                   {showReviewStatus
@@ -3744,8 +3745,7 @@ export function DeveloperLaunchHistory({
                   ? <button className={styles.walletButton} type="button" disabled aria-busy="true">Preparing your launch…</button> : null}
                 {launchErrors[key] ? <p className={styles.inlineError} role="alert">{launchFeedback(launchErrors[key])}</p> : null}
                 {launch.status === "finalized" ? <CustomLaunchCompletion chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : "1"}
-                  launchId={launch.onchainLaunchId} controller={launch.ownerWallet} transactionHash={transactionHash}
-                  openAutomatically={detailOnly || highlightedLaunchId === resourceIdentity} /> : null}
+                  launchId={launch.onchainLaunchId} controller={launch.ownerWallet} transactionHash={transactionHash} /> : null}
                 <details className={styles.launchReview}>
                   <summary>Details and review</summary>
                 <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : "1"} />

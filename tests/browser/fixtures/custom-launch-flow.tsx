@@ -171,5 +171,5 @@ createRoot(document.getElementById("root")!).render(<main className={`${styles.p
     record = { ...record, manualReview: { ...record.manualReview!, state: "rejected", revision: 2,
       reason: "Please clarify liquidity ownership before approval." } };
   }}>Fixture: request changes</button> : null}
-  {mode.startsWith("legacy-indexing") ? <CustomLaunchCompletion chainId={mode.endsWith("-1")?"1":"4663"} launchId={`0x${"9".repeat(64)}`} controller={controller} transactionHash={hash} openAutomatically />
+  {mode.startsWith("legacy-indexing") ? <CustomLaunchCompletion chainId={mode.endsWith("-1")?"1":"4663"} launchId={`0x${"9".repeat(64)}`} controller={controller} transactionHash={hash} />
     : mode === "session-refresh" ? <SessionRefreshFixture /> : <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId} getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} sendWallet={sendWallet} />}</main>);

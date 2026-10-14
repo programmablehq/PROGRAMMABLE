@@ -1,0 +1,45 @@
+.actions {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.actions :is(.openCoin, .teamTag) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--panel-fill-action);
+  color: #181818;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.actions .teamTag { font-size: 14px; }
+.teamTag img { display: block; flex: none; width: 36px; height: 36px; }
+.actions a:focus-visible { outline: 2px solid var(--brand-ivory); outline-offset: 4px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .actions a:hover { background: var(--panel-fill-action-hover); color: #181818; }
+}
+
+@media (max-width: 480px) {
+  .actions { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actions a { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .actions a { border-color: ButtonText; }
+}
