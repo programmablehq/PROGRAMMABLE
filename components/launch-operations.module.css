@@ -24,6 +24,11 @@
 .networkTitle { margin-bottom: 12px; }
 .badge { display: inline-block; font-size: 13px; padding: 5px 9px; border: 1px solid #666; border-radius: 6px; max-width: 100%; overflow-wrap: anywhere; }
 .filters { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin: 24px 0 16px; }
+.views { display: flex; flex-wrap: wrap; gap: 8px; }
+.views button { display: inline-flex; align-items: center; gap: 10px; background: transparent; }
+.views button[aria-pressed="true"] { background: #303030; border-color: #aaa; }
+.views button > span { font-variant-numeric: tabular-nums; color: #b9b9b9; }
+.views small { font-size: 12px; }
 .filters label { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
 .filters :is(select, input) { width: 100%; font-size: 16px; }
 .search { flex: 1; }

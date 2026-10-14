@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { buildOperationsRows, describeStoredLaunchStatus, reviewOperations, type OperationsReview, type OperationsLaunch, type OperationsSnapshot } from "../lib/launch-operations";
+import { buildOperationsRows, describeStoredLaunchStatus, reviewListView, reviewOperations, type OperationsReview, type OperationsLaunch, type OperationsSnapshot } from "../lib/launch-operations";
 import { createLaunchOperationsRoute, createOperationsSnapshotReader } from "../lib/server/launch-operations";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
 
@@ -75,17 +75,19 @@ describe("launch operations observations", () => {
     r.requestSummary.operations.current.status = "source_verified";
     expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ owner: "Programmable", status: "Onchain complete · check index" });
   });
-  it("matches finalization by exact request and chain, never ticker or creator; excludes replaced requests", () => {
+  it("matches finalization by exact request and chain, never ticker or creator; retains replaced requests in history", () => {
     const snapshot: OperationsSnapshot = { ...empty(), published: [{ ...launch, chainId: 4663 as const }], indexed: [{ ...launch, chainId: 4663 as const }] };
     expect(buildOperationsRows([review], snapshot, now)[0].group).toBe("waiting");
     snapshot.published = [launch]; snapshot.indexed = [launch];
-    expect(buildOperationsRows([review], snapshot, now)[0]).toMatchObject({ group: "complete", status: "Launched" });
-    expect(buildOperationsRows([{ ...review, supersededBy: { reviewId: review.reviewId, launchId: review.launchId } }], empty(), now)).toEqual([]);
+    expect(buildOperationsRows([review], snapshot, now)[0]).toMatchObject({ group: "complete", view: "history", status: "Launched" });
+    expect(buildOperationsRows([{ ...review, supersededBy: { reviewId: successor, launchId: successor } }], empty(), now)[0]).toMatchObject({
+      view: "history", group: "complete", status: "Replaced", replacementReviewId: successor,
+    });
   });
   it("detects a published launch absent from the index and never flags deliberately unlisted launches", () => {
     const snapshot = { ...empty(), published: [launch] };
     expect(buildOperationsRows([review], snapshot, now)).toHaveLength(1);
-    expect(buildOperationsRows([review], snapshot, now)[0]).toMatchObject({ group: "attention", status: "Index not observed" });
+    expect(buildOperationsRows([review], snapshot, now)[0]).toMatchObject({ group: "attention", view: "current", status: "Index not observed" });
     expect(buildOperationsRows([], { ...snapshot, published: [{ ...launch, listed: false }] }, now)).toEqual([]);
     expect(buildOperationsRows([review], { ...snapshot, published: [{ ...launch, listed: false }] }, now)[0].status).toBe("Launched · unlisted");
   });
@@ -95,6 +97,26 @@ describe("launch operations observations", () => {
     const snapshot = empty(); snapshot.sources[0].status = "unavailable"; snapshot.sources[0].complete = false;
     expect(buildOperationsRows([], { ...snapshot, recent: [moduleLaunch] }, now)[0].status).toBe("Index observation incomplete");
     expect(describeStoredLaunchStatus({ status: "submitted" }).next).toContain("before sending anything else");
+  });
+  it("keeps new work current and moves answered reviews to history without inferring replacement", () => {
+    expect(reviewListView(review, now)).toBe("current");
+    const pending = { ...review, state: "pending" as const, approvedAt: null, expiresAt: null };
+    expect(reviewListView(pending, now)).toBe("current");
+    expect(reviewListView({ ...pending, reviewId: successor }, now)).toBe("current");
+    const rejected = { ...pending, state: "rejected" as const };
+    expect(reviewListView(rejected, now)).toBe("history");
+    expect(reviewListView({ ...rejected, discussion: [{ revision: 3, createdAt: new Date(now).toISOString(), author: "applicant", message: "Please check the updated evidence", links: [] }] }, now)).toBe("current");
+  });
+  it("retains expired unresolved requests in history with their warning", () => {
+    const expired = { ...review, expiresAt: new Date(now - 1).toISOString(), requestSummary: { operations: {
+      ...operations, current: { launchId: successor, status: "analysis_pending", replanRequired: false } } } };
+    expect(buildOperationsRows([expired], empty(), now)[0]).toMatchObject({ view: "history", group: "attention", status: "Window ended · launch unconfirmed" });
+  });
+  it("keeps a recorded pending transaction current despite expiry or replacement", () => {
+    const base = { ...review, expiresAt: new Date(now - 1).toISOString(), supersededBy: { reviewId: successor, launchId: successor },
+      requestSummary: { operations: { ...operations, current: { launchId: review.launchId, status: "broadcast", replanRequired: false } } } };
+    expect(reviewListView(base, now)).toBe("current");
+    expect(buildOperationsRows([base], empty(), now)[0]).toMatchObject({ view: "current", group: "waiting", owner: "Blockchain" });
   });
   it("coalesces read-only snapshots, expires them, and never caches a failed read", async () => {
     let clock = now;

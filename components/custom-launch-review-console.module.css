@@ -2,15 +2,22 @@
 .page h1 { font-size: clamp(26px, 4vw, 38px); margin: 16px 0; }
 .page h2 { font-size: 22px; }
 .page p { line-height: 1.5; }
-.page button, .page textarea, .page select { font: inherit; color: inherit; background: #202020; border: 1px solid #555; border-radius: 8px; padding: 12px 16px; }
+.page button, .page textarea, .page select, .page input { font: inherit; color: inherit; background: #202020; border: 1px solid #555; border-radius: 8px; padding: 12px 16px; box-sizing: border-box; min-height: 44px; }
 .page button { cursor: pointer; }
 .page button:disabled { opacity: .5; cursor: default; }
-.page button:focus-visible, .page textarea:focus-visible { outline: 2px solid #95cfff; outline-offset: 3px; }
+.page :is(button, textarea, input, select):focus-visible { outline: 2px solid #95cfff; outline-offset: 3px; }
 .page textarea { display: block; width: 100%; min-height: 90px; box-sizing: border-box; margin: 8px 0 16px; }
 .layout { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); gap: 24px; margin-top: 24px; }
 .layout section { min-width: 0; padding: 20px; border: 1px solid #444; border-radius: 12px; background: #111e; }
 .row { display: grid; text-align: left; width: 100%; gap: 8px; margin-bottom: 12px; overflow-wrap: anywhere; }
 .row span, .address { font-size: 13px; overflow-wrap: anywhere; }
+.row[aria-pressed="true"] { border-color: #aaa; background: #303030; }
+.views { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.views button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; background: transparent; }
+.views button[aria-pressed="true"] { background: #303030; border-color: #aaa; }
+.views span { color: #b9b9b9; font-variant-numeric: tabular-nums; }
+.search { display: grid; gap: 8px; margin-bottom: 20px; font-size: 14px; }
+.search input { width: 100%; min-width: 0; font-size: 16px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .page pre { max-height: 400px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; background: #080808; padding: 12px; border-radius: 8px; }
 .page summary { cursor: pointer; padding: 12px 0; }

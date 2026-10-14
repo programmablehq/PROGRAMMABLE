@@ -26,11 +26,13 @@ export type OperationsSnapshot = {
   recent: OperationsLaunch[];
 };
 export type OperationsReview = CustomLaunchReview & { launchId: string; requestSummary: Record<string, unknown> };
+export type ReviewListView = "current" | "history";
 export type OperationsRow = {
   id: string; chainId: OperationsChain; name: string; symbol: string; mode: "module" | "custom" | "classic";
+  view: ReviewListView;
   group: "review" | "waiting" | "attention" | "complete";
   status: string; next: string; owner: "Programmable" | "Team" | "Blockchain" | "None"; updatedAt: string | null;
-  reviewId?: string; token?: string; transactionHash?: string | null;
+  reviewId?: string; token?: string; transactionHash?: string | null; replacementReviewId?: string;
 };
 export const operationIdentity = (row: Pick<OperationsLaunch, "chainId" | "token">) => `${row.chainId}:${row.token.toLowerCase()}`;
 export function operationTokenHref(row: Pick<OperationsLaunch, "chainId" | "token">) {
@@ -67,21 +69,32 @@ export function reviewProject(review: OperationsReview) {
     symbol: text(metadata.symbol) || text(primary.symbol) || text(publication.symbol) };
 }
 
+/** List placement only. An expired window never proves that a transaction failed. */
+export function reviewListView(review: OperationsReview, now = Date.now()): ReviewListView {
+  const status = reviewOperations(review, review.requestSummary.operations)?.current?.status;
+  if (["submitted", "broadcast", "mined", "sequencer_soft_confirmed", "ethereum_posted"].includes(status ?? "")) return "current";
+  if (["final", "finalized", "source_verified", "indexed", "publicly_visible"].includes(status ?? "") || review.supersededBy) return "history";
+  if (review.state === "rejected") return review.discussion?.at(-1)?.author === "applicant" ? "current" : "history";
+  if (review.state === "expired" || review.state === "approved" && Date.parse(review.expiresAt ?? "") <= now) return "history";
+  return "current";
+}
+
 /** Match exact request bindings, never the creator wallet or ticker. Approval alone is not a launch. */
 export function buildOperationsRows(reviews: OperationsReview[], snapshot: OperationsSnapshot | null, now = Date.now()): OperationsRow[] {
   const indexed = new Map((snapshot?.indexed ?? []).map(row => [operationIdentity(row), row]));
   const published = snapshot?.published ?? [];
-  const rows: OperationsRow[] = reviews.filter(review => !review.supersededBy).map(review => {
+  const rows: OperationsRow[] = reviews.map(review => {
     const chainId = Number(review.chainId) as OperationsChain;
     const operations = reviewOperations(review, review.requestSummary.operations);
     const boundIds = new Set([review.launchId, ...operations?.boundLaunchIds ?? []]);
     const final = published.find(row => row.chainId === chainId && (boundIds.has(row.requestId ?? "")
       || boundIds.has(row.launchId) || (row.subjectHash && row.subjectHash === review.subjectHash)));
-    const base = { id: `review:${review.reviewId}`, chainId, ...reviewProject(review), mode: "custom" as const,
+    const base = { id: `review:${review.reviewId}`, chainId, ...reviewProject(review), mode: "custom" as const, view: reviewListView(review, now),
       reviewId: review.reviewId, owner: "Programmable" as const, updatedAt: operations?.current?.updatedAt ?? review.launchRequestedAt ?? review.approvedAt ?? review.submittedAt };
     if (final) {
       const found = indexed.has(operationIdentity(final));
       return { ...base, token: final.token, transactionHash: final.transactionHash,
+        view: found || !final.listed ? "history" : "current",
         group: found || !final.listed ? "complete" : "attention", status: found ? "Launched" : !final.listed ? "Launched · unlisted" : "Index not observed",
         owner: found || !final.listed ? "None" : "Programmable",
         next: found ? "Open the coin page." : !final.listed ? "Intentionally excluded from public discovery." : "A finalized launch is published. Check the website index." };
@@ -90,8 +103,10 @@ export function buildOperationsRows(reviews: OperationsReview[], snapshot: Opera
     const savedStatus = operations?.current?.status ?? "";
     if (["submitted", "broadcast", "mined", "sequencer_soft_confirmed", "ethereum_posted", "final", "finalized", "source_verified", "indexed", "publicly_visible"].includes(savedStatus)) {
       const progress = describeStoredLaunchStatus({}, operations);
-      return { ...base, ...progress, group: progress.owner === "Blockchain" ? "waiting" : "attention" };
+      return { ...base, ...progress, view: "current", group: progress.owner === "Blockchain" ? "waiting" : "attention" };
     }
+    if (review.supersededBy) return { ...base, view: "history", group: "complete", owner: "None", status: "Replaced",
+      replacementReviewId: review.supersededBy.reviewId, next: `Continue with request ${review.supersededBy.launchId}.` };
     const label = customLaunchReviewLabel(review, now);
     if (review.state === "pending") {
       const waiting = review.discussion?.at(-1)?.author === "reviewer";
@@ -127,7 +142,7 @@ export function buildOperationsRows(reviews: OperationsReview[], snapshot: Opera
     const source = snapshot?.sources.find(source => source.id === `index:${row.chainId}`);
     const complete = source?.status === "ready" && source.complete;
     const age = row.observedAt ? now - Date.parse(row.observedAt) : 0;
-    rows.push({ id: `index:${identity}`, chainId: row.chainId, name: row.name, symbol: row.symbol, mode: row.mode,
+    rows.push({ id: `index:${identity}`, chainId: row.chainId, name: row.name, symbol: row.symbol, mode: row.mode, view: "current",
       owner: "Programmable",
       token: row.token, transactionHash: row.transactionHash, updatedAt: row.observedAt,
       group: kind === "published" || age >= 15 * 60_000 ? "attention" : "waiting",
