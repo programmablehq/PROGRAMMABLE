@@ -18,6 +18,7 @@ import { PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1 } from "@/lib/public-explore-catal
 import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { readRecentFoundationLaunches } from "./module-foundation/recent-launch-store";
+import { readApprovedLaunchPresentations } from "./approved-launch-presentation";
 
 const readers = {
   robinhood: readRobinhoodExploreCatalog,
@@ -128,8 +129,9 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const selectedRh = rhRows.filter(row => selectedKeys.has(exploreIdentityKey(row)));
   const selectedEth = selection.items.filter(row => row.chainId === 1);
   const selectedRecentRh = recent.filter(item => item.chainId === 4663 && selectedKeys.has(exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress })));
-  const [ethMetadata, [rhMetadata, rhPresentations]] = await Promise.all([
+  const [ethMetadata, approved, [rhMetadata, rhPresentations]] = await Promise.all([
     readCodexTokenMetadata(selectedEth.map(row => row.tokenAddress), 1),
+    readApprovedLaunchPresentations(selectedEth,1),
     readCodexTokenMetadata([...selectedRh, ...selectedRecentRh.map(item => item.row)].map(row => row.tokenAddress), 4663)
       .then(async metadata => [metadata, await dependencies.robinhoodPresentations(selectedRh, rhMarkets, metadata)
         .catch(() => selectedRh.map(row => ({ tokenAddress: row.tokenAddress,
@@ -144,8 +146,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
       const entry = metadata.get(exploreIdentityKey(row));
       const saved = recentMetadata.get(exploreIdentityKey(row));
       return { chainId: 1 as const, tokenAddress: row.tokenAddress,
-        ...mergeCoinMetadata(saved ?? { imageUrl: entry?.imageUrl ?? null, description: entry?.description ?? null,
-          links: (entry?.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, ethMetadata.get(row.tokenAddress.toLowerCase())),
+        ...mergeCoinMetadata(mergeCoinMetadata(saved ?? { imageUrl: entry?.imageUrl ?? null, description: entry?.description ?? null,
+          links: (entry?.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, approved.get(row.tokenAddress.toLowerCase())), ethMetadata.get(row.tokenAddress.toLowerCase())),
         market: markets.get(exploreIdentityKey(row)) ?? null };
     }),
     ...selectedRecentRh.map(item => ({ ...item.presentation,

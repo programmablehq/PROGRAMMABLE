@@ -1,11 +1,13 @@
 import { reviewLinksV4 } from "@/lib/custom-launch-review-workflow";
 import "server-only";
+import { after } from "next/server";
 import { randomBytes } from "node:crypto";
 import { getAddress, isAddress } from "viem";
 import { isWebsiteAdminWallet } from "@/lib/admin-access";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
 import { createPrivyWalletPrincipalAuthenticatorV1, WalletPrincipalAuthenticationErrorV1, type WalletPrincipalAuthenticatorV1 } from "../creator-article/wallet-principal.server";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "./wallet-admin-bff-assertion-v2";
+import { rememberApprovedLaunchPresentation } from "../approved-launch-presentation";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", Vary: "Authorization, X-Privy-Identity-Token" };
@@ -28,6 +30,8 @@ async function boundedBody(message: Request | Response, maximum: number) {
 export function createManualReviewBridgeV1(input: {
   authenticator: WalletPrincipalAuthenticatorV1; backendBaseUrl: string; websiteToken: string; bffAssertionKeyV2: string;
   fetchBackend: typeof fetch; now?: () => Date;
+  rememberPresentation?: (review: unknown) => Promise<void>;
+  defer?: (work: () => Promise<void>) => void;
 }) {
   const base = new URL(input.backendBaseUrl);
   if (base.protocol !== "https:" || base.username || base.password) throw new Error("Invalid review backend");
@@ -84,6 +88,28 @@ export function createManualReviewBridgeV1(input: {
         if (!Array.isArray(value.reviews) || value.reviews.length > 100) throw new Error("Invalid review list");
         value.reviews.forEach(parseCustomLaunchReview);
       } else parseCustomLaunchReview(value.review);
+      if (input.rememberPresentation && value.review?.state === "approved" && (reviewId || request.method === "POST")) {
+        const remember = async () => {
+          let detail = value.review;
+          if (!detail.request) {
+            const target = new URL("/v1/admin/custom-launch-reviews", base);
+            target.searchParams.set("reviewId", detail.reviewId);
+            const assertion = createWalletAdminBffAssertionV2({ method: "GET", requestTarget: target.pathname + target.search,
+              privyUserId: principal.privyUserId, walletAddress: getAddress(wallet), issuedAt: (input.now?.() ?? new Date()).toISOString(),
+              nonce: randomBytes(16).toString("base64url"), bodyBytes: Buffer.alloc(0), assertionKey });
+            const response = await input.fetchBackend(target, { headers: { Accept: "application/json", Authorization: `Bearer ${input.websiteToken}`,
+              "X-Programmable-Privy-User-Id": principal.privyUserId, "X-Programmable-Wallet-Address": getAddress(wallet), ...assertion },
+              cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000) });
+            if (!response.ok) return;
+            detail = JSON.parse(await boundedBody(response,64 * 1024 * 1024)).review;
+            parseCustomLaunchReview(detail);
+          }
+          await input.rememberPresentation!(detail);
+        };
+        const work = async () => { try { await remember(); } catch { console.warn("Approved launch presentation could not be cached"); } };
+        try { if (input.defer) input.defer(work); else await work(); }
+        catch { console.warn("Approved launch presentation could not be scheduled"); }
+      }
       return new Response(JSON.stringify(value), { headers });
     } catch (error) {
       const known = error instanceof InputError || error instanceof WalletPrincipalAuthenticationErrorV1;
@@ -95,6 +121,7 @@ export async function routeProductionManualReviewsV1(request: Request) {
   try {
     return await createManualReviewBridgeV1({ authenticator: createPrivyWalletPrincipalAuthenticatorV1(),
       backendBaseUrl: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL!, websiteToken: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN!,
-      bffAssertionKeyV2: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2!, fetchBackend: fetch })(request);
+      bffAssertionKeyV2: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2!, fetchBackend: fetch,
+      rememberPresentation: rememberApprovedLaunchPresentation, defer: work => after(work) })(request);
   } catch { return new Response(JSON.stringify({ error: { code: "REVIEW_UNAVAILABLE" } }), { status: 503, headers }); }
 }

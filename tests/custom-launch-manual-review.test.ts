@@ -19,6 +19,30 @@ function request(body: unknown) { return new Request(`https://programmable.marke
 }); }
 const decision = { reviewId: review.reviewId, subjectHash: review.subjectHash, revision: 1, decision: "approve", reason: "Reviewed" };
 describe("manual launch approval", () => {
+  it("captures the approved server-side detail after responding, without changing approval or requiring applicant input", async () => {
+    const detail = { ...review, request: { projectMetadata: { presentation: { description: "Public project" } } } };
+    const fetchBackend = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ review })).mockResolvedValueOnce(Response.json({ review: detail }));
+    const rememberPresentation = vi.fn(async () => undefined), work: Array<() => Promise<void>> = [];
+    const route = createManualReviewBridgeV1({ authenticator: { authenticate: async () => ({ privyUserId: "did:privy:admin", privySessionId:"session", wallets:[WEBSITE_ADMIN_WALLET] }) },
+      backendBaseUrl:"https://api.programmable.market",websiteToken:"w".repeat(43),bffAssertionKeyV2:"b".repeat(43),fetchBackend,
+      rememberPresentation,defer: task => work.push(task) });
+    expect((await route(request(decision))).status).toBe(200);
+    expect(rememberPresentation).not.toHaveBeenCalled();
+    await work[0]();
+    expect(rememberPresentation).toHaveBeenCalledExactlyOnceWith(detail);
+    expect(String(fetchBackend.mock.calls[1][0])).toContain(`reviewId=${review.reviewId}`);
+    expect(new Headers(fetchBackend.mock.calls[1][1]?.headers).get("X-Programmable-Wallet-Address")?.toLowerCase()).toBe(WEBSITE_ADMIN_WALLET.toLowerCase());
+  });
+  it("never turns an optional presentation-cache failure into a failed approval", async () => {
+    const work: Array<() => Promise<void>> = [];
+    const route = createManualReviewBridgeV1({ authenticator: { authenticate: async () => ({ privyUserId:"did:privy:admin",privySessionId:"session",wallets:[WEBSITE_ADMIN_WALLET] }) },
+      backendBaseUrl:"https://api.programmable.market",websiteToken:"w".repeat(43),bffAssertionKeyV2:"b".repeat(43),
+      fetchBackend:vi.fn<typeof fetch>().mockResolvedValue(Response.json({review:{...review,request:{}}})),
+      rememberPresentation:async()=>{throw new Error("storage unavailable");},defer:task=>work.push(task) });
+    expect((await route(request(decision))).status).toBe(200);
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>undefined);
+    try { await expect(work[0]()).resolves.toBeUndefined(); } finally { warning.mockRestore(); }
+  });
   it("shows a fresh server approval without enabling signing before its start time", () => {
     const now = Date.parse(review.approvedAt!) - 500;
     expect(customLaunchReviewLabel(review, now)).toBe("Approved");

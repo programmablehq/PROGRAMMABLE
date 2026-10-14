@@ -9,7 +9,6 @@ import type {
   CanonicalTokenExploreEntry,
   TokenLink,
 } from "../../tokens";
-import { isProgrammableTokenImageUrl } from "../../token-image";
 import {
   parseStrictJson,
   type JsonValue,
@@ -629,7 +628,7 @@ function projectLaunchPresentationV1(
     const contentUri = normalizeContentUri(presentation.image.uri);
     const url = new URL(contentUri);
     if (url.protocol === "https:") {
-      if (isProgrammableTokenImageUrl(contentUri)) imageUrl = contentUri;
+      imageUrl = contentUri;
     } else if (url.protocol === "ipfs:") {
       imageUrl = `${TRUSTED_IPFS_PROJECT_IMAGE_GATEWAY_V1}${url.hostname}`;
     } else if (url.protocol === "ar:") {
@@ -1441,6 +1440,12 @@ function rawSafeReadbackText(
     || containsRecognizableSecret(value)
   ) throw new Error(`${label} is unsafe or outside its bound`);
   return value;
+}
+
+/** Credential-free public metadata links shared by approved and finalized display readers. */
+export function publicLaunchMetadataHttpsUriV1(value: unknown): string | null {
+  try { return typeof value === "string" ? normalizeHttpsUri(new URL(value).href) : null; }
+  catch { return null; }
 }
 
 function normalizeHttpsUri(value: JsonValue | undefined) {

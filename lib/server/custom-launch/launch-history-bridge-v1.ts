@@ -1,4 +1,6 @@
 import "server-only";
+import { after } from "next/server";
+import { rememberApprovedLaunchResource } from "../approved-launch-presentation";
 import { parseCustomLaunchReview, type CustomLaunchReview } from "@/lib/custom-launch-review";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -300,6 +302,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
   backendTimeoutMs?: number;
   assertionNow?: () => Date;
   assertionNonce?: () => string;
+  onReadResource?: (resource: DeveloperCustomLaunch) => void;
 }>): DeveloperLaunchHistoryBridgeV1 {
   const backendBaseUrl = normalizedBackendBaseUrl(input.backendBaseUrl);
   const websiteToken = boundedWebsiteToken(input.websiteToken);
@@ -642,6 +645,8 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         if (resourceId !== launchId.toLowerCase()) {
           throw new BackendContractErrorV1();
         }
+        try { input.onReadResource?.(launch); }
+        catch { console.warn("Approved launch presentation could not be scheduled"); }
         return jsonResponse(200, { ...launch });
       } catch (error) {
         return mappedError(error);
@@ -831,6 +836,10 @@ export function getProductionDeveloperLaunchHistoryBridgeV1() {
       "PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2",
     ),
     fetchBackend: fetch,
+    onReadResource: resource => after(async () => {
+      try { await rememberApprovedLaunchResource(resource); }
+      catch { console.warn("Approved launch presentation could not be cached"); }
+    }),
   });
   return productionBridge;
 }
