@@ -1,6 +1,7 @@
 "use client";
 
 import NextImage from "next/image";
+import { CustomLaunchSuccessActions } from "./custom-launch-success-actions";
 import { CustomLaunchProgress } from "./custom-launch-progress";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import { safePublicImageUrl } from "@/lib/safe-public-image-url";
@@ -9,7 +10,6 @@ import { CustomLaunchDiscussion } from "./custom-launch-discussion";
 import { CustomLaunchStartButton } from "./custom-launch-start-button";
 import { customLaunchReviewAllowsSigning } from "@/lib/custom-launch-review";
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
 import { formatEther, type Hex } from "viem";
 import { parseLaunchProjectionV1, projectionObject, projectionToRobinhoodLaunch } from "@/lib/custom-launch/launch-projection-v1";
 import { launchFlowPresentationV1 } from "@/lib/custom-launch/launch-flow-v1";
@@ -26,13 +26,11 @@ type Props = {
   load(): Promise<unknown>;
   sendWallet(input: UniversalLaunchWalletInputV1): Promise<UniversalLaunchWalletReviewV1 | Hex | null>;
   onSubmitted(step: string, hash: Hex): Promise<void>;
-  onIndexed?(href: string): void;
 };
 const stepLabels = { pending: "Waiting", wallet_action_ready: "Ready", broadcast: "Submitted", mined: "Confirming finality", final: "Final", failed: "Needs attention" };
 const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
-export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoPrepare = true, load, sendWallet, onSubmitted, onIndexed }: Props) {
-  const router = useRouter();
+export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoPrepare = true, load, sendWallet, onSubmitted }: Props) {
   const { resource } = entry;
   const plan = entry.sourceVersion === "custom_launch_plan_v1" ? readLaunchPlanResourceV1(resource) : null;
   const id = String(resource.planId ?? resource.launchId);
@@ -54,7 +52,6 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   const recoveryInput = useRef<HTMLInputElement>(null);
   const actionInFlight = useRef(false);
   const recoveryId = useId();
-  const navigated = useRef(false);
   const onSubmittedRef = useRef(onSubmitted);
   useEffect(() => { onSubmittedRef.current = onSubmitted; }, [onSubmitted]);
   const reviewCallbacks = useRef({ load, sendWallet, resource });
@@ -160,7 +157,6 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         || plan && (projection.planHash !== plan.planHash || projection.manifestDigest !== plan.manifestDigest) || body.href !== href) throw new Error("The indexed program does not match this launch. Keep this page open while it is reconciled.");
       if (signal.aborted) return;
       setIndexedHref(href); setTrackingError(null);
-      if (highlighted && !navigated.current) { navigated.current = true; if (onIndexed) onIndexed(href); else router.push(href); }
     } catch (caught) {
       if (!signal.aborted) setTrackingError(caught instanceof Error ? caught.message : "Website indexing is pending.");
       throw caught;
@@ -196,6 +192,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
   }
 
   return <li className={styles.flow} data-highlighted={highlighted} aria-labelledby={`${recoveryId}-title`}>
+    {indexedHref ? <h2 className={styles.completeTitle}>Launch complete</h2> : null}
     <div className={styles.topline}>
       <div className={styles.identity}>
         <div className={styles.artwork}>{imageUrl && imageUrl !== failedImage
@@ -204,7 +201,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
         <div><p className={styles.eyebrow}>Robinhood Chain</p><h3 id={`${recoveryId}-title`}>{title}</h3>{symbol ? <p className={styles.ticker}>{symbol.replace(/^\$+/, "")}</p> : null}</div>
       </div>
     </div>
-    {(!ready || hasUnresolved || busy === "send") ? <div className={styles.progress} aria-live="polite"><h4>{indexedHref ? "Launch complete" : busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4>
+    {(!ready || hasUnresolved || busy === "send") ? <div className={styles.progress} aria-live="polite">{!indexedHref ? <h4>{busy === "send" && !hash ? "Confirm in your wallet" : unknownSend ? "Checking your transaction" : ready && !hasUnresolved ? "Ready to launch" : state.title}</h4> : null}
       <p>{indexedHref ? "Your coin is live on Explore." : busy === "send" && !hash ? "Confirm the launch in your wallet." : unknownSend ? "We’ll continue automatically when your transaction is found. If your wallet is still waiting, confirm or cancel there." : ready && !hasUnresolved ? "Your wallet opens when you choose Sign and launch." : state.description}</p></div> : null}
     {plan?.manualReview && !hasUnresolved && !state.terminal
       ? <CustomLaunchStartButton key={`${id}:${plan.manualReview.revision}`} review={plan.manualReview} launchId={id} onStarted={load} /> : null}
@@ -219,7 +216,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
       <button className={shared.primaryButton} type="button" disabled={!!busy} onClick={() => void action("send")}>{busy ? "Confirm in your wallet…" : "Sign and launch"}</button>
     </div> : null}
     {plan?.manualReview?.expiresAt && ready && !hasUnresolved ? <p className={styles.notice}>Launch by {new Date(plan.manualReview.expiresAt).toLocaleString()}.</p> : null}
-    {indexedHref ? <a className={styles.programLink} href={indexedHref}>Open coin</a> : null}
+    {indexedHref ? <CustomLaunchSuccessActions href={indexedHref} /> : null}
     {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{hash ? "Your transaction is saved. Confirmation will update automatically." : launchFeedback(visibleError)}</p> : null}
     {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
     <details className={styles.details}><summary>Details and review</summary>
