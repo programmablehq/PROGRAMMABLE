@@ -62,7 +62,7 @@ export function EthereumTokenView({ address, token, observedLaunch, status, mark
       ...(token ? ethereumPairPresentation(token) : { quoteAsset: observedLaunch?.quoteAsset }) }}
     presentation={{ chainId: 1, tokenAddress: address, ...metadata, market: display?.market ?? null }}
     loading={presentation.loading} delayed={presentation.delayed}
-    trade={<SwapPanel key={`1:${address.toLowerCase()}`} embedded initialDescriptor={initialSwapToken} initialAddress={address} initialChainId={1} tokenSymbol={symbol} />} />;
+    trade={<SwapPanel key={`1:${address.toLowerCase()}`} embedded initialDescriptor={initialSwapToken} initialAddress={address} initialChainId={1} tokenSymbol={symbol ?? undefined} />} />;
   return <div className={`${styles.page} page-width`}>
     <Link className={styles.back} href="/explore"><ArrowLeft aria-hidden="true" size={16} />Back to Explore</Link>
     <section className={styles.empty}>

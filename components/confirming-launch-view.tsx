@@ -3,15 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ConfirmingLaunch } from "@/lib/confirming-launches";
-import type { RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import { EthereumTokenView } from "./ethereum-token-view";
 import styles from "./confirming-launch-view.module.css";
 
 /** Normal public market view while finality is reconciled in the background. */
-export function ConfirmingLaunchView({ launch, initialPresentation }: {
-  launch: ConfirmingLaunch;
-  initialPresentation: Promise<RobinhoodCoinPresentation | null>;
-}) {
+export function ConfirmingLaunchView({ launch }: { launch: ConfirmingLaunch }) {
   const router = useRouter();
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === "visible") router.refresh(); };
@@ -21,6 +17,6 @@ export function ConfirmingLaunchView({ launch, initialPresentation }: {
   }, [router]);
   return <div className={styles.market}>
     <EthereumTokenView address={launch.tokenAddress} token={null} observedLaunch={launch}
-      status="partial" updatedAt={launch.launchedAt} initialPresentation={initialPresentation} />
+      status="partial" updatedAt={launch.launchedAt} />
   </div>;
 }

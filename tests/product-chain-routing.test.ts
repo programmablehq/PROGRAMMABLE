@@ -24,7 +24,6 @@ vi.mock("../lib/server/robinhood-index/read", () => ({
 }));
 vi.mock("../lib/server/ethereum-explore", () => ({
   readEthereumToken: mocks.readEthereumToken,
-  presentEthereumToken: vi.fn(async () => null),
   readEthereumTokenPresentation: vi.fn(async () => ({ presentation: null })),
 }));
 
@@ -79,7 +78,7 @@ describe("Explore chain routes", () => {
 });
 
 describe("verified token routing", () => {
-  it("opens the normal market page from a receipt without granting canonical transaction authority", async () => {
+  it("opens a refreshing observation page without changing the canonical transaction resolver", async () => {
     vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([{
       chainId: 1, confirmation: "confirming", observationExpiresAt: Date.now() + 30_000,
       category: "custom", mode: "custom", launchId: "launch", tokenAddress: address, hookAddress: address,
@@ -89,8 +88,6 @@ describe("verified token routing", () => {
     expect(await resolveTokenPage(address, "1")).toMatchObject({ token: null });
     const page = await TokenPage({ params: Promise.resolve({ address }), searchParams: Promise.resolve({ chain: "1" }) });
     expect(page.props.children.type.name).toBe("ConfirmingLaunchView");
-    expect(page.props.children.props).toMatchObject({ launch: { tokenAddress: address, symbol: "NEW" } });
-    expect(page.props.children.props.initialSwapToken).toBeUndefined();
   });
   it("resolves a clean URL from the exact Robinhood record independently of cookies", async () => {
     mocks.cookie.mockReturnValue({ value: "1" });

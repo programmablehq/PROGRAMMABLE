@@ -32,6 +32,7 @@ describe("Ethereum verified Explore adapter", () => {
       blockNumber: "123", poolId: hex(13,64), quoteAsset: hex(0,40), launchedAt: "2026-10-14T20:05:35Z", decimals: 18 };
     vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([launch]);
     vi.mocked(readCodexTokenMetadata).mockResolvedValueOnce(new Map([[launch.tokenAddress, {
+      name: null, symbol: null,
       imageUrl: "https://example.com/new.png", description: "New project", links: [{ label: "X", url: "https://x.com/new" }],
     }]]));
     const result = await readEthereumTokenPresentation(launch.tokenAddress);
