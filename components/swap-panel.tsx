@@ -11,6 +11,7 @@ import type { PendingSwap, SwapWalletActions } from "@/lib/swap/client";
 import { walletChainIdsEqual } from "@/lib/wallet-chain-id";
 import { displaySwapAmount, maximumSwapInput, normalizeSwapAmountInput, parseSwapAmount } from "./swap-amount";
 import { scheduleVisibleQuoteRefresh } from "./quote-refresh";
+import { createSwapQuoteCache, swapQuoteExpiresAt } from "./swap-quote-cache";
 import { runSwapFlow } from "./swap-flow";
 import { TradeWalletButton } from "./responsive-trade-panel";
 import { TradeAssetBadge } from "./trade-asset-badge";
@@ -49,6 +50,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
   const [asset, setAsset] = useState<{ key: string; descriptor?: SwapTokenDescriptor; error?: string } | null>(null);
   const [balances, setBalances] = useState<{ key: string; value?: WalletTradeBalances; error?: string } | null>(null);
   const [quotation, setQuotation] = useState<{ key: string; review?: SwapReview; error?: string; receivedAt?: number } | null>(null);
+  const [quoteCache] = useState(createSwapQuoteCache);
   const [pendingView, setPendingView] = useState<PendingView | null>(null);
   const [recoveryHash, setRecoveryHash] = useState("");
   const [revision, setRevision] = useState(0);
@@ -82,7 +84,8 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
   const inputBalance = balance ? side === "buy" ? balance.nativeBalanceWei : balance.tokenBalanceRaw : null;
   const insufficient = parsed !== null && inputBalance !== null && parsed > inputBalance;
   const quoteKey = `${assetKey}:${ownerKey}:${side}:${amount}:${slippageBps}:${revision}`;
-  const review = quotation?.key === quoteKey ? quotation.review : undefined;
+  const currentQuotation = quotation?.key === quoteKey ? quotation : quoteCache.get(quoteKey);
+  const review = currentQuotation?.review;
   const quoteError = quotation?.key === quoteKey ? quotation.error : undefined;
   const canQuote = descriptor?.status === "ready" && descriptor.route.kind !== "module-foundation" && connected && correctNetwork && parsed !== null && !insufficient && !pending && !pendingError && pendingLoaded;
   const quoting = canQuote && !review && !quoteError && !busy;
@@ -133,21 +136,31 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
   }, [balanceKey, connected, correctNetwork, chainId, normalizedAddress, validAddress]);
 
   useEffect(() => {
+    quoteCache.clear();
+  }, [quoteCache, assetKey, ownerKey]);
+
+  useEffect(() => {
     if (!canQuote || !descriptor || !owner || parsed === null || busy) return;
+    if (quoteCache.get(quoteKey)) return;
     let active = true;
     const timer = setTimeout(() => {
       void import("@/lib/swap/client").then(({ prepareSwap }) => prepareSwap({ descriptor, owner, side, amountIn: parsed, slippageBps }, walletRef.current))
-        .then(value => { if (active) setQuotation({ key: quoteKey, review: value, receivedAt: Date.now() }); })
+        .then(value => {
+          if (!active) return;
+          const quote = { review: value, receivedAt: Date.now() };
+          quoteCache.set(quoteKey, quote);
+          setQuotation({ key: quoteKey, ...quote });
+        })
         .catch(caught => { if (active) setQuotation({ key: quoteKey, error: message(caught) }); });
     }, 250);
     return () => { active = false; clearTimeout(timer); };
-  }, [canQuote, descriptor, owner, parsed, side, slippageBps, quoteKey, busy]);
+  }, [canQuote, descriptor, owner, parsed, side, slippageBps, quoteKey, busy, quoteCache]);
 
   useEffect(() => {
     if (!review || busy || pending) return;
-    const until = Math.min(Number(review.expiresAt) * 1_000 - 5_000, (quotation?.receivedAt ?? 0) + 30_000);
+    const until = swapQuoteExpiresAt({ review, receivedAt: currentQuotation?.receivedAt ?? 0 });
     return scheduleVisibleQuoteRefresh(until, () => setRevision(value => value + 1));
-  }, [review, quotation?.receivedAt, busy, pending]);
+  }, [review, currentQuotation?.receivedAt, busy, pending]);
 
   function edit(change: () => void) {
     if (mutex.current || locked) return;
@@ -165,6 +178,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
     inputRef.current?.focus();
   }
   function acceptReceipt(receipt: SwapReceipt, kind: "swap" | "approval") {
+    quoteCache.clear();
     setOutcome({ receipt, kind }); setError(""); setSubmitted(null);
     if (receipt.status === "success" && kind === "swap") setAmount("");
     setRevision(value => value + 1);
@@ -193,9 +207,10 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
       return;
     }
     if (!review || !descriptor || !owner || parsed === null || pending || pendingError || !pendingLoaded || insufficient) return;
-    if (Date.now() >= Math.min(Number(review.expiresAt) * 1_000 - 5_000, (quotation?.receivedAt ?? 0) + 30_000)) {
+    if (Date.now() >= swapQuoteExpiresAt({ review, receivedAt: currentQuotation?.receivedAt ?? 0 })) {
       setRevision(value => value + 1); return;
     }
+    quoteCache.clear();
     mutex.current = true; setBusy("signing"); setError(""); setOutcome(null);
     try {
       const { prepareSwap, submitSwap } = await import("@/lib/swap/client");
