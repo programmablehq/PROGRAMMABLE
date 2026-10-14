@@ -45,6 +45,7 @@ describe("verified chart identity", () => {
     mocks.chart.mockRejectedValue(new Error("private provider response"));
     const failed = await GET(new Request(url));
     expect(failed.status).toBe(503); expect(JSON.stringify(await failed.json())).not.toContain("private provider response");
+    expect(failed.headers.get("retry-after")).toBe("15");
   });
   it("checks empty histories again quickly instead of caching a new coin's empty chart for a minute", async () => {
     mocks.robinhood.mockResolvedValue({ token: { tokenAddress: address } });
