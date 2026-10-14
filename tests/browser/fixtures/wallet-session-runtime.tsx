@@ -90,6 +90,11 @@ function emitInjected(event: string, value: unknown) {
 function wallet(address: string, linked = true, connectedAt = 1, initialChain = "eip155:4663"): FixtureWallet {
   let networkChain = initialChain;
   const provider = {
+    on(event: string, listener: (value: unknown) => void) {
+      if (!injectedListeners.has(event)) injectedListeners.set(event, new Set());
+      injectedListeners.get(event)!.add(listener);
+    },
+    removeListener(event: string, listener: (value: unknown) => void) { injectedListeners.get(event)?.delete(listener); },
     request: async ({ method, params }: { method: string; params?: unknown[] }) => {
       record(method, { address });
       if (method === "eth_chainId") return state.providerChainOverride
@@ -402,6 +407,7 @@ export function FixtureControls() {
     <button onClick={() => update({ wallets: state.wallets.map(candidate => ({ ...candidate,
       getEthereumProvider: () => candidate.getEthereumProvider(), switchChain: chainId => candidate.switchChain(chainId),
     })) })}>Refresh SDK methods without changing provider</button>
+    <button onClick={() => update({ wallets: state.wallets.map(candidate => ({ ...candidate, walletClientType: "coinbase_wallet", connectorType: "wallet_connect" })) })}>Use Coinbase fixture wallet</button>
     <button onClick={() => update({ wallets: state.wallets.map(candidate => ({ ...candidate, walletClientType: "privy", connectorType: "embedded" })) })}>Use embedded fixture wallet</button>
     <button onClick={() => update({ isOpen: true })}>Open SDK modal</button>
     <button onClick={() => update({ isOpen: false })}>Close SDK modal</button>

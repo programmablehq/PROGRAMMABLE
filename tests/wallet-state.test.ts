@@ -761,10 +761,8 @@ describe("wallet recovery state", () => {
       disconnectSettled = true;
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(events).toEqual(["logout", "provider cleanup"]));
     expect(disconnectSettled).toBe(false);
-    expect(events).toEqual(["logout", "provider cleanup"]);
 
     finishCleanup?.(true);
     const succeeded = await disconnect;
@@ -947,4 +945,17 @@ describe("wallet recovery state", () => {
     expect(subject.getWalletLoginErrorMessage("linked_to_another_user"))
       .toBe("This wallet is linked to another account. Switch accounts to use it.");
   });
+});
+
+ it("finishes authoritative logout even if extension cleanup never answers", async () => {
+  vi.useFakeTimers();
+  try {
+    const marked = vi.fn();
+    const pending = walletProvider.executeWalletDisconnect({ authenticated: true,
+      logout: async () => {}, disconnectProviderWallets: () => new Promise(() => {}),
+      markAppDisconnected: marked, cleanupTimeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await pending).toBe(true);
+    expect(marked).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
 });

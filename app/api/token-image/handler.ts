@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { put, type PutBlobResult } from "@vercel/blob";
-import { PrivyClient } from "@privy-io/node";
+import { privyReadClient, privyReadUnavailable } from "@/lib/server/privy-read-client";
 import { NextResponse } from "next/server";
 
 import type {
@@ -68,7 +68,13 @@ export function createTokenImageUploadHandlerV1(
       && contentLength > MAX_TOKEN_IMAGE_UPLOAD_BYTES + 100_000
     ) return errorResponse("Choose a smaller image", 413);
 
-    const session = await dependencies.authenticateSession(request);
+    let session: TokenImageUploadSessionV1 | null;
+    try { session = await dependencies.authenticateSession(request); }
+    catch (error) {
+      return errorResponse(privyReadUnavailable(error)
+        ? "Wallet access is temporarily unavailable. Try the upload again shortly."
+        : "Connect your wallet and try again", privyReadUnavailable(error) ? 503 : 401);
+    }
     if (!session) return errorResponse("Connect your wallet and try again", 401);
 
     let form: FormData;
@@ -219,12 +225,13 @@ async function verifyPrivySession(request: Request): Promise<TokenImageUploadSes
   const appSecret = process.env.PRIVY_APP_SECRET?.trim();
   const accessToken = getBearerToken(request);
   if (!appId || !appSecret || !accessToken) return null;
-  const privy = new PrivyClient({ appId, appSecret });
+  const privy = privyReadClient(appId, appSecret);
   try {
     const session = await privy.utils().auth().verifyAccessToken(accessToken);
     if (session.app_id !== appId || !session.user_id) return null;
     return Object.freeze({ privyUserId: session.user_id });
-  } catch {
+  } catch (error) {
+    if (privyReadUnavailable(error)) throw error;
     return null;
   }
 }

@@ -122,7 +122,7 @@ for (const path of ["/profile", "/developers/api-keys"]) {
     await expect(page.getByRole("dialog", { name: "SDK wallet dialog", exact: true })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expectMethods(page, ["connectWallet"]);
-    expect((await calls(page))[0].options).toMatchObject({ walletChainType: "ethereum-only" });
+    expect((await calls(page)).find(call => call.method === "connectWallet")?.options).toMatchObject({ walletChainType: "ethereum-only" });
     await page.getByRole("button", { name: "Complete wallet A reconnect", exact: true }).click();
     await expect(page.getByLabel("Selected account", { exact: true })).toHaveText(accountA);
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -896,4 +896,15 @@ test("another user's late link success cannot settle the current user's link", a
   await expect(page.getByRole("dialog", { name: "SDK wallet dialog", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reject linking foreign account", exact: true }).click();
   await expect(page.getByLabel("Wallet busy", { exact: true })).toHaveText("false");
+});
+
+ test("a connected WalletConnect provider updates account and network without MetaMask or another login", async ({ page }) => {
+  await open(page);
+  await scenario(page, "both-owned");
+  await page.getByRole("button", { name: "Use Coinbase fixture wallet", exact: true }).click();
+  await page.getByRole("button", { name: "MetaMask selects wallet B", exact: true }).click();
+  await expect(page.getByLabel("Selected account", { exact: true })).toHaveText(accountB);
+  await page.getByRole("button", { name: "MetaMask selects Ethereum", exact: true }).click();
+  await expect(page.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1");
+  await expectMethods(page, []);
 });

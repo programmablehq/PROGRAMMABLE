@@ -1,6 +1,6 @@
 import "server-only";
 
-import { PrivyClient } from "@privy-io/node";
+import { privyReadClient, readCurrentPrivyUser, privyReadUnavailable } from "../privy-read-client";
 
 import {
   canonicalizeJson,
@@ -154,7 +154,7 @@ export function createPrivyGitHubPrincipalAuthenticatorV1():
 WebsiteEntitlementReadAuthenticatorV1 {
   const appId = requiredEnvironment("NEXT_PUBLIC_PRIVY_APP_ID");
   const appSecret = requiredEnvironment("PRIVY_APP_SECRET");
-  const privy = new PrivyClient({ appId, appSecret });
+  const privy = privyReadClient(appId, appSecret);
 
   return createPrivyGitHubPrincipalAuthenticatorFromBoundaryV1({
     appId,
@@ -176,7 +176,7 @@ WebsiteEntitlementReadAuthenticatorV1 {
         return claims;
       },
       async getCurrentUser(userId: string) {
-        const user = await privy.users()._get(userId);
+        const user = await readCurrentPrivyUser(privy, userId);
         return Object.freeze({
           id: user.id,
           linkedAccounts: Object.freeze(user.linked_accounts.map((account) =>
@@ -225,7 +225,8 @@ export function createPrivyGitHubPrincipalAuthenticatorFromBoundaryV1(
           || access.appId !== input.appId
         ) throw new TypeError("Privy token binding mismatch");
         user = await input.boundary.getCurrentUser(access.userId);
-      } catch {
+      } catch (error) {
+        if (privyReadUnavailable(error)) throw new GitHubPrincipalAuthenticationErrorV1(503, "privy_service_unavailable");
         throw new GitHubPrincipalAuthenticationErrorV1(
           401,
           "privy_session_rejected",
@@ -282,7 +283,7 @@ export function createPrivyGitHubPrincipalAuthenticatorFromBoundaryV1(
 
 export class GitHubPrincipalAuthenticationErrorV1 extends Error {
   constructor(
-    readonly status: 401 | 403,
+    readonly status: 401 | 403 | 503,
     readonly code: string,
   ) {
     super(code);

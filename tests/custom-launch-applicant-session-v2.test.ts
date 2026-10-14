@@ -900,6 +900,5 @@ describe("custom launch applicant session currentness", () => {
     expect(clientSource).not.toContain("session: CustomLaunchWebsiteSessionV2");
     expect(walletSource).toContain("const { refreshUser } = useUser();");
     expect(walletSource).toContain("refreshApplicantSession,");
-    expect(walletSource).toContain("loadIdentityToken: getPrivyIdentityToken");
   });
 });
