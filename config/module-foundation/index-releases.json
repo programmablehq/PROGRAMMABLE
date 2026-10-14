@@ -103,6 +103,32 @@
         "factoryTransactionHash": "0xedb7cef9edcdfd1f250b775b6f1b776e05c79276ddc1a2ecd698016e145b8998",
         "hookDeployerTransactionHash": "0xd39d58c9942474b702174705eafb3b3ca456c013c213492a49c684cf64cab2f6"
       }
+    },
+    {
+      "binding": {
+        "releaseDigest": "0x3367338aac4a124cd14b258ee906a863d894d76c4f16357132684c3fdadc32db",
+        "sourceCommit": "80551a93677a5f9d6202e09b5bba677351d71710",
+        "startBlock": "86465251",
+        "factoryVersion": "v3",
+        "lpCustodyId": "0x2c7b3660c5544787be316b6ede4cc650661ca804d71fda39f7b179d6af6837e1",
+        "factory": {
+          "address": "0xa3479cb16fdb71b706b8961dc50be6404c05c7ea",
+          "runtimeCodeHash": "0x6ced7b14731a3d038146c49da5b397a149f01e28a5a765353e16c3151b688a45"
+        },
+        "hookDeployer": {
+          "address": "0xb7f83c119a0951f02c12c2fc76d18c8990507473",
+          "runtimeCodeHash": "0xcf408f95fe87e32695637ad35f4a64b6277a74b7c25e8d855839882fc06d7e51"
+        }
+      },
+      "evidence": {
+        "artifactDigest": "0x50401473a65a07534735b3e7c4041956f017513d136ec30ae8684f7cf5f79443",
+        "decisionDigest": "0x32619ac8e7697e6fc08a55e206517876b57e99872e478145f547d0742524cbbf",
+        "sourceManifestHash": "0x6b80a6b256b944cbc0aff091342e6f433fe529c1a892beb9a6121dda1c330291"
+      },
+      "deployment": {
+        "factoryTransactionHash": "0x931d616b139e20a6cf381304ac7e18976c48550365bd89cbd4a90956d9785153",
+        "hookDeployerTransactionHash": "0xa0a4c0c2c2bb1b5083876a2e476b138aaf8fbe4efeaf1ec4d690823c8be4b051"
+      }
     }
   ]
 }
