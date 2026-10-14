@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ProfileLaunchRewards } from "@/components/profile-launch-rewards";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import type { FoundationProfileLaunch } from "@/lib/profile/module-launches";
 import type { Hex } from "viem";
@@ -338,7 +337,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const hasRows = items.length > 0;
   const updatingSearch = search.trim() !== request.q;
   const hasFilters = activeExploreFilterCount(request) > 0;
-  const slots = pending ? Math.max(0, ROBINHOOD_EXPLORE_PAGE_SIZE - items.length) : 0;
+  const slots = pending && !profile ? Math.max(0, ROBINHOOD_EXPLORE_PAGE_SIZE - items.length) : 0;
   const canPrevious = enabled && !pending && !updatingSearch && Boolean(data && data.page.number > 1);
   const canNext = enabled && !pending && !updatingSearch && Boolean(data?.page.hasMore);
   const Heading = embedded ? "h2" : "h1";
@@ -370,15 +369,11 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     <div ref={listRef} className={`${styles.page} ${profile ? styles.profilePage : "page-width"}`}>
       <header className={profile ? styles.profileHeading : styles.heading}>
         <Heading data-explore-heading id={headingId} tabIndex={-1}>{profile ? "Launches" : "Explore"}</Heading>
-        {profile?.enableClaims ? <div className={styles.profileActions}>
-          {profile.onAllRewards ? <button className={styles.rewardsButton} type="button" onClick={profile.onAllRewards}>Claim rewards</button> : null}
-          <Link className={styles.launchButton} href={`/launch/modules/foundation?chainId=${profile.launchChainId}`}>Launch a coin</Link>
-        </div> : null}
       </header>
 
       <section className={styles.body} aria-labelledby={headingId}>
         <div className={styles.toolbar} role="group" aria-label={profile ? "Launches controls" : "Explore controls"}>
-          <form className={styles.search} role="search" onSubmit={submitSearch}>
+          {!profile ? <><form className={styles.search} role="search" onSubmit={submitSearch}>
             <Search aria-hidden="true" size={18} />
             <label className="sr-only" htmlFor={searchId}>Search {chainName} launches by name, symbol or address</label>
             <input
@@ -404,7 +399,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
           </form>
           <ExploreFilters value={request} onApply={applyFilters} defaultValue={defaultFilters}
             modeOptions={chainId === 1 ? ETHEREUM_EXPLORE_MODES : undefined}
-            sortOptions={chainId === 1 ? [{ value: "newest", label: "Newest" }, { value: "oldest", label: "Oldest" }] : undefined} />
+            sortOptions={chainId === 1 ? [{ value: "newest", label: "Newest" }, { value: "oldest", label: "Oldest" }] : undefined} /></> : null}
           <nav className={styles.pagination} aria-label="Launch pages">
             <button type="button" aria-disabled={!canPrevious} aria-label="Previous page" title="Previous page" aria-controls={listId}
               onClick={() => { if (canPrevious && data) changePage(data.page.number - 1); }}>
@@ -422,7 +417,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
         </p>
         {noMatches && !loading && !failed ? <p className={styles.status}>No matches.</p> : null}
 
-        {hasRows || pending ? (
+        {profile && pending && !hasRows ? <p className={styles.profileLoading}>Loading launches…</p> : hasRows || pending ? (
           <ul className={styles.list} id={listId} aria-label={`${chainName} launches`} aria-busy={pending}>
             {items.map((launch, index) => {
               const launchChainId = launch.chainId ?? (chainId === "all" ? 4663 : chainId);
@@ -468,7 +463,6 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
                 </Link>
                 {details?.links.length ? <RobinhoodProjectLinks links={details.links}
                   name={launch.name?.trim() || (hasAsset ? "Token" : "Project")} className={styles.socials} /> : null}
-                {profile?.enableClaims ? <ProfileLaunchRewards launch={launch} account={profile.account} chainId={launchChainId} sendWallet={profile.sendWallet} onEthereumClaim={profile.onEthereumClaim} /> : null}
                 </article>
               </li>
             );})}

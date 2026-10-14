@@ -30,12 +30,13 @@
 .identity svg { flex-shrink: 0; }
 .identity a { margin-left: auto; color: #d2d2cf; min-height: 32px; min-width: 32px; display: grid; place-items: center; border-radius: 8px; }
 .embedded { display: flex; min-width: 0; width: 100%; color: var(--webde-ink); }
-.embedded .card { display: flex; flex: 1; flex-direction: column; width: 100%; padding: 20px; box-shadow: none; }
-.embedded .card > form { display: flex; flex: 1; flex-direction: column; }
-.embedded .primary { margin-top: auto; }
+.embedded .card { display: flex; flex-direction: column; width: 100%; padding: 20px; box-shadow: none; }
+.embedded .card > form { display: flex; flex-direction: column; }
+.embedded .primary { margin-top: 16px; }
 .sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; margin-bottom: 20px; border-radius: 12px; background: var(--webde-control); }
-.sides button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--webde-muted); font: inherit; font-size: 15px; font-weight: 550; cursor: pointer; }
+.sides button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--webde-muted); font: inherit; font-size: 15px; font-weight: 550; cursor: pointer; transition: background-color 150ms ease, color 150ms ease; }
 .sides button[aria-pressed="true"] { background: var(--panel-fill-action); color: #161616; }
+@media(prefers-reduced-motion:reduce) { .sides button { transition: none; } }
 .estimate { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--webde-muted); font-size: 13px; min-height: 24px; }
 .estimate output { text-align: right; color: var(--webde-ink); overflow-wrap: anywhere; min-width: 0; font-variant-numeric: tabular-nums; }
 .estimate output[data-empty="true"] { color: var(--webde-muted); }

@@ -79,7 +79,7 @@ function LivePriceChart({ name, points, now, market }: Readonly<{
         <p className={liveStyles.label}>Live price <span>USD</span></p>
         <p className={liveStyles.price}>{last ? coinDollars(last.price, true) : "—"}</p>
       </div>
-      <p className={liveStyles.status} role="status">{status === "Live price" ? (market?.source === "dexscreener" ? "DEX Screener" : "Uniswap v4") : status}</p>
+      {status !== "Price updates delayed" ? <p className={liveStyles.status} role="status">{status === "Live price" ? (market?.source === "dexscreener" ? "DEX Screener" : "Uniswap v4") : status}</p> : null}
     </header>
     <div className={liveStyles.plot}>
       {geometry && last ? <>

@@ -37,11 +37,6 @@ const menuNavItems = [
 
 const mobileNavItems = [desktopNavItems[0], ...menuNavItems];
 
-function isBuilderWorkspace(pathname: string) {
-  return pathname === "/launch/modules" || pathname.startsWith("/launch/modules/")
-    || pathname === "/developers/api-keys" || pathname === "/developers/hooks";
-}
-
 function warmNavigationRoute(
   router: ReturnType<typeof useRouter>,
   href: string,
@@ -245,7 +240,6 @@ function DesktopNavigation() {
 
 export function SiteHeader() {
   const pathname = usePathname() ?? "/";
-  const builderWorkspace = isBuilderWorkspace(pathname);
   const menuId = useId();
   const headerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -330,22 +324,22 @@ export function SiteHeader() {
               alt=""
               width={1168}
               height={1536}
-              sizes={builderWorkspace ? "40px" : "32px"}
+              sizes="32px"
               priority
             />
           </Link>
         </div>
 
-        {builderWorkspace ? null : <DesktopNavigation />}
+        <DesktopNavigation />
 
-        {builderWorkspace ? null : <Link
+        <Link
           className={styles.mobileLaunch}
           href="/launch"
           prefetch={false}
           aria-current={pathname.startsWith("/launch") ? "page" : undefined}
         >
           Launch a token
-        </Link>}
+        </Link>
 
         <div className={`header-actions ${styles.headerActions}`}>
           <button

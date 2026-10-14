@@ -1533,6 +1533,7 @@ export function DeveloperApiKeysView({
         </div>
       </header>
 
+      <div className={styles.contentPanel}>
       <nav
         className={styles.sectionSwitch}
         aria-label="Developer access view"
@@ -2146,7 +2147,7 @@ export function DeveloperApiKeysView({
         {setupChainId !== "1" ? <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
         {setupChainId !== "4663" ? <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </nav>
-
+      </div>
     </div>
     </div>
   );

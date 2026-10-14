@@ -4,8 +4,8 @@
 .panel::backdrop { background: rgb(0 0 0 / .65); }
 
 @media (min-width: 1001px) {
-  .panel { display: flex; flex-direction: column; height: 100%; }
-  .panel > * { flex: 1; }
+  .host { align-self: center; }
+  .panel { display: block; height: auto; }
 }
 
 @media (max-width: 1000px) {

@@ -1,18 +1,9 @@
-.launchPage { position: relative; isolation: isolate; height: 100svh; display: flex; flex-direction: column; min-height: 520px; background: linear-gradient(#0005,#0006),url('/brand/atmosphere/programmable-floral-foreground-v1.avif') center bottom / cover no-repeat; }
+.launchPage { position: relative; isolation: isolate; height: calc(100svh - var(--header-height)); display: flex; flex-direction: column; min-height: 520px; background: linear-gradient(#0005,#0006),url('/brand/atmosphere/programmable-floral-foreground-v1.avif') center bottom / cover no-repeat; }
 .launchPage > .studio { height: auto; flex: 1; min-height: 0; }
 .launchPage > :not(.studio) { flex-shrink: 0; }
 :global(.app-frame):has(.launchPage) > :global(main) { padding-bottom: 0; }
 :global(.app-frame):has(.launchPage) :global(.route-transition) { min-height: 0; }
 :global(.app-frame):has(.launchPage) :global([data-site-footer]) { display: none; }
-:global(.app-frame):has(.launchPage) :global(.desktop-nav) { display: none; }
-:global(.app-frame):has(.launchPage) > :global(.site-header) { position: absolute; inset: 0 0 auto; height: 76px; background: transparent !important; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; }
-:global(.app-frame):has(.launchPage) :global(.header-inner) { max-width: none; padding-inline: 24px; }
-:global(.app-frame):has(.launchPage) :global(.wordmark) { width: 64px; height: 64px; }
-:global(.app-frame):has(.launchPage) :global(.wordmark-logo) { width: 40px; height: 52px; }
-:global(.app-frame):has(.launchPage) :global([data-site-menu-button]) { width: 60px; height: 60px; }
-:global(.app-frame):has(.launchPage) :global([data-site-menu-button]) > span,:global(.app-frame):has(.launchPage) :global([data-site-menu-button]) svg { width: 34px; height: 34px; }
-:global(.app-frame):has(.launchPage) :global([data-site-menu-surface]),:global(.app-frame):has(.launchPage) :global([data-site-menu-surface]) input { border: 0; }
-:global(.app-frame):has(.launchPage) :global(.header-brand),:global(.app-frame):has(.launchPage) :global(.header-actions),:global(.app-frame):has(.launchPage) :global(.site-header) [aria-hidden="false"] { pointer-events: auto; }
 .studio { --surface: var(--panel-fill); --line: var(--panel-line); --muted: #a0a0a6; --accent: #a5e9bd; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; display: grid; grid-template-rows: auto minmax(0,740px); align-content: center; gap: 12px; height: 100svh; min-height: 520px; padding: 18px 24px 20px; background: transparent; box-sizing: border-box; }
 .studio * { box-sizing: border-box; }
 .studio button { cursor: pointer; font: inherit; color: inherit; }
@@ -168,7 +159,7 @@
 @media(max-width:520px) { .previewTag { padding: 3px 5px; font-size: 9px; } }
 @media(max-height:760px) { .studio { padding-top: 10px; padding-bottom: 10px; gap: 8px; } .title { transform: none; } .coinArtwork { width: min(106px,100%); height: auto; justify-self: center; margin-bottom: 0; } .coinNode { gap: 3px; } .panelHeading { min-height: 52px; padding-top: 12px; padding-bottom: 12px; } }
 
-@media(max-width:520px) { :global(.app-frame):has(.launchPage) :global(.header-inner) { padding-inline: 12px; } .title p { font-size: 14px; line-height: 20px; } .title { max-width: calc(100% - 104px); gap: 6px; padding: 6px 8px; } .heading h1 { font-size: 30px; } .previewTag { top: 0; } .homeLogo { top: 0; } .moduleName .moduleArt { width: 34px; height: 34px; } }
+@media(max-width:520px) { .title p { font-size: 14px; line-height: 20px; } .title { max-width: calc(100% - 104px); gap: 6px; padding: 6px 8px; } .heading h1 { font-size: 30px; } .previewTag { top: 0; } .homeLogo { top: 0; } .moduleName .moduleArt { width: 34px; height: 34px; } }
 @media(max-width:380px) { .heading h1 { font-size: 29px; } }
 
 @keyframes connectionGrow { from { stroke-dasharray: 100; stroke-dashoffset: 100; } to { stroke-dasharray: 100; stroke-dashoffset: 0; } }
