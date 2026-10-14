@@ -192,15 +192,18 @@ export async function readEthereumToken(address: string, dependencies?: Dependen
 
 export async function readEthereumTokenPresentation(address: string) {
   const record = await readEthereumToken(address);
-  if (!record.token) return { ...record, presentation: null };
-  const entry = record.token;
+  return { ...record, presentation: record.token ? await presentEthereumToken(record.token) : null };
+}
+
+/** Enrich an already verified identity without rereading the launch catalog. */
+export async function presentEthereumToken(entry: CanonicalTokenExploreEntry) {
   const [markets, metadata] = await Promise.all([
     readCodexMarkets([entry], 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
     readCodexTokenMetadata([entry.tokenAddress], 1),
   ]);
-  return { ...record, presentation: { chainId: 1 as const, tokenAddress: entry.tokenAddress,
+  return { chainId: 1 as const, tokenAddress: entry.tokenAddress,
     name: entry.name, symbol: entry.symbol,
     ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
       links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
-    market: markets.get(entry.tokenAddress.toLowerCase()) ?? null } };
+    market: markets.get(entry.tokenAddress.toLowerCase()) ?? null };
 }

@@ -5,8 +5,9 @@ const readers = vi.hoisted(() => ({ indexed: vi.fn(), recent: vi.fn(), presentat
 vi.mock("@/lib/server/token-page", () => ({ resolveTokenPage: readers.indexed }));
 vi.mock("@/lib/server/confirming-launches", () => ({ readConfirmingEthereumLaunches: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/lib/server/module-foundation/recent-launch-store", () => ({ findRecentFoundationLaunch: readers.recent }));
-vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumTokenPresentation: readers.presentation }));
-vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodTokenPresentation: readers.presentation }));
+vi.mock("@/lib/server/ethereum-explore", () => ({ presentEthereumToken: readers.presentation }));
+vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodPresentations: readers.presentation }));
+vi.mock("@/lib/server/swap/token", () => ({ resolveVerifiedLaunchSwapToken: vi.fn() }));
 vi.mock("@/lib/module-foundation/ethereum-release", () => ({ isEthereumModuleLaunchCandidate: () => true }));
 vi.mock("@/components/module-foundation-market-host", () => ({ ModuleFoundationMarketHost: () => null }));
 vi.mock("@/components/ethereum-token-view", () => ({ EthereumTokenView: () => null }));

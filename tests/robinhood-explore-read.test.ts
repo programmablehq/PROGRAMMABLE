@@ -141,10 +141,11 @@ describe("Robinhood Explore read model", () => {
     const rows = [token(1), token(2)];
     const observations = new Map(rows.map(row => [row.tokenAddress, market(row, 10)]));
     mocks.read.mockResolvedValue({ snapshot: saved(rows) });
-    mocks.markets.mockResolvedValue(observations);
+    mocks.presentations.mockResolvedValueOnce([{ tokenAddress: rows[1].tokenAddress,
+      imageUrl: null, description: null, links: [], market: observations.get(rows[1].tokenAddress) }]);
     const detail = await readRobinhoodTokenPresentation(rows[1].tokenAddress);
-    expect(mocks.markets).toHaveBeenCalledWith([rows[1]]);
-    expect(mocks.presentations).toHaveBeenCalledWith([rows[1]], observations);
+    expect(mocks.markets).not.toHaveBeenCalled();
+    expect(mocks.presentations).toHaveBeenCalledWith([rows[1]]);
     expect(detail.token).toEqual(rows[1]);
     expect(detail.presentation?.market).toBe(observations.get(rows[1].tokenAddress));
     mocks.presentations.mockRejectedValueOnce(new Error("metadata unavailable"));

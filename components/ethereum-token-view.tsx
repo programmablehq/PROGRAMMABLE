@@ -1,5 +1,7 @@
 "use client";
 
+import type { SwapTokenDescriptor } from "@/lib/swap/types";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getAddress } from "viem";
@@ -14,13 +16,14 @@ import { RobinhoodMarketView } from "./robinhood-market-view";
 import { mergeCoinMetadata } from "@/lib/coin-metadata";
 import styles from "./robinhood-token-view.module.css";
 
-export function EthereumTokenView({ address, token, status, market: initialMarket, initialPresentation }: {
+export function EthereumTokenView({ address, token, status, market: initialMarket, initialPresentation, initialSwapToken }: {
   address: string;
   token: CanonicalTokenExploreEntry | null;
   status: "ready" | "stale" | "partial" | "unavailable";
   updatedAt: string | null;
   market?: RobinhoodCoinMarket | null;
   initialPresentation?: Promise<RobinhoodCoinPresentation | null>;
+  initialSwapToken?: Promise<SwapTokenDescriptor | null>;
 }) {
   const seed = useMemo(() => initialPresentation ?? (initialMarket && token ? Promise.resolve({
     chainId: 1 as const, tokenAddress: address, imageUrl: token.imageUrl ?? null, description: token.description ?? null,
@@ -54,7 +57,7 @@ export function EthereumTokenView({ address, token, status, market: initialMarke
     launch={{ tokenAddress: address, poolId: token.poolId, ...ethereumPairPresentation(token) }}
     presentation={{ chainId: 1, tokenAddress: address, ...metadata, market: display?.market ?? null }}
     loading={presentation.loading} delayed={presentation.delayed}
-    trade={<SwapPanel key={`1:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={1} tokenSymbol={symbol} />} />;
+    trade={<SwapPanel key={`1:${address.toLowerCase()}`} embedded initialDescriptor={initialSwapToken} initialAddress={address} initialChainId={1} tokenSymbol={symbol} />} />;
   return <div className={`${styles.page} page-width`}>
     <Link className={styles.back} href="/explore"><ArrowLeft aria-hidden="true" size={16} />Back to Explore</Link>
     <section className={styles.empty}>

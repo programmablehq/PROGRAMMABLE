@@ -54,37 +54,7 @@ export async function resolveSwapToken(input: { address: string; chainId?: SwapC
     if (!result.token) throw new SwapUnavailableError(result.status === "unavailable" ? "Ethereum token details are temporarily unavailable. Try again." : "This token is not in the verified Ethereum launch index.", result.status === "unavailable" ? "INDEX_UNAVAILABLE" : "TOKEN_NOT_FOUND");
     const row = result.token;
     if (row.tokenAddress.toLowerCase() !== address.toLowerCase()) throw new SwapUnavailableError("Enter the coin’s token address, rather than one of its supporting contracts.", "NOT_PRIMARY_TOKEN");
-    const base = { schemaVersion: SWAP_TOKEN_SCHEMA, chainId: 1 as const, token: tokenMetadata(row), manageHref: null };
-    if (isEthereumModuleLaunchCandidate(row) && row.launchTransactionHash) {
-      return { ...base, status: "ready", manageHref: `/modules/${address.toLowerCase()}?chainId=1`,
-        route: { kind: "module-foundation", transactionHash: row.launchTransactionHash as `0x${string}` } };
-    }
-    if (row.launchStampProvenance) {
-      let classification;
-      try { classification = await readEthereumFeeClassificationV1(row); }
-      catch { return unavailable(base, "The launch fee policy is updating. Please try again shortly."); }
-      const adapter = classification?.profileVersion === "3.6.0" ? null : await dependencies.ethereumCustom(row);
-      const market = adapter?.project.markets.find(item => item.marketId === adapter.market.marketId);
-      const capability = market?.tradeCapability;
-      if (adapter?.chainId === "1" && market && capability
-        && adapter.tokenAddress.toLowerCase() === base.token.address.toLowerCase()
-        && market.baseAsset.identity.value.toLowerCase() === base.token.address.toLowerCase()
-        && market.baseAsset.decimals === base.token.decimals && market.quoteAsset.identity.value.toLowerCase() === ZERO
-        && market.poolId.toLowerCase() === row.poolId?.toLowerCase()
-        && capability.poolKey.hooks.value.toLowerCase() === row.hookAddress?.toLowerCase()
-        && capability.supportedSides.includes("base-to-quote") && capability.supportedSides.includes("quote-to-base")) {
-        return { ...base, status: "ready", route: { kind: "custom-market", projectId: adapter.projectId, marketId: market.marketId, capability } };
-      }
-      const automatic = ethereumStampedSwapRoute(row, classification);
-      if (automatic) return { ...base, status: "ready", route: { kind: "ethereum-stamped", descriptor: automatic } };
-      return unavailable(base, "An ETH swap route is not available for this launch yet.");
-    }
-    if (row.launchModel === "custom-graph" || row.launchModel === "adaptive") return unavailable(base, "An ETH swap route is not available for this launch yet.");
-    if (!row.hookAddress || !row.poolId) return unavailable(base, "No verified trading pool is available for this coin.");
-    return { ...base, status: "ready", route: { kind: "classic", hook: getAddress(row.hookAddress), poolId: row.poolId,
-      launchModel: row.launchModel === "deep" || row.launchModel === "stock-paired" ? row.launchModel : "classic",
-      ...(row.launchModelVersion ? { launchModelVersion: row.launchModelVersion } : {}),
-      ...(row.quoteAssetAddress ? { quoteAsset: getAddress(row.quoteAssetAddress) } : {}) } };
+    return resolveVerifiedLaunchSwapToken({ chainId: 1, token: row }, dependencies);
   }
   const result = await dependencies.robinhood(address);
   if (!result.token) throw new SwapUnavailableError(result.status === "unavailable" ? "Robinhood token details are temporarily unavailable. Try again." : "This token is not in the verified Robinhood launch index.", result.status === "unavailable" ? "INDEX_UNAVAILABLE" : "TOKEN_NOT_FOUND");
@@ -92,7 +62,48 @@ export async function resolveSwapToken(input: { address: string; chainId?: SwapC
   // The index also resolves component addresses. A component is not implicitly
   // the primary trade token, and must never swap some other token by accident.
   if (row.tokenAddress.toLowerCase() !== address.toLowerCase()) throw new SwapUnavailableError("Enter the coin’s token address, rather than one of its supporting contracts.", "NOT_PRIMARY_TOKEN");
-  return resolveRobinhoodSwapToken(row, dependencies);
+  return resolveVerifiedLaunchSwapToken({ chainId: 4663, token: row }, dependencies);
+}
+
+/** Reuse the server-verified page identity. Public lookups still validate the
+ * requested address above, and transaction preparation rechecks live state. */
+export async function resolveVerifiedLaunchSwapToken(
+  launch: { chainId: 1; token: CanonicalTokenExploreEntry } | { chainId: 4663; token: RobinhoodLaunch },
+  dependencies: SwapTokenDependencies = readers,
+): Promise<SwapTokenDescriptor> {
+  if (launch.chainId === 4663) return resolveRobinhoodSwapToken(launch.token, dependencies);
+  const row = launch.token;
+  const base = { schemaVersion: SWAP_TOKEN_SCHEMA, chainId: 1 as const, token: tokenMetadata(row), manageHref: null };
+  if (isEthereumModuleLaunchCandidate(row) && row.launchTransactionHash) {
+    return { ...base, status: "ready", manageHref: `/modules/${row.tokenAddress.toLowerCase()}?chainId=1`,
+      route: { kind: "module-foundation", transactionHash: row.launchTransactionHash as `0x${string}` } };
+  }
+  if (row.launchStampProvenance) {
+    let classification;
+    try { classification = await readEthereumFeeClassificationV1(row); }
+    catch { return unavailable(base, "The launch fee policy is updating. Please try again shortly."); }
+    const adapter = classification?.profileVersion === "3.6.0" ? null : await dependencies.ethereumCustom(row);
+    const market = adapter?.project.markets.find(item => item.marketId === adapter.market.marketId);
+    const capability = market?.tradeCapability;
+    if (adapter?.chainId === "1" && market && capability
+      && adapter.tokenAddress.toLowerCase() === base.token.address.toLowerCase()
+      && market.baseAsset.identity.value.toLowerCase() === base.token.address.toLowerCase()
+      && market.baseAsset.decimals === base.token.decimals && market.quoteAsset.identity.value.toLowerCase() === ZERO
+      && market.poolId.toLowerCase() === row.poolId?.toLowerCase()
+      && capability.poolKey.hooks.value.toLowerCase() === row.hookAddress?.toLowerCase()
+      && capability.supportedSides.includes("base-to-quote") && capability.supportedSides.includes("quote-to-base")) {
+      return { ...base, status: "ready", route: { kind: "custom-market", projectId: adapter.projectId, marketId: market.marketId, capability } };
+    }
+    const automatic = ethereumStampedSwapRoute(row, classification);
+    if (automatic) return { ...base, status: "ready", route: { kind: "ethereum-stamped", descriptor: automatic } };
+    return unavailable(base, "An ETH swap route is not available for this launch yet.");
+  }
+  if (row.launchModel === "custom-graph" || row.launchModel === "adaptive") return unavailable(base, "An ETH swap route is not available for this launch yet.");
+  if (!row.hookAddress || !row.poolId) return unavailable(base, "No verified trading pool is available for this coin.");
+  return { ...base, status: "ready", route: { kind: "classic", hook: getAddress(row.hookAddress), poolId: row.poolId,
+    launchModel: row.launchModel === "deep" || row.launchModel === "stock-paired" ? row.launchModel : "classic",
+    ...(row.launchModelVersion ? { launchModelVersion: row.launchModelVersion } : {}),
+    ...(row.quoteAssetAddress ? { quoteAsset: getAddress(row.quoteAssetAddress) } : {}) } };
 }
 
 async function resolveRobinhoodSwapToken(row: RobinhoodLaunch, dependencies: SwapTokenDependencies): Promise<SwapTokenDescriptor> {
