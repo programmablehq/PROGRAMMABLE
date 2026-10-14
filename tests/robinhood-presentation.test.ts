@@ -100,7 +100,7 @@ describe("Robinhood optional coin presentation", () => {
     const result = readRobinhoodPresentations([{ ...TOKEN, launchProjection: { publication: {} } } as RobinhoodLaunch]);
     expect(codex.read).toHaveBeenCalledTimes(1);
     expect(codexMetadata.read).toHaveBeenCalledTimes(1);
-    finishMarket(new Map()); finishMetadata(new Map());
+    finishMarket(new Map<string, never>()); finishMetadata(new Map<string, never>());
     expect((await result)[0].tokenAddress).toBe(TOKEN.tokenAddress);
   });
   it("uses Codex module artwork without extra blockchain metadata reads", async () => {
