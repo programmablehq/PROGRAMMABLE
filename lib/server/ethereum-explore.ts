@@ -192,17 +192,26 @@ export async function readEthereumToken(address: string, dependencies?: Dependen
 
 export async function readEthereumTokenPresentation(address: string) {
   const record = await readEthereumToken(address);
-  return { ...record, presentation: record.token ? await presentEthereumToken(record.token) : null };
+  if (record.token) return { ...record, presentation: await presentEthereumToken(record.token) };
+  // Public market data can render as soon as a successful receipt is observed.
+  // Keep token null: transaction/claim readers still require the canonical proof.
+  const observed = liveLaunchObservations(await readConfirmingEthereumLaunches().catch(() => []))
+    .find(row => row.tokenAddress.toLowerCase() === address.toLowerCase());
+  return { ...record, status: observed ? "partial" as const : record.status,
+    presentation: observed ? await presentEthereumToken(observed) : null };
 }
 
-/** Enrich an already verified identity without rereading the launch catalog. */
-export async function presentEthereumToken(entry: CanonicalTokenExploreEntry) {
+/** Display data for a receipt-backed identity, without creating finality or trading proof. */
+export async function presentEthereumToken(entry: {
+  tokenAddress: string; poolId: string; name: string | null; symbol: string | null;
+  imageUrl?: string; description?: string; links?: CanonicalTokenExploreEntry["links"];
+}) {
   const [markets, metadata] = await Promise.all([
     readCodexMarkets([entry], 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
     readCodexTokenMetadata([entry.tokenAddress], 1),
   ]);
   return { chainId: 1 as const, tokenAddress: entry.tokenAddress,
-    name: entry.name, symbol: entry.symbol,
+    name: entry.name ?? undefined, symbol: entry.symbol,
     ...mergeCoinMetadata({ imageUrl: entry.imageUrl ?? null, description: entry.description ?? null,
       links: (entry.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, metadata.get(entry.tokenAddress.toLowerCase())),
     market: markets.get(entry.tokenAddress.toLowerCase()) ?? null };

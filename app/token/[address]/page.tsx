@@ -93,7 +93,10 @@ export default async function TokenPage({
     if (chainId === 1) {
       const observations = await readConfirmingEthereumLaunches().catch(() => []);
       const launch = liveLaunchObservations(observations).find(row => row.tokenAddress.toLowerCase() === address.toLowerCase());
-      if (launch) return <TokenRouteChainSync key={1} chainId={1}><ConfirmingLaunchView launch={launch} /></TokenRouteChainSync>;
+      if (launch) return <TokenRouteChainSync key={1} chainId={1}>
+        <ConfirmingLaunchView launch={launch}
+          initialPresentation={presentEthereumToken(launch).catch(() => null)} />
+      </TokenRouteChainSync>;
     }
   }
   if (resolved.chainId === 4663) {

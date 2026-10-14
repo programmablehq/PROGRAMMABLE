@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
 import type { RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
+import type { ConfirmingLaunch } from "@/lib/confirming-launches";
 const display = vi.hoisted(() => ({ items: [] as RobinhoodCoinPresentation[] }));
 vi.mock("@/components/use-robinhood-presentation", () => ({ useRobinhoodPresentation: () => display }));
 vi.mock("@/components/swap-panel", () => ({ SwapPanel: () => null }));
@@ -18,6 +19,27 @@ const presentation = { chainId: 1 as const, tokenAddress: token.tokenAddress, na
 const render = () => renderToStaticMarkup(<EthereumTokenView address={token.tokenAddress} token={token} status="ready" updatedAt={null} />);
 beforeEach(() => { display.items = []; });
 describe("Ethereum live public presentation", () => {
+  it("renders the normal coin market immediately from a receipt-backed identity", () => {
+    display.items = [presentation];
+    const launch: ConfirmingLaunch = {
+      chainId: 1, confirmation: "confirming", observationExpiresAt: Date.now() + 30_000,
+      category: "custom", mode: "custom", launchId: token.id, tokenAddress: token.tokenAddress,
+      hookAddress: token.hookAddress, creator: token.creatorAddress!, transactionHash: token.launchTransactionHash!,
+      blockNumber: token.launchBlockNumber!, blockHash: `0x${"ab".repeat(32)}`, poolId: token.poolId,
+      quoteAsset: "0x0000000000000000000000000000000000000000", launchedAt: token.launchedAt,
+      name: token.name, symbol: token.symbol, decimals: 18,
+    };
+    const html = renderToStaticMarkup(<EthereumTokenView address={token.tokenAddress} token={null}
+      observedLaunch={launch} status="partial" updatedAt={null} />);
+    expect(html).toContain("Updated coin");
+    expect(html).toContain("NEW / ETH");
+    expect(html).toContain("https://example.com/new.png");
+    expect(html).toContain("Market Cap");
+    expect(html).toContain("Copy address");
+    expect(html).not.toContain("Confirming");
+    expect(html).not.toContain("Launch not found");
+    expect(html).not.toContain("final verification");
+  });
   it("renders updated name, symbol, artwork and links from the matching presentation refresh", () => {
     display.items = [presentation];
     const html = render();
