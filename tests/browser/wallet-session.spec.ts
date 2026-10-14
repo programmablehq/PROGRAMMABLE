@@ -775,6 +775,33 @@ test("returning to the page reads a missed Ethereum network change without a wal
   }
 });
 
+for (const width of [1440, 390]) {
+  test(`wallet resume at ${width}px refreshes missed network and account changes without prompting`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await open(page);
+    await scenario(page, "both-owned");
+    await page.getByRole("button", { name: "Simulate stale Robinhood cache", exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(page.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1");
+    await page.getByRole("button", { name: "Select wallet B without an event", exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    await expect(page.getByLabel("Selected account", { exact: true })).toHaveText(accountB);
+    await expect(page.getByLabel("Wallet busy", { exact: true })).toHaveText("false");
+    await expectMethods(page, []);
+  });
+}
+
+test("a request-only connector refreshes after hydration and on return without event listeners", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Use provider without event listeners", exact: true }).click();
+  await page.getByRole("button", { name: "Simulate stale Robinhood cache", exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1");
+  await page.getByRole("button", { name: "Open account", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Wallet", exact: true })).toBeVisible();
+  await expectMethods(page, []);
+});
+
 test("a rejected network switch keeps the existing chain and releases the pending gate for retry", async ({ page }) => {
   await open(page);
   await beginDelayedNetworkSwitch(page);
