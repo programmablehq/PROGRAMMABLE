@@ -62,7 +62,7 @@ describe("Codex server market adapter", () => {
     vi.stubGlobal("fetch", fetcher);
     const catalog = await readCodexMarkets([{ tokenAddress: address, poolId }, other]);
     const observedAt = catalog.get(address)!.observedAt;
-    catalog.get(address)!.priceUsd = 42;
+    Reflect.set(catalog.get(address)!, "priceUsd", 42);
     vi.setSystemTime(Date.now() + 20_000);
     expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).get(address))
       .toMatchObject({ priceUsd: .001, observedAt });
