@@ -19,22 +19,22 @@ test.beforeEach(async ({ page }) => { await page.goto(origin); });
 
 const menuName = /^(Open|Close) menu$/;
 
-test("Module Mode keeps navigation and the connected account inside its menu", async ({ page }) => {
+test("Module Mode shares the site navigation and keeps the account inside its menu", async ({ page }) => {
   await page.goto(`${origin}/launch/modules/foundation`);
   const header = page.getByRole("banner");
-  await expect(header.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
-  await expect(header.getByRole("link", { name: "Launch a token", exact: true })).toHaveCount(0);
+  const navigation = header.getByRole("navigation", { name: "Primary navigation" });
+  await expect(navigation).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "Launch a token", exact: true })).toBeVisible();
   await expect(header.getByText("Connected wallet", { exact: true })).not.toBeVisible();
   await expect(header.getByLabel("Connected wallet 0xaaaa…aaaa")).toHaveCount(0);
   await header.getByRole("button", { name: "Open menu", exact: true }).click();
   await expect(header.getByRole("group", { name: "Wallet actions", exact: true })).toContainText("Connected wallet");
   await expect(header.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
-  await expect(header.getByRole("navigation", { name: "Menu navigation" }).getByRole("link", { name: "Explore", exact: true })).toBeVisible();
-  await header.getByRole("link", { name: "Explore", exact: true }).click();
+  await navigation.getByRole("link", { name: "Explore", exact: true }).click();
   await expect(page).toHaveURL(`${origin}/explore`);
   await page.goBack();
   await expect(page).toHaveURL(`${origin}/launch/modules/foundation`);
-  await expect(header.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
+  await expect(navigation).toBeVisible();
   await expect(header.getByRole("button", { name: "Open menu", exact: true })).toHaveAttribute("aria-expanded", "false");
 });
 

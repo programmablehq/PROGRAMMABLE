@@ -420,7 +420,7 @@ export function MobileNavigation({
             key={item.href}
             className={[
               current ? "active" : "",
-              desktopNavItems.includes(item) && !isBuilderWorkspace(pathname) ? styles.mobilePrimaryLink : "",
+              desktopNavItems.includes(item) ? styles.mobilePrimaryLink : "",
             ].filter(Boolean).join(" ") || undefined}
             href={item.href}
             prefetch={false}
