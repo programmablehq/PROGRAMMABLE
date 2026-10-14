@@ -17,6 +17,8 @@ evidence of a public deployment or launch approval.
 
 - DuelHook uses the unchanged EthereumNativeFeeVaultV3, with the hook as its
   kernel and the fixed Programmable recipient. Its fee rounds up per trade.
+  The second exact binding covers its partial-fill rejection and corrected
+  gross-native buyback fee; the original binding remains separately identified.
 - BrownieHook holds native PoolManager claims itself. Its fee rounds down per
   trade. The check includes every fee liability: platform, project, module and
   launch-tax balances. Module payments may reduce the non-platform liability,
