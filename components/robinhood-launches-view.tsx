@@ -450,7 +450,6 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
                     </div>
                     <span className={styles.mode}>{{ classic: "Classic", module: "Module", custom: "Custom" }[launchMode]}
                       <ChainMark chainId={launchChainId} className={styles.chainMark} />
-                      {launch.confirmation === "confirming" ? <span className={styles.confirming}>Confirming</span> : null}
                     </span>
                   </div>
                   <div className={styles.cardFooter}>

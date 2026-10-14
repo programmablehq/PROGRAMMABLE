@@ -1,5 +1,1 @@
-.panel { margin-block: 48px; padding: 32px; max-width: 680px; background: #131719e8; border: 1px solid #ffffff24; border-radius: 16px; }
-.panel h1 { font-size: clamp(1.6rem, 4vw, 2.5rem); overflow-wrap: anywhere; }
-.panel p { line-height: 1.6; }
-.status { color: #e7c786; }
-.panel a { display: inline-block; margin-top: 16px; text-decoration: underline; text-underline-offset: 4px; }
+.market { display: contents; }

@@ -8,7 +8,11 @@ import { shardRouterTradeEntry } from "./shard-router-trade-fixture";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/market-data/classic-launch-catalog.server", () => ({ readClassicLaunchCatalogV1: vi.fn() }));
 vi.mock("@/lib/alchemy/router-custom-public.server", () => ({ readWebsiteRouterCustomIdentitySnapshotV1: vi.fn() }));
-import { readEthereumCustomExploreCatalog, readEthereumUnifiedExploreCatalog, readEthereumLaunches, readEthereumToken } from "@/lib/server/ethereum-explore";
+vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: vi.fn(async () => new Map()) }));
+vi.mock("@/lib/server/codex-token-metadata", () => ({ readCodexTokenMetadata: vi.fn(async () => new Map()) }));
+import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
+import { readCodexTokenMetadata } from "@/lib/server/codex-token-metadata";
+import { readEthereumCustomExploreCatalog, readEthereumUnifiedExploreCatalog, readEthereumLaunches, readEthereumToken, readEthereumTokenPresentation } from "@/lib/server/ethereum-explore";
 const hex = (n: number, size: number) => `0x${n.toString(16).padStart(size, "0")}` as `0x${string}`;
 function entry(n: number): CanonicalTokenExploreEntry {
   return canonicalTokenExploreEntryV1({ id: `1:${hex(n,40)}`, name: `Coin ${n}`, symbol: `C${n}`, tokenAddress: hex(n,40),
@@ -21,6 +25,25 @@ const source = (entries: CanonicalTokenExploreEntry[], status: "current" | "last
 const unavailable = async (): Promise<never> => { throw new Error("source unavailable"); };
 
 describe("Ethereum verified Explore adapter", () => {
+  it("keeps a fresh receipt's public presentation available without promoting it to a canonical token", async () => {
+    const launch = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
+      category: "custom" as const, mode: "custom" as const, tokenAddress: hex(7,40), name: "New coin", symbol: "NEW",
+      hookAddress: hex(8,40), launchId: hex(9,64), creator: hex(10,40), transactionHash: hex(11,64), blockHash: hex(12,64),
+      blockNumber: "123", poolId: hex(13,64), quoteAsset: hex(0,40), launchedAt: "2026-10-14T20:05:35Z", decimals: 18 };
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([launch]);
+    vi.mocked(readCodexTokenMetadata).mockResolvedValueOnce(new Map([[launch.tokenAddress, {
+      name: null, symbol: null,
+      imageUrl: "https://example.com/new.png", description: "New project", links: [{ label: "X", url: "https://x.com/new" }],
+    }]]));
+    const result = await readEthereumTokenPresentation(launch.tokenAddress);
+    expect(result.token).toBeNull();
+    expect(result.status).toBe("partial");
+    expect(result.presentation).toMatchObject({ tokenAddress: launch.tokenAddress, name: "New coin", symbol: "NEW",
+      imageUrl: "https://example.com/new.png", links: [{ label: "X", url: "https://x.com/new" }] });
+    expect(result.presentation).not.toHaveProperty("launchStampProvenance");
+    vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([{ ...launch, observationExpiresAt: Date.now() - 1 }]);
+    expect((await readEthereumTokenPresentation(launch.tokenAddress)).presentation).toBeNull();
+  });
   it("adds only the selected verified Classic identity to unified discovery", async () => {
     const helixAddress = "0x9C355950bd5634eF2b2935d356075C7c19b2386a";
     const helix: CanonicalTokenExploreEntry = { ...entry(1), tokenAddress: helixAddress };
