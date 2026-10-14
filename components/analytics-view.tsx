@@ -10,8 +10,8 @@ const exact = (value: number | null) => value === null ? "Unavailable" : new Int
   maximumFractionDigits: 2,
 }).format(value);
 
-function Metric({ label, value, detail, suffix }: { label: string; value: string; detail: string; suffix?: string | null }) {
-  return <article className={styles.metric}><h2>{label}</h2><p className={styles.value} title={detail}>{value}{suffix && <span className={styles.supplyShare}>/ {suffix}</span>}</p></article>;
+function Metric({ label, value, detail, description, suffix }: { label: string; value: string; detail: string; description: string; suffix?: string | null }) {
+  return <article className={styles.metric}><h2>{label}</h2><p className={styles.value} title={detail}>{value}{suffix && <span className={styles.supplyShare}>/ {suffix}</span>}</p><p className={styles.description}>{description}</p></article>;
 }
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
@@ -19,14 +19,13 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
   return <section className={styles.page}>
     <header className={styles.header}>
       <h1>Analytics</h1>
-      <p className={styles.intro}>100% of our 0.3% platform fees across Ethereum and Robinhood fund V4 buybacks. Our V4 liquidity position earns ETH on buys and V4 on sells. We burn the V4 fees too.</p>
-      <p className={styles.dataNote}>Burns include purchased V4 and V4 collected as liquidity fees. <a href="https://dune.com/programmablehq/analytics" target="_blank" rel="noreferrer">Our Dune dashboard</a></p>
+      <p className={styles.intro}>All-time activity across Ethereum and Robinhood. We use 100% of collected 0.3% platform fees to buy back V4.</p>
+      <p className={styles.dataNote}>Burns also include V4 collected as liquidity fees, so more V4 can be burned than bought back. <a href="https://dune.com/programmablehq/analytics" target="_blank" rel="noreferrer">Our Dune dashboard</a></p>
     </header>
     <div className={styles.grid}>
-      <Metric label="Trading Volume" value={compact(s.volume, true)} detail={`${exact(s.volume)} USD${s.unpricedSwaps ? " · priced subtotal" : ""}`} />
-      <Metric label="Protocol Revenue" value={compact(s.revenue, true)} detail={`${exact(s.revenue)} USD${s.unpricedClaims ? " · priced subtotal" : ""}`} />
-      <Metric label="V4 Bought Back" value={compact(s.bought)} detail={`${exact(s.bought)} V4`} />
-      <Metric label="V4 Burned" value={compact(s.burned)} detail={`${exact(s.burned)} V4 · share of the original 1 billion V4 supply`} suffix={s.burnedSupplyPercent === null ? null : `${s.burnedSupplyPercent.toFixed(1)}% supply`} />
+      <Metric label="Ecosystem Trading Volume" value={compact(s.volume, true)} detail={`${exact(s.volume)} USD${s.unpricedSwaps ? " · priced subtotal" : ""}`} description="Main coin and all platform launches on both chains." />
+      <Metric label="V4 Bought Back" value={compact(s.bought)} detail={`${exact(s.bought)} V4`} description="V4 purchased through buybacks." />
+      <Metric label="V4 Burned" value={compact(s.burned)} detail={`${exact(s.burned)} V4 · share of the original 1 billion V4 supply`} description="Purchased V4 plus V4 collected as liquidity fees." suffix={s.burnedSupplyPercent === null ? null : `${s.burnedSupplyPercent.toFixed(1)}% supply`} />
     </div>
     {s.launches !== null && <p className={styles.context}><strong>{exact(s.launches)}</strong> launches across both chains</p>}
     <section className={styles.activity} aria-labelledby="activity-title">

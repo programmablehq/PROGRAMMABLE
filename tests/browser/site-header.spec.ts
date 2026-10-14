@@ -43,8 +43,9 @@ test("one navigation menu includes the connected profile; Escape, outside click 
   await trigger.click();
   const menu = page.getByRole("group",{name:"Wallet actions",exact:true});
   const navigation = page.getByRole("navigation", {name:"Menu navigation",exact:true});
-  await expect(navigation.getByRole("link")).toHaveText(["API keys", "Docs"]);
+  await expect(navigation.getByRole("link")).toHaveText(["API keys", "Docs", "Analytics"]);
   await expect(navigation.getByRole("link", { name: "API keys", exact: true })).toHaveAttribute("href", "/developers/api-keys");
+  await expect(navigation.getByRole("link", { name: "Analytics", exact: true })).toHaveAttribute("href", "/analytics");
   await expect(menu.getByRole("button")).toHaveText(["Disconnect"]);
   await expect(menu.getByRole("link", { name: "Profile", exact: true })).toHaveAttribute("href", "/profile");
   await expect(page.getByRole("dialog")).toHaveCount(0);
