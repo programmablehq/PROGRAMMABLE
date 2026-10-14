@@ -2,7 +2,8 @@ export type Chain = "all" | "Ethereum" | "Robinhood";
 export type Period = "all" | "7d" | "30d";
 export type Row = Record<string, unknown>;
 export type QueryResult = { updatedAt: string; rows: Row[]; available: boolean; stale?: boolean };
-export type AnalyticsData = { volume: QueryResult; revenue: QueryResult; buybacks: QueryResult; burns: QueryResult };
+export type ActivityValue = { usd: number; amount: number; at: string };
+export type AnalyticsData = { volume: QueryResult; revenue: QueryResult; buybacks: QueryResult; burns: QueryResult; activityValues?: Record<string, ActivityValue>; renderedAt?: number };
 export const PROJECT_WALLETS = ["0x4957f49620aff3adbbe8195a4f633e49cc93376c", "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "0x39544a7023081b56d7405c1af0bfaf72da7e24f6"];
 // Original supply of the current Robinhood V4; the public contract is recorded in the analytics supply evidence.
 // Transfers to a burn address do not reduce this original-supply denominator.
@@ -11,10 +12,11 @@ export const QUERY_IDS = { volume: 8940969, revenue: 8940998, buybacks: 8677080,
 export const QUERY_COLUMNS = {
   volume: ["day","chain","category","volume_usd","unpriced_swaps","launched_tokens"],
   revenue: ["day","chain","priced_collected_subtotal_usd","unpriced_claims"],
-  buybacks: ["v4_bought_back","legacy_eth_v4_bought_back","buyback_events_v1","buybacks_usd","unpriced_buybacks"],
+  buybacks: ["v4_bought_back","legacy_eth_v4_bought_back","buyback_events_v1","buybacks_usd","unpriced_buybacks","transaction_audit"],
   burns: ["chain","burn_time_utc","transaction_hash","log_index","sender_address","v4_burned"],
 } as const;
-export type Activity = { kind: "Buyback" | "Burn"; chain: Exclude<Chain, "all">; hash: string; amount: number; at: string };
+export type Activity = { kind: "Buyback" | "Burn"; chain: Exclude<Chain, "all">; hash: string; amount: number; at: string; usd?: number | null };
+export const activityKey = (a: Activity) => `${a.kind}:${a.chain}:${a.hash}`;
 export function number(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : null;
@@ -61,7 +63,10 @@ export function summarize(data: AnalyticsData, chain: Chain, period: Period, now
     const existing = dedup.get(`Burn:${a.chain}:${a.hash}`);
     add({ ...a, amount: a.amount + (existing?.amount ?? 0) });
   }
-  const activity = [...dedup.values()].filter(a => matches(chain, a.chain) && new Date(a.at).getTime() >= since).sort((a,b) => b.at.localeCompare(a.at));
+  const activity = [...dedup.values()].filter(a => matches(chain, a.chain) && new Date(a.at).getTime() >= since).sort((a,b) => b.at.localeCompare(a.at)).map(a => {
+    const value = data.activityValues?.[activityKey(a)];
+    return { ...a, usd: value?.amount === a.amount && value.at === a.at ? number(value.usd) : null };
+  });
   const purchaseSum = (c: Chain) => activity.filter(a => a.kind === "Buyback" && matches(c, a.chain)).reduce((s,a) => s+a.amount,0);
   const burnSum = (c: Chain) => activity.filter(a => a.kind === "Burn" && matches(c, a.chain)).reduce((s,a) => s+a.amount,0);
   const hasPurchaseEvents = typeof purchases?.buyback_events_v1 === "string";
@@ -84,8 +89,8 @@ export function summarize(data: AnalyticsData, chain: Chain, period: Period, now
     legacyBought, legacyBurned,
     launches: number(data.volume.rows[0]?.launched_tokens),
     activity,
-    updatedAt: Object.values(data).map(q=>q.updatedAt).filter(Boolean).sort()[0] ?? "",
-    unavailable: Object.values(data).some(q=>!q.available || q.stale),
+    updatedAt: [data.volume,data.revenue,data.buybacks,data.burns].map(q=>q.updatedAt).filter(Boolean).sort()[0] ?? "",
+    unavailable: [data.volume,data.revenue,data.buybacks,data.burns].some(q=>!q.available || q.stale),
   };
 }
 export function explorer(a: Activity) {
