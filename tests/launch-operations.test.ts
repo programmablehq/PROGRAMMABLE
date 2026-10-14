@@ -47,6 +47,19 @@ describe("launch operations observations", () => {
     expect(pending.state).toBe("pending");
     expect(buildOperationsRows([{ ...review, launchRequestedAt: "2026-10-11T11:00:00Z" }], empty(), now)[0].status).toBe("Launch completion unconfirmed");
   });
+  it.each(["failed", "cancelled", "expired"])("never presents a %s launch as signable from its previous stage", status => {
+    const current = { ...operations, current: { launchId: successor, status, stage: "router-transaction-required", replanRequired: false,
+      errorCode: "PERMIT_EXPIRED", findingCodes: ["PLAN_PROVIDER_UNAVAILABLE"] } };
+    const r = { ...review, launchRequestedAt: "2026-10-11T10:00:00Z", requestSummary: { operations: current } };
+    expect(describeStoredLaunchStatus({}, reviewOperations(review, current))).toMatchObject({ owner: "Team", status: "Launch needs attention" });
+    expect(buildOperationsRows([r], empty(), now)[0]).toMatchObject({ owner: "Team", group: "attention", status: "Launch needs attention" });
+  });
+  it("only uses a legacy ready stage when no saved status contradicts it", () => {
+    expect(describeStoredLaunchStatus({ result: { stage: "router-transaction-required" } }).status).toBe("Ready · waiting for team signature");
+    expect(describeStoredLaunchStatus({ status: "prepared", result: { stage: "router-transaction-required" } }).status).toBe("Preparing launch");
+    expect(describeStoredLaunchStatus({ status: "action_required", result: { stage: "router-transaction-required" } }).status).toBe("Launch needs attention");
+    expect(describeStoredLaunchStatus({ status: "action_required", errorCode: "PLAN_PROVIDER_UNAVAILABLE" }).owner).toBe("Programmable");
+  });
   it("assigns stale preparation and provider failures to Programmable, not the team", () => {
     const r = { ...review, launchRequestedAt: "2026-10-11T11:00:00Z", requestSummary: { operations: {
       ...operations, current: { launchId: successor, status: "analysis_pending", replanRequired: false, updatedAt: "2026-10-11T11:01:00Z", findingCodes: [] } } } };
