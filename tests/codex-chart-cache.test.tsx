@@ -45,6 +45,20 @@ describe("Shared chart navigation cache", () => {
     await expect(cache.load(token, 4663, "1D")).resolves.toEqual(chart("1D", now));
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
+  it("honors the server recovery delay and bypasses browser cache on the next read", async () => {
+    let now = time;
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response("", { status: 503, headers: { "Retry-After": "15" } }));
+    const cache = createCodexChartCache({ fetcher, now: () => now });
+    await expect(cache.load(token, 4663, "1D")).rejects.toThrow();
+    expect(cache.waitMs(token, 4663, "1D")).toBe(15_000);
+    now += 5_001;
+    await expect(cache.load(token, 4663, "1D")).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    now += 10_000;
+    fetcher.mockResolvedValueOnce(Response.json(chart("1D", now)));
+    await expect(cache.load(token, 4663, "1D")).resolves.toMatchObject({ source: "codex" });
+    expect(fetcher.mock.calls[1][1].cache).toBe("no-store");
+  });
   it("polls empty charts sooner and backs off repeated failures without discarding history", async () => {
     let now = time;
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ ...chart(), points: [] }));

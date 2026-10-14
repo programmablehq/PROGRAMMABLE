@@ -44,10 +44,14 @@ export function createCodexChartCache({ fetcher = (input, init) => fetch(input, 
         throw new Error("Price history unavailable");
       }
       const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15_000);
+      let retryAfterMs = 0;
       const request = Promise.resolve().then(async () => {
         try {
           const query = new URLSearchParams({ token: token.toLowerCase(), chain: String(chain), range });
-          const response = await fetcher(`/api/market/chart?${query}`, { signal: controller.signal });
+          const response = await fetcher(`/api/market/chart?${query}`, { signal: controller.signal,
+            ...(previous?.failed ? { cache: "no-store" as const } : {}) });
+          const retryAfter = response.headers.get("retry-after");
+          if (retryAfter && /^\d+$/.test(retryAfter)) retryAfterMs = Math.min(60_000, Number(retryAfter) * 1_000);
           if (!response.ok) throw new Error("Price history unavailable");
           const value: unknown = await response.json();
           if (!acceptsCodexChart(value, token, chain, range, now())) throw new Error("Price history unavailable");
@@ -57,7 +61,7 @@ export function createCodexChartCache({ fetcher = (input, init) => fetch(input, 
         } catch {
           const failures = (previous?.failures ?? 0) + 1;
           remember(key, { chart: previous?.chart, failed: true, failures,
-            nextAttemptAt: now() + Math.min(5_000 * 2 ** Math.min(failures - 1, 3), 30_000) });
+            nextAttemptAt: now() + Math.max(retryAfterMs, Math.min(5_000 * 2 ** Math.min(failures - 1, 3), 30_000)) });
           throw new Error("Price history unavailable");
         } finally { clearTimeout(timeout); pending.delete(key); }
       });

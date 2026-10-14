@@ -35,7 +35,16 @@ export function CodexPriceChart({ tokenAddress, chainId, name, market }: { token
     const visible = () => { clearTimeout(timer); if (visibleNow()) void load(); };
     void load();
     document.addEventListener("visibilitychange", visible);
-    return () => { disposed = true; clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
+    window.addEventListener("focus", visible);
+    window.addEventListener("pageshow", visible);
+    window.addEventListener("online", visible);
+    return () => {
+      disposed = true; clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("focus", visible);
+      window.removeEventListener("pageshow", visible);
+      window.removeEventListener("online", visible);
+    };
   }, [key, tokenAddress, chainId, range]);
   const points = chart?.points ?? [];
   const last = points.at(-1);

@@ -163,7 +163,7 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
   return result;
 }
 
-const cachedChart = unstable_cache(async (address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> => {
+async function fetchChart(address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> {
   const config = CODEX_CHART_RANGES[range];
   const bucket = Math.floor(Date.now() / config.refreshMs);
   const to = Math.floor(bucket * config.refreshMs / 1_000), from = to - config.seconds;
@@ -172,15 +172,28 @@ const cachedChart = unstable_cache(async (address: string, chainId: number, rang
   const earliest = from - config.candleSeconds;
   const points = parseCodexBars(data.getTokenBars, address.toLowerCase(), chainId, earliest, to);
   return { tokenAddress: address.toLowerCase(), chainId, range, points, source: "codex", observedAt: new Date().toISOString() };
+}
+const freshChart = (address: string, chainId: number, range: CodexChartRange) =>
+  sharedRead(`chart-provider:${chainId}:${address}:${range}`, () => fetchChart(address, chainId, range));
 // A stable key serves the previous observation while Next refreshes it.
 // Putting the clock in the key forces a blocking cold read every minute.
-}, ["codex-token-bars-v4"], { revalidate: 15 });
+const cachedChart = unstable_cache(freshChart, ["codex-token-bars-v4"], { revalidate: 15 });
+
+function currentChart(chart: CodexChart) {
+  const age = Date.now() - Date.parse(chart.observedAt);
+  return Number.isFinite(age) && age >= 0 && age <= 180_000;
+}
 
 export async function readCodexChart(address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> {
   if (!marketAddress.test(address) || ![1, 4663].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)) throw new Error("Invalid chart request");
   const normalized = address.toLowerCase();
-  const chart = await sharedRead(`chart:${chainId}:${normalized}:${range}`, () => cachedChart(normalized, chainId, range));
-  const age = Date.now() - Date.parse(chart.observedAt);
-  if (!Number.isFinite(age) || age < 0 || age > 180_000) throw new Error("Market data unavailable");
-  return chart;
+  return sharedRead(`chart:${chainId}:${normalized}:${range}`, async () => {
+    const cached = await cachedChart(normalized, chainId, range);
+    // Next can return an old observation while revalidating in the background.
+    // Once it exceeds our display limit, join that source read instead of
+    // returning 503 for data that is already being refreshed.
+    const chart = currentChart(cached) ? cached : await freshChart(normalized, chainId, range);
+    if (!currentChart(chart)) throw new Error("Market data unavailable");
+    return chart;
+  });
 }
