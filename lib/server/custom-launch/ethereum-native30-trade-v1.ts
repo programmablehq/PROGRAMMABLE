@@ -1,5 +1,6 @@
 import "server-only";
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
+import { isBrownieNative30RecipeV1 } from "@/lib/custom-launch/ethereum-custom-native30-recipes-v1";
 import type { EthereumNative30RuntimeProofV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
 
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
@@ -47,7 +48,7 @@ export async function proveEthereumNative30TradeAccrualV1(input: Readonly<{
   const grossNative = request.zeroForOne ? BigInt(request.nativeInput ?? request.amountIn) : nativeDelta;
   const platform = (grossNative * BigInt(proof.rateBps) + (proof.rounding === "ceil_per_trade" ? 9999n : 0n)) / 10000n;
   if (grossNative <= 0n || platform < 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
-  if (proof.recipeId === "brownie_native30_v1") {
+  if (isBrownieNative30RecipeV1(proof.recipeId)) {
     const read = async (name: "platformOwed" | "harvestable" | "moduleBudget" | "launchTaxOwed", afterState: boolean) => {
       const raw = await call(proof.feeVault, encodeFunctionData({ abi: BROWNIE_READ, functionName: name }), afterState ? post : undefined);
       if (!/^0x[0-9a-f]{64}$/i.test(raw)) return pendingTradeV1("POOL_FEE_LEDGER_READ_PENDING");
