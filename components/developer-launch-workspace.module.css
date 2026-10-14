@@ -1,5 +1,6 @@
 .workspace { display: grid; gap: 16px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.toolbar > button { display: none; }
 .toolbar label { display: flex; align-items: center; gap: 12px; }
 .toolbar select { color: inherit; background: var(--panel-fill-control); border: 1px solid var(--panel-line); border-radius: 10px; padding: 10px; font: inherit; min-height: 44px; }
 .list { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
