@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { decodeAbiParameters, decodeFunctionData, encodeFunctionData, getAddress, getContractAddress, parseAbi, parseAbiParameters, toHex, type Address, type Hex } from "viem";
 import fixtureBytes from "./fixtures/custom-native30-runtimes.json";
-import { ETHEREUM_CUSTOM_NATIVE30_RECIPES_V1 as recipes } from "@/lib/custom-launch/ethereum-custom-native30-recipes-v1";
+import { ETHEREUM_CUSTOM_NATIVE30_RECIPES_V1 as recipes, isBrownieNative30RecipeV1 } from "@/lib/custom-launch/ethereum-custom-native30-recipes-v1";
 import { ethereumNative30RequiredAddressesV1, materializeEthereumNative30RuntimeWordsV1, proveEthereumNative30RuntimeV1,
   rebuildEthereumNative30RuntimeProofV1, type EthereumNative30MarketV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
 import { proveEthereumNative30TradeAccrualV1 } from "@/lib/server/custom-launch/ethereum-native30-trade-v1";
@@ -29,7 +29,7 @@ function fixture(id: RecipeId) {
   const f = fixtureBytes[id], market = f.market as EthereumNative30MarketV1;
   const hook = materializeEthereumNative30RuntimeWordsV1(recipes[id].hook, f.words as Record<string, Hex>);
   const codes: Record<string, Hex> = { [market.hooks]: hook };
-  if (id !== "brownie_native30_v1") codes[getContractAddress({ from: market.hooks, nonce: 1n })] = materializeEthereumNative30RuntimeWordsV1(
+  if (!isBrownieNative30RecipeV1(id)) codes[getContractAddress({ from: market.hooks, nonce: 1n })] = materializeEthereumNative30RuntimeWordsV1(
     recipes[id].vault,
     { poolManager: word(market.poolManager), kernel: word(market.hooks), creatorRecipient: fixtureBytes[id].words.OWNER as Hex });
   const proof = proveEthereumNative30RuntimeV1(market, codes)!;
@@ -37,14 +37,14 @@ function fixture(id: RecipeId) {
 }
 function trade(id: RecipeId, buy: boolean, options: { paid?: bigint; nativeInput?: string; unbacked?: boolean } = {}) {
   const { market, proof } = fixture(id), gross = 1_000_001n;
-  const paid = options.paid ?? (gross * 30n + (id !== "brownie_native30_v1" ? 9999n : 0n)) / 10000n;
+  const paid = options.paid ?? (gross * 30n + (!isBrownieNative30RecipeV1(id) ? 9999n : 0n)) / 10000n;
   const router = getAddress(protocol.router.address), params = { zeroForOne: buy, amountSpecified: -gross, sqrtPriceLimitX96: 1n };
   const frame = (from: Address, to: Address, input: Hex, calls: TradeTraceV1[] = []): TradeTraceV1 =>
     ({ type: "CALL", from, to, input, output: "0x", value: "0", gasUsed: "1", failed: false, calls });
   const record = frame(market.hooks, proof.feeVault, encodeFunctionData({ abi, functionName: "recordFees", args: [paid, 0n] }));
   const trace = frame(owner, router, "0x", [
     frame(market.poolManager, market.hooks, encodeFunctionData({ abi, functionName: "beforeSwap", args: [router, market, params, "0x"] })),
-    frame(market.poolManager, market.hooks, encodeFunctionData({ abi, functionName: "afterSwap", args: [router, market, params, (buy ? -gross : gross) << 128n, "0x"] }), id !== "brownie_native30_v1" ? [record] : []),
+    frame(market.poolManager, market.hooks, encodeFunctionData({ abi, functionName: "afterSwap", args: [router, market, params, (buy ? -gross : gross) << 128n, "0x"] }), !isBrownieNative30RecipeV1(id) ? [record] : []),
   ]);
   const call = async (_to: Address, data: Hex, overrides?: Record<string, Record<string, unknown>>) => {
     const name = decodeFunctionData({ abi, data }).functionName;
@@ -99,7 +99,7 @@ describe("exact custom hook fee recognition", () => {
   it.each(Object.keys(recipes) as RecipeId[])("checks %s accrual on both sides, including rounding and actual input", async id => {
     for (const buy of [true, false]) {
       const input = trade(id, buy), result = await proveEthereumNative30TradeAccrualV1(input);
-      expect(result.platformAccruedIncrease).toBe(id !== "brownie_native30_v1" ? "3001" : "3000");
+      expect(result.platformAccruedIncrease).toBe(!isBrownieNative30RecipeV1(id) ? "3001" : "3000");
       await expect(proveEthereumNative30TradeAccrualV1(trade(id, buy, { paid: 6000n }))).rejects.toThrow();
       await expect(proveEthereumNative30TradeAccrualV1(trade(id, buy, { paid: 100n }))).rejects.toThrow();
       await expect(proveEthereumNative30TradeAccrualV1(trade(id, buy, { unbacked: true }))).rejects.toThrow();

@@ -19,7 +19,8 @@ evidence of a public deployment or launch approval.
   kernel and the fixed Programmable recipient. Its fee rounds up per trade.
   The second exact binding covers its partial-fill rejection and corrected
   gross-native buyback fee; the original binding remains separately identified.
-- BrownieHook holds native PoolManager claims itself. Its fee rounds down per
+- BrownieHook has separate exact runtime bindings for optimizer runs 200 and
+  1000. Both hold native PoolManager claims in the hook itself. Its fee rounds down per
   trade. The check includes every fee liability: platform, project, module and
   launch-tax balances. Module payments may reduce the non-platform liability,
   but cannot consume the platform's backed balance.
