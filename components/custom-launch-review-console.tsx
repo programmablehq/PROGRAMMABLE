@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useWallet } from "@/components/wallet-provider";
 import { isWebsiteAdminWallet } from "@/lib/admin-access";
 import { customLaunchReviewLabel, customLaunchReviewOverdue, parseCustomLaunchReview, type CustomLaunchReview } from "@/lib/custom-launch-review";
-import { buildOperationsRows, type OperationsReview } from "@/lib/launch-operations";
+import { buildOperationsRows, reviewListView, reviewProject, type OperationsReview, type ReviewListView } from "@/lib/launch-operations";
 import styles from "./custom-launch-review-console.module.css";
 type ReviewRow = CustomLaunchReview & { launchId: string; requestSummary: Record<string, unknown> };
 type ReviewDetail = CustomLaunchReview & { launchId: string; request: Record<string, unknown>; technicalStatus: Record<string, unknown>; assessment?: unknown; operations?: unknown };
@@ -27,6 +27,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const [reviews, setReviews] = useState<ReviewRow[]>([]), [detail, setDetail] = useState<ReviewDetail | null>(null);
+  const [view, setView] = useState<ReviewListView>("current"), [query, setQuery] = useState(""), [limit, setLimit] = useState(25);
   const [replacementId, setReplacementId] = useState("");
   const [tradeReport, setTradeReport] = useState("");
   const selectedReview = useRef(initialReviewId);
@@ -66,7 +67,10 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
     let current = true;
     request(initialReviewId).then(value => {
       parseCustomLaunchReview(value.review);
-      if (current && selectedReview.current === initialReviewId) setDetail(value.review);
+      if (current && selectedReview.current === initialReviewId) {
+        setDetail(value.review);
+        setView(reviewListView({ ...value.review, requestSummary: { operations: value.review.operations } }, Date.now()));
+      }
     }).catch(error => { if (current) setError(error instanceof Error ? error.message : "Unable to load launch."); });
     return () => { current = false; };
   }, [initialReviewId, request]);
@@ -99,14 +103,26 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
   const canDecide = detail && !detail.supersededBy && customLaunchReviewLabel(detail, now) !== "Approved";
   const replacements = detail ? reviews.filter(r => r.chainId === detail.chainId && r.controller === detail.controller && Date.parse(r.submittedAt) > Date.parse(detail.submittedAt) && !r.supersededBy) : [];
   const progress = detail ? buildOperationsRows([{ ...detail, requestSummary: { operations: detail.operations } } as OperationsReview], null, now)[0] : null;
+  const currentReviews = reviews.filter(review => reviewListView(review, now) === "current");
+  const historyReviews = reviews.filter(review => reviewListView(review, now) === "history");
+  const visibleReviews = (view === "current" ? currentReviews : historyReviews).filter(review => {
+    const project = reviewProject(review);
+    return `${project.name} ${project.symbol} ${review.controller} ${review.launchId} ${review.reviewId}`.toLowerCase().includes(query.trim().toLowerCase());
+  });
   return <>
       <button disabled={busy} onClick={() => void load()}>Refresh</button>
       <div className={styles.layout}><section aria-label="Launch review queue">
-        {!busy && !error && reviews.length === 0 && <p>No launches awaiting review.</p>}
-        {reviews.map(review => <button className={styles.row} key={review.reviewId} disabled={busy} onClick={() => void select(review.reviewId)}>
-          <strong>{review.chainId === "1" ? "Ethereum" : "Robinhood"} · {customLaunchReviewLabel(review, now)}</strong>
-          <span>{review.controller}</span>{customLaunchReviewOverdue(review, now) && <strong>Review overdue</strong>}<small>{new Date(review.submittedAt).toLocaleString()}</small>
+        <div className={styles.views} role="group" aria-label="Review view">
+          <button aria-pressed={view === "current"} onClick={() => { setView("current"); setLimit(25); }}>Current <span>{currentReviews.length}</span></button>
+          <button aria-pressed={view === "history"} onClick={() => { setView("history"); setLimit(25); }}>History <span>{historyReviews.length}</span></button>
+        </div>
+        <label className={styles.search}>Search reviews<input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(25); }} placeholder="Name, wallet or request ID" /></label>
+        {!busy && !error && visibleReviews.length === 0 && <p>{query.trim() ? "No matching requests in this view." : view === "current" ? "No current requests. Earlier decisions are in History." : "No earlier requests."}</p>}
+        {visibleReviews.slice(0, limit).map(review => <button className={styles.row} key={review.reviewId} disabled={busy} aria-pressed={detail?.reviewId === review.reviewId} onClick={() => void select(review.reviewId)}>
+          <strong>{reviewProject(review).name}</strong><span>{review.chainId === "1" ? "Ethereum" : "Robinhood"} · {customLaunchReviewLabel(review, now)}</span>
+          {customLaunchReviewOverdue(review, now) && <strong>Review overdue</strong>}<small>{new Date(review.submittedAt).toLocaleString()}</small>
         </button>)}
+        {visibleReviews.length > limit && <button onClick={() => setLimit(previous => previous + 25)}>Show more</button>}
       </section><section aria-label="Selected launch">{detail ? <>
         <h2>{customLaunchReviewLabel(detail, now)}</h2><p className={styles.address}>{detail.controller}</p>
         {detail.state === "pending" && <p>{customLaunchReviewOverdue(detail, now) ? "Review overdue. The application remains open." : `Review due ${new Date(detail.reviewDueAt ?? Date.parse(detail.submittedAt) + 86_400_000).toLocaleString()}.`}</p>}

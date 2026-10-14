@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWallet } from "./wallet-provider";
 import { isWebsiteAdminWallet } from "@/lib/admin-access";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
-import { buildOperationsRows, describeStoredLaunchStatus, operationTokenHref, reviewOperations, type OperationsReview, type OperationsRow, type OperationsSnapshot } from "@/lib/launch-operations";
+import { buildOperationsRows, describeStoredLaunchStatus, operationTokenHref, reviewOperations, type OperationsReview, type OperationsRow, type OperationsSnapshot, type ReviewListView } from "@/lib/launch-operations";
 import styles from "./launch-operations.module.css";
 
 type Diagnostic = { status: string; next: string };
@@ -29,7 +29,8 @@ function AccountOperations({ account }: { account: string }) {
   const [snapshot, setSnapshot] = useState<OperationsSnapshot | null>(null);
   const [errors, setErrors] = useState<string[]>([]), [busy, setBusy] = useState(true);
   const [checkedAt, setCheckedAt] = useState<string | null>(null), [now, setNow] = useState(Date.now());
-  const [chain, setChain] = useState("all"), [group, setGroup] = useState("action"), [query, setQuery] = useState("");
+  const [chain, setChain] = useState("all"), [group, setGroup] = useState("all"), [query, setQuery] = useState("");
+  const [view, setView] = useState<ReviewListView>("current");
   const [limit, setLimit] = useState(25), [diagnostics, setDiagnostics] = useState<Record<string, Diagnostic>>({});
   const [checking, setChecking] = useState<string | null>(null);
   const active = useRef(true), inFlight = useRef<AbortController | null>(null), diagnosticFlight = useRef(false);
@@ -95,18 +96,22 @@ function AccountOperations({ account }: { account: string }) {
   }
   const allRows = useMemo(() => buildOperationsRows(reviews ?? [], snapshot, now), [reviews, snapshot, now]);
   const chainRows = allRows.filter(row => chain === "all" || String(row.chainId) === chain);
-  const rows = chainRows.filter(row => (group === "all" || group === "action" ? group === "all" || ["review", "attention"].includes(row.group) : row.group === group)
+  const currentRows = chainRows.filter(row => row.view === "current");
+  const historyRows = chainRows.filter(row => row.view === "history").sort((a, b) => Date.parse(b.updatedAt ?? "") - Date.parse(a.updatedAt ?? ""));
+  const rows = (view === "current" ? currentRows : historyRows).filter(row => (group === "all" || group === row.group)
     && `${row.name} ${row.symbol} ${row.token ?? ""} ${row.reviewId ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const counts = { review: chainRows.filter(row => row.group === "review").length, attention: chainRows.filter(row => row.group === "attention").length, waiting: chainRows.filter(row => row.group === "waiting").length };
+  const counts = { review: currentRows.filter(row => row.group === "review").length, attention: currentRows.filter(row => row.group === "attention").length, waiting: currentRows.filter(row => row.group === "waiting").length };
+  const historyChecks = historyRows.filter(row => row.group === "attention").length;
+  const selectView = (next: ReviewListView) => { setView(next); setGroup("all"); setLimit(25); };
   const sources = snapshot?.sources.filter(source => chain === "all" || source.chainId === null || String(source.chainId) === chain) ?? [];
   const complete = reviews !== null && snapshot !== null && sources.every(source => source.status === "ready" && source.complete);
   return <>
     <div className={styles.toolbar}><p role="status">{busy ? "Refreshing observations…" : checkedAt ? `Updated ${date(checkedAt)} · refreshes every minute while open` : "Waiting for observations"}</p><button disabled={busy} onClick={() => void load()}>Refresh</button></div>
     {errors.map(error => <p className={styles.notice} role="alert" key={error}>{error}</p>)}
-    <section className={styles.stats} aria-label="Work queue totals">
-      <button onClick={() => { setGroup("review"); setLimit(25); }}><span>Needs review</span><strong>{reviews === null ? "—" : counts.review}</strong></button>
-      <button onClick={() => { setGroup("attention"); setLimit(25); }}><span>Needs checking</span><strong>{snapshot === null ? "—" : counts.attention}</strong></button>
-      <button onClick={() => { setGroup("waiting"); setLimit(25); }}><span>Waiting</span><strong>{reviews === null ? "—" : counts.waiting}</strong></button>
+    <section className={styles.stats} aria-label="Current work queue totals">
+      <button onClick={() => { setView("current"); setGroup("review"); setLimit(25); }}><span>Needs review</span><strong>{reviews === null ? "—" : counts.review}</strong></button>
+      <button onClick={() => { setView("current"); setGroup("attention"); setLimit(25); }}><span>Needs checking</span><strong>{snapshot === null ? "—" : counts.attention}</strong></button>
+      <button onClick={() => { setView("current"); setGroup("waiting"); setLimit(25); }}><span>Waiting</span><strong>{reviews === null ? "—" : counts.waiting}</strong></button>
     </section>
     <section className={styles.networks} aria-label="Chain indexes">{[1, 4663].filter(id => chain === "all" || String(id) === chain).map(id => {
       const source = snapshot?.sources.find(source => source.id === `index:${id}`);
@@ -115,18 +120,23 @@ function AccountOperations({ account }: { account: string }) {
         <p>{source && source.status !== "unavailable" ? `${indexed.filter(row => row.mode === "module").length} module · ${indexed.filter(row => row.mode === "custom").length} custom launches in the website index` : "Index data has not been loaded."}</p>
         <small>Source updated {date(source?.updatedAt ?? null)}</small></div>;
     })}</section>
-    <section className={styles.panel} aria-labelledby="queue-title"><h2 id="queue-title">Work queue</h2>
+    <section className={styles.panel} aria-labelledby="queue-title"><h2 id="queue-title">Launch requests</h2>
+      <div className={styles.views} role="group" aria-label="Request view">
+        <button aria-pressed={view === "current"} onClick={() => selectView("current")}>Current <span>{currentRows.length}</span></button>
+        <button aria-pressed={view === "history"} onClick={() => selectView("history")}>History <span>{historyRows.length}</span>{historyChecks > 0 && <small>{historyChecks} to check</small>}</button>
+      </div>
       <div className={styles.filters}>
         <label>Chain<select value={chain} onChange={event => { setChain(event.target.value); setLimit(25); }}><option value="all">Both chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option></select></label>
-        <label>Show<select value={group} onChange={event => { setGroup(event.target.value); setLimit(25); }}><option value="action">Action needed</option><option value="review">Needs review</option><option value="attention">Needs checking</option><option value="waiting">Waiting</option><option value="complete">Completed</option><option value="all">All</option></select></label>
+        <label>Show<select value={group} onChange={event => { setGroup(event.target.value); setLimit(25); }}><option value="all">All {view === "current" ? "current" : "history"}</option>{view === "current" && <option value="review">Needs review</option>}<option value="attention">Needs checking</option>{view === "current" ? <option value="waiting">Waiting</option> : <option value="complete">Completed or replaced</option>}</select></label>
         <label className={styles.search}>Search<input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(25); }} placeholder="Name, symbol, address or review ID" /></label>
       </div>
       <p role="status" className={styles.muted}>{rows.length} matching items{!complete ? " · observations incomplete" : ""}</p>
-      {rows.length === 0 && <p>{busy ? "Loading…" : !complete ? "No items in this view. Some sources could not be checked." : "No items in this view."}</p>}
+      {rows.length === 0 && <p>{busy ? "Loading…" : !complete ? "No items in this view. Some sources could not be checked." : view === "current" ? "No current requests need action. Earlier requests are in History." : "No requests in this history view."}</p>}
       <ul className={styles.queue}>{rows.slice(0, limit).map(row => <li key={row.id}>
         <div className={styles.itemHeading}><div><strong>{row.name}</strong>{row.symbol && <span className={styles.muted}> {row.symbol.replace(/^\$+/, "")}</span>}<p className={styles.muted}>{chainName(row.chainId)} · {row.mode === "module" ? "Module" : "Custom"} · {date(row.updatedAt)}</p></div><span className={styles.badge}>{row.status}</span></div>
         <p><strong>{row.owner === "None" ? "No action needed" : `Next: ${row.owner}`}</strong> · {row.next}</p>
         <div className={styles.actions}>{row.reviewId && <Link href={`/admin/custom-launch-reviews?reviewId=${row.reviewId}`}>Open review</Link>}{row.token && <Link href={operationTokenHref({ chainId: row.chainId, token: row.token })}>Open coin</Link>}
+          {row.replacementReviewId && <Link href={`/admin/custom-launch-reviews?reviewId=${row.replacementReviewId}`}>Open current request</Link>}
           <button disabled={checking !== null} onClick={() => void diagnose(row)}>{checking === row.id ? "Checking…" : "Check status"}</button></div>
         {diagnostics[row.id] && <div className={styles.diagnostic} role="status"><strong>{diagnostics[row.id].status}</strong><p>{diagnostics[row.id].next}</p></div>}
       </li>)}</ul>
