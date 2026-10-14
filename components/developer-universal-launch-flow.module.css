@@ -34,6 +34,7 @@
 .flow code { font-family: var(--font-plex-mono), monospace; font-size: 12px; overflow-wrap: anywhere; }
 .error { color: var(--danger); font-size: 14px; line-height: 20px; margin: 16px 0 0; overflow-wrap: anywhere; }
 .details { margin-top: 16px; }
+.flow > .details { display: none; }
 .details summary, .recoveryDetails summary { color: var(--webde-muted); cursor: pointer; font-size: 14px; line-height: 20px; min-height: 44px; padding-block: 12px; }
 .details pre { background: var(--webde-control); border: 1px solid var(--webde-line); border-radius: 12px; font-family: var(--font-plex-mono), monospace; font-size: 12px; line-height: 16px; max-height: 320px; overflow: auto; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .programLink { font-size: 16px; font-weight: 500; line-height: 24px; }
@@ -53,4 +54,7 @@
 .progress { margin-top: 0; }
 .topline h3 { font-size: 28px; line-height: 34px; font-weight: 600; }
 .programLink { display: flex; justify-content: center; width: 100%; min-height: 54px; border-radius: 12px; background: var(--brand-pink); color: #111; text-decoration: none; }
+.flow .confirmation > button, .flow .recovery > button, .flow .programLink { background: var(--panel-fill-action); border-color: transparent; color: #181818; }
+.flow .confirmation > button:not(:disabled):hover, .flow .recovery > button:not(:disabled):hover, .flow .programLink:hover { background: var(--panel-fill-action-hover); border-color: transparent; color: #181818; }
+.flow :is(button, input, a, summary):focus-visible { outline-color: var(--brand-ivory); }
 @media (max-width: 600px) { .identity { gap: 12px; } .topline h3 { font-size: 22px; line-height: 28px; } }

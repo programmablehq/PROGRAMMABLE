@@ -1,6 +1,8 @@
 .history { display: flex; flex-direction: column; min-width: 0; }
 .heading, .launchTopline { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
 .heading { justify-content: flex-end; min-height: 48px; }
+.history > .heading { display: none; }
+.launchItem > .launchReview { display: none; }
 .intro { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin: 0; text-wrap: pretty; }
 .launchList { align-content: start; display: grid; gap: 16px; list-style: none; margin: 16px 0 0; padding: 0; }
 .launchItem, .skeletonRow { background: var(--webde-surface); border: 1px solid var(--webde-line); border-radius: 16px; min-width: 0; padding: 24px; }
@@ -165,4 +167,7 @@
 .launchItem:is([data-status="authorized"],[data-status="wallet_action_required"],[data-status="awaiting_wallet_signature"],[data-status="finalized"]) > .statusDescription { display: none; }
 .launchItem[data-review-blocked="true"] > .statusDescription { display: block; }
 .launchItem > .walletButton { min-height: 54px; border-radius: 12px; font-size: 16px; }
+.launchItem > .walletButton { background: var(--panel-fill-action); border-color: transparent; color: #181818; }
+.launchItem > .walletButton:not(:disabled):hover { background: var(--panel-fill-action-hover); border-color: transparent; }
+.launchItem > .walletButton:focus-visible { outline-color: var(--brand-ivory); }
 .launchTopline .projectIdentity h3 { font-size: 28px; line-height: 34px; font-weight: 600; }
