@@ -78,8 +78,7 @@ export async function readRobinhoodTokenPresentation(address: string) {
     const snapshot = await readSnapshot();
     const record = tokenLaunchRecord(snapshot, address);
     if (!record.token) return { ...record, presentation: null };
-    const markets = await readRobinhoodMarkets([record.token]).catch(() => new Map<string, RobinhoodCoinMarket>());
-    const presentations = await readRobinhoodPresentations([record.token], markets).catch(() => [] as RobinhoodCoinPresentation[]);
+    const presentations = await readRobinhoodPresentations([record.token]).catch(() => [] as RobinhoodCoinPresentation[]);
     return { ...record, presentation: presentations[0] ?? null };
   } catch {
     return { status: "unavailable" as const, updatedAt: null, token: null, presentation: null };

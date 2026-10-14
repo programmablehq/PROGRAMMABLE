@@ -92,6 +92,17 @@ beforeEach(() => { vi.clearAllMocks(); codex.read.mockResolvedValue(new Map()); 
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("Robinhood optional coin presentation", () => {
+  it("starts market and artwork reads together for a known token", async () => {
+    let finishMarket!: (value: Map<string, never>) => void;
+    let finishMetadata!: (value: Map<string, never>) => void;
+    codex.read.mockImplementationOnce(() => new Promise(resolve => { finishMarket = resolve; }));
+    codexMetadata.read.mockImplementationOnce(() => new Promise(resolve => { finishMetadata = resolve; }));
+    const result = readRobinhoodPresentations([{ ...TOKEN, launchProjection: { publication: {} } } as RobinhoodLaunch]);
+    expect(codex.read).toHaveBeenCalledTimes(1);
+    expect(codexMetadata.read).toHaveBeenCalledTimes(1);
+    finishMarket(new Map()); finishMetadata(new Map());
+    expect((await result)[0].tokenAddress).toBe(TOKEN.tokenAddress);
+  });
   it("uses Codex module artwork without extra blockchain metadata reads", async () => {
     const token = { ...TOKEN, sourceKind: "module-native-v1" } as unknown as RobinhoodLaunch;
     const metadata = { imageUrl: "https://example.com/coin.png", description: "Coin", links: [] };

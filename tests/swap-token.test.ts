@@ -4,7 +4,7 @@ import ethereumModuleSpec from "@/contracts/spec/module-foundation/chain-1.v1.js
 import { describe, expect, it, vi } from "vitest";
 import { brotliDecompressSync } from "node:zlib";
 import { getAddress } from "viem";
-import { resolveSwapToken, type SwapTokenDependencies } from "@/lib/server/swap/token";
+import { resolveSwapToken, resolveVerifiedLaunchSwapToken, type SwapTokenDependencies } from "@/lib/server/swap/token";
 import { normalizeSupportedModuleModeLaunches } from "@/lib/module-mode/source-adapters";
 import { moduleEnginePublicLaunch, moduleModePublicLaunch } from "@/lib/server/robinhood-index/module-source";
 import { bindActiveModuleModeRelease } from "@/lib/module-mode/release";
@@ -45,6 +45,17 @@ function nativeFixture(v2 = false) {
 }
 
 describe("swap source resolution", () => {
+  it("reuses a verified page identity without another catalog lookup and keeps the same route", async () => {
+    const { row, deps } = nativeFixture();
+    const expected = await resolveSwapToken({ address: row.tokenAddress, chainId: 4663 }, deps);
+    vi.mocked(deps.robinhood).mockClear();
+    const actual = await resolveVerifiedLaunchSwapToken({ chainId: 4663, token: row }, deps);
+    expect(actual).toEqual(expected);
+    expect(parseSwapTokenDescriptor(actual, { address: row.tokenAddress, chainId: 4663 })).toEqual(actual);
+    expect(deps.robinhood).not.toHaveBeenCalled();
+    expect(deps.ethereum).not.toHaveBeenCalled();
+  });
+
   it.each(["v1", "v2", "v3"])("routes finalized Foundation %s launches to their original module controls", async factoryVersion => {
     const row = { ...nativeFixture().row, sourceKind: "module-foundation-v1", factoryVersion,
       routerAddress: null, stampHash: null, sourceAddress: a(101), sourceReleaseDigest: h(201),
@@ -78,6 +89,9 @@ describe("swap source resolution", () => {
       manageHref: `/modules/${row.tokenAddress.toLowerCase()}?chainId=1` });
     expect(parseSwapTokenDescriptor(result, { address: row.tokenAddress, chainId: 1 })).toEqual(result);
     expect(deps.ethereumCustom).not.toHaveBeenCalled();
+    vi.mocked(deps.ethereum).mockClear();
+    expect(await resolveVerifiedLaunchSwapToken({ chainId: 1, token: row }, deps)).toEqual(result);
+    expect(deps.ethereum).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("uses the exact saved native release with an empty current catalogue (V2=%s)", async v2 => {

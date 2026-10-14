@@ -1,5 +1,7 @@
 "use client";
 
+import type { SwapTokenDescriptor } from "@/lib/swap/types";
+
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { useEffect } from "react";
@@ -12,11 +14,12 @@ import { isRobinhoodFoundationLaunch, isRobinhoodModuleLaunch, robinhoodModuleMa
 import type { RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
 import styles from "./robinhood-token-view.module.css";
 
-export function RobinhoodTokenView({ address, token, status, initialPresentation }: {
+export function RobinhoodTokenView({ address, token, status, initialPresentation, initialSwapToken }: {
   address: string;
   token: RobinhoodLaunch | null;
   status: "ready" | "syncing" | "stale" | "unavailable";
   initialPresentation?: Promise<RobinhoodCoinPresentation | null>;
+  initialSwapToken?: Promise<SwapTokenDescriptor | null>;
 }) {
   const presentation = useRobinhoodPresentation(`token=${encodeURIComponent(address)}`, token !== null, initialPresentation);
   const details = presentation.items.find(item => item.tokenAddress.toLowerCase() === address.toLowerCase());
@@ -37,7 +40,7 @@ export function RobinhoodTokenView({ address, token, status, initialPresentation
   return <RobinhoodMarketView address={address} name={name} symbol={token.symbol} creator={token.creator} launch={token}
     presentation={details} loading={presentation.loading} delayed={presentation.delayed} hasAsset={hasAsset}
     manageHref={moduleLaunch ? robinhoodModuleManageHref(moduleLaunch) : null} fallbackImageUrl={moduleLaunch ? MODULE_TOKEN_FALLBACK_IMAGE : undefined}
-    trade={<SwapPanel key={`4663:${address.toLowerCase()}`} embedded initialAddress={address} initialChainId={4663} tokenSymbol={token.symbol ?? undefined} />}>
+    trade={<SwapPanel key={`4663:${address.toLowerCase()}`} embedded initialDescriptor={initialSwapToken} initialAddress={address} initialChainId={4663} tokenSymbol={token.symbol ?? undefined} />}>
     {moduleLaunch && !isRobinhoodFoundationLaunch(moduleLaunch) ? <TokenLaunchModules launch={moduleLaunch} /> : null}
   </RobinhoodMarketView>;
 }

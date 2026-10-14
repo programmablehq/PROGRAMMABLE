@@ -32,8 +32,9 @@ function message(error: unknown) {
 const explorer = (chainId: SwapChainId) => chainId === 4663 ? "https://robinhoodchain.blockscout.com" : "https://etherscan.io";
 const networkName = (chainId: SwapChainId) => chainId === 4663 ? "Robinhood" : "Ethereum";
 
-export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded = false, tokenSymbol }: {
+export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded = false, tokenSymbol, initialDescriptor }: {
   initialAddress?: string; initialChainId?: SwapChainId; embedded?: boolean; tokenSymbol?: string;
+  initialDescriptor?: Promise<SwapTokenDescriptor | null>;
 }) {
   const id = useId();
   const mounted = useRef(true);
@@ -100,12 +101,20 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
     if (!validAddress) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      void import("@/lib/swap/client").then(({ fetchSwapToken }) => fetchSwapToken({ address: normalizedAddress, chainId, signal: controller.signal }))
+      void import("@/lib/swap/client").then(async ({ fetchSwapToken, parseSwapTokenDescriptor }) => {
+        // The page starts this read with its verified identity before hydration.
+        // A refresh or a different asset always performs a new public lookup.
+        const seeded = lookupRevision === 0 && chainId === initialChainId && normalizedAddress === initialAddress.toLowerCase()
+          ? await Promise.resolve(initialDescriptor).catch(() => null) : null;
+        controller.signal.throwIfAborted();
+        return seeded ? parseSwapTokenDescriptor(seeded, { address: normalizedAddress, chainId })
+          : fetchSwapToken({ address: normalizedAddress, chainId, signal: controller.signal });
+      })
         .then(value => { if (!controller.signal.aborted) setAsset({ key: assetKey, descriptor: value }); })
         .catch(caught => { if (!controller.signal.aborted) setAsset({ key: assetKey, error: message(caught) }); });
     }, embedded ? 0 : 200);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [assetKey, chainId, normalizedAddress, validAddress, lookupRevision, embedded]);
+  }, [assetKey, chainId, normalizedAddress, validAddress, lookupRevision, embedded, initialDescriptor, initialChainId, initialAddress]);
 
   useEffect(() => {
     if (!owner) return;
