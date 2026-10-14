@@ -3706,6 +3706,7 @@ export function DeveloperLaunchHistory({
                 id={`custom-launch-${resourceIdentity}`}
                 className={styles.launchItem}
                 data-status={launch.status}
+                data-review-blocked={showReviewStatus}
                 data-highlighted={
                   highlightedLaunchId === resourceIdentity ? "true" : "false"
                 }

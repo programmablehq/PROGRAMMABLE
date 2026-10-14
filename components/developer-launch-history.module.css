@@ -163,5 +163,6 @@
 .launchItem > .walletButton { width: 100%; min-height: 48px; justify-content: center; margin-block: 20px 0; }
 .launchItem > .statusDescription { margin-top: 20px; }
 .launchItem:is([data-status="authorized"],[data-status="wallet_action_required"],[data-status="awaiting_wallet_signature"],[data-status="finalized"]) > .statusDescription { display: none; }
+.launchItem[data-review-blocked="true"] > .statusDescription { display: block; }
 .launchItem > .walletButton { min-height: 54px; border-radius: 12px; font-size: 16px; }
 .launchTopline .projectIdentity h3 { font-size: 28px; line-height: 34px; font-weight: 600; }
