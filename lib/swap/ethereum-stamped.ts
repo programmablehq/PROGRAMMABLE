@@ -235,18 +235,19 @@ export function validateEthereumStampedPreparation(value: unknown, route: Ethere
         && same(binding.runtimeCodeHash, expected.runtimeCodeHash))), "The pool fee runtime is incomplete.");
     } else requireValue(fee.mode === "programmable_routed" && fee.routedRateBps === feePolicy.policy.defaultCollection.routedRateBps && fee.native30Proof === null && fee.accrual === null, "The platform fee mode is invalid.");
     const gross = BigInt(fee.grossNativeAmount), platform = BigInt(fee.platformFeeAmount);
-    requireValue(BigInt(fee.netNativeAmount) === gross - platform && platform === (gross * BigInt(feePolicy.policy.rateBps) + (native30Proof ? 9999n : 0n)) / 10000n, "The platform fee amount is invalid.");
+    requireValue(BigInt(fee.netNativeAmount) === gross - platform && platform === (gross * BigInt(feePolicy.policy.rateBps) + (native30Proof?.rounding === "ceil_per_trade" ? 9999n : 0n)) / 10000n, "The platform fee amount is invalid.");
     if (transaction.kind === "swap") {
-      requireValue(gross > 0n && (request.side !== "buy" || gross === BigInt(request.amountIn))
+      requireValue(gross > 0n && (request.side !== "buy" || (native30Proof ? gross <= BigInt(request.amountIn) : gross === BigInt(request.amountIn)))
         && (request.side !== "sell" || native30Proof || BigInt(fee.netNativeAmount) === BigInt(quote.amountOut)), "The platform fee does not match the trade.");
       if (native30Proof) {
         const accrued = fee.accrual;
         requireValue(object(accrued) && accrued.proofDigest === native30Proof.proofDigest && accrued.vault === native30Proof.feeVault
           && accrued.recipient === native30Proof.recipient && accrued.rateBps === native30Proof.rateBps && accrued.currency === NATIVE
-          && accrued.assessmentBase === "gross_native_leg" && accrued.rounding === "ceil_per_trade"
+          && accrued.assessmentBase === "gross_native_leg" && accrued.rounding === native30Proof.rounding
           && accrued.grossNativeAmount === fee.grossNativeAmount && accrued.platformAccruedIncrease === fee.platformFeeAmount
           && digest(accrued.callbackTraceDigest) && digest(accrued.recordTraceDigest), "The pool fee accrual is invalid.");
-        const ledger = (key: string) => { const value = accrued[key]; requireValue(typeof value === "string" && /^(0|[1-9][0-9]{0,77})$/.test(value), "The pool fee ledger is invalid."); return BigInt(value); };
+        const ledger = (key: string) => { const value = accrued[key]; const change = key === "creatorAccruedIncrease" || key === "backingIncrease";
+          requireValue(typeof value === "string" && (change ? /^(0|-?[1-9][0-9]{0,77})$/ : /^(0|[1-9][0-9]{0,77})$/).test(value), "The pool fee ledger is invalid."); return BigInt(value); };
         requireValue(ledger("platformAccruedAfter") - ledger("platformAccruedBefore") === platform
           && ledger("creatorAccruedAfter") - ledger("creatorAccruedBefore") === ledger("creatorAccruedIncrease")
           && ledger("backingAfter") - ledger("backingBefore") === ledger("backingIncrease")

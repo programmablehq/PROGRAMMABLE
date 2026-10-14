@@ -293,7 +293,7 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
     let accrual: Record<string, unknown> | null = null;
     if (native30Proof) {
       accrual = await proveEthereumNative30TradeAccrualV1({ proof: native30Proof,
-        request: { zeroForOne: request.side === "buy", amountIn: request.amountIn, hookData: "0x" },
+        request: { zeroForOne: request.side === "buy", amountIn: request.amountIn, nativeInput: inputDecrease.toString(), hookData: "0x" },
         router: getAddress(protocol.router.address), trace: simulation.trace, post, call });
       grossNative = BigInt(accrual.grossNativeAmount as string);
       platform = BigInt(accrual.platformAccruedIncrease as string);
