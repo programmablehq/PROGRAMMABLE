@@ -12,6 +12,21 @@ function fixture(): AnalyticsData { return {
 describe("public analytics",()=>{
   it("sums pool facts once, not repeated window totals, and keeps partial USD explicit",()=>{const s=summarize(fixture(),"all","all");expect(s.volume).toBe(300);expect(s.revenue).toBe(3);expect(s.unpricedSwaps).toBe(2);expect(s.unpricedClaims).toBe(1);expect(s.launches).toBe(10);});
   it("does not combine different token generations",()=>{const d=fixture();const s=summarize(d,"all","all");expect(s.bought).toBe(9);expect(s.legacyBought).toBe(5);expect(s.burned).toBe(2);expect(s.legacyBurned).toBe(4);expect(summarize(d,"Ethereum","all").bought).toBe(5);});
+  it("shows historical USD spent across both chains without converting token counts",()=>{
+    const d=fixture();
+    Object.assign(d.buybacks.rows[0],{buybacks_usd:61749.807523564494,unpriced_buybacks:0});
+    expect(summarize(d,"all","all").buybackSpendUsd).toBe(61749.807523564494);
+    expect(summarize(d,"Ethereum","all").buybackSpendUsd).toBeNull();
+    expect(summarize(d,"all","7d").buybackSpendUsd).toBeNull();
+    d.buybacks.rows[0].unpriced_buybacks=1;
+    expect(summarize(d,"all","all").buybackSpendUsd).toBeNull();
+    d.buybacks.rows[0].unpriced_buybacks=0;
+    d.buybacks.rows[0].buybacks_usd=null;
+    expect(summarize(d,"all","all").buybackSpendUsd).toBeNull();
+    Object.assign(d.buybacks.rows[0],{buybacks_usd:61749.807523564494,unpriced_buybacks:0});
+    d.buybacks.available=false;
+    expect(summarize(d,"all","all").buybackSpendUsd).toBeNull();
+  });
   it("deduplicates repeated burn logs but includes distinct burns in one transaction",()=>{const d=fixture();d.burns.rows.push({...d.burns.rows[0]},{...d.burns.rows[0],log_index:2,v4_burned:3},{...d.burns.rows[0],sender_address:"0x0000000000000000000000000000000000000001",log_index:3,v4_burned:200});const s=summarize(d,"Robinhood","all");expect(s.burned).toBe(5);expect(s.activity.filter(a=>a.kind==="Burn")).toHaveLength(1);});
   it("includes all three project wallets once and derives their burn share from the original supply",()=>{
     const d=fixture();

@@ -11,7 +11,7 @@ export const QUERY_IDS = { volume: 8940969, revenue: 8940998, buybacks: 8677080,
 export const QUERY_COLUMNS = {
   volume: ["day","chain","category","volume_usd","unpriced_swaps","launched_tokens"],
   revenue: ["day","chain","priced_collected_subtotal_usd","unpriced_claims"],
-  buybacks: ["v4_bought_back","legacy_eth_v4_bought_back","buyback_events_v1"],
+  buybacks: ["v4_bought_back","legacy_eth_v4_bought_back","buyback_events_v1","buybacks_usd","unpriced_buybacks"],
   burns: ["chain","burn_time_utc","transaction_hash","log_index","sender_address","v4_burned"],
 } as const;
 export type Activity = { kind: "Buyback" | "Burn"; chain: Exclude<Chain, "all">; hash: string; amount: number; at: string };
@@ -75,6 +75,10 @@ export function summarize(data: AnalyticsData, chain: Chain, period: Period, now
     revenue: data.revenue.available ? total(feeRows,"priced_collected_subtotal_usd") : null,
     unpricedClaims: total(feeRows,"unpriced_claims"),
     bought: chain === "Ethereum" ? legacyBought : currentBought,
+    // This source's historical USD total covers both chains. Never present a
+    // priced subtotal (or a missing price) as the complete amount spent.
+    buybackSpendUsd: data.buybacks.available && chain === "all" && period === "all"
+      && number(purchases?.unpriced_buybacks) === 0 ? number(purchases?.buybacks_usd) : null,
     burned: chain === "Ethereum" ? legacyBurned : currentBurned,
     burnedSupplyPercent: chain === "Ethereum" || currentBurned === null ? null : currentBurned / V4_INITIAL_SUPPLY * 100,
     legacyBought, legacyBurned,
