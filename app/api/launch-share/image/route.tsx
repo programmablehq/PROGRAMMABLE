@@ -8,7 +8,8 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams;
   const identity = query.getAll("address").length === 1 && query.getAll("chain").length === 1
-    && [...query.keys()].every(key => key === "address" || key === "chain")
+    && (query.getAll("v").length === 0 || query.getAll("v").length === 1 && query.get("v") === "2")
+    && [...query.keys()].every(key => key === "address" || key === "chain" || key === "v")
     ? launchShareIdentity(query.get("address")!, query.get("chain")) : null;
   if (!identity) return new Response("Choose a valid coin and chain.", { status: 400 });
   try {
@@ -29,7 +30,6 @@ export async function GET(request: Request) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, width: 760, gap: 14 }}>
             <div style={{ display: "flex", fontSize: name.length > 40 ? 46 : 64, lineHeight: 1.12, letterSpacing: -1.5, overflow: "hidden", maxHeight: 160 }}>{name}</div>
-            {coin.symbol ? <div style={{ display: "flex", fontSize: 32, color: "#b3b6b4" }}>{coin.symbol}</div> : null}
           </div>
         </div>
         <div style={{ display: "flex", position: "absolute", left: 64, bottom: 60, fontSize: 23, color: "#b3b6b4" }}>{coin.address}</div>

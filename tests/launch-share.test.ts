@@ -18,7 +18,7 @@ describe("launch share identity", () => {
     expect(intent.origin).toBe("https://twitter.com");
     expect(intent.searchParams.get("url")).toBe(launchShareCoinHref(data));
     expect(intent.searchParams.get("text")).toBe(launchSharePost(data));
-    expect(launchSharePost(data)).toContain(`CA: ${address}`);
+    expect(launchSharePost(data)).toBe(`ROBINHOOK is now live on @ProgrammableHQ.\n\n${address}`);
     expect(launchSharePost(data)).not.toContain("Robinhood Chain");
     expect(launchSharePost(data)).not.toContain("other.example");
     expect(launchSharePost(data)).not.toContain("$$");

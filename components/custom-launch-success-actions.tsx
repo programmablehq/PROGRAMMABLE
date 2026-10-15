@@ -5,6 +5,7 @@ import styles from "./custom-launch-success-actions.module.css";
 export function CustomLaunchSuccessActions({ href }: { href: string }) {
   return (
     <div className={styles.actions} role="group" aria-label="Launch actions">
+      <div className={styles.share}><LaunchShareLink href={href} /></div>
       <a className={styles.openCoin} href={href}>Open coin</a>
       <a
         className={styles.teamTag}
@@ -16,7 +17,6 @@ export function CustomLaunchSuccessActions({ href }: { href: string }) {
         <span>Setup Team Tag</span>
         <Image src="/brand/fomo-logo-black.svg" width={36} height={36} alt="fomo" unoptimized />
       </a>
-      <div className={styles.share}><LaunchShareLink href={href} /></div>
     </div>
   );
 }
