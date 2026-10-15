@@ -32,7 +32,7 @@ function fixture(id: RecipeId) {
   if (!isBrownieNative30RecipeV1(id)) codes[getContractAddress({ from: market.hooks, nonce: 1n })] = materializeEthereumNative30RuntimeWordsV1(
     recipes[id].vault,
     { poolManager: word(market.poolManager), kernel: word(market.hooks), creatorRecipient: id === "clover_native30_v1"
-      ? word(market.hooks) : (fixtureBytes[id].words as Record<string, Hex>).OWNER });
+      ? word(market.hooks) : (fixtureBytes[id].words as Record<string, Hex>)[id === "grail_native30_v1" ? "teamRecipient" : "OWNER"] });
   const proof = proveEthereumNative30RuntimeV1(market, codes)!;
   return { market, hook, codes, proof };
 }
@@ -88,6 +88,21 @@ describe("exact custom hook fee recognition", () => {
     const changed = materializeEthereumNative30RuntimeWordsV1(recipe.vault,
       { poolManager: word(f.market.poolManager), kernel: word(f.market.hooks), creatorRecipient: word(owner) });
     expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [vault]: changed })).toBeNull();
+  });
+
+  it("binds Grail's pool immutables and CREATE child fee vault", () => {
+    const f = fixture("grail_native30_v1"), recipe = recipes.grail_native30_v1;
+    const words = fixtureBytes.grail_native30_v1.words as Record<string, Hex>;
+    for (const [name, value] of Object.entries({ token: word(owner), feeVault: word(owner), lpFee: word(3000n), tickSpacing: word(10n) })) {
+      const changed = materializeEthereumNative30RuntimeWordsV1(recipe.hook, { ...words, [name]: value });
+      expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [f.market.hooks]: changed })).toBeNull();
+    }
+    const vault = getContractAddress({ from: f.market.hooks, nonce: 1n });
+    expect(proveEthereumNative30RuntimeV1(f.market, { [f.market.hooks]: f.hook })).toBeNull();
+    for (const changed of ["0x6000", materializeEthereumNative30RuntimeWordsV1(recipe.vault,
+      { poolManager: word(f.market.poolManager), kernel: word(f.market.hooks), creatorRecipient: word(owner) })]) {
+      expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [vault]: changed as Hex })).toBeNull();
+    }
   });
 
   it.each(Object.keys(recipes) as RecipeId[])("does not add a second fee to %s buys or sells", id => {

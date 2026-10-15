@@ -199,9 +199,12 @@ function customCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
       // exact vault accrual still have to be proved for this precise pool key.
       if (key.fee !== 0 || !eq(addressWord(words, "PLATFORM_RECIPIENT"), recipe.recipient)
         || !eq(addressWord(words, "DEPLOYER"), "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887")) continue;
-    } else if (!eq(addressWord(words, "TOKEN"), key.currency1)) continue;
+    } else if (!eq(addressWord(words, recipeId === "grail_native30_v1" ? "token" : "TOKEN"), key.currency1)) continue;
     if (recipeId === "qubit_native30_v1") {
       if (key.fee !== 10000 || key.tickSpacing !== 60) continue;
+    } else if (recipeId === "grail_native30_v1") {
+      if (numberWord(words, "lpFee") !== BigInt(key.fee) || numberWord(words, "tickSpacing") !== BigInt(key.tickSpacing)
+        || !eq(addressWord(words, "feeVault"), getContractAddress({ from: key.hooks, nonce: 1n }))) continue;
     } else if (recipeId !== "clover_native30_v1" && !isBrownieNative30RecipeV1(recipeId)) {
       if (numberWord(words, "LP_FEE") !== BigInt(key.fee) || numberWord(words, "SPACING") !== BigInt(key.tickSpacing)) continue;
     } else if (isBrownieNative30RecipeV1(recipeId) && (!eq(addressWord(words, "QUOTE"), ZERO) || numberWord(words, "QUOTE_ID") !== 0n
@@ -234,7 +237,7 @@ function buildCustomProof(market: EthereumNative30MarketV1, codes: Readonly<Reco
     if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
       || !eq(addressWord(vaultWords, "kernel"), key.hooks)
       || !eq(addressWord(vaultWords, "creatorRecipient"), recipeId === "clover_native30_v1"
-        ? key.hooks : addressWord(words, "OWNER"))) return null;
+        ? key.hooks : addressWord(words, recipeId === "grail_native30_v1" ? "teamRecipient" : "OWNER"))) return null;
     bindings.push({ role: "vault", address: vault, runtimeCodeHash: keccak256(vaultCode), immutableWords: vaultWords });
   }
   const body = { schemaVersion: ETHEREUM_NATIVE30_PROOF_SCHEMA_V1, recipeId, sourceArtifactHash: recipe.sourceArtifactHash,
