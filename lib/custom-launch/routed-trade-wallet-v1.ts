@@ -2,7 +2,7 @@ import { getAddress, keccak256, toHex, type Address, type Hex } from "viem";
 import type { LaunchProjectionV1 } from "./launch-plan-v1";
 import { canonicalBrowserSha256V2 } from "./browser-authority-v2";
 import { projectionObject } from "./launch-projection-v1";
-import { LaunchPlanTradeErrorV1, ROUTED_TRADE_CONTRACTS_V1, validateLaunchPlanTradePreparationV1,
+import { LaunchPlanTradeErrorV1, ROUTED_TRADE_CONTRACTS_V1, ROUTED_TRADE_WRAPPED_ETH_V1, validateLaunchPlanTradePreparationV1,
   type LaunchPlanTradePreparationV1, type LaunchPlanTradeRequestV1 } from "./routed-trade-plan-v1";
 import type { LaunchWalletProviderV1 } from "./wallet-handoff-plan-v1";
 
@@ -41,6 +41,8 @@ export async function prepareLaunchPlanTradeWalletV1(provider: LaunchWalletProvi
     const pinned = ROUTED_TRADE_CONTRACTS_V1[name];
     if (bindings.find(item => item.address.toLowerCase() === pinned.address.toLowerCase())?.runtimeCodeHash.toLowerCase() !== pinned.runtimeCodeHash.toLowerCase()) throw new Error("The trade infrastructure differs from the reviewed release.");
   }
+  if (input.request.nativeFunding && bindings.find(item => item.address.toLowerCase() === ROUTED_TRADE_WRAPPED_ETH_V1.address.toLowerCase())
+    ?.runtimeCodeHash !== ROUTED_TRADE_WRAPPED_ETH_V1.runtimeCodeHash) throw new Error("The wrapped ETH runtime differs from the reviewed release.");
   await Promise.all(bindings.map(async binding => {
     const code = await provider.request({ method: "eth_getCode", params: [binding.address, "latest"] });
     if (typeof code !== "string" || !/^0x(?:[0-9a-f]{2})*$/i.test(code) || keccak256(code as Hex) !== binding.runtimeCodeHash.toLowerCase()) throw new Error("A trade contract changed. Refresh before signing.");
