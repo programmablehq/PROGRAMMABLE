@@ -411,6 +411,36 @@ describe("generic vNext routed swap", () => {
     expect(tradePostStateV1({ pre: { [component]: { code: runtime, storage: { [hash]: hash } } }, post: {} }))
       .toEqual({ [component]: { code: "0x", balance: "0x0", nonce: "0x0", stateDiff: { [hash]: toHex(0n, { size: 32 }) } } });
   });
+  it("preserves a numeric wallet nonce exactly and rejects unsafe numeric nonces before simulation", async () => {
+    const value = await prepared(), date = vi.spyOn(Date, "now").mockReturnValue(Number(now) * 1000);
+    let nonce = 7;
+    const calls: string[] = [];
+    const provider = { request: async ({ method, params }: { method: string; params?: readonly unknown[] }) => {
+      calls.push(method);
+      if (method === "eth_chainId") return "0x1237";
+      if (method === "eth_accounts") return [controller];
+      if (method === "eth_getCode") return String(params?.[0]).toLowerCase() === controller ? "0x" : runtime;
+      if (method === "eth_getTransactionCount") return nonce;
+      if (method === "eth_call") return "0x";
+      if (method === "eth_estimateGas") return "0x186a0";
+      if (method === "eth_gasPrice") return "0x1";
+      if (method === "eth_getBalance") return "0x1000000000000";
+      throw new Error(`Unexpected wallet request ${method}`);
+    } };
+    const run = () => prepareLaunchPlanTradeWalletV1(provider, controller,
+      { action: "review", request: request(), projection: projection() }, (async () => Response.json(value)) as typeof fetch);
+    try {
+      expect((await run()).transaction.nonce).toBe("0x7");
+      nonce = 0;
+      expect((await run()).transaction.nonce).toBe("0x0");
+      for (nonce of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN]) {
+        calls.length = 0;
+        await expect(run()).rejects.toThrow("wallet chain read");
+        expect(calls).not.toContain("eth_call");
+        expect(calls).not.toContain("eth_sendTransaction");
+      }
+    } finally { date.mockRestore(); }
+  });
   it("prepares connected contract-wallet inner calls without fabricating an EOA nonce or owner approval", async () => {
     const value = await prepared({ contractWallet: true });
     const date = vi.spyOn(Date, "now").mockReturnValue(Number(now) * 1000);

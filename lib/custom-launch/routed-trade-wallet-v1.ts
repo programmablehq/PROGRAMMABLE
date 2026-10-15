@@ -12,6 +12,10 @@ export type LaunchPlanTradeWalletReviewV1 = { binding: `sha256:${string}`; prepa
   controllerKind: "eoa" | "connected_contract_wallet"; maxGasCostWei: string;
   transaction: { chainId: "0x1237"; from: Address; to: Address; data: Hex; value: Hex; gas: Hex; nonce?: Hex } };
 const quantity = (value: unknown) => typeof value === "string" && /^0x[0-9a-f]{1,64}$/i.test(value) ? BigInt(value) : (() => { throw new Error("The wallet chain read is invalid."); })();
+// Wallet adapters normalize the pending nonce to a number. Match the launch
+// handoff's exact conversion; never coerce a fractional or unsafe integer.
+const transactionCount = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+  ? BigInt(value) : quantity(value);
 
 export async function fetchLaunchPlanTradePreparationV1(request: LaunchPlanTradeRequestV1, fetcher: typeof fetch = fetch) {
   const response = await fetcher("/api/custom-launch/vnext/trade/prepare", { method: "POST", cache: "no-store",
@@ -48,7 +52,7 @@ export async function prepareLaunchPlanTradeWalletV1(provider: LaunchWalletProvi
     if (typeof code !== "string" || !/^0x(?:[0-9a-f]{2})*$/i.test(code) || keccak256(code as Hex) !== binding.runtimeCodeHash.toLowerCase()) throw new Error("A trade contract changed. Refresh before signing.");
   }));
   const tx = preparation.transaction;
-  const nonce = controllerKind === "eoa" ? toHex(quantity(await provider.request({ method: "eth_getTransactionCount", params: [from, "pending"] }))) : undefined;
+  const nonce = controllerKind === "eoa" ? toHex(transactionCount(await provider.request({ method: "eth_getTransactionCount", params: [from, "pending"] }))) : undefined;
   const transaction = { chainId: "0x1237" as const, from, to: tx.to, data: tx.data, value: toHex(BigInt(tx.value)), gas: toHex(BigInt(tx.gasLimit)), ...(nonce ? { nonce } : {}) };
   await provider.request({ method: "eth_call", params: [transaction, "latest"] });
   const [estimate, price, balance] = await Promise.all([provider.request({ method: "eth_estimateGas", params: [transaction] }),
