@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { LaunchShareLink } from "./launch-share-link";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
@@ -140,6 +141,7 @@ export function ModuleFoundationTransactionResult({ result, onRefresh, refreshin
     <p role="status">Your launch is confirmed onchain. Opening your coin…</p>
     {result.metadataStatus !== "indexed" ? <p className={styles.help}>Explore indexing is still being confirmed. Your coin page opens independently.</p> : null}
     <div className={styles.actions}><Link className={styles.primaryButton} href={coinUrl}>View Coin <ArrowUpRightIcon size={16} aria-hidden="true" /></Link><Link className={styles.secondaryButton} href="/profile">Creator rewards</Link></div>
+    <LaunchShareLink href={coinUrl} />
     <details className={styles.transactionDetails}><summary>Transaction details</summary><FoundationAddress value={result.transactionHash} label="transaction hash" />
       {foundationPublicUrl(result.explorerUrl) ? <a className={styles.textButton} href={result.explorerUrl} target="_blank" rel="noreferrer">View transaction <ArrowUpRightIcon size={16} aria-hidden="true" /></a> : null}
     </details>

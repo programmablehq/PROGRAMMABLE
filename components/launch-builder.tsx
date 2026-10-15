@@ -1,4 +1,5 @@
 "use client";
+import { LaunchShareLink } from "./launch-share-link";
 import { TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 
 import Link from "next/link";
@@ -2842,6 +2843,7 @@ function LaunchSuccessDialog({
         <Link ref={viewLinkRef} className="primary-button" href={launch.href}>
           View token
         </Link>
+        {launch.chainId === 1 ? <LaunchShareLink href={`/token/${launch.address}?chain=1`} /> : null}
       </section>
     </div>
   );
