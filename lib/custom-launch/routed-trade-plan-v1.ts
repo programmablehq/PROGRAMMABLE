@@ -10,6 +10,7 @@ import { assertIssuedImmutablePoolFeeRuntimeProof, rebuildImmutablePoolFeeRuntim
 import { ROUTED_FEE_BPS_V2, ROUTED_FEE_POLICY_V2 } from "./routed-fee-policy-v2";
 export { ROUTED_FEE_BPS_V2, ROUTED_FEE_POLICY_V2 } from "./routed-fee-policy-v2";
 import { ROUTED_FEE_BPS_V3, ROUTED_FEE_POLICY_V3 } from "./routed-fee-policy-v3";
+import { assertIrlPoolFeeV1, IRL_POOL_FEE_PROOF_SCHEMA_V1, rebuildIrlPoolFeeV1, validateIrlFeeAccrualV1, type IrlPoolFeeProofV1 } from "./irl-pool-fee-custom-launch-plan-v1";
 export { ROUTED_FEE_BPS_V3, ROUTED_FEE_POLICY_V3 } from "./routed-fee-policy-v3";
 
 export const ROUTED_TRADE_REQUEST_V1 = "programmable.launch-plan-trade-request.v1" as const;
@@ -17,18 +18,22 @@ export const ROUTED_TRADE_RESPONSE_V1 = "programmable.launch-plan-trade-preparat
 export const ROUTED_FEE_POLICY_V1 = "programmable.routed-swap-fee.v1" as const;
 export const ROUTED_FEE_RECIPIENT_V1 = getAddress("0xD88539d3c4C460136a733A3Fd60cf6BF269079da");
 export const ROUTED_TRADE_CONTRACTS_V1 = chainProfile.contracts.uniswap;
+export const ROUTED_TRADE_WRAPPED_ETH_V1 = Object.freeze({ address: getAddress("0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"),
+  runtimeCodeHash: "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353" as Hex });
 export const ROUTED_TRADE_ROUTER_ABI_V1 = parseAbi(["function execute(bytes commands,bytes[] inputs,uint256 deadline) payable"]);
 export const ROUTED_TRADE_TOKEN_ABI_V1 = parseAbi(["function balanceOf(address) view returns(uint256)", "function allowance(address,address) view returns(uint256)", "function approve(address,uint256) returns(bool)", "function decimals() view returns(uint8)"]);
 export const ROUTED_TRADE_PERMIT2_ABI_V1 = parseAbi(["function allowance(address,address,address) view returns(uint160,uint48,uint48)", "function approve(address,address,uint160,uint48)"]);
 export const ROUTED_TRADE_APPROVAL_GRACE_SECONDS_V1 = 300n;
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 const SENDER = "0x0000000000000000000000000000000000000001" as Address;
+const ROUTER = "0x0000000000000000000000000000000000000002" as Address;
 const UINT128_MAX = (1n << 128n) - 1n;
 const UINT256_MAX = (1n << 256n) - 1n;
 
 export type LaunchPlanTradeRequestV1 = Readonly<{ schemaVersion: typeof ROUTED_TRADE_REQUEST_V1; chainId: "4663";
   launchId: string; planHash: `sha256:${string}`; marketId: string; owner: Address; zeroForOne: boolean;
-  amountIn: string; slippageBps: number; deadline: string; hookData: Hex }>;
+  amountIn: string; slippageBps: number; deadline: string; hookData: Hex; nativeFunding?: true }>;
+export type LaunchPlanPoolFeeProofV1 = ImmutablePoolFeeRuntimeProof | IrlPoolFeeProofV1;
 export type LaunchPlanFeeBindingV1 = Readonly<{ mode: "programmable_routed" | "pool_enforced"; obligationId: string;
   policyVersion: typeof ROUTED_FEE_POLICY_V1 | typeof ROUTED_FEE_POLICY_V2 | typeof ROUTED_FEE_POLICY_V3; scope: "fee_on_programmable_routed_trades" | "fee_on_proven_pool_paths";
   rateBps: 20 | 30 | 100; routedRateBps: 20 | 30 | 100 | 0; recipient: Address; base: "gross_output_credit" | "not_applicable"; rounding: "floor" | "not_applicable"; currency: Address;
@@ -55,6 +60,7 @@ function uint(value: unknown, maximum = UINT128_MAX): bigint {
 }
 export function parseLaunchPlanTradeRequestV1(value: unknown): LaunchPlanTradeRequestV1 {
   const keys = ["schemaVersion", "chainId", "launchId", "planHash", "marketId", "owner", "zeroForOne", "amountIn", "slippageBps", "deadline", "hookData"];
+  if (projectionObject(value) && value.nativeFunding === true) keys.push("nativeFunding");
   if (!projectionObject(value) || Object.keys(value).sort().join() !== keys.sort().join()
     || value.schemaVersion !== ROUTED_TRADE_REQUEST_V1 || value.chainId !== "4663"
     || typeof value.launchId !== "string" || value.launchId.length < 1 || value.launchId.length > 256
@@ -68,7 +74,7 @@ export function parseLaunchPlanTradeRequestV1(value: unknown): LaunchPlanTradeRe
 }
 
 export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, request: LaunchPlanTradeRequestV1,
-  poolFeeProof?: ImmutablePoolFeeRuntimeProof) {
+  poolFeeProof?: LaunchPlanPoolFeeProofV1) {
   const projection = parseLaunchProjectionV1(projectionInput);
   if (projection.sourceVersion !== "custom_launch_plan_v1" || projection.chainId !== request.chainId || projection.finality.status !== "final"
     || projection.launchId !== request.launchId || projection.planHash !== request.planHash) return bad("LAUNCH_BINDING_CHANGED", "Refresh the finalized launch before trading.");
@@ -115,13 +121,20 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
     }
     obligationId = obligation.obligationId;
   }
-  if (poolFeeProof) assertIssuedImmutablePoolFeeRuntimeProof(poolFeeProof, {
-    chainId: "4663", poolManager: market.poolManager, ...poolKey });
+  if (poolFeeProof) {
+    const key = { chainId: "4663" as const, poolManager: market.poolManager, ...poolKey };
+    if (poolFeeProof.schemaVersion === IRL_POOL_FEE_PROOF_SCHEMA_V1) assertIrlPoolFeeV1(poolFeeProof, key);
+    else assertIssuedImmutablePoolFeeRuntimeProof(poolFeeProof, key);
+  }
   if (poolFeeProof && feeClaims.length > 0 && poolFeeProof.rateBps !== routedRateBps) {
     return bad("FEE_POLICY_PENDING", "The pool fee differs from its recorded fee policy.");
   }
   const inputCurrency = request.zeroForOne ? poolKey.currency0 : poolKey.currency1;
   const outputCurrency = request.zeroForOne ? poolKey.currency1 : poolKey.currency0;
+  const wrapInput = request.nativeFunding === true && inputCurrency === ROUTED_TRADE_WRAPPED_ETH_V1.address;
+  const unwrapOutput = request.nativeFunding === true && outputCurrency === ROUTED_TRADE_WRAPPED_ETH_V1.address;
+  if (request.nativeFunding && (!wrapInput && !unwrapOutput || inputCurrency === ZERO || outputCurrency === ZERO))
+    return bad("INVALID_NATIVE_FUNDING", "Native funding requires the canonical wrapped ETH market.", 400);
   const fee: LaunchPlanFeeBindingV1 = poolFeeProof ? { mode: "pool_enforced", obligationId,
     policyVersion: poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : poolFeeProof.rateBps === 100 ? ROUTED_FEE_POLICY_V3 : ROUTED_FEE_POLICY_V2, scope: "fee_on_proven_pool_paths", rateBps: poolFeeProof.rateBps, routedRateBps: 0,
     recipient: ROUTED_FEE_RECIPIENT_V1, base: "not_applicable", rounding: "not_applicable", currency: outputCurrency,
@@ -129,7 +142,8 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
     policyVersion, scope: "fee_on_programmable_routed_trades",
     rateBps: routedRateBps, routedRateBps, recipient: ROUTED_FEE_RECIPIENT_V1,
     base: "gross_output_credit", rounding: "floor", currency: outputCurrency, poolEnforcementWitness: null };
-  return { projection, poolKey, inputCurrency, outputCurrency, fee,
+  return { projection, poolKey, inputCurrency, outputCurrency, fee, wrapInput, unwrapOutput,
+    nativeInput: inputCurrency === ZERO || wrapInput, nativeOutput: outputCurrency === ZERO || unwrapOutput,
     projectionDigest: canonicalBrowserSha256V2("programmable.launch-plan-trade-projection.v1", projection) };
 }
 
@@ -147,22 +161,28 @@ export function launchPlanTradeAmountsV1(gross: bigint, rateBps: 20 | 30 | 100 |
     amountOutMinimum: netMinimum.toString(), grossAmountOutMinimum: grossMinimum.toString() };
 }
 export function buildLaunchPlanRoutedSwapV1(projection: LaunchProjectionV1, request: LaunchPlanTradeRequestV1, grossAmountOut: bigint,
-  poolFeeProof?: ImmutablePoolFeeRuntimeProof): LaunchPlanTradeTransactionV1 {
+  poolFeeProof?: LaunchPlanPoolFeeProofV1): LaunchPlanTradeTransactionV1 {
   const binding = launchPlanTradeBindingV1(projection, request, poolFeeProof), amounts = launchPlanTradeAmountsV1(grossAmountOut, binding.fee.routedRateBps, request.slippageBps);
   const planner = new V4Planner();
   // The bound Robinhood router is 2.1.1; its swap tuple includes minHopPriceX36.
   // Keep that additional price floor neutral; amountOutMinimum enforces slippage.
   planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [{ poolKey: binding.poolKey, zeroForOne: request.zeroForOne, amountIn: request.amountIn,
     amountOutMinimum: amounts.grossAmountOutMinimum, minHopPriceX36: "0", hookData: request.hookData }], URVersion.V2_1_1);
-  planner.addAction(Actions.SETTLE_ALL, [binding.inputCurrency, request.amountIn], URVersion.V2_1_1);
+  if (binding.wrapInput) planner.addAction(Actions.SETTLE, [binding.inputCurrency, "0", false], URVersion.V2_1_1);
+  else planner.addAction(Actions.SETTLE_ALL, [binding.inputCurrency, request.amountIn], URVersion.V2_1_1);
   if (binding.fee.routedRateBps) planner.addAction(Actions.TAKE_PORTION, [binding.outputCurrency, ROUTED_FEE_RECIPIENT_V1, binding.fee.routedRateBps], URVersion.V2_1_1);
-  planner.addAction(Actions.TAKE_ALL, [binding.outputCurrency, amounts.amountOutMinimum], URVersion.V2_1_1);
-  const route = new RoutePlanner(); route.addCommand(CommandType.V4_SWAP, [planner.finalize()], false, UniversalRouterVersion.V2_1_1);
+  if (binding.unwrapOutput) planner.addAction(Actions.TAKE, [binding.outputCurrency, ROUTER, "0"], URVersion.V2_1_1);
+  else planner.addAction(Actions.TAKE_ALL, [binding.outputCurrency, amounts.amountOutMinimum], URVersion.V2_1_1);
+  const route = new RoutePlanner();
+  if (binding.wrapInput) route.addCommand(CommandType.WRAP_ETH, [ROUTER, request.amountIn], false, UniversalRouterVersion.V2_1_1);
+  route.addCommand(CommandType.V4_SWAP, [planner.finalize()], false, UniversalRouterVersion.V2_1_1);
+  if (binding.wrapInput || binding.unwrapOutput) route.addCommand(CommandType.UNWRAP_WETH,
+    [SENDER, binding.unwrapOutput ? amounts.amountOutMinimum : "0"], false, UniversalRouterVersion.V2_1_1);
   // Partial input fills must not leave native funds in the Universal Router.
   if (binding.inputCurrency === ZERO) route.addCommand(CommandType.SWEEP, [ZERO, SENDER, 0], false, UniversalRouterVersion.V2_1_1);
   return { kind: "swap", chainId: "4663", from: request.owner, to: getAddress(ROUTED_TRADE_CONTRACTS_V1.universalRouter.address),
     data: encodeFunctionData({ abi: ROUTED_TRADE_ROUTER_ABI_V1, functionName: "execute", args: [route.commands as Hex, route.inputs as Hex[], BigInt(request.deadline)] }),
-    value: binding.inputCurrency === ZERO ? request.amountIn : "0", gasLimit: "1" };
+    value: binding.nativeInput ? request.amountIn : "0", gasLimit: "1" };
 }
 export function launchPlanTradeApprovalExpirationV1(deadline: string): bigint {
   // Leave time to mine the exact-amount approval and refresh the swap quote.
@@ -187,10 +207,13 @@ export function validateLaunchPlanTradePreparationV1(value: unknown, projection:
     || !projectionObject(value.transaction) || !projectionObject(value.evidence)) return bad("INVALID_PREPARATION", "The prepared trade is invalid.");
   const typed = value as unknown as LaunchPlanTradePreparationV1;
   const original = launchPlanTradeBindingV1(projection, request);
-  let poolFeeProof: ImmutablePoolFeeRuntimeProof | undefined;
+  let poolFeeProof: LaunchPlanPoolFeeProofV1 | undefined;
   if (typed.fee?.mode === "pool_enforced") {
-    try { poolFeeProof = rebuildImmutablePoolFeeRuntimeProof(typed.fee.poolEnforcementWitness, {
-      chainId: "4663", poolManager: getAddress(ROUTED_TRADE_CONTRACTS_V1.poolManager.address), ...original.poolKey }); }
+    try {
+      const key = { chainId: "4663" as const, poolManager: getAddress(ROUTED_TRADE_CONTRACTS_V1.poolManager.address), ...original.poolKey };
+      poolFeeProof = projectionObject(typed.fee.poolEnforcementWitness) && typed.fee.poolEnforcementWitness.schemaVersion === IRL_POOL_FEE_PROOF_SCHEMA_V1
+        ? rebuildIrlPoolFeeV1(typed.fee.poolEnforcementWitness, key) : rebuildImmutablePoolFeeRuntimeProof(typed.fee.poolEnforcementWitness, key);
+    }
     catch { return bad("IMMUTABLE_POOL_FEE_PROOF_MISSING", "The existing pool fee requires exact independent runtime proof."); }
   }
   const binding = launchPlanTradeBindingV1(projection, request, poolFeeProof), quote = typed.quote;
@@ -219,7 +242,9 @@ export function validateLaunchPlanTradePreparationV1(value: unknown, projection:
     observed.address.toLowerCase() === required.address.toLowerCase() && observed.runtimeCodeHash === required.runtimeCodeHash))) {
     return bad("IMMUTABLE_POOL_FEE_PROOF_MISSING", "The pool fee runtime observations are incomplete.");
   }
-  if (poolFeeProof && typed.transaction.kind === "swap") {
+  if (poolFeeProof?.schemaVersion === IRL_POOL_FEE_PROOF_SCHEMA_V1 && typed.transaction.kind === "swap") {
+    validateIrlFeeAccrualV1(projectionObject(proof) && proof.poolFeeAccrual, poolFeeProof, request);
+  } else if (poolFeeProof && typed.transaction.kind === "swap") {
     const accrued = projectionObject(proof) && proof.poolFeeAccrual;
     const ledger = (value: unknown) => uint(value, UINT256_MAX);
     if (!projectionObject(accrued) || accrued.proofDigest !== poolFeeProof.proofDigest || accrued.vault !== poolFeeProof.feeVault
@@ -243,7 +268,7 @@ export function validateLaunchPlanTradePreparationV1(value: unknown, projection:
   }
   const expected = typed.transaction.kind === "swap" ? buildLaunchPlanRoutedSwapV1(projection, request, BigInt(quote.grossAmountOut), poolFeeProof)
     : ["token_approval", "permit2_approval"].includes(typed.transaction.kind) ? buildLaunchPlanTradeApprovalV1(request, binding.inputCurrency, typed.transaction.kind) : null;
-  if (!expected || (typed.transaction.kind === "swap" ? typed.status !== "ready" : typed.status !== "approval_required" || binding.inputCurrency === ZERO)
+  if (!expected || (typed.transaction.kind === "swap" ? typed.status !== "ready" : typed.status !== "approval_required" || binding.nativeInput)
     || Object.entries(expected).some(([key, item]) => key !== "gasLimit" && typed.transaction[key as keyof LaunchPlanTradeTransactionV1] !== item)
     || uint(typed.transaction.gasLimit, 30_000_000n) === 0n) return bad("NONCANONICAL_TRANSACTION", "The wallet transaction differs from the reviewed trade.");
   const { preparationDigest, ...body } = typed;

@@ -16,6 +16,7 @@ import { SWAP_TOKEN_SCHEMA, SwapUnavailableError, type SwapChainId, type SwapTok
 import { isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
 import { ethereumStampedSwapRoute } from "@/lib/swap/ethereum-stamped";
 import { readEthereumFeeClassificationV1 } from "@/lib/server/custom-launch/ethereum-routing-fee-policy-v1";
+import { ROUTED_TRADE_WRAPPED_ETH_V1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 export interface SwapTokenDependencies {
@@ -129,7 +130,8 @@ async function resolveRobinhoodSwapToken(row: RobinhoodLaunch, dependencies: Swa
     const projection = row.launchProjection;
     const market = projection.markets.find(item => {
       const assets = [resolveProjectionAddress(projection, item.currency0), resolveProjectionAddress(projection, item.currency1)].map(value => value.toLowerCase());
-      return assets.includes(ZERO) && assets.includes(base.token.address.toLowerCase());
+      return assets.includes(base.token.address.toLowerCase())
+        && (assets.includes(ZERO) || assets.includes(ROUTED_TRADE_WRAPPED_ETH_V1.address.toLowerCase()));
     });
     if (!market) return unavailable(base, "This launch has no verified ETH trading pool.");
     return { ...base, status: "ready", route: { kind: "custom-vnext", projection, marketId: market.marketId } };

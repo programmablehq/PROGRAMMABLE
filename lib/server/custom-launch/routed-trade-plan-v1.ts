@@ -5,7 +5,7 @@ import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-
 import { buildLaunchPlanRoutedSwapV1, buildLaunchPlanTradeApprovalV1, launchPlanTradeApprovalExpirationV1, launchPlanTradeAmountsV1, launchPlanTradeBindingV1,
   launchPlanTradePreparationDigestV1, LaunchPlanTradeErrorV1, parseLaunchPlanTradeRequestV1, ROUTED_TRADE_CONTRACTS_V1,
   ROUTED_TRADE_PERMIT2_ABI_V1, ROUTED_TRADE_RESPONSE_V1, ROUTED_TRADE_TOKEN_ABI_V1,
-  type LaunchPlanTradePreparationV1, type LaunchPlanTradeTransactionV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
+  ROUTED_TRADE_WRAPPED_ETH_V1, type LaunchPlanPoolFeeProofV1, type LaunchPlanTradePreparationV1, type LaunchPlanTradeTransactionV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 import { indexStore } from "@/lib/server/robinhood-index/store";
 import { snapshotLaunches } from "@/lib/server/robinhood-index/model";
 import { agreedTradeRpcV1, bytesV1, pendingTradeV1, productionTradeRpcsV1, quantityV1, readTradeCheckpointV1, readAgreedTradeTraceV1, readTradeGasEstimateV1, readTradePostStateCallV1, successfulTradeFramesV1,
@@ -13,6 +13,7 @@ import { agreedTradeRpcV1, bytesV1, pendingTradeV1, productionTradeRpcsV1, quant
 import type { ImmutablePoolFeeMarketV1 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v1";
 import { immutablePoolFeeRequiredAddresses, proveImmutablePoolFeeRuntime } from "@/lib/custom-launch/immutable-pool-fee-runtime";
 import { proveImmutablePoolFeeTradeAccrualV1 } from "./immutable-pool-fee-trade-v1";
+import { proveIrlPoolFeeV1 } from "@/lib/custom-launch/irl-pool-fee-custom-launch-plan-v1";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 const QUOTER = parseAbi(["function quoteExactInputSingle(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 exactAmount,bytes hookData) params) returns(uint256 amountOut,uint256 gasEstimate)"]);
@@ -47,6 +48,7 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
   const runtimeCodes: Record<string, Hex> = {};
   const expected = new Map<string, string>();
   INFRA.forEach(name => expected.set(ROUTED_TRADE_CONTRACTS_V1[name].address.toLowerCase(), ROUTED_TRADE_CONTRACTS_V1[name].runtimeCodeHash.toLowerCase()));
+  if (request.nativeFunding) expected.set(ROUTED_TRADE_WRAPPED_ETH_V1.address.toLowerCase(), ROUTED_TRADE_WRAPPED_ETH_V1.runtimeCodeHash);
   projection.components.forEach(component => {
     const previous = expected.get(component.expectedAddress.toLowerCase());
     if (previous && previous !== component.runtimeCodeHash.toLowerCase()) return pendingTradeV1("RUNTIME_BINDING_CONFLICT");
@@ -66,7 +68,8 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
     runtimeCodes[address.toLowerCase()] = code;
     runtimeBindings.push({ address, runtimeCodeHash: keccak256(code) });
   }));
-  const poolFeeProof = requiredFeeRuntimes ? proveImmutablePoolFeeRuntime(feeMarket, runtimeCodes) ?? undefined : undefined;
+  const poolFeeProof: LaunchPlanPoolFeeProofV1 | undefined = proveIrlPoolFeeV1(feeMarket, runtimeCodes)
+    ?? (requiredFeeRuntimes ? proveImmutablePoolFeeRuntime(feeMarket, runtimeCodes) ?? undefined : undefined);
   if (requiredFeeRuntimes && !poolFeeProof) return pendingTradeV1("IMMUTABLE_POOL_FEE_RUNTIME_PENDING");
   if (poolFeeProof) binding = launchPlanTradeBindingV1(projection, request, poolFeeProof);
   runtimeBindings.sort((a, b) => a.address.toLowerCase().localeCompare(b.address.toLowerCase()));
@@ -79,7 +82,7 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
     if (raw.length !== 66) return pendingTradeV1("ASSET_READ_ADAPTER_PENDING");
     return BigInt(raw);
   };
-  const nativeInputBalance = binding.inputCurrency === ZERO
+  const nativeInputBalance = binding.nativeInput
     ? BigInt(await rpc("eth_getBalance", [request.owner, reference], v => quantityV1(v).toString())) : null;
   if (nativeInputBalance !== null && nativeInputBalance < BigInt(request.amountIn))
     throw new LaunchPlanTradeErrorV1("INSUFFICIENT_INPUT_BALANCE", "Your wallet does not have enough ETH for this amount.", 400);
@@ -93,7 +96,7 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
   const decimals = async (currency: Address) => currency === ZERO ? 18 : tokenUint(currency, "decimals", []).then(v => v <= 255n ? Number(v) : null).catch(() => null);
   const [inputDecimals, outputDecimals] = await Promise.all([decimals(binding.inputCurrency), decimals(binding.outputCurrency)]);
   let transaction = buildLaunchPlanRoutedSwapV1(projection, request, gross, poolFeeProof);
-  if (binding.inputCurrency !== ZERO) {
+  if (!binding.nativeInput) {
     const [balance, allowance, raw] = await Promise.all([tokenUint(binding.inputCurrency, "balanceOf", [request.owner]),
       tokenUint(binding.inputCurrency, "allowance", [request.owner, ROUTED_TRADE_CONTRACTS_V1.permit2.address]),
       call(getAddress(ROUTED_TRADE_CONTRACTS_V1.permit2.address), encodeFunctionData({ abi: ROUTED_TRADE_PERMIT2_ABI_V1,
@@ -132,7 +135,7 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
   if (maximumGasUsed > gas) return pendingTradeV1("TRADE_GAS_PENDING");
   let feeTransfer: unknown = null;
   if (transaction.kind === "swap") {
-    const nativeInput = binding.inputCurrency === ZERO;
+    const nativeInput = binding.nativeInput;
     const inputBefore = nativeInput ? nativeInputBalance!
       : await tokenUint(binding.inputCurrency, "balanceOf", [request.owner]);
     const inputAfter = nativeInput ? post[request.owner.toLowerCase()]?.balance === undefined ? inputBefore : quantityV1(post[request.owner.toLowerCase()]!.balance)
@@ -145,31 +148,34 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
         catch { return []; }
       }).filter(item => item.currency === binding.outputCurrency.toLowerCase());
     const feeTakes = takes.filter(item => item.recipient === binding.fee.recipient.toLowerCase());
-    const userTakes = takes.filter(item => item.recipient === request.owner.toLowerCase());
+    const outputRecipient = binding.unwrapOutput ? transaction.to.toLowerCase() : request.owner.toLowerCase();
+    const userTakes = takes.filter(item => item.recipient === outputRecipient);
     const expectedTakeCount = binding.fee.routedRateBps && takes.length === 2 ? 2 : 1;
     // Exact command order matters when the trader is also the fee recipient.
     if (takes.length !== expectedTakeCount || userTakes.length === 0 || (expectedTakeCount === 2 && feeTakes.length === 0)) return pendingTradeV1("ROUTED_FEE_TRANSFER_UNPROVEN");
     const feeAmount = expectedTakeCount === 2 ? takes[0]!.amount : 0n, userAmount = takes.at(-1)!.amount, actualGross = feeAmount + userAmount;
     if ((expectedTakeCount === 2 && takes[0]!.recipient !== binding.fee.recipient.toLowerCase())
-      || takes.at(-1)!.recipient !== request.owner.toLowerCase() || feeAmount !== actualGross * BigInt(binding.fee.routedRateBps) / 10_000n
+      || takes.at(-1)!.recipient !== outputRecipient || feeAmount !== actualGross * BigInt(binding.fee.routedRateBps) / 10_000n
       || userAmount < BigInt(amounts.amountOutMinimum) || actualGross < BigInt(amounts.grossAmountOutMinimum)) return pendingTradeV1("ROUTED_FEE_TRANSFER_UNPROVEN");
     if (actualGross !== gross) return pendingTradeV1("SWAP_QUOTE_SIMULATION_MISMATCH");
-    const credit = async (recipient: Address) => {
-      const native = binding.outputCurrency === ZERO;
+    const credit = async (recipient: Address, native = binding.outputCurrency === ZERO) => {
       const before = native ? BigInt(await rpc("eth_getBalance", [recipient, reference], v => quantityV1(v).toString())) : await tokenUint(binding.outputCurrency, "balanceOf", [recipient]);
       const changed = post[recipient.toLowerCase()];
       const after = native ? changed?.balance === undefined ? before : quantityV1(changed.balance)
         : await tokenUint(binding.outputCurrency, "balanceOf", [recipient], post);
       return after - before;
     };
-    const [feeCredit, ownerCredit] = await Promise.all([credit(binding.fee.recipient), credit(request.owner)]);
-    const sameRecipient = request.owner.toLowerCase() === binding.fee.recipient.toLowerCase();
+    const [feeCredit, ownerCredit] = await Promise.all([credit(binding.fee.recipient), credit(request.owner, binding.nativeOutput)]);
+    const sameRecipient = !binding.unwrapOutput && request.owner.toLowerCase() === binding.fee.recipient.toLowerCase();
     // The displayed output is the actual recipient credit. Tokens whose transfer
     // accounting differs need an exact settlement adapter, regardless of name or
     // economic category; nominal PoolManager.take arguments are insufficient.
     if (sameRecipient ? ownerCredit !== actualGross : (binding.fee.routedRateBps && feeCredit !== feeAmount) || ownerCredit !== userAmount) return pendingTradeV1("OUTPUT_CREDIT_ADAPTER_PENDING");
     const poolFeeAccrual = poolFeeProof ? await proveImmutablePoolFeeTradeAccrualV1({ proof: poolFeeProof, request,
-      router: transaction.to, trace, post, call }) : undefined;
+      router: transaction.to, trace, post, call, nativeBalance: async (address, overrides) => {
+        const changed = overrides?.[address.toLowerCase()];
+        return changed?.balance === undefined ? BigInt(await rpc("eth_getBalance", [address, reference], v => quantityV1(v).toString())) : quantityV1(changed.balance);
+      } }) : undefined;
     feeTransfer = { policyVersion: binding.fee.policyVersion, scope: binding.fee.scope, currency: binding.outputCurrency,
       inputCurrency: binding.inputCurrency, maximumInput: request.amountIn, inputBalanceDecrease: (inputBefore - inputAfter).toString(),
       recipient: binding.fee.recipient, rateBps: binding.fee.routedRateBps, base: binding.fee.base, rounding: binding.fee.rounding,

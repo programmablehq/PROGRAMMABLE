@@ -1,6 +1,6 @@
 "use client";
 
-import { createPublicClient, getAddress, http, isAddress, sha256, type Address, type Hex } from "viem";
+import { createPublicClient, encodeAbiParameters, getAddress, http, isAddress, sha256, type Address, type Hex } from "viem";
 import { mainnet } from "viem/chains";
 import type { PreparedTransaction } from "@/lib/prepared-transaction";
 import { parseModuleModeAvailability } from "@/lib/module-mode/native-catalog";
@@ -272,11 +272,19 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     const market = projection.markets.find(item => item.marketId === route.marketId);
     requireValue(market, "The trading market changed.");
     const currency0 = resolveProjectionAddress(projection, market.currency0), currency1 = resolveProjectionAddress(projection, market.currency1);
-    const inputCurrency = input.side === "buy" ? "0x0000000000000000000000000000000000000000" : token;
-    const outputCurrency = input.side === "buy" ? token : "0x0000000000000000000000000000000000000000";
+    const quoteCurrency = same(currency0, token) ? currency1 : currency0;
+    requireValue(same(quoteCurrency, "0x0000000000000000000000000000000000000000")
+      || same(quoteCurrency, api.ROUTED_TRADE_WRAPPED_ETH_V1.address), "This pool has no ETH swap route.");
+    const inputCurrency = input.side === "buy" ? quoteCurrency : token;
+    const outputCurrency = input.side === "buy" ? token : quoteCurrency;
     requireValue([currency0, currency1].some(asset => same(asset, inputCurrency)) && [currency0, currency1].some(asset => same(asset, outputCurrency)), "This pool has no ETH swap route.");
+    const { IRL_POOL_FEE_DEPLOYMENT_V1: irl } = await import("@/lib/custom-launch/irl-pool-fee-custom-launch-plan-v1");
+    const irlMarket = same(resolveProjectionAddress(projection, market.hooks), irl.hook.address)
+      && same(token, irl.token.address) && same(quoteCurrency, irl.wrappedEth.address);
     const request = api.parseLaunchPlanTradeRequestV1({ schemaVersion: api.ROUTED_TRADE_REQUEST_V1, chainId: "4663", launchId: projection.launchId,
-      planHash: projection.planHash, marketId: market.marketId, owner: account, zeroForOne: same(inputCurrency, currency0), amountIn: input.amountIn.toString(), slippageBps, deadline: (now() + 600n).toString(), hookData: "0x" });
+      planHash: projection.planHash, marketId: market.marketId, owner: account, zeroForOne: same(inputCurrency, currency0), amountIn: input.amountIn.toString(), slippageBps, deadline: (now() + 600n).toString(),
+      hookData: irlMarket ? encodeAbiParameters([{ type: "address" }], [account]) : "0x",
+      ...(same(quoteCurrency, api.ROUTED_TRADE_WRAPPED_ETH_V1.address) ? { nativeFunding: true } : {}) });
     const reviewed = await wallet.sendLaunchPlanTradeWalletAction({ action: "review", projection, request });
     requireValue(typeof reviewed !== "string", "The wallet returned no swap review.");
     const preparation = reviewed.preparation, tx = preparation.transaction;

@@ -4,6 +4,7 @@ import type { ImmutablePoolFeeRuntimeProof } from "@/lib/custom-launch/immutable
 import type { LaunchPlanTradeRequestV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { pendingTradeV1, successfulTradeFramesV1, type TradeTraceV1 } from "./routed-trade-rpc-v1";
+import { IRL_POOL_FEE_PROOF_SCHEMA_V1, irlPoolFeeAmountsV1, validateIrlFeeAccrualV1, type IrlPoolFeeProofV1 } from "@/lib/custom-launch/irl-pool-fee-custom-launch-plan-v1";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 const CALLBACKS = parseAbi([
@@ -17,9 +18,10 @@ const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 /** Trace arguments fix the gross native fee base; exact vault and ERC-6909
  * post-state readbacks establish both the liability and its actual backing. */
 export async function proveImmutablePoolFeeTradeAccrualV1(input: Readonly<{
-  proof: ImmutablePoolFeeRuntimeProof; request: LaunchPlanTradeRequestV1; router: Address; trace: TradeTraceV1;
+  proof: ImmutablePoolFeeRuntimeProof | IrlPoolFeeProofV1; request: LaunchPlanTradeRequestV1; router: Address; trace: TradeTraceV1;
   post: Record<string, Record<string, unknown>>;
   call(to: Address, data: Hex, overrides?: Record<string, Record<string, unknown>>): Promise<Hex>;
+  nativeBalance?(address: Address, overrides?: Record<string, Record<string, unknown>>): Promise<bigint>;
 }>) {
   const { proof, request, router, trace, post, call } = input;
   const frames = successfulTradeFramesV1(trace);
@@ -43,6 +45,38 @@ export async function proveImmutablePoolFeeTradeAccrualV1(input: Readonly<{
   const nativeDelta = BigInt.asIntN(128, afterDecoded.args[3] >> 128n);
   if (request.zeroForOne ? nativeDelta >= 0n : nativeDelta <= 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
   const grossNative = request.zeroForOne ? BigInt(request.amountIn) : nativeDelta < 0n ? -nativeDelta : nativeDelta;
+  if (proof.schemaVersion === IRL_POOL_FEE_PROOF_SCHEMA_V1) {
+    const abi = parseAbi(["function isLaunchTaxActive() view returns(bool)", "function programmableFeePot() view returns(uint256)",
+      "function take(address currency,address recipient,uint256 amount)"]);
+    const read = async (name: "isLaunchTaxActive" | "programmableFeePot", afterState = false) => {
+      const raw = await call(proof.market.hooks, encodeFunctionData({ abi, functionName: name }), afterState ? post : undefined);
+      if (!/^0x[0-9a-f]{64}$/.test(raw)) return pendingTradeV1("POOL_FEE_LEDGER_READ_PENDING");
+      return BigInt(raw);
+    };
+    const [boost, potBefore, potAfter] = await Promise.all([read("isLaunchTaxActive"), read("programmableFeePot"), read("programmableFeePot", true)]);
+    if (boost !== 0n && boost !== 1n || !input.nativeBalance) return pendingTradeV1("POOL_FEE_LEDGER_READ_PENDING");
+    const amounts = irlPoolFeeAmountsV1(grossNative, boost === 1n);
+    const feeTakes = frames.filter(frame => frame.type === "CALL" && same(frame.from, proof.market.hooks)
+      && frame.to && same(frame.to, proof.market.poolManager)).flatMap(frame => {
+        try { const decoded = decodeFunctionData({ abi, data: frame.input });
+          return decoded.functionName === "take" ? [{ frame, args: decoded.args }] : []; } catch { return []; }
+      });
+    if (feeTakes.length !== 1 || !same(feeTakes[0]!.args[0], proof.market.currency0)
+      || !same(feeTakes[0]!.args[1], proof.market.hooks) || feeTakes[0]!.args[2] !== amounts.ecosystemFee)
+      return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
+    const payments = frames.filter(frame => frame.type === "CALL" && same(frame.from, proof.market.hooks)
+      && frame.to && same(frame.to, proof.recipient));
+    if (payments.length > 1 || payments.some(frame => frame.input !== "0x" || BigInt(frame.value) !== amounts.platformFee))
+      return pendingTradeV1("POOL_FEE_ACCRUAL_UNPROVEN");
+    const paid = payments.reduce((total, frame) => total + BigInt(frame.value), 0n);
+    const result = { proofDigest: proof.proofDigest, vault: proof.feeVault, recipient: proof.recipient,
+      launchBoost: boost === 1n, grossNativeAmount: grossNative.toString(), ecosystemFee: amounts.ecosystemFee.toString(),
+      platformFee: amounts.platformFee.toString(), paid: paid.toString(), potBefore: potBefore.toString(), potAfter: potAfter.toString(),
+      backingAfter: (await input.nativeBalance(proof.feeVault, post)).toString(),
+      traceDigest: canonicalBrowserSha256V2(IRL_POOL_FEE_PROOF_SCHEMA_V1, [...callbacks.map(c => c.frame), ...feeTakes.map(t => t.frame), ...payments]) };
+    try { validateIrlFeeAccrualV1(result, proof, request); } catch { return pendingTradeV1("POOL_FEE_BACKING_UNPROVEN"); }
+    return result;
+  }
   const platform = (grossNative * BigInt(proof.rateBps) + 9999n) / 10000n;
   if (grossNative <= 0n || platform <= 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
   const recorded = frames.filter(frame => frame.type === "CALL" && frame.to && same(frame.to, proof.feeVault)
