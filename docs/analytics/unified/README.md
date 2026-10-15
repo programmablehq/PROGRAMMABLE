@@ -4,13 +4,13 @@
 
 [Website analytics](https://programmable.market/analytics) displays trading volume, historical USD spent on buybacks and project burns. Activity rows show V4 amounts, approximate historical dollar values, the chain and relative transaction times. Its server reads the latest completed query results with the private `DUNE_API_KEY` and an hourly cache. Page visits never execute SQL. A checked-in snapshot preserves the last verified values and their original timestamps if a source is unavailable. Query execution schedules are managed separately in Dune within the owner's existing credit budget.
 
-The website's [project burn source](https://dune.com/queries/8941418) covers transfers from the three project wallets for the current Robinhood token and historical Ethereum token. The token generations are never summed together. Buyback query 8677080 additionally publishes `buyback_events_v1`, a timestamped transaction list for the website's history. The page always shows all-time figures across both chains, with V4 totals referring to the current token.
+The website's [project burn source](https://dune.com/queries/8941418) covers transfers from the tracked project wallets for the current Robinhood token and historical Ethereum token. The token generations are never summed together. Buyback query 8677080 additionally publishes `buyback_events_v1`, a timestamped transaction list for the website's history. The page always shows all-time figures across both chains, with V4 totals referring to the current token.
 
 The public policy allocates 80% of collected fee revenue to manual Programmable (V4) buybacks and burns. The remaining 20% is for treasury and operating costs. Eligible revenue includes the 0.3% platform fees from launches on both chains and collected quote-asset fees from the project’s own liquidity position. The allocation is not evidence of a purchase. Queries count completed transactions independently.
 
 The buyback dollar amount is the sum of actual purchase costs on both chains, valued using the historical price at each purchase. It is not the current value of the tokens bought and excludes transaction gas. `buybacks_usd` is displayed only when `unpriced_buybacks` is zero; a priced subtotal is never substituted for a complete total. V4 amounts and burn percentages still refer to the current Robinhood token so different token generations are not added together.
 
-Buyback activity values use the verified transaction audit: actual native ETH/WETH spent plus priced other-asset costs. Codex supplies the historical ETH price. Burn activity values use the historical price of the burned V4 token. Quotes must match the chain and token and precede the transaction by no more than 24 hours. Missing quotes remain unavailable. These row estimates do not replace the independently calculated Dune buyback total. Historical prices are cached for 24 hours, and relative times update every minute in the browser.
+Buyback activity values use the verified transaction audit: actual native ETH/WETH spent plus priced other-asset costs. Codex supplies the historical ETH price. Burn activity values use the historical price of the burned V4 token. Quotes must match the chain and token and precede the transaction by no more than 24 hours. Missing quotes remain unavailable. Where Dune lacks a USDG quote, the website verifies the finalized purchase receipt and uses Codex for that exact input asset and purchase time. Every missing purchase cost must be resolved before the website shows a complete USD total. The original Dune priced subtotal is retained separately. Verified receipt costs and historical prices are cached for 24 hours, and relative times update every minute in the browser.
 
 ## Queries
 
@@ -18,10 +18,13 @@ Buyback activity values use the verified transaction audit: actual native ETH/WE
 | --- | --- | --- |
 | [Ecosystem volume](https://dune.com/queries/8940969) | `ecosystem-volume.sql` | Executed swaps across Ethereum and Robinhood for the main V4 token and recognized launch generations. |
 | [Collected platform fees](https://dune.com/queries/8940998) | `collected-fees.sql` | Finalized claims to the three project wallets from recognized fee contracts, plus the main V4 liquidity position's fees. |
-| [V4 buybacks](https://dune.com/queries/8677080) | Dune version history | Actual V4 purchases by the three wallets, including ETH, WETH and token-funded purchases. |
-| [V4 burns](https://dune.com/queries/8626416) | Dune version history | Finalized transfers to the burn address, with project and other-holder totals separated. |
+| [V4 buybacks](https://dune.com/queries/8677080) | `buybacks.sql` | Actual V4 purchases by the tracked wallets, including ETH, WETH and token-funded purchases. |
+| [Project V4 burns](https://dune.com/queries/8941418) | `project-burns.sql` | Finalized burns from the tracked wallets, separated by token generation. |
+| [V4 burns](https://dune.com/queries/8626416) | `all-burns.sql` | Finalized transfers to the burn address, with project and other-holder totals separated. |
 
-The three project wallets are:
+The primary buyback wallet is `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. Its executed purchases are included from the beginning of its history. Funding this wallet with ETH is not itself a buyback or additional protocol revenue.
+
+The following wallets remain tracked for the combined purchase and burn history. Their fee collection roles are unchanged:
 
 - `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`: current platform fees.
 - `0x39544A7023081B56D7405c1af0bFaf72da7e24F6`: own V4 liquidity fees and project burns.
@@ -29,7 +32,9 @@ The three project wallets are:
 
 The current V4 burn percentage uses the original 1,000,000,000-token supply of `0xc60ba256b44334a0cd2c7242e98b88f031abb006`. The amount remains derived from verified burn events, not a manually entered dashboard value. The onchain supply and burn-address balance were reconciled with the stored Dune results on 14 October 2026.
 
-Buybacks count executed purchases delivered to the tracked wallet group. Burns count V4 that the group sends to burn addresses, including tokens received as fees or from other sources. These are separate events and their totals need not match. Transfers between the three wallets do not create a new purchase. A direct-to-burn purchase must retain verified transaction-level attribution rather than being treated as a wallet transfer.
+Buybacks count executed purchases delivered to the tracked wallet group. Burns count V4 that the group sends to burn addresses, including tokens received as fees or from other sources. These are separate events and their totals need not match. Transfers between the four wallets do not create a new purchase. A direct-to-burn purchase must retain verified transaction-level attribution rather than being treated as a wallet transfer.
+
+Relay-funded ERC20 purchases are attributed through the verified RelayApprovalProxyV3 funding and RelayRouterV3 output events, the matching actual payment transfer and the pool swap. Exactly one funding/delivery pair is required. Refunds reduce the recorded input cost. The historical price is taken from the actual payment asset, including USDG, without assuming a one-dollar peg. Transactions already covered by tracked-wallet debits use that accounting once.
 
 ## Interpretation
 

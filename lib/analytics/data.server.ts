@@ -3,6 +3,7 @@ import { decodeResult, pickColumns, QUERY_IDS, QUERY_COLUMNS, type AnalyticsData
 import snapshot from "./snapshot.json";
 import { activityPriceRequests } from "./activity-values";
 import { readActivityValues } from "./activity-values.server";
+import { fillBuybackCosts } from "./buyback-costs.server";
 
 export async function getAnalytics(): Promise<AnalyticsData> {
   const entries = await Promise.all(Object.entries(QUERY_IDS).map(async ([kind, id]) => {
@@ -19,7 +20,8 @@ export async function getAnalytics(): Promise<AnalyticsData> {
       if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw new Error("Analytics unavailable");
       const raw = await response.text();
       if (raw.length > 4_000_000) throw new Error("Analytics response too large");
-      return [kind, pickColumns(decodeResult(JSON.parse(raw)),queryKind)] as const;
+      const result = pickColumns(decodeResult(JSON.parse(raw)),queryKind);
+      return [kind, queryKind === "buybacks" ? await fillBuybackCosts(result) : result] as const;
     } catch {
       // Keep the last verified result with its original timestamp; never replace an outage with zero.
       return [kind, { ...fallback, stale: true }] as const;

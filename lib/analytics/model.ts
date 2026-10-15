@@ -4,7 +4,8 @@ export type Row = Record<string, unknown>;
 export type QueryResult = { updatedAt: string; rows: Row[]; available: boolean; stale?: boolean };
 export type ActivityValue = { usd: number; amount: number; at: string };
 export type AnalyticsData = { volume: QueryResult; revenue: QueryResult; buybacks: QueryResult; burns: QueryResult; activityValues?: Record<string, ActivityValue>; renderedAt?: number };
-export const PROJECT_WALLETS = ["0x4957f49620aff3adbbe8195a4f633e49cc93376c", "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "0x39544a7023081b56d7405c1af0bfaf72da7e24f6"];
+export const PRIMARY_BUYBACK_WALLET = "0x9f5856a3578faba96a6e8dfd9c10563a1e598f62";
+export const PROJECT_WALLETS = ["0x4957f49620aff3adbbe8195a4f633e49cc93376c", "0xd88539d3c4c460136a733a3fd60cf6bf269079da", "0x39544a7023081b56d7405c1af0bfaf72da7e24f6", PRIMARY_BUYBACK_WALLET];
 // Original supply of the current Robinhood V4; the public contract is recorded in the analytics supply evidence.
 // Transfers to a burn address do not reduce this original-supply denominator.
 export const V4_INITIAL_SUPPLY = 1_000_000_000;
@@ -12,7 +13,7 @@ export const QUERY_IDS = { volume: 8940969, revenue: 8940998, buybacks: 8677080,
 export const QUERY_COLUMNS = {
   volume: ["day","chain","category","volume_usd","unpriced_swaps","launched_tokens"],
   revenue: ["day","chain","priced_collected_subtotal_usd","unpriced_claims"],
-  buybacks: ["v4_bought_back","legacy_eth_v4_bought_back","buyback_events_v1","buybacks_usd","unpriced_buybacks","transaction_audit"],
+  buybacks: ["v4_bought_back","legacy_eth_v4_bought_back","buyback_events_v1","buybacks_usd","buybacks_priced_subtotal_usd","unpriced_buybacks","transaction_audit"],
   burns: ["chain","burn_time_utc","transaction_hash","log_index","sender_address","v4_burned"],
 } as const;
 export type Activity = { kind: "Buyback" | "Burn"; chain: Exclude<Chain, "all">; hash: string; amount: number; at: string; usd?: number | null };
@@ -53,7 +54,7 @@ export function summarize(data: AnalyticsData, chain: Chain, period: Period, now
     const [id, hash, amount, at] = entry.split("|");
     if (id === "1" || id === "4663") add({ kind: "Buyback", chain: id === "1" ? "Ethereum" : "Robinhood", hash: `0x${hash.toLowerCase()}`, amount: number(amount) ?? NaN, at: date(at) });
   }
-  // Only transfers from the three project wallets contribute to project burns.
+  // Only transfers from tracked project wallets contribute to project burns.
   const burnEvents = new Set<string>();
   for (const row of data.burns.rows) if (PROJECT_WALLETS.includes(String(row.sender_address).toLowerCase())) {
     const a: Activity = { kind: "Burn", chain: row.chain === "Ethereum" ? "Ethereum" : "Robinhood", hash: String(row.transaction_hash).toLowerCase(), amount: number(row.exact_v4_burned ?? row.v4_burned) ?? NaN, at: date(row.burn_time_utc) };
