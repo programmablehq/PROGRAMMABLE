@@ -9,7 +9,7 @@ the pool, the recipient and the fee custody contract. A project declaring
 `0.3%` or deploying a copy of a fee vault does not establish this property.
 
 The custom bindings in `ethereum-custom-native30-recipes-v1.ts` cover the
-submitted DuelHook, BrownieHook and QubitHook runtimes. They are derived from the exact
+submitted DuelHook, BrownieHook, QubitHook and CloverHook runtimes. They are derived from the exact
 Solidity 0.8.26 compiler output and its AST immutable references. The recorded
 `sourceArtifactHash` is the SHA-256 of the original Standard JSON input. The
 fixture records immutable values from those compiled submissions; it is not
@@ -29,6 +29,12 @@ evidence of a public deployment or launch approval.
   Its 0.3% platform share rounds up and is backed by PoolManager native claims
   in that vault; the project's separate hook levy and LP fee are not platform
   fees. The hook's buybacks also accrue the platform share.
+- CloverHook at commit `5ccd03d` uses the unchanged EthereumNativeFeeVaultV3
+  child at CREATE nonce 1, with the hook as both kernel and unused creator
+  recipient. Every registered native pool accrues the fixed 30-bps platform
+  fee, rounded up, into backed claims in that vault. The exact callback pool
+  key and claim increase are checked for each swap. Token-specific project
+  fees remain separate and do not waive platform collection.
 
 The quote uses the actual native amount spent, including any refund, rather
 than assuming that the entire requested input was used. A mismatch in the

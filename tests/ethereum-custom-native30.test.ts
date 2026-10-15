@@ -31,7 +31,8 @@ function fixture(id: RecipeId) {
   const codes: Record<string, Hex> = { [market.hooks]: hook };
   if (!isBrownieNative30RecipeV1(id)) codes[getContractAddress({ from: market.hooks, nonce: 1n })] = materializeEthereumNative30RuntimeWordsV1(
     recipes[id].vault,
-    { poolManager: word(market.poolManager), kernel: word(market.hooks), creatorRecipient: fixtureBytes[id].words.OWNER as Hex });
+    { poolManager: word(market.poolManager), kernel: word(market.hooks), creatorRecipient: id === "clover_native30_v1"
+      ? word(market.hooks) : (fixtureBytes[id].words as Record<string, Hex>).OWNER });
   const proof = proveEthereumNative30RuntimeV1(market, codes)!;
   return { market, hook, codes, proof };
 }
@@ -63,7 +64,8 @@ describe("exact custom hook fee recognition", () => {
     expect(rebuildEthereumNative30RuntimeProofV1(JSON.parse(JSON.stringify(f.proof)), f.market)).toEqual(f.proof);
     expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [f.market.hooks]: `0x00${f.hook.slice(4)}` })).toBeNull();
     expect(() => rebuildEthereumNative30RuntimeProofV1({ ...f.proof, recipient: owner }, f.market)).toThrow();
-    expect(proveEthereumNative30RuntimeV1({ ...f.market, currency1: owner }, f.codes)).toBeNull();
+    expect(proveEthereumNative30RuntimeV1({ ...f.market, currency0: owner }, f.codes)).toBeNull();
+    if (id !== "clover_native30_v1") expect(proveEthereumNative30RuntimeV1({ ...f.market, currency1: owner }, f.codes)).toBeNull();
   });
 
   it("requires the exact funded vault bound to the custom hook", () => {
@@ -73,6 +75,19 @@ describe("exact custom hook fee recognition", () => {
     const wrongKernel = materializeEthereumNative30RuntimeWordsV1(recipes.duelis_native30_v1.vault,
       { poolManager: word(f.market.poolManager), kernel: word(owner), creatorRecipient: word(owner) });
     expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [vault]: wrongKernel })).toBeNull();
+  });
+
+  it("binds Clover's recipient, graph deployer and hook-owned vault", () => {
+    const f = fixture("clover_native30_v1"), recipe = recipes.clover_native30_v1;
+    const words = fixtureBytes.clover_native30_v1.words;
+    for (const name of ["PLATFORM_RECIPIENT", "DEPLOYER"]) {
+      const changed = materializeEthereumNative30RuntimeWordsV1(recipe.hook, { ...words, [name]: word(owner) });
+      expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [f.market.hooks]: changed })).toBeNull();
+    }
+    const vault = getContractAddress({ from: f.market.hooks, nonce: 1n });
+    const changed = materializeEthereumNative30RuntimeWordsV1(recipe.vault,
+      { poolManager: word(f.market.poolManager), kernel: word(f.market.hooks), creatorRecipient: word(owner) });
+    expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [vault]: changed })).toBeNull();
   });
 
   it.each(Object.keys(recipes) as RecipeId[])("does not add a second fee to %s buys or sells", id => {

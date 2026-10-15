@@ -1,7 +1,9 @@
 import { ETHEREUM_QUBIT_NATIVE30_RECIPES_V1 } from "./ethereum-qubit-native30-recipes-v1";
+import { ETHEREUM_CLOVER_NATIVE30_RECIPES_V1 } from "./ethereum-clover-native30-recipes-v1";
 // Exact compiled fee-custody bindings, not launch approval. See docs/custom-launch/custom-native30-fees.md.
 export const ETHEREUM_CUSTOM_NATIVE30_RECIPES_V1 = {
   ...ETHEREUM_QUBIT_NATIVE30_RECIPES_V1,
+  ...ETHEREUM_CLOVER_NATIVE30_RECIPES_V1,
   "duelis_native30_v1": {
     "sourceArtifactHash": "sha256:5024c42c72e287bb4f5cd73e78f9a2d9649784a1432660fed43d916a373f18f9",
     "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
