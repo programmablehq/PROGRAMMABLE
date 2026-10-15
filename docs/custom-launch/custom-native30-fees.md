@@ -9,7 +9,7 @@ the pool, the recipient and the fee custody contract. A project declaring
 `0.3%` or deploying a copy of a fee vault does not establish this property.
 
 The custom bindings in `ethereum-custom-native30-recipes-v1.ts` cover the
-submitted DuelHook, BrownieHook, QubitHook and CloverHook runtimes. They are derived from the exact
+submitted DuelHook, BrownieHook, QubitHook, CloverHook and GrailHook runtimes. They are derived from the exact
 Solidity 0.8.26 compiler output and its AST immutable references. The recorded
 `sourceArtifactHash` is the SHA-256 of the original Standard JSON input. The
 fixture records immutable values from those compiled submissions; it is not
@@ -35,6 +35,11 @@ evidence of a public deployment or launch approval.
   fee, rounded up, into backed claims in that vault. The exact callback pool
   key and claim increase are checked for each swap. Token-specific project
   fees remain separate and do not waive platform collection.
+- GrailHook uses the unchanged EthereumNativeFeeVaultV3 child at CREATE
+  nonce 1. Recognition binds the token, LP fee, tick spacing, child address,
+  kernel and immutable team recipient. Its fixed 30-bps platform fee rounds
+  up separately from the team and staking shares. Both swap callbacks and
+  the backed platform accrual must match the exact pool.
 
 The quote uses the actual native amount spent, including any refund, rather
 than assuming that the entire requested input was used. A mismatch in the
