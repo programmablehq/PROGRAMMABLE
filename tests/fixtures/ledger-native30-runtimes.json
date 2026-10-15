@@ -1,0 +1,38 @@
+{
+  "rivet_native30_v1": {
+    "market": {
+      "chainId": "1",
+      "poolManager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0x9467bede58D905C6b0022465b7a4f0091aE9C6F1",
+      "fee": 0,
+      "tickSpacing": 60,
+      "hooks": "0xFdD3f8C7A4069452159a93267949F634Cd1dA0CC"
+    },
+    "words": {
+      "poolManager": "0x000000000000000000000000000000000004444c5dc75cb358380d2e3de08a90",
+      "token": "0x0000000000000000000000009467bede58d905c6b0022465b7a4f0091ae9c6f1",
+      "poolInitializer": "0x000000000000000000000000e99c8a79aacdfcd9b7d8fd9fecb5508e44b6b348",
+      "development": "0x0000000000000000000000000c18c37112856225a669131c6e06c70ccdebfab7",
+      "rewardVault": "0x0000000000000000000000002eecd54eb19ee949faa8836e3d7cf139921ffe5f"
+    },
+    "runtimeCodeHash": "0xf980cbe22134d847a4e47ffb38d44fd9e058601fc9abccd8e58e7700bb7cb2ec"
+  },
+  "pidx_native30_v1": {
+    "market": {
+      "chainId": "1",
+      "poolManager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0xC1e4D1b35874c9E6992F1E2317898c4322A351DA",
+      "fee": 0,
+      "tickSpacing": 60,
+      "hooks": "0x29Da2AFEB8F2844949d81726c4346163148860cC"
+    },
+    "words": {
+      "poolManager": "0x000000000000000000000000000000000004444c5dc75cb358380d2e3de08a90",
+      "registrar": "0x000000000000000000000000acd3bb1e71853d46facad577fb76733ff72f5010",
+      "quoteCurrencyAddress": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "runtimeCodeHash": "0xf795b4fc733e17a339a30fdd89ed4a72ec837a0ae656bef4c7c6d1decc34c906"
+  }
+}

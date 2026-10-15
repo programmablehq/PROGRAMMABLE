@@ -8,7 +8,7 @@ import { isLaunchStampProvenanceV1, type CanonicalTokenExploreEntry, type Launch
 import { computeOfficialV4PoolId } from "@/lib/uniswap/liquidity-launcher-sdk";
 import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1, ethereumPoolFeeMatchesPolicy,
   validateEthereumFeeClassificationV1, type EthereumFeeClassificationV1 } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
-import { assertIssuedEthereumNative30RuntimeProofV1, rebuildEthereumNative30RuntimeProofV1,
+import { assertIssuedEthereumNative30RuntimeProofV1, rebuildEthereumNative30RuntimeProofV1, ethereumNative30FeeAmountV1,
   type EthereumNative30RuntimeProofV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
 
 const NATIVE = "0x0000000000000000000000000000000000000000";
@@ -235,7 +235,17 @@ export function validateEthereumStampedPreparation(value: unknown, route: Ethere
         && same(binding.runtimeCodeHash, expected.runtimeCodeHash))), "The pool fee runtime is incomplete.");
     } else requireValue(fee.mode === "programmable_routed" && fee.routedRateBps === feePolicy.policy.defaultCollection.routedRateBps && fee.native30Proof === null && fee.accrual === null, "The platform fee mode is invalid.");
     const gross = BigInt(fee.grossNativeAmount), platform = BigInt(fee.platformFeeAmount);
-    requireValue(BigInt(fee.netNativeAmount) === gross - platform && platform === (gross * BigInt(feePolicy.policy.rateBps) + (native30Proof?.rounding === "ceil_per_trade" ? 9999n : 0n)) / 10000n, "The platform fee amount is invalid.");
+    let remainderBefore = 0n;
+    if (native30Proof?.rounding === "floor_with_remainder" && transaction.kind === "swap") {
+      const accrued = fee.accrual;
+      requireValue(object(accrued) && [accrued.platformRemainderBefore, accrued.platformRemainderAfter]
+        .every(value => typeof value === "string" && /^(0|[1-9][0-9]{0,5})$/.test(value)), "The platform fee remainder is invalid.");
+      remainderBefore = BigInt(accrued.platformRemainderBefore as string);
+      requireValue(ethereumNative30FeeAmountV1(native30Proof, gross, remainderBefore).remainder === BigInt(accrued.platformRemainderAfter as string), "The platform fee remainder is invalid.");
+    }
+    requireValue(BigInt(fee.netNativeAmount) === gross - platform
+      && platform === ethereumNative30FeeAmountV1(native30Proof ?? { rateBps: feePolicy.policy.rateBps, rounding: "floor_per_trade" }, gross, remainderBefore).amount,
+    "The platform fee amount is invalid.");
     if (transaction.kind === "swap") {
       requireValue(gross > 0n && (request.side !== "buy" || (native30Proof ? gross <= BigInt(request.amountIn) : gross === BigInt(request.amountIn)))
         && (request.side !== "sell" || native30Proof || BigInt(fee.netNativeAmount) === BigInt(quote.amountOut)), "The platform fee does not match the trade.");
