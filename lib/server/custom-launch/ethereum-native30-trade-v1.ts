@@ -2,6 +2,8 @@ import "server-only";
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 import { isBrownieNative30RecipeV1 } from "@/lib/custom-launch/ethereum-custom-native30-recipes-v1";
 import type { EthereumNative30RuntimeProofV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
+import { isEthereumLedgerNative30RecipeV1 } from "@/lib/custom-launch/ethereum-ledger-native30-recipes-v1";
+import { proveEthereumLedgerNative30AccrualV1 } from "./ethereum-ledger-native30-trade-v1";
 
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { pendingTradeV1, successfulTradeFramesV1, type TradeTraceV1 } from "./routed-trade-rpc-v1";
@@ -23,6 +25,7 @@ export async function proveEthereumNative30TradeAccrualV1(input: Readonly<{
   proof: EthereumNative30RuntimeProofV1; request: { zeroForOne: boolean; amountIn: string; nativeInput?: string; hookData: Hex }; router: Address; trace: TradeTraceV1;
   post: Record<string, Record<string, unknown>>;
   call(to: Address, data: Hex, overrides?: Record<string, Record<string, unknown>>): Promise<Hex>;
+  balance?: (to: Address) => Promise<bigint>;
 }>) {
   const { proof, request, router, trace, post, call } = input;
   const frames = successfulTradeFramesV1(trace);
@@ -46,6 +49,9 @@ export async function proveEthereumNative30TradeAccrualV1(input: Readonly<{
   const nativeDelta = BigInt.asIntN(128, afterDecoded.args[3] >> 128n);
   if (request.zeroForOne ? nativeDelta >= 0n : nativeDelta <= 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
   const grossNative = request.zeroForOne ? BigInt(request.nativeInput ?? request.amountIn) : nativeDelta;
+  if (grossNative <= 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
+  if (isEthereumLedgerNative30RecipeV1(proof.recipeId)) return proveEthereumLedgerNative30AccrualV1({ proof, grossNative, nativeDelta,
+    callbacks: callbacks.map(callback => callback.frame), post, call, balance: input.balance });
   const platform = (grossNative * BigInt(proof.rateBps) + (proof.rounding === "ceil_per_trade" ? 9999n : 0n)) / 10000n;
   if (grossNative <= 0n || platform < 0n) return pendingTradeV1("POOL_FEE_BASE_UNPROVEN");
   if (isBrownieNative30RecipeV1(proof.recipeId)) {

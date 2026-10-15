@@ -294,7 +294,8 @@ async function prepare(request: ReturnType<typeof parseEthereumStampedSwapReques
     if (native30Proof) {
       accrual = await proveEthereumNative30TradeAccrualV1({ proof: native30Proof,
         request: { zeroForOne: request.side === "buy", amountIn: request.amountIn, nativeInput: inputDecrease.toString(), hookData: "0x" },
-        router: getAddress(protocol.router.address), trace: simulation.trace, post, call });
+        router: getAddress(protocol.router.address), trace: simulation.trace, post, call,
+        balance: address => rpc("eth_getBalance", [address, reference], quantityV1) });
       grossNative = BigInt(accrual.grossNativeAmount as string);
       platform = BigInt(accrual.platformAccruedIncrease as string);
     }

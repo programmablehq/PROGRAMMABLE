@@ -9,7 +9,7 @@ the pool, the recipient and the fee custody contract. A project declaring
 `0.3%` or deploying a copy of a fee vault does not establish this property.
 
 The custom bindings in `ethereum-custom-native30-recipes-v1.ts` cover the
-submitted DuelHook and BrownieHook runtimes. They are derived from the exact
+submitted DuelHook, BrownieHook and QubitHook runtimes. They are derived from the exact
 Solidity 0.8.26 compiler output and its AST immutable references. The recorded
 `sourceArtifactHash` is the SHA-256 of the original Standard JSON input. The
 fixture records immutable values from those compiled submissions; it is not
@@ -24,6 +24,11 @@ evidence of a public deployment or launch approval.
   trade. The check includes every fee liability: platform, project, module and
   launch-tax balances. Module payments may reduce the non-platform liability,
   but cannot consume the platform's backed balance.
+- QubitHook uses the unchanged EthereumNativeFeeVaultV3 child at CREATE nonce 1.
+  Its exact runtime fixes the native/QBT pool at a 1% LP fee and spacing 60.
+  Its 0.3% platform share rounds up and is backed by PoolManager native claims
+  in that vault; the project's separate hook levy and LP fee are not platform
+  fees. The hook's buybacks also accrue the platform share.
 
 The quote uses the actual native amount spent, including any refund, rather
 than assuming that the entire requested input was used. A mismatch in the
@@ -34,3 +39,16 @@ Fee recognition does not approve a project's opening tax, liquidity custody,
 upgrade authority or other behavior. Those remain part of launch review.
 Changing executable hook code requires a new exact binding and review.
 Existing launch hashes, signatures and historical fee policies are unchanged.
+
+RivetHook and DecayingVolumeFeeHookV1 also have exact submitted-runtime
+bindings. Rivet holds native ETH in the hook; its three credit balances must
+remain fully backed by the hook's ETH balance. The decaying-volume hook holds
+PoolManager native claims. Its platform and project liabilities must equal
+the recorded total and remain fully backed by those claims. Its fractional
+platform fee remainder carries between swaps, so both the before and after
+remainder are checked with the exact contract integer arithmetic.
+
+Both paths require the successful callbacks for the exact pool and transaction,
+current runtime observations, backed fee accrual and fixed-recipient claims.
+Recognition changes no project contracts, salts, launch addresses or review
+decisions, and does not approve reward-management rights or project taxes.
