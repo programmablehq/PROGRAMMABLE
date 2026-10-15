@@ -2,7 +2,7 @@ import { isAddress } from "viem";
 
 export type LaunchShareIdentity = { address: string; chainId: 1 | 4663 };
 export type LaunchShareData = LaunchShareIdentity & {
-  name: string; symbol: string; description: string; href: string; imageDataUrl: string | null;
+  name: string; symbol: string; href: string; imageDataUrl: string | null;
 };
 
 export function launchShareIdentity(address: string, chain: string | null): LaunchShareIdentity | null {
@@ -22,7 +22,6 @@ export function launchShareHref(href: string): string | null {
   return identity ? `/share/${identity.address}?chain=${identity.chainId}` : null;
 }
 
-export const launchShareChain = (chainId: 1 | 4663) => chainId === 1 ? "Ethereum Mainnet" : "Robinhood Chain";
 export const launchShareCoinHref = ({ address, chainId }: LaunchShareIdentity) =>
   `https://programmable.market/token/${address.toLowerCase()}?chain=${chainId}`;
 
@@ -34,5 +33,23 @@ export function launchShareText(value: string | null | undefined, limit: number)
 
 export function launchSharePost(data: LaunchShareData): string {
   const symbol = launchShareText(data.symbol, 24).replace(/^\$+/, "");
-  return `${launchShareText(data.name, 100)}${symbol ? ` ($${symbol})` : ""} is live on Programmable.\n\n${launchShareChain(data.chainId)}\n${launchShareCoinHref(data)}`;
+  return `${launchShareText(data.name, 80)}${symbol ? ` ($${symbol})` : ""} is now live on Programmable.\n\nCA: ${data.address}`;
+}
+
+export function launchShareIntent(data: LaunchShareData) {
+  const url = new URL("https://twitter.com/intent/tweet");
+  url.searchParams.set("text", launchSharePost(data));
+  url.searchParams.set("url", launchShareCoinHref(data));
+  return url.href;
+}
+
+export function launchShareMetadata(identity: LaunchShareIdentity, name: string | null, symbol: string | null) {
+  const title = `${launchShareText(name, 100) || "Programmable coin"}${symbol ? ` ($${launchShareText(symbol, 24).replace(/^\$+/, "")})` : ""}`;
+  const url = launchShareCoinHref(identity);
+  const image = `https://programmable.market/api/launch-share/image?address=${identity.address.toLowerCase()}&chain=${identity.chainId}`;
+  const description = `${title} is live on Programmable. CA: ${identity.address.toLowerCase()}`;
+  return { title, description, alternates: { canonical: url },
+    openGraph: { type: "website" as const, title, description, url,
+      images: [{ url: image, width: 1200, height: 630, type: "image/png", alt: `${title} · ${identity.address}` }] },
+    twitter: { card: "summary_large_image" as const, title, description, images: [image] } };
 }

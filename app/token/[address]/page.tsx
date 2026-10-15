@@ -14,12 +14,13 @@ import { readRobinhoodPresentations } from "@/lib/server/robinhood-presentation"
 import { resolveVerifiedLaunchSwapToken } from "@/lib/server/swap/token";
 import { genericTokenDetailMetadata } from "@/lib/token-detail-metadata";
 import { tokenDetailPageChainId } from "@/lib/token-page-chain";
-import { isRobinhoodFoundationLaunch, robinhoodLaunchDescription } from "@/lib/robinhood-launches";
+import { isRobinhoodFoundationLaunch } from "@/lib/robinhood-launches";
 import { ethereumFoundationPresentation } from "@/lib/launch-presentation-details";
 import { findRecentFoundationLaunch } from "@/lib/server/module-foundation/recent-launch-store";
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { ConfirmingLaunchView } from "@/components/confirming-launch-view";
+import { launchShareMetadata } from "@/lib/launch-share";
 
 type TokenPageSearchParams = Promise<
   Record<string, string | string[] | undefined>
@@ -39,22 +40,16 @@ export async function generateMetadata({
   if (isAddress(address) && tokenDetailPageChainId(resolvedSearchParams.chain) !== null) {
     const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
     if (resolved?.chainId === 1 && resolved.token) return {
-      title: `${resolved.token.name || address} · Programmable`,
-      description: resolved.token.description || "Verified Programmable launch on Ethereum.",
-      alternates: { canonical: `/token/${resolved.token.tokenAddress}?chain=1` },
+      ...launchShareMetadata({ address: resolved.token.tokenAddress, chainId: 1 }, resolved.token.name, resolved.token.symbol),
     };
     const token = resolved?.chainId === 4663 ? resolved.token : null;
     if (token) return {
-      title: `${token.name || address} · Programmable`,
-      description: robinhoodLaunchDescription(token),
-      alternates: { canonical: `/token/${token.tokenAddress}` },
+      ...launchShareMetadata({ address: token.tokenAddress, chainId: 4663 }, token.name, token.symbol),
     };
     const chainId = resolvedSearchParams.chain === "1" ? 1 : 4663;
     const recent = await findRecentFoundationLaunch(chainId, address).catch(() => null);
     if (recent) return {
-      title: `${recent.row.name || address} · Programmable`,
-      description: `Programmable launch on ${chainId === 1 ? "Ethereum" : "Robinhood Chain"}.`,
-      alternates: { canonical: `/token/${recent.row.tokenAddress}${chainId === 1 ? "?chain=1" : ""}` },
+      ...launchShareMetadata({ address: recent.row.tokenAddress, chainId }, recent.row.name, recent.row.symbol),
     };
   }
   return genericTokenDetailMetadata(address, true, tokenDetailPageChainId(resolvedSearchParams.chain) ?? 1);
