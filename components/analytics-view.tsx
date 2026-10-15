@@ -22,7 +22,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
     <header className={styles.header}>
       <h1>Analytics</h1>
       <p className={styles.intro}>All-time activity across Ethereum and Robinhood. Platform fees are 0.3%. We use 80% of collected fee revenue for V4 buybacks and burns.</p>
-      <p className={styles.dataNote}>Buybacks show historical USD spent by our three project wallets. Burns also include V4 collected as liquidity fees. <a href="https://dune.com/programmablehq/analytics" target="_blank" rel="noreferrer">Our Dune dashboard</a></p>
+      <p className={styles.dataNote}>Buybacks show historical USD spent by our tracked project wallets. Burns also include V4 collected as liquidity fees. <a href="https://dune.com/programmablehq/analytics" target="_blank" rel="noreferrer">Our Dune dashboard</a></p>
     </header>
     <div className={styles.grid}>
       <Metric label="Ecosystem Trading Volume" value={compact(s.volume, true)} detail={`${exact(s.volume)} USD${s.unpricedSwaps ? " · priced subtotal" : ""}`} description="Main coin and all platform launches on both chains." />

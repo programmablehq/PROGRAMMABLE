@@ -28,13 +28,13 @@ describe("public analytics",()=>{
     expect(summarize(d,"all","all").buybackSpendUsd).toBeNull();
   });
   it("deduplicates repeated burn logs but includes distinct burns in one transaction",()=>{const d=fixture();d.burns.rows.push({...d.burns.rows[0]},{...d.burns.rows[0],log_index:2,v4_burned:3},{...d.burns.rows[0],sender_address:"0x0000000000000000000000000000000000000001",log_index:3,v4_burned:200});const s=summarize(d,"Robinhood","all");expect(s.burned).toBe(5);expect(s.activity.filter(a=>a.kind==="Burn")).toHaveLength(1);});
-  it("includes all three project wallets once and derives their burn share from the original supply",()=>{
+  it("includes historical and primary buyback wallets once and derives their burn share from the original supply",()=>{
     const d=fixture();
-    d.burns.rows=PROJECT_WALLETS.map((sender_address,i)=>({...d.burns.rows[0],sender_address,log_index:i,v4_burned:[63_000_000,20_000,3398.35359216][i]}));
+    d.burns.rows=PROJECT_WALLETS.map((sender_address,i)=>({...d.burns.rows[0],sender_address,log_index:i,v4_burned:[63_000_000,20_000,3398.35359216,1_000_000][i]}));
     d.burns.rows.push({...d.burns.rows[0]});
     const s=summarize(d,"all","all");
-    expect(s.burned).toBeCloseTo(63_023_398.35359216);
-    expect(s.burnedSupplyPercent).toBeCloseTo(6.302339835359216);
+    expect(s.burned).toBeCloseTo(64_023_398.35359216);
+    expect(s.burnedSupplyPercent).toBeCloseTo(6.402339835359216);
     expect(summarize(d,"Ethereum","all").burnedSupplyPercent).toBeNull();
   });
   it("uses UTC calendar boundaries for period filters",()=>{const s=summarize(fixture(),"all","7d",Date.parse("2026-10-20T12:00:00Z"));expect(s.volume).toBe(0);expect(s.bought).toBe(0);expect(s.activity).toHaveLength(0);});

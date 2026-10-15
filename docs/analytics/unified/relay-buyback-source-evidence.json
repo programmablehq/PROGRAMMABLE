@@ -1,0 +1,65 @@
+{
+  "chainId": 4663,
+  "buybackWallet": "0x9f5856a3578faba96a6e8dfd9c10563a1e598f62",
+  "approvalProxy": "0xccc88a9d1b4ed6b0eaba998850414b24f1c315be",
+  "router": "0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f",
+  "inputAsset": {
+    "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+    "symbol": "USDG",
+    "decimals": 6
+  },
+  "purchases": [
+    {
+      "transactionHash": "0xcd1a32c36dc82a6e58deade00290d5a43fa3ab7a092080c9d4a2ac9384537917",
+      "block": 89167312,
+      "rootValueWei": "0",
+      "inputAmountRaw": "4973173257",
+      "v4AmountRaw": "1486838280147047996079061"
+    },
+    {
+      "transactionHash": "0x90a126b471d75e0afc4296db44ccc0ed7a7229c73dec7ddf96cf656e98aeeed9",
+      "block": 89167337,
+      "rootValueWei": "0",
+      "inputAmountRaw": "4973165197",
+      "v4AmountRaw": "1456851089500465083778950"
+    },
+    {
+      "transactionHash": "0xa07491f51cde136dedb446c84573bccb191766d996665a2767115dc9baa61e6a",
+      "block": 89167365,
+      "rootValueWei": "0",
+      "inputAmountRaw": "4973173727",
+      "v4AmountRaw": "1428891856807422644987669"
+    },
+    {
+      "transactionHash": "0x011df48b5c4afb7f2a88edd7a8ca47b936bf4e737f8ce8b9075d00f369da7099",
+      "block": 89167396,
+      "rootValueWei": "0",
+      "inputAmountRaw": "4972998443",
+      "v4AmountRaw": "1400308223873057117550909"
+    },
+    {
+      "transactionHash": "0xa7e834c9b76744f8dbd018bc3c1eacc9ebecc47047c72b9916b1914886f1c5c9",
+      "block": 89167446,
+      "rootValueWei": "0",
+      "inputAmountRaw": "658717376",
+      "v4AmountRaw": "183463380158281799200091"
+    },
+    {
+      "transactionHash": "0xc4907967161e24cb958566f3504d648f6341b2d5dc7c13efa169da64d9025f42",
+      "block": 89168192,
+      "rootValueWei": "0",
+      "inputAmountRaw": "1170920137",
+      "v4AmountRaw": "347810076429586519302655"
+    }
+  ],
+  "excludedInternalTransfer": "0x042e5df46f7a5aba209a50ecef4db67b052ee82e386839969be9eb15ee846b45",
+  "checks": [
+    "Successful receipts and matching actual input transfers",
+    "One verified RelayApprovalProxyV3 funding and RelayRouterV3 delivery pair per purchase",
+    "V4 pool swaps and actual output to the designated wallet",
+    "Finalized blocks before Dune refresh",
+    "Internal wallet transfers excluded from purchases"
+  ],
+  "approvalProxyRuntimeCodeHash": "0xa3b36a6aa3c2fb588b92336d88b0735b40dea0282c110d2034edf688ca661b5b",
+  "sourceUrl": "https://sourcify.dev/server/v2/contract/4663/0xccc88a9d1b4ed6b0eaba998850414b24f1c315be"
+}
