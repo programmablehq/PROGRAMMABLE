@@ -20,6 +20,14 @@ In the review console, a passed fork check means the saved buy, sell and platfor
 
 New approval requires passing buy and sell checks proving that the pool collects the platform’s 0.3%. The checks must match the exact submitted contracts; a website-only surcharge does not satisfy this requirement. See [Fees and liquidity](custom-launch.md#fees-funding-and-liquidity) for the current fee requirements.
 
+## Artwork and public links
+
+Provide the coin's real image and public project links in the launch package. For Robinhood, use `publication.name`, `publication.symbol`, `publication.imageUrl` and at least one URL in `publication.links`. For Ethereum, `projectMetadata.presentation` requires an image, a website and an X profile. Keep these values in the same packed request you submit for review.
+
+Use a stable image URL that serves PNG, JPEG, WebP or GIF bytes with the matching image content type. A page returning HTTP 200 with HTML is not a valid logo. Check the live capabilities' `publicationPolicy` and run preflight before submitting. A permanent image error needs a corrected URL and newly packed bytes; a temporary image-host outage can retry the same request.
+
+The approved artwork and links are kept with the exact chain and launch identity and used by Explore and the coin page once the launch is indexed. Market data from an external provider is separate. Existing signed requests and transactions are not rewritten to change their display data.
+
 ## One link from review to launch
 
 Ethereum and Robinhood launch pages show **Review → Launch → Complete**. Use **Copy launch link** to return to the same request. Contract details, findings and review messages remain under **Details and review**.
