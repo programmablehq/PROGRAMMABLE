@@ -32,8 +32,7 @@ export function launchShareText(value: string | null | undefined, limit: number)
 }
 
 export function launchSharePost(data: LaunchShareData): string {
-  const symbol = launchShareText(data.symbol, 24).replace(/^\$+/, "");
-  return `${launchShareText(data.name, 80)}${symbol ? ` ($${symbol})` : ""} is now live on Programmable.\n\nCA: ${data.address}`;
+  return `${launchShareText(data.name, 80)} is now live on @ProgrammableHQ.\n\n${data.address}`;
 }
 
 export function launchShareIntent(data: LaunchShareData) {
@@ -43,11 +42,11 @@ export function launchShareIntent(data: LaunchShareData) {
   return url.href;
 }
 
-export function launchShareMetadata(identity: LaunchShareIdentity, name: string | null, symbol: string | null) {
-  const title = `${launchShareText(name, 100) || "Programmable coin"}${symbol ? ` ($${launchShareText(symbol, 24).replace(/^\$+/, "")})` : ""}`;
+export function launchShareMetadata(identity: LaunchShareIdentity, name: string | null, _symbol: string | null) {
+  const title = launchShareText(name, 100) || "Programmable coin";
   const url = launchShareCoinHref(identity);
-  const image = `https://programmable.market/api/launch-share/image?address=${identity.address.toLowerCase()}&chain=${identity.chainId}`;
-  const description = `${title} is live on Programmable. CA: ${identity.address.toLowerCase()}`;
+  const image = `https://programmable.market/api/launch-share/image?address=${identity.address.toLowerCase()}&chain=${identity.chainId}&v=2`;
+  const description = `${title} is now live on @ProgrammableHQ. ${identity.address.toLowerCase()}`;
   return { title: `${launchShareText(name, 100) || identity.address} · Programmable`, description,
     alternates: { canonical: `/token/${identity.address}${identity.chainId === 1 ? "?chain=1" : ""}` },
     openGraph: { type: "website" as const, title, description, url,

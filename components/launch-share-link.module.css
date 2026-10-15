@@ -1,3 +1,5 @@
-.link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 22px; color: var(--text); background: var(--panel-fill-control); font-size: 15px; font-weight: 500; text-decoration: none; border-radius: 12px; }
+.link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 22px; color: var(--text); background: var(--panel-fill-control); font-size: 15px; font-weight: 500; text-decoration: none; border-radius: 12px; transition: background-color 160ms var(--webde-ease), transform 160ms var(--webde-ease); }
 .link:hover { color: var(--text); background: var(--panel-fill-hover); }
+.link:active { transform: scale(0.96); }
 .link:focus-visible { outline: 2px solid var(--brand-ivory); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .link { transition: none; } .link:active { transform: none; } }

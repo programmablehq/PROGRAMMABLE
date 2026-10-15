@@ -27,7 +27,8 @@
 .actions .teamTag { font-size: 14px; }
 .actions a:active { transform: scale(0.96); }
 .teamTag img { display: block; flex: none; width: 36px; height: 36px; }
-.share { grid-column: 1 / -1; text-align: center; }
+.share { grid-column: 1 / -1; }
+.share > a { width: 100%; min-height: 54px; font-size: 16px; }
 .actions a:focus-visible { outline: 2px solid var(--brand-ivory); outline-offset: 4px; }
 
 @media (hover: hover) and (pointer: fine) {
