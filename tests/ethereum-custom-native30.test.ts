@@ -79,7 +79,7 @@ describe("exact custom hook fee recognition", () => {
 
   it("binds Clover's recipient, graph deployer and hook-owned vault", () => {
     const f = fixture("clover_native30_v1"), recipe = recipes.clover_native30_v1;
-    const words = fixtureBytes.clover_native30_v1.words;
+    const words = fixtureBytes.clover_native30_v1.words as Record<string, Hex>;
     for (const name of ["PLATFORM_RECIPIENT", "DEPLOYER"]) {
       const changed = materializeEthereumNative30RuntimeWordsV1(recipe.hook, { ...words, [name]: word(owner) });
       expect(proveEthereumNative30RuntimeV1(f.market, { ...f.codes, [f.market.hooks]: changed })).toBeNull();
