@@ -30,6 +30,11 @@ type JsonObject = Record<string, unknown>;
 type Metadata = Pick<RobinhoodCoinPresentation, "imageUrl" | "description" | "links">;
 type MetadataBinding = Readonly<{ launch: JsonObject; metadata: Metadata }>;
 type MarketToken = RobinhoodMarketIdentity;
+const IRL_DISPLAY_IDENTITY = Object.freeze({
+  hook: "0xAb64c6Eb29a6bb8488cb1fcAB1ca11C5e28bC0cc",
+  pool: "0x1848c9b63c7733c421b2db31bcb606ad75d505d281f7377dc170b082dbe989cb",
+  creator: "0xfABeb55321cc90323cC6207902B2a2936B95ed05",
+});
 const object = (value: unknown): value is JsonObject =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const same = (left: unknown, right: unknown) =>
@@ -38,7 +43,23 @@ const count = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
 // Operator-supplied artwork and links apply only to already indexed coin identities.
-function displayOverride(address: string): Pick<Metadata, "imageUrl" | "links"> | null {
+function displayOverride(token: RobinhoodLaunch): Pick<Metadata, "imageUrl" | "links"> | null {
+  const address = token.tokenAddress.toLowerCase();
+  // Owner-provided replacement for the submitted URL, which serves HTML.
+  // Bind display data to the existing finalized launch; never create an identity.
+  if (token.sourceKind === "custom-launch-plan-v1"
+    && address === "0xf7a2f5554c57c216f1831aa5c8ed3c46727efe2b"
+    && token.launchId === "d9c69c22-d242-4e24-97ad-e1d2cdf6c0f9"
+    && same(token.hookAddress, IRL_DISPLAY_IDENTITY.hook)
+    && same(token.poolId, IRL_DISPLAY_IDENTITY.pool)
+    && same(token.creator, IRL_DISPLAY_IDENTITY.creator)) {
+    return { imageUrl: "/token-images/irl.png", links: [
+      { label: "Website", url: "https://irlprotocol.xyz/" },
+      { label: "X", url: "https://x.com/IRL_Protocol" },
+      { label: "Telegram", url: "https://t.me/InternetRobinhoodLottery" },
+      { label: "GitHub", url: "https://github.com/math-crypt/lottery-robinhood" },
+    ] };
+  }
   try {
     const raw = process.env.ROBINHOOD_TOKEN_PRESENTATION_OVERRIDES_JSON;
     if (!raw || Buffer.byteLength(raw) > 65_536) return null;
@@ -260,7 +281,7 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
   const codexMetadata = knownMetadata ?? await readCodexTokenMetadata(ordered.map(token => token.tokenAddress), 4663);
   const custom = ordered.filter(token => {
     const details = codexMetadata.get(token.tokenAddress.toLowerCase());
-    return !isRobinhoodModuleSourceKind(token.sourceKind) && !token.launchProjection && !displayOverride(token.tokenAddress.toLowerCase())
+    return !isRobinhoodModuleSourceKind(token.sourceKind) && !token.launchProjection && !displayOverride(token)
       && !(coinImage(details?.imageUrl) && details?.description && details.links.length);
   });
   const native = ordered.filter(token => isRobinhoodModuleSourceKind(token.sourceKind)
@@ -284,7 +305,7 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
     const presentation = mergeCoinMetadata(mergeCoinMetadata(published ?? { imageUrl: null, description: null, links: [] },
       approved.status === "fulfilled" ? approved.value.get(key) : null), codexMetadata.get(key));
     const main = key === MAIN_TOKEN;
-    const override = displayOverride(key);
+    const override = displayOverride(token);
     const links = [...(override?.links ?? presentation?.links ?? [])];
     if (main) {
       const labels = { website: "Website", x: "X", github: "GitHub", discord: "Discord", gitbook: "GitBook" };
