@@ -48,7 +48,8 @@ export function launchShareMetadata(identity: LaunchShareIdentity, name: string 
   const url = launchShareCoinHref(identity);
   const image = `https://programmable.market/api/launch-share/image?address=${identity.address.toLowerCase()}&chain=${identity.chainId}`;
   const description = `${title} is live on Programmable. CA: ${identity.address.toLowerCase()}`;
-  return { title, description, alternates: { canonical: url },
+  return { title: `${launchShareText(name, 100) || identity.address} · Programmable`, description,
+    alternates: { canonical: `/token/${identity.address}${identity.chainId === 1 ? "?chain=1" : ""}` },
     openGraph: { type: "website" as const, title, description, url,
       images: [{ url: image, width: 1200, height: 630, type: "image/png", alt: `${title} · ${identity.address}` }] },
     twitter: { card: "summary_large_image" as const, title, description, images: [image] } };
