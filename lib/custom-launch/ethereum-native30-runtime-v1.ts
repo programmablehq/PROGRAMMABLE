@@ -193,15 +193,20 @@ function customCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
     const recipe = customRecipes[recipeId];
     if ((BigInt(key.hooks) & 0x3fffn) !== BigInt(recipe.hookFlags)) continue;
     const words = readEthereumNative30RuntimeWordsV1(recipe.hook, runtime);
-    if (!words || !eq(addressWord(words, "poolManager"), key.poolManager)
-      || !eq(addressWord(words, "TOKEN"), key.currency1)) continue;
+    if (!words || !eq(addressWord(words, "poolManager"), key.poolManager)) continue;
+    if (recipeId === "clover_native30_v1") {
+      // Every registered pool pays the fixed rate. The successful callback and
+      // exact vault accrual still have to be proved for this precise pool key.
+      if (key.fee !== 0 || !eq(addressWord(words, "PLATFORM_RECIPIENT"), recipe.recipient)
+        || !eq(addressWord(words, "DEPLOYER"), "0xB012e4A8F2c5FC4E8E4faCA9D5Ad6FfF13FBA887")) continue;
+    } else if (!eq(addressWord(words, "TOKEN"), key.currency1)) continue;
     if (recipeId === "qubit_native30_v1") {
       if (key.fee !== 10000 || key.tickSpacing !== 60) continue;
-    } else if (!isBrownieNative30RecipeV1(recipeId)) {
+    } else if (recipeId !== "clover_native30_v1" && !isBrownieNative30RecipeV1(recipeId)) {
       if (numberWord(words, "LP_FEE") !== BigInt(key.fee) || numberWord(words, "SPACING") !== BigInt(key.tickSpacing)) continue;
-    } else if (!eq(addressWord(words, "QUOTE"), ZERO) || numberWord(words, "QUOTE_ID") !== 0n
+    } else if (isBrownieNative30RecipeV1(recipeId) && (!eq(addressWord(words, "QUOTE"), ZERO) || numberWord(words, "QUOTE_ID") !== 0n
       || numberWord(words, "QUOTE_IS_0") !== 1n || numberWord(words, "PLATFORM_BPS") !== 30n
-      || !eq(addressWord(words, "PLATFORM_RECIPIENT"), recipe.recipient)) continue;
+      || !eq(addressWord(words, "PLATFORM_RECIPIENT"), recipe.recipient))) continue;
     return { key, words, recipe, recipeId, vault: !isBrownieNative30RecipeV1(recipeId)
       ? getContractAddress({ from: key.hooks, nonce: 1n }) : key.hooks };
   }
@@ -228,7 +233,8 @@ function buildCustomProof(market: EthereumNative30MarketV1, codes: Readonly<Reco
     const vaultWords = readEthereumNative30RuntimeWordsV1(customRecipes[recipeId].vault, vaultCode);
     if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
       || !eq(addressWord(vaultWords, "kernel"), key.hooks)
-      || !eq(addressWord(vaultWords, "creatorRecipient"), addressWord(words, "OWNER"))) return null;
+      || !eq(addressWord(vaultWords, "creatorRecipient"), recipeId === "clover_native30_v1"
+        ? key.hooks : addressWord(words, "OWNER"))) return null;
     bindings.push({ role: "vault", address: vault, runtimeCodeHash: keccak256(vaultCode), immutableWords: vaultWords });
   }
   const body = { schemaVersion: ETHEREUM_NATIVE30_PROOF_SCHEMA_V1, recipeId, sourceArtifactHash: recipe.sourceArtifactHash,
