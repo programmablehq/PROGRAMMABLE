@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LaunchShareLink } from "./launch-share-link";
 import { FomoTeamTagButton } from "./fomo-team-tag";
 import { ProfileLaunchRewards } from "./profile-launch-rewards";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
@@ -469,6 +470,8 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
                     sendWallet={profile.sendWallet} onEthereumClaim={profile.onEthereumClaim} /></div>
                   <FomoTeamTagButton name={launch.name?.trim() || "your coin"} />
                 </div> : null}
+                {hasAsset && profile?.enableClaims && profile.account.toLowerCase() === launch.creator.toLowerCase()
+                  ? <LaunchShareLink href={`/token/${launch.tokenAddress}?chain=${launchChainId}`} /> : null}
                 </article>
               </li>
             );})}

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { LaunchShareLink } from "./launch-share-link";
 import styles from "./custom-launch-success-actions.module.css";
 
 export function CustomLaunchSuccessActions({ href }: { href: string }) {
@@ -15,6 +16,7 @@ export function CustomLaunchSuccessActions({ href }: { href: string }) {
         <span>Setup Team Tag</span>
         <Image src="/brand/fomo-logo-black.svg" width={36} height={36} alt="fomo" unoptimized />
       </a>
+      <div className={styles.share}><LaunchShareLink href={href} /></div>
     </div>
   );
 }

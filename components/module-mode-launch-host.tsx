@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LaunchShareLink } from "./launch-share-link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, Copy, LoaderCircle, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
@@ -316,6 +317,7 @@ export function ModuleModeLaunchResult({ phase, token, symbol, transactionHash, 
     {launched && token ? <>
       <div className={styles.contractAddress}><label htmlFor="module-launched-address">Contract address</label><input ref={addressInput} id="module-launched-address" value={token} readOnly spellCheck={false} onFocus={(event) => event.currentTarget.select()} /></div>
       <div className={styles.resultLinks}><Link className={styles.primaryButton} href={`/token/${token}?chain=4663`}>View token <ArrowUpRight size={16} aria-hidden="true" /></Link><button className={styles.secondaryButton} type="button" onClick={() => void copyAddress()}><Copy size={16} aria-hidden="true" />{copyStatus === "Address copied" ? "Copied" : "Copy address"}</button></div>
+      <LaunchShareLink href={`/token/${token}?chain=4663`} />
       <p className={copyStatus === "Select and copy the address below." ? styles.help : styles.liveRegion} role="status">{copyStatus}</p>
     </> : null}
     {transactionHash ? <a className={styles.transactionLink} href={`${ROBINHOOD_BLOCK_EXPLORER_URL}/tx/${transactionHash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} aria-hidden="true" /><span className={styles.liveRegion}> (opens in a new tab)</span></a> : null}
