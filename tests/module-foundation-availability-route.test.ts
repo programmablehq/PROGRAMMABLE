@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getAddress } from "viem";
 import { GET, maxDuration } from "@/app/api/module-foundation/route";
-import { FOUNDATION_AVAILABILITY_SCHEMA, unavailableFoundation } from "@/lib/module-foundation/availability";
+import { FOUNDATION_AVAILABILITY_SCHEMA, parseFoundationAvailability, unavailableFoundation } from "@/lib/module-foundation/availability";
 import { readFoundationAvailabilityResponse } from "@/lib/server/module-foundation/availability";
 
 vi.mock("server-only", () => ({}));
@@ -30,6 +30,18 @@ beforeEach(() => {
   });
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it.each([4663, 1])("reports the launch-protection pause before preparing a new Module Mode launch on chain %s", async chainId => {
+  vi.stubEnv("PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE", "required");
+  const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+  const response = await GET(new Request(`https://programmable.example/api/module-foundation?chainId=${chainId}`));
+  const body = await response.json();
+  expect(response.status).toBe(200);
+  expect(body).toMatchObject({ available: false, binding: null, code: "LAUNCH_PROTECTION_REQUIRED" });
+  expect(body.reason).toContain("Module Mode");
+  expect(parseFoundationAvailability(body).reason).toBe(body.reason);
+  expect(fetcher).not.toHaveBeenCalled();
+});
 
 it("returns a current verified response after the old deadline and closes a stalled availability read before the route expires", async () => {
   vi.stubGlobal("fetch", vi.fn((_url: URL, init: RequestInit) => new Promise<Response>((resolve, reject) => {
@@ -82,6 +94,7 @@ it("shares overlapping authority checks but performs a fresh check after they se
 });
 
 it("resolves an existing coin through its retained release rather than the active launch default", async () => {
+  vi.stubEnv("PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE", "required");
   const token = getAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
   const existing = { ...availableFixture(), token: token.toLowerCase() };
   const fetcher = vi.fn(async (url: URL) => Response.json(url.pathname.endsWith(`/token/${token}`) ? existing : unavailableFoundation()));

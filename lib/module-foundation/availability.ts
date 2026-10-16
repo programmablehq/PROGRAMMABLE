@@ -11,6 +11,7 @@ export const FOUNDATION_AVAILABILITY_SCHEMA_V2 = "programmable.module-foundation
 export const FOUNDATION_AVAILABILITY_SCHEMA_V3 = "programmable.module-foundation.availability.v3";
 export const FOUNDATION_AVAILABILITY_SCHEMA_V4 = "programmable.module-foundation.availability.v4";
 export const FOUNDATION_AVAILABILITY_SCHEMA_V5 = "programmable.module-foundation.availability.v5";
+export const FOUNDATION_LAUNCH_PROTECTION_PAUSE = "New Module Mode launches are paused while the required launch protection is added. Your coin details stay saved.";
 export interface FoundationAvailabilityEnvelope {
   chainId?: FoundationChainId;
   schemaVersion: typeof FOUNDATION_AVAILABILITY_SCHEMA | typeof FOUNDATION_AVAILABILITY_SCHEMA_V2 | typeof FOUNDATION_AVAILABILITY_SCHEMA_V3 | typeof FOUNDATION_AVAILABILITY_SCHEMA_V4 | typeof FOUNDATION_AVAILABILITY_SCHEMA_V5;
@@ -62,6 +63,7 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
     if (r.chainId !== 1) throw new Error("This graph release belongs only to Ethereum.");
     const token = r.token === undefined ? undefined : tokenAddress(r.token).toLowerCase() as Address;
     if (r.available !== true) return { ...unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1), ...(token ? { token } : {}),
+      ...(!token && r.code === "LAUNCH_PROTECTION_REQUIRED" ? { reason: FOUNDATION_LAUNCH_PROTECTION_PAUSE } : {}),
       ...(r.reason === "MODULE_INDEX_PROVIDER_DISAGREEMENT" ? { providerDisagreement: true } : {}),
       ...(token && r.reason === "MODULE_INDEX_PENDING" ? { indexPending: true, reason: "Waiting for this launch to appear in the index." } : {}),
       ...(token && r.reason === "MODULE_STAMP_MISSING" ? { stampMissing: true,
@@ -94,6 +96,7 @@ export function parseFoundationAvailability(value: unknown, now = Date.now()): F
   const token = r.token === undefined ? undefined : tokenAddress(r.token).toLowerCase() as Address;
   if (r.token !== undefined && r.token !== token) throw new Error("The token authority response is not canonical.");
   if (r.available !== true) return { ...unavailableFoundation(r.schemaVersion, chainId), ...(token ? { token } : {}),
+    ...(!token && r.code === "LAUNCH_PROTECTION_REQUIRED" ? { reason: FOUNDATION_LAUNCH_PROTECTION_PAUSE } : {}),
     ...(r.reason === "MODULE_INDEX_PROVIDER_DISAGREEMENT" ? { providerDisagreement: true } : {}) };
   const b = record(r.binding), evidence = record(r.evidence);
   if (typeof b.sourceCommit !== "string" || !/^[a-f0-9]{40}$/.test(b.sourceCommit)
