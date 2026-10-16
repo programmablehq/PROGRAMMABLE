@@ -17,17 +17,24 @@ describe("legacy launch protection gate", () => {
     }
   });
 
-  it.each([
-    () => import("@/app/api/module-foundation/compose/route"),
-    () => import("@/app/api/module-foundation/authorize/route"),
-    () => import("@/app/api/module-mode/any-quote/launch-preview/route"),
-    () => import("@/app/api/launch/preflight/route"),
-  ])("rejects legacy creation before body parsing, simulation or signing", async load => {
+  it("rejects legacy Custom creation before body parsing, simulation or signing", async () => {
     vi.stubEnv("PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE", "required");
-    const { POST } = await load();
+    const { POST } = await import("@/app/api/launch/preflight/route");
     // An unreadable request is sufficient: the policy must run before request parsing.
     const response = await POST(undefined as never);
     expect(response.status).toBe(503);
     expect((await response.json()).code).toBe("LAUNCH_PROTECTION_REQUIRED");
+  });
+  it.each([
+    () => import("@/app/api/module-foundation/compose/route"),
+    () => import("@/app/api/module-foundation/authorize/route"),
+    () => import("@/app/api/module-mode/any-quote/launch-preview/route"),
+  ])("lets Module Mode reach its own validation while Custom Launch protection is required", async load => {
+    vi.stubEnv("PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE", "required");
+    const { POST } = await load();
+    const response = await POST(new Request("https://programmable.example/api/module", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    }));
+    expect((await response.json()).code).not.toBe("LAUNCH_PROTECTION_REQUIRED");
   });
 });
