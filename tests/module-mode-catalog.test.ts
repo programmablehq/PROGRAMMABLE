@@ -1,3 +1,4 @@
+vi.mock("server-only", () => ({}));
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";

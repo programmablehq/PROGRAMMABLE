@@ -168,7 +168,7 @@ export function protectedVerificationBundleV1(prepared) {
 /** Robinhood's current plan transport supports exact generic source, including constructor-created children. */
 export function protectedRobinhoodPlanV1(prepared, { manifestDigest, controller, validAfter, deadline, publication, maxTotalGas = '16000000' }) {
   if (prepared.chainId !== '4663' || getAddress(controller.address) !== prepared.developer || !/^sha256:[0-9a-f]{64}$/.test(manifestDigest)) throw new TypeError('Plan authority does not match protected launch');
-  if (!/^[0-9]+$/.test(validAfter) || !/^[0-9]+$/.test(deadline) || BigInt(deadline) <= BigInt(validAfter) || BigInt(deadline) - BigInt(validAfter) > 86400n) throw new TypeError('Atomic validity must be positive and at most 24 hours');
+  if (!/^[0-9]+$/.test(validAfter) || !/^[0-9]+$/.test(deadline) || BigInt(deadline) <= BigInt(validAfter)) throw new TypeError('The plan validity window must be positive');
   const names = ['initializer', 'token', 'hook'];
   const effects = Object.entries(prepared.contracts).map(([role, c]) => ({ effectId: role + '-runtime', kind: 'runtime', criticality: 'critical', target: { componentId: role }, runtimeCodeHash: c.runtimeCodeHash }));
   const actions = names.map((role, i) => ({ actionId: 'deploy-' + role, kind: 'deployCreate2', componentId: role,
