@@ -1,6 +1,6 @@
 {
   "name": "@programmable/launch",
-  "version": "4.1.6",
+  "version": "4.1.7",
   "packageManager": "npm@11.16.0",
   "description": "Deterministic pack, validation, submission, and status tooling for the Programmable Custom Launch API",
   "type": "module",
@@ -8,7 +8,8 @@
     "programmable-launch": "bin/programmable-launch.mjs"
   },
   "exports": {
-    ".": "./src/index.mjs"
+    ".": "./src/index.mjs",
+    "./launch-protection": "./src/launch-protection.mjs"
   },
   "files": [
     "bin",

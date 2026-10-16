@@ -121,3 +121,15 @@ int_types = "long"
 quote_style = "double"
 number_underscore = "thousands"
 wrap_comments = true
+
+# Isolated mandatory launch-protection candidate. Existing runtimes are unchanged.
+[profile.launch-protection]
+skip = []
+src = "src/launch-protection"
+test = "test/launch-protection"
+script = "script/launch-protection"
+out = "out/launch-protection"
+cache_path = "cache/launch-protection"
+via_ir = true
+optimizer_runs = 200
+auto_detect_remappings = false

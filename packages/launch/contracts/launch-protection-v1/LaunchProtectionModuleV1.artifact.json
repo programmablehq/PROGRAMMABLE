@@ -1,0 +1,690 @@
+{
+  "contractName": "LaunchProtectionModuleV1",
+  "compiler": "0.8.26+commit.8a97fa7a",
+  "sourcePath": "src/launch-protection/LaunchProtectionModuleV1.sol",
+  "sourceArtifactHash": "sha256:189748a681176c9fd0f21f1c492dc351a9a35aaf971046913a9b754bcb249605",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "kernel_",
+          "type": "address"
+        },
+        {
+          "internalType": "contract ProtectedLaunchTokenV1",
+          "name": "token_",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "developer_",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "router_",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "routerCodeHash_",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint16",
+          "name": "creatorBuyFeeBps_",
+          "type": "uint16"
+        },
+        {
+          "internalType": "address[3]",
+          "name": "exemptWallets_",
+          "type": "address[3]"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidBuyer",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidConfiguration",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidPool",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyKernel",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UnsupportedRouter",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "DECAY_SECONDS",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "OPENING_TOTAL_PPM",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "buyer",
+          "type": "address"
+        }
+      ],
+      "name": "additionalTaxPpmForBuyer",
+      "outputs": [
+        {
+          "internalType": "uint24",
+          "name": "",
+          "type": "uint24"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "components": [
+            {
+              "internalType": "Currency",
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "internalType": "Currency",
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "internalType": "uint24",
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "internalType": "contract IHooks",
+              "name": "hooks",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct PoolKey",
+          "name": "",
+          "type": "tuple"
+        },
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "internalType": "int256",
+              "name": "amountSpecified",
+              "type": "int256"
+            },
+            {
+              "internalType": "uint160",
+              "name": "sqrtPriceLimitX96",
+              "type": "uint160"
+            }
+          ],
+          "internalType": "struct SwapParams",
+          "name": "",
+          "type": "tuple"
+        },
+        {
+          "internalType": "BalanceDelta",
+          "name": "",
+          "type": "int256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "name": "afterSwap",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        },
+        {
+          "internalType": "int128",
+          "name": "",
+          "type": "int128"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "components": [
+            {
+              "internalType": "Currency",
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "internalType": "Currency",
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "internalType": "uint24",
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "internalType": "int24",
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "internalType": "contract IHooks",
+              "name": "hooks",
+              "type": "address"
+            }
+          ],
+          "internalType": "struct PoolKey",
+          "name": "key",
+          "type": "tuple"
+        },
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "internalType": "int256",
+              "name": "amountSpecified",
+              "type": "int256"
+            },
+            {
+              "internalType": "uint160",
+              "name": "sqrtPriceLimitX96",
+              "type": "uint160"
+            }
+          ],
+          "internalType": "struct SwapParams",
+          "name": "",
+          "type": "tuple"
+        },
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "name": "beforeSwap",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        },
+        {
+          "internalType": "BeforeSwapDelta",
+          "name": "",
+          "type": "int256"
+        },
+        {
+          "internalType": "uint24",
+          "name": "",
+          "type": "uint24"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "developer",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "exemptWallets",
+      "outputs": [
+        {
+          "internalType": "address[3]",
+          "name": "",
+          "type": "address[3]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        }
+      ],
+      "name": "isTaxExempt",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "kernel",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "normalBuyFeePpm",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "openingTaxPpmForSender",
+      "outputs": [
+        {
+          "internalType": "uint24",
+          "name": "",
+          "type": "uint24"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "protectedBuyer",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "router",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "routerCodeHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "token",
+      "outputs": [
+        {
+          "internalType": "contract ProtectedLaunchTokenV1",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "metadata": "{\"compiler\":{\"version\":\"0.8.26+commit.8a97fa7a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"kernel_\",\"type\":\"address\"},{\"internalType\":\"contract ProtectedLaunchTokenV1\",\"name\":\"token_\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"developer_\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"router_\",\"type\":\"address\"},{\"internalType\":\"bytes32\",\"name\":\"routerCodeHash_\",\"type\":\"bytes32\"},{\"internalType\":\"uint16\",\"name\":\"creatorBuyFeeBps_\",\"type\":\"uint16\"},{\"internalType\":\"address[3]\",\"name\":\"exemptWallets_\",\"type\":\"address[3]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"InvalidBuyer\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidConfiguration\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidPool\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"OnlyKernel\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnsupportedRouter\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"DECAY_SECONDS\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"OPENING_TOTAL_PPM\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"buyer\",\"type\":\"address\"}],\"name\":\"additionalTaxPpmForBuyer\",\"outputs\":[{\"internalType\":\"uint24\",\"name\":\"\",\"type\":\"uint24\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"Currency\",\"name\":\"currency0\",\"type\":\"address\"},{\"internalType\":\"Currency\",\"name\":\"currency1\",\"type\":\"address\"},{\"internalType\":\"uint24\",\"name\":\"fee\",\"type\":\"uint24\"},{\"internalType\":\"int24\",\"name\":\"tickSpacing\",\"type\":\"int24\"},{\"internalType\":\"contract IHooks\",\"name\":\"hooks\",\"type\":\"address\"}],\"internalType\":\"struct PoolKey\",\"name\":\"\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bool\",\"name\":\"zeroForOne\",\"type\":\"bool\"},{\"internalType\":\"int256\",\"name\":\"amountSpecified\",\"type\":\"int256\"},{\"internalType\":\"uint160\",\"name\":\"sqrtPriceLimitX96\",\"type\":\"uint160\"}],\"internalType\":\"struct SwapParams\",\"name\":\"\",\"type\":\"tuple\"},{\"internalType\":\"BalanceDelta\",\"name\":\"\",\"type\":\"int256\"},{\"internalType\":\"bytes\",\"name\":\"\",\"type\":\"bytes\"}],\"name\":\"afterSwap\",\"outputs\":[{\"internalType\":\"bytes4\",\"name\":\"\",\"type\":\"bytes4\"},{\"internalType\":\"int128\",\"name\":\"\",\"type\":\"int128\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"Currency\",\"name\":\"currency0\",\"type\":\"address\"},{\"internalType\":\"Currency\",\"name\":\"currency1\",\"type\":\"address\"},{\"internalType\":\"uint24\",\"name\":\"fee\",\"type\":\"uint24\"},{\"internalType\":\"int24\",\"name\":\"tickSpacing\",\"type\":\"int24\"},{\"internalType\":\"contract IHooks\",\"name\":\"hooks\",\"type\":\"address\"}],\"internalType\":\"struct PoolKey\",\"name\":\"key\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bool\",\"name\":\"zeroForOne\",\"type\":\"bool\"},{\"internalType\":\"int256\",\"name\":\"amountSpecified\",\"type\":\"int256\"},{\"internalType\":\"uint160\",\"name\":\"sqrtPriceLimitX96\",\"type\":\"uint160\"}],\"internalType\":\"struct SwapParams\",\"name\":\"\",\"type\":\"tuple\"},{\"internalType\":\"bytes\",\"name\":\"\",\"type\":\"bytes\"}],\"name\":\"beforeSwap\",\"outputs\":[{\"internalType\":\"bytes4\",\"name\":\"\",\"type\":\"bytes4\"},{\"internalType\":\"BeforeSwapDelta\",\"name\":\"\",\"type\":\"int256\"},{\"internalType\":\"uint24\",\"name\":\"\",\"type\":\"uint24\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"developer\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"exemptWallets\",\"outputs\":[{\"internalType\":\"address[3]\",\"name\":\"\",\"type\":\"address[3]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"wallet\",\"type\":\"address\"}],\"name\":\"isTaxExempt\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"kernel\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"normalBuyFeePpm\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"}],\"name\":\"openingTaxPpmForSender\",\"outputs\":[{\"internalType\":\"uint24\",\"name\":\"\",\"type\":\"uint24\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"}],\"name\":\"protectedBuyer\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"router\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"routerCodeHash\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"token\",\"outputs\":[{\"internalType\":\"contract ProtectedLaunchTokenV1\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"details\":\"Total buy fee starts at 99% and falls linearly to normal fees over thirty seconds. The kernel separately accounts for opening taxes payable only to the fixed platform treasury.\",\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"notice\":\"Immutable opening-tax policy for the sealed launch kernel.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/launch-protection/LaunchProtectionModuleV1.sol\":\"LaunchProtectionModuleV1\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"appendCBOR\":false,\"bytecodeHash\":\"none\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":@openzeppelin/uniswap-hooks/=lib/openzeppelin-uniswap-hooks/\",\":@solady/=lib/solady/\",\":@uniswap/blocknumberish/=lib/blocknumberish/\",\":@uniswap/liquidity-launcher/=lib/liquidity-launcher/\",\":@uniswap/uerc20-factory/=lib/uerc20-factory/\",\":@uniswap/universal-router/=lib/universal-router/\",\":@uniswap/v4-core/=lib/v4-core/\",\":@uniswap/v4-periphery-v211/=lib/v4-periphery-v211/\",\":@uniswap/v4-periphery/=lib/v4-periphery/\",\":blocknumberish/=lib/blocknumberish/\",\":continuous-clearing-auction/=lib/continuous-clearing-auction/src/\",\":forge-std/=lib/forge-std/src/\",\":liquidity-launcher/=lib/liquidity-launcher/\",\":permit2/=lib/permit2/\",\":solady/=lib/solady/src/\",\":solmate/=lib/solmate/\",\":test/module-mode/=test/module-mode/\",\":v4-periphery/=lib/v4-periphery/\"],\"viaIR\":true},\"sources\":{\"lib/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol\":{\"keccak256\":\"0x880da465c203cec76b10d72dbd87c80f387df4102274f23eea1f9c9b0918792b\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://399594cd8bb0143bc9e55e0f1d071d0d8c850a394fb7a319d50edd55d9ed822b\",\"dweb:/ipfs/QmbPZzgtT6LEm9CMqWfagQFwETbV1ztpECBB1DtQHrKiRz\"]},\"lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol\":{\"keccak256\":\"0x41f6b3b9e030561e7896dbef372b499cc8d418a80c3884a4d65a68f2fdc7493a\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://80b0992a11b2fd1f75ced2971696d07bbd1d19ce6761dd50d8b6d48aa435f42a\",\"dweb:/ipfs/QmZDe5xd2gXHjVEjv9t8C1KQ68K5T8qFwdinwQgmP3rF3x\"]},\"lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol\":{\"keccak256\":\"0xe06a3f08a987af6ad2e1c1e774405d4fe08f1694b67517438b467cecf0da0ef7\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://df6f0c459663c9858b6cba2cda1d14a7d05a985bed6d2de72bd8e78c25ee79db\",\"dweb:/ipfs/QmeTTxZ7qVk9rjEv2R4CpCwdf8UMCcRqDNMvzNxHc3Fnn9\"]},\"lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol\":{\"keccak256\":\"0x70f2f713b13b7ce4610bcd0ac9fec0f3cc43693b043abcb8dc40a42a726eb330\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://c13d13304ac79a83ab1c30168967d19e2203342ebbd6a9bbce4db7550522dcbf\",\"dweb:/ipfs/QmeN5jKMN2vw5bhacr6tkg78afbTTZUeaacNHqjWt4Ew1r\"]},\"lib/openzeppelin-contracts/contracts/utils/Context.sol\":{\"keccak256\":\"0x493033a8d1b176a037b2cc6a04dad01a5c157722049bbecf632ca876224dd4b2\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://6a708e8a5bdb1011c2c381c9a5cfd8a9a956d7d0a9dc1bd8bcdaf52f76ef2f12\",\"dweb:/ipfs/Qmax9WHBnVsZP46ZxEMNRQpLQnrdE4dK8LehML1Py8FowF\"]},\"lib/openzeppelin-contracts/contracts/utils/Panic.sol\":{\"keccak256\":\"0xf7fe324703a64fc51702311dc51562d5cb1497734f074e4f483bfb6717572d7a\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://c6a5ff4f9fd8649b7ee20800b7fa387d3465bd77cf20c2d1068cd5c98e1ed57a\",\"dweb:/ipfs/QmVSaVJf9FXFhdYEYeCEfjMVHrxDh5qL4CGkxdMWpQCrqG\"]},\"lib/openzeppelin-contracts/contracts/utils/math/Math.sol\":{\"keccak256\":\"0x1225214420c83ebcca88f2ae2b50f053aaa7df7bd684c3e878d334627f2edfc6\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://6c5fab4970634f9ab9a620983dc1c8a30153981a0b1a521666e269d0a11399d3\",\"dweb:/ipfs/QmVRnBC575MESGkEHndjujtR7qub2FzU9RWy9eKLp4hPZB\"]},\"lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol\":{\"keccak256\":\"0x195533c86d0ef72bcc06456a4f66a9b941f38eb403739b00f21fd7c1abd1ae54\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://b1d578337048cad08c1c03041cca5978eff5428aa130c781b271ad9e5566e1f8\",\"dweb:/ipfs/QmPFKL2r9CBsMwmUqqdcFPfHZB2qcs9g1HDrPxzWSxomvy\"]},\"lib/v4-core/src/interfaces/IHooks.sol\":{\"keccak256\":\"0xc131ffa2d04c10a012fe715fe2c115811526b7ea34285cf0a04ce7ce8320da8d\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://3b212358897db5d99c21244d88f97b2e788527552cb430629b472a8cc6289aec\",\"dweb:/ipfs/QmQtwV4dDe2RYk2ErLpaAX7U82jWh1L6Lw2HRuKDvBi84G\"]},\"lib/v4-core/src/interfaces/external/IERC20Minimal.sol\":{\"keccak256\":\"0xeccadf1bf69ba2eb51f2fe4fa511bc7bb05bbd6b9f9a3cb8e5d83d9582613e0f\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://118757369892687b99ef46ce28d6861f62c098285bd7687a4f17f7e44e5f81de\",\"dweb:/ipfs/QmUxqbYqQtcEwwFbb9e6BBMePEaSgN8C45v6RKubD4ib8d\"]},\"lib/v4-core/src/libraries/CustomRevert.sol\":{\"keccak256\":\"0x111ed3031b6990c80a93ae35dde6b6ac0b7e6af471388fdd7461e91edda9b7de\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://c9ea883c98d6ae1829160d0977bb5195761cfd5bc81692d0a941f45717f594cd\",\"dweb:/ipfs/QmZPwxzaeMNv536wzrAMrMswu7vMHuqPVpjcqL3YvCMoxt\"]},\"lib/v4-core/src/libraries/SafeCast.sol\":{\"keccak256\":\"0x42c4a24f996a14d358be397b71f7ec9d7daf666aaec78002c63315a6ee67aa86\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://c3db86e2ba3679105fc32edec656c70282e1fede6cab11217702443f6c26fa59\",\"dweb:/ipfs/QmX4yaaSPdKQzYNRsezjTvZKsubzS8JRTEGFD3fPpTTCcj\"]},\"lib/v4-core/src/types/BalanceDelta.sol\":{\"keccak256\":\"0xa719c8fe51e0a9524280178f19f6851bcc3b3b60e73618f3d60905d35ae5569f\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://7436928dc9de35c6c7c5c636cb51adaf295cfd590da83b19a004ae33cbec9ef9\",\"dweb:/ipfs/QmRJ9yZkUpzk4433GX3LgVVL8jwpbSYSUwXcucKisf3v4H\"]},\"lib/v4-core/src/types/BeforeSwapDelta.sol\":{\"keccak256\":\"0x2a774312d91285313d569da1a718c909655da5432310417692097a1d4dc83a78\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://a2c7a0379955cff9c17ab9e61f95e42909aa5947c22740f86ce940d09856f782\",\"dweb:/ipfs/QmaAuo8UBYXsGrVuKh8iRoAAdqwtg1jDq515cW1ZRP5m9K\"]},\"lib/v4-core/src/types/Currency.sol\":{\"keccak256\":\"0x4a0b84b282577ff6f8acf13ec9f4d32dbb9348748b49611d00e68bee96609c93\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://45f9d62ab3d51b52957279e353853ba1547c3182c9a1e3d1846ada4a90263b01\",\"dweb:/ipfs/QmS8NG84ccQS1yXVD8cv3eKX7J1UKxuJhbUfHTQR2opKF5\"]},\"lib/v4-core/src/types/PoolId.sol\":{\"keccak256\":\"0x308311916ea0f5c2fd878b6a2751eb223d170a69e33f601fae56dfe3c5d392af\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://669c2cd7ac17690b5d8831e0bda72822376c3a04b36afed6d31df4d75fe60918\",\"dweb:/ipfs/QmT6EpkxqU8VF3WsgrZ66F3s1cCQRffR95z1HDYZz7ph6y\"]},\"lib/v4-core/src/types/PoolKey.sol\":{\"keccak256\":\"0xf89856e0580d7a4856d3187a76858377ccee9d59702d230c338d84388221b786\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://6f3118fa189025695c37fdf0bdd1190f085ad097484d3c88cf4c56d1db65f639\",\"dweb:/ipfs/QmamXpgtB8GV1CaFLvqefPWSoikLDhMk1yU4heBnVzU8gi\"]},\"lib/v4-core/src/types/PoolOperation.sol\":{\"keccak256\":\"0x7a1a107fc1f2208abb2c9364c8c54e56e98dca27673e9441bed2b949b6382162\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://4ad2470383bc5595d5af17840c64971f457adac68895a4db41ba5c71a4478e07\",\"dweb:/ipfs/QmdwKhBHDZFuqXrR2BfDBD9r7rB2ULGQBznsajRTkTmL4c\"]},\"src/launch-protection/LaunchProtectionModuleV1.sol\":{\"keccak256\":\"0x3a62219d93fb42c2762626af185e2756462e06f866146ca90d92a444b433c9ea\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://42fbccca3413cdc6948551ef315d4d4e7df469d15d45ab0bcf66c1264aa4cdfa\",\"dweb:/ipfs/QmdvdbV5JAsoQz8WsJt47RTbxmp2woqtBMoYCLLhvEofW5\"]},\"src/launch-protection/ProtectedLaunchTokenV1.sol\":{\"keccak256\":\"0x6c66dec40dc924c9d6b232b9b5aa85861f20a5752bd42ae3fc62060b54924d5e\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://cb26e26d65f6ced9c183025901e9cf0bf54b21eb670b144ef5436c65ef2fa831\",\"dweb:/ipfs/QmfJdQMWro8nrmqYrAPvBx9L8mUmFF5RcEHk398gkzhyMb\"]}},\"version\":1}",
+  "bytecode": {
+    "functionDebugData": {
+      "abi_decode_address_fromMemory": {
+        "entryPoint": 1390,
+        "id": null,
+        "parameterSlots": 1,
+        "returnSlots": 1
+      },
+      "finalize_allocation": {
+        "entryPoint": 1355,
+        "id": null,
+        "parameterSlots": 2,
+        "returnSlots": 0
+      },
+      "memory_array_index_access_address": {
+        "entryPoint": 1410,
+        "id": null,
+        "parameterSlots": 2,
+        "returnSlots": 1
+      }
+    },
+    "generatedSources": [],
+    "linkReferences": {},
+    "object": "6101408060405234610358576111c8803803809161001d828561054b565b8339810161012082820312610358576100358261056e565b60208301516001600160a01b0381169190828103610358576100596040860161056e565b906100666060870161056e565b9260808701519460a08801519661ffff8816809803610358578060df8a011215610358576040519860608a016001600160401b0381118b82101761053757604052899061012081019283116103585760c001905b82821061051f575050506001461490815f146105045773d92a36b0000531ef3063ded4de20a0783308446c915b6001600160a01b0384169283159182156104fa575b82156104e8575b82156104d5575b821561045f575b8215610455575b8215610438575b508115610421575b508015610416575b801561040b575b6102e257906001600160a01b038516905f5b60038110610267575050505060805260a05260c05260e05261010052601e0180601e116102535760648102908082046064149015171561025357610120525f5b6003811061023857604051610c2090816105a88239608051818181610165015281816101d4015281816102ba015281816103fa0152818161084e0152610b68015260a05181818160d3015281816104b6015281816107240152818161089101526109e1015260c051818181610218015281816106490152610a37015260e05181818161011b0152610a5d0152610100518181816103450152610bd801526101205181818161037f01526107750152f35b81516001600160a01b03168155602090910190600101610188565b634e487b7160e01b5f52601160045260245ffd5b6001600160a01b03610279828d610582565b511680156104025783811480156103f9575b80156103f0575b8015610381575b801561036f575b80156102f1575b6102e2575f5b8281106102c05750506001905b01610148565b6001600160a01b036102d2828f610582565b511682146102e2576001016102ad565b63c52a9bd360e01b5f5260045ffd5b50604051639ce110d760e01b8152602081600481895afa908115610364575f91610327575b506001600160a01b031681146102a7565b90506020813d821161035c575b816103416020938361054b565b81010312610358576103529061056e565b5f610316565b5f80fd5b3d9150610334565b6040513d5f823e3d90fd5b506001600160a01b03891681146102a0565b5060405163dc4c90d360e01b8152602081600481895afa908115610364575f916103b7575b506001600160a01b03168114610299565b90506020813d82116103e8575b816103d16020938361054b565b81010312610358576103e29061056e565b5f6103a6565b3d91506103c4565b50848114610292565b5082811461028b565b506001906102ba565b506103e88811610136565b5086863f141561012f565b6001600160a01b038881169116141590505f610127565b9091501580610449575b905f61011f565b50611237461415610442565b883b159250610118565b60405163dc4c90d360e01b8152909250602081600481875afa908115610364575f9161049b575b506001600160a01b0388811691161491610111565b90506020813d6020116104cd575b816104b66020938361054b565b81010312610358576104c79061056e565b5f610486565b3d91506104a9565b6001600160a01b0388168414925061010a565b6001600160a01b038816159250610103565b833b1592506100fc565b7306afba43fd06227fa663b0daecf536f6eaa6bf99916100e7565b6020809161052c8461056e565b8152019101906100ba565b634e487b7160e01b5f52604160045260245ffd5b601f909101601f19168101906001600160401b0382119082101761053757604052565b51906001600160a01b038216820361035857565b9060038110156105935760051b0190565b634e487b7160e01b5f52603260045260245ffdfe60806040526004361015610011575f80fd5b5f3560e01c806316c2be6b146105d6578063314052da146105b95780634b4737e2146105965780634fb32ab614610503578063575e24b4146103a25780636942027414610368578063a032b9c51461032e578063a7968055146102fe578063b47b2fb114610262578063bac403cc14610247578063ca4b208b14610203578063d4aae0c4146101bf578063f013b1ac1461014a578063f887ea40146101065763fc0c546a146100be575f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b3461010257602036600319011261010257610163610603565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05761019e6020916109d0565b6040516001600160a01b039091168152f35b63087e122d60e21b5f5260045ffd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576020604051601e8152f35b34610102576101603660031901126101025761027c610603565b5060a03660231901126101025760603660c3190112610102576101443567ffffffffffffffff8111610102576102b6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b0576040805163b47b2fb160e01b81525f6020820152f35b3461010257602036600319011261010257602061032161031c610603565b61084c565b62ffffff60405191168152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b3461010257610140366003190112610102576103bc610603565b5060a03660231901126101025760603660c3190112610102576101243567ffffffffffffffff8111610102576103f6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316338190036101b05760a4356001600160a01b0381169081900361010257148015906104e5575b801561049d575b8015610485575b6104775760606040516315d7892d60e21b81525f60208201525f6040820152f35b62820f3560e61b5f5260045ffd5b5060643562ffffff8116809103610102571515610456565b506044356001600160a01b0381169081810361010257507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316141561044f565b506024356001600160a01b0381169081810361010257501515610448565b34610102575f3660031901126101025760608060405161052382826106d8565b3690376040515f80825b600382106105765750505061054282826106d8565b604051905f825b6003821061055657505050f35b82516001600160a01b031681526020928301926001929092019101610549565b82546001600160a01b03168152600192830192919091019060200161052d565b346101025760203660031901126101025760206103216105b4610603565b61070e565b34610102575f366003190112610102576020604051620f1b308152f35b346101025760203660031901126101025760206105f96105f4610603565b610647565b6040519015158152f35b600435906001600160a01b038216820361010257565b9181601f840112156101025782359167ffffffffffffffff8311610102576020838186019501011161010257565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b039081169116908114908115610683575090565b801515915081610691575090565b5f546001600160a01b03168114915081156106c3575b81156106b1575090565b6002546001600160a01b031614905090565b6001546001600160a01b0316811491506106a7565b90601f8019910116810190811067ffffffffffffffff8211176106fa57604052565b634e487b7160e01b5f52604160045260245ffd5b60405163f21f537d60e01b8152906020826004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa918215610841575f9261080d575b5081159081156107f7575b81156107e7575b506107e2577f0000000000000000000000000000000000000000000000000000000000000000620f1b3003620f1b3081116107ce57601e8201918281116107ce57429003601e019182116107ce5762ffffff916107ca91610930565b1690565b634e487b7160e01b5f52601160045260245ffd5b505f90565b6107f19150610647565b5f61076e565b9050601e82018083116107ce5742101590610767565b9091506020813d602011610839575b81610829602093836106d8565b810103126101025751905f61075c565b3d915061081c565b6040513d5f823e3d90fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05760405163f21f537d60e01b81526020816004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa908115610841575f916108fe575b5080159081156108e8575b506107e2576105b46108e5916109d0565b90565b9050601e81018091116107ce574210155f6108d4565b90506020813d602011610928575b81610919602093836106d8565b8101031261010257515f6108c9565b3d915061090c565b9091905f905f1984820990848102928380841093039280840393146109a55782601e111561099357507feeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef9394601e910990828211900360ff1b910360011c170290565b634e487b71905260116020526024601cfd5b505050601e9192500490565b9081602091031261010257516001600160a01b03811681036101025790565b604051639ce110d760e01b815291907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316602084600481845afa938415610841575f94610bff575b506001600160a01b0382811694168403610a5b57507f0000000000000000000000000000000000000000000000000000000000000000925050565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03169184831480159190610bd3575b50610bc45760206004946040519586809263d737d0c760e01b82525afa938415610841575f94610ba3575b506001600160a01b0384168015929091908315610b99575b508215610b66575b8215610afb575b5050610aec57565b6358ef870360e11b5f5260045ffd5b60405163dc4c90d360e01b8152919250602090829060049082905afa908115610841575f91610b37575b506001600160a01b0316145f80610ae4565b610b59915060203d602011610b5f575b610b5181836106d8565b8101906109b1565b5f610b25565b503d610b47565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031682149250610add565b821492505f610ad5565b610bbd91945060203d602011610b5f57610b5181836106d8565b925f610abd565b63ac566cef60e01b5f5260045ffd5b90503f7f000000000000000000000000000000000000000000000000000000000000000014155f610a92565b610c1991945060203d602011610b5f57610b5181836106d8565b925f610a2056",
+    "opcodes": "PUSH2 0x140 DUP1 PUSH1 0x40 MSTORE CALLVALUE PUSH2 0x358 JUMPI PUSH2 0x11C8 DUP1 CODESIZE SUB DUP1 SWAP2 PUSH2 0x1D DUP3 DUP6 PUSH2 0x54B JUMP JUMPDEST DUP4 CODECOPY DUP2 ADD PUSH2 0x120 DUP3 DUP3 SUB SLT PUSH2 0x358 JUMPI PUSH2 0x35 DUP3 PUSH2 0x56E JUMP JUMPDEST PUSH1 0x20 DUP4 ADD MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP2 SWAP1 DUP3 DUP2 SUB PUSH2 0x358 JUMPI PUSH2 0x59 PUSH1 0x40 DUP7 ADD PUSH2 0x56E JUMP JUMPDEST SWAP1 PUSH2 0x66 PUSH1 0x60 DUP8 ADD PUSH2 0x56E JUMP JUMPDEST SWAP3 PUSH1 0x80 DUP8 ADD MLOAD SWAP5 PUSH1 0xA0 DUP9 ADD MLOAD SWAP7 PUSH2 0xFFFF DUP9 AND DUP1 SWAP9 SUB PUSH2 0x358 JUMPI DUP1 PUSH1 0xDF DUP11 ADD SLT ISZERO PUSH2 0x358 JUMPI PUSH1 0x40 MLOAD SWAP9 PUSH1 0x60 DUP11 ADD PUSH1 0x1 PUSH1 0x1 PUSH1 0x40 SHL SUB DUP2 GT DUP12 DUP3 LT OR PUSH2 0x537 JUMPI PUSH1 0x40 MSTORE DUP10 SWAP1 PUSH2 0x120 DUP2 ADD SWAP3 DUP4 GT PUSH2 0x358 JUMPI PUSH1 0xC0 ADD SWAP1 JUMPDEST DUP3 DUP3 LT PUSH2 0x51F JUMPI POP POP POP PUSH1 0x1 CHAINID EQ SWAP1 DUP2 PUSH0 EQ PUSH2 0x504 JUMPI PUSH20 0xD92A36B0000531EF3063DED4DE20A0783308446C SWAP2 JUMPDEST PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP5 AND SWAP3 DUP4 ISZERO SWAP2 DUP3 ISZERO PUSH2 0x4FA JUMPI JUMPDEST DUP3 ISZERO PUSH2 0x4E8 JUMPI JUMPDEST DUP3 ISZERO PUSH2 0x4D5 JUMPI JUMPDEST DUP3 ISZERO PUSH2 0x45F JUMPI JUMPDEST DUP3 ISZERO PUSH2 0x455 JUMPI JUMPDEST DUP3 ISZERO PUSH2 0x438 JUMPI JUMPDEST POP DUP2 ISZERO PUSH2 0x421 JUMPI JUMPDEST POP DUP1 ISZERO PUSH2 0x416 JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x40B JUMPI JUMPDEST PUSH2 0x2E2 JUMPI SWAP1 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP6 AND SWAP1 PUSH0 JUMPDEST PUSH1 0x3 DUP2 LT PUSH2 0x267 JUMPI POP POP POP POP PUSH1 0x80 MSTORE PUSH1 0xA0 MSTORE PUSH1 0xC0 MSTORE PUSH1 0xE0 MSTORE PUSH2 0x100 MSTORE PUSH1 0x1E ADD DUP1 PUSH1 0x1E GT PUSH2 0x253 JUMPI PUSH1 0x64 DUP2 MUL SWAP1 DUP1 DUP3 DIV PUSH1 0x64 EQ SWAP1 ISZERO OR ISZERO PUSH2 0x253 JUMPI PUSH2 0x120 MSTORE PUSH0 JUMPDEST PUSH1 0x3 DUP2 LT PUSH2 0x238 JUMPI PUSH1 0x40 MLOAD PUSH2 0xC20 SWAP1 DUP2 PUSH2 0x5A8 DUP3 CODECOPY PUSH1 0x80 MLOAD DUP2 DUP2 DUP2 PUSH2 0x165 ADD MSTORE DUP2 DUP2 PUSH2 0x1D4 ADD MSTORE DUP2 DUP2 PUSH2 0x2BA ADD MSTORE DUP2 DUP2 PUSH2 0x3FA ADD MSTORE DUP2 DUP2 PUSH2 0x84E ADD MSTORE PUSH2 0xB68 ADD MSTORE PUSH1 0xA0 MLOAD DUP2 DUP2 DUP2 PUSH1 0xD3 ADD MSTORE DUP2 DUP2 PUSH2 0x4B6 ADD MSTORE DUP2 DUP2 PUSH2 0x724 ADD MSTORE DUP2 DUP2 PUSH2 0x891 ADD MSTORE PUSH2 0x9E1 ADD MSTORE PUSH1 0xC0 MLOAD DUP2 DUP2 DUP2 PUSH2 0x218 ADD MSTORE DUP2 DUP2 PUSH2 0x649 ADD MSTORE PUSH2 0xA37 ADD MSTORE PUSH1 0xE0 MLOAD DUP2 DUP2 DUP2 PUSH2 0x11B ADD MSTORE PUSH2 0xA5D ADD MSTORE PUSH2 0x100 MLOAD DUP2 DUP2 DUP2 PUSH2 0x345 ADD MSTORE PUSH2 0xBD8 ADD MSTORE PUSH2 0x120 MLOAD DUP2 DUP2 DUP2 PUSH2 0x37F ADD MSTORE PUSH2 0x775 ADD MSTORE RETURN JUMPDEST DUP2 MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 SSTORE PUSH1 0x20 SWAP1 SWAP2 ADD SWAP1 PUSH1 0x1 ADD PUSH2 0x188 JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x11 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB PUSH2 0x279 DUP3 DUP14 PUSH2 0x582 JUMP JUMPDEST MLOAD AND DUP1 ISZERO PUSH2 0x402 JUMPI DUP4 DUP2 EQ DUP1 ISZERO PUSH2 0x3F9 JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x3F0 JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x381 JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x36F JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x2F1 JUMPI JUMPDEST PUSH2 0x2E2 JUMPI PUSH0 JUMPDEST DUP3 DUP2 LT PUSH2 0x2C0 JUMPI POP POP PUSH1 0x1 SWAP1 JUMPDEST ADD PUSH2 0x148 JUMP JUMPDEST PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB PUSH2 0x2D2 DUP3 DUP16 PUSH2 0x582 JUMP JUMPDEST MLOAD AND DUP3 EQ PUSH2 0x2E2 JUMPI PUSH1 0x1 ADD PUSH2 0x2AD JUMP JUMPDEST PUSH4 0xC52A9BD3 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST POP PUSH1 0x40 MLOAD PUSH4 0x9CE110D7 PUSH1 0xE0 SHL DUP2 MSTORE PUSH1 0x20 DUP2 PUSH1 0x4 DUP2 DUP10 GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x364 JUMPI PUSH0 SWAP2 PUSH2 0x327 JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 EQ PUSH2 0x2A7 JUMP JUMPDEST SWAP1 POP PUSH1 0x20 DUP2 RETURNDATASIZE DUP3 GT PUSH2 0x35C JUMPI JUMPDEST DUP2 PUSH2 0x341 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x54B JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x358 JUMPI PUSH2 0x352 SWAP1 PUSH2 0x56E JUMP JUMPDEST PUSH0 PUSH2 0x316 JUMP JUMPDEST PUSH0 DUP1 REVERT JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x334 JUMP JUMPDEST PUSH1 0x40 MLOAD RETURNDATASIZE PUSH0 DUP3 RETURNDATACOPY RETURNDATASIZE SWAP1 REVERT JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP10 AND DUP2 EQ PUSH2 0x2A0 JUMP JUMPDEST POP PUSH1 0x40 MLOAD PUSH4 0xDC4C90D3 PUSH1 0xE0 SHL DUP2 MSTORE PUSH1 0x20 DUP2 PUSH1 0x4 DUP2 DUP10 GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x364 JUMPI PUSH0 SWAP2 PUSH2 0x3B7 JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 EQ PUSH2 0x299 JUMP JUMPDEST SWAP1 POP PUSH1 0x20 DUP2 RETURNDATASIZE DUP3 GT PUSH2 0x3E8 JUMPI JUMPDEST DUP2 PUSH2 0x3D1 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x54B JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x358 JUMPI PUSH2 0x3E2 SWAP1 PUSH2 0x56E JUMP JUMPDEST PUSH0 PUSH2 0x3A6 JUMP JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x3C4 JUMP JUMPDEST POP DUP5 DUP2 EQ PUSH2 0x292 JUMP JUMPDEST POP DUP3 DUP2 EQ PUSH2 0x28B JUMP JUMPDEST POP PUSH1 0x1 SWAP1 PUSH2 0x2BA JUMP JUMPDEST POP PUSH2 0x3E8 DUP9 GT PUSH2 0x136 JUMP JUMPDEST POP DUP7 DUP7 EXTCODEHASH EQ ISZERO PUSH2 0x12F JUMP JUMPDEST PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP9 DUP2 AND SWAP2 AND EQ ISZERO SWAP1 POP PUSH0 PUSH2 0x127 JUMP JUMPDEST SWAP1 SWAP2 POP ISZERO DUP1 PUSH2 0x449 JUMPI JUMPDEST SWAP1 PUSH0 PUSH2 0x11F JUMP JUMPDEST POP PUSH2 0x1237 CHAINID EQ ISZERO PUSH2 0x442 JUMP JUMPDEST DUP9 EXTCODESIZE ISZERO SWAP3 POP PUSH2 0x118 JUMP JUMPDEST PUSH1 0x40 MLOAD PUSH4 0xDC4C90D3 PUSH1 0xE0 SHL DUP2 MSTORE SWAP1 SWAP3 POP PUSH1 0x20 DUP2 PUSH1 0x4 DUP2 DUP8 GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x364 JUMPI PUSH0 SWAP2 PUSH2 0x49B JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP9 DUP2 AND SWAP2 AND EQ SWAP2 PUSH2 0x111 JUMP JUMPDEST SWAP1 POP PUSH1 0x20 DUP2 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0x4CD JUMPI JUMPDEST DUP2 PUSH2 0x4B6 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x54B JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x358 JUMPI PUSH2 0x4C7 SWAP1 PUSH2 0x56E JUMP JUMPDEST PUSH0 PUSH2 0x486 JUMP JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x4A9 JUMP JUMPDEST PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP9 AND DUP5 EQ SWAP3 POP PUSH2 0x10A JUMP JUMPDEST PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP9 AND ISZERO SWAP3 POP PUSH2 0x103 JUMP JUMPDEST DUP4 EXTCODESIZE ISZERO SWAP3 POP PUSH2 0xFC JUMP JUMPDEST PUSH20 0x6AFBA43FD06227FA663B0DAECF536F6EAA6BF99 SWAP2 PUSH2 0xE7 JUMP JUMPDEST PUSH1 0x20 DUP1 SWAP2 PUSH2 0x52C DUP5 PUSH2 0x56E JUMP JUMPDEST DUP2 MSTORE ADD SWAP2 ADD SWAP1 PUSH2 0xBA JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x41 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST PUSH1 0x1F SWAP1 SWAP2 ADD PUSH1 0x1F NOT AND DUP2 ADD SWAP1 PUSH1 0x1 PUSH1 0x1 PUSH1 0x40 SHL SUB DUP3 GT SWAP1 DUP3 LT OR PUSH2 0x537 JUMPI PUSH1 0x40 MSTORE JUMP JUMPDEST MLOAD SWAP1 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP3 AND DUP3 SUB PUSH2 0x358 JUMPI JUMP JUMPDEST SWAP1 PUSH1 0x3 DUP2 LT ISZERO PUSH2 0x593 JUMPI PUSH1 0x5 SHL ADD SWAP1 JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x32 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT INVALID PUSH1 0x80 PUSH1 0x40 MSTORE PUSH1 0x4 CALLDATASIZE LT ISZERO PUSH2 0x11 JUMPI PUSH0 DUP1 REVERT JUMPDEST PUSH0 CALLDATALOAD PUSH1 0xE0 SHR DUP1 PUSH4 0x16C2BE6B EQ PUSH2 0x5D6 JUMPI DUP1 PUSH4 0x314052DA EQ PUSH2 0x5B9 JUMPI DUP1 PUSH4 0x4B4737E2 EQ PUSH2 0x596 JUMPI DUP1 PUSH4 0x4FB32AB6 EQ PUSH2 0x503 JUMPI DUP1 PUSH4 0x575E24B4 EQ PUSH2 0x3A2 JUMPI DUP1 PUSH4 0x69420274 EQ PUSH2 0x368 JUMPI DUP1 PUSH4 0xA032B9C5 EQ PUSH2 0x32E JUMPI DUP1 PUSH4 0xA7968055 EQ PUSH2 0x2FE JUMPI DUP1 PUSH4 0xB47B2FB1 EQ PUSH2 0x262 JUMPI DUP1 PUSH4 0xBAC403CC EQ PUSH2 0x247 JUMPI DUP1 PUSH4 0xCA4B208B EQ PUSH2 0x203 JUMPI DUP1 PUSH4 0xD4AAE0C4 EQ PUSH2 0x1BF JUMPI DUP1 PUSH4 0xF013B1AC EQ PUSH2 0x14A JUMPI DUP1 PUSH4 0xF887EA40 EQ PUSH2 0x106 JUMPI PUSH4 0xFC0C546A EQ PUSH2 0xBE JUMPI PUSH0 DUP1 REVERT JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST PUSH0 DUP1 REVERT JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x163 PUSH2 0x603 JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER SUB PUSH2 0x1B0 JUMPI PUSH2 0x19E PUSH1 0x20 SWAP2 PUSH2 0x9D0 JUMP JUMPDEST PUSH1 0x40 MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB SWAP1 SWAP2 AND DUP2 MSTORE RETURN JUMPDEST PUSH4 0x87E122D PUSH1 0xE2 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH1 0x1E DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH2 0x160 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x27C PUSH2 0x603 JUMP JUMPDEST POP PUSH1 0xA0 CALLDATASIZE PUSH1 0x23 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x60 CALLDATASIZE PUSH1 0xC3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x144 CALLDATALOAD PUSH8 0xFFFFFFFFFFFFFFFF DUP2 GT PUSH2 0x102 JUMPI PUSH2 0x2B6 SWAP1 CALLDATASIZE SWAP1 PUSH1 0x4 ADD PUSH2 0x619 JUMP JUMPDEST POP POP PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER SUB PUSH2 0x1B0 JUMPI PUSH1 0x40 DUP1 MLOAD PUSH4 0xB47B2FB1 PUSH1 0xE0 SHL DUP2 MSTORE PUSH0 PUSH1 0x20 DUP3 ADD MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH2 0x321 PUSH2 0x31C PUSH2 0x603 JUMP JUMPDEST PUSH2 0x84C JUMP JUMPDEST PUSH3 0xFFFFFF PUSH1 0x40 MLOAD SWAP2 AND DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH32 0x0 DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH32 0x0 DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH2 0x140 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x3BC PUSH2 0x603 JUMP JUMPDEST POP PUSH1 0xA0 CALLDATASIZE PUSH1 0x23 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x60 CALLDATASIZE PUSH1 0xC3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x124 CALLDATALOAD PUSH8 0xFFFFFFFFFFFFFFFF DUP2 GT PUSH2 0x102 JUMPI PUSH2 0x3F6 SWAP1 CALLDATASIZE SWAP1 PUSH1 0x4 ADD PUSH2 0x619 JUMP JUMPDEST POP POP PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER DUP2 SWAP1 SUB PUSH2 0x1B0 JUMPI PUSH1 0xA4 CALLDATALOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP1 DUP2 SWAP1 SUB PUSH2 0x102 JUMPI EQ DUP1 ISZERO SWAP1 PUSH2 0x4E5 JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x49D JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x485 JUMPI JUMPDEST PUSH2 0x477 JUMPI PUSH1 0x60 PUSH1 0x40 MLOAD PUSH4 0x15D7892D PUSH1 0xE2 SHL DUP2 MSTORE PUSH0 PUSH1 0x20 DUP3 ADD MSTORE PUSH0 PUSH1 0x40 DUP3 ADD MSTORE RETURN JUMPDEST PUSH3 0x820F35 PUSH1 0xE6 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST POP PUSH1 0x64 CALLDATALOAD PUSH3 0xFFFFFF DUP2 AND DUP1 SWAP2 SUB PUSH2 0x102 JUMPI ISZERO ISZERO PUSH2 0x456 JUMP JUMPDEST POP PUSH1 0x44 CALLDATALOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP1 DUP2 DUP2 SUB PUSH2 0x102 JUMPI POP PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND EQ ISZERO PUSH2 0x44F JUMP JUMPDEST POP PUSH1 0x24 CALLDATALOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP1 DUP2 DUP2 SUB PUSH2 0x102 JUMPI POP ISZERO ISZERO PUSH2 0x448 JUMP JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x60 DUP1 PUSH1 0x40 MLOAD PUSH2 0x523 DUP3 DUP3 PUSH2 0x6D8 JUMP JUMPDEST CALLDATASIZE SWAP1 CALLDATACOPY PUSH1 0x40 MLOAD PUSH0 DUP1 DUP3 JUMPDEST PUSH1 0x3 DUP3 LT PUSH2 0x576 JUMPI POP POP POP PUSH2 0x542 DUP3 DUP3 PUSH2 0x6D8 JUMP JUMPDEST PUSH1 0x40 MLOAD SWAP1 PUSH0 DUP3 JUMPDEST PUSH1 0x3 DUP3 LT PUSH2 0x556 JUMPI POP POP POP RETURN JUMPDEST DUP3 MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP3 DUP4 ADD SWAP3 PUSH1 0x1 SWAP3 SWAP1 SWAP3 ADD SWAP2 ADD PUSH2 0x549 JUMP JUMPDEST DUP3 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x1 SWAP3 DUP4 ADD SWAP3 SWAP2 SWAP1 SWAP2 ADD SWAP1 PUSH1 0x20 ADD PUSH2 0x52D JUMP JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH2 0x321 PUSH2 0x5B4 PUSH2 0x603 JUMP JUMPDEST PUSH2 0x70E JUMP JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH3 0xF1B30 DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH2 0x5F9 PUSH2 0x5F4 PUSH2 0x603 JUMP JUMPDEST PUSH2 0x647 JUMP JUMPDEST PUSH1 0x40 MLOAD SWAP1 ISZERO ISZERO DUP2 MSTORE RETURN JUMPDEST PUSH1 0x4 CALLDATALOAD SWAP1 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP3 AND DUP3 SUB PUSH2 0x102 JUMPI JUMP JUMPDEST SWAP2 DUP2 PUSH1 0x1F DUP5 ADD SLT ISZERO PUSH2 0x102 JUMPI DUP3 CALLDATALOAD SWAP2 PUSH8 0xFFFFFFFFFFFFFFFF DUP4 GT PUSH2 0x102 JUMPI PUSH1 0x20 DUP4 DUP2 DUP7 ADD SWAP6 ADD ADD GT PUSH2 0x102 JUMPI JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB SWAP1 DUP2 AND SWAP2 AND SWAP1 DUP2 EQ SWAP1 DUP2 ISZERO PUSH2 0x683 JUMPI POP SWAP1 JUMP JUMPDEST DUP1 ISZERO ISZERO SWAP2 POP DUP2 PUSH2 0x691 JUMPI POP SWAP1 JUMP JUMPDEST PUSH0 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 EQ SWAP2 POP DUP2 ISZERO PUSH2 0x6C3 JUMPI JUMPDEST DUP2 ISZERO PUSH2 0x6B1 JUMPI POP SWAP1 JUMP JUMPDEST PUSH1 0x2 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND EQ SWAP1 POP SWAP1 JUMP JUMPDEST PUSH1 0x1 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 EQ SWAP2 POP PUSH2 0x6A7 JUMP JUMPDEST SWAP1 PUSH1 0x1F DUP1 NOT SWAP2 ADD AND DUP2 ADD SWAP1 DUP2 LT PUSH8 0xFFFFFFFFFFFFFFFF DUP3 GT OR PUSH2 0x6FA JUMPI PUSH1 0x40 MSTORE JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x41 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST PUSH1 0x40 MLOAD PUSH4 0xF21F537D PUSH1 0xE0 SHL DUP2 MSTORE SWAP1 PUSH1 0x20 DUP3 PUSH1 0x4 DUP2 PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND GAS STATICCALL SWAP2 DUP3 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP3 PUSH2 0x80D JUMPI JUMPDEST POP DUP2 ISZERO SWAP1 DUP2 ISZERO PUSH2 0x7F7 JUMPI JUMPDEST DUP2 ISZERO PUSH2 0x7E7 JUMPI JUMPDEST POP PUSH2 0x7E2 JUMPI PUSH32 0x0 PUSH3 0xF1B30 SUB PUSH3 0xF1B30 DUP2 GT PUSH2 0x7CE JUMPI PUSH1 0x1E DUP3 ADD SWAP2 DUP3 DUP2 GT PUSH2 0x7CE JUMPI TIMESTAMP SWAP1 SUB PUSH1 0x1E ADD SWAP2 DUP3 GT PUSH2 0x7CE JUMPI PUSH3 0xFFFFFF SWAP2 PUSH2 0x7CA SWAP2 PUSH2 0x930 JUMP JUMPDEST AND SWAP1 JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x11 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST POP PUSH0 SWAP1 JUMP JUMPDEST PUSH2 0x7F1 SWAP2 POP PUSH2 0x647 JUMP JUMPDEST PUSH0 PUSH2 0x76E JUMP JUMPDEST SWAP1 POP PUSH1 0x1E DUP3 ADD DUP1 DUP4 GT PUSH2 0x7CE JUMPI TIMESTAMP LT ISZERO SWAP1 PUSH2 0x767 JUMP JUMPDEST SWAP1 SWAP2 POP PUSH1 0x20 DUP2 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0x839 JUMPI JUMPDEST DUP2 PUSH2 0x829 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x6D8 JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x102 JUMPI MLOAD SWAP1 PUSH0 PUSH2 0x75C JUMP JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x81C JUMP JUMPDEST PUSH1 0x40 MLOAD RETURNDATASIZE PUSH0 DUP3 RETURNDATACOPY RETURNDATASIZE SWAP1 REVERT JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER SUB PUSH2 0x1B0 JUMPI PUSH1 0x40 MLOAD PUSH4 0xF21F537D PUSH1 0xE0 SHL DUP2 MSTORE PUSH1 0x20 DUP2 PUSH1 0x4 DUP2 PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP2 PUSH2 0x8FE JUMPI JUMPDEST POP DUP1 ISZERO SWAP1 DUP2 ISZERO PUSH2 0x8E8 JUMPI JUMPDEST POP PUSH2 0x7E2 JUMPI PUSH2 0x5B4 PUSH2 0x8E5 SWAP2 PUSH2 0x9D0 JUMP JUMPDEST SWAP1 JUMP JUMPDEST SWAP1 POP PUSH1 0x1E DUP2 ADD DUP1 SWAP2 GT PUSH2 0x7CE JUMPI TIMESTAMP LT ISZERO PUSH0 PUSH2 0x8D4 JUMP JUMPDEST SWAP1 POP PUSH1 0x20 DUP2 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0x928 JUMPI JUMPDEST DUP2 PUSH2 0x919 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x6D8 JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x102 JUMPI MLOAD PUSH0 PUSH2 0x8C9 JUMP JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x90C JUMP JUMPDEST SWAP1 SWAP2 SWAP1 PUSH0 SWAP1 PUSH0 NOT DUP5 DUP3 MULMOD SWAP1 DUP5 DUP2 MUL SWAP3 DUP4 DUP1 DUP5 LT SWAP4 SUB SWAP3 DUP1 DUP5 SUB SWAP4 EQ PUSH2 0x9A5 JUMPI DUP3 PUSH1 0x1E GT ISZERO PUSH2 0x993 JUMPI POP PUSH32 0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEF SWAP4 SWAP5 PUSH1 0x1E SWAP2 MULMOD SWAP1 DUP3 DUP3 GT SWAP1 SUB PUSH1 0xFF SHL SWAP2 SUB PUSH1 0x1 SHR OR MUL SWAP1 JUMP JUMPDEST PUSH4 0x4E487B71 SWAP1 MSTORE PUSH1 0x11 PUSH1 0x20 MSTORE PUSH1 0x24 PUSH1 0x1C REVERT JUMPDEST POP POP POP PUSH1 0x1E SWAP2 SWAP3 POP DIV SWAP1 JUMP JUMPDEST SWAP1 DUP2 PUSH1 0x20 SWAP2 SUB SLT PUSH2 0x102 JUMPI MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND DUP2 SUB PUSH2 0x102 JUMPI SWAP1 JUMP JUMPDEST PUSH1 0x40 MLOAD PUSH4 0x9CE110D7 PUSH1 0xE0 SHL DUP2 MSTORE SWAP2 SWAP1 PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND PUSH1 0x20 DUP5 PUSH1 0x4 DUP2 DUP5 GAS STATICCALL SWAP4 DUP5 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP5 PUSH2 0xBFF JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP3 DUP2 AND SWAP5 AND DUP5 SUB PUSH2 0xA5B JUMPI POP PUSH32 0x0 SWAP3 POP POP JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND SWAP2 DUP5 DUP4 EQ DUP1 ISZERO SWAP2 SWAP1 PUSH2 0xBD3 JUMPI JUMPDEST POP PUSH2 0xBC4 JUMPI PUSH1 0x20 PUSH1 0x4 SWAP5 PUSH1 0x40 MLOAD SWAP6 DUP7 DUP1 SWAP3 PUSH4 0xD737D0C7 PUSH1 0xE0 SHL DUP3 MSTORE GAS STATICCALL SWAP4 DUP5 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP5 PUSH2 0xBA3 JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP5 AND DUP1 ISZERO SWAP3 SWAP1 SWAP2 SWAP1 DUP4 ISZERO PUSH2 0xB99 JUMPI JUMPDEST POP DUP3 ISZERO PUSH2 0xB66 JUMPI JUMPDEST DUP3 ISZERO PUSH2 0xAFB JUMPI JUMPDEST POP POP PUSH2 0xAEC JUMPI JUMP JUMPDEST PUSH4 0x58EF8703 PUSH1 0xE1 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST PUSH1 0x40 MLOAD PUSH4 0xDC4C90D3 PUSH1 0xE0 SHL DUP2 MSTORE SWAP2 SWAP3 POP PUSH1 0x20 SWAP1 DUP3 SWAP1 PUSH1 0x4 SWAP1 DUP3 SWAP1 GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP2 PUSH2 0xB37 JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND EQ PUSH0 DUP1 PUSH2 0xAE4 JUMP JUMPDEST PUSH2 0xB59 SWAP2 POP PUSH1 0x20 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0xB5F JUMPI JUMPDEST PUSH2 0xB51 DUP2 DUP4 PUSH2 0x6D8 JUMP JUMPDEST DUP2 ADD SWAP1 PUSH2 0x9B1 JUMP JUMPDEST PUSH0 PUSH2 0xB25 JUMP JUMPDEST POP RETURNDATASIZE PUSH2 0xB47 JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP3 EQ SWAP3 POP PUSH2 0xADD JUMP JUMPDEST DUP3 EQ SWAP3 POP PUSH0 PUSH2 0xAD5 JUMP JUMPDEST PUSH2 0xBBD SWAP2 SWAP5 POP PUSH1 0x20 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0xB5F JUMPI PUSH2 0xB51 DUP2 DUP4 PUSH2 0x6D8 JUMP JUMPDEST SWAP3 PUSH0 PUSH2 0xABD JUMP JUMPDEST PUSH4 0xAC566CEF PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST SWAP1 POP EXTCODEHASH PUSH32 0x0 EQ ISZERO PUSH0 PUSH2 0xA92 JUMP JUMPDEST PUSH2 0xC19 SWAP2 SWAP5 POP PUSH1 0x20 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0xB5F JUMPI PUSH2 0xB51 DUP2 DUP4 PUSH2 0x6D8 JUMP JUMPDEST SWAP3 PUSH0 PUSH2 0xA20 JUMP ",
+    "sourceMap": "948:4965:37:-:0;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;:::i;:::-;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;;;:::i;:::-;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1811:13;;;948:4965;1811:13;:18;:132;;;;;;1844:42;1811:132;;-1:-1:-1;;;;;948:4965:37;;;1970:21;;;:57;;;;1811:132;1970:85;;;;1811:132;1970:134;;;;1811:132;1970:172;;;;1811:132;1970:200;;;;1811:132;1970:265;;;;1811:132;1970:295;;;;;1811:132;1970:350;;;;;1811:132;1970:378;;;;1811:132;1953:435;;2403:9;-1:-1:-1;;;;;948:4965:37;;;-1:-1:-1;2414:5:37;948:4965;2414:5;;;;2968:16;;;;948:4965;2968:16;948:4965;2994:14;948:4965;3018:22;3050:16;;3076:32;;3137:2;948:4965;;3137:2;948:4965;;;3172:3;948:4965;;;;;;3172:3;948:4965;;;;;;;;3118:57;-1:-1:-1;948:4965:37;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3050:16;948:4965;;;;;;;;;;3076:32;948:4965;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;;;;;-1:-1:-1;948:4965:37;;;;;-1:-1:-1;948:4965:37;2421:3;-1:-1:-1;;;;;2457:17:37;;;;:::i;:::-;948:4965;;2492:20;;2488:34;;2557:20;;;:41;;;;2421:3;2557:70;;;;2421:3;2557:104;;;;2421:3;2557:145;;;;2421:3;2557:179;;;;2421:3;2536:277;;-1:-1:-1;2842:5:37;;;;;;2421:3;;948:4965;2421:3;2403:9;948:4965;2403:9;;2849:3;-1:-1:-1;;;;;2886:17:37;948:4965;;2886:17;:::i;:::-;948:4965;;2876:27;;2872:62;;948:4965;;2831:9;;2872:62;2366:22;;;-1:-1:-1;2912:22:37;;-1:-1:-1;2912:22:37;2557:179;-1:-1:-1;948:4965:37;;-1:-1:-1;;;2716:20:37;;948:4965;;2716:20;948:4965;2716:20;;;;;;;;-1:-1:-1;2716:20:37;;;2557:179;-1:-1:-1;;;;;;948:4965:37;2706:30;;2557:179;;2716:20;;;948:4965;2716:20;;;;;;;;;948:4965;2716:20;;;:::i;:::-;;;948:4965;;;;;;;:::i;:::-;2716:20;;;948:4965;-1:-1:-1;948:4965:37;;2716:20;;;-1:-1:-1;2716:20:37;;;948:4965;;;-1:-1:-1;948:4965:37;;;;;2557:145;-1:-1:-1;;;;;;948:4965:37;;2685:17;;2557:145;;:104;-1:-1:-1;948:4965:37;;-1:-1:-1;;;2641:20:37;;948:4965;;2641:20;948:4965;2641:20;;;;;;;;-1:-1:-1;2641:20:37;;;2557:104;-1:-1:-1;;;;;;948:4965:37;2631:30;;2557:104;;2641:20;;;948:4965;2641:20;;;;;;;;;948:4965;2641:20;;;:::i;:::-;;;948:4965;;;;;;;:::i;:::-;2641:20;;;;;;-1:-1:-1;2641:20:37;;2557:70;2602:25;;;;2557:70;;:41;2581:17;;;;2557:41;;2488:34;2514:8;948:4965;2514:8;;;1970:378;2324:24;2344:4;2324:24;;1970:378;;:350;2285:16;;;;:35;;1970:350;;:295;-1:-1:-1;;;;;948:4965:37;;;;;2239:26;;;-1:-1:-1;1970:295:37;;;:265;2191:18;;;;:43;;;1970:265;;;;;2191:43;1811:13;2230:4;1811:13;2213:21;;2191:43;;1970:200;2146:19;;:24;;-1:-1:-1;1970:200:37;;:172;948:4965;;-1:-1:-1;;;2122:20:37;;948:4965;;-1:-1:-1;948:4965:37;;2122:20;948:4965;2122:20;;;;;;;;-1:-1:-1;2122:20:37;;;1970:172;-1:-1:-1;;;;;;948:4965:37;;;;;2108:34;;1970:172;;2122:20;;;948:4965;2122:20;;948:4965;2122:20;;;;;;948:4965;2122:20;;;:::i;:::-;;;948:4965;;;;;;;:::i;:::-;2122:20;;;;;;-1:-1:-1;2122:20:37;;1970:134;-1:-1:-1;;;;;948:4965:37;;2075:29;;;-1:-1:-1;1970:134:37;;:85;-1:-1:-1;;;;;948:4965:37;;2031:24;;-1:-1:-1;1970:85:37;;:57;1995:27;;:32;;-1:-1:-1;1970:57:37;;1811:132;1901:42;1811:132;;;948:4965;;;;;;;:::i;:::-;;;;;;;;;;;;;-1:-1:-1;948:4965:37;;;;;-1:-1:-1;948:4965:37;;;;;;-1:-1:-1;;948:4965:37;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;:::o;:::-;;;-1:-1:-1;;;;;948:4965:37;;;;;;:::o;:::-;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;"
+  },
+  "deployedBytecode": {
+    "functionDebugData": {
+      "abi_decode_address": {
+        "entryPoint": 1539,
+        "id": null,
+        "parameterSlots": 0,
+        "returnSlots": 1
+      },
+      "abi_decode_address_fromMemory": {
+        "entryPoint": 2481,
+        "id": null,
+        "parameterSlots": 2,
+        "returnSlots": 1
+      },
+      "abi_decode_bytes_calldata": {
+        "entryPoint": 1561,
+        "id": null,
+        "parameterSlots": 2,
+        "returnSlots": 2
+      },
+      "finalize_allocation": {
+        "entryPoint": 1752,
+        "id": null,
+        "parameterSlots": 2,
+        "returnSlots": 0
+      },
+      "fun_additionalTaxPpmForBuyer": {
+        "entryPoint": 1806,
+        "id": 9905,
+        "parameterSlots": 1,
+        "returnSlots": 1
+      },
+      "fun_buyer": {
+        "entryPoint": 2512,
+        "id": 10031,
+        "parameterSlots": 1,
+        "returnSlots": 1
+      },
+      "fun_isTaxExempt": {
+        "entryPoint": 1607,
+        "id": 9857,
+        "parameterSlots": 1,
+        "returnSlots": 1
+      },
+      "fun_mulDiv": {
+        "entryPoint": 2352,
+        "id": 1930,
+        "parameterSlots": 2,
+        "returnSlots": 1
+      },
+      "fun_openingTaxPpmForSender": {
+        "entryPoint": 2124,
+        "id": 9946,
+        "parameterSlots": 1,
+        "returnSlots": 1
+      }
+    },
+    "generatedSources": [],
+    "immutableReferences": {
+      "9567": [
+        {
+          "length": 32,
+          "start": 357
+        },
+        {
+          "length": 32,
+          "start": 468
+        },
+        {
+          "length": 32,
+          "start": 698
+        },
+        {
+          "length": 32,
+          "start": 1018
+        },
+        {
+          "length": 32,
+          "start": 2126
+        },
+        {
+          "length": 32,
+          "start": 2920
+        }
+      ],
+      "9570": [
+        {
+          "length": 32,
+          "start": 211
+        },
+        {
+          "length": 32,
+          "start": 1206
+        },
+        {
+          "length": 32,
+          "start": 1828
+        },
+        {
+          "length": 32,
+          "start": 2193
+        },
+        {
+          "length": 32,
+          "start": 2529
+        }
+      ],
+      "9572": [
+        {
+          "length": 32,
+          "start": 536
+        },
+        {
+          "length": 32,
+          "start": 1609
+        },
+        {
+          "length": 32,
+          "start": 2615
+        }
+      ],
+      "9574": [
+        {
+          "length": 32,
+          "start": 283
+        },
+        {
+          "length": 32,
+          "start": 2653
+        }
+      ],
+      "9576": [
+        {
+          "length": 32,
+          "start": 837
+        },
+        {
+          "length": 32,
+          "start": 3032
+        }
+      ],
+      "9578": [
+        {
+          "length": 32,
+          "start": 895
+        },
+        {
+          "length": 32,
+          "start": 1909
+        }
+      ]
+    },
+    "linkReferences": {},
+    "object": "60806040526004361015610011575f80fd5b5f3560e01c806316c2be6b146105d6578063314052da146105b95780634b4737e2146105965780634fb32ab614610503578063575e24b4146103a25780636942027414610368578063a032b9c51461032e578063a7968055146102fe578063b47b2fb114610262578063bac403cc14610247578063ca4b208b14610203578063d4aae0c4146101bf578063f013b1ac1461014a578063f887ea40146101065763fc0c546a146100be575f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b3461010257602036600319011261010257610163610603565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05761019e6020916109d0565b6040516001600160a01b039091168152f35b63087e122d60e21b5f5260045ffd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576020604051601e8152f35b34610102576101603660031901126101025761027c610603565b5060a03660231901126101025760603660c3190112610102576101443567ffffffffffffffff8111610102576102b6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b0576040805163b47b2fb160e01b81525f6020820152f35b3461010257602036600319011261010257602061032161031c610603565b61084c565b62ffffff60405191168152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b3461010257610140366003190112610102576103bc610603565b5060a03660231901126101025760603660c3190112610102576101243567ffffffffffffffff8111610102576103f6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316338190036101b05760a4356001600160a01b0381169081900361010257148015906104e5575b801561049d575b8015610485575b6104775760606040516315d7892d60e21b81525f60208201525f6040820152f35b62820f3560e61b5f5260045ffd5b5060643562ffffff8116809103610102571515610456565b506044356001600160a01b0381169081810361010257507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316141561044f565b506024356001600160a01b0381169081810361010257501515610448565b34610102575f3660031901126101025760608060405161052382826106d8565b3690376040515f80825b600382106105765750505061054282826106d8565b604051905f825b6003821061055657505050f35b82516001600160a01b031681526020928301926001929092019101610549565b82546001600160a01b03168152600192830192919091019060200161052d565b346101025760203660031901126101025760206103216105b4610603565b61070e565b34610102575f366003190112610102576020604051620f1b308152f35b346101025760203660031901126101025760206105f96105f4610603565b610647565b6040519015158152f35b600435906001600160a01b038216820361010257565b9181601f840112156101025782359167ffffffffffffffff8311610102576020838186019501011161010257565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b039081169116908114908115610683575090565b801515915081610691575090565b5f546001600160a01b03168114915081156106c3575b81156106b1575090565b6002546001600160a01b031614905090565b6001546001600160a01b0316811491506106a7565b90601f8019910116810190811067ffffffffffffffff8211176106fa57604052565b634e487b7160e01b5f52604160045260245ffd5b60405163f21f537d60e01b8152906020826004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa918215610841575f9261080d575b5081159081156107f7575b81156107e7575b506107e2577f0000000000000000000000000000000000000000000000000000000000000000620f1b3003620f1b3081116107ce57601e8201918281116107ce57429003601e019182116107ce5762ffffff916107ca91610930565b1690565b634e487b7160e01b5f52601160045260245ffd5b505f90565b6107f19150610647565b5f61076e565b9050601e82018083116107ce5742101590610767565b9091506020813d602011610839575b81610829602093836106d8565b810103126101025751905f61075c565b3d915061081c565b6040513d5f823e3d90fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05760405163f21f537d60e01b81526020816004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa908115610841575f916108fe575b5080159081156108e8575b506107e2576105b46108e5916109d0565b90565b9050601e81018091116107ce574210155f6108d4565b90506020813d602011610928575b81610919602093836106d8565b8101031261010257515f6108c9565b3d915061090c565b9091905f905f1984820990848102928380841093039280840393146109a55782601e111561099357507feeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef9394601e910990828211900360ff1b910360011c170290565b634e487b71905260116020526024601cfd5b505050601e9192500490565b9081602091031261010257516001600160a01b03811681036101025790565b604051639ce110d760e01b815291907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316602084600481845afa938415610841575f94610bff575b506001600160a01b0382811694168403610a5b57507f0000000000000000000000000000000000000000000000000000000000000000925050565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03169184831480159190610bd3575b50610bc45760206004946040519586809263d737d0c760e01b82525afa938415610841575f94610ba3575b506001600160a01b0384168015929091908315610b99575b508215610b66575b8215610afb575b5050610aec57565b6358ef870360e11b5f5260045ffd5b60405163dc4c90d360e01b8152919250602090829060049082905afa908115610841575f91610b37575b506001600160a01b0316145f80610ae4565b610b59915060203d602011610b5f575b610b5181836106d8565b8101906109b1565b5f610b25565b503d610b47565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031682149250610add565b821492505f610ad5565b610bbd91945060203d602011610b5f57610b5181836106d8565b925f610abd565b63ac566cef60e01b5f5260045ffd5b90503f7f000000000000000000000000000000000000000000000000000000000000000014155f610a92565b610c1991945060203d602011610b5f57610b5181836106d8565b925f610a2056",
+    "opcodes": "PUSH1 0x80 PUSH1 0x40 MSTORE PUSH1 0x4 CALLDATASIZE LT ISZERO PUSH2 0x11 JUMPI PUSH0 DUP1 REVERT JUMPDEST PUSH0 CALLDATALOAD PUSH1 0xE0 SHR DUP1 PUSH4 0x16C2BE6B EQ PUSH2 0x5D6 JUMPI DUP1 PUSH4 0x314052DA EQ PUSH2 0x5B9 JUMPI DUP1 PUSH4 0x4B4737E2 EQ PUSH2 0x596 JUMPI DUP1 PUSH4 0x4FB32AB6 EQ PUSH2 0x503 JUMPI DUP1 PUSH4 0x575E24B4 EQ PUSH2 0x3A2 JUMPI DUP1 PUSH4 0x69420274 EQ PUSH2 0x368 JUMPI DUP1 PUSH4 0xA032B9C5 EQ PUSH2 0x32E JUMPI DUP1 PUSH4 0xA7968055 EQ PUSH2 0x2FE JUMPI DUP1 PUSH4 0xB47B2FB1 EQ PUSH2 0x262 JUMPI DUP1 PUSH4 0xBAC403CC EQ PUSH2 0x247 JUMPI DUP1 PUSH4 0xCA4B208B EQ PUSH2 0x203 JUMPI DUP1 PUSH4 0xD4AAE0C4 EQ PUSH2 0x1BF JUMPI DUP1 PUSH4 0xF013B1AC EQ PUSH2 0x14A JUMPI DUP1 PUSH4 0xF887EA40 EQ PUSH2 0x106 JUMPI PUSH4 0xFC0C546A EQ PUSH2 0xBE JUMPI PUSH0 DUP1 REVERT JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST PUSH0 DUP1 REVERT JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x163 PUSH2 0x603 JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER SUB PUSH2 0x1B0 JUMPI PUSH2 0x19E PUSH1 0x20 SWAP2 PUSH2 0x9D0 JUMP JUMPDEST PUSH1 0x40 MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB SWAP1 SWAP2 AND DUP2 MSTORE RETURN JUMPDEST PUSH4 0x87E122D PUSH1 0xE2 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x40 MLOAD PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP1 RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH1 0x1E DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH2 0x160 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x27C PUSH2 0x603 JUMP JUMPDEST POP PUSH1 0xA0 CALLDATASIZE PUSH1 0x23 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x60 CALLDATASIZE PUSH1 0xC3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x144 CALLDATALOAD PUSH8 0xFFFFFFFFFFFFFFFF DUP2 GT PUSH2 0x102 JUMPI PUSH2 0x2B6 SWAP1 CALLDATASIZE SWAP1 PUSH1 0x4 ADD PUSH2 0x619 JUMP JUMPDEST POP POP PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER SUB PUSH2 0x1B0 JUMPI PUSH1 0x40 DUP1 MLOAD PUSH4 0xB47B2FB1 PUSH1 0xE0 SHL DUP2 MSTORE PUSH0 PUSH1 0x20 DUP3 ADD MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH2 0x321 PUSH2 0x31C PUSH2 0x603 JUMP JUMPDEST PUSH2 0x84C JUMP JUMPDEST PUSH3 0xFFFFFF PUSH1 0x40 MLOAD SWAP2 AND DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH32 0x0 DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH32 0x0 DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH2 0x140 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x3BC PUSH2 0x603 JUMP JUMPDEST POP PUSH1 0xA0 CALLDATASIZE PUSH1 0x23 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x60 CALLDATASIZE PUSH1 0xC3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH2 0x124 CALLDATALOAD PUSH8 0xFFFFFFFFFFFFFFFF DUP2 GT PUSH2 0x102 JUMPI PUSH2 0x3F6 SWAP1 CALLDATASIZE SWAP1 PUSH1 0x4 ADD PUSH2 0x619 JUMP JUMPDEST POP POP PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER DUP2 SWAP1 SUB PUSH2 0x1B0 JUMPI PUSH1 0xA4 CALLDATALOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP1 DUP2 SWAP1 SUB PUSH2 0x102 JUMPI EQ DUP1 ISZERO SWAP1 PUSH2 0x4E5 JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x49D JUMPI JUMPDEST DUP1 ISZERO PUSH2 0x485 JUMPI JUMPDEST PUSH2 0x477 JUMPI PUSH1 0x60 PUSH1 0x40 MLOAD PUSH4 0x15D7892D PUSH1 0xE2 SHL DUP2 MSTORE PUSH0 PUSH1 0x20 DUP3 ADD MSTORE PUSH0 PUSH1 0x40 DUP3 ADD MSTORE RETURN JUMPDEST PUSH3 0x820F35 PUSH1 0xE6 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST POP PUSH1 0x64 CALLDATALOAD PUSH3 0xFFFFFF DUP2 AND DUP1 SWAP2 SUB PUSH2 0x102 JUMPI ISZERO ISZERO PUSH2 0x456 JUMP JUMPDEST POP PUSH1 0x44 CALLDATALOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP1 DUP2 DUP2 SUB PUSH2 0x102 JUMPI POP PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND EQ ISZERO PUSH2 0x44F JUMP JUMPDEST POP PUSH1 0x24 CALLDATALOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND SWAP1 DUP2 DUP2 SUB PUSH2 0x102 JUMPI POP ISZERO ISZERO PUSH2 0x448 JUMP JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x60 DUP1 PUSH1 0x40 MLOAD PUSH2 0x523 DUP3 DUP3 PUSH2 0x6D8 JUMP JUMPDEST CALLDATASIZE SWAP1 CALLDATACOPY PUSH1 0x40 MLOAD PUSH0 DUP1 DUP3 JUMPDEST PUSH1 0x3 DUP3 LT PUSH2 0x576 JUMPI POP POP POP PUSH2 0x542 DUP3 DUP3 PUSH2 0x6D8 JUMP JUMPDEST PUSH1 0x40 MLOAD SWAP1 PUSH0 DUP3 JUMPDEST PUSH1 0x3 DUP3 LT PUSH2 0x556 JUMPI POP POP POP RETURN JUMPDEST DUP3 MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x20 SWAP3 DUP4 ADD SWAP3 PUSH1 0x1 SWAP3 SWAP1 SWAP3 ADD SWAP2 ADD PUSH2 0x549 JUMP JUMPDEST DUP3 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 MSTORE PUSH1 0x1 SWAP3 DUP4 ADD SWAP3 SWAP2 SWAP1 SWAP2 ADD SWAP1 PUSH1 0x20 ADD PUSH2 0x52D JUMP JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH2 0x321 PUSH2 0x5B4 PUSH2 0x603 JUMP JUMPDEST PUSH2 0x70E JUMP JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH0 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH1 0x40 MLOAD PUSH3 0xF1B30 DUP2 MSTORE RETURN JUMPDEST CALLVALUE PUSH2 0x102 JUMPI PUSH1 0x20 CALLDATASIZE PUSH1 0x3 NOT ADD SLT PUSH2 0x102 JUMPI PUSH1 0x20 PUSH2 0x5F9 PUSH2 0x5F4 PUSH2 0x603 JUMP JUMPDEST PUSH2 0x647 JUMP JUMPDEST PUSH1 0x40 MLOAD SWAP1 ISZERO ISZERO DUP2 MSTORE RETURN JUMPDEST PUSH1 0x4 CALLDATALOAD SWAP1 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP3 AND DUP3 SUB PUSH2 0x102 JUMPI JUMP JUMPDEST SWAP2 DUP2 PUSH1 0x1F DUP5 ADD SLT ISZERO PUSH2 0x102 JUMPI DUP3 CALLDATALOAD SWAP2 PUSH8 0xFFFFFFFFFFFFFFFF DUP4 GT PUSH2 0x102 JUMPI PUSH1 0x20 DUP4 DUP2 DUP7 ADD SWAP6 ADD ADD GT PUSH2 0x102 JUMPI JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB SWAP1 DUP2 AND SWAP2 AND SWAP1 DUP2 EQ SWAP1 DUP2 ISZERO PUSH2 0x683 JUMPI POP SWAP1 JUMP JUMPDEST DUP1 ISZERO ISZERO SWAP2 POP DUP2 PUSH2 0x691 JUMPI POP SWAP1 JUMP JUMPDEST PUSH0 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 EQ SWAP2 POP DUP2 ISZERO PUSH2 0x6C3 JUMPI JUMPDEST DUP2 ISZERO PUSH2 0x6B1 JUMPI POP SWAP1 JUMP JUMPDEST PUSH1 0x2 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND EQ SWAP1 POP SWAP1 JUMP JUMPDEST PUSH1 0x1 SLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP2 EQ SWAP2 POP PUSH2 0x6A7 JUMP JUMPDEST SWAP1 PUSH1 0x1F DUP1 NOT SWAP2 ADD AND DUP2 ADD SWAP1 DUP2 LT PUSH8 0xFFFFFFFFFFFFFFFF DUP3 GT OR PUSH2 0x6FA JUMPI PUSH1 0x40 MSTORE JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x41 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST PUSH1 0x40 MLOAD PUSH4 0xF21F537D PUSH1 0xE0 SHL DUP2 MSTORE SWAP1 PUSH1 0x20 DUP3 PUSH1 0x4 DUP2 PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND GAS STATICCALL SWAP2 DUP3 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP3 PUSH2 0x80D JUMPI JUMPDEST POP DUP2 ISZERO SWAP1 DUP2 ISZERO PUSH2 0x7F7 JUMPI JUMPDEST DUP2 ISZERO PUSH2 0x7E7 JUMPI JUMPDEST POP PUSH2 0x7E2 JUMPI PUSH32 0x0 PUSH3 0xF1B30 SUB PUSH3 0xF1B30 DUP2 GT PUSH2 0x7CE JUMPI PUSH1 0x1E DUP3 ADD SWAP2 DUP3 DUP2 GT PUSH2 0x7CE JUMPI TIMESTAMP SWAP1 SUB PUSH1 0x1E ADD SWAP2 DUP3 GT PUSH2 0x7CE JUMPI PUSH3 0xFFFFFF SWAP2 PUSH2 0x7CA SWAP2 PUSH2 0x930 JUMP JUMPDEST AND SWAP1 JUMP JUMPDEST PUSH4 0x4E487B71 PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x11 PUSH1 0x4 MSTORE PUSH1 0x24 PUSH0 REVERT JUMPDEST POP PUSH0 SWAP1 JUMP JUMPDEST PUSH2 0x7F1 SWAP2 POP PUSH2 0x647 JUMP JUMPDEST PUSH0 PUSH2 0x76E JUMP JUMPDEST SWAP1 POP PUSH1 0x1E DUP3 ADD DUP1 DUP4 GT PUSH2 0x7CE JUMPI TIMESTAMP LT ISZERO SWAP1 PUSH2 0x767 JUMP JUMPDEST SWAP1 SWAP2 POP PUSH1 0x20 DUP2 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0x839 JUMPI JUMPDEST DUP2 PUSH2 0x829 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x6D8 JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x102 JUMPI MLOAD SWAP1 PUSH0 PUSH2 0x75C JUMP JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x81C JUMP JUMPDEST PUSH1 0x40 MLOAD RETURNDATASIZE PUSH0 DUP3 RETURNDATACOPY RETURNDATASIZE SWAP1 REVERT JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND CALLER SUB PUSH2 0x1B0 JUMPI PUSH1 0x40 MLOAD PUSH4 0xF21F537D PUSH1 0xE0 SHL DUP2 MSTORE PUSH1 0x20 DUP2 PUSH1 0x4 DUP2 PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP2 PUSH2 0x8FE JUMPI JUMPDEST POP DUP1 ISZERO SWAP1 DUP2 ISZERO PUSH2 0x8E8 JUMPI JUMPDEST POP PUSH2 0x7E2 JUMPI PUSH2 0x5B4 PUSH2 0x8E5 SWAP2 PUSH2 0x9D0 JUMP JUMPDEST SWAP1 JUMP JUMPDEST SWAP1 POP PUSH1 0x1E DUP2 ADD DUP1 SWAP2 GT PUSH2 0x7CE JUMPI TIMESTAMP LT ISZERO PUSH0 PUSH2 0x8D4 JUMP JUMPDEST SWAP1 POP PUSH1 0x20 DUP2 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0x928 JUMPI JUMPDEST DUP2 PUSH2 0x919 PUSH1 0x20 SWAP4 DUP4 PUSH2 0x6D8 JUMP JUMPDEST DUP2 ADD SUB SLT PUSH2 0x102 JUMPI MLOAD PUSH0 PUSH2 0x8C9 JUMP JUMPDEST RETURNDATASIZE SWAP2 POP PUSH2 0x90C JUMP JUMPDEST SWAP1 SWAP2 SWAP1 PUSH0 SWAP1 PUSH0 NOT DUP5 DUP3 MULMOD SWAP1 DUP5 DUP2 MUL SWAP3 DUP4 DUP1 DUP5 LT SWAP4 SUB SWAP3 DUP1 DUP5 SUB SWAP4 EQ PUSH2 0x9A5 JUMPI DUP3 PUSH1 0x1E GT ISZERO PUSH2 0x993 JUMPI POP PUSH32 0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEF SWAP4 SWAP5 PUSH1 0x1E SWAP2 MULMOD SWAP1 DUP3 DUP3 GT SWAP1 SUB PUSH1 0xFF SHL SWAP2 SUB PUSH1 0x1 SHR OR MUL SWAP1 JUMP JUMPDEST PUSH4 0x4E487B71 SWAP1 MSTORE PUSH1 0x11 PUSH1 0x20 MSTORE PUSH1 0x24 PUSH1 0x1C REVERT JUMPDEST POP POP POP PUSH1 0x1E SWAP2 SWAP3 POP DIV SWAP1 JUMP JUMPDEST SWAP1 DUP2 PUSH1 0x20 SWAP2 SUB SLT PUSH2 0x102 JUMPI MLOAD PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP2 AND DUP2 SUB PUSH2 0x102 JUMPI SWAP1 JUMP JUMPDEST PUSH1 0x40 MLOAD PUSH4 0x9CE110D7 PUSH1 0xE0 SHL DUP2 MSTORE SWAP2 SWAP1 PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND PUSH1 0x20 DUP5 PUSH1 0x4 DUP2 DUP5 GAS STATICCALL SWAP4 DUP5 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP5 PUSH2 0xBFF JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP3 DUP2 AND SWAP5 AND DUP5 SUB PUSH2 0xA5B JUMPI POP PUSH32 0x0 SWAP3 POP POP JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND SWAP2 DUP5 DUP4 EQ DUP1 ISZERO SWAP2 SWAP1 PUSH2 0xBD3 JUMPI JUMPDEST POP PUSH2 0xBC4 JUMPI PUSH1 0x20 PUSH1 0x4 SWAP5 PUSH1 0x40 MLOAD SWAP6 DUP7 DUP1 SWAP3 PUSH4 0xD737D0C7 PUSH1 0xE0 SHL DUP3 MSTORE GAS STATICCALL SWAP4 DUP5 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP5 PUSH2 0xBA3 JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB DUP5 AND DUP1 ISZERO SWAP3 SWAP1 SWAP2 SWAP1 DUP4 ISZERO PUSH2 0xB99 JUMPI JUMPDEST POP DUP3 ISZERO PUSH2 0xB66 JUMPI JUMPDEST DUP3 ISZERO PUSH2 0xAFB JUMPI JUMPDEST POP POP PUSH2 0xAEC JUMPI JUMP JUMPDEST PUSH4 0x58EF8703 PUSH1 0xE1 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST PUSH1 0x40 MLOAD PUSH4 0xDC4C90D3 PUSH1 0xE0 SHL DUP2 MSTORE SWAP2 SWAP3 POP PUSH1 0x20 SWAP1 DUP3 SWAP1 PUSH1 0x4 SWAP1 DUP3 SWAP1 GAS STATICCALL SWAP1 DUP2 ISZERO PUSH2 0x841 JUMPI PUSH0 SWAP2 PUSH2 0xB37 JUMPI JUMPDEST POP PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND EQ PUSH0 DUP1 PUSH2 0xAE4 JUMP JUMPDEST PUSH2 0xB59 SWAP2 POP PUSH1 0x20 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0xB5F JUMPI JUMPDEST PUSH2 0xB51 DUP2 DUP4 PUSH2 0x6D8 JUMP JUMPDEST DUP2 ADD SWAP1 PUSH2 0x9B1 JUMP JUMPDEST PUSH0 PUSH2 0xB25 JUMP JUMPDEST POP RETURNDATASIZE PUSH2 0xB47 JUMP JUMPDEST PUSH32 0x0 PUSH1 0x1 PUSH1 0x1 PUSH1 0xA0 SHL SUB AND DUP3 EQ SWAP3 POP PUSH2 0xADD JUMP JUMPDEST DUP3 EQ SWAP3 POP PUSH0 PUSH2 0xAD5 JUMP JUMPDEST PUSH2 0xBBD SWAP2 SWAP5 POP PUSH1 0x20 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0xB5F JUMPI PUSH2 0xB51 DUP2 DUP4 PUSH2 0x6D8 JUMP JUMPDEST SWAP3 PUSH0 PUSH2 0xABD JUMP JUMPDEST PUSH4 0xAC566CEF PUSH1 0xE0 SHL PUSH0 MSTORE PUSH1 0x4 PUSH0 REVERT JUMPDEST SWAP1 POP EXTCODEHASH PUSH32 0x0 EQ ISZERO PUSH0 PUSH2 0xA92 JUMP JUMPDEST PUSH2 0xC19 SWAP2 SWAP5 POP PUSH1 0x20 RETURNDATASIZE PUSH1 0x20 GT PUSH2 0xB5F JUMPI PUSH2 0xB51 DUP2 DUP4 PUSH2 0x6D8 JUMP JUMPDEST SWAP3 PUSH0 PUSH2 0xA20 JUMP ",
+    "sourceMap": "948:4965:37:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;1131:45;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;1222:31;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;:::i;:::-;4412:6;-1:-1:-1;;;;;948:4965:37;4398:10;:20;4394:45;;4456:14;948:4965;4456:14;;:::i;:::-;948:4965;;-1:-1:-1;;;;;948:4965:37;;;;;;4394:45;5211:12;;;948:4965;4427:12;948:4965;;4427:12;948:4965;;;;;;-1:-1:-1;;948:4965:37;;;;;;1094:31;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;1182:34;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;;1085:2;948:4965;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;:::i;:::-;-1:-1:-1;948:4965:37;;-1:-1:-1;;948:4965:37;;;;;;-1:-1:-1;;948:4965:37;;;;;;;;;;;;;;;;;;:::i;:::-;-1:-1:-1;;5832:6:37;-1:-1:-1;;;;;948:4965:37;5818:10;:20;5814:45;;948:4965;;;-1:-1:-1;;;948:4965:37;;;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;;;:::i;:::-;;:::i;:::-;;;;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;;1259:39;948:4965;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;;1304:40;948:4965;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;:::i;:::-;-1:-1:-1;948:4965:37;;-1:-1:-1;;948:4965:37;;;;;;-1:-1:-1;;948:4965:37;;;;;;;;;;;;;;;;;;:::i;:::-;-1:-1:-1;;5196:6:37;-1:-1:-1;;;;;948:4965:37;5182:10;:20;;;5178:45;;5258:9;948:4965;-1:-1:-1;;;;;948:4965:37;;;;;;;;5250:28;;;:76;;;948:4965;5250:144;;;;948:4965;5250:160;;;;948:4965;5233:208;;948:4965;;;;;;;;;;;;;;;;;;;5233:208;5428:13;;;948:4965;5428:13;948:4965;;5428:13;5250:160;948:4965;5398:7;948:4965;;;;;;;;;5398:12;;5250:160;;:144;-1:-1:-1;5362:13:37;948:4965;-1:-1:-1;;;;;948:4965:37;;;;;;;;-1:-1:-1;5388:5:37;-1:-1:-1;;;;;948:4965:37;5346:48;;5250:144;;:76;-1:-1:-1;948:4965:37;;-1:-1:-1;;;;;948:4965:37;;;;;;;;5282:44;;;5250:76;;948:4965;;;;;;-1:-1:-1;;948:4965:37;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;;;:::i;:::-;;:::i;:::-;;;;;;-1:-1:-1;;948:4965:37;;;;;;;1032:7;948:4965;;;;;;;;;-1:-1:-1;;948:4965:37;;;;;;;;:::i;:::-;;:::i;:::-;;;;;;;;;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::o;3340:256::-;3431:9;-1:-1:-1;;;;;948:4965:37;;;;;3421:19;;;;:168;;;;3414:175;3340:256;:::o;3421:168::-;3457:20;;;;-1:-1:-1;3457:20:37;:131;;3421:168;3340:256;:::o;3457:131::-;3475:1;948:4965;-1:-1:-1;;;;;948:4965:37;3498:27;;;-1:-1:-1;3498:58:37;;;;3457:131;3498:89;;;;3457:131;3340:256;:::o;3498:89::-;3585:1;948:4965;-1:-1:-1;;;;;948:4965:37;3560:27;;-1:-1:-1;3340:256:37;:::o;3498:58::-;948:4965;;-1:-1:-1;;;;;948:4965:37;3529:27;;;-1:-1:-1;3498:58:37;;948:4965;;;;;;;;;;;;;;;;;;;;;:::o;:::-;;;;-1:-1:-1;948:4965:37;;;;;-1:-1:-1;948:4965:37;3602:379;948:4965;;-1:-1:-1;;;3706:17:37;;948:4965;3706:17;948:4965;3706:17;948:4965;3706:5;-1:-1:-1;;;;;948:4965:37;3706:17;;;;;;;948:4965;3706:17;;;3602:379;3737:10;;;:54;;;;;3602:379;3737:76;;;;3602:379;3733:90;;;3892:15;1032:7;948:4965;1032:7;948:4965;;;;1085:2;948:4965;;;;;;;;3933:15;948:4965;;1085:2;948:4965;;;;;;;3860:104;;;;:::i;:::-;948:4965;3602:379;:::o;948:4965::-;;;;;;;3706:17;948:4965;;;;3733:90;3815:8;948:4965;3815:8;:::o;3737:76::-;3795:18;;;;:::i;:::-;3737:76;;;:54;948:4965;;1085:2;948:4965;;;;;;;3751:15;:40;;3737:54;;;3706:17;;;;;;;;;;;;;;948:4965;3706:17;;;:::i;:::-;;;948:4965;;;;;3706:17;;;;;;;-1:-1:-1;3706:17:37;;;948:4965;;;;;;;;;3987:319;4094:6;-1:-1:-1;;;;;948:4965:37;4080:10;:20;4076:45;;948:4965;;-1:-1:-1;;;4147:17:37;;;948:4965;4147:17;948:4965;4147:5;-1:-1:-1;;;;;948:4965:37;4147:17;;;;;;;948:4965;4147:17;;;3987:319;4178:10;;;:54;;;;;3987:319;4174:68;;;4284:14;4259:40;4284:14;;:::i;4259:40::-;3987:319;:::o;4178:54::-;948:4965;;1085:2;948:4965;;;;;;;4192:15;:40;;4178:54;;;4147:17;;;;;;;;;;;;;948:4965;4147:17;;;:::i;:::-;;;948:4965;;;;;4147:17;;;;;;-1:-1:-1;4147:17:37;;7242:3683:11;;;;948:4965:37;;-1:-1:-1;;7242:3683:11;;1412:159;;;;;;;;;;;;;;;;7498:9;;7494:365;;7969:19;1085:2:37;7969:19:11;;7965:142;;8390:308;940:4:9;8390:308:11;;1085:2:37;8390:308:11;;;;;;;;940:4:9;;8390:308:11;;8962:384;;9409:18;940:4:9;7242:3683:11;:::o;7965:142::-;1829:135:9;;;940:4;1829:135;;;;;7494:365:11;948:4965:37;;;1085:2;948:4965;;;;7820:24:11;:::o;948:4965:37:-;;;;;;;;;;-1:-1:-1;;;;;948:4965:37;;;;;;;:::o;4483:507::-;948:4965;;-1:-1:-1;;;4576:19:37;;948:4965;4483:507;4576:5;-1:-1:-1;;;;;948:4965:37;4576:19;948:4965;4576:19;948:4965;;4576:19;;;;;;;948:4965;4576:19;;;4483:507;-1:-1:-1;;;;;;948:4965:37;;;;;4566:29;;948:4965;;-1:-1:-1;4619:9:37;;-1:-1:-1;;4483:507:37:o;4562:422::-;4673:6;-1:-1:-1;;;;;948:4965:37;;4663:16;;;;;;;:53;;4562:422;4659:85;;;4576:19;;948:4965;;;;;;;;;;4766:45;;;;;;;;;948:4965;4766:45;;;4562:422;-1:-1:-1;;;;;;948:4965:37;;4829:19;;;948:4965;;4829:19;:38;;;;4562:422;4829:57;;;;;4562:422;4829:89;;;;4562:422;4825:149;;;;4483:507::o;4825:149::-;4945:14;;;948:4965;4945:14;4576:19;948:4965;4945:14;4829:89;948:4965;;-1:-1:-1;;;4899:19:37;;948:4965;;-1:-1:-1;4576:19:37;;948:4965;;4576:19;;948:4965;;4899:19;;;;;;;948:4965;4899:19;;;4829:89;-1:-1:-1;;;;;;948:4965:37;4890:28;4829:89;;;;4899:19;;;;4576;4899;4576;4899;;;;;;;;:::i;:::-;;;;;:::i;:::-;;;;;;;;;4829:57;4880:6;-1:-1:-1;;;;;948:4965:37;4871:15;;;-1:-1:-1;4829:57:37;;:38;4852:15;;;-1:-1:-1;4829:38:37;;;4766:45;;;;;4576:19;4766:45;4576:19;4766:45;;;;;;;:::i;:::-;;;;;4659:85;4725:19;;;948:4965;4725:19;4576;948:4965;4725:19;4663:53;4683:15;;;4702:14;4683:33;;4663:53;;;4576:19;;;;;;;;;;;;;;;:::i;:::-;;;;"
+  },
+  "immutableIds": {
+    "kernel": "9567",
+    "token": "9570",
+    "developer": "9572",
+    "router": "9574",
+    "routerCodeHash": "9576",
+    "normalBuyFeePpm": "9578"
+  },
+  "creationBytecode": "0x6101408060405234610358576111c8803803809161001d828561054b565b8339810161012082820312610358576100358261056e565b60208301516001600160a01b0381169190828103610358576100596040860161056e565b906100666060870161056e565b9260808701519460a08801519661ffff8816809803610358578060df8a011215610358576040519860608a016001600160401b0381118b82101761053757604052899061012081019283116103585760c001905b82821061051f575050506001461490815f146105045773d92a36b0000531ef3063ded4de20a0783308446c915b6001600160a01b0384169283159182156104fa575b82156104e8575b82156104d5575b821561045f575b8215610455575b8215610438575b508115610421575b508015610416575b801561040b575b6102e257906001600160a01b038516905f5b60038110610267575050505060805260a05260c05260e05261010052601e0180601e116102535760648102908082046064149015171561025357610120525f5b6003811061023857604051610c2090816105a88239608051818181610165015281816101d4015281816102ba015281816103fa0152818161084e0152610b68015260a05181818160d3015281816104b6015281816107240152818161089101526109e1015260c051818181610218015281816106490152610a37015260e05181818161011b0152610a5d0152610100518181816103450152610bd801526101205181818161037f01526107750152f35b81516001600160a01b03168155602090910190600101610188565b634e487b7160e01b5f52601160045260245ffd5b6001600160a01b03610279828d610582565b511680156104025783811480156103f9575b80156103f0575b8015610381575b801561036f575b80156102f1575b6102e2575f5b8281106102c05750506001905b01610148565b6001600160a01b036102d2828f610582565b511682146102e2576001016102ad565b63c52a9bd360e01b5f5260045ffd5b50604051639ce110d760e01b8152602081600481895afa908115610364575f91610327575b506001600160a01b031681146102a7565b90506020813d821161035c575b816103416020938361054b565b81010312610358576103529061056e565b5f610316565b5f80fd5b3d9150610334565b6040513d5f823e3d90fd5b506001600160a01b03891681146102a0565b5060405163dc4c90d360e01b8152602081600481895afa908115610364575f916103b7575b506001600160a01b03168114610299565b90506020813d82116103e8575b816103d16020938361054b565b81010312610358576103e29061056e565b5f6103a6565b3d91506103c4565b50848114610292565b5082811461028b565b506001906102ba565b506103e88811610136565b5086863f141561012f565b6001600160a01b038881169116141590505f610127565b9091501580610449575b905f61011f565b50611237461415610442565b883b159250610118565b60405163dc4c90d360e01b8152909250602081600481875afa908115610364575f9161049b575b506001600160a01b0388811691161491610111565b90506020813d6020116104cd575b816104b66020938361054b565b81010312610358576104c79061056e565b5f610486565b3d91506104a9565b6001600160a01b0388168414925061010a565b6001600160a01b038816159250610103565b833b1592506100fc565b7306afba43fd06227fa663b0daecf536f6eaa6bf99916100e7565b6020809161052c8461056e565b8152019101906100ba565b634e487b7160e01b5f52604160045260245ffd5b601f909101601f19168101906001600160401b0382119082101761053757604052565b51906001600160a01b038216820361035857565b9060038110156105935760051b0190565b634e487b7160e01b5f52603260045260245ffdfe60806040526004361015610011575f80fd5b5f3560e01c806316c2be6b146105d6578063314052da146105b95780634b4737e2146105965780634fb32ab614610503578063575e24b4146103a25780636942027414610368578063a032b9c51461032e578063a7968055146102fe578063b47b2fb114610262578063bac403cc14610247578063ca4b208b14610203578063d4aae0c4146101bf578063f013b1ac1461014a578063f887ea40146101065763fc0c546a146100be575f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b3461010257602036600319011261010257610163610603565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05761019e6020916109d0565b6040516001600160a01b039091168152f35b63087e122d60e21b5f5260045ffd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576020604051601e8152f35b34610102576101603660031901126101025761027c610603565b5060a03660231901126101025760603660c3190112610102576101443567ffffffffffffffff8111610102576102b6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b0576040805163b47b2fb160e01b81525f6020820152f35b3461010257602036600319011261010257602061032161031c610603565b61084c565b62ffffff60405191168152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b3461010257610140366003190112610102576103bc610603565b5060a03660231901126101025760603660c3190112610102576101243567ffffffffffffffff8111610102576103f6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316338190036101b05760a4356001600160a01b0381169081900361010257148015906104e5575b801561049d575b8015610485575b6104775760606040516315d7892d60e21b81525f60208201525f6040820152f35b62820f3560e61b5f5260045ffd5b5060643562ffffff8116809103610102571515610456565b506044356001600160a01b0381169081810361010257507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316141561044f565b506024356001600160a01b0381169081810361010257501515610448565b34610102575f3660031901126101025760608060405161052382826106d8565b3690376040515f80825b600382106105765750505061054282826106d8565b604051905f825b6003821061055657505050f35b82516001600160a01b031681526020928301926001929092019101610549565b82546001600160a01b03168152600192830192919091019060200161052d565b346101025760203660031901126101025760206103216105b4610603565b61070e565b34610102575f366003190112610102576020604051620f1b308152f35b346101025760203660031901126101025760206105f96105f4610603565b610647565b6040519015158152f35b600435906001600160a01b038216820361010257565b9181601f840112156101025782359167ffffffffffffffff8311610102576020838186019501011161010257565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b039081169116908114908115610683575090565b801515915081610691575090565b5f546001600160a01b03168114915081156106c3575b81156106b1575090565b6002546001600160a01b031614905090565b6001546001600160a01b0316811491506106a7565b90601f8019910116810190811067ffffffffffffffff8211176106fa57604052565b634e487b7160e01b5f52604160045260245ffd5b60405163f21f537d60e01b8152906020826004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa918215610841575f9261080d575b5081159081156107f7575b81156107e7575b506107e2577f0000000000000000000000000000000000000000000000000000000000000000620f1b3003620f1b3081116107ce57601e8201918281116107ce57429003601e019182116107ce5762ffffff916107ca91610930565b1690565b634e487b7160e01b5f52601160045260245ffd5b505f90565b6107f19150610647565b5f61076e565b9050601e82018083116107ce5742101590610767565b9091506020813d602011610839575b81610829602093836106d8565b810103126101025751905f61075c565b3d915061081c565b6040513d5f823e3d90fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05760405163f21f537d60e01b81526020816004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa908115610841575f916108fe575b5080159081156108e8575b506107e2576105b46108e5916109d0565b90565b9050601e81018091116107ce574210155f6108d4565b90506020813d602011610928575b81610919602093836106d8565b8101031261010257515f6108c9565b3d915061090c565b9091905f905f1984820990848102928380841093039280840393146109a55782601e111561099357507feeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef9394601e910990828211900360ff1b910360011c170290565b634e487b71905260116020526024601cfd5b505050601e9192500490565b9081602091031261010257516001600160a01b03811681036101025790565b604051639ce110d760e01b815291907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316602084600481845afa938415610841575f94610bff575b506001600160a01b0382811694168403610a5b57507f0000000000000000000000000000000000000000000000000000000000000000925050565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03169184831480159190610bd3575b50610bc45760206004946040519586809263d737d0c760e01b82525afa938415610841575f94610ba3575b506001600160a01b0384168015929091908315610b99575b508215610b66575b8215610afb575b5050610aec57565b6358ef870360e11b5f5260045ffd5b60405163dc4c90d360e01b8152919250602090829060049082905afa908115610841575f91610b37575b506001600160a01b0316145f80610ae4565b610b59915060203d602011610b5f575b610b5181836106d8565b8101906109b1565b5f610b25565b503d610b47565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031682149250610add565b821492505f610ad5565b610bbd91945060203d602011610b5f57610b5181836106d8565b925f610abd565b63ac566cef60e01b5f5260045ffd5b90503f7f000000000000000000000000000000000000000000000000000000000000000014155f610a92565b610c1991945060203d602011610b5f57610b5181836106d8565b925f610a2056",
+  "runtimeTemplateHex": "0x60806040526004361015610011575f80fd5b5f3560e01c806316c2be6b146105d6578063314052da146105b95780634b4737e2146105965780634fb32ab614610503578063575e24b4146103a25780636942027414610368578063a032b9c51461032e578063a7968055146102fe578063b47b2fb114610262578063bac403cc14610247578063ca4b208b14610203578063d4aae0c4146101bf578063f013b1ac1461014a578063f887ea40146101065763fc0c546a146100be575f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b5f80fd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b3461010257602036600319011261010257610163610603565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05761019e6020916109d0565b6040516001600160a01b039091168152f35b63087e122d60e21b5f5260045ffd5b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b34610102575f366003190112610102576020604051601e8152f35b34610102576101603660031901126101025761027c610603565b5060a03660231901126101025760603660c3190112610102576101443567ffffffffffffffff8111610102576102b6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b0576040805163b47b2fb160e01b81525f6020820152f35b3461010257602036600319011261010257602061032161031c610603565b61084c565b62ffffff60405191168152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b34610102575f3660031901126101025760206040517f00000000000000000000000000000000000000000000000000000000000000008152f35b3461010257610140366003190112610102576103bc610603565b5060a03660231901126101025760603660c3190112610102576101243567ffffffffffffffff8111610102576103f6903690600401610619565b50507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316338190036101b05760a4356001600160a01b0381169081900361010257148015906104e5575b801561049d575b8015610485575b6104775760606040516315d7892d60e21b81525f60208201525f6040820152f35b62820f3560e61b5f5260045ffd5b5060643562ffffff8116809103610102571515610456565b506044356001600160a01b0381169081810361010257507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316141561044f565b506024356001600160a01b0381169081810361010257501515610448565b34610102575f3660031901126101025760608060405161052382826106d8565b3690376040515f80825b600382106105765750505061054282826106d8565b604051905f825b6003821061055657505050f35b82516001600160a01b031681526020928301926001929092019101610549565b82546001600160a01b03168152600192830192919091019060200161052d565b346101025760203660031901126101025760206103216105b4610603565b61070e565b34610102575f366003190112610102576020604051620f1b308152f35b346101025760203660031901126101025760206105f96105f4610603565b610647565b6040519015158152f35b600435906001600160a01b038216820361010257565b9181601f840112156101025782359167ffffffffffffffff8311610102576020838186019501011161010257565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b039081169116908114908115610683575090565b801515915081610691575090565b5f546001600160a01b03168114915081156106c3575b81156106b1575090565b6002546001600160a01b031614905090565b6001546001600160a01b0316811491506106a7565b90601f8019910116810190811067ffffffffffffffff8211176106fa57604052565b634e487b7160e01b5f52604160045260245ffd5b60405163f21f537d60e01b8152906020826004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa918215610841575f9261080d575b5081159081156107f7575b81156107e7575b506107e2577f0000000000000000000000000000000000000000000000000000000000000000620f1b3003620f1b3081116107ce57601e8201918281116107ce57429003601e019182116107ce5762ffffff916107ca91610930565b1690565b634e487b7160e01b5f52601160045260245ffd5b505f90565b6107f19150610647565b5f61076e565b9050601e82018083116107ce5742101590610767565b9091506020813d602011610839575b81610829602093836106d8565b810103126101025751905f61075c565b3d915061081c565b6040513d5f823e3d90fd5b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031633036101b05760405163f21f537d60e01b81526020816004817f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03165afa908115610841575f916108fe575b5080159081156108e8575b506107e2576105b46108e5916109d0565b90565b9050601e81018091116107ce574210155f6108d4565b90506020813d602011610928575b81610919602093836106d8565b8101031261010257515f6108c9565b3d915061090c565b9091905f905f1984820990848102928380841093039280840393146109a55782601e111561099357507feeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef9394601e910990828211900360ff1b910360011c170290565b634e487b71905260116020526024601cfd5b505050601e9192500490565b9081602091031261010257516001600160a01b03811681036101025790565b604051639ce110d760e01b815291907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316602084600481845afa938415610841575f94610bff575b506001600160a01b0382811694168403610a5b57507f0000000000000000000000000000000000000000000000000000000000000000925050565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03169184831480159190610bd3575b50610bc45760206004946040519586809263d737d0c760e01b82525afa938415610841575f94610ba3575b506001600160a01b0384168015929091908315610b99575b508215610b66575b8215610afb575b5050610aec57565b6358ef870360e11b5f5260045ffd5b60405163dc4c90d360e01b8152919250602090829060049082905afa908115610841575f91610b37575b506001600160a01b0316145f80610ae4565b610b59915060203d602011610b5f575b610b5181836106d8565b8101906109b1565b5f610b25565b503d610b47565b7f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031682149250610add565b821492505f610ad5565b610bbd91945060203d602011610b5f57610b5181836106d8565b925f610abd565b63ac566cef60e01b5f5260045ffd5b90503f7f000000000000000000000000000000000000000000000000000000000000000014155f610a92565b610c1991945060203d602011610b5f57610b5181836106d8565b925f610a2056",
+  "immutableWords": [
+    {
+      "name": "developer",
+      "byteOffsets": [
+        536,
+        1609,
+        2615
+      ]
+    },
+    {
+      "name": "kernel",
+      "byteOffsets": [
+        357,
+        468,
+        698,
+        1018,
+        2126,
+        2920
+      ]
+    },
+    {
+      "name": "normalBuyFeePpm",
+      "byteOffsets": [
+        895,
+        1909
+      ]
+    },
+    {
+      "name": "router",
+      "byteOffsets": [
+        283,
+        2653
+      ]
+    },
+    {
+      "name": "routerCodeHash",
+      "byteOffsets": [
+        837,
+        3032
+      ]
+    },
+    {
+      "name": "token",
+      "byteOffsets": [
+        211,
+        1206,
+        1828,
+        2193,
+        2529
+      ]
+    }
+  ]
+}

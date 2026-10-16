@@ -86,12 +86,35 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
     ? BigInt(await rpc("eth_getBalance", [request.owner, reference], v => quantityV1(v).toString())) : null;
   if (nativeInputBalance !== null && nativeInputBalance < BigInt(request.amountIn))
     throw new LaunchPlanTradeErrorV1("INSUFFICIENT_INPUT_BALANCE", "Your wallet does not have enough ETH for this amount.", 400);
-  const quoteData = encodeFunctionData({ abi: QUOTER, functionName: "quoteExactInputSingle", args: [{ poolKey: binding.poolKey,
-    zeroForOne: request.zeroForOne, exactAmount: BigInt(request.amountIn), hookData: request.hookData }] });
-  const quoteRaw = await call(getAddress(ROUTED_TRADE_CONTRACTS_V1.v4Quoter.address), quoteData);
   let gross: bigint;
-  try { [gross] = decodeFunctionResult({ abi: QUOTER, functionName: "quoteExactInputSingle", data: quoteRaw }); }
-  catch { return pendingTradeV1("SWAP_QUOTE_ADAPTER_PENDING"); }
+  if (poolFeeProof?.recipeId === "protected_native30_v1" && binding.nativeInput && request.zeroForOne) {
+    // The protected hook authenticates the actual router buyer. A generic quoter
+    // cannot impersonate that buyer, including their fixed tax exemption/cap.
+    // Two nominal units produce a one-unit minimum; this probe is never returned
+    // for signing. The final transaction below binds the actual quoted output.
+    const probe = { ...buildLaunchPlanRoutedSwapV1(projection, request, 2n, poolFeeProof), gasLimit: "2000000" };
+    const { trace } = await readAgreedTradeTraceV1(rpcs, transactionRpc(probe, true), tag);
+    if (trace.from !== request.owner.toLowerCase() || trace.to !== probe.to.toLowerCase()
+      || trace.input !== probe.data.toLowerCase() || trace.value !== probe.value || trace.type !== "CALL")
+      return pendingTradeV1("TRADE_TRACE_BINDING_CHANGED");
+    if (trace.failed) throw new LaunchPlanTradeErrorV1("TRADE_EXECUTION_REVERTED", "This purchase exceeds the launch wallet limit or currently reverts. Reduce the amount and refresh.");
+    const outputs = successfulTradeFramesV1(trace).filter(frame => frame.type === "CALL"
+      && frame.from === probe.to.toLowerCase() && frame.to === ROUTED_TRADE_CONTRACTS_V1.poolManager.address.toLowerCase()).flatMap(frame => {
+        try { const decoded = decodeFunctionData({ abi: TAKE, data: frame.input });
+          return decoded.args[0].toLowerCase() === binding.outputCurrency.toLowerCase()
+            ? [{ recipient: decoded.args[1].toLowerCase(), amount: decoded.args[2] }] : []; }
+        catch { return []; }
+      });
+    if (outputs.length !== 1 || outputs[0]!.recipient !== request.owner.toLowerCase() || outputs[0]!.amount <= 0n)
+      return pendingTradeV1("OUTPUT_CREDIT_ADAPTER_PENDING");
+    gross = outputs[0]!.amount;
+  } else {
+    const quoteData = encodeFunctionData({ abi: QUOTER, functionName: "quoteExactInputSingle", args: [{ poolKey: binding.poolKey,
+      zeroForOne: request.zeroForOne, exactAmount: BigInt(request.amountIn), hookData: request.hookData }] });
+    const quoteRaw = await call(getAddress(ROUTED_TRADE_CONTRACTS_V1.v4Quoter.address), quoteData);
+    try { [gross] = decodeFunctionResult({ abi: QUOTER, functionName: "quoteExactInputSingle", data: quoteRaw }); }
+    catch { return pendingTradeV1("SWAP_QUOTE_ADAPTER_PENDING"); }
+  }
   const amounts = launchPlanTradeAmountsV1(gross, binding.fee.routedRateBps, request.slippageBps);
   const decimals = async (currency: Address) => currency === ZERO ? 18 : tokenUint(currency, "decimals", []).then(v => v <= 255n ? Number(v) : null).catch(() => null);
   const [inputDecimals, outputDecimals] = await Promise.all([decimals(binding.inputCurrency), decimals(binding.outputCurrency)]);

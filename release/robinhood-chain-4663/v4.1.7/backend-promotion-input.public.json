@@ -1,0 +1,216 @@
+{
+  "schemaVersion": "programmable.robinhood-custom-launch.backend-promotion-public-input.v2",
+  "captureId": "ec55b0112146f39ccec6dfe1f598dacb9495b55c3a82296cc6d6abcdd88fd825",
+  "observedAt": "2026-10-16T10:16:42Z",
+  "backendSource": {
+    "repository": "programmablehq/programmable-open-hook-v2-internal",
+    "sourceCommit": "dad87a2f9430ddc8d39aa567568113317601003d",
+    "sourceTree": "830cdb451c24333dfc361f12adea7afec5e4ff18"
+  },
+  "backendPromotionInputDigest": "sha256:ec55b0112146f39ccec6dfe1f598dacb9495b55c3a82296cc6d6abcdd88fd825",
+  "readbackReceipts": {
+    "readiness": {
+      "kind": "readiness",
+      "httpStatus": 200,
+      "contentType": "application/json",
+      "requestSha256": "sha256:f705bbf5f96097da2f746d2e0efffe785d92561997832fa246b0a48b94d9ffe2",
+      "normalizedResponseSha256": "sha256:23c67f70ac4366d853a91225716b065fd361b04c99b0cfa3dd316a54fdad8a93"
+    },
+    "fly": [
+      {
+        "kind": "releases",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:b88388f0f5aca2e34ce6118c4a5072b8c72fcb77b5064dbc1f3ef82926c9d211",
+        "normalizedResponseSha256": "sha256:d27e6bcd9ec2af9e6101a225220fae79754ac8c2d65026e02181617af1554bd9"
+      },
+      {
+        "kind": "app",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:e1fcc687b580f09c56acbad85b1b3a50d36bcdbe42d8e4d9e50a7beeaa247c94",
+        "normalizedResponseSha256": "sha256:ca63865f68aea9d66a336de30375aeb93bfe74aa19d0a25aed213d8b712cfa1f"
+      },
+      {
+        "kind": "machine-list",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:7633525ad1e165e9be999bf00852c82986d6c1897ce1a5637b975e4b82a5d864",
+        "normalizedResponseSha256": "sha256:d87d1e8390236df94b2a5245d1c7b36e4cab2a2f4cc6dd60d11e38a1e0aa5803"
+      },
+      {
+        "kind": "machine:1",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:219a16d8052b41c660c2c80ffba5105b18626302ffda146e6cb5a77b4152671d",
+        "normalizedResponseSha256": "sha256:6433b027b988b89e0c976947224e02bc7fc5f22ffa2328b105d0d0f3ef4f1e24"
+      },
+      {
+        "kind": "metadata:1",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:14eb044aac1ae963dad30c5e83770e78b9ea5ffb3cdba177ef36f198797cfaae",
+        "normalizedResponseSha256": "sha256:ffe875b6f4a9b5c40a2ccb0b83e3a1e080c95a032abd0ef8e66c08b39b835803"
+      },
+      {
+        "kind": "machine:2",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:db7d347cb98cd57d1c4b7f3ff91993d5a6c02f5629d1de3a5200351af0f10cf6",
+        "normalizedResponseSha256": "sha256:9cdb0bf225489b58ee25c159f6081223a06090eb31f6b16410686a4edefd1ab2"
+      },
+      {
+        "kind": "metadata:2",
+        "httpStatus": 200,
+        "contentType": "application/json",
+        "requestSha256": "sha256:35fd3195579c98d04fbc9050d8f24072607b65fa63984179d20cccdaf79bdcf0",
+        "normalizedResponseSha256": "sha256:c777306d2e6ce0901e585639b2636d86b8e47742335cc11e713d27fc81ba2724"
+      }
+    ],
+    "digest": "sha256:1b4c927c38ff2a492606dc1295b91028a110e40382f8a72e13b1b22c806dbd32"
+  },
+  "runtimeReadiness": {
+    "schemaVersion": "programmable.custom-launch-api-runtime-readiness-receipt.v4",
+    "path": "/v4/chains/4663/readiness",
+    "releaseIdentity": {
+      "schemaVersion": "programmable.custom-launch-api-release-identity.v4",
+      "status": "ready",
+      "service": "custom-launch-api-v1",
+      "sourceCommit": "dad87a2f9430ddc8d39aa567568113317601003d",
+      "sourceTree": "830cdb451c24333dfc361f12adea7afec5e4ff18",
+      "chainId": "4663",
+      "chainDeploymentId": "robinhood-mainnet-custom-launch-v1",
+      "chainDeploymentDescriptorDigest": "0x4bde6e26b6630aa684b4ac2a987d6322755896b249a189843bd3a58fe313694c",
+      "providerProfileDigest": "sha256:ea5b5884b2b09775da760f65ba998c4ab68319e8567fa1d05072943c4bf8eb16",
+      "migration": {
+        "path": "migrations/0029_activate_robinhood_fee_profile_v41.sql",
+        "sha256": "sha256:68dc928cbfd27ca0a0172747c47d7f6de3e523334a3246e2be74ec855226b6f4"
+      },
+      "apiContract": {
+        "path": "release/custom-launch-api-contract.v4.1.json",
+        "sha256": "sha256:b7eb27465ffd11baf97223069bba4db1fdaa1b6b13190841b0e402e8563af7d5"
+      },
+      "openApiSha256": "sha256:d44a77fd2d7f6d14d60b837fedd45349083b47bc93c5b29de2612274407928df",
+      "finalityPolicy": {
+        "schemaVersion": "programmable.custom-launch-finality-policy-ref.v1",
+        "policyId": "robinhood-stage-finality-v1",
+        "policyRevision": 1,
+        "policyDigest": "sha256:537d531423d1285a3808556a57303ec68f1e6bdeea3c9aaf6320f9e5a0e47153"
+      },
+      "uniswapRegistrySnapshot": {
+        "repository": "Uniswap/contracts",
+        "commit": "4cfc406c8e34da3ce04e60657a7825075b64fd22",
+        "sourcePath": "deployments/json/4663.json",
+        "releasePath": "release/assets/uniswap-4663-4cfc406.json",
+        "sha256": "sha256:21964cefbfc24b0ee89e7427acf74d223ce5a50aeb4216a9bac361a6148dea15"
+      },
+      "policySource": {
+        "schemaVersion": "programmable.custom-launch-policy-source.v1",
+        "repository": "programmablehq/Launch-Policy",
+        "repositoryId": 1320171831,
+        "protectedBranch": "main",
+        "verifiedMergeCommit": "6e33d64609567f6d1d03c9a9d6bd41ee71fe48f4",
+        "verifiedTree": "8aa630325d638b8dde573ebd6f95b35b0716e7bc",
+        "artifacts": {
+          "descriptor": {
+            "path": "policy/custom-launch-admission-v4.1.json",
+            "digest": "sha256:b09611360e284641873fdb2914b4282e0545e32ea587b278fcd11f4db9a4e7f5"
+          },
+          "businessPolicy": {
+            "path": "policy/robinhood-custom-launch-economics-v1.json",
+            "digest": "sha256:47801f57e2365f89eb7397a2df10d697bd1f756ec01536b9b34755e89809da04"
+          },
+          "generatedBinding": {
+            "path": ".programmable/custom-launch-admission.v4.1.json",
+            "digest": "sha256:5b2486f35fcd44bd476cafd5bfb5a12decf05a756ba237ca191928f5414c721e"
+          },
+          "schema": {
+            "path": "policy/schemas/custom-launch-admission-v4.1.schema.json",
+            "digest": "sha256:6a8194a3b5d8b6432a95ec04da3cd86091ad64c93c0531125caf00ecb919c8cf"
+          }
+        }
+      },
+      "profile": {
+        "structuralProfileId": "programmable.custom-launch.robinhood-mainnet.v1",
+        "businessProfileId": "robinhood-production-launch",
+        "profileRevision": 2,
+        "profileVersion": "4.1.0",
+        "profileDigest": "sha256:b0fca91264a49d358ed1a9eec2a679b59a48d716b71475bef583c2545e1ee502",
+        "providerProfileDigest": "sha256:ea5b5884b2b09775da760f65ba998c4ab68319e8567fa1d05072943c4bf8eb16"
+      },
+      "providerQuorums": {
+        "robinhood": [
+          {
+            "providerId": "drpc",
+            "trustDomain": "drpc.org"
+          },
+          {
+            "providerId": "alchemy",
+            "trustDomain": "alchemy.com"
+          }
+        ],
+        "ethereum": [
+          {
+            "providerId": "drpc",
+            "trustDomain": "drpc.org"
+          },
+          {
+            "providerId": "quicknode",
+            "trustDomain": "quicknode.com"
+          }
+        ]
+      },
+      "composition": {
+        "authoritativeChainRuntime": true,
+        "nativeInitialBuyQuote": true,
+        "liveExactPrivyPolicyReadiness": true,
+        "apiSignerObserverVerifierRoleAttestation": true,
+        "durableLedger": true,
+        "exactCredentialScopeRecheck": true,
+        "isolatedImageDecoder": true,
+        "dualProviderSimulation": true,
+        "exactExternalContractVerifier": true,
+        "permitDigestSigner": true,
+        "durableFinalityWriter": true,
+        "canonicalFinalitySubjectReader": true,
+        "dualProviderSubmissionDiscovery": true,
+        "finalityObserver": true,
+        "finalityWorkerLifecycle": true,
+        "sourceVerificationWorkerConfigured": true,
+        "sourceVerificationWorkerStarted": true,
+        "sourceVerificationWorkerLifecycle": true
+      }
+    },
+    "releaseIdentityDigest": "sha256:77c6a5257c009927b4a5bc271d7c7087ac33b4604080286b01dc131426ed1f7b",
+    "observedAt": "2026-10-16T10:16:42Z",
+    "authorizationDigest": "sha256:403882ad9831e11f2436f20dfab9ef77f0141ae646013afe1d8cbe7409a38bbf"
+  },
+  "flyControlPlane": {
+    "schemaVersion": "programmable.custom-launch-api-fly-control-plane-receipt.v2",
+    "app": "programmable-custom-launch-api",
+    "appStatus": "deployed",
+    "releaseIdDigest": "sha256:7fac8d61d639c8d3db3d629842c70614b5ef6c988337b3b94ebb3b5be718a07d",
+    "releaseVersionDigest": "sha256:e4edcaaa6192d5853b34804f74a4554657cfb16022ab64504bf2355fbc58254b",
+    "imageTag": "main-dad87a2f9430",
+    "imageIdentityDigest": "sha256:05d42ca4428d4f96b2a133512aff4b22198096115c4d1ef50c1fb2b12b9b1c96",
+    "machines": [
+      {
+        "slot": "1",
+        "machineIdentityDigest": "sha256:5da0bfc4328a9077483852ec7ed720becd3516ced914514f4a37b5ddaeb73b7f",
+        "state": "started",
+        "region": "fra"
+      },
+      {
+        "slot": "2",
+        "machineIdentityDigest": "sha256:495a4ddc3bce845eb8cfbb5a04ed0f51a3ef38d6dd49e389f6623e1ea0d52813",
+        "state": "started",
+        "region": "fra"
+      }
+    ],
+    "safeReadbacksDigest": "sha256:bd89cc2c8af8fbca8213d0e2a59f41541c82c5f948e75610ec024f9de74873d2",
+    "releaseIdentityDigest": "sha256:c8081e1b552023b93a12c012fe704fb52be458152f2cdd612e6f4d7b8c2af3d0",
+    "observedAt": "2026-10-16T10:16:42Z",
+    "authorizationDigest": "sha256:10ea466f60c8304e2a82d4f7b13a1180b27635f652c45adc978acf9aea7698cb"
+  },
+  "publicInputDigest": "sha256:0cfa63d85dd4637a9dafda540469ba229f3ca8e4e85c9fc161625054acf59fd4"
+}

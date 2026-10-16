@@ -106,7 +106,7 @@ function failures(value) {
     "node scripts/programmable-launch-v4-release-binding.mjs verify-release-ready",
     "npm run release:custom-launch:v4:clean-room:test",
     "PROGRAMMABLE_PRODUCTION_VERIFY_PROOF: ${{ runner.temp }}/production-verify-proof/production-verify-proof.json",
-    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7') && 'v4.1/' || '' }}programmable-backend-authorization.json",
     "startsWith(inputs.version, '4.')",
     'finalizer="contracts/scripts/finalize-robinhood-custom-launch-deployment.mjs"',
     'finalizer="contracts/scripts/finalize-robinhood-custom-launch-v41-deployment.mjs"',
@@ -235,6 +235,8 @@ function failures(value) {
     ["4.1.3", ["v411", "v412", "v413"]],
     ["4.1.4", ["v411", "v412", "v413", "v414"]],
     ["4.1.5", ["v411", "v412", "v413", "v414", "v415"]],
+    ["4.1.6", ["v411", "v412", "v413", "v414", "v416"]],
+    ["4.1.7", ["v411", "v412", "v413", "v414", "v416", "v417"]],
   ]) {
     const branch = testSelection.match(new RegExp(`^ *${version.replaceAll(".", "\\.")}\\) (.+) ;;$`, "m"))?.[1] ?? "";
     const selectedTests = new Set(branch.split(" "));
@@ -250,7 +252,7 @@ function failures(value) {
   const freshLines = new Set(freshStep.split("\n").map(line => line.trim()));
   for (const requiredInput of [
     "PROGRAMMABLE_PRODUCTION_VERIFY_PROOF: ${{ runner.temp }}/production-verify-proof/production-verify-proof.json",
-    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7') && 'v4.1/' || '' }}programmable-backend-authorization.json",
     'test -f "$PROGRAMMABLE_PRODUCTION_VERIFY_PROOF"',
     'test -f "$PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION"',
   ]) {
@@ -261,7 +263,7 @@ function failures(value) {
   const downloadLines = new Set(downloadStep.split("\n").map(line => line.trim()));
   for (const requiredInput of [
     "PROGRAMMABLE_PRODUCTION_VERIFY_PROOF: ${{ runner.temp }}/production-verify-proof/production-verify-proof.json",
-    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7') && 'v4.1/' || '' }}programmable-backend-authorization.json",
   ]) {
     if (!downloadLines.has(requiredInput)) missing.push(`download verification must receive ${requiredInput}`);
   }
@@ -349,7 +351,7 @@ test("CLI release workflow closes source, test, provenance, and immutability gat
   );
 });
 
-test("4.1.1 through 4.1.5 dispatch select separate client bindings and preserve the active 4.1 API gates", () => {
+test("4.1.1 through 4.1.7 dispatch select separate client bindings and preserve the active 4.1 API gates", () => {
   const cases = [...source.matchAll(/case "\$EXPECTED_VERSION" in[\s\S]*?\n\s*esac/g)].map(match => match[0]);
   assert.equal(cases.length, 3);
   function runSelection(value, version) {
@@ -362,7 +364,7 @@ test("4.1.1 through 4.1.5 dispatch select separate client bindings and preserve 
     ].join("\n")], { encoding: "utf8", env: { PATH: process.env.PATH,
       EXPECTED_VERSION: version, GITHUB_WORKSPACE: "/fixture", evidence: "/fixture/evidence" } });
   }
-  for (const [version, helper] of [["4.1.1", "v411"], ["4.1.2", "v412"], ["4.1.3", "v413"], ["4.1.4", "v414"], ["4.1.5", "v415"]]) {
+  for (const [version, helper] of [["4.1.1", "v411"], ["4.1.2", "v412"], ["4.1.3", "v413"], ["4.1.4", "v414"], ["4.1.5", "v415"], ["4.1.6", "v416"], ["4.1.7", "v417"]]) {
     const selected = cases.map(value => runSelection(value, version));
     for (const result of selected) assert.equal(result.status, 0, result.stderr);
     assert.ok(selected[0].stdout.includes(`node scripts/programmable-launch-${helper}-release-binding.mjs verify-release-ready`));
@@ -370,15 +372,15 @@ test("4.1.1 through 4.1.5 dispatch select separate client bindings and preserve 
     const priorTests = runSelection(cases[1], "4.1.0").stdout.split("\n")[0].split(" ").slice(2);
     for (const relative of priorTests) assert.ok(selected[1].stdout.split(" ").includes(relative), relative);
     assert.match(selected[1].stdout, /scripts\/test\/programmable-launch-v411-release-binding\.test\.mjs/);
-    assert.equal(selected[1].stdout.includes("scripts/test/programmable-launch-v412-release-binding.test.mjs"), ["4.1.2", "4.1.3", "4.1.4", "4.1.5"].includes(version));
-    assert.equal(selected[1].stdout.includes("scripts/test/programmable-launch-v413-release-binding.test.mjs"), ["4.1.3", "4.1.4", "4.1.5"].includes(version));
+    assert.equal(selected[1].stdout.includes("scripts/test/programmable-launch-v412-release-binding.test.mjs"), ["4.1.2", "4.1.3", "4.1.4", "4.1.5", "4.1.6", "4.1.7"].includes(version));
+    assert.equal(selected[1].stdout.includes("scripts/test/programmable-launch-v413-release-binding.test.mjs"), ["4.1.3", "4.1.4", "4.1.5", "4.1.6", "4.1.7"].includes(version));
     assert.equal(selected[1].stdout.includes("scripts/test/programmable-launch-v413-runtime-refresh.test.mjs"), version === "4.1.3");
-    assert.match(selected[2].stdout, version === "4.1.5" ? /finalizer=scripts\/programmable-launch-v415-runtime-refresh\.mjs/ : version === "4.1.4" ? /finalizer=scripts\/programmable-launch-v414-runtime-refresh\.mjs/ : version === "4.1.3"
-      ? /finalizer=scripts\/programmable-launch-v413-runtime-refresh\.mjs/
-      : /finalizer=contracts\/scripts\/finalize-robinhood-custom-launch-v41-deployment\.mjs/);
+    if (["4.1.3", "4.1.4", "4.1.5", "4.1.6", "4.1.7"].includes(version))
+      assert.ok(selected[2].stdout.includes(`finalizer=scripts/programmable-launch-${helper}-runtime-refresh.mjs`));
+    else assert.match(selected[2].stdout, /finalizer=contracts\/scripts\/finalize-robinhood-custom-launch-v41-deployment\.mjs/);
     assert.match(selected[2].stdout, /evidence=\/fixture\/evidence\/v4\.1/);
   }
-  for (const version of ["4.1.6", "4.2.0", "4.1.1-preview", "4.1.2-preview", "4.1.3-preview"]) {
+  for (const version of ["4.1.8", "4.2.0", "4.1.1-preview", "4.1.2-preview", "4.1.3-preview"]) {
     for (const value of cases) assert.notEqual(runSelection(value, version).status, 0, version);
   }
 });
@@ -430,7 +432,7 @@ test("release workflow contract mutations fail closed", () => {
     source.replace("node scripts/programmable-launch-v4-release-binding.mjs verify-release-ready", "echo unbound"),
     source.replace("npm run release:custom-launch:v4:clean-room:test", "echo skipped-clean-room-contract"),
     source.replaceAll(
-      "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+      "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7') && 'v4.1/' || '' }}programmable-backend-authorization.json",
       "",
     ),
     source.replace("node scripts/programmable-launch-release-assets.mjs build", "echo fabricated"),

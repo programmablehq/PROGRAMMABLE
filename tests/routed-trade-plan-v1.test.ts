@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, keccak256, parseAbi, toHex, type Hex } from "viem";
+import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getContractAddress, keccak256, parseAbi, toHex, type Hex } from "viem";
 vi.mock("server-only", () => ({}));
 vi.mock("@/contracts/spec/robinhood-custom-launch/chain-4663.v1.json", async importOriginal => {
   const original = await importOriginal<{ default: { contracts: { uniswap: Record<string, { runtimeCodeHash?: string }> } } }>();
@@ -21,12 +21,15 @@ import { ROBINHOOD_NATIVE100_RECIPES_V1 as feeRecipesV3 } from "@/lib/custom-lau
 import { proveImmutablePoolFeeRuntimeV3 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v3";
 import native30Vector from "./fixtures/immutable-pool-fee-runtime-v2.json";
 import { rebuildImmutablePoolFeeRuntimeProof } from "@/lib/custom-launch/immutable-pool-fee-runtime";
-import { IMMUTABLE_POOL_FEE_RECIPES_V2 as feeRecipesV2 } from "@/lib/custom-launch/immutable-pool-fee-recipes-custom-launch-plan-v2";
+import { proveImmutablePoolFeeRuntimeV2 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v2";
+import { LAUNCH_PROTECTION_RECIPES_V1 } from "@/lib/launch-protection/recipes-v1";
+import { IMMUTABLE_POOL_FEE_RECIPES_V2 } from "@/lib/custom-launch/immutable-pool-fee-recipes-custom-launch-plan-v2";
 import { materializeImmutableFeeRuntimeWordsV1,
   type ImmutablePoolFeeRuntimeProofV1 } from "@/lib/custom-launch/immutable-pool-fee-runtime-custom-launch-plan-v1";
 import { IMMUTABLE_POOL_FEE_RECIPES_V1 as feeRecipes } from "@/lib/custom-launch/immutable-pool-fee-recipes-custom-launch-plan-v1";
 import { CUSTOM_LAUNCH_OPEN_PROVENANCE_POLICY_V1, type LaunchClaimV1, type LaunchProjectionV1 } from "@/lib/custom-launch/launch-plan-v1";
 
+const feeRecipesV2 = { ...IMMUTABLE_POOL_FEE_RECIPES_V2, ...LAUNCH_PROTECTION_RECIPES_V1 };
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const TAKE = parseAbi(["function take(address,address,uint256)"]);
 function projection() {
@@ -93,8 +96,25 @@ function native100Vector() {
     materializeImmutableFeeRuntimeWordsV1(b.role === "hook" ? recipe.hook : recipe.vault, b.immutableWords!)]));
   return proveImmutablePoolFeeRuntimeV3(old.market,codes)!;
 }
-function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean; native30?: boolean; native100?: boolean; permitExpiration?: number } = {}) {
-  const vector = (options.native100 ? native100Vector() : options.native30 ? native30Vector : feeVectors.proofs[index]!) as unknown as ImmutablePoolFeeRuntimeProofV1;
+function protectedVector() {
+  const previous = native30Vector, recipe = LAUNCH_PROTECTION_RECIPES_V1.protected_native30_v1;
+  const market = { ...previous.market, chainId: "4663" as const, fee: 0 };
+  const protectionModule = getContractAddress({ from: market.hooks as Hex, nonce: 2n });
+  const w = (value: string | bigint) => toHex(BigInt(value), { size: 32 });
+  const moduleCode = materializeImmutableFeeRuntimeWordsV1(recipe.module, { kernel: w(market.hooks), token: w(market.currency1),
+    developer: w(controller), router: w(ROUTED_TRADE_CONTRACTS_V1.universalRouter.address), routerCodeHash: hash, normalBuyFeePpm: w(3000n) });
+  const old = previous.runtimeBindings.find(b => b.role === "hook")!.immutableWords;
+  const hookWords = { ...old, CANONICAL_POOL_MANAGER: w(market.poolManager), CHAIN_ID: w(4663n), lpFee: w(0n),
+    module: w(protectionModule), moduleCodeHash: keccak256(moduleCode), openingTaxVault: w(getContractAddress({ from: market.hooks as Hex, nonce: 3n })) };
+  const vaultWords = previous.runtimeBindings.find(b => b.role === "vault")!.immutableWords;
+  const codes = { [market.hooks.toLowerCase()]: materializeImmutableFeeRuntimeWordsV1(recipe.hook, hookWords as unknown as Record<string, Hex>),
+    [previous.feeVault.toLowerCase()]: materializeImmutableFeeRuntimeWordsV1(recipe.vault, vaultWords as unknown as Record<string, Hex>),
+    [protectionModule.toLowerCase()]: moduleCode };
+  return { proof: proveImmutablePoolFeeRuntimeV2(market as never, codes)!, codes };
+}
+function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean; native30?: boolean; native100?: boolean; protected?: boolean; permitExpiration?: number } = {}) {
+  const protectedFixture = options.protected ? protectedVector() : null;
+  const vector = (protectedFixture ? protectedFixture.proof : options.native100 ? native100Vector() : options.native30 ? native30Vector : feeVectors.proofs[index]!) as unknown as ImmutablePoolFeeRuntimeProofV1;
   const proof = rebuildImmutablePoolFeeRuntimeProof(vector, vector.market);
   const recipes = proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v3" ? feeRecipesV3[proof.recipeId] : proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v2" ? feeRecipesV2[proof.recipeId] : feeRecipes[proof.recipeId];
   const platform = BigInt(proof.rateBps) * 10n;
@@ -104,6 +124,7 @@ function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAcc
   const codes = Object.fromEntries(proof.runtimeBindings.filter(b => b.role !== "module").map(binding => [binding.address.toLowerCase(),
     materializeImmutableFeeRuntimeWordsV1((binding.role === "controller" && "controller" in recipes ? recipes.controller
       : binding.role === "hook" ? recipes.hook : recipes.vault), binding.immutableWords!)]));
+  if (protectedFixture) Object.assign(codes, protectedFixture.codes);
   const original: LaunchProjectionV1 = { ...projection(), components: [...projection().components,
     ...proof.runtimeBindings.map(binding => ({ componentId: `fee-${binding.role}`, artifactId: `fee-source-${binding.role}`,
       expectedAddress: binding.address, runtimeCodeHash: binding.runtimeCodeHash }))], markets: [{ marketId: request().marketId, kind: "uniswap_v4",
@@ -122,7 +143,10 @@ function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAcc
       return options.missingVault && address===proof.feeVault.toLowerCase()?"0x":codes[address]??base(method,params);
     }
     const tx=params[0] as {from:string;to:string;data:Hex;value:Hex};
-    if (method === "eth_call" && tx.to.toLowerCase() === ROUTED_TRADE_CONTRACTS_V1.v4Quoter.address.toLowerCase()) return encodeAbiParameters([{type:"uint256"},{type:"uint256"}],[quoteAmount,100000n]);
+    if (method === "eth_call" && tx.to.toLowerCase() === ROUTED_TRADE_CONTRACTS_V1.v4Quoter.address.toLowerCase()) {
+      if (options.protected && !options.sell) throw new Error("The protected buyer must use its actual router, never a generic quoter");
+      return encodeAbiParameters([{type:"uint256"},{type:"uint256"}],[quoteAmount,100000n]);
+    }
     if (method === "eth_call" && tx.to.toLowerCase() === ROUTED_TRADE_CONTRACTS_V1.permit2.address.toLowerCase()) return encodeAbiParameters([{type:"uint160"},{type:"uint48"},{type:"uint48"}],[100000n,options.permitExpiration ?? Number(BigInt(tradeRequest.deadline)),0]);
     if (method === "eth_call" && [proof.feeVault.toLowerCase(),proof.market.poolManager.toLowerCase()].includes(tx.to.toLowerCase())) {
       const name=decodeFunctionData({abi:LEDGER,data:tx.data}).functionName,post=!!params[2];
@@ -270,6 +294,13 @@ describe("generic vNext routed swap", () => {
       expect(decodeAbiParameters([{type:"bytes"},{type:"bytes[]"}],decoded.args[1][0]!)[0]).toBe("0x060c0f");
     }
     await expect(immutablePoolFixture(0,{native100:true,provenance:true,unbacked:true}).prepare()).rejects.toMatchObject({status:503});
+  });
+  it("quotes a protected purchase through the authenticated buyer router and validates its final fee accrual", async () => {
+    const fixture = immutablePoolFixture(0, { protected: true, provenance: true });
+    const result = await fixture.prepare();
+    expect(result.status).toBe("ready");
+    expect(result.quote.amountOut).toBe("50001");
+    expect(result.fee.routedRateBps).toBe(0);
   });
   it("proves Native30 buy and sell accrual without charging a second route fee", async () => {
     for (const sell of [false, true]) {

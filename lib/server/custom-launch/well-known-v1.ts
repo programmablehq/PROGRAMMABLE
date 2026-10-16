@@ -30,11 +30,11 @@ const ETHEREUM_PROFILE_SELECTION = Object.freeze({
   unknownProfileDisposition: "fail-closed" as const,
   requiresCliForDirectHttp: false as const,
   cli: Object.freeze({
-    sourceCandidateVersion: "4.1.6" as const,
+    sourceCandidateVersion: "4.1.7" as const,
     publicationVerified: null,
     publicationAuthority: "immutable-github-release" as const,
-    releaseUrl: "https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.1.6",
-    releaseTag: "programmable-launch-v4.1.6" as const,
+    releaseUrl: "https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.1.7",
+    releaseTag: "programmable-launch-v4.1.7" as const,
     publishedReleaseAndArtifactVerificationRequired: true as const,
     freshUnversionedPackSelection: "server-capabilities" as const,
     offlineBuilderDefaultProfileVersion: "3.3.0" as const,
@@ -99,6 +99,16 @@ export function programmableWellKnownDocumentV1(
       readyzUrl: "https://api.programmable.market/readyz",
       capabilitiesUrl: "https://api.programmable.market/v3/capabilities",
       ethereumProfileSelection: ETHEREUM_PROFILE_SELECTION,
+      launchProtection: Object.freeze({
+        policyVersion: "programmable.launch-protection.v1",
+        statusUrl: "https://api.programmable.market/v1/launch-protection",
+        supportedChainIds: ["1", "4663"],
+        builderModule: "@programmable/launch/launch-protection",
+        sourceCandidateVersion: "4.1.7",
+        minimumFdvUsd: "30000", walletLimitBps: 200, buyerLimitBps: 200, protectionSeconds: 300,
+        openingTotalFeePpm: 990000, openingFeeSeconds: 30, maximumAdditionalTaxExemptWallets: 3,
+        discoveryIsActivationEvidence: false,
+      }),
       preflightUrl:
         "https://api.programmable.market/v3/custom-launches/preflight",
       finalizedMetadataUrl:

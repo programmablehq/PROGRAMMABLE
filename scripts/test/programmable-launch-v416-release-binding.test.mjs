@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
-import test from 'node:test';
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import test,{after} from 'node:test';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
+import {gunzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import Ajv2020 from 'ajv/dist/2020.js';
 import * as client from '../programmable-launch-v416-release-binding.mjs';
 import {releaseBindingTools} from '../programmable-launch-release-assets.mjs';
-const repositoryRoot=fileURLToPath(new URL('../../',import.meta.url));
+const repositoryRoot=mkdtempSync(join(tmpdir(),'launch-v416-history-'));
+after(()=>rmSync(repositoryRoot,{recursive:true,force:true}));
+const snapshot=readFileSync(new URL('./fixtures/programmable-launch-v416-source.json.gz',import.meta.url));
+assert.equal(createHash('sha256').update(snapshot).digest('hex'),'9c9f48e779248f3e101fc93ffc912808eecbb0d5ca75182e0d321e58953a1bea');
+for(const [relative,bytes] of Object.entries(JSON.parse(gunzipSync(snapshot)))){const file=join(repositoryRoot,relative);mkdirSync(dirname(file),{recursive:true});writeFileSync(file,bytes);}
 test('4.1.6 binds the 1% policy while retaining historical policy identities',()=>{
  const result=client.auditV416ClientSource({repositoryRoot});
  assert.equal(result.productionEvidenceVerified,false);
