@@ -378,3 +378,18 @@ test("fee100 compiler export permits exact public source hashes, not nearby cred
     assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
   }
 });
+
+test("Claus kernel exceptions permit only exact public source lines", t => {
+  const manifest="contracts/src/claus-partner-v1/source-manifest.json";
+  const source=readFileSync(new URL(`../../${manifest}`,import.meta.url),"utf8");
+  for(const name of ["PoolKey.sol","ClausLaunchTokenV1.sol"]) {
+    const line=source.split("\n").find(value=>value.includes(`${name}\":`));assert.ok(line);
+    assert.deepEqual(scan(t,{[manifest]:line},{raw:true}),[]);
+    assertFiles(scan(t,{[manifest]:line.replace(/0x[0-9a-f]{64}/,material)},{raw:true}),[manifest]);
+    assertFiles(scan(t,{[`${manifest}.backup`]:line},{raw:true}),[`${manifest}.backup`]);
+  }
+  const hook="contracts/src/claus-partner-v1/ClausQuoteHookV1.sol";
+  const line="        int128 tokenDelta = quoteIsCurrency0 ? delta.amount1() : delta.amount0();";
+  assert.deepEqual(scan(t,{[hook]:line},{raw:true}),[]);
+  assertFiles(scan(t,{[hook]:`${line} const apiKey = \"${material}\";`},{raw:true}),[hook],2);
+});

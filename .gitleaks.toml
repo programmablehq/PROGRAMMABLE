@@ -2,6 +2,25 @@
 useDefault = true
 
 [[allowlists]]
+description = "Claus kernel manifest contains exact public Solidity source commitments"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^contracts/src/claus-partner-v1/source-manifest\.json$''']
+regexes = [
+  '''^\s*"lib/v4-core/src/types/PoolKey\.sol": "0xf89856e0580d7a4856d3187a76858377ccee9d59702d230c338d84388221b786",\s*$''',
+  '''^\s*"src/claus-partner-v1/ClausLaunchTokenV1\.sol": "0xa9878888c45305b746cc13e6d69e05e05d30c995adc44cafcb9b9baa71d0c298",\s*$''',
+]
+
+[[allowlists]]
+description = "Claus hook derives the public swap delta without a credential"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^contracts/src/claus-partner-v1/ClausQuoteHookV1\.sol$''']
+regexes = ['''^\s*int128 tokenDelta = quoteIsCurrency0 \? delta\.amount1\(\) : delta\.amount0\(\);\s*$''']
+
+[[allowlists]]
 description = "Atomic Module V2 lifecycle evidence identifies its public canary and activated API source"
 targetRules = ["generic-api-key"]
 condition = "AND"

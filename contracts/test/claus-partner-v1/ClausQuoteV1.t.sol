@@ -14,6 +14,7 @@ import { BalanceDelta } from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import { HookMiner } from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import { ClausLaunchTokenV1 } from "../../src/claus-partner-v1/ClausLaunchTokenV1.sol";
+import { ClausBoundedFeePolicyV1 } from "../../src/claus-partner-v1/ClausBoundedFeePolicyV1.sol";
 import { ClausQuoteHookV1 } from "../../src/claus-partner-v1/ClausQuoteHookV1.sol";
 import { ClausQuoteInitializerV1, IClausUsdFeedV1 } from "../../src/claus-partner-v1/ClausQuoteInitializerV1.sol";
 
@@ -109,6 +110,18 @@ contract ClausRouterFixture is IUnlockCallback {
 }
 
 contract ClausQuoteV1Test is Test {
+    function test_clausReadonlyModuleInterfaceAndBoundedConfiguration() public {
+        ClausBoundedFeePolicyV1 module = new ClausBoundedFeePolicyV1();
+        assertEq(
+            abi.decode(module.evaluate(abi.encode(uint24(10_000), uint24(20_000)), abi.encode(true)), (uint256)), 10_000
+        );
+        assertEq(
+            abi.decode(module.evaluate(abi.encode(uint24(10_000), uint24(20_000)), abi.encode(false)), (uint256)),
+            20_000
+        );
+        vm.expectRevert(ClausBoundedFeePolicyV1.InvalidFeeConfiguration.selector);
+        module.evaluate(abi.encode(uint24(147_001), uint24(0)), abi.encode(true));
+    }
     address constant QUOTE = 0x1b54E762aa34CF6E28E9C082F2848e28E45DA6b8;
     address constant MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     address constant BUYER = address(0xB001);
@@ -153,9 +166,8 @@ contract ClausQuoteV1Test is Test {
                 uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(tokenCode)))))
             );
             if ((predicted < QUOTE) == _below()) {
-                token = new ClausLaunchTokenV1{ salt: salt }(
-                    "Project", "EXAMPLE", SUPPLY, address(initializer), MANAGER
-                );
+                token =
+                    new ClausLaunchTokenV1{ salt: salt }("Project", "EXAMPLE", SUPPLY, address(initializer), MANAGER);
                 break;
             }
         }
