@@ -389,7 +389,12 @@ test("Claus kernel exceptions permit only exact public source lines", t => {
     assertFiles(scan(t,{[`${manifest}.backup`]:line},{raw:true}),[`${manifest}.backup`]);
   }
   const hook="contracts/src/claus-partner-v1/ClausQuoteHookV1.sol";
-  const line="        int128 tokenDelta = quoteIsCurrency0 ? delta.amount1() : delta.amount0();";
+  const line=readFileSync(new URL(`../../${hook}`,import.meta.url),"utf8").split("\n").find(value=>value.includes("int128 tokenDelta"));
+  assert.ok(line);
   assert.deepEqual(scan(t,{[hook]:line},{raw:true}),[]);
   assertFiles(scan(t,{[hook]:`${line} const apiKey = \"${material}\";`},{raw:true}),[hook],2);
+  const historical="const line="+JSON.stringify(line)+";";
+  const self="scripts/security/gitleaks-policy.test.mjs";
+  assert.deepEqual(scan(t,{[self]:historical},{raw:true}),[]);
+  assertFiles(scan(t,{[self]:`${historical} const apiKey = \"${material}\";`},{raw:true}),[self],2);
 });

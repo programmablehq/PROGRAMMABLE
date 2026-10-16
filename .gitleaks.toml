@@ -21,6 +21,14 @@ paths = ['''^contracts/src/claus-partner-v1/ClausQuoteHookV1\.sol$''']
 regexes = ['''^\s*int128 tokenDelta = quoteIsCurrency0 \? delta\.amount1\(\) : delta\.amount0\(\);\s*$''']
 
 [[allowlists]]
+description = "Exact historical public swap-expression fixture in the scanner regression"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^scripts/security/gitleaks-policy\.test\.mjs$''']
+regexes = ['''^\s*const line="        int128 tokenDelta = quoteIsCurrency0 \? delta\.amount1\(\) : delta\.amount0\(\);";\s*$''']
+
+[[allowlists]]
 description = "Atomic Module V2 lifecycle evidence identifies its public canary and activated API source"
 targetRules = ["generic-api-key"]
 condition = "AND"
