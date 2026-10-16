@@ -21,6 +21,10 @@ import {
   type MarketValuationV1,
   type TokenMarketDataV1,
 } from "./market-data-v1";
+import {
+  BitqueryResponseBodyError,
+  readBoundedBitqueryResponseText,
+} from "./bitquery-response.server";
 
 export const BITQUERY_OAUTH_TOKEN_ENVIRONMENT_VARIABLE =
   "BITQUERY_OAUTH_TOKEN" as const;
@@ -1300,14 +1304,6 @@ async function executeBitqueryGraphql(
         response.status,
       );
     }
-    const declared = Number(response.headers.get("content-length") ?? "0");
-    if (Number.isFinite(declared) && declared > MAXIMUM_RESPONSE_BYTES) {
-      throw new BitqueryMarketDataError(
-        "response",
-        "unspecified",
-        "body-too-large",
-      );
-    }
     if (!response.headers.get("content-type")?.toLowerCase().includes(
       "application/json",
     )) {
@@ -1317,17 +1313,37 @@ async function executeBitqueryGraphql(
         "invalid-content-type",
       );
     }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAXIMUM_RESPONSE_BYTES) {
+    let source: string;
+    try {
+      source = await readBoundedBitqueryResponseText(
+        response,
+        MAXIMUM_RESPONSE_BYTES,
+      );
+    } catch (error) {
+      if (!(error instanceof BitqueryResponseBodyError)) throw error;
+      if (error.kind === "too-large") {
+        throw new BitqueryMarketDataError(
+          "response",
+          "unspecified",
+          "body-too-large",
+        );
+      }
+      if (error.kind === "invalid-body") {
+        throw new BitqueryMarketDataError(
+          "response",
+          "unspecified",
+          "invalid-json",
+        );
+      }
       throw new BitqueryMarketDataError(
-        "response",
+        "transport",
         "unspecified",
-        "body-too-large",
+        "request-transport",
       );
     }
     let payload: unknown;
     try {
-      payload = JSON.parse(new TextDecoder().decode(bytes));
+      payload = JSON.parse(source);
     } catch {
       throw new BitqueryMarketDataError(
         "response",
