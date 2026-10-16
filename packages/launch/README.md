@@ -624,12 +624,12 @@ New fee100 Custom Launches on Ethereum and Robinhood use a 1% platform trading f
 
 ## Required launch protection (4.1.7)
 
-Use `@programmable/launch/launch-protection` for new native ETH launches on Ethereum (1) and Robinhood (4663). Check `GET https://api.programmable.market/v1/launch-protection` for activation. This is a fixed, source-verified package; all six component runtimes are bound into the reviewed launch.
+Use `@programmable/launch/launch-protection` for new native ETH Custom Launches on Ethereum (1) and Robinhood (4663). Module Mode is exempt from this package and retains its own release, wallet and simulation checks. Check `GET https://api.programmable.market/v1/launch-protection` for activation. This is a fixed, source-verified package; all six component runtimes are bound into the reviewed launch.
 
-- Minimum starting fully diluted valuation: USD 30,000, checked against the chain's fixed, fresh ETH/USD feed. This is virtual pool valuation, not USD 30,000 of deposited liquidity.
+- Minimum starting fully diluted valuation: USD 15,000, checked against the chain's fixed, fresh ETH/USD feed. This is virtual pool valuation, not USD 15,000 of deposited liquidity.
 - First 300 seconds: cumulative purchased tokens per authenticated buyer and cumulative recipient inflow are each limited to 2% of the initial supply. Selling or transferring does not restore capacity. The developer and exempt wallets have the same limits.
 - The initial total buy fee is 99%. Its extra component decreases linearly over 30 seconds to zero. The normal 0.3% platform fee and selected creator fee continue. The extra fee is claimable only by the fixed platform treasury.
-- The developer and up to three distinct additional wallets can be exempted from the extra opening fee. The list is fixed in the constructor. Sell fees remain the normal fees.
+- The developer and up to six distinct additional wallets can be exempted from the extra opening fee. The list is fixed in the constructor. Sell fees remain the normal fees.
 - Initial liquidity is permanently locked. The initial developer buy is atomic with initialization and must have a positive, reviewed minimum output.
 
 Amounts such as `supply` are decimal strings in token base units (18 decimals). Use `"1000000000000000000000000000"` for one billion tokens. Never reuse the example minimum output of one base unit for a production launch: obtain and review the actual expected initial purchase and its slippage bound.
