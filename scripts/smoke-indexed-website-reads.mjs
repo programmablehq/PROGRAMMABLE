@@ -55,7 +55,7 @@ function responseStatusSummary(body, response) {
 
 class IncompleteEthereumCatalogError extends Error {}
 
-function isIncompleteEthereumCatalog(body, response, expectations, nowMs) {
+function isIncompleteEthereumCatalog(body, response, expectations, nowMs, pageNumber) {
   if (!record(body) || body.chainId !== 1 || !record(body.sources) || !record(body.sourceEvidence) ||
     Object.keys(body.sources).sort().join(",") !== "classic,custom" ||
     Object.keys(body.sourceEvidence).sort().join(",") !== "classic,custom" ||
@@ -67,10 +67,12 @@ function isIncompleteEthereumCatalog(body, response, expectations, nowMs) {
   if (!["classic", "custom"].every(name => body.sources[name] === "unavailable"
     ? body.sourceEvidence[name] === null
     : ["current", "last-known-good"].includes(body.sources[name]) && record(body.sourceEvidence[name]))) return false;
-  if (!record(body.page) || body.page.number !== 1 || body.page.size !== PAGE_SIZE ||
+  if (!record(body.page) || body.page.size !== PAGE_SIZE ||
     !Number.isSafeInteger(body.page.totalItems) || body.page.totalItems < 0 || body.page.totalItems > MAXIMUM_ITEMS ||
-    body.page.totalPages !== Math.ceil(body.page.totalItems / PAGE_SIZE) || body.page.hasMore !== (body.page.totalPages > 1) ||
-    !Array.isArray(body.items) || body.items.length !== Math.min(PAGE_SIZE, body.page.totalItems) ||
+    body.page.totalPages !== Math.ceil(body.page.totalItems / PAGE_SIZE) ||
+    body.page.number !== Math.min(pageNumber, Math.max(1, body.page.totalPages)) ||
+    body.page.hasMore !== (body.page.number < body.page.totalPages) ||
+    !Array.isArray(body.items) || body.items.length !== Math.min(PAGE_SIZE, Math.max(0, body.page.totalItems - (body.page.number - 1) * PAGE_SIZE)) ||
     !Array.isArray(body.presentations)) return false;
   if (unavailable === 2 && (body.updatedAt !== null || body.page.totalItems !== 0 || body.presentations.length !== 0)) return false;
   try {
@@ -197,11 +199,26 @@ function validateProjectedItem(item, sources) {
   } else check(item.poolManager === null && item.hookAddress === null && item.poolId === null, "Robinhood no-market projection");
 }
 
-function validateItem(item, body, route, expectations) {
+function validateItem(item, body, route, expectations, nowMs) {
   check(record(item) && ADDRESS.test(item.tokenAddress ?? "") && ADDRESS.test(item.creator ?? "") &&
     HASH.test(item.transactionHash ?? "") && BLOCK.test(item.blockNumber ?? "") &&
     (item.chainId === undefined || item.chainId === route.chainId), "launch identity");
   if (route.chainId === 1) {
+    // The website also shows fresh, independently observed receipts while they
+    // wait for the canonical reader's finality depth. Validate their separate
+    // display-only contract; never count them as canonical provenance.
+    if (item.confirmation !== undefined) {
+      check(item.confirmation === "confirming" && item.chainId === 1 && item.category === "custom"
+        && ["custom", "module"].includes(item.mode) && ADDRESS.test(item.hookAddress ?? "")
+        && HASH.test(item.launchId ?? "") && HASH.test(item.blockHash ?? "") && HASH.test(item.poolId ?? "")
+        && /^0x[0-9a-f]{40}$/iu.test(item.quoteAsset ?? "") && timestamp(item.launchedAt, nowMs)
+        && Number.isSafeInteger(item.observationExpiresAt) && item.observationExpiresAt > nowMs
+        && item.observationExpiresAt <= nowMs + 60_000
+        && BigInt(item.blockNumber) > BigInt(body.sourceEvidence.custom.asOfBlock)
+        && item.provenance === undefined && item.finality === undefined && item.launchProjection === undefined,
+      "Ethereum confirming observation");
+      return;
+    }
     const provenance = item.provenance;
     check(ADDRESS.test(item.hookAddress ?? "") && ["classic", "custom"].includes(item.category) && record(provenance) &&
       provenance.schemaVersion === "programmable.explore-launch-category-provenance.v1" && provenance.category === item.category,
@@ -270,7 +287,7 @@ export function validateIndexedWebsiteList({ body, response, route, pageNumber, 
   const identities = new Set();
   const addresses = new Set();
   for (const item of body.items) {
-    validateItem(item, body, route, expectations);
+    validateItem(item, body, route, expectations, nowMs);
     check(!identities.has(launchIdentity(item)), "duplicate launch identity");
     identities.add(launchIdentity(item));
     addresses.add(item.tokenAddress.toLowerCase());
@@ -318,12 +335,15 @@ async function observeReads(input, target, headers, observedAt) {
       const result = await request(`${route.path}?page=${number}&pageSize=${PAGE_SIZE}&sort=newest&mode=all`, "application/json");
       let body;
       try { body = JSON.parse(result.text); } catch { throw new Error("indexed website JSON is invalid"); }
-      if (input.targetKind === "staged" && route.chainId === 1 && number === 1 &&
-        isIncompleteEthereumCatalog(body, result.response, expectations, Date.parse(observedAt))) {
+      if (input.targetKind === "staged" && route.chainId === 1 &&
+        isIncompleteEthereumCatalog(body, result.response, expectations, Date.parse(observedAt), number)) {
         throw new IncompleteEthereumCatalogError(`indexed website ethereum response status (${responseStatusSummary(body, result.response)}) is incomplete`);
       }
       validateIndexedWebsiteList({ body, response: result.response, route, pageNumber: number, expectations, nowMs: Date.parse(observedAt) });
       first ??= body;
+      if (input.targetKind === "staged" && body.page.totalItems !== first.page.totalItems) {
+        throw new IncompleteEthereumCatalogError("indexed website catalog changed during pagination; recapture the complete observation");
+      }
       check(body.page.totalItems === first.page.totalItems, "catalog changed during pagination; rerun smoke");
       check(hasPersistentPin(body, route) === hasPersistentPin(first, route), "persistent pin changed during pagination");
       for (const [index, item] of body.items.entries()) {
@@ -334,7 +354,8 @@ async function observeReads(input, target, headers, observedAt) {
         check(!identities.has(launchIdentity(item)), "duplicate launch across pages; rerun smoke");
         identities.add(launchIdentity(item));
       }
-      pages.push({ number, status: body.status, count: body.items.length, updatedAt: body.updatedAt,
+      pages.push({ number, status: body.status, count: body.items.length,
+        confirmingCount: body.items.filter(item => item.confirmation === "confirming").length, updatedAt: body.updatedAt,
         sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest: result.bodyDigest });
     }
     check(identities.size === first.page.totalItems, "catalog count");

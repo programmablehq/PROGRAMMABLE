@@ -8,7 +8,7 @@ import { encodeAbiParameters, keccak256 } from "viem";
 
 import { RELEASE_GATED_FLAG_NAMES, WORKER_ACTIVATION_FLAG_NAMES } from "../perf/read-model-deploy-policy.mjs";
 import { evaluateIndexedWebsiteReadDeployPolicy, readIndexedWebsiteSourceExpectations, MODULE_ENGINE_INDEX_RELEASES_SCHEMA } from "../perf/indexed-website-read-deploy-policy.mjs";
-import { runIndexedWebsiteReadSmoke } from "../smoke-indexed-website-reads.mjs";
+import { runIndexedWebsiteReadSmoke, validateIndexedWebsiteList } from "../smoke-indexed-website-reads.mjs";
 import { engineWire } from "../../contracts/scripts/module-engine/shared.mjs";
 
 const NOW = Date.parse("2026-09-09T03:00:00.000Z");
@@ -397,6 +397,53 @@ test("staged smoke scans complete catalogs and token pages with only the protect
   assert.doesNotMatch(JSON.stringify(result), /fixture-vercel-token|fixture-protection-bypass/u);
 });
 
+function confirmingItem(mode = "module") {
+  const { provenance, ...item } = ethereumItem(1);
+  return { ...item, chainId: 1, category: "custom", mode, confirmation: "confirming", launchId: HASH(900),
+    hookAddress: ADDRESS(901), blockNumber: "25930001", blockHash: HASH(902), poolId: HASH(903),
+    quoteAsset: ADDRESS(0), launchedAt: UPDATED, observationExpiresAt: NOW + 30_000 };
+}
+
+test("fresh module and custom observations remain display-only in release evidence", async () => {
+  for (const mode of ["module", "custom"]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) spec.body.items[0] = confirmingItem(mode);
+    });
+    const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl }));
+    assert.equal(result.chains[0].totalItems, 51);
+    assert.equal(result.chains[0].pages[0].confirmingCount, 1);
+    assert.equal(result.chains[0].pages[1].confirmingCount, 0);
+  }
+});
+
+test("confirming labels cannot bypass canonical source, identity or freshness checks", () => {
+  for (const mutate of [
+    item => { item.confirmation = "final"; },
+    item => { item.chainId = 4663; },
+    item => { item.category = "classic"; },
+    item => { item.mode = "unknown"; },
+    item => { item.launchId = HASH(0); },
+    item => { item.hookAddress = ADDRESS(0); },
+    item => { item.transactionHash = HASH(0); },
+    item => { item.blockHash = HASH(0); },
+    item => { item.poolId = HASH(0); },
+    item => { item.quoteAsset = "invalid"; },
+    item => { item.observationExpiresAt = NOW; },
+    item => { item.observationExpiresAt = NOW + 60_001; },
+    item => { item.launchedAt = new Date(NOW + 120_000).toISOString(); },
+    item => { item.blockNumber = "25930000"; },
+    item => { item.provenance = ethereumItem(1).provenance; },
+    item => { item.finality = { status: "final" }; },
+    item => { item.launchProjection = {}; },
+  ]) {
+    const body = listBody(1, 1); body.items[0] = confirmingItem(); mutate(body.items[0]);
+    assert.throws(() => validateIndexedWebsiteList({ body, response: new Response(null, { headers: {
+      "x-programmable-indexing-status": body.status, "x-content-type-options": "nosniff" } }),
+      route: { chainId: 1, slug: "ethereum" }, pageNumber: 1, expectations: EXPECTATIONS, nowMs: NOW }),
+    /Ethereum confirming observation|launch identity/);
+  }
+});
+
 function incompleteEthereum(spec, unavailable = false) {
   spec.body.status = unavailable ? "unavailable" : "partial";
   spec.status = unavailable ? 503 : 200;
@@ -473,16 +520,36 @@ test("malformed or untrusted incomplete source envelopes never trigger availabil
   }
 });
 
-test("production, later-page incompleteness and other-chain integrity failures are not retried", async () => {
-  for (const kind of ["production", "later-page", "other-chain"]) {
+test("production and other-chain integrity failures are not retried", async () => {
+  for (const kind of ["production", "other-chain"]) {
     const f = fixture(({ url, spec }) => {
-      if (url.pathname === "/api/explore/ethereum" && (kind !== "later-page" || spec.body.page.number === 2)) incompleteEthereum(spec);
+      if (url.pathname === "/api/explore/ethereum") incompleteEthereum(spec);
       if (kind === "other-chain" && url.pathname === "/api/explore/robinhood") spec.body.sourceEvidence.router.binding = "invalid";
     });
     await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
       ...(kind === "production" ? { targetKind: "production", targetUrl: "https://programmable.market" } : {}),
       waitImpl: async () => assert.fail("nonretryable observation was retried") })),
     kind === "other-chain" ? /Robinhood Router binding/u : /ethereum response status/u);
+  }
+});
+
+test("later-page availability and live count drift discard the entire attempt before a bounded retry", async () => {
+  for (const kind of ["availability", "count"]) {
+    let firstPages = 0;
+    const waits = [];
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname !== "/api/explore/ethereum") return;
+      if (spec.body.page.number === 1) firstPages += 1;
+      if (spec.body.page.number !== 2 || firstPages !== 1) return;
+      if (kind === "availability") incompleteEthereum(spec);
+      else { spec.body.page.totalItems = 52; spec.body.items.push(ethereumItem(52)); }
+    });
+    const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl, waitImpl: async delay => waits.push(delay) }));
+    assert.deepEqual(waits, [5_000]);
+    assert.equal(firstPages, 2);
+    assert.equal(result.chains[0].totalItems, 51);
+    assert.equal(result.chains[0].pages.length, 2);
+    assert.doesNotMatch(JSON.stringify(result), /partial|unavailable/);
   }
 });
 
