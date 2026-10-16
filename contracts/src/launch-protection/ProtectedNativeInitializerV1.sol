@@ -30,7 +30,7 @@ interface ILaunchUsdFeedV1 {
 contract ProtectedNativeInitializerV1 is IUnlockCallback {
     using SafeERC20 for IERC20;
     uint256 public constant MINIMUM_FDV_USD = 30_000;
-    uint256 public constant MAX_FEED_AGE = 1 hours;
+    uint256 public immutable MAX_FEED_AGE;
     address public immutable graphFactory;
     IPoolManager public immutable poolManager;
     ILaunchUsdFeedV1 public immutable nativeUsdFeed;
@@ -59,8 +59,15 @@ contract ProtectedNativeInitializerV1 is IUnlockCallback {
     );
 
     constructor(IPoolManager manager_, address graphFactory_, ILaunchUsdFeedV1 feed_, bytes32 expectedFeedCodeHash) {
+        address canonicalFeed = block.chainid == 1
+            ? 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+            : block.chainid == 4663 ? 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9 : address(0);
+        address canonicalManager = block.chainid == 1
+            ? 0x000000000004444c5dc75cB358380D2e3dE08A90
+            : block.chainid == 4663 ? 0x8366a39CC670B4001A1121B8F6A443A643e40951 : address(0);
         if (
-            address(manager_).code.length == 0 || graphFactory_ == address(0) || address(feed_).code.length == 0
+            canonicalFeed == address(0) || address(feed_) != canonicalFeed || address(manager_) != canonicalManager
+                || address(manager_).code.length == 0 || graphFactory_ == address(0) || address(feed_).code.length == 0
                 || address(feed_).codehash != expectedFeedCodeHash
         ) {
             revert InvalidConfiguration();
@@ -68,6 +75,8 @@ contract ProtectedNativeInitializerV1 is IUnlockCallback {
         uint8 decimals_ = feed_.decimals();
         if (decimals_ > 18) revert InvalidConfiguration();
         poolManager = manager_;
+        // Bound to the published heartbeat of the fixed feed, not an applicant-supplied tolerance.
+        MAX_FEED_AGE = block.chainid == 1 ? 1 hours : 24 hours;
         graphFactory = graphFactory_;
         nativeUsdFeed = feed_;
         feedCodeHash = expectedFeedCodeHash;
@@ -89,7 +98,7 @@ contract ProtectedNativeInitializerV1 is IUnlockCallback {
             hook.initializer() != address(this) || token.initializer() != address(this)
                 || token.poolManager() != address(poolManager) || Currency.unwrap(key.currency0) != address(0)
                 || Currency.unwrap(key.currency1) != address(token) || address(key.hooks) != address(hook)
-                || key.fee != 0x800000 || key.tickSpacing != 60 || protection.kernel() != address(hook)
+                || key.fee != 0 || key.tickSpacing != 60 || protection.kernel() != address(hook)
                 || address(protection.token()) != address(token) || protection.developer() != buyer
                 || startTick % 60 != 0 || startTick <= TickMath.minUsableTick(60)
                 || startTick >= TickMath.maxUsableTick(60)

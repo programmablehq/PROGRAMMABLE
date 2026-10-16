@@ -21,7 +21,7 @@ import { LaunchProtectionModuleV1 } from "./LaunchProtectionModuleV1.sol";
 import { ProtectedLaunchTokenV1 } from "./ProtectedLaunchTokenV1.sol";
 import { EthereumNativeFeeVaultV3 } from "../ethereum-native30-v3/EthereumNativeFeeVaultV3.sol";
 
-/// @notice V2 supports read-only dynamic LP fees and validation, not stateful modules or custom settlement/deltas.
+/// @notice Read-only validation interface; this version requires zero LP fees and zero custom module deltas.
 /// @dev Implementations must authenticate this kernel as caller. A module never executes in kernel storage.
 interface IProtectedNativeFeeModuleV1 {
     function beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata data)
@@ -38,8 +38,8 @@ interface IProtectedNativeFeeModuleV1 {
 }
 
 /// @notice Sealed native/token launch kernel with a mandatory immutable protection module and fixed 30-bps fee.
-/// @dev V2 accounting profile: fees round UP per trade; total fee rounds once, platform is allocated first.
-///      This is not the historical cumulative-floor V2 fee profile. Only the exact bound PoolKey is covered.
+/// @dev Fees round up per trade; the opening surcharge is accounted for separately from normal fees.
+///      Only the exact bound PoolKey is covered.
 ///      ETH-specified partial fills revert. Nonzero custom deltas are unsupported, never silently ignored.
 ///      The shell has no swap, unlock-forwarding, delegatecall, arbitrary-call, or privileged execution path:
 ///      those paths would bypass callbacks under Uniswap's same-hook-sender exception.
@@ -79,6 +79,10 @@ contract ProtectedNative30HookV1 is BaseHook {
     bytes32 public immutable moduleCodeHash;
     uint24 public immutable maxModuleLpFeePips;
     EthereumNativeFeeVaultV3 public immutable feeVault;
+    EthereumNativeFeeVaultV3 public immutable openingTaxVault;
+    uint24 private activeOpeningTaxPpm;
+    address private activeBuyer;
+    mapping(address => uint256) public boughtDuringProtection;
     bool public initialized;
     bool private swapActive;
     bytes32 private activeSwap;
@@ -96,6 +100,7 @@ contract ProtectedNative30HookV1 is BaseHook {
     error ModuleCodeChanged();
     error InvalidDynamicFeeOverride();
     error NoTrade();
+    error BuyerLimitExceeded(address buyer, uint256 attempted, uint256 limit);
 
     event NativeFeesAccrued(
         bytes32 indexed poolId,
@@ -105,6 +110,8 @@ contract ProtectedNative30HookV1 is BaseHook {
         uint256 platformFee,
         uint256 creatorFee
     );
+
+    event OpeningTaxAccrued(bytes32 indexed poolId, address indexed sender, uint256 grossNative, uint256 amount);
 
     constructor(
         IPoolManager manager,
@@ -120,11 +127,11 @@ contract ProtectedNative30HookV1 is BaseHook {
             : 0x8366a39CC670B4001A1121B8F6A443A643e40951;
         if (
             (block.chainid != 1 && block.chainid != 4663) || address(manager) != CANONICAL_POOL_MANAGER
-                || address(manager).code.length == 0 || config.lpFee != 0x800000 || config.tickSpacing != 60
+                || address(manager).code.length == 0 || config.lpFee != 0 || config.tickSpacing != 60
                 || config.module != address(0) || config.creatorBuyFeeBps > 1000 || config.creatorSellFeeBps > 1000
                 || config.token == address(0) || config.initializer == address(0)
                 || config.creatorFeeRecipient == address(0) || config.initialSqrtPriceX96 == 0
-                || config.tickSpacing <= 0 || config.maxModuleLpFeePips > LPFeeLibrary.MAX_LP_FEE
+                || config.tickSpacing <= 0 || config.maxModuleLpFeePips != 0
                 || uint256(config.creatorBuyFeeBps) + PLATFORM_FEE_BPS >= FEE_DENOMINATOR
                 || uint256(config.creatorSellFeeBps) + PLATFORM_FEE_BPS >= FEE_DENOMINATOR
         ) revert InvalidConfiguration();
@@ -142,6 +149,8 @@ contract ProtectedNative30HookV1 is BaseHook {
         initializer = config.initializer;
         creatorBuyFeeBps = config.creatorBuyFeeBps;
         creatorSellFeeBps = config.creatorSellFeeBps;
+        // Keep the normal fee vault as CREATE child 1 for canonical native-fee proof compatibility.
+        feeVault = new EthereumNativeFeeVaultV3(manager, config.creatorFeeRecipient);
         LaunchProtectionModuleV1 protection = new LaunchProtectionModuleV1(
             address(this),
             ProtectedLaunchTokenV1(config.token),
@@ -153,8 +162,8 @@ contract ProtectedNative30HookV1 is BaseHook {
         );
         module = address(protection);
         moduleCodeHash = address(protection).codehash;
-        maxModuleLpFeePips = 990_000;
-        feeVault = new EthereumNativeFeeVaultV3(manager, config.creatorFeeRecipient);
+        maxModuleLpFeePips = 0;
+        openingTaxVault = new EthereumNativeFeeVaultV3(manager, PLATFORM_RECIPIENT);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory permissions) {
@@ -186,6 +195,31 @@ contract ProtectedNative30HookV1 is BaseHook {
         creatorFee = totalFee - platformFee;
     }
 
+    function previewTradeFees(uint256 amount, bool amountIsNet, bool isBuy, address buyer)
+        external
+        view
+        returns (uint256 gross, uint256 platformFee, uint256 creatorFee, uint256 openingTax)
+    {
+        uint24 taxPpm = isBuy ? LaunchProtectionModuleV1(module).additionalTaxPpmForBuyer(buyer) : 0;
+        return _quoteTradeFees(amount, amountIsNet, isBuy, taxPpm);
+    }
+
+    function _quoteTradeFees(uint256 amount, bool amountIsNet, bool isBuy, uint24 taxPpm)
+        private
+        view
+        returns (uint256 gross, uint256 platformFee, uint256 creatorFee, uint256 openingTax)
+    {
+        uint256 normalPpm = (PLATFORM_FEE_BPS + uint256(isBuy ? creatorBuyFeeBps : creatorSellFeeBps)) * 100;
+        uint256 totalPpm = normalPpm + taxPpm;
+        if (totalPpm >= 1_000_000) revert InvalidConfiguration();
+        gross = amountIsNet ? Math.mulDiv(amount, 1_000_000, 1_000_000 - totalPpm, Math.Rounding.Ceil) : amount;
+        uint256 totalFee = amountIsNet ? gross - amount : Math.mulDiv(gross, totalPpm, 1_000_000, Math.Rounding.Ceil);
+        uint256 normalFee = Math.mulDiv(gross, normalPpm, 1_000_000, Math.Rounding.Ceil);
+        platformFee = Math.mulDiv(gross, PLATFORM_FEE_BPS, FEE_DENOMINATOR, Math.Rounding.Ceil);
+        creatorFee = normalFee - platformFee;
+        openingTax = totalFee - normalFee;
+    }
+
     function _beforeInitialize(address sender, PoolKey calldata key, uint160 price) internal override returns (bytes4) {
         _requirePool(key);
         if (initialized || sender != initializer || price != initialSqrtPriceX96) revert UnauthorizedInitializer();
@@ -205,15 +239,20 @@ contract ProtectedNative30HookV1 is BaseHook {
         swapActive = true;
         activeSwap = keccak256(abi.encode(sender, key, params, data));
         overrideFee = _beforeModule(sender, key, params, data);
+        if (params.zeroForOne && block.timestamp < ProtectedLaunchTokenV1(token).startedAt() + 300) {
+            activeBuyer = LaunchProtectionModuleV1(module).protectedBuyer(sender);
+        }
+        activeOpeningTaxPpm = params.zeroForOne ? LaunchProtectionModuleV1(module).openingTaxPpmForSender(sender) : 0;
         bool nativeIsSpecified = params.zeroForOne == (params.amountSpecified < 0);
         if (!nativeIsSpecified) return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, overrideFee);
         uint256 nativeAmount = _absolute(params.amountSpecified);
-        (uint256 gross, uint256 platformFee, uint256 creatorFee) =
-            quoteFees(nativeAmount, params.amountSpecified > 0, params.zeroForOne);
-        uint256 total = platformFee + creatorFee;
+        (uint256 gross, uint256 platformFee, uint256 creatorFee, uint256 openingTax) =
+            _quoteTradeFees(nativeAmount, params.amountSpecified > 0, params.zeroForOne, activeOpeningTaxPpm);
+        uint256 total = platformFee + creatorFee + openingTax;
+        if (params.amountSpecified < 0 && total >= nativeAmount) revert NoTrade();
         expectedNativePoolAmount = params.amountSpecified > 0 ? gross : nativeAmount - total;
         if (expectedNativePoolAmount == 0) revert NoTrade();
-        _accrue(sender, key, params.zeroForOne, gross, platformFee, creatorFee);
+        _accrue(sender, key, params.zeroForOne, gross, platformFee, creatorFee, openingTax);
         return (IHooks.beforeSwap.selector, toBeforeSwapDelta(total.toInt256().toInt128(), 0), overrideFee);
     }
 
@@ -235,15 +274,24 @@ contract ProtectedNative30HookV1 is BaseHook {
                 revert PartialFillUnsupported(expectedNativePoolAmount, nativeAmount);
             }
         } else {
-            (uint256 gross, uint256 platformFee, uint256 creatorFee) =
-                quoteFees(nativeAmount, params.amountSpecified > 0, params.zeroForOne);
-            total = platformFee + creatorFee;
+            (uint256 gross, uint256 platformFee, uint256 creatorFee, uint256 openingTax) =
+                _quoteTradeFees(nativeAmount, params.amountSpecified > 0, params.zeroForOne, activeOpeningTaxPpm);
+            total = platformFee + creatorFee + openingTax;
             if (params.amountSpecified < 0 && total >= nativeAmount) revert NoTrade();
-            _accrue(sender, key, params.zeroForOne, gross, platformFee, creatorFee);
+            _accrue(sender, key, params.zeroForOne, gross, platformFee, creatorFee, openingTax);
+        }
+        if (activeBuyer != address(0)) {
+            if (delta.amount1() <= 0) revert NoTrade();
+            uint256 bought = boughtDuringProtection[activeBuyer] + uint256(uint128(delta.amount1()));
+            uint256 limit = ProtectedLaunchTokenV1(token).walletTokenLimit();
+            if (bought > limit) revert BuyerLimitExceeded(activeBuyer, bought, limit);
+            boughtDuringProtection[activeBuyer] = bought;
+            activeBuyer = address(0);
         }
         _afterModule(sender, key, params, delta, data);
         expectedNativePoolAmount = 0;
         activeSwap = bytes32(0);
+        activeOpeningTaxPpm = 0;
         swapActive = false;
         return (IHooks.afterSwap.selector, total.toInt256().toInt128());
     }
@@ -298,13 +346,20 @@ contract ProtectedNative30HookV1 is BaseHook {
         bool isBuy,
         uint256 gross,
         uint256 platformFee,
-        uint256 creatorFee
+        uint256 creatorFee,
+        uint256 openingTax
     ) private {
         uint256 total = platformFee + creatorFee;
         total.toInt256().toInt128();
         poolManager.mint(address(feeVault), 0, total);
         feeVault.recordFees(platformFee, creatorFee);
         emit NativeFeesAccrued(keccak256(abi.encode(key)), sender, isBuy, gross, platformFee, creatorFee);
+        if (openingTax != 0) {
+            openingTax.toInt256().toInt128();
+            poolManager.mint(address(openingTaxVault), 0, openingTax);
+            openingTaxVault.recordFees(openingTax, 0);
+            emit OpeningTaxAccrued(keccak256(abi.encode(key)), sender, gross, openingTax);
+        }
     }
 
     function _absolute(int256 amount) private pure returns (uint256) {

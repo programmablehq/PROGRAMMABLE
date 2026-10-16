@@ -1,3 +1,4 @@
+import { legacyLaunchGuardV1 } from "@/lib/launch-protection/legacy-gate.server";
 import { NextRequest, NextResponse } from "next/server";
 import {
   createPublicClient,
@@ -3420,6 +3421,8 @@ async function prepareStockPairedLaunch(
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = legacyLaunchGuardV1();
+  if (blocked) return blocked;
   try {
     const rawBody = await request.text();
     if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {

@@ -13,15 +13,12 @@ interface ILaunchProtectionRouterV1 {
     function msgSender() external view returns (address);
 }
 
-/// @notice Immutable opening buy fee for the sealed Native30 kernel's dynamic-LP-fee module interface.
-/// @dev Candidate parameters: 99% total at time zero, linear decay to normal fees after thirty seconds.
-/// The fixed platform fee is never waived. The initializer locks all LP principal and fees permanently.
+/// @notice Immutable opening-tax policy for the sealed launch kernel.
+/// @dev Total buy fee starts at 99% and falls linearly to normal fees over thirty seconds.
+/// The kernel separately accounts for opening taxes payable only to the fixed platform treasury.
 contract LaunchProtectionModuleV1 {
     uint256 public constant OPENING_TOTAL_PPM = 990_000;
     uint256 public constant DECAY_SECONDS = 30;
-    uint256 private constant PPM = 1_000_000;
-    uint24 private constant OVERRIDE_FEE_FLAG = 0x400000;
-    uint24 private constant DYNAMIC_FEE_FLAG = 0x800000;
 
     address public immutable kernel;
     ProtectedLaunchTokenV1 public immutable token;
@@ -87,16 +84,39 @@ contract LaunchProtectionModuleV1 {
                 && (wallet == _exemptWallets[0] || wallet == _exemptWallets[1] || wallet == _exemptWallets[2]));
     }
 
-    function additionalLpFeePpm(address buyer) public view returns (uint24) {
+    function additionalTaxPpmForBuyer(address buyer) public view returns (uint24) {
         uint256 start = token.startedAt();
         if (start == 0 || block.timestamp >= start + DECAY_SECONDS || isTaxExempt(buyer)) return 0;
-        uint256 opening = Math.mulDiv(OPENING_TOTAL_PPM, start + DECAY_SECONDS - block.timestamp, DECAY_SECONDS);
-        if (opening <= normalBuyFeePpm) return 0;
-        // The hook fee is taken first. This LP fee applies only to the remaining native input.
-        return uint24(Math.mulDiv(opening - normalBuyFeePpm, PPM, PPM - normalBuyFeePpm));
+        return uint24(
+            Math.mulDiv(OPENING_TOTAL_PPM - normalBuyFeePpm, start + DECAY_SECONDS - block.timestamp, DECAY_SECONDS)
+        );
     }
 
-    function beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata)
+    function openingTaxPpmForSender(address sender) external view returns (uint24) {
+        if (msg.sender != kernel) revert OnlyKernel();
+        uint256 start = token.startedAt();
+        if (start == 0 || block.timestamp >= start + DECAY_SECONDS) return 0;
+        return additionalTaxPpmForBuyer(_buyer(sender));
+    }
+
+    function protectedBuyer(address sender) external view returns (address) {
+        if (msg.sender != kernel) revert OnlyKernel();
+        return _buyer(sender);
+    }
+
+    function _buyer(address sender) private view returns (address buyer) {
+        if (sender == token.initializer()) {
+            buyer = developer;
+        } else {
+            if (sender != router || sender.codehash != routerCodeHash) revert UnsupportedRouter();
+            buyer = ILaunchProtectionRouterV1(sender).msgSender();
+            if (buyer == address(0) || buyer == router || buyer == kernel || buyer == token.poolManager()) {
+                revert InvalidBuyer();
+            }
+        }
+    }
+
+    function beforeSwap(address, PoolKey calldata key, SwapParams calldata, bytes calldata)
         external
         view
         returns (bytes4, BeforeSwapDelta, uint24)
@@ -104,24 +124,10 @@ contract LaunchProtectionModuleV1 {
         if (msg.sender != kernel) revert OnlyKernel();
         if (
             address(key.hooks) != kernel || Currency.unwrap(key.currency0) != address(0)
-                || Currency.unwrap(key.currency1) != address(token) || key.fee != DYNAMIC_FEE_FLAG
+                || Currency.unwrap(key.currency1) != address(token) || key.fee != 0
         ) revert InvalidPool();
-        uint24 fee;
-        uint256 start = token.startedAt();
-        if (params.zeroForOne && start != 0 && block.timestamp < start + DECAY_SECONDS) {
-            address buyer;
-            if (sender == token.initializer()) {
-                buyer = developer;
-            } else {
-                if (sender != router || sender.codehash != routerCodeHash) revert UnsupportedRouter();
-                buyer = ILaunchProtectionRouterV1(sender).msgSender();
-                if (buyer == address(0) || buyer == router || buyer == kernel || buyer == token.poolManager()) {
-                    revert InvalidBuyer();
-                }
-            }
-            fee = additionalLpFeePpm(buyer);
-        }
-        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, fee | OVERRIDE_FEE_FLAG);
+        // Buyer authentication and the current tax are read by the kernel and bound to its active swap.
+        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
     function afterSwap(address, PoolKey calldata, SwapParams calldata, BalanceDelta, bytes calldata)

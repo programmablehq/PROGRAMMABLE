@@ -51,9 +51,21 @@ contract TestAuthenticatedRouter is IUnlockCallback {
     }
 
     function swap(PoolKey calldata key, bool buy, uint256 amount) external payable returns (BalanceDelta delta) {
+        return _swap(key, buy, -int256(amount));
+    }
+
+    function swapExactOutput(PoolKey calldata key, bool buy, uint256 amount)
+        external
+        payable
+        returns (BalanceDelta delta)
+    {
+        return _swap(key, buy, int256(amount));
+    }
+
+    function _swap(PoolKey calldata key, bool buy, int256 specified) private returns (BalanceDelta delta) {
         require(msgSender == address(0));
         msgSender = msg.sender;
-        delta = abi.decode(manager.unlock(abi.encode(key, buy, amount)), (BalanceDelta));
+        delta = abi.decode(manager.unlock(abi.encode(key, buy, specified)), (BalanceDelta));
         msgSender = address(0);
         uint256 refund = address(this).balance;
         if (refund != 0) {
@@ -64,16 +76,17 @@ contract TestAuthenticatedRouter is IUnlockCallback {
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
         require(msg.sender == address(manager));
-        (PoolKey memory key, bool buy, uint256 amount) = abi.decode(data, (PoolKey, bool, uint256));
+        (PoolKey memory key, bool buy, int256 specified) = abi.decode(data, (PoolKey, bool, int256));
         BalanceDelta delta = manager.swap(
-            key, SwapParams(buy, -int256(amount), buy ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1), ""
+            key, SwapParams(buy, specified, buy ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1), ""
         );
         if (buy) {
             manager.settle{ value: uint256(-int256(delta.amount0())) }();
             manager.take(key.currency1, msgSender, uint256(uint128(delta.amount1())));
         } else {
             manager.sync(key.currency1);
-            IERC20(Currency.unwrap(key.currency1)).transferFrom(msgSender, address(manager), amount);
+            IERC20(Currency.unwrap(key.currency1))
+                .transferFrom(msgSender, address(manager), uint256(-int256(delta.amount1())));
             manager.settle();
             manager.take(key.currency0, msgSender, uint256(uint128(delta.amount0())));
         }
@@ -108,7 +121,11 @@ contract LaunchProtectionV1Test is Test {
         vm.deal(BUYER, 100 ether);
         deployCodeTo("PoolManager.sol:PoolManager", abi.encode(address(this)), MANAGER);
         manager = IPoolManager(MANAGER);
-        feed = new TestPriceFeed();
+        address feedAddress = _chain() == 1
+            ? 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+            : 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9;
+        deployCodeTo("TestPriceFeed", "", feedAddress);
+        feed = TestPriceFeed(feedAddress);
         address routerAddress =
             _chain() == 1 ? 0xd92A36B0000531EF3063dEd4De20A0783308446C : 0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99;
         deployCodeTo("TestAuthenticatedRouter", abi.encode(manager), routerAddress);
@@ -123,7 +140,7 @@ contract LaunchProtectionV1Test is Test {
     function _deployHook(address router_, bytes32 hash, address[3] memory exempt) internal {
         ProtectedNative30HookV1.PoolConfig memory config = ProtectedNative30HookV1.PoolConfig({
             token: address(token),
-            lpFee: 0x800000,
+            lpFee: 0,
             tickSpacing: 60,
             initialSqrtPriceX96: TickMath.getSqrtPriceAtTick(START_TICK),
             initializer: address(initializer),
@@ -131,7 +148,7 @@ contract LaunchProtectionV1Test is Test {
             creatorBuyFeeBps: 70,
             creatorSellFeeBps: 70,
             module: address(0),
-            maxModuleLpFeePips: 990_000
+            maxModuleLpFeePips: 0
         });
         bytes memory args = abi.encode(manager, config, DEV, router_, hash, exempt);
         (, bytes32 salt) = HookMiner.find(address(this), 0x20cc, type(ProtectedNative30HookV1).creationCode, args);
@@ -156,6 +173,12 @@ contract LaunchProtectionV1Test is Test {
         vm.prank(address(initializer));
         vm.expectRevert(ProtectedLaunchTokenV1.TradingNotStarted.selector);
         token.transfer(BUYER, 1);
+    }
+
+    function test_arbitraryOracleCannotSubstituteForUsdFeed() public {
+        TestPriceFeed fake = new TestPriceFeed();
+        vm.expectRevert(ProtectedNativeInitializerV1.InvalidConfiguration.selector);
+        new ProtectedNativeInitializerV1(manager, address(this), ILaunchUsdFeedV1(address(fake)), address(fake).codehash);
     }
 
     function test_cumulativeCapIncludesTransfersAndDoesNotRefill() public {
@@ -208,35 +231,74 @@ contract LaunchProtectionV1Test is Test {
     function test_decayAndOnlyTaxExemptions() public {
         _launch();
         LaunchProtectionModuleV1 module = LaunchProtectionModuleV1(hook.module());
-        uint24 start = module.additionalLpFeePpm(BUYER);
-        assertGt(start, 980_000);
-        assertEq(module.additionalLpFeePpm(DEV), 0);
-        assertEq(module.additionalLpFeePpm(address(0xA1)), 0);
+        uint24 start = module.additionalTaxPpmForBuyer(BUYER);
+        assertEq(start, 980_000);
+        assertEq(module.additionalTaxPpmForBuyer(DEV), 0);
+        assertEq(module.additionalTaxPpmForBuyer(address(0xA1)), 0);
         vm.warp(token.startedAt() + 15);
-        assertLt(module.additionalLpFeePpm(BUYER), start);
-        assertGt(module.additionalLpFeePpm(BUYER), 480_000);
+        assertLt(module.additionalTaxPpmForBuyer(BUYER), start);
+        assertGt(module.additionalTaxPpmForBuyer(BUYER), 480_000);
         vm.warp(token.startedAt() + 30);
-        assertEq(module.additionalLpFeePpm(BUYER), 0);
+        assertEq(module.additionalTaxPpmForBuyer(BUYER), 0);
     }
 
     function test_realBuyAndSellPayPlatformOnce() public {
         _launch();
+        assertEq(hook.openingTaxVault().platformAccrued(), 0, "dev initial buy is exempt only from opening tax");
         uint256 before = hook.feeVault().platformAccrued();
         vm.startPrank(BUYER);
         router.swap{ value: 0.001 ether }(hook.poolKey(), true, 0.001 ether);
         uint256 tokens = token.balanceOf(BUYER);
         assertGt(tokens, 0);
         assertEq(hook.feeVault().platformAccrued() - before, 0.000_003 ether);
+        uint256 openingTax = hook.openingTaxVault().platformAccrued();
+        assertEq(openingTax, 0.000_98 ether);
         token.approve(address(router), tokens);
         router.swap(hook.poolKey(), false, tokens / 2);
         vm.stopPrank();
         assertGt(hook.feeVault().platformAccrued(), before + 0.000_003 ether);
+        assertEq(hook.openingTaxVault().platformAccrued(), openingTax, "selling adds no opening tax");
         uint256 owed = hook.feeVault().platformAccrued();
         address recipient = hook.feeVault().PLATFORM_RECIPIENT();
         uint256 balance = recipient.balance;
         hook.feeVault().claimPlatform();
         assertEq(recipient.balance - balance, owed);
+        hook.openingTaxVault().claimPlatform();
+        assertEq(recipient.balance - balance, owed + openingTax);
+        assertEq(hook.openingTaxVault().creatorAccrued(), 0);
         assertGt(initializer.lockedLiquidity(), 0);
+    }
+
+    function test_exactOutputTaxAndThirtySecondEnd() public {
+        _launch();
+        PoolKey memory key = hook.poolKey();
+        uint256 before = BUYER.balance;
+        vm.prank(BUYER);
+        router.swapExactOutput{ value: 0.1 ether }(key, true, 1000 ether);
+        uint256 gross = before - BUYER.balance;
+        assertEq(token.balanceOf(BUYER), 1000 ether);
+        assertEq(
+            hook.openingTaxVault().platformAccrued(), (gross * 9900 + 9999) / 10_000 - (gross * 100 + 9999) / 10_000
+        );
+        vm.warp(token.startedAt() + 30);
+        uint256 taxBefore = hook.openingTaxVault().platformAccrued();
+        vm.prank(BUYER);
+        router.swap{ value: 0.001 ether }(key, true, 0.001 ether);
+        assertEq(hook.openingTaxVault().platformAccrued(), taxBefore);
+    }
+
+    function testFuzz_feeComponentsAndNetInverse(uint128 raw, uint8 secondsElapsed) public {
+        _launch();
+        uint256 amount = bound(raw, 100, 1 ether);
+        vm.warp(token.startedAt() + bound(secondsElapsed, 0, 30));
+        (uint256 gross, uint256 platformFee, uint256 creatorFee, uint256 tax) =
+            hook.previewTradeFees(amount, true, true, BUYER);
+        assertEq(gross - platformFee - creatorFee - tax, amount);
+        (uint256 sameGross, uint256 p2, uint256 c2, uint256 t2) = hook.previewTradeFees(gross, false, true, BUYER);
+        assertEq(sameGross, gross);
+        assertEq(p2, platformFee);
+        assertEq(c2, creatorFee);
+        assertEq(t2, tax);
     }
 
     function test_untrustedRouterAndSpoofedDataCannotClaimExemption() public {
@@ -246,13 +308,36 @@ contract LaunchProtectionV1Test is Test {
         vm.prank(DEV);
         vm.expectRevert();
         other.swap{ value: 0.001 ether }(key, true, 0.001 ether);
+        vm.warp(token.startedAt() + 31);
+        vm.prank(DEV);
+        vm.expectRevert();
+        other.swap{ value: 0.001 ether }(key, true, 0.001 ether);
+    }
+
+    function test_cumulativeBuyerLimitAlsoAppliesToExemptWallets() public {
+        _launch();
+        PoolKey memory key = hook.poolKey();
+        address exemptBuyer = address(0xA1);
+        vm.deal(exemptBuyer, 5 ether);
+        uint256 limit = token.walletTokenLimit();
+        vm.prank(exemptBuyer);
+        router.swapExactOutput{ value: 1 ether }(key, true, limit);
+        assertEq(hook.boughtDuringProtection(exemptBuyer), limit);
+        vm.prank(exemptBuyer);
+        token.transfer(address(0xB2), limit);
+        vm.prank(exemptBuyer);
+        vm.expectRevert(abi.encodeWithSignature("WrappedError(address,bytes4,bytes,bytes)", address(hook),
+            IHooks.afterSwap.selector,
+            abi.encodeWithSelector(ProtectedNative30HookV1.BuyerLimitExceeded.selector, exemptBuyer, limit + 1, limit),
+            abi.encodeWithSignature("HookCallFailed()")));
+        router.swapExactOutput{ value: 1 ether }(key, true, 1);
     }
 
     function test_staleNegativeAndLowUsdPriceRollBackLaunch() public {
         feed.set(-1, block.timestamp);
         vm.expectRevert(ProtectedNativeInitializerV1.InvalidOraclePrice.selector);
         _launch();
-        feed.set(2000e8, block.timestamp - 3601);
+        feed.set(2000e8, block.timestamp - initializer.MAX_FEED_AGE() - 1);
         vm.expectRevert(ProtectedNativeInitializerV1.InvalidOraclePrice.selector);
         _launch();
         feed.set(100e8, block.timestamp);
@@ -305,9 +390,9 @@ contract LaunchProtectionV1Test is Test {
         LaunchProtectionModuleV1 module = LaunchProtectionModuleV1(hook.module());
         uint256 elapsed = bound(secondsElapsed, 0, 30);
         vm.warp(token.startedAt() + elapsed);
-        uint24 current = module.additionalLpFeePpm(BUYER);
+        uint24 current = module.additionalTaxPpmForBuyer(BUYER);
         vm.warp(token.startedAt() + elapsed + 1);
-        assertLe(module.additionalLpFeePpm(BUYER), current);
+        assertLe(module.additionalTaxPpmForBuyer(BUYER), current);
         assertLe(current, 990_000);
         if (elapsed == 30) assertEq(current, 0);
     }

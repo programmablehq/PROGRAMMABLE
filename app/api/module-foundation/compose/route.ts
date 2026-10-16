@@ -1,3 +1,4 @@
+import { legacyLaunchGuardV1 } from "@/lib/launch-protection/legacy-gate.server";
 import { foundationPriceLifetime } from "@/lib/module-foundation/price-freshness";
 import { predictFoundationEthereumAccounts } from "@/lib/module-foundation/ethereum-graph-builder";
 import { foundationCreatorFeeFields, foundationCreatorFeeRates } from "@/lib/module-foundation/creator-fees";
@@ -48,6 +49,8 @@ async function readLaunchAvailability(chainId: FoundationChainId) {
 
 /** Read-only composition from admitted source. Request JSON cannot supply review or runtime authority. */
 export async function POST(request: Request): Promise<NextResponse> {
+  const blocked = legacyLaunchGuardV1();
+  if (blocked) return blocked;
   try {
     if (!request.headers.get("content-type")?.startsWith("application/json") || !request.body) throw new Error("Send the launch details as JSON.");
     const reader = request.body.getReader(), chunks: Uint8Array[] = []; let size = 0;

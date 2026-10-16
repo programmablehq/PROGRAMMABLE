@@ -1,5 +1,6 @@
 import { getAddress, getContractAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
 import { ETHEREUM_NATIVE30_RECIPES_V1 } from "./ethereum-native30-recipes-v1";
+import { LAUNCH_PROTECTION_RECIPES_V1 } from "../launch-protection/recipes-v1";
 
 import { ETHEREUM_NATIVE30_RECIPES_V2 } from "./ethereum-native30-recipes-v2";
 import { ETHEREUM_NATIVE100_RECIPES_V1 } from "./ethereum-native100-recipes-v1";
@@ -9,6 +10,7 @@ const recipes = {
   ...ETHEREUM_NATIVE100_RECIPES_V1,
   native30_fee_kernel_v2: { ...ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2, recipient: "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c" },
   ...ETHEREUM_NATIVE30_RECIPES_V2,
+  ...LAUNCH_PROTECTION_RECIPES_V1,
 } as const;
 
 /** Optional exact Native30 property. It grants no source-model eligibility,

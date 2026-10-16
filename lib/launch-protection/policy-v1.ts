@@ -12,7 +12,8 @@ export const LAUNCH_PROTECTION_V1 = Object.freeze({
   maximumAdditionalTaxExemptWallets: 3,
   exemptionScope: "additional-opening-fee-only",
   capBasis: "cumulative-recipient-inflow",
-  openingFeeDestination: "irrevocably-locked-lp",
+  openingFeeDestination: "fixed-platform-treasury",
+  openingTaxRecipient: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
   platformFeeBps: 30,
 } as const);
 
@@ -57,13 +58,14 @@ export function openingFdvUsdV1(input: { sqrtPriceX96: bigint; tokenIsCurrency0:
 }
 
 /** The caller must obtain usd from an independent verified server/oracle source, never from a request assertion. */
-export function planProtectedOpeningPriceV1(input: { token: Address; quote: Address; supply: bigint;
+export function planProtectedOpeningPriceV1(input: { chainId: 1 | 4663; token: Address; quote: Address; supply: bigint;
   quoteDecimals: number; usd: VerifiedLaunchUsdPriceV1; now: bigint; targetFdvUsd?: bigint }) {
   const { usd, now } = input, target = input.targetFdvUsd ?? BigInt(LAUNCH_PROTECTION_V1.minimumFdvUsd);
   const token = getAddress(input.token), quote = getAddress(input.quote);
-  if (token === quote || target < BigInt(LAUNCH_PROTECTION_V1.minimumFdvUsd) || target > (1n << 128n)
-    || usd.observedAt <= 0n || usd.observedAt > now || now - usd.observedAt > 3600n
-    || usd.validUntil <= now || usd.validUntil > usd.observedAt + 3600n) {
+  const maxAge = input.chainId === 1 ? 3600n : 86400n;
+  if (![1, 4663].includes(input.chainId) || token === quote || target < BigInt(LAUNCH_PROTECTION_V1.minimumFdvUsd) || target > (1n << 128n)
+    || usd.observedAt <= 0n || usd.observedAt > now || now - usd.observedAt > maxAge
+    || usd.validUntil <= now || usd.validUntil > usd.observedAt + maxAge) {
     throw new Error("A fresh verified USD price and at least USD 30,000 starting valuation are required.");
   }
   const tokenIsCurrency0 = BigInt(token) < BigInt(quote);

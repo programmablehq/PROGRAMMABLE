@@ -11,7 +11,7 @@ describe("mandatory launch-protection candidate", () => {
   it.each([0, 6, 8, 18, 36])("never rounds below the USD minimum with %i quote decimals", quoteDecimals => {
     for (const [token, quote] of [[low, high], [high, low]] as const) {
       for (const supply of [1_000_000n, 1_000_000_000n * 10n ** 18n]) {
-        const result = planProtectedOpeningPriceV1({ token, quote, quoteDecimals, supply, usd, now });
+        const result = planProtectedOpeningPriceV1({ chainId: 1, token, quote, quoteDecimals, supply, usd, now });
         expect(result.openingFdv.numerator).toBeGreaterThanOrEqual(30000n * result.openingFdv.denominator);
         const lowerTick = result.initialTick + (result.tokenIsCurrency0 ? -60 : 60);
         const previous = openingFdvUsdV1({ supply, quoteDecimals, usd, tokenIsCurrency0: result.tokenIsCurrency0,
@@ -23,7 +23,7 @@ describe("mandatory launch-protection candidate", () => {
   });
 
   it("rejects stale, future, absent or zero price evidence and a lower target", () => {
-    const input = { token: low, quote: high, quoteDecimals: 18, supply: 10n ** 27n, usd, now };
+    const input = { chainId: 1 as const, token: low, quote: high, quoteDecimals: 18, supply: 10n ** 27n, usd, now };
     for (const patch of [{ numerator: 0n }, { denominator: 0n }, { observedAt: now + 1n },
       { observedAt: now - 3601n }, { validUntil: now }, { validUntil: now + 3601n }]) {
       expect(() => planProtectedOpeningPriceV1({ ...input, usd: { ...usd, ...patch } })).toThrow();
@@ -38,5 +38,14 @@ describe("mandatory launch-protection candidate", () => {
     for (const invalid of [[...wallets, low], [high], [low, low], ["0x0000000000000000000000000000000000000000"]]) {
       expect(() => validateLaunchExemptions(high, invalid)).toThrow();
     }
+  });
+
+  it.each([[1, 3600n], [4663, 86400n]] as const)("enforces the fixed feed heartbeat on chain %i", (chainId, maxAge) => {
+    const now = 200000n;
+    const input = { chainId, token: high, quote: low, quoteDecimals: 18, supply: 10n ** 27n, now };
+    expect(() => planProtectedOpeningPriceV1({ ...input, usd: { numerator: 2000n, denominator: 1n,
+      observedAt: now - maxAge + 1n, validUntil: now + 1n } })).not.toThrow();
+    expect(() => planProtectedOpeningPriceV1({ ...input, usd: { numerator: 2000n, denominator: 1n,
+      observedAt: now - maxAge - 1n, validUntil: now + 1n } })).toThrow();
   });
 });
