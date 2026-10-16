@@ -1,4 +1,3 @@
-import { legacyLaunchGuardV1 } from "@/lib/launch-protection/legacy-gate.server";
 import { NextResponse } from "next/server";
 import { readModuleModeAvailability } from "@/lib/server/module-mode/catalog";
 import { readModuleEngineAvailability } from "@/lib/server/module-engine/catalog";
@@ -10,8 +9,6 @@ export const maxDuration = 15;
 
 /** Read-only: release, packages and publication origins come exclusively from reviewed server configuration. */
 export async function GET(request: Request): Promise<NextResponse> {
-  const blocked = legacyLaunchGuardV1();
-  if (blocked) return blocked;
   const query = new URL(request.url).searchParams;
   let selection;
   try { selection = parseModuleModeReleaseSelection(query); }

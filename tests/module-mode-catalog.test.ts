@@ -1,4 +1,3 @@
-vi.mock("server-only", () => ({}));
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
@@ -368,7 +367,8 @@ describe("Read-only Module Mode availability", () => {
     expect(await read()).toMatchObject({ release: null, catalog: [] });
     expect(f.fetchPublic).not.toHaveBeenCalled();
   });
-  it("keeps the public route read-only and uncached at the browser boundary", async () => {
+  it("keeps the public catalog readable and uncached while new launches require protection", async () => {
+    vi.stubEnv("PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE", "required");
     const readAvailability = vi.fn<(releaseDigest?: string) => Promise<ModuleModeAvailability>>();
     vi.resetModules();
     vi.doMock("../lib/server/module-mode/catalog", async importOriginal => ({
@@ -401,6 +401,7 @@ describe("Read-only Module Mode availability", () => {
       expect(readAvailability).not.toHaveBeenCalled();
       expect(Object.keys(route)).not.toContain("POST");
     } finally {
+      vi.unstubAllEnvs();
       vi.doUnmock("../lib/server/module-mode/catalog");
       vi.resetModules();
     }

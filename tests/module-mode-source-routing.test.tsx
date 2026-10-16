@@ -1,4 +1,3 @@
-vi.mock("server-only", () => ({}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModuleEngineHost } from "@/components/module-engine-host";
 import { ModuleLaunchWorkspace } from "@/components/module-launch-workspace";
