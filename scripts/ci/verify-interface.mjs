@@ -38,7 +38,10 @@ if (mode === "browser-build") {
   else {
     if (plan.scriptTests) {
       const files = execFileSync("git", ["ls-files", "scripts"], { encoding: "utf8" }).trim().split("\n");
-      const selected = relatedInputs(paths, files).filter(file => file.endsWith(".test.mjs"));
+      // The mandatory Credential leak gate runs this test with its checksum-
+      // verified binary. This runner has no such binary and must not rerun it.
+      const selected = relatedInputs(paths, files).filter(file => file.endsWith(".test.mjs")
+        && file !== "scripts/security/gitleaks-policy.test.mjs");
       if (selected.length) run("node", ["--test", ...selected]);
     }
     const files = execFileSync("git", ["ls-files"], { encoding: "utf8" }).trim().split("\n");
