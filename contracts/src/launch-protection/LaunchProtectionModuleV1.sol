@@ -26,7 +26,7 @@ contract LaunchProtectionModuleV1 {
     address public immutable router;
     bytes32 public immutable routerCodeHash;
     uint256 public immutable normalBuyFeePpm;
-    address[3] private _exemptWallets;
+    address[6] private _exemptWallets;
 
     error InvalidConfiguration();
     error OnlyKernel();
@@ -41,7 +41,7 @@ contract LaunchProtectionModuleV1 {
         address router_,
         bytes32 routerCodeHash_,
         uint16 creatorBuyFeeBps_,
-        address[3] memory exemptWallets_
+        address[6] memory exemptWallets_
     ) {
         address canonicalRouter = block.chainid == 1
             ? 0xd92A36B0000531EF3063dEd4De20A0783308446C
@@ -52,7 +52,7 @@ contract LaunchProtectionModuleV1 {
                 || (block.chainid != 1 && block.chainid != 4663) || router_ != canonicalRouter
                 || router_.codehash != routerCodeHash_ || creatorBuyFeeBps_ > 1000
         ) revert InvalidConfiguration();
-        for (uint256 i; i < 3; ++i) {
+        for (uint256 i; i < exemptWallets_.length; ++i) {
             address wallet = exemptWallets_[i];
             if (wallet == address(0)) continue;
             if (
@@ -74,14 +74,17 @@ contract LaunchProtectionModuleV1 {
         _exemptWallets = exemptWallets_;
     }
 
-    function exemptWallets() external view returns (address[3] memory) {
+    function exemptWallets() external view returns (address[6] memory) {
         return _exemptWallets;
     }
 
     function isTaxExempt(address wallet) public view returns (bool) {
-        return wallet == developer
-            || (wallet != address(0)
-                && (wallet == _exemptWallets[0] || wallet == _exemptWallets[1] || wallet == _exemptWallets[2]));
+        if (wallet == address(0)) return false;
+        if (wallet == developer) return true;
+        for (uint256 i; i < _exemptWallets.length; ++i) {
+            if (wallet == _exemptWallets[i]) return true;
+        }
+        return false;
     }
 
     function additionalTaxPpmForBuyer(address buyer) public view returns (uint24) {

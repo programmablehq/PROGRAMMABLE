@@ -7,7 +7,8 @@ The exact compiler input is `standard-json.json`. Compile it with Solidity
 The source includes all dependencies. Generated artifacts include constructor ABI,
 creation bytecode, runtime template, named immutable offsets and the input digest.
 Run `node packages/launch/scripts/build-launch-protection-v1.mjs` at repository root
-to check reproducibility. Only use `--write` when intentionally updating the package.
+to check reproducibility. `historical-runtime-recipes.json` retains fee recognition
+for already deployed contracts; it is not selected for new launches. Only use `--write` when intentionally updating the package.
 
 The deployment graph contains these roots:
 
@@ -23,20 +24,20 @@ The deployment graph contains these roots:
    opening sqrt price, the initializer above, the creator fee recipient, and creator
    buy/sell rates. `config.module` and `config.maxModuleLpFeePips` must both be zero.
    The hook creates the normal fee vault as child 1, protection module as child 2,
-   and opening-tax vault as child 3. Exemptions are a fixed array of three addresses;
+   and opening-tax vault as child 3. Exemptions are a fixed array of six addresses;
    zero entries mean unused slots. Developer is already exempt from the extra tax.
 
 After deployment, the graph factory calls
 `initializer.initialize(hook, token, startTick, developer, minimumTokensOut)` with a
 nonzero native initial buy. This must be part of the same atomic authorized graph.
-The initializer seeds and permanently locks liquidity, checks the USD 30,000 floor
+The initializer seeds and permanently locks liquidity, checks the USD 15,000 floor
 against the fixed feed, starts protection and executes the initial buy. An initial
 buy above 2% of supply reverts the complete transaction.
 
 For 300 seconds both recipient inflow and authenticated buyer purchases have a
 cumulative 2% budget. Outgoing transfers, sells and burns do not restore either
 budget. Buys use the fixed canonical Universal Router during this window. The dev
-and up to three extra tax-exempt wallets retain both limits. For the first 30 seconds,
+and up to six extra tax-exempt wallets retain both limits. For the first 30 seconds,
 total buy fees start at 99% and decline to the normal fee. The additional amount is
 claimable only by the fixed platform treasury; sales have normal fees throughout.
 

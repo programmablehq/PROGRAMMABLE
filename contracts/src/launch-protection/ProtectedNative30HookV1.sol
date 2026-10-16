@@ -119,7 +119,7 @@ contract ProtectedNative30HookV1 is BaseHook {
         address developer,
         address router,
         bytes32 routerCodeHash,
-        address[3] memory exemptWallets
+        address[6] memory exemptWallets
     ) BaseHook(manager) {
         CHAIN_ID = block.chainid;
         CANONICAL_POOL_MANAGER = block.chainid == 1

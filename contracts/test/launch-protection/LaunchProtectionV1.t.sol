@@ -133,10 +133,14 @@ contract LaunchProtectionV1Test is Test {
             manager, address(this), ILaunchUsdFeedV1(address(feed)), address(feed).codehash
         );
         token = new ProtectedLaunchTokenV1("Protected", "GUARD", SUPPLY, address(initializer), MANAGER);
-        _deployHook(address(router), address(router).codehash, [address(0xA1), address(0xA2), address(0xA3)]);
+        _deployHook(
+            address(router),
+            address(router).codehash,
+            [address(0xA1), address(0xA2), address(0xA3), address(0xA4), address(0xA5), address(0xA6)]
+        );
     }
 
-    function _deployHook(address router_, bytes32 hash, address[3] memory exempt) internal {
+    function _deployHook(address router_, bytes32 hash, address[6] memory exempt) internal {
         ProtectedNative30HookV1.PoolConfig memory config = ProtectedNative30HookV1.PoolConfig({
             token: address(token),
             lpFee: 0,
@@ -160,12 +164,19 @@ contract LaunchProtectionV1Test is Test {
 
     function test_atomicStartEnforcesFdvInitialBuyAndFee() public {
         _launch();
-        assertGe(initializer.openingFdvUsd(), 30_000);
+        assertGe(initializer.openingFdvUsd(), 15_000);
         assertEq(token.startedAt(), block.timestamp);
         assertGt(token.balanceOf(DEV), 0);
         assertLe(token.balanceOf(DEV), SUPPLY / 50);
         assertGt(initializer.lockedLiquidity(), 0);
         assertEq(hook.feeVault().platformAccrued(), 0.000_03 ether);
+    }
+
+    function test_launchBetweenFifteenAndThirtyThousandIsAllowed() public {
+        feed.set(1000e8, block.timestamp);
+        _launch();
+        assertGe(initializer.openingFdvUsd(), 15_000);
+        assertLt(initializer.openingFdvUsd(), 30_000);
     }
 
     function test_noOrdinaryTransferBeforeStart() public {
@@ -205,7 +216,8 @@ contract LaunchProtectionV1Test is Test {
 
     function test_devAndExemptWalletsHaveSameCap() public {
         _launch();
-        address[2] memory wallets = [DEV, address(0xA1)];
+        address[7] memory wallets =
+            [DEV, address(0xA1), address(0xA2), address(0xA3), address(0xA4), address(0xA5), address(0xA6)];
         for (uint256 i; i < wallets.length; ++i) {
             uint256 remaining = token.walletTokenLimit() - token.receivedDuringProtection(wallets[i]);
             vm.prank(MANAGER);
@@ -235,7 +247,11 @@ contract LaunchProtectionV1Test is Test {
         uint24 start = module.additionalTaxPpmForBuyer(BUYER);
         assertEq(start, 980_000);
         assertEq(module.additionalTaxPpmForBuyer(DEV), 0);
-        assertEq(module.additionalTaxPpmForBuyer(address(0xA1)), 0);
+        for (uint160 i = 0xA1; i <= 0xA6; ++i) {
+            assertTrue(module.isTaxExempt(address(i)));
+            assertEq(module.additionalTaxPpmForBuyer(address(i)), 0);
+        }
+        assertFalse(module.isTaxExempt(address(0xA7)));
         vm.warp(token.startedAt() + 15);
         assertLt(module.additionalTaxPpmForBuyer(BUYER), start);
         assertGt(module.additionalTaxPpmForBuyer(BUYER), 480_000);
@@ -318,7 +334,7 @@ contract LaunchProtectionV1Test is Test {
     function test_cumulativeBuyerLimitAlsoAppliesToExemptWallets() public {
         _launch();
         PoolKey memory key = hook.poolKey();
-        address exemptBuyer = address(0xA1);
+        address exemptBuyer = address(0xA6);
         vm.deal(exemptBuyer, 5 ether);
         uint256 limit = token.walletTokenLimit();
         vm.prank(exemptBuyer);
@@ -364,7 +380,7 @@ contract LaunchProtectionV1Test is Test {
             address(router),
             address(router).codehash,
             70,
-            [address(0xA1), address(0xA1), address(0)]
+            [address(0xA1), address(0xA1), address(0), address(0), address(0), address(0)]
         );
     }
 
