@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { Address } from "viem";
 import { type FoundationChainId } from "@/lib/module-foundation/chains";
-import { FOUNDATION_AVAILABILITY_SCHEMA_V4, FOUNDATION_LAUNCH_PROTECTION_PAUSE, unavailableFoundation } from "@/lib/module-foundation/availability";
+import { FOUNDATION_AVAILABILITY_SCHEMA_V4, unavailableFoundation } from "@/lib/module-foundation/availability";
 import { FoundationAvailabilityInputError, parseFoundationAvailabilityQuery, readFoundationAvailabilityResponse } from "@/lib/server/module-foundation/availability";
-import { legacyLaunchGuardV1 } from "@/lib/launch-protection/legacy-gate.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +16,6 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     if (request.url.length > 2_048) throw new FoundationAvailabilityInputError("The lookup request is too long.");
     ({ token, chainId } = parseFoundationAvailabilityQuery(new URL(request.url).searchParams));
-    if (!token && legacyLaunchGuardV1()) {
-      return NextResponse.json({ ...unavailable(), code: "LAUNCH_PROTECTION_REQUIRED", reason: FOUNDATION_LAUNCH_PROTECTION_PAUSE }, { headers });
-    }
     return NextResponse.json(await readFoundationAvailabilityResponse(fetch, 55_000, token, chainId), { headers });
   } catch (error) {
     if (error instanceof FoundationAvailabilityInputError) return NextResponse.json({ ...unavailable(), reason: error.message }, { status: 400, headers });

@@ -1,4 +1,3 @@
-import { legacyLaunchGuardV1 } from "@/lib/launch-protection/legacy-gate.server";
 import { NextResponse } from "next/server";
 import { getProductionEthereumModuleAuthorizationBridgeV1, EthereumModuleAuthorizationBridgeErrorV1 } from "@/lib/server/custom-launch/ethereum-module-authorization-bridge-v1";
 import { parseStrictJson } from "@/lib/server/projection-target/canonical-json";
@@ -8,8 +7,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 export async function POST(request: Request) {
-  const blocked = legacyLaunchGuardV1();
-  if (blocked) return blocked;
   try {
     if (process.env.PROGRAMMABLE_ETHEREUM_MODULE_MODE !== "enabled") return NextResponse.json({ code: "MODULE_LAUNCH_UNAVAILABLE" }, { status: 503, headers });
     if (!request.headers.get("content-type")?.startsWith("application/json") || !request.body) return NextResponse.json({ code: "INVALID_REQUEST" }, { status: 400, headers });
