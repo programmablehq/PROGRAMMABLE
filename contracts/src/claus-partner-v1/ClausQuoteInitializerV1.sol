@@ -143,28 +143,30 @@ contract ClausQuoteInitializerV1 is IUnlockCallback {
             uint256 minimumOutput,
             bool quote0
         ) = abi.decode(data, (PoolKey, ClausLaunchTokenV1, int24, uint256, uint256, bool));
-        uint256 supply = token.balanceOf(address(this));
-        if (supply != token.launchSupply()) revert InvalidConfiguration();
-        int24 lower = quote0 ? TickMath.minUsableTick(60) : startTick;
-        int24 upper = quote0 ? startTick : TickMath.maxUsableTick(60);
-        uint128 liquidity = quote0
-            ? LiquidityAmounts.getLiquidityForAmount1(
-                TickMath.getSqrtPriceAtTick(lower), TickMath.getSqrtPriceAtTick(upper), supply
-            )
-            : LiquidityAmounts.getLiquidityForAmount0(
-                TickMath.getSqrtPriceAtTick(lower), TickMath.getSqrtPriceAtTick(upper), supply
+        {
+            uint256 supply = token.balanceOf(address(this));
+            if (supply != token.launchSupply()) revert InvalidConfiguration();
+            int24 lower = quote0 ? TickMath.minUsableTick(60) : startTick;
+            int24 upper = quote0 ? startTick : TickMath.maxUsableTick(60);
+            uint128 liquidity = quote0
+                ? LiquidityAmounts.getLiquidityForAmount1(
+                    TickMath.getSqrtPriceAtTick(lower), TickMath.getSqrtPriceAtTick(upper), supply
+                )
+                : LiquidityAmounts.getLiquidityForAmount0(
+                    TickMath.getSqrtPriceAtTick(lower), TickMath.getSqrtPriceAtTick(upper), supply
+                );
+            if (liquidity == 0 || liquidity > uint128(type(int128).max)) revert InvalidSettlement();
+            lockedLiquidity = liquidity;
+            (BalanceDelta seed,) = poolManager.modifyLiquidity(
+                key, ModifyLiquidityParams(lower, upper, int256(uint256(liquidity)), bytes32(0)), ""
             );
-        if (liquidity == 0 || liquidity > uint128(type(int128).max)) revert InvalidSettlement();
-        lockedLiquidity = liquidity;
-        (BalanceDelta seed,) = poolManager.modifyLiquidity(
-            key, ModifyLiquidityParams(lower, upper, int256(uint256(liquidity)), bytes32(0)), ""
-        );
-        int128 tokenDebt = quote0 ? seed.amount1() : seed.amount0();
-        if ((quote0 ? seed.amount0() : seed.amount1()) != 0 || tokenDebt >= 0) revert InvalidSettlement();
-        uint256 owed = uint256(-int256(tokenDebt));
-        poolManager.sync(Currency.wrap(address(token)));
-        IERC20(address(token)).safeTransfer(address(poolManager), owed);
-        if (poolManager.settle() != owed) revert InvalidSettlement();
+            int128 tokenDebt = quote0 ? seed.amount1() : seed.amount0();
+            if ((quote0 ? seed.amount0() : seed.amount1()) != 0 || tokenDebt >= 0) revert InvalidSettlement();
+            uint256 owed = uint256(-int256(tokenDebt));
+            poolManager.sync(Currency.wrap(address(token)));
+            IERC20(address(token)).safeTransfer(address(poolManager), owed);
+            if (poolManager.settle() != owed) revert InvalidSettlement();
+        }
         token.start();
         BalanceDelta buy = poolManager.swap(
             key,

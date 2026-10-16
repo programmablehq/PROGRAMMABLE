@@ -247,20 +247,22 @@ contract ClausQuoteHookV1 is BaseHook {
     ) internal override returns (bytes4, int128) {
         _requirePool(key);
         if (activeSwap != keccak256(abi.encode(sender, key, p, data))) revert InvalidSwap();
-        int128 quoteDelta = quoteIsCurrency0 ? delta.amount0() : delta.amount1();
+        return _settleSwap(sender, key, p, delta);
+    }
+
+    function _settleSwap(address sender, PoolKey calldata key, SwapParams calldata p, BalanceDelta delta)
+        private
+        returns (bytes4, int128)
+    {
         int128 tokenDelta = quoteIsCurrency0 ? delta.amount1() : delta.amount0();
-        uint256 quoteAmount = _abs(int256(quoteDelta));
+        uint256 quoteAmount = _abs(int256(quoteIsCurrency0 ? delta.amount0() : delta.amount1()));
         if (quoteAmount == 0 || tokenDelta == 0) revert InvalidSwap();
         bool buy = p.zeroForOne == quoteIsCurrency0;
         uint256 total;
         if (buy == (p.amountSpecified < 0)) {
             if (quoteAmount != expectedQuoteAmount) revert InvalidSwap();
         } else {
-            (uint256 gross, uint256 platform, uint256 creator) =
-                _fees(quoteAmount, p.amountSpecified > 0, activeCreatorPpm);
-            total = platform + creator;
-            if (p.amountSpecified < 0 && total >= quoteAmount) revert InvalidSwap();
-            _accrue(sender, key, buy, gross, platform, creator);
+            total = _afterSwapFee(sender, key, buy, quoteAmount, p.amountSpecified > 0);
         }
         if (activeBuyer != address(0)) {
             if (tokenDelta <= 0) revert InvalidSwap();
@@ -273,6 +275,16 @@ contract ClausQuoteHookV1 is BaseHook {
         expectedQuoteAmount = 0;
         activeSwap = bytes32(0);
         return (IHooks.afterSwap.selector, total.toInt256().toInt128());
+    }
+
+    function _afterSwapFee(address sender, PoolKey calldata key, bool buy, uint256 quoteAmount, bool exactOutput)
+        private
+        returns (uint256 total)
+    {
+        (uint256 gross, uint256 platform, uint256 creator) = _fees(quoteAmount, exactOutput, activeCreatorPpm);
+        total = platform + creator;
+        if (!exactOutput && total >= quoteAmount) revert InvalidSwap();
+        _accrue(sender, key, buy, gross, platform, creator);
     }
 
     function _requirePool(PoolKey calldata key) private view {

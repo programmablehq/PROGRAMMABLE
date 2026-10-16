@@ -1,5 +1,5 @@
 {
-  "kernelSourceHash": "sha256:04d407c04e061de2d2a9fd2ddce48eccdceb1f7ec263fd6ad6d4a2f2710d4ad4",
+  "kernelSourceHash": "sha256:a32c144552506aadc798fd5d4707e942bedc2054cfb605c2415b5fae4e7c651d",
   "schemaVersion": "programmable.claus-kernel-source.v1",
   "compilerVersion": "0.8.26+commit.8a97fa7a",
   "sources": {
@@ -43,7 +43,7 @@
     "lib/v4-periphery/src/libraries/LiquidityAmounts.sol": "0x8ea74b89831877ffe657f8461164a01a6f3c7e46f415410854fca8d28a8cab53",
     "src/claus-partner-v1/ClausLaunchTokenV1.sol": "0xa9878888c45305b746cc13e6d69e05e05d30c995adc44cafcb9b9baa71d0c298",
     "src/claus-partner-v1/ClausQuoteFeeVaultV1.sol": "0x024b7ddf4e6ffde3360196511e975e2e5b97aa68fcd453a2fed674d18a95e2f5",
-    "src/claus-partner-v1/ClausQuoteHookV1.sol": "0xe5984dc222cf933bbc15a3ade227837e8be00d0fe53c557f909442b3927da1f2",
-    "src/claus-partner-v1/ClausQuoteInitializerV1.sol": "0xf12badd00d07c2a9b33f1bf35403ccf55e04d798e432ea2276480d391e040920"
+    "src/claus-partner-v1/ClausQuoteHookV1.sol": "0xe369423da21c1fd65a602d5976cb45236f8220ca5d9c6647712670c94342566f",
+    "src/claus-partner-v1/ClausQuoteInitializerV1.sol": "0x2bb7d3d3092721eb14a7503b504046347c9e25083a5a4e25a244874fddfcb98c"
   }
 }
