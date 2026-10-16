@@ -7,6 +7,7 @@ afterEach(() => vi.unstubAllEnvs());
 describe("legacy launch protection gate", () => {
   it("preserves candidate behavior and blocks required or unknown modes", async () => {
     expect(legacyLaunchGuardV1({})).toBeNull();
+    expect(legacyLaunchGuardV1({ NODE_ENV: "production" })?.status).toBe(503);
     expect(legacyLaunchGuardV1({ PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE: "candidate" })).toBeNull();
     for (const mode of ["required", "typo", ""]) {
       const response = legacyLaunchGuardV1({ PROGRAMMABLE_LAUNCH_PROTECTION_V1_MODE: mode })!;

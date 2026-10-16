@@ -171,3 +171,6 @@ export { CANONICAL_SETTLEMENT_FEE_VAULT_V2, validateCanonicalSettlementFeeVaultV
 export { DIRECT_NATIVE_PROFILE_VERSION_V36 } from "./constants.mjs";
 export { DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, assertDirectNativeProgrammableTradeFeePolicyV36,
   directNativeProgrammableTradeFeePolicyHashV36 } from "./profile-v36.mjs";
+
+export * from "./launch-protection-v1.mjs";
+export { buildProtectedEthereumLaunchV1 } from "./launch-protection-ethereum-v1.mjs";

@@ -1,5 +1,7 @@
 import { getAddress, getContractAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
-import { IMMUTABLE_POOL_FEE_RECIPES_V2 as recipes } from "./immutable-pool-fee-recipes-custom-launch-plan-v2";
+import { IMMUTABLE_POOL_FEE_RECIPES_V2 } from "./immutable-pool-fee-recipes-custom-launch-plan-v2";
+import { LAUNCH_PROTECTION_RECIPES_V1 } from "../launch-protection/recipes-v1";
+const recipes = { ...IMMUTABLE_POOL_FEE_RECIPES_V2, ...LAUNCH_PROTECTION_RECIPES_V1 } as const;
 
 /** Optional exact Native30 property. It grants no source-model eligibility,
  * admission or current-chain status and changes no historical V1 statement. */
@@ -100,8 +102,11 @@ export function materializeImmutableFeeRuntimeWordsV2(recipe: Recipe, words: Rea
 }
 
 function hookCandidate(market: ImmutablePoolFeeMarketV2, runtime: Hex) {
-  const key = marketKey(market), recipe = recipes.native30_fee_kernel_v2;
-  const words = readImmutableFeeRuntimeWordsV2(recipe.hook, runtime); if (!words) return null;
+  const key = marketKey(market);
+  const match = (Object.keys(recipes) as (keyof typeof recipes)[]).map(recipeId => ({ recipeId, recipe: recipes[recipeId],
+    words: readImmutableFeeRuntimeWordsV2(recipes[recipeId].hook, runtime) })).find(candidate => candidate.words !== null);
+  if (!match?.words) return null;
+  const { recipeId, recipe, words } = match;
   const vault = addressWord(words, "feeVault"), feeModule = addressWord(words, "module");
   if (!eq(addressWord(words, "poolManager"), key.poolManager) || !eq(addressWord(words, "token"), key.currency1)
     || numberWord(words, "lpFee") !== BigInt(key.fee) || numberWord(words, "tickSpacing") !== BigInt(key.tickSpacing)
@@ -110,7 +115,7 @@ function hookCandidate(market: ImmutablePoolFeeMarketV2, runtime: Hex) {
     || numberWord(words, "creatorBuyFeeBps") + 30n >= 10000n || numberWord(words, "creatorSellFeeBps") + 30n >= 10000n
     || numberWord(words, "maxModuleLpFeePips") > 1000000n || eq(feeModule, key.poolManager)
     || eq(feeModule, ZERO) !== eq(words.moduleCodeHash!, WORD0)) return null;
-  return { key, words, vault, feeModule };
+  return { key, words, vault, feeModule, recipeId, recipe };
 }
 export function immutablePoolFeeRequiredAddressesV2(market: ImmutablePoolFeeMarketV2, hookRuntime: Hex): readonly Address[] | null {
   try {
@@ -126,8 +131,8 @@ function buildProof(market: ImmutablePoolFeeMarketV2, codes: Readonly<Record<str
   };
   const hookCode = code(market.hooks); if (!hookCode) return null;
   const candidate = hookCandidate(market, hookCode); if (!candidate) return null;
-  const { key, words, vault, feeModule } = candidate, vaultCode = code(vault); if (!vaultCode) return null;
-  const vaultWords = readImmutableFeeRuntimeWordsV2(recipes.native30_fee_kernel_v2.vault, vaultCode);
+  const { key, words, vault, feeModule, recipeId, recipe } = candidate, vaultCode = code(vault); if (!vaultCode) return null;
+  const vaultWords = readImmutableFeeRuntimeWordsV2(recipe.vault, vaultCode);
   if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
     || !eq(addressWord(vaultWords, "kernel"), key.hooks) || eq(addressWord(vaultWords, "creatorRecipient"), ZERO)) return null;
   const bindings: ImmutablePoolFeeRuntimeBindingV2[] = [
@@ -142,8 +147,8 @@ function buildProof(market: ImmutablePoolFeeMarketV2, codes: Readonly<Record<str
   }
   if (new Set(bindings.map(binding => binding.address.toLowerCase())).size !== bindings.length) return null;
   bindings.sort((a, b) => a.role.localeCompare(b.role));
-  const body = { schemaVersion: IMMUTABLE_POOL_FEE_PROOF_SCHEMA_V2, recipeId: "native30_fee_kernel_v2" as const,
-    sourceArtifactHash: recipes.native30_fee_kernel_v2.sourceArtifactHash, market: key,
+  const body = { schemaVersion: IMMUTABLE_POOL_FEE_PROOF_SCHEMA_V2, recipeId,
+    sourceArtifactHash: recipe.sourceArtifactHash, market: key,
     recipient: IMMUTABLE_POOL_FEE_RECIPIENT_V2, rateBps: IMMUTABLE_POOL_FEE_RATE_BPS_V2, denominator: 10000 as const,
     scope: "exact_pool_key" as const, feeCurrency: "native" as const, assessmentBase: "gross_native_leg" as const,
     rounding: "ceil_per_trade" as const, accrual: "backed_pool_manager_native_claims" as const,
@@ -168,7 +173,7 @@ export function assertIssuedImmutablePoolFeeRuntimeProofV2(proof: ImmutablePoolF
 export function rebuildImmutablePoolFeeRuntimeProofV2(value: unknown, market: ImmutablePoolFeeMarketV2): ImmutablePoolFeeRuntimeProofV2 {
   if (!value || typeof value !== "object" || Array.isArray(value)) return fail();
   const supplied = value as ImmutablePoolFeeRuntimeProofV2;
-  if (supplied.recipeId !== "native30_fee_kernel_v2" || !Array.isArray(supplied.runtimeBindings)
+  if (!Object.hasOwn(recipes, supplied.recipeId) || !Array.isArray(supplied.runtimeBindings)
     || supplied.runtimeBindings.length < 2 || supplied.runtimeBindings.length > 3) return fail();
   const codes: Record<string, Hex> = {}, roles = new Set<string>(), addresses = new Set<string>();
   for (const binding of supplied.runtimeBindings) {
@@ -177,7 +182,7 @@ export function rebuildImmutablePoolFeeRuntimeProofV2(value: unknown, market: Im
     roles.add(binding.role); addresses.add(binding.address.toLowerCase());
     if (binding.role === "module") { if (binding.immutableWords !== null) return fail(); }
     else codes[binding.address.toLowerCase()] = materializeImmutableFeeRuntimeWordsV2(
-      binding.role === "hook" ? recipes.native30_fee_kernel_v2.hook : recipes.native30_fee_kernel_v2.vault,
+      binding.role === "hook" ? recipes[supplied.recipeId].hook : recipes[supplied.recipeId].vault,
       binding.immutableWords!,
     );
   }

@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { BaseHook } from "@openzeppelin/uniswap-hooks/src/base/BaseHook.sol";
-import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import { Hooks } from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import { LPFeeLibrary } from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
-import { BalanceDelta } from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {BaseHook} from "@openzeppelin/uniswap-hooks/src/base/BaseHook.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {
     BeforeSwapDelta,
     BeforeSwapDeltaLibrary,
     toBeforeSwapDelta
 } from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
-import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
-import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
-import { SwapParams } from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import { LaunchProtectionModuleV1 } from "./LaunchProtectionModuleV1.sol";
-import { ProtectedLaunchTokenV1 } from "./ProtectedLaunchTokenV1.sol";
-import { EthereumNativeFeeVaultV3 } from "../ethereum-native30-v3/EthereumNativeFeeVaultV3.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {LaunchProtectionModuleV1} from "./LaunchProtectionModuleV1.sol";
+import {ProtectedLaunchTokenV1} from "./ProtectedLaunchTokenV1.sol";
+import {EthereumNativeFeeVaultV3} from "../ethereum-native30-v3/EthereumNativeFeeVaultV3.sol";
 
 /// @notice Read-only validation interface; this version requires zero LP fees and zero custom module deltas.
 /// @dev Implementations must authenticate this kernel as caller. A module never executes in kernel storage.

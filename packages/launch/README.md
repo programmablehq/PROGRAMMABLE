@@ -620,3 +620,31 @@ vault runtime plus trade accrual evidence; changing a getter or declaration is i
 ### Platform fee revision
 
 New fee100 Custom Launches on Ethereum and Robinhood use a 1% platform trading fee. Creator and pool fees are separate. The Ethereum policy is `programmable.ethereum-routed-native-fee.v3`; its hash is `sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a`. The Robinhood routed policy is `programmable.routed-swap-fee.v3`. Historical immutable pool fees and signed policies retain their original amounts. Read live capabilities before packing and show the exact selected rate before signing.
+
+
+## Required launch protection (4.1.7)
+
+Use `@programmable/launch/launch-protection` for new native ETH launches on Ethereum (1) and Robinhood (4663). Check `GET https://api.programmable.market/v1/launch-protection` for activation. This is a fixed, source-verified package; all six component runtimes are bound into the reviewed launch.
+
+- Minimum starting fully diluted valuation: USD 30,000, checked against the chain's fixed, fresh ETH/USD feed. This is virtual pool valuation, not USD 30,000 of deposited liquidity.
+- First 300 seconds: cumulative purchased tokens per authenticated buyer and cumulative recipient inflow are each limited to 2% of the initial supply. Selling or transferring does not restore capacity. The developer and exempt wallets have the same limits.
+- The initial total buy fee is 99%. Its extra component decreases linearly over 30 seconds to zero. The normal 0.3% platform fee and selected creator fee continue. The extra fee is claimable only by the fixed platform treasury.
+- The developer and up to three distinct additional wallets can be exempted from the extra opening fee. The list is fixed in the constructor. Sell fees remain the normal fees.
+- Initial liquidity is permanently locked. The initial developer buy is atomic with initialization and must have a positive, reviewed minimum output.
+
+Amounts such as `supply` are decimal strings in token base units (18 decimals). Use `"1000000000000000000000000000"` for one billion tokens. Never reuse the example minimum output of one base unit for a production launch: obtain and review the actual expected initial purchase and its slippage bound.
+
+```js
+import {
+  prepareProtectedNativeContractsV1, protectedRobinhoodPlanV1,
+  protectedRobinhoodPlanBytesV1, buildProtectedEthereumLaunchV1,
+} from '@programmable/launch/launch-protection';
+```
+
+For Robinhood, fetch `/v4/chains/4663/custom-launch-capabilities`, pass its current atomic executor as `initializerAuthority` to `prepareProtectedNativeContractsV1`, then call `protectedRobinhoodPlanV1`. Bind the connected credential controller, current manifest, publication metadata and validity window. Submit the bytes returned by `protectedRobinhoodPlanBytesV1` to `/v4/chains/4663/custom-launch-plans:preflight`, then to `/v4/chains/4663/custom-launch-plans`, with the existing Bearer credential and `Programmable-Launch-Response-Version: 1.2`. The standard deterministic deployment factory is `0x4e59b44847b379578588920cA78FbF26c0B4956C`. A fresh 32-byte `nonce` avoids collisions.
+
+For Ethereum, fetch `/v3/capabilities` and use `buildProtectedEthereumLaunchV1({ projectRoot, client, capabilities, input, permitWindow })`. `input` includes the connected `launchWallet`, a fresh 32-byte `nonce`, complete `projectMetadata`, `initialBuyWei`, `minimumTokensOut`, optional creator fees and `additionalTaxExemptWallets`. The helper writes the exact sources and pack configuration and returns the existing SDK `built` result for the normal V3 preflight/submission workflow. The supplied RPC client must read the intended live chain; it must not substitute a price feed or router.
+
+Both routes require manual review of the exact submitted source and launch graph. Approval also requires authenticated operator evidence for the wallet/buyer limits, fee decay, exemptions, USD floor, locked liquidity, normal fees and treasury custody. Old approvals lacking that evidence cannot issue a new protected permit. Legacy factories that cannot install these immutable rules remain paused for new launches; existing tokens remain tradable.
+
+This limits early accumulation per wallet. It cannot identify a person operating several independent wallets. Helpers prepare requests only; they do not sign or broadcast transactions.

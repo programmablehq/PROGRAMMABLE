@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @notice Fixed supply and a cumulative two-percent receiving budget for the opening five minutes.
 /// @dev Selling, burning and forwarding tokens do not refill the budget. No EOA or contract is whitelisted.

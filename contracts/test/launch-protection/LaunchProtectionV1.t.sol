@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import { Test } from "forge-std/Test.sol";
-import { PoolManager } from "@uniswap/v4-core/src/PoolManager.sol";
-import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import { IUnlockCallback } from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
-import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
-import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
-import { BalanceDelta } from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import { SwapParams } from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { HookMiner } from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
-import { ProtectedLaunchTokenV1 } from "../../src/launch-protection/ProtectedLaunchTokenV1.sol";
-import { LaunchProtectionModuleV1 } from "../../src/launch-protection/LaunchProtectionModuleV1.sol";
+import {Test} from "forge-std/Test.sol";
+import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {ProtectedLaunchTokenV1} from "../../src/launch-protection/ProtectedLaunchTokenV1.sol";
+import {LaunchProtectionModuleV1} from "../../src/launch-protection/LaunchProtectionModuleV1.sol";
 import {
     ProtectedNativeInitializerV1,
     IProtectedLaunchHookV1,
     ILaunchUsdFeedV1
 } from "../../src/launch-protection/ProtectedNativeInitializerV1.sol";
-import { ProtectedNative30HookV1 } from "../../src/launch-protection/ProtectedNative30HookV1.sol";
+import {ProtectedNative30HookV1} from "../../src/launch-protection/ProtectedNative30HookV1.sol";
 
 contract TestPriceFeed {
     uint8 public constant decimals = 8;
@@ -69,7 +69,7 @@ contract TestAuthenticatedRouter is IUnlockCallback {
         msgSender = address(0);
         uint256 refund = address(this).balance;
         if (refund != 0) {
-            (bool ok,) = msg.sender.call{ value: refund }("");
+            (bool ok,) = msg.sender.call{value: refund}("");
             require(ok);
         }
     }
@@ -81,7 +81,7 @@ contract TestAuthenticatedRouter is IUnlockCallback {
             key, SwapParams(buy, specified, buy ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1), ""
         );
         if (buy) {
-            manager.settle{ value: uint256(-int256(delta.amount0())) }();
+            manager.settle{value: uint256(-int256(delta.amount0()))}();
             manager.take(key.currency1, msgSender, uint256(uint128(delta.amount1())));
         } else {
             manager.sync(key.currency1);
@@ -121,9 +121,8 @@ contract LaunchProtectionV1Test is Test {
         vm.deal(BUYER, 100 ether);
         deployCodeTo("PoolManager.sol:PoolManager", abi.encode(address(this)), MANAGER);
         manager = IPoolManager(MANAGER);
-        address feedAddress = _chain() == 1
-            ? 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
-            : 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9;
+        address feedAddress =
+            _chain() == 1 ? 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 : 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9;
         deployCodeTo("TestPriceFeed", "", feedAddress);
         feed = TestPriceFeed(feedAddress);
         address routerAddress =
@@ -152,11 +151,11 @@ contract LaunchProtectionV1Test is Test {
         });
         bytes memory args = abi.encode(manager, config, DEV, router_, hash, exempt);
         (, bytes32 salt) = HookMiner.find(address(this), 0x20cc, type(ProtectedNative30HookV1).creationCode, args);
-        hook = new ProtectedNative30HookV1{ salt: salt }(manager, config, DEV, router_, hash, exempt);
+        hook = new ProtectedNative30HookV1{salt: salt}(manager, config, DEV, router_, hash, exempt);
     }
 
     function _launch() internal {
-        initializer.initialize{ value: 0.01 ether }(IProtectedLaunchHookV1(address(hook)), token, START_TICK, DEV, 1);
+        initializer.initialize{value: 0.01 ether}(IProtectedLaunchHookV1(address(hook)), token, START_TICK, DEV, 1);
     }
 
     function test_atomicStartEnforcesFdvInitialBuyAndFee() public {
@@ -178,7 +177,9 @@ contract LaunchProtectionV1Test is Test {
     function test_arbitraryOracleCannotSubstituteForUsdFeed() public {
         TestPriceFeed fake = new TestPriceFeed();
         vm.expectRevert(ProtectedNativeInitializerV1.InvalidConfiguration.selector);
-        new ProtectedNativeInitializerV1(manager, address(this), ILaunchUsdFeedV1(address(fake)), address(fake).codehash);
+        new ProtectedNativeInitializerV1(
+            manager, address(this), ILaunchUsdFeedV1(address(fake)), address(fake).codehash
+        );
     }
 
     function test_cumulativeCapIncludesTransfersAndDoesNotRefill() public {
@@ -247,7 +248,7 @@ contract LaunchProtectionV1Test is Test {
         assertEq(hook.openingTaxVault().platformAccrued(), 0, "dev initial buy is exempt only from opening tax");
         uint256 before = hook.feeVault().platformAccrued();
         vm.startPrank(BUYER);
-        router.swap{ value: 0.001 ether }(hook.poolKey(), true, 0.001 ether);
+        router.swap{value: 0.001 ether}(hook.poolKey(), true, 0.001 ether);
         uint256 tokens = token.balanceOf(BUYER);
         assertGt(tokens, 0);
         assertEq(hook.feeVault().platformAccrued() - before, 0.000_003 ether);
@@ -274,7 +275,7 @@ contract LaunchProtectionV1Test is Test {
         PoolKey memory key = hook.poolKey();
         uint256 before = BUYER.balance;
         vm.prank(BUYER);
-        router.swapExactOutput{ value: 0.1 ether }(key, true, 1000 ether);
+        router.swapExactOutput{value: 0.1 ether}(key, true, 1000 ether);
         uint256 gross = before - BUYER.balance;
         assertEq(token.balanceOf(BUYER), 1000 ether);
         assertEq(
@@ -283,7 +284,7 @@ contract LaunchProtectionV1Test is Test {
         vm.warp(token.startedAt() + 30);
         uint256 taxBefore = hook.openingTaxVault().platformAccrued();
         vm.prank(BUYER);
-        router.swap{ value: 0.001 ether }(key, true, 0.001 ether);
+        router.swap{value: 0.001 ether}(key, true, 0.001 ether);
         assertEq(hook.openingTaxVault().platformAccrued(), taxBefore);
     }
 
@@ -307,11 +308,11 @@ contract LaunchProtectionV1Test is Test {
         PoolKey memory key = hook.poolKey();
         vm.prank(DEV);
         vm.expectRevert();
-        other.swap{ value: 0.001 ether }(key, true, 0.001 ether);
+        other.swap{value: 0.001 ether}(key, true, 0.001 ether);
         vm.warp(token.startedAt() + 31);
         vm.prank(DEV);
         vm.expectRevert();
-        other.swap{ value: 0.001 ether }(key, true, 0.001 ether);
+        other.swap{value: 0.001 ether}(key, true, 0.001 ether);
     }
 
     function test_cumulativeBuyerLimitAlsoAppliesToExemptWallets() public {
@@ -321,16 +322,23 @@ contract LaunchProtectionV1Test is Test {
         vm.deal(exemptBuyer, 5 ether);
         uint256 limit = token.walletTokenLimit();
         vm.prank(exemptBuyer);
-        router.swapExactOutput{ value: 1 ether }(key, true, limit);
+        router.swapExactOutput{value: 1 ether}(key, true, limit);
         assertEq(hook.boughtDuringProtection(exemptBuyer), limit);
         vm.prank(exemptBuyer);
         token.transfer(address(0xB2), limit);
         vm.prank(exemptBuyer);
-        vm.expectRevert(abi.encodeWithSignature("WrappedError(address,bytes4,bytes,bytes)", address(hook),
-            IHooks.afterSwap.selector,
-            abi.encodeWithSelector(ProtectedNative30HookV1.BuyerLimitExceeded.selector, exemptBuyer, limit + 1, limit),
-            abi.encodeWithSignature("HookCallFailed()")));
-        router.swapExactOutput{ value: 1 ether }(key, true, 1);
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "WrappedError(address,bytes4,bytes,bytes)",
+                address(hook),
+                IHooks.afterSwap.selector,
+                abi.encodeWithSelector(
+                    ProtectedNative30HookV1.BuyerLimitExceeded.selector, exemptBuyer, limit + 1, limit
+                ),
+                abi.encodeWithSignature("HookCallFailed()")
+            )
+        );
+        router.swapExactOutput{value: 1 ether}(key, true, 1);
     }
 
     function test_staleNegativeAndLowUsdPriceRollBackLaunch() public {
@@ -362,7 +370,7 @@ contract LaunchProtectionV1Test is Test {
 
     function test_initialBuyOverTwoPercentRollsBackEverything() public {
         vm.expectRevert();
-        initializer.initialize{ value: 1 ether }(IProtectedLaunchHookV1(address(hook)), token, START_TICK, DEV, 1);
+        initializer.initialize{value: 1 ether}(IProtectedLaunchHookV1(address(hook)), token, START_TICK, DEV, 1);
         assertFalse(initializer.initialized());
         assertEq(token.startedAt(), 0);
         assertEq(token.balanceOf(address(initializer)), SUPPLY);
@@ -409,7 +417,7 @@ contract LaunchProtectionV1Test is Test {
         token.transfer(BUYER, limit - amount + 1);
     }
 
-    receive() external payable { }
+    receive() external payable {}
 }
 
 /// @dev The same local Core behavior is exercised at the Robinhood chain/address binding.

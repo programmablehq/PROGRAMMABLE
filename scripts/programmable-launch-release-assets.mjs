@@ -21,6 +21,8 @@ import * as v415Binding from "./programmable-launch-v415-release-binding.mjs";
 
 import * as v416Binding from "./programmable-launch-v416-release-binding.mjs";
 
+import * as v417Binding from "./programmable-launch-v417-release-binding.mjs";
+
 export function releaseBindingTools(version) {
   if (version === "4.0.0") return v4Binding;
   if (version === "4.1.0") return v41Binding;
@@ -30,6 +32,7 @@ export function releaseBindingTools(version) {
   if (version === "4.1.4") return v414Binding;
   if (version === "4.1.5") return v415Binding;
   if (version === "4.1.6") return v416Binding;
+  if (version === "4.1.7") return v417Binding;
   if (version.split(".")[0] === "4") throw new Error("Unsupported V4 release version");
   return null;
 }

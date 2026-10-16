@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import { IUnlockCallback } from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
-import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
-import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
-import { BalanceDelta } from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import { ModifyLiquidityParams, SwapParams } from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import { FullMath } from "@uniswap/v4-core/src/libraries/FullMath.sol";
-import { SafeERC20, IERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ProtectedLaunchTokenV1 } from "./ProtectedLaunchTokenV1.sol";
-import { LaunchProtectionModuleV1 } from "./LaunchProtectionModuleV1.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ProtectedLaunchTokenV1} from "./ProtectedLaunchTokenV1.sol";
+import {LaunchProtectionModuleV1} from "./LaunchProtectionModuleV1.sol";
 
 interface IProtectedLaunchHookV1 {
     function poolKey() external view returns (PoolKey memory);
@@ -172,7 +172,7 @@ contract ProtectedNativeInitializerV1 is IUnlockCallback {
         if (int256(buy.amount0()) != -int256(nativeIn) || buy.amount1() <= 0) revert InvalidSettlement();
         uint256 out = uint256(uint128(buy.amount1()));
         if (out < minOut) revert InvalidInitialBuy();
-        if (poolManager.settle{ value: nativeIn }() != nativeIn) revert InvalidSettlement();
+        if (poolManager.settle{value: nativeIn}() != nativeIn) revert InvalidSettlement();
         poolManager.take(key.currency1, buyer, out);
         emit ProtectedLaunch(address(token), address(key.hooks), openingFdvUsd, lockedLiquidity, nativeIn, out);
         return "";
