@@ -165,6 +165,8 @@ contract LaunchProtectionV1Test is Test {
     function test_atomicStartEnforcesFdvInitialBuyAndFee() public {
         _launch();
         assertGe(initializer.openingFdvUsd(), 15_000);
+        assertEq(token.POLICY_REVISION(), 2);
+        assertEq(hook.POLICY_REVISION(), 2);
         assertEq(token.startedAt(), block.timestamp);
         assertGt(token.balanceOf(DEV), 0);
         assertLe(token.balanceOf(DEV), SUPPLY / 50);

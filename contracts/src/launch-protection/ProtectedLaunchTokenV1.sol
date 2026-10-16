@@ -6,6 +6,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 /// @notice Fixed supply and a cumulative two-percent receiving budget for the opening five minutes.
 /// @dev Selling, burning and forwarding tokens do not refill the budget. No EOA or contract is whitelisted.
 contract ProtectedLaunchTokenV1 is ERC20 {
+    uint256 public constant POLICY_REVISION = 2;
     uint256 public constant WALLET_LIMIT_BPS = 200;
     uint256 public constant PROTECTION_SECONDS = 300;
     address public immutable initializer;

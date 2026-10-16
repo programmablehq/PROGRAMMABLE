@@ -5,7 +5,7 @@ import { LAUNCH_PROTECTION_RECIPES_V1 } from "@/lib/launch-protection/recipes-v1
 import { materializeEthereumNative30RuntimeWordsV1 as materialize, proveEthereumNative30RuntimeV1,
   rebuildEthereumNative30RuntimeProofV1, type EthereumNative30MarketV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
 
-// The fee kernel is unchanged; its historical fee proof remains valid for the new module.
+// New policy runtimes remain separate from the historical deployed kernel.
 const recipe = LAUNCH_PROTECTION_RECIPES_V1.protected_native30_15000_six_v1;
 const hook = "0x11111111111111111111111111111111111120cc" as Address;
 const token = "0x2222222222222222222222222222222222222222" as Address;
@@ -35,7 +35,7 @@ function fixture(chainId: 1 | 4663 = 1, runtimeRecipe: typeof recipe | typeof LA
 describe("protected Native30 exact fee recognition", () => {
   it("recognizes the fixed 0.3% fee without combining opening-tax custody", () => {
     const { codes } = fixture(), proof = proveEthereumNative30RuntimeV1(market, codes)!;
-    expect(proof).toMatchObject({ recipeId: "protected_native30_v1", rateBps: 30, feeVault,
+    expect(proof).toMatchObject({ recipeId: "protected_native30_15000_six_v1", rateBps: 30, feeVault,
       recipient: recipe.recipient, rounding: "ceil_per_trade" });
     expect(rebuildEthereumNative30RuntimeProofV1(JSON.parse(JSON.stringify(proof)), market)).toEqual(proof);
   });
@@ -54,7 +54,7 @@ describe("Robinhood protected fee recognition", () => {
     const { codes } = fixture(4663);
     const rhMarket = { ...market, chainId: "4663" as const, poolManager: "0x8366a39CC670B4001A1121B8F6A443A643e40951" as Address };
     const proof = proveImmutablePoolFeeRuntimeV2(rhMarket, codes)!;
-    expect(proof).toMatchObject({ recipeId: "protected_native30_v1", rateBps: 30, feeVault });
+    expect(proof).toMatchObject({ recipeId: "protected_native30_15000_six_v1", rateBps: 30, feeVault });
     expect(rebuildImmutablePoolFeeRuntimeProofV2(JSON.parse(JSON.stringify(proof)), rhMarket)).toEqual(proof);
     expect(proveImmutablePoolFeeRuntimeV2(rhMarket, { ...codes, [protectionModule]: "0x6000" })).toBeNull();
   });
