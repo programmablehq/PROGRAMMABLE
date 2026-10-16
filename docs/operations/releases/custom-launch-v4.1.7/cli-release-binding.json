@@ -188,11 +188,11 @@
     },
     {
       "path": "packages/launch/src/launch-protection-v1.mjs",
-      "sha256": "sha256:fa63e4c0bc1646a4c262790f4d1531e8e239fa75c70f88105d799bad44ba3d2d"
+      "sha256": "sha256:a6efe2e28c0917c856ca82e8b31621c62f5429521b595d6163cf485c00dbfe24"
     },
     {
       "path": "packages/launch/src/launch-protection-ethereum-v1.mjs",
-      "sha256": "sha256:5861e84c5061ff806ec3f8a4478def1cd886b0cce2fc47831c58009349ea16d2"
+      "sha256": "sha256:2937f4a6ab17db1036729254aed57091d6ef7e686a5c88470025ea1435b8f8aa"
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/standard-json.json",

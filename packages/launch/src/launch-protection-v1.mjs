@@ -121,11 +121,12 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
   const salt = (role, attempt = 0n) => keccak256(encodeAbiParameters(parseAbiParameters('uint256,address,bytes32,string,uint256'), [BigInt(chainId), owner, nonce, role, attempt]));
   const root = (role, args, flags) => {
     const initCode = encodeDeployData({ abi: a[role].abi, bytecode: a[role].creationBytecode, args });
+    const initCodeHash = keccak256(initCode);
     for (let attempt = 0n; attempt < 262144n; attempt++) {
       const applicantSalt = salt(role, attempt);
-      const derived = deriveRootAddress?.({ role, initCode, applicantSalt });
+      const derived = deriveRootAddress?.({ role, initCode, initCodeHash, applicantSalt });
       const s = derived?.salt ?? applicantSalt;
-      const address = derived?.address ?? getCreate2Address({ from: factory, salt: s, bytecode: initCode });
+      const address = derived?.address ?? getCreate2Address({ from: factory, salt: s, bytecodeHash: initCodeHash });
       if (flags === undefined || (BigInt(address) & 0x3fffn) === BigInt(flags)) return { address, salt: s, applicantSalt, args, initCode };
     }
     throw new TypeError('Hook address search exhausted');

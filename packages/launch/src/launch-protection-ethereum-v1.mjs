@@ -51,12 +51,12 @@ export async function buildProtectedEthereumLaunchV1({ projectRoot, client, capa
   const prepared = await prepareProtectedNativeContractsV1({ ...input, client, chainId: 1, developer: input.launchWallet,
     name: metadata.token.name, symbol: metadata.token.symbol, deploymentFactory: profile.graphFactory,
     initializerAuthority: profile.graphFactory,
-    deriveRootAddress({ role, initCode, applicantSalt }) {
+    deriveRootAddress({ role, initCodeHash, applicantSalt }) {
       const field = Buffer.from(role), length = Buffer.alloc(4); length.writeUInt32BE(field.length);
       const targetIdHash = keccak256('0x' + Buffer.concat([Buffer.from('programmable.create2-graph-target-id.v1'), Buffer.from([0]), length, field]).toString('hex'));
       const salt = keccak256(encodeAbiParameters(parseAbiParameters('bytes32,uint256,address,bytes32,bytes32,bytes32,bytes32,address'),
         [saltType, 1n, profile.graphFactory, namespace, input.nonce, targetIdHash, applicantSalt, profile.router]));
-      return { salt, address: getCreate2Address({ from: profile.graphFactory, salt, bytecode: initCode }) };
+      return { salt, address: getCreate2Address({ from: profile.graphFactory, salt, bytecodeHash: initCodeHash }) };
     } });
   const base = role => ({ targetId: role, compilationUnitId: 'launch-protection-v1', artifact: `protection/artifacts/${role}.json`,
     applicantSalt: prepared.deployments[role].applicantSalt, deploymentValueWei: '0', initializerValueWei: '0',
