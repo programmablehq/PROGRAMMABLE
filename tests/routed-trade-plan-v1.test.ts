@@ -96,8 +96,8 @@ function native100Vector() {
     materializeImmutableFeeRuntimeWordsV1(b.role === "hook" ? recipe.hook : recipe.vault, b.immutableWords!)]));
   return proveImmutablePoolFeeRuntimeV3(old.market,codes)!;
 }
-function protectedVector() {
-  const previous = native30Vector, recipe = LAUNCH_PROTECTION_RECIPES_V1.protected_native30_v1;
+function protectedVector(recipeId: keyof typeof LAUNCH_PROTECTION_RECIPES_V1 = "protected_native30_v1") {
+  const previous = native30Vector, recipe = LAUNCH_PROTECTION_RECIPES_V1[recipeId];
   const market = { ...previous.market, chainId: "4663" as const, fee: 0 };
   const protectionModule = getContractAddress({ from: market.hooks as Hex, nonce: 2n });
   const w = (value: string | bigint) => toHex(BigInt(value), { size: 32 });
@@ -112,8 +112,8 @@ function protectedVector() {
     [protectionModule.toLowerCase()]: moduleCode };
   return { proof: proveImmutablePoolFeeRuntimeV2(market as never, codes)!, codes };
 }
-function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean; native30?: boolean; native100?: boolean; protected?: boolean; permitExpiration?: number } = {}) {
-  const protectedFixture = options.protected ? protectedVector() : null;
+function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAccrual?: boolean; missingRecord?: boolean; missingVault?: boolean; sell?: boolean; provenance?: boolean; native30?: boolean; native100?: boolean; protected?: boolean | keyof typeof LAUNCH_PROTECTION_RECIPES_V1; permitExpiration?: number } = {}) {
+  const protectedFixture = options.protected ? protectedVector(typeof options.protected === "string" ? options.protected : undefined) : null;
   const vector = (protectedFixture ? protectedFixture.proof : options.native100 ? native100Vector() : options.native30 ? native30Vector : feeVectors.proofs[index]!) as unknown as ImmutablePoolFeeRuntimeProofV1;
   const proof = rebuildImmutablePoolFeeRuntimeProof(vector, vector.market);
   const recipes = proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v3" ? feeRecipesV3[proof.recipeId] : proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v2" ? feeRecipesV2[proof.recipeId] : feeRecipes[proof.recipeId];
@@ -295,8 +295,8 @@ describe("generic vNext routed swap", () => {
     }
     await expect(immutablePoolFixture(0,{native100:true,provenance:true,unbacked:true}).prepare()).rejects.toMatchObject({status:503});
   });
-  it("quotes a protected purchase through the authenticated buyer router and validates its final fee accrual", async () => {
-    const fixture = immutablePoolFixture(0, { protected: true, provenance: true });
+  it.each(["protected_native30_v1", "protected_native30_15000_six_v1"] as const)("quotes %s through the authenticated buyer router and validates its final fee accrual", async recipeId => {
+    const fixture = immutablePoolFixture(0, { protected: recipeId, provenance: true });
     const result = await fixture.prepare();
     expect(result.status).toBe("ready");
     expect(result.quote.amountOut).toBe("50001");

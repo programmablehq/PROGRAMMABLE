@@ -14,6 +14,7 @@ import type { ImmutablePoolFeeMarketV1 } from "@/lib/custom-launch/immutable-poo
 import { immutablePoolFeeRequiredAddresses, proveImmutablePoolFeeRuntime } from "@/lib/custom-launch/immutable-pool-fee-runtime";
 import { proveImmutablePoolFeeTradeAccrualV1 } from "./immutable-pool-fee-trade-v1";
 import { proveIrlPoolFeeV1 } from "@/lib/custom-launch/irl-pool-fee-custom-launch-plan-v1";
+import { LAUNCH_PROTECTION_RECIPES_V1 } from "@/lib/launch-protection/recipes-v1";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 const QUOTER = parseAbi(["function quoteExactInputSingle(((address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks) poolKey,bool zeroForOne,uint128 exactAmount,bytes hookData) params) returns(uint256 amountOut,uint256 gasEstimate)"]);
@@ -87,7 +88,7 @@ export async function prepareLaunchPlanTradeV1(input: unknown, dependencies: {
   if (nativeInputBalance !== null && nativeInputBalance < BigInt(request.amountIn))
     throw new LaunchPlanTradeErrorV1("INSUFFICIENT_INPUT_BALANCE", "Your wallet does not have enough ETH for this amount.", 400);
   let gross: bigint;
-  if (poolFeeProof?.recipeId === "protected_native30_v1" && binding.nativeInput && request.zeroForOne) {
+  if (poolFeeProof && Object.hasOwn(LAUNCH_PROTECTION_RECIPES_V1, poolFeeProof.recipeId) && binding.nativeInput && request.zeroForOne) {
     // The protected hook authenticates the actual router buyer. A generic quoter
     // cannot impersonate that buyer, including their fixed tax exemption/cap.
     // Two nominal units produce a one-unit minimum; this probe is never returned
