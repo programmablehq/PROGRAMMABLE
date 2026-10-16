@@ -4,7 +4,7 @@ import { TickMath } from "@uniswap/v3-sdk";
 /** Candidate policy. Activation is a separately reviewed release operation. */
 export const LAUNCH_PROTECTION_V1 = Object.freeze({
   schemaVersion: "programmable.launch-protection.v1",
-  minimumFdvUsd: "30000",
+  minimumFdvUsd: "15000",
   walletLimitBps: 200,
   walletLimitSeconds: 300,
   buyerLimitBps: 200,
@@ -12,7 +12,7 @@ export const LAUNCH_PROTECTION_V1 = Object.freeze({
   buyerCapBasis: "cumulative-authenticated-buys",
   openingTotalFeePpm: 990_000,
   openingFeeSeconds: 30,
-  maximumAdditionalTaxExemptWallets: 3,
+  maximumAdditionalTaxExemptWallets: 6,
   exemptionScope: "additional-opening-fee-only",
   capBasis: "cumulative-recipient-inflow",
   openingFeeDestination: "fixed-platform-treasury",
@@ -23,7 +23,7 @@ export const LAUNCH_PROTECTION_V1 = Object.freeze({
 export function validateLaunchExemptions(developer: Address, additional: readonly string[]): readonly Address[] {
   const dev = getAddress(developer), zero = "0x0000000000000000000000000000000000000000";
   if (dev === zero || additional.length > LAUNCH_PROTECTION_V1.maximumAdditionalTaxExemptWallets) {
-    throw new Error("At most three additional tax-exempt wallets are allowed.");
+    throw new Error("At most six additional tax-exempt wallets are allowed.");
   }
   const wallets = additional.map(wallet => getAddress(wallet));
   if (wallets.some(w => w === zero || w === dev) || new Set(wallets).size !== wallets.length) {
@@ -69,7 +69,7 @@ export function planProtectedOpeningPriceV1(input: { chainId: 1 | 4663; token: A
   if (![1, 4663].includes(input.chainId) || token === quote || target < BigInt(LAUNCH_PROTECTION_V1.minimumFdvUsd) || target > (1n << 128n)
     || usd.observedAt <= 0n || usd.observedAt > now || now - usd.observedAt > maxAge
     || usd.validUntil <= now || usd.validUntil > usd.observedAt + maxAge) {
-    throw new Error("A fresh verified USD price and at least USD 30,000 starting valuation are required.");
+    throw new Error("A fresh verified USD price and at least USD 15,000 starting valuation are required.");
   }
   const tokenIsCurrency0 = BigInt(token) < BigInt(quote);
   const at = (tick: number) => {

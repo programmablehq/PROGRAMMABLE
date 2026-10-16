@@ -44,6 +44,7 @@ interface IProtectedNativeFeeModuleV1 {
 ///      The shell has no swap, unlock-forwarding, delegatecall, arbitrary-call, or privileged execution path:
 ///      those paths would bypass callbacks under Uniswap's same-hook-sender exception.
 contract ProtectedNative30HookV1 is BaseHook {
+    uint256 public constant POLICY_REVISION = 2;
     using SafeCast for uint256;
     using SafeCast for int256;
     using LPFeeLibrary for uint24;
@@ -119,7 +120,7 @@ contract ProtectedNative30HookV1 is BaseHook {
         address developer,
         address router,
         bytes32 routerCodeHash,
-        address[3] memory exemptWallets
+        address[6] memory exemptWallets
     ) BaseHook(manager) {
         CHAIN_ID = block.chainid;
         CANONICAL_POOL_MANAGER = block.chainid == 1

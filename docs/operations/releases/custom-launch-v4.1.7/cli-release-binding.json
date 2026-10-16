@@ -188,7 +188,7 @@
     },
     {
       "path": "packages/launch/src/launch-protection-v1.mjs",
-      "sha256": "sha256:620e3ed0f43f2d957bcdf32f5b79e7d66fd7b276c712a18c43531804caf012d6"
+      "sha256": "sha256:8ecd46d075c966010ed9642211682449616abe1fb4ecca79a667e3be3f2bb98b"
     },
     {
       "path": "packages/launch/src/launch-protection-ethereum-v1.mjs",
@@ -196,27 +196,27 @@
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/standard-json.json",
-      "sha256": "sha256:189748a681176c9fd0f21f1c492dc351a9a35aaf971046913a9b754bcb249605"
+      "sha256": "sha256:ce4da3776a862de4f02929dc0d2418a770bd357a75dabaa172bb80d392439a65"
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/ProtectedLaunchTokenV1.artifact.json",
-      "sha256": "sha256:aff970629d564ee446a1c908365058bb06a9ba60b3b761fc3c11a9def74f6bd6"
+      "sha256": "sha256:276bdb6f61aa3eebeff9d5c7d40080c8cf431bddba91fe8cf70bbb37d338f595"
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/LaunchProtectionModuleV1.artifact.json",
-      "sha256": "sha256:b77f7f8d8fb64abee9db0588aa213220d051d6d17781de0e6464451adf22ac09"
+      "sha256": "sha256:29b862cf098f193afd91d269b69815a308d25b4c153ac9ebe8ea574026ed8d82"
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/ProtectedNative30HookV1.artifact.json",
-      "sha256": "sha256:98fac1b4bc61dc35724a9d8d74cb09688fda40242af7dcc7d2a8f60e27fb8ce3"
+      "sha256": "sha256:8075eac148b92e69076aebb70ca0ddfe56a2e05e9290a56dcaaf9b274aaded14"
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/ProtectedNativeInitializerV1.artifact.json",
-      "sha256": "sha256:5765d016fa07dec2ada626d54513d41634aec8714a1076c417e4753ee4c3cbe8"
+      "sha256": "sha256:a7d28e89f1070cf832651687e11e8f59db826bb4983c6e96a9f6a917e9ab6f69"
     },
     {
       "path": "packages/launch/contracts/launch-protection-v1/EthereumNativeFeeVaultV3.artifact.json",
-      "sha256": "sha256:691dd8b69c2ad69a04513c35b6675d703f6d76429770f2992dffd3ef0977a51a"
+      "sha256": "sha256:c450d1be9b605a56b06fde16e5f76fd731447149aa0ccc256caca910b0f237a3"
     }
   ],
   "machineContracts": [

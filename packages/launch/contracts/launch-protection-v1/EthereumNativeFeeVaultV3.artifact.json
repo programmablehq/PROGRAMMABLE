@@ -2,7 +2,7 @@
   "contractName": "EthereumNativeFeeVaultV3",
   "compiler": "0.8.26+commit.8a97fa7a",
   "sourcePath": "src/ethereum-native30-v3/EthereumNativeFeeVaultV3.sol",
-  "sourceArtifactHash": "sha256:189748a681176c9fd0f21f1c492dc351a9a35aaf971046913a9b754bcb249605",
+  "sourceArtifactHash": "sha256:ce4da3776a862de4f02929dc0d2418a770bd357a75dabaa172bb80d392439a65",
   "abi": [
     {
       "inputs": [

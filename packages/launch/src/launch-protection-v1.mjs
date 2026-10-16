@@ -6,9 +6,9 @@ import { concatHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, g
   getCreate2Address, keccak256, parseAbi, parseAbiParameters, toHex } from 'viem';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
-export const PROTECTED_LAUNCH_POLICY_V1 = Object.freeze({ minimumFdvUsd: '30000', walletLimitBps: 200,
+export const PROTECTED_LAUNCH_POLICY_V1 = Object.freeze({ minimumFdvUsd: '15000', walletLimitBps: 200,
   buyerLimitBps: 200, protectionSeconds: 300, openingTotalFeePpm: 990000, openingFeeSeconds: 30,
-  maximumAdditionalTaxExemptWallets: 3, treasury: '0xD88539d3c4C460136a733A3Fd60cf6BF269079da' });
+  maximumAdditionalTaxExemptWallets: 6, treasury: '0xD88539d3c4C460136a733A3Fd60cf6BF269079da' });
 export const PROTECTED_LAUNCH_CHAIN_PINS_V1 = Object.freeze({
   1: Object.freeze({ manager: '0x000000000004444c5dc75cB358380D2e3dE08A90',
     router: '0xd92A36B0000531EF3063dEd4De20A0783308446C',
@@ -36,10 +36,10 @@ function fee(value = 0) {
 }
 export function protectedLaunchExemptionsV1(developer, extra = []) {
   const owner = getAddress(developer);
-  if (!Array.isArray(extra) || extra.length > 3) throw new TypeError('At most three additional exempt wallets');
+  if (!Array.isArray(extra) || extra.length > PROTECTED_LAUNCH_POLICY_V1.maximumAdditionalTaxExemptWallets) throw new TypeError('At most six additional exempt wallets');
   const result = extra.map(address => getAddress(address));
   if (result.some(a => a === owner || a === ZERO) || new Set(result).size !== result.length) throw new TypeError('Exempt wallets must be distinct and nonzero, excluding developer');
-  return [...result, ...Array(3 - result.length).fill(ZERO)];
+  return [...result, ...Array(PROTECTED_LAUNCH_POLICY_V1.maximumAdditionalTaxExemptWallets - result.length).fill(ZERO)];
 }
 
 // Uniswap TickMath constants, preserving the same upward sqrt rounding as Core.
@@ -56,9 +56,9 @@ export function protectedSqrtPriceAtTickV1(tick) {
   if (tick > 0) ratio = ((1n << 256n) - 1n) / ratio;
   return (ratio >> 32n) + (ratio % (1n << 32n) === 0n ? 0n : 1n);
 }
-export function protectedOpeningPriceV1({ supply, answer, feedDecimals = 8, targetFdvUsd = '30000' }) {
+export function protectedOpeningPriceV1({ supply, answer, feedDecimals = 8, targetFdvUsd = '15000' }) {
   const amount = positive(supply), target = positive(targetFdvUsd);
-  if (target < 30000n || answer <= 0n || !Number.isInteger(feedDecimals) || feedDecimals < 0 || feedDecimals > 18) throw new TypeError('Invalid USD floor or feed');
+  if (target < BigInt(PROTECTED_LAUNCH_POLICY_V1.minimumFdvUsd) || answer <= 0n || !Number.isInteger(feedDecimals) || feedDecimals < 0 || feedDecimals > 18) throw new TypeError('Invalid USD floor or feed');
   const value = tick => { const sqrt = protectedSqrtPriceAtTickV1(tick); return (((1n << 192n) * amount / (sqrt * sqrt)) * answer) / (10n ** BigInt(18 + feedDecimals)); };
   let lo = -14786, hi = 14786;
   if (value(lo * 60) < target) throw new TypeError('Valuation outside tick range');
@@ -96,7 +96,7 @@ function materialize(a, values, args, address) {
 /** Builds exact bytes only; no account, signature or transaction is sent. The supplied reader must be on the intended chain. */
 export async function prepareProtectedNativeContractsV1({ client, chainId, developer, deploymentFactory, initializerAuthority,
   nonce, name, symbol, supply = '1000000000000000000000000000', creatorBuyFeeBps = 0, creatorSellFeeBps = 0,
-  additionalTaxExemptWallets = [], targetFdvUsd = '30000', initialBuyWei, minimumTokensOut, deriveRootAddress }) {
+  additionalTaxExemptWallets = [], targetFdvUsd = '15000', initialBuyWei, minimumTokensOut, deriveRootAddress }) {
   const pins = PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
   if (!pins || await client.getChainId() !== Number(chainId)) throw new TypeError('Unsupported or mismatched chain');
   const owner = getAddress(developer), factory = getAddress(deploymentFactory), authority = getAddress(initializerAuthority);

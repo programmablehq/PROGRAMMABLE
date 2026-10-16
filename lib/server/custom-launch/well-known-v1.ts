@@ -105,8 +105,8 @@ export function programmableWellKnownDocumentV1(
         supportedChainIds: ["1", "4663"],
         builderModule: "@programmable/launch/launch-protection",
         sourceCandidateVersion: "4.1.7",
-        minimumFdvUsd: "30000", walletLimitBps: 200, buyerLimitBps: 200, protectionSeconds: 300,
-        openingTotalFeePpm: 990000, openingFeeSeconds: 30, maximumAdditionalTaxExemptWallets: 3,
+        minimumFdvUsd: "15000", walletLimitBps: 200, buyerLimitBps: 200, protectionSeconds: 300,
+        openingTotalFeePpm: 990000, openingFeeSeconds: 30, maximumAdditionalTaxExemptWallets: 6,
         discoveryIsActivationEvidence: false,
       }),
       preflightUrl:

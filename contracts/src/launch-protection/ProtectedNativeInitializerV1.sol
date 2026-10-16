@@ -29,7 +29,7 @@ interface ILaunchUsdFeedV1 {
 /// @dev There is no remove-liquidity, collect-fees, execute, upgrade or owner-withdrawal entry point.
 contract ProtectedNativeInitializerV1 is IUnlockCallback {
     using SafeERC20 for IERC20;
-    uint256 public constant MINIMUM_FDV_USD = 30_000;
+    uint256 public constant MINIMUM_FDV_USD = 15_000;
     uint256 public immutable MAX_FEED_AGE;
     address public immutable graphFactory;
     IPoolManager public immutable poolManager;
