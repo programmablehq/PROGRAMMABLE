@@ -133,3 +133,14 @@ cache_path = "cache/launch-protection"
 via_ir = true
 optimizer_runs = 200
 auto_detect_remappings = false
+
+# Candidate only; never selected by a live release merely by compiling it.
+[profile.claus-partner]
+skip = []
+src = "src/claus-partner-v1"
+test = "test/claus-partner-v1"
+script = "script/claus-partner-v1"
+out = "out/claus-partner-v1"
+cache_path = "cache/claus-partner-v1"
+via_ir = true
+optimizer_runs = 200
