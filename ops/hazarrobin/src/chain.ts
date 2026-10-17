@@ -312,7 +312,7 @@ export async function claimFees(
     throw new Error("Aktuell sind keine LP Fees offen. Es wurde keine Transaktion gestartet.");
   }
 
-  const [simulation, gas, gasPrice, nonce] = await Promise.all([
+  const [simulation, gas, gasPrice, nonce, balance] = await Promise.all([
     publicClient.simulateContract({
       account: connection.account,
       address: LOCKER,
@@ -329,7 +329,12 @@ export async function claimFees(
     }),
     publicClient.getGasPrice(),
     publicClient.getTransactionCount({ address: connection.account, blockTag: 'pending' }),
+    publicClient.getBalance({ address: connection.account }),
   ]);
+
+  if (balance < gas * gasPrice * 125n / 100n) {
+    throw new Error('Bitte etwas ETH für Gas auf Robinhood Chain nachlegen.');
+  }
 
   onProgress({
     stage: "wallet",

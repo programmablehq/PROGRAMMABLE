@@ -32,3 +32,4 @@ it('rejects disagreement between receipt providers',async()=>{
 it('finds an old mined transaction outside the previous 16-block window',async()=>expect(await findMinedClaim({...entry,hash:undefined},readers())).toBe(hash));
 
 it('clears rejected wallet requests through wrapped viem errors only',()=>{expect(walletRequestNotSent({cause:{cause:{code:4001}}})).toBe(true);expect(walletRequestNotSent({cause:{code:-32000}})).toBe(false);});
+it('clears a proven insufficient-funds rejection but preserves unknown broadcasts',()=>{expect(walletRequestNotSent({cause:{name:'InsufficientFundsError'}})).toBe(true);expect(walletRequestNotSent({cause:{name:'TransactionNotFoundError'}})).toBe(false);});

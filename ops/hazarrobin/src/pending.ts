@@ -47,9 +47,9 @@ export function remember(value: PendingClaim | null, chainId?: 1 | 4663) {
 }
 
 export function walletRequestNotSent(error: unknown, codes = [4001, 4100, -32602]) {
-  let current = error as { code?: unknown; cause?: unknown } | undefined;
+  let current = error as { code?: unknown; name?: string; cause?: unknown } | undefined;
   for (let i = 0; current && i < 12; i++) {
-    if (codes.includes(Number(current.code))) return true;
+    if (codes.includes(Number(current.code)) || current.name === 'InsufficientFundsError') return true;
     current = current.cause as typeof current;
   }
   return false;
