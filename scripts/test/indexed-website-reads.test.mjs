@@ -205,6 +205,13 @@ function ethereumItem(n) {
     } };
 }
 
+function confirmingEthereumItem(n = 2) {
+  const item = ethereumItem(n);
+  delete item.provenance;
+  return { ...item, chainId: 1, confirmation: "confirming", observationExpiresAt: NOW + 30_000,
+    category: "custom", mode: "module", launchId: HASH(n), blockHash: HASH(500), poolId: HASH(501), quoteAsset: ADDRESS(0) };
+}
+
 function robinhoodSource() {
   return { source: "canonical-launch-stamp-router", sourceAddress: EXPECTATIONS.robinhood.routerAddress,
     binding: HASH(1000), startBlock: EXPECTATIONS.robinhood.startBlock, cursor: { number: "60000000", hash: HASH(2000) },
@@ -727,6 +734,49 @@ test("current Ethereum sources, finalized module sources and stale observations 
   });
   const delayResult = await runIndexedWebsiteReadSmoke(input({ fetchImpl: delayed.fetchImpl }));
   assert.equal(delayResult.chains[0].status, "stale");
+});
+
+test("fresh provisional Ethereum receipts stay separate from canonical token page evidence", async () => {
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) {
+      spec.body.items[1] = confirmingEthereumItem();
+    }
+  });
+  const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl }));
+  assert.equal(result.chains[0].confirmingItems, 1);
+  assert.equal(result.chains[0].tokenPage.tokenAddress, ethereumItem(1).tokenAddress);
+});
+
+test("provisional receipts reject expiry, malformed identity and canonical-provenance confusion", async () => {
+  for (const mutate of [
+    item => { item.observationExpiresAt = NOW; },
+    item => { item.observationExpiresAt = NOW + 60_001; },
+    item => { item.confirmation = "confirmed"; },
+    item => { item.chainId = 4663; },
+    item => { item.mode = "other"; },
+    item => { item.category = "classic"; },
+    item => { item.blockHash = HASH(0); },
+    item => { item.poolId = "bad"; },
+    item => { item.quoteAsset = "bad"; },
+    item => { item.provenance = ethereumItem(2).provenance; },
+    item => { delete item.confirmation; },
+  ]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) {
+        const item = confirmingEthereumItem(); mutate(item); spec.body.items[1] = item;
+      }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl })), /indexed website/u);
+  }
+});
+
+test("provisional receipts cannot exceed the observer's bounded launch window", async () => {
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) {
+      spec.body.items = spec.body.items.map((item, index) => index > 0 && index <= 33 ? confirmingEthereumItem(index + 1) : item);
+    }
+  });
+  await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl })), /provisional receipt count/u);
 });
 
 test("wrong source, partial source and unsupported ready claims fail closed", async () => {

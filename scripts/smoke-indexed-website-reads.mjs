@@ -197,11 +197,23 @@ function validateProjectedItem(item, sources) {
   } else check(item.poolManager === null && item.hookAddress === null && item.poolId === null, "Robinhood no-market projection");
 }
 
-function validateItem(item, body, route, expectations) {
+function validateItem(item, body, route, expectations, nowMs) {
   check(record(item) && ADDRESS.test(item.tokenAddress ?? "") && ADDRESS.test(item.creator ?? "") &&
     HASH.test(item.transactionHash ?? "") && BLOCK.test(item.blockNumber ?? "") &&
     (item.chainId === undefined || item.chainId === route.chainId), "launch identity");
   if (route.chainId === 1) {
+    if (item.confirmation !== undefined) {
+      // Receipt observations are explicitly provisional in the public API.
+      // They must never acquire, replace, or satisfy canonical provenance.
+      check(item.chainId === 1 && item.confirmation === "confirming" && item.category === "custom" &&
+        ["custom", "module"].includes(item.mode) && item.provenance === undefined &&
+        HASH.test(item.launchId ?? "") && ADDRESS.test(item.hookAddress ?? "") &&
+        HASH.test(item.blockHash ?? "") && HASH.test(item.poolId ?? "") &&
+        /^0x[0-9a-f]{40}$/iu.test(item.quoteAsset ?? "") && timestamp(item.launchedAt, nowMs) &&
+        Number.isSafeInteger(item.observationExpiresAt) && item.observationExpiresAt > nowMs &&
+        item.observationExpiresAt <= nowMs + 60_000, "Ethereum provisional receipt");
+      return;
+    }
     const provenance = item.provenance;
     check(ADDRESS.test(item.hookAddress ?? "") && ["classic", "custom"].includes(item.category) && record(provenance) &&
       provenance.schemaVersion === "programmable.explore-launch-category-provenance.v1" && provenance.category === item.category,
@@ -270,7 +282,7 @@ export function validateIndexedWebsiteList({ body, response, route, pageNumber, 
   const identities = new Set();
   const addresses = new Set();
   for (const item of body.items) {
-    validateItem(item, body, route, expectations);
+    validateItem(item, body, route, expectations, nowMs);
     check(!identities.has(launchIdentity(item)), "duplicate launch identity");
     identities.add(launchIdentity(item));
     addresses.add(item.tokenAddress.toLowerCase());
@@ -312,6 +324,7 @@ async function observeReads(input, target, headers, observedAt) {
   }
   const results = await Promise.allSettled(INDEXED_WEBSITE_ROUTES.map(async route => {
     let first;
+    let confirmingItems = 0;
     const identities = new Set();
     const pages = [];
     for (let number = 1; number <= (first?.page.totalPages ?? 1); number += 1) {
@@ -333,12 +346,16 @@ async function observeReads(input, target, headers, observedAt) {
         }
         check(!identities.has(launchIdentity(item)), "duplicate launch across pages; rerun smoke");
         identities.add(launchIdentity(item));
+        if (item.confirmation === "confirming") confirmingItems += 1;
       }
       pages.push({ number, status: body.status, count: body.items.length, updatedAt: body.updatedAt,
         sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest: result.bodyDigest });
     }
     check(identities.size === first.page.totalItems, "catalog count");
-    const item = first.items.find(row => typeof row.name === "string" && row.name.length > 0) ?? first.items[0];
+    check(confirmingItems <= 32, "provisional receipt count");
+    const canonical = first.items.filter(row => row.confirmation !== "confirming");
+    const item = canonical.find(row => typeof row.name === "string" && row.name.length > 0) ?? canonical[0];
+    check(item, "canonical token page sample");
     const tokenPath = `/token/${item.tokenAddress.toLowerCase()}${route.chainId === 1 ? "?chain=1" : ""}`;
     const token = await request(tokenPath, "text/html");
     check(token.response.status === 200, "token page response");
@@ -379,7 +396,7 @@ async function observeReads(input, target, headers, observedAt) {
     }
     const status = pages.some(page => page.status === "stale") ? "stale"
       : pages.some(page => page.status === "syncing") ? "syncing" : "ready";
-    return { chainId: route.chainId, status, totalItems: identities.size, pages,
+    return { chainId: route.chainId, status, totalItems: identities.size, confirmingItems, pages,
       tokenPage: { path: tokenPath, tokenAddress: item.tokenAddress, bodyDigest: token.bodyDigest } };
   }));
   const failures = results.filter(result => result.status === "rejected");
@@ -436,7 +453,7 @@ export async function runIndexedWebsiteReadSmoke(input) {
   return { schemaVersion: "programmable.indexed-website-read-evidence.v1", mode: INDEXED_WEBSITE_READ_MODE,
     targetKind: input.targetKind, targetUrl: target.origin, deploymentId: input.deploymentId, gitHead: input.gitHead,
     projectId: input.projectId, observedAt, publicReadAuthentication: "none", chains,
-    scope: "Website catalogs and server-rendered token pages; existing readers enforce source trust. No market, trading, worker activation or legacy API availability claim." };
+    scope: "Website catalogs and server-rendered token pages; existing readers enforce source trust. Confirming receipts are display-only, not canonical launch proofs. No market, trading, worker activation or legacy API availability claim." };
 }
 
 async function main() {
