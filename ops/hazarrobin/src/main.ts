@@ -3,7 +3,7 @@ import './styles.css';
 import { formatUnits, type Address } from 'viem';
 import { readSnapshot, claimFees, type ChainSnapshot, type WalletConnection } from './chain';
 import { FEE_RECIPIENT, TOKEN_ID, LOCKER, CLAIM_CALLDATA } from './config';
-import { scanChain, connect, totals, claimEcosystem, eligible, pending, checkPending, remember, readers, type Scan } from './ecosystem';
+import { scanChain, connect, totals, claimEcosystem, eligible, pending, pendingClaims, checkPending, remember, readers, type Scan } from './ecosystem';
 
 type GroupId='v4'|'robinhood'|'ethereum';
 interface Group {id:GroupId;title:string;description:string;network:string;chainId:1|4663;busy:boolean;message:string;error:string;scan?:Scan;snapshot?:ChainSnapshot}
@@ -48,14 +48,14 @@ function render(){
  app.innerHTML=`<header><a class="brand" href="https://programmable.market" target="_blank" rel="noreferrer"><img src="/programmable.png" alt=""/><span>programmable<span class="brand-sub">fee claims</span></span></a><button class="wallet" id="connect" ${claiming?'disabled':''}><span class="wallet-dot ${wallet?'connected':''}"></span>${wallet?short(wallet.account):'Wallet verbinden'}</button></header>
  <main><div class="hero"><span class="eyebrow">HAZARROBIN</span><h1>Alle Fees.<br><span>Drei Claims.</span></h1><p>Scanne die Gebühren unseres Coins und beider Ecosystems.<br>ETH und Token werden an die hinterlegten Wallets ausgezahlt.</p><div class="hero-actions"><button id="scan-all" class="primary" ${groups.some(g=>g.busy)||claiming?'disabled':''}>${groups.some(g=>g.busy)&&!claiming?'Scan läuft…':'Alles scannen'}<span aria-hidden="true">↻</span></button><button id="claim-all" class="outline" ${!groups.some(canClaim)||groups.some(g=>g.busy)||claiming?'disabled':''}>Alles claimen <span aria-hidden="true">↗</span></button></div></div>
  <div id="notice" class="notice ${notice?'visible':''}" role="status">${escape(notice)}</div>
- ${pending()?'<div class="pending">Eine Auszahlung wartet auf Bestätigung. <button id="check-pending">Status prüfen</button></div>':''}
+ ${pendingClaims().map(p=>`<div class="pending">${p.chainId===1?'Ethereum':'Robinhood'}: Vorherigen Auftrag prüfen. ${p.hash?`<a href="${p.chainId===1?'https://etherscan.io':'https://robinhoodchain.blockscout.com'}/tx/${p.hash}" target="_blank" rel="noreferrer">Transaktion ansehen</a> · `:''}<button data-pending="${p.chainId}">Status prüfen</button></div>`).join('')}
  <div class="grid">${groups.map(card).join('')}</div>
  <p class="footnote">Kein Mindestbetrag. Keine Freigabe deiner Token. Pro Chain bestätigst du die Auszahlung in deiner Wallet.</p>
  </main><footer><span>Programmable Treasury</span><div><a href="/privacy.html">Datenschutz</a><a href="/terms.html">Hinweise</a></div></footer>`;
  document.querySelector('#connect')?.addEventListener('click',()=>void connectWallet());
  document.querySelector('#scan-all')?.addEventListener('click',()=>void scanAll());
  document.querySelector('#claim-all')?.addEventListener('click',()=>void claimAll());
- document.querySelector('#check-pending')?.addEventListener('click',()=>void recover());
+ document.querySelectorAll<HTMLElement>('[data-pending]').forEach(el=>el.addEventListener('click',()=>void recover(Number(el.dataset.pending) as 1|4663)));
  document.querySelectorAll<HTMLElement>('[data-scan]').forEach(el=>el.addEventListener('click',()=>void scanGroup(groups.find(g=>g.id===el.dataset.scan)!)));
  document.querySelectorAll<HTMLElement>('[data-claim]').forEach(el=>el.addEventListener('click',()=>void claimGroup(groups.find(g=>g.id===el.dataset.claim)!)));
 }
@@ -66,21 +66,21 @@ async function scanGroup(g:Group){if(g.busy||claiming)return;g.busy=true;g.error
  else{g.scan=await scanChain(g.chainId,s=>{g.message=s;render();});g.message=g.scan.complete?'Alle unterstützten Quellen geprüft.':g.scan.issues.length?'Ein Teil der Quellen ist noch nicht erreichbar.':'Verfügbare Fees bereit. Weitere Informationen siehe Details.';}
  }catch(e){g.error=message(e);}finally{g.busy=false;render();}}
 async function scanAll(){notice='';await Promise.all(groups.map(scanGroup));}
-async function recover(){claiming=true;try{await checkPending(s=>{notice=s;render();});notice='Auszahlung bestätigt.';}catch(e){notice=message(e);}finally{claiming=false;render();}}
+async function recover(chainId:1|4663){if(claiming)return;claiming=true;try{await checkPending(s=>{notice=s;render();},chainId);}catch(e){notice=message(e);}finally{claiming=false;render();}if(!pending(chainId))await Promise.all(groups.filter(g=>g.chainId===chainId).map(scanGroup));}
 async function claimGroup(g:Group){if(claiming)return;if(!wallet){await connectWallet();if(!wallet)return;}
  if(g.id!=='v4'&&(!g.scan||Date.now()-g.scan.scannedAt>90000)){await scanGroup(g);if(!g.scan)return;}
  claiming=true;g.busy=true;g.error='';notice='';render();
  try{
- if(pending())await checkPending(s=>{notice=s;render();});
+ if(pending(g.chainId))await checkPending(s=>{notice=s;render();},g.chainId);
  if(g.id==='v4'){
  const nonce=await readers(4663)[0]!.getTransactionCount({address:wallet.account,blockTag:'pending'});
- await claimFees(wallet,p=>{g.message=p.stage==='wallet'?'In der Wallet bestätigen…':p.stage==='confirmed'?'Claim bestätigt.':'Auf Bestätigung warten…';if(p.stage==='wallet')remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now()});if(p.hash)remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now(),hash:p.hash});render();});remember(null);
+ await claimFees(wallet,p=>{g.message=p.stage==='wallet'?'In der Wallet bestätigen…':p.stage==='confirmed'?'Claim bestätigt.':'Auf Bestätigung warten…';if(p.stage==='wallet')remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now()});if(p.hash)remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now(),hash:p.hash});render();});remember(null,g.chainId);
  }else{const result=await claimEcosystem(g.scan!,wallet,s=>{g.message=s;render();});if(result.remaining)notice=`${result.count} Gebührenkonten ausgezahlt. Für ${result.remaining} weitere Konten bitte die Empfänger-Wallet verbinden.`;}
  g.message='Auszahlung bestätigt.';if(!notice)notice=`${g.title}: Fees ausgezahlt.`;
- }catch(e){if([4001,4100].includes(Number((e as {code?:number}).code)))remember(null);g.error=message(e);notice=g.error;}
+ }catch(e){if([4001,4100].includes(Number((e as {code?:number}).code)))remember(null,g.chainId);g.error=message(e);notice=g.error;}
  finally{g.busy=false;claiming=false;render();}
  if(!g.error)await scanGroup(g);
 }
-async function claimAll(){for(const g of groups){if(canClaim(g)){await claimGroup(g);if(g.error||pending())break;}}}
+async function claimAll(){const blocked=new Set<number>();for(const g of groups){if(!blocked.has(g.chainId)&&canClaim(g)){await claimGroup(g);if(g.error||pending(g.chainId))blocked.add(g.chainId);}}}
 window.ethereum?.on?.('accountsChanged',()=>{wallet=null;notice='Wallet gewechselt. Bitte erneut verbinden.';render();});
 render();void scanAll();

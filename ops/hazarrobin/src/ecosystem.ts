@@ -1,12 +1,13 @@
 import { createPublicClient, createWalletClient, custom, http, encodeFunctionData, decodeFunctionResult, multicall3Abi, keccak256, type Address, type Hex, type EIP1193Provider } from 'viem';
 import { mainnet } from 'viem/chains';
 import { robinhoodChain } from './config';
+import { pending, remember, findMinedClaim, verifyPendingClaim } from './pending';
+export { pending, pendingClaims, remember } from './pending';
 interface ClaimAsset {asset:Address;amount:string;symbol:string;decimals:number}
 export interface FeeClaim extends ClaimAsset {id:string;chainId:1|4663;to:Address;data:Hex;recipient:Address;source:string;permissionless:boolean;runtimeCodeHash:Hex|null;additionalAssets?:ClaimAsset[]}
 export interface Scan {chainId:1|4663;scannedAt:number;blockNumber:string;claims:FeeClaim[];blockedClaims?:{claim:FeeClaim;reason:string}[];complete:boolean;issues:{source:string;message:string}[];unsupported:string[];launchCount:number;sourceCount:number}
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11' as Address;
 const MULTICALL_HASH='0xd5c15df687b16f2ff992fc8d767b4216323184a2bbc6ee2f9c398c318e770891';
-const KEY='hazarrobin.pending-claim.v2';
 const confirmedBlocks=new Map<number,bigint>();
 const same=(a:unknown,b:unknown)=>String(a).toLowerCase()===String(b).toLowerCase();
 const address=(v:unknown):v is Address=>typeof v==='string'&&/^0x[0-9a-f]{40}$/i.test(v);
@@ -42,15 +43,13 @@ export async function ensureChain(provider:EIP1193Provider,id:1|4663){
 }
 export function totals(claims:FeeClaim[]){const map=new Map<string,{symbol:string;decimals:number;amount:bigint}>();for(const claim of claims)for(const c of [claim,...claim.additionalAssets??[]]){const key=c.asset.toLowerCase();const item=map.get(key)??{symbol:c.symbol,decimals:c.decimals,amount:0n};if(item.decimals!==c.decimals)throw Error('Währungsdaten stimmen nicht.');item.amount+=BigInt(c.amount);map.set(key,item);}return [...map.values()];}
 export function eligible(claims:FeeClaim[],account?:Address){return claims.filter(c=>c.permissionless||same(account,c.recipient));}
-export function pending(){try{return JSON.parse(localStorage.getItem(KEY)??'null') as {chainId:1|4663;hash?:Hex;account:Address;to:Address;data:Hex;nonce:number;created:number;batchId?:string;atomic?:boolean}|null;}catch{throw Error('Gespeicherter Claim muss geprüft werden.');}}
-export function remember(value:ReturnType<typeof pending>){if(value)localStorage.setItem(KEY,JSON.stringify(value));else localStorage.removeItem(KEY);}
 export function buildBatch(claims:FeeClaim[]){
   if(!claims.length||claims.length>40||claims.some(c=>!c.permissionless)||new Set(claims.map(c=>c.chainId)).size!==1)throw Error('Ungültiger Sammelclaim.');
   validateScan({chainId:claims[0]!.chainId,claims,issues:[],unsupported:[],complete:true,blockNumber:'0',scannedAt:Date.now(),sourceCount:claims.length,launchCount:0});
   return {to:MULTICALL,data:encodeFunctionData({abi:multicall3Abi,functionName:'aggregate3',args:[claims.map(c=>({target:c.to,allowFailure:false,callData:c.data}))]}),value:0n};
 }
-export async function checkPending(progress:(message:string)=>void){
-  const entry=pending();if(!entry)return;
+export async function checkPending(progress:(message:string)=>void,chainId?:1|4663){
+  const entry=pending(chainId);if(!entry)return;
   const clients=readers(entry.chainId);
   if(entry.atomic){
     if(!entry.batchId||!window.ethereum)throw Error('Bitte den letzten Sammelclaim in der Wallet prüfen.');
@@ -62,30 +61,39 @@ export async function checkPending(progress:(message:string)=>void){
       if(status.status===200){
         if(!status.receipts?.length||status.receipts.some(r=>r.status!=='0x1'))throw Error('Die Wallet hat keinen vollständigen Beleg geliefert.');
         for(const proof of status.receipts){const receipts=await Promise.all(clients.map(c=>c.getTransactionReceipt({hash:proof.transactionHash})));if(receipts.some(r=>r.status!=='success'||!same(r.blockHash,proof.blockHash)))throw Error('Sammelclaim wird noch auf der Chain geprüft.');confirmedBlocks.set(entry.chainId,receipts[0]!.blockNumber);}
-        remember(null);progress('Sammelclaim bestätigt.');return status.receipts[0]!.transactionHash;
+        remember(null,entry.chainId);progress('Sammelclaim bestätigt.');return status.receipts[0]!.transactionHash;
       }
-      if(status.status>=400){remember(null);throw Error('Sammelclaim fehlgeschlagen. Bitte erneut scannen.');}
+      if(status.status>=400){remember(null,entry.chainId);throw Error('Sammelclaim fehlgeschlagen. Bitte erneut scannen.');}
       await new Promise(resolve=>setTimeout(resolve,2000));
     }
     throw Error('Bestätigung dauert noch. Du kannst den Status später weiter prüfen.');
   }
-  if(!entry.hash){
-    progress('Vorherigen Wallet-Auftrag prüfen…');
-    // Recover a broadcast whose wallet response was lost, by the captured sender nonce.
-    const head=await clients[0]!.getBlockNumber();
-    for(let n=head;n>=0n&&n>head-16n;n--){const block=await clients[0]!.getBlock({blockNumber:n,includeTransactions:true});const tx=block.transactions.find(t=>typeof t==='object'&&same(t.from,entry.account)&&t.nonce===entry.nonce);if(tx&&typeof tx==='object'){if(!same(tx.to,entry.to)||!same(tx.input,entry.data)||tx.value!==0n)throw Error('Die Wallet hat diesen Auftrag ersetzt. Bitte in der Wallet prüfen.');entry.hash=tx.hash;remember(entry);break;}}
-    if(!entry.hash)throw Error('Der letzte Wallet-Auftrag ist noch offen. Bitte in der Wallet abschließen oder ablehnen.');
+  progress('Vorherigen Wallet-Auftrag prüfen…');
+  let mined=entry.hash;
+  if(mined){
+    try{await clients[0]!.getTransactionReceipt({hash:mined});}
+    catch(error){
+      if((error as Error).name!=='TransactionReceiptNotFoundError')throw error;
+      mined=await findMinedClaim(entry,clients)??undefined;
+    }
+  }else mined=await findMinedClaim(entry,clients)??undefined;
+  if(!mined&&entry.hash){
+    progress('Auf Bestätigung warten…');
+    const receipt=await clients[0]!.waitForTransactionReceipt({hash:entry.hash,timeout:30000,
+      onReplaced:({transaction})=>{entry.hash=transaction.hash;remember(entry);}});
+    mined=receipt.transactionHash;
   }
-  progress('Auf Bestätigung warten…');
-  const receipt=await clients[0]!.waitForTransactionReceipt({hash:entry.hash,timeout:120000});
-  const [other,tx]=await Promise.all([clients[1]!.getTransactionReceipt({hash:receipt.transactionHash}),clients[0]!.getTransaction({hash:receipt.transactionHash})]);
-  if(!same(receipt.blockHash,other.blockHash)||!same(tx.to,entry.to)||!same(tx.input,entry.data)||!same(tx.from,entry.account)||tx.value!==0n)throw Error('Die Bestätigung muss erneut geprüft werden.');
-  if(receipt.status!=='success'){remember(null);throw Error('Claim fehlgeschlagen. Es wurden keine Gebühren ausgezahlt.');}
-  confirmedBlocks.set(entry.chainId,receipt.blockNumber);
-  remember(null);progress('Claim bestätigt.');return receipt.transactionHash;
+  if(!mined)throw Error('Der letzte Wallet-Auftrag ist noch offen. Bitte in der Wallet abschließen oder ablehnen.');
+  if(entry.hash!==mined){entry.hash=mined;remember(entry);}
+  const result=await verifyPendingClaim(entry,mined,clients);
+  confirmedBlocks.set(entry.chainId,result.blockNumber);
+  remember(null,entry.chainId);
+  progress(result.outcome==='confirmed'?'Claim bestätigt.':result.outcome==='replaced'?'Vorheriger Auftrag wurde ersetzt. Du kannst erneut claimen.':'Vorheriger Claim fehlgeschlagen. Du kannst erneut claimen.');
+  return result;
+
 }
 export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provider;account:Address},progress:(message:string)=>void){
-  if(pending())await checkPending(progress);
+  if(pending(scan.chainId))await checkPending(progress,scan.chainId);
   await ensureChain(connection.provider,scan.chainId);
   const accounts=await connection.provider.request({method:'eth_accounts'}) as Address[];
   if(!same(accounts[0],connection.account))throw Error('Wallet wurde gewechselt. Bitte erneut verbinden.');
@@ -114,8 +122,8 @@ export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provi
         progress(`Sammelclaim in der Wallet bestätigen · ${i+1}/${packets.length}`);
         const result=await rpc.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:`0x${scan.chainId.toString(16)}`,from:connection.account,atomicRequired:true,calls:packet.atomic.map(c=>({to:c.to,data:c.data,value:'0x0'}))}]}) as string|{id:string};
         const batchId=typeof result==='string'?result:result.id;if(typeof batchId!=='string'||!batchId.length)throw Error('Die Wallet hat keine Sammelclaim-ID geliefert.');remember({...entry,batchId});
-      }catch(error){if([4001,4100,-32602,5700,5710,5740,5750,5760].includes(Number((error as {code?:number}).code)))remember(null);throw error;}
-      await checkPending(progress);continue;
+      }catch(error){if([4001,4100,-32602,5700,5710,5740,5750,5760].includes(Number((error as {code?:number}).code)))remember(null,entry.chainId);throw error;}
+      await checkPending(progress,scan.chainId);continue;
     }
     const calls=await Promise.all(clients.map(c=>c.call({to:packet.to,data:packet.data,account:connection.account,blockNumber})));
     if(!same(calls[0]!.data,calls[1]!.data))throw Error('Die Claim-Simulation stimmt nicht überein. Bitte neu scannen.');
@@ -124,8 +132,9 @@ export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provi
     if(balance<gas*price*125n/100n)throw Error(`Bitte etwas ETH für Gas auf ${chain(scan.chainId).name} nachlegen.`);
     const entry={chainId:scan.chainId,account:connection.account,to:packet.to,data:packet.data,nonce,created:Date.now()};remember(entry);
     try{progress(`In der Wallet bestätigen · ${i+1}/${packets.length}`);const hash=await wallet.sendTransaction({to:packet.to,data:packet.data,value:0n,gas:gas*120n/100n,nonce});remember({...entry,hash});}
-    catch(error){if([4001,4100,-32602].includes(Number((error as {code?:number}).code)))remember(null);throw error;}
-    await checkPending(progress);
+    catch(error){if([4001,4100,-32602].includes(Number((error as {code?:number}).code)))remember(null,entry.chainId);throw error;}
+    const result=await checkPending(progress,scan.chainId);
+    if(result&&typeof result!=='string'&&result.outcome!=='confirmed')throw Error('Der Claim wurde ersetzt oder ist fehlgeschlagen. Bitte neu scannen und erneut claimen.');
   }
   return {count:claims.length,remaining:scan.claims.length-claims.length};
 }
