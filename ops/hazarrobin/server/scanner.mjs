@@ -5,6 +5,7 @@ import customRevenueVaults from '../vendor/custom-revenue-vaults.json' with {typ
 import { createFoundationScanner } from './foundation.mjs';
 import { scanLegacyEthereum } from './legacy-ethereum.mjs';
 import { executableClaims } from './claimability.mjs';
+import { protectedCandidate, proveProtectedVaults } from './protected.mjs';
 import { immutablePoolFeeRequiredAddresses, proveImmutablePoolFeeRuntime, ethereumNative30RequiredAddressesV1, proveEthereumNative30RuntimeV1 } from '../vendor/native-proofs.mjs';
 import { rpcClients, checkpoint, pin, readBoth, mapLimit, recoverRpcRead, rangeLogs, same, need, json, MULTICALL, MULTICALL_HASH } from './rpc.mjs';
 import { LAUNCH_STAMP_TOPICS, reduceLaunchStampLogs } from '../vendor/logic.mjs';
@@ -13,7 +14,7 @@ export const PROJECT_WALLETS=['0xD88539d3c4C460136a733A3Fd60cf6BF269079da','0x39
 const ZERO='0x0000000000000000000000000000000000000000';
 const ABI=parseAbi(['function claimable(address) view returns(uint256)','function claimableEth(address) view returns(uint256)','function treasury() view returns(address)',
   'function claim(address) returns(uint256)','function claimEthFor(address) returns(uint256)','function claim(address,address) returns(uint256)',
-  'function claimPlatform() returns(uint256)','function platformAccrued() view returns(uint256)','function creatorAccrued() view returns(uint256)',
+  'function claimCreator() returns(uint256)','function claimPlatform() returns(uint256)','function platformAccrued() view returns(uint256)','function creatorAccrued() view returns(uint256)',
   'function creatorRecipient() view returns(address)','function PLATFORM_RECIPIENT() view returns(address)','function balanceOf(address,uint256) view returns(uint256)',
   'function FEE_RECIPIENT() view returns(address)',
   'function platformRevenue() view returns(address)','function poolManager() view returns(address)','function beneficiary() view returns(address)',
@@ -130,6 +131,24 @@ export async function scanNativeVaults(chainId,clients,block,candidates,progress
     const fields=await readBoth(clients,['lpFee','tickSpacing','token'].map(n=>call(hook,n)),block.number,true);
     if(fields.some(v=>v===null))return {unsupported:hook};
     const market={chainId:String(chainId),poolManager:manager.address,currency0:ZERO,currency1:fields[2],fee:Number(fields[0]),tickSpacing:Number(fields[1]),hooks:hook};
+    const protectedLaunch=protectedCandidate(market,codes[0]);
+    if(protectedLaunch){
+      const codeMap=Object.fromEntries(await Promise.all([protectedLaunch.vault,protectedLaunch.module,protectedLaunch.opening].map(async address=>{
+        const values=await Promise.all(clients.map(c=>c.getCode({address,blockNumber:block.number})));
+        need(values.every(v=>same(v,values[0])),'Geschützte Gebührenkonten unterscheiden sich.');return [address,values[0]];
+      })));
+      const vaults=proveProtectedVaults(protectedLaunch,codeMap);
+      const claims=[];
+      for(const vault of vaults){
+        const [amount,creatorAmount,backing]=await readBoth(clients,[call(vault.address,'platformAccrued'),call(vault.address,'creatorAccrued'),call(manager.address,'balanceOf',[vault.address,0n])],block.number);
+        need(backing>=amount+creatorAmount,'Geschützte Gebühren sind nicht gedeckt.');
+        const add=(amount,recipient,fn)=>{if(amount>0n)claims.push(descriptor({chainId,to:vault.address,data:encodeFunctionData(call(vault.address,fn)),amount,recipient,
+          source:vault.opening?'Custom Launch · Startsteuer':'Custom Launch',permissionless:true,runtimeCodeHash:vault.runtimeCodeHash,token:fields[2]}));};
+        add(amount,vault.recipient,'claimPlatform');
+        if(PROJECT_WALLETS.some(w=>same(w,vault.creator)))add(creatorAmount,vault.creator,'claimCreator');
+      }
+      return {claims,covered:hook};
+    }
     const addresses=(chainId===1?ethereumNative30RequiredAddressesV1:immutablePoolFeeRequiredAddresses)(market,codes[0]);
     if(!addresses)return {unsupported:hook};
     const codeMap=Object.fromEntries(await Promise.all(addresses.map(async address=>{

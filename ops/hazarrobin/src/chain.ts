@@ -46,6 +46,7 @@ import {
   validateSnapshot,
   type ContractCheck,
 } from "./domain";
+import { verifyPendingClaim } from './pending';
 
 export interface ChainSnapshot {
   blockNumber: bigint;
@@ -67,6 +68,7 @@ export interface ClaimProgress {
   hash?: Hash;
   gas?: bigint;
   estimatedGasCost?: bigint;
+  nonce?: number;
 }
 
 export interface ClaimResult {
@@ -310,7 +312,7 @@ export async function claimFees(
     throw new Error("Aktuell sind keine LP Fees offen. Es wurde keine Transaktion gestartet.");
   }
 
-  const [simulation, gas, gasPrice] = await Promise.all([
+  const [simulation, gas, gasPrice, nonce, balance] = await Promise.all([
     publicClient.simulateContract({
       account: connection.account,
       address: LOCKER,
@@ -326,12 +328,19 @@ export async function claimFees(
       args: [TOKEN_ID],
     }),
     publicClient.getGasPrice(),
+    publicClient.getTransactionCount({ address: connection.account, blockTag: 'pending' }),
+    publicClient.getBalance({ address: connection.account }),
   ]);
+
+  if (balance < gas * gasPrice * 125n / 100n) {
+    throw new Error('Bitte etwas ETH für Gas auf Robinhood Chain nachlegen.');
+  }
 
   onProgress({
     stage: "wallet",
     gas,
     estimatedGasCost: gas * gasPrice,
+    nonce,
   });
 
   const walletClient = createWalletClient({
@@ -339,7 +348,7 @@ export async function claimFees(
     chain: robinhoodChain,
     transport: custom(connection.provider),
   });
-  let activeHash = await walletClient.writeContract(simulation.request);
+  let activeHash = await walletClient.writeContract({ ...simulation.request, nonce });
   onProgress({ stage: "submitted", hash: activeHash });
 
   const receipt = await publicClient.waitForTransactionReceipt({
@@ -356,12 +365,12 @@ export async function claimFees(
     throw new Error("Die Claim Transaktion wurde bestätigt, ist aber fehlgeschlagen.");
   }
 
-  const transaction = await publicClient.getTransaction({ hash: receipt.transactionHash });
-  if (
-    transaction.to?.toLowerCase() !== LOCKER.toLowerCase() ||
-    transaction.input.toLowerCase() !== EXPECTED_CLAIM_CALLDATA ||
-    transaction.value !== 0n
-  ) {
+  const verification = await verifyPendingClaim({ chainId: 4663, account: connection.account,
+    to: LOCKER, data: CLAIM_CALLDATA, nonce, created: Date.now(), hash: receipt.transactionHash },
+    receipt.transactionHash, ['primary', 'secondary'].map(provider => createPublicClient({
+      chain: robinhoodChain, transport: http(`/api/rpc?chainId=4663&provider=${provider}`),
+    })));
+  if (verification.outcome !== 'confirmed') {
     throw new Error("Die bestätigte Transaktion stimmt nicht mit dem gebundenen Claim überein.");
   }
 

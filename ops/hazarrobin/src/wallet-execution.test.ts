@@ -1,0 +1,11 @@
+import {expect,it} from 'vitest';
+import {concat,encodeFunctionData,toHex} from 'viem';
+import {matchesWalletExecution,walletExecutionAbi,type PendingClaim} from './pending';
+const entry:PendingClaim={chainId:4663,account:'0x0000000000000000000000000000000000000001',to:'0x0000000000000000000000000000000000000002',data:'0x12345678',nonce:7,created:1};
+const manager='0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3';
+const single=concat([entry.to,toHex(0,{size:32}),entry.data]);
+const wrap=(executions=[single],modes=[toHex(0,{size:32})])=>({to:manager,value:0n,input:encodeFunctionData({abi:walletExecutionAbi,functionName:'redeemDelegations',args:[['0x'],modes,executions]})});
+it('recognizes exactly one zero-value MetaMask execution of the prepared claim',()=>expect(matchesWalletExecution(entry,wrap())).toBe('metamask'));
+it('rejects added calls and failure-tolerant or batch wallet modes',()=>{expect(matchesWalletExecution(entry,wrap([single,single]))).toBeNull();expect(matchesWalletExecution(entry,wrap([single],[toHex(1,{size:32})]))).toBeNull();});
+it('rejects changes to the inner recipient, amount, calldata or manager',()=>{for(const packed of [concat([entry.account,toHex(0,{size:32}),entry.data]),concat([entry.to,toHex(1,{size:32}),entry.data]),concat([entry.to,toHex(0,{size:32}),'0x87654321'])])expect(matchesWalletExecution(entry,wrap([packed]))).toBeNull();expect(matchesWalletExecution(entry,{...wrap(),to:entry.account})).toBeNull();});
+it('rejects nonzero outer value and extra bytes',()=>{expect(matchesWalletExecution(entry,{...wrap(),value:1n})).toBeNull();expect(matchesWalletExecution(entry,{...wrap(),input:concat([wrap().input,'0x00'])})).toBeNull();});
