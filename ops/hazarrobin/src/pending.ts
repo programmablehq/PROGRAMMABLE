@@ -46,6 +46,15 @@ export function remember(value: PendingClaim | null, chainId?: 1 | 4663) {
   localStorage.removeItem(LEGACY_STORAGE_SLOT);
 }
 
+export function walletRequestNotSent(error: unknown, codes = [4001, 4100, -32602]) {
+  let current = error as { code?: unknown; cause?: unknown } | undefined;
+  for (let i = 0; current && i < 12; i++) {
+    if (codes.includes(Number(current.code))) return true;
+    current = current.cause as typeof current;
+  }
+  return false;
+}
+
 type Reader = Pick<PublicClient, 'getChainId' | 'getBlockNumber' | 'getBlock' | 'getTransactionCount' | 'getTransaction' | 'getTransactionReceipt'>;
 
 /** Find a mined replacement even after the browser has been closed for days. */
@@ -72,7 +81,7 @@ export async function verifyPendingClaim(entry: PendingClaim, hash: Hex, clients
     Promise.all(clients.map(c => c.getTransactionReceipt({ hash }))),
   ]);
   const tx = transactions[0]!, receipt = receipts[0]!;
-  need(transactions.every(t => same(t.hash, hash) && same(t.from, entry.account) && t.nonce === entry.nonce &&
+  need(transactions.every(t => same(t.hash, hash) && same(t.from, entry.account) && t.nonce === tx.nonce &&
     same(t.to, tx.to) && same(t.input, tx.input) && t.value === tx.value),
   'Die Wallet-Transaktion stimmt nicht mit dem gespeicherten Auftrag überein.');
   need(receipts.every(r => same(r.transactionHash, hash) && same(r.blockHash, receipt.blockHash) &&
@@ -81,6 +90,10 @@ export async function verifyPendingClaim(entry: PendingClaim, hash: Hex, clients
   const blocks = await Promise.all(clients.map(c => c.getBlock({ blockNumber: receipt.blockNumber })));
   need(blocks.every(b => same(b.hash, receipt.blockHash)), 'Die Bestätigung ist noch nicht kanonisch.');
   const exact = same(tx.to, entry.to) && same(tx.input, entry.data) && tx.value === 0n;
+  // Older V4 builds recorded the nonce before the wallet selected its final
+  // transaction. An exact stored hash still proves the intended zero-value call.
+  need(tx.nonce === entry.nonce || (exact && same(entry.hash, hash)),
+    'Die Wallet-Transaktion stimmt nicht mit dem gespeicherten Auftrag überein.');
   return { hash, blockNumber: receipt.blockNumber,
     outcome: !exact ? 'replaced' as const : receipt.status === 'success' ? 'confirmed' as const : 'reverted' as const };
 }

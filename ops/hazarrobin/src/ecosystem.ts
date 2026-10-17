@@ -1,8 +1,8 @@
 import { createPublicClient, createWalletClient, custom, http, encodeFunctionData, decodeFunctionResult, multicall3Abi, keccak256, type Address, type Hex, type EIP1193Provider } from 'viem';
 import { mainnet } from 'viem/chains';
 import { robinhoodChain } from './config';
-import { pending, remember, findMinedClaim, verifyPendingClaim } from './pending';
-export { pending, pendingClaims, remember } from './pending';
+import { pending, remember, findMinedClaim, verifyPendingClaim, walletRequestNotSent } from './pending';
+export { pending, pendingClaims, remember, walletRequestNotSent } from './pending';
 interface ClaimAsset {asset:Address;amount:string;symbol:string;decimals:number}
 export interface FeeClaim extends ClaimAsset {id:string;chainId:1|4663;to:Address;data:Hex;recipient:Address;source:string;permissionless:boolean;runtimeCodeHash:Hex|null;additionalAssets?:ClaimAsset[]}
 export interface Scan {chainId:1|4663;scannedAt:number;blockNumber:string;claims:FeeClaim[];blockedClaims?:{claim:FeeClaim;reason:string}[];complete:boolean;issues:{source:string;message:string}[];unsupported:string[];launchCount:number;sourceCount:number}
@@ -122,7 +122,7 @@ export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provi
         progress(`Sammelclaim in der Wallet bestätigen · ${i+1}/${packets.length}`);
         const result=await rpc.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:`0x${scan.chainId.toString(16)}`,from:connection.account,atomicRequired:true,calls:packet.atomic.map(c=>({to:c.to,data:c.data,value:'0x0'}))}]}) as string|{id:string};
         const batchId=typeof result==='string'?result:result.id;if(typeof batchId!=='string'||!batchId.length)throw Error('Die Wallet hat keine Sammelclaim-ID geliefert.');remember({...entry,batchId});
-      }catch(error){if([4001,4100,-32602,5700,5710,5740,5750,5760].includes(Number((error as {code?:number}).code)))remember(null,entry.chainId);throw error;}
+      }catch(error){if(walletRequestNotSent(error,[4001,4100,-32602,5700,5710,5740,5750,5760]))remember(null,entry.chainId);throw error;}
       await checkPending(progress,scan.chainId);continue;
     }
     const calls=await Promise.all(clients.map(c=>c.call({to:packet.to,data:packet.data,account:connection.account,blockNumber})));
@@ -132,7 +132,7 @@ export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provi
     if(balance<gas*price*125n/100n)throw Error(`Bitte etwas ETH für Gas auf ${chain(scan.chainId).name} nachlegen.`);
     const entry={chainId:scan.chainId,account:connection.account,to:packet.to,data:packet.data,nonce,created:Date.now()};remember(entry);
     try{progress(`In der Wallet bestätigen · ${i+1}/${packets.length}`);const hash=await wallet.sendTransaction({to:packet.to,data:packet.data,value:0n,gas:gas*120n/100n,nonce});remember({...entry,hash});}
-    catch(error){if([4001,4100,-32602].includes(Number((error as {code?:number}).code)))remember(null,entry.chainId);throw error;}
+    catch(error){if(walletRequestNotSent(error))remember(null,entry.chainId);throw error;}
     const result=await checkPending(progress,scan.chainId);
     if(result&&typeof result!=='string'&&result.outcome!=='confirmed')throw Error('Der Claim wurde ersetzt oder ist fehlgeschlagen. Bitte neu scannen und erneut claimen.');
   }

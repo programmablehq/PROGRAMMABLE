@@ -67,6 +67,7 @@ export interface ClaimProgress {
   hash?: Hash;
   gas?: bigint;
   estimatedGasCost?: bigint;
+  nonce?: number;
 }
 
 export interface ClaimResult {
@@ -310,7 +311,7 @@ export async function claimFees(
     throw new Error("Aktuell sind keine LP Fees offen. Es wurde keine Transaktion gestartet.");
   }
 
-  const [simulation, gas, gasPrice] = await Promise.all([
+  const [simulation, gas, gasPrice, nonce] = await Promise.all([
     publicClient.simulateContract({
       account: connection.account,
       address: LOCKER,
@@ -326,12 +327,14 @@ export async function claimFees(
       args: [TOKEN_ID],
     }),
     publicClient.getGasPrice(),
+    publicClient.getTransactionCount({ address: connection.account, blockTag: 'pending' }),
   ]);
 
   onProgress({
     stage: "wallet",
     gas,
     estimatedGasCost: gas * gasPrice,
+    nonce,
   });
 
   const walletClient = createWalletClient({
@@ -339,7 +342,7 @@ export async function claimFees(
     chain: robinhoodChain,
     transport: custom(connection.provider),
   });
-  let activeHash = await walletClient.writeContract(simulation.request);
+  let activeHash = await walletClient.writeContract({ ...simulation.request, nonce });
   onProgress({ stage: "submitted", hash: activeHash });
 
   const receipt = await publicClient.waitForTransactionReceipt({

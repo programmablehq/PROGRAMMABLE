@@ -3,7 +3,7 @@ import './styles.css';
 import { formatUnits, type Address } from 'viem';
 import { readSnapshot, claimFees, type ChainSnapshot, type WalletConnection } from './chain';
 import { FEE_RECIPIENT, TOKEN_ID, LOCKER, CLAIM_CALLDATA } from './config';
-import { scanChain, connect, totals, claimEcosystem, eligible, pending, pendingClaims, checkPending, remember, readers, type Scan } from './ecosystem';
+import { scanChain, connect, totals, claimEcosystem, eligible, pending, pendingClaims, checkPending, remember, walletRequestNotSent, type Scan } from './ecosystem';
 
 type GroupId='v4'|'robinhood'|'ethereum';
 interface Group {id:GroupId;title:string;description:string;network:string;chainId:1|4663;busy:boolean;message:string;error:string;scan?:Scan;snapshot?:ChainSnapshot}
@@ -73,11 +73,11 @@ async function claimGroup(g:Group){if(claiming)return;if(!wallet){await connectW
  try{
  if(pending(g.chainId))await checkPending(s=>{notice=s;render();},g.chainId);
  if(g.id==='v4'){
- const nonce=await readers(4663)[0]!.getTransactionCount({address:wallet.account,blockTag:'pending'});
- await claimFees(wallet,p=>{g.message=p.stage==='wallet'?'In der Wallet bestätigen…':p.stage==='confirmed'?'Claim bestätigt.':'Auf Bestätigung warten…';if(p.stage==='wallet')remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now()});if(p.hash)remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now(),hash:p.hash});render();});remember(null,g.chainId);
+ let nonce=0;
+ await claimFees(wallet,p=>{if(p.nonce!==undefined)nonce=p.nonce;g.message=p.stage==='wallet'?'In der Wallet bestätigen…':p.stage==='confirmed'?'Claim bestätigt.':'Auf Bestätigung warten…';if(p.stage==='wallet')remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now()});if(p.hash)remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now(),hash:p.hash});render();});remember(null,g.chainId);
  }else{const result=await claimEcosystem(g.scan!,wallet,s=>{g.message=s;render();});if(result.remaining)notice=`${result.count} Gebührenkonten ausgezahlt. Für ${result.remaining} weitere Konten bitte die Empfänger-Wallet verbinden.`;}
  g.message='Auszahlung bestätigt.';if(!notice)notice=`${g.title}: Fees ausgezahlt.`;
- }catch(e){if([4001,4100].includes(Number((e as {code?:number}).code)))remember(null,g.chainId);g.error=message(e);notice=g.error;}
+ }catch(e){if(walletRequestNotSent(e))remember(null,g.chainId);g.error=message(e);notice=g.error;}
  finally{g.busy=false;claiming=false;render();}
  if(!g.error)await scanGroup(g);
 }
