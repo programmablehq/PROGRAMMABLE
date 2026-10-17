@@ -24,7 +24,7 @@ for (const [width, chainId] of [[1440, 4663], [390, 4663], [1440, 1], [390, 1]])
     try {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`http://127.0.0.1:${address.port}/?mode=launch-speed&chainId=${chainId}`);
-      if (width < 700) await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
       await page.getByLabel("Name", { exact: true }).fill("My coin");
       await page.getByLabel("Ticker", { exact: true }).fill("COIN");
       const events = () => page.evaluate(() => (window as unknown as { launchEvents: { preparations: number; coldPreparations: number; walletRequests: number; readyAt?: number; walletRequestedAt?: number; clickedAt?: number } }).launchEvents);
@@ -359,9 +359,9 @@ test.describe("Module Studio", () => {
     await page.getByLabel("Name", { exact: true }).fill("My coin");
     await page.getByLabel("Ticker", { exact: true }).fill("MINE");
     await page.getByRole("button", { name: "Switch to Ethereum", exact: true }).click();
-    await expect(page.getByText("Network change cancelled.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Wallet request cancelled. Your coin details are saved. Continue when you're ready.", { exact: true })).toBeVisible();
     await page.getByTestId("wallet-switch").click();
-    await expect(page.getByText("Network change cancelled.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Wallet request cancelled. Your coin details are saved. Continue when you're ready.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Launch coin", exact: true })).toBeVisible();
     await expect(page.getByLabel("Name", { exact: true })).toHaveValue("My coin");
     await expect(page.getByLabel("Ticker", { exact: true })).toHaveValue("MINE");
@@ -388,15 +388,15 @@ test.describe("Module Studio", () => {
     await name.fill("Garden");
     await page.getByLabel("Ticker", { exact: true }).fill("$GARDEN");
     await expect(page.getByLabel("Ticker", { exact: true })).toHaveValue("GARDEN");
-    await page.getByRole("button", { name: "Links", exact: true }).click();
+    await page.getByRole("button", { name: "Description & links · optional", exact: true }).click();
     await page.getByLabel("X", { exact: true }).fill("@ garden");
     await page.getByLabel("Telegram", { exact: true }).fill("@garden");
     await page.getByRole("button", { name: "Add other link", exact: true }).click();
     await expect(page.getByLabel("X", { exact: true })).toHaveValue("https://x.com/garden");
     await expect(page.getByLabel("Telegram", { exact: true })).toHaveValue("https://t.me/garden");
     await page.getByLabel("Other link 1", { exact: true }).fill("garden.example");
-    await page.getByRole("button", { name: "Links", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Links", exact: true })).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("button", { name: "Description & links · optional", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Description & links · optional", exact: true })).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("textbox", { name: "Other link 1", exact: true })).toHaveCount(0);
   });
 
