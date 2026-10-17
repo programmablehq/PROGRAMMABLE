@@ -46,6 +46,7 @@ import {
   validateSnapshot,
   type ContractCheck,
 } from "./domain";
+import { verifyPendingClaim } from './pending';
 
 export interface ChainSnapshot {
   blockNumber: bigint;
@@ -359,12 +360,12 @@ export async function claimFees(
     throw new Error("Die Claim Transaktion wurde bestätigt, ist aber fehlgeschlagen.");
   }
 
-  const transaction = await publicClient.getTransaction({ hash: receipt.transactionHash });
-  if (
-    transaction.to?.toLowerCase() !== LOCKER.toLowerCase() ||
-    transaction.input.toLowerCase() !== EXPECTED_CLAIM_CALLDATA ||
-    transaction.value !== 0n
-  ) {
+  const verification = await verifyPendingClaim({ chainId: 4663, account: connection.account,
+    to: LOCKER, data: CLAIM_CALLDATA, nonce, created: Date.now(), hash: receipt.transactionHash },
+    receipt.transactionHash, ['primary', 'secondary'].map(provider => createPublicClient({
+      chain: robinhoodChain, transport: http(`/api/rpc?chainId=4663&provider=${provider}`),
+    })));
+  if (verification.outcome !== 'confirmed') {
     throw new Error("Die bestätigte Transaktion stimmt nicht mit dem gebundenen Claim überein.");
   }
 

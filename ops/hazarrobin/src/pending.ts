@@ -1,4 +1,4 @@
-import type { Address, Hex, PublicClient } from 'viem';
+import { decodeFunctionData, encodeFunctionData, keccak256, parseAbi, type Address, type Hex, type PublicClient } from 'viem';
 
 export interface PendingClaim {
   chainId: 1 | 4663;
@@ -55,7 +55,30 @@ export function walletRequestNotSent(error: unknown, codes = [4001, 4100, -32602
   return false;
 }
 
-type Reader = Pick<PublicClient, 'getChainId' | 'getBlockNumber' | 'getBlock' | 'getTransactionCount' | 'getTransaction' | 'getTransactionReceipt'>;
+type Reader = Pick<PublicClient, 'getChainId' | 'getBlockNumber' | 'getBlock' | 'getTransactionCount' | 'getTransaction' | 'getTransactionReceipt' | 'getCode'>;
+const WALLET_MANAGER = '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3';
+const WALLET_MANAGER_HASH = {
+  1: '0x762a7ccac3fba1fce7751870298c097c0d050451d9b4a1f0935e65dc4078d1d3',
+  4663: '0xe45747f90ecec2ba96ae9f4a15c36289653efdfef7690bcfb90a1945bb0fe207',
+};
+export const walletExecutionAbi = parseAbi(['function redeemDelegations(bytes[] permissionContexts,bytes32[] modes,bytes[] executionCallDatas)']);
+
+/** Inspect only a mined wallet envelope. This never creates a delegation. */
+export function matchesWalletExecution(entry: PendingClaim, tx: { to: string | null; input: Hex; value: bigint }) {
+  if (tx.value !== 0n) return null;
+  if (same(tx.to, entry.to) && same(tx.input, entry.data)) return 'direct';
+  if (!same(tx.to, WALLET_MANAGER)) return null;
+  try {
+    const decoded = decodeFunctionData({ abi: walletExecutionAbi, data: tx.input });
+    const [contexts, modes, executions] = decoded.args;
+    if (contexts.length !== 1 || modes.length !== 1 || executions.length !== 1 || BigInt(modes[0]!) !== 0n ||
+      !same(encodeFunctionData({ abi: walletExecutionAbi, functionName: 'redeemDelegations', args: decoded.args }), tx.input)) return null;
+    const packed = executions[0]!;
+    if (packed.length < 106 || !same(packed.slice(0, 42), entry.to) ||
+      BigInt(`0x${packed.slice(42, 106)}`) !== 0n || !same(`0x${packed.slice(106)}`, entry.data)) return null;
+    return 'metamask';
+  } catch { return null; }
+}
 
 /** Find a mined replacement even after the browser has been closed for days. */
 export async function findMinedClaim(entry: PendingClaim, clients: Reader[]): Promise<Hex | null> {
@@ -89,7 +112,13 @@ export async function verifyPendingClaim(entry: PendingClaim, hash: Hex, clients
   'Die Bestätigung ist noch nicht auf beiden Verbindungen verfügbar.');
   const blocks = await Promise.all(clients.map(c => c.getBlock({ blockNumber: receipt.blockNumber })));
   need(blocks.every(b => same(b.hash, receipt.blockHash)), 'Die Bestätigung ist noch nicht kanonisch.');
-  const exact = same(tx.to, entry.to) && same(tx.input, entry.data) && tx.value === 0n;
+  const execution = matchesWalletExecution(entry, tx);
+  if (execution === 'metamask') {
+    const codes = await Promise.all(clients.map(c => c.getCode({ address: WALLET_MANAGER, blockNumber: receipt.blockNumber })));
+    need(codes.every(code => code && same(keccak256(code), WALLET_MANAGER_HASH[entry.chainId])),
+      'Der Wallet-Ausführungsvertrag stimmt nicht mit der geprüften Version überein.');
+  }
+  const exact = execution !== null;
   // Older V4 builds recorded the nonce before the wallet selected its final
   // transaction. An exact stored hash still proves the intended zero-value call.
   need(tx.nonce === entry.nonce || (exact && same(entry.hash, hash)),
