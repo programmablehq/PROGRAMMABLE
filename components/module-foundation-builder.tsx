@@ -30,6 +30,7 @@ import styles from "./module-foundation-ui.module.css";
 import { FoundationStudio } from "./module-studio/studio";
 import type { FoundationStudioDraft } from "@/lib/module-foundation/studio";
 import { clearFoundationLaunchDraft, readFoundationLaunchDraft, rememberFoundationLaunchDraft } from "@/lib/module-foundation/launch-draft";
+import { foundationLaunchFeedback } from "@/lib/launch-feedback";
 
 type EditableDraft = FoundationStudioDraft;
 type LocalImage = { blob: Blob; preview: string; sha256: Hex };
@@ -78,17 +79,7 @@ const EMPTY_MODULES: FoundationModuleSelection[] = [];
 type LaunchErrorStage = "details" | "image" | "simulation" | "wallet" | "result";
 
 function cleanError(error: unknown, stage: LaunchErrorStage = "details") {
-  const shortMessage = error && typeof error === "object" && "shortMessage" in error ? error.shortMessage : undefined;
-  const message = typeof shortMessage === "string" ? shortMessage
-    : error instanceof Error ? error.message : "This step could not complete. Please try again.";
-  if (message.length <= 320) return message;
-  if (stage === "image") return "The coin image could not be saved. Your coin details are kept.";
-  if (stage === "simulation") return "The launch checks or simulation failed before your wallet opened. Your coin details are kept.";
-  if (stage === "wallet") return error && typeof error === "object" && "walletRequestAttempted" in error && error.walletRequestAttempted === false
-    ? "The transaction could not be checked before opening your wallet. Your coin details are kept."
-    : "The wallet step did not complete. Check wallet activity before trying again.";
-  if (stage === "result") return "The transaction result could not be checked. Check wallet activity before trying again.";
-  return "The coin details could not be checked. Your entries are kept.";
+  return foundationLaunchFeedback(error, stage);
 }
 
 function initialForm(initial: Partial<FoundationLaunchDraft> | undefined, quotes: readonly FoundationQuoteAsset[], chainId: number): EditableDraft {
@@ -371,8 +362,6 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
     try {
       setPhase("preparing");
       setError("");
-      await onCheckFunding?.(initialBuy);
-      assertCurrent();
       let selectedQuote = quote;
       if (!selectedQuote && /^0x[0-9a-fA-F]{40}$/.test(quoteAddress)) {
         selectedQuote = await resolveQuote();
@@ -381,10 +370,6 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
       let launchInitialBuy = initialBuy;
       if (!buyEdited && !launchInitialBuy && onResolveSuggestedInitialBuy) {
         launchInitialBuy = await onResolveSuggestedInitialBuy();
-        assertCurrent();
-      }
-      if (launchInitialBuy !== initialBuy) {
-        await onCheckFunding?.(launchInitialBuy);
         assertCurrent();
       }
       const checked = validate(selectedQuote, launchInitialBuy);
@@ -400,6 +385,8 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
         });
         return;
       }
+      await onCheckFunding?.(launchInitialBuy);
+      assertCurrent();
       let savedImage = draft.image;
       if (!savedImage && localImage) {
         errorStage = "image";
@@ -470,7 +457,7 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
   if (layout === "studio" && phase !== "result") return <FoundationStudio draft={draft} catalog={catalog} imageSource={imageSource} platformFeeBps={platformFeeBps}
     previousLaunchAction={previousLaunchAction} recoveryAction={recoveryAction} networkControl={networkControl} quoteSymbol={quoteSymbol} quoteStatus={quoteStatus}
     initialBuy={initialBuy} actionLabel={actionLabel} imagePreparing={imagePreparing} disabled={locked} busy={busy || walletAction?.busy}
-    actionDisabled={imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} status={launchProgress || (availability.status !== "ready" ? availability.reason || actionLabel : undefined)}
+    actionDisabled={imagePreparing || unavailable || Boolean(submissionBlocked) || walletAction?.busy} status={launchProgress || (availability.status === "checking" ? "Connecting to the launch network. You can fill in your coin details while we check." : availability.status !== "ready" ? availability.reason || actionLabel : undefined)}
     error={error || (recoveryAction ? undefined : submissionBlocked)} errors={{ ...errors, ...(imageError ? { image: imageError } : {}) }}
     customQuote={customQuote} canResolveQuote={canResolveQuote} modulesLoading={availability.status === "checking" && !catalog.length} formRef={form} imageInput={imageInput}
     onSocialChange={updateSocial} onImageError={() => setImageError("The image could not load. Choose another image.")}

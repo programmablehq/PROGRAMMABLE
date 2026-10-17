@@ -1,5 +1,3 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,7 +7,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import LaunchPage from "../app/launch/page";
-import { ViewChainProvider } from "../components/view-chain";
+import { ModuleFoundationLaunchHost } from "../components/module-foundation-launch-host";
 import { POST } from "../app/api/launch/preflight/route";
 import { createStockPairedDraft } from "../lib/launch";
 import { STOCK_PAIRED_ETH_QUOTE_ASSETS } from "../lib/stock-paired";
@@ -36,15 +34,10 @@ function publicPreflightRequest() {
 }
 
 describe("Stock-Paired launch closure", () => {
-  it("removes Stock-Paired from the public launch picker", async () => {
-    const html = renderToStaticMarkup(
-      createElement(ViewChainProvider, null, await LaunchPage()),
-    );
-
-    expect(html).toContain('data-launch-model-option="modules"');
-    expect(html).not.toContain('data-launch-model-option="classic"');
-    expect(html).not.toContain('data-launch-model-option="stock-paired"');
-    expect(html).not.toContain("<strong>Stock-Paired</strong>");
+  it("opens Module Mode directly on the supported view chain instead of a legacy launch picker", async () => {
+    const page = await LaunchPage();
+    expect(page.type).toBe(ModuleFoundationLaunchHost);
+    expect(page.props).toEqual({ layout: "studio", chainId: 4663 });
   });
 
   it("rejects a valid direct launch request with a stable response", async () => {
