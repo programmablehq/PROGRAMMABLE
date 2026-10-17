@@ -48,7 +48,7 @@ describe("Module Studio interface", () => {
     expect(render({ ...availability, status: "ready" })).toContain("No modules available");
   });
 
-  it("keeps base launch fields open, makes links optional to expand and avoids redundant Coin details controls", () => {
+  it("keeps financial inputs visible and groups optional metadata in one disclosure", () => {
     const html = render({ status: "ready", chainId: 4663, chainName: "Robinhood Chain" });
     for (const id of ["foundation-name", "foundation-symbol", "foundation-initial-buy", "foundation-creator-fee-inline", "foundation-description", "foundation-social-twitter", "foundation-social-telegram"]) {
       expect(html).toContain(`id="${id}"`);
@@ -60,9 +60,21 @@ describe("Module Studio interface", () => {
     expect(html).toContain('draggable="false"');
     expect(html).not.toContain('id="foundation-social-github"');
     expect(html).not.toContain('id="foundation-social-discord"');
-    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Links/);
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Description &amp; links/);
+    expect(html).toMatch(/inert="" aria-hidden="true"[^>]*><div><div[^>]*><div[^>]*><label[^>]*for="foundation-description"/);
     expect(actions.onPrepareLaunch).not.toHaveBeenCalled();
     expect(actions.onConfirmLaunch).not.toHaveBeenCalled();
+  });
+
+  it.each(["description", "social-website"])("reveals an invalid optional field: %s", key => {
+    const html = renderToStaticMarkup(<FoundationStudio
+      draft={{ name: "Coin", symbol: "COIN", description: "", image: null, socialLinks: {}, quoteAsset: "", creatorFeeBps: 0,
+        initialBuy: "0.001", additionalLiquidity: "0", modules: [] }} catalog={[]} quoteSymbol="ETH" initialBuy="0.001" actionLabel="Launch coin"
+      errors={{ [key]: "Check this field" }} customQuote={false} canResolveQuote={false}
+      onUpdate={vi.fn()} onChooseImage={vi.fn()} onRemoveImage={vi.fn()} onQuoteChange={vi.fn()}
+      onDefaultQuote={vi.fn()} onEnableQuote={vi.fn()} onSubmit={vi.fn()} />);
+    expect(html).toMatch(/<button[^>]*aria-expanded="true"[^>]*>Description &amp; links/);
+    expect(html).toContain('aria-invalid="true"');
   });
 
   it("adds the quote module to the map only when the creator selects a custom pairing", () => {

@@ -443,3 +443,6 @@
 .inlineRecovery .savedResult summary { min-height: 32px; font-size: 13px; }
 .inlineRecovery .savedResult p { margin: 8px 0; }
 .inlineRecovery button { width: 100%; min-height: 44px; }
+.launchRoutes { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.customLaunchLink { color: inherit; font-size: .8125rem; text-underline-offset: 4px; }
+.customLaunchLink:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; border-radius: 2px; }

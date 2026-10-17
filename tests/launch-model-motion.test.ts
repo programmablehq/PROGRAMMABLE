@@ -64,7 +64,8 @@ describe("launch model artwork", () => {
     expect(source).not.toContain("customLaunchPublicEnabled");
     expect(source).not.toContain("custom-launch-experience");
     expect(source).not.toContain("custom-launch-local-preview");
-    expect(route).toContain("return <LaunchExperience initialViewChainId={initialViewChainId} />;");
+    expect(route).toContain("<ModuleFoundationLaunchHost");
+    expect(route).not.toContain("<LaunchExperience");
     expect(route).not.toContain("isCustomLaunchPublicEnabled");
     expect(route).not.toContain("configuredLaunchPermitSignersV2");
     for (const marker of removedPartnerMarkers) {

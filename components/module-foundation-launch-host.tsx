@@ -10,6 +10,7 @@ import type { FoundationFundingHop } from "@/lib/module-foundation/atomic-launch
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { formatUnits, getAddress, keccak256, toHex, type Address, type Hex, type PublicClient } from "viem";
 import { ModuleFoundationBuilder } from "./module-foundation-builder";
 import { useFoundationLaunchBalance } from "./use-foundation-launch-balance";
@@ -275,7 +276,7 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
   return <div className={layout === "studio" ? studioStyles.launchPage : undefined}>{layout === "studio" ? <StudioAtmosphere /> : null}{inlineRecovery ? null : sessionStatus}
     {layout !== "studio" && previousLaunchAction ? <div className={`${styles.page} ${styles.sessionStatus}`}>{previousLaunchAction}</div> : null}
     <ModuleFoundationBuilder key={`${chainId}:${session.resultGeneration}`} persistDraft layout={layout} networkControl={
-      <fieldset className={styles.networkChoice} disabled={Boolean(session.progress) || launchBusy || changingNetwork} aria-busy={changingNetwork}>
+      <div className={styles.launchRoutes}><fieldset className={styles.networkChoice} disabled={Boolean(session.progress) || launchBusy || changingNetwork} aria-busy={changingNetwork}>
         <legend className="sr-only">Launch network</legend>
         {([{ id: 4663, name: "Robinhood" }, { id: 1, name: "Ethereum" }] as const).map(network =>
           <label key={network.id}>
@@ -283,7 +284,7 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
               onChange={() => startNetworkChange(() => router.push(`/launch/modules/foundation?chainId=${network.id}`, { scroll: false }))} />
             <span><span aria-hidden="true"><ChainMark chainId={network.id} /></span>{network.name}</span>
           </label>)}
-      </fieldset>
+      </fieldset><Link className={styles.customLaunchLink} href={`/developers/api-keys?start=custom&chainId=${chainId}`}>Build a custom hook</Link></div>
     } recoveryAction={inlineRecovery ? sessionStatus : undefined} previousLaunchAction={previousLaunchAction} availability={session.availability} contextKey={session.contextKey}
     platformFeeBps={foundationPlatformFeeBps(session.envelope?.binding ?? {})}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}
