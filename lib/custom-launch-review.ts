@@ -16,7 +16,22 @@ export type CustomLaunchReview = Readonly<ReviewWorkflowV4 & {
   reviewOverdue?: boolean;
   launchRequestedAt?: string | null;
   launchDeadline?: string | null;
+  ownerException?: Readonly<{
+    schemaVersion: "programmable.owner-review-exception.v1";
+    id: string; reviewId: string; subjectHash: string; chainId: string; controller: string;
+    technicalEvidenceStatus: "not-certified"; approvalReason: string;
+  }> | null;
 }>;
+
+/** Only display an exception supplied by the authenticated review service for
+ * this exact identity. The server remains the approval authority. */
+export function customLaunchOwnerException(review: CustomLaunchReview) {
+  const e = review.ownerException;
+  return e?.schemaVersion === "programmable.owner-review-exception.v1" && e.reviewId === review.reviewId
+    && e.subjectHash === review.subjectHash && e.chainId === review.chainId
+    && e.controller.toLowerCase() === review.controller.toLowerCase()
+    && e.technicalEvidenceStatus === "not-certified" && typeof e.approvalReason === "string" ? e : null;
+}
 
 export function parseCustomLaunchReview(value: unknown): CustomLaunchReview {
   const v = value as CustomLaunchReview | undefined;

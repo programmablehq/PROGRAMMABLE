@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/components/wallet-provider";
 import { isWebsiteAdminWallet } from "@/lib/admin-access";
-import { customLaunchReviewLabel, customLaunchReviewOverdue, parseCustomLaunchReview, type CustomLaunchReview } from "@/lib/custom-launch-review";
+import { customLaunchOwnerException, customLaunchReviewLabel, customLaunchReviewOverdue, parseCustomLaunchReview, type CustomLaunchReview } from "@/lib/custom-launch-review";
 import { buildOperationsRows, reviewListView, reviewProject, type OperationsReview, type ReviewListView } from "@/lib/launch-operations";
 import styles from "./custom-launch-review-console.module.css";
 type ReviewRow = CustomLaunchReview & { launchId: string; requestSummary: Record<string, unknown> };
@@ -100,6 +100,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
     } catch (e) { setError(e instanceof Error ? e.message : "Decision could not be saved."); } finally { setBusy(false); }
   }
   const currentPlatformFee = detail && customLaunchTradeEvidence(detail.tradeChecks, detail.subjectHash, detail.chainId).currentPlatformFee;
+  const ownerException = detail && customLaunchOwnerException(detail);
   const canDecide = detail && !detail.supersededBy && customLaunchReviewLabel(detail, now) !== "Approved";
   const replacements = detail ? reviews.filter(r => r.chainId === detail.chainId && r.controller === detail.controller && Date.parse(r.submittedAt) > Date.parse(detail.submittedAt) && !r.supersededBy) : [];
   const progress = detail ? buildOperationsRows([{ ...detail, requestSummary: { operations: detail.operations } } as OperationsReview], null, now)[0] : null;
@@ -139,8 +140,8 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
         <details><summary>Technical checks</summary><pre>{JSON.stringify(detail.technicalStatus, null, 2)}</pre></details>
         <details><summary>Submitted launch and source</summary><pre>{JSON.stringify(detail.request, null, 2)}</pre></details>
         <p className={styles.address}>Reviewed version: {detail.subjectHash}</p>
-        {canDecide && <>{!currentPlatformFee && <p>Approval requires passing 0.3% platform fee checks for this pool.</p>}<label>Note to the team <textarea maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} /></label>
-          <div className={styles.actions}><button disabled={busy || detail.requiresRepack === true || !currentPlatformFee} onClick={() => void decide("approve")}>Approve for 24 hours</button><button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Request changes</button><button disabled={busy || !reason.trim() || detail.state === "approved"} onClick={() => void decide("request_information")}>Ask for information</button></div>
+        {canDecide && <>{ownerException ? <p role="note">{ownerException.approvalReason}</p> : !currentPlatformFee && <p>Approval requires passing 0.3% platform fee checks for this pool.</p>}<label>Note to the team <textarea maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} /></label>
+          <div className={styles.actions}><button disabled={busy || detail.requiresRepack === true || (!currentPlatformFee && !ownerException)} onClick={() => void decide("approve")}>{ownerException ? "Approve owner exception for 24 hours" : "Approve for 24 hours"}</button><button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Request changes</button><button disabled={busy || !reason.trim() || detail.state === "approved"} onClick={() => void decide("request_information")}>Ask for information</button></div>
           {replacements.length && detail.state !== "approved" ? <div><label>Replace this old request with<select value={replacementId} onChange={event => setReplacementId(event.target.value)} disabled={busy}>
             <option value="">Choose the newer request</option>{replacements.map(r => <option value={r.reviewId} key={r.reviewId}>{r.launchId} · {new Date(r.submittedAt).toLocaleString()}</option>)}
           </select></label><button disabled={busy || !replacementId} onClick={() => void decide("replace")}>Mark as replaced</button></div> : null}</>}
