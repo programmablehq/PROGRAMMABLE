@@ -20,14 +20,15 @@ const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 describe("view chain", () => {
-  it("preserves historical chain parsing but pins public preferences to Robinhood", () => {
+  it("supports Base preferences while preserving the Robinhood default", () => {
     expect(DEFAULT_VIEW_CHAIN_ID).toBe(4663);
     expect(isViewChainId(1)).toBe(true);
     expect(isViewChainId(4663)).toBe(true);
     expect(isViewChainId("4663")).toBe(false);
     expect(tryParseViewChainId("1")).toBe(1);
     expect(tryParseViewChainId("4663")).toBe(4663);
-    expect(tryParseViewChainId("8453")).toBeNull();
+    expect(tryParseViewChainId("8453")).toBe(8453);
+    expect(parseViewChainId("8453")).toBe(8453);
     expect(tryParseViewChainId("11155111")).toBeNull();
     expect(parseViewChainId("1")).toBe(4663);
     expect(parseViewChainId(1)).toBe(4663);
@@ -49,7 +50,7 @@ describe("view chain", () => {
   it("accepts supported Explore preferences and normalizes invalid chains", () => {
     expect(resolveExploreChainId(1)).toBe(1);
     expect(resolveExploreChainId(4663)).toBe(4663);
-    expect(resolveExploreChainId(8453)).toBe(4663);
+    expect(resolveExploreChainId(8453)).toBe(8453);
     expect(resolveExploreChainId("invalid")).toBe(4663);
   });
 

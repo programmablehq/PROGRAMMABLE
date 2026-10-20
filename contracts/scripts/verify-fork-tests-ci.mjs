@@ -42,6 +42,12 @@ export const chains = [
       "https://sepolia.drpc.org",
     ],
   },
+  {
+    name: "Base mainnet",
+    environmentKey: "BASE_RPC_URL",
+    testGlobs: ["test/base-custom-v1/BaseLaunchLifecycleFork.t.sol"],
+    publicEndpoints: ["https://base-rpc.publicnode.com", "https://base.drpc.org"],
+  },
 ];
 
 // A provider timeout must not kill a healthy 30-file batch that is still

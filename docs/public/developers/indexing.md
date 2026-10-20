@@ -8,6 +8,8 @@ Use this guide to add Programmable coins to a wallet, explorer or trading termin
 
 A coin is identified by **chain ID + token address**. A verified launch record proves its Programmable origin. Prices, images and trading routes are added separately.
 
+Base Custom Launches use the chain-qualified [Base finalized feed](base-custom-launch.md#index-base-launches). Module Mode remains on its existing chains.
+
 ## Choose your integration
 
 | Launch type | Chain | Source and verification |

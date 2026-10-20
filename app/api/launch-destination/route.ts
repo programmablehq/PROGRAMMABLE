@@ -1,3 +1,4 @@
+import { readBaseExploreCatalog } from "@/lib/server/base-explore";
 import { readEthereumCustomExploreCatalog } from "@/lib/server/ethereum-explore";
 import { readRobinhoodExploreCatalog } from "@/lib/server/robinhood-index/read";
 import { indexedLaunchDestination, launchDestinationIdentity, type DestinationEntry } from "@/lib/launch-destination";
@@ -16,6 +17,9 @@ export async function GET(request:Request) {
       if (catalog.status==="unavailable") throw Error("Unavailable");
       entries=catalog.entries.flatMap(row=>row.launchStampProvenance?.chainId===1 ? [{chainId:"1" as const,launchId:row.launchStampProvenance.launchId,
         controller:row.launchStampProvenance.launchWallet,transactionHash:row.launchStampProvenance.transactionHash,tokenAddress:row.tokenAddress}] : []);
+    } else if (identity.chainId === "8453") {
+      const catalog = await readBaseExploreCatalog();
+      entries = catalog.items.map(row => ({chainId:"8453" as const, launchId:row.launchId, controller:row.creator, transactionHash:row.transactionHash, tokenAddress:row.tokenAddress}));
     } else {
       const catalog=await readRobinhoodExploreCatalog();
       if (catalog.status==="unavailable") throw Error("Unavailable");

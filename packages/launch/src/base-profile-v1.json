@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "programmable.direct-native-hook-graph-profile.v3",
+  "profileId": "programmable.direct-native-hook-graph.v1",
+  "profileRevision": 3,
+  "profileVersion": "3.6.0",
+  "productionLaunchAuthorized": true,
+  "chainId": "8453",
+  "router": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
+  "routerRuntimeCodeHash": "0xce2527e8d94c33fe1b3383297498ad8ed8a1c206ae758b6c18a2ff4e098f4de1",
+  "permitAuthority": "0x872478Df54f15f9d0faa3936b174cDaFe70d1B97",
+  "permitAuthorityRuntimeCodeHash": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c",
+  "graphFactory": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e",
+  "graphFactoryRuntimeCodeHash": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8",
+  "poolManager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+  "poolManagerRuntimeCodeHash": "0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6",
+  "fundingToken": "0x4200000000000000000000000000000000000006",
+  "fundingTokenRuntimeCodeHash": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+  "graphPolicy": {
+    "minimumTargets": 3,
+    "maximumTargets": 16,
+    "directTargetsOnly": true
+  },
+  "currencyPolicy": {
+    "native": true,
+    "erc20": true
+  },
+  "hookPermissionPolicy": {
+    "minimumMask": 0,
+    "maximumMask": 16383,
+    "requireHookMinerAddressMaskMatch": true
+  },
+  "fundingPolicy": {
+    "mode": "wallet-transaction-value",
+    "launchFundingRequired": true,
+    "signatureRequired": false,
+    "valueSource": "exact-router-transaction-msg-value"
+  },
+  "platformFeePolicy": {
+    "schemaVersion": "programmable.platform-fee-policy.v1",
+    "accountingMode": "inclusive-selected-total",
+    "applicability": "successful-pool-swaps",
+    "rateDenominator": "1000000",
+    "programmableFeeHundredthsOfBip": "3000",
+    "assessmentBase": "executed-gross-declared-quote",
+    "feeCurrency": "declared-quote-currency",
+    "roundingMode": "floor",
+    "claimAuthority": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+  },
+  "programmableTradeFeePolicy": {
+    "schemaVersion": "programmable.base-programmable-trade-fee-policy.v1",
+    "policyVersion": "programmable.base-native-fee.v1",
+    "scope": "base-custom-launch-trades",
+    "ratePpm": "3000",
+    "rateDenominator": "1000000",
+    "rateBps": 30,
+    "modeSelection": "server-exact-runtime-and-trade-proof",
+    "defaultCollection": {
+      "mode": "pool_enforced",
+      "routedRateBps": 0,
+      "basis": "gross-native-by-side",
+      "buyBasis": "funded-native-input",
+      "sellBasis": "gross-native-output-credit",
+      "currency": "native-ETH",
+      "rounding": "ceil-per-trade",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "collection": "atomic-pool-fee-accrual"
+    },
+    "native30Waiver": null,
+    "launchAdmissionEstablishesFeeCollection": false,
+    "externalTradeFeeGuaranteed": false,
+    "historicalSignedFeeObligations": "preserved"
+  },
+  "platformAdmissionPolicy": {
+    "schemaVersion": "programmable.direct-native-platform-admission-policy.v1",
+    "mode": "deterministic-exact-source-graph-static-baseline-v1",
+    "receiptSchemaVersion": "programmable.platform-admission-receipt.v1",
+    "engineId": "programmable.direct-native-static-admission",
+    "engineVersion": "1.0.0",
+    "exactSourceCompilerGraphBindingRequired": true,
+    "staticBaselineGateVersion": "1.0.0",
+    "blockingFindingRules": [
+      {
+        "code": "RUNTIME_CALLCODE",
+        "targetRoles": [
+          "any"
+        ]
+      },
+      {
+        "code": "RUNTIME_SELFDESTRUCT",
+        "targetRoles": [
+          "any"
+        ]
+      },
+      {
+        "code": "SOURCE_SELFDESTRUCT_SURFACE",
+        "targetRoles": [
+          "any"
+        ]
+      },
+      {
+        "code": "V4_CALLBACK_AUTHENTICATION_MISSING",
+        "targetRoles": [
+          "hook"
+        ]
+      },
+      {
+        "code": "V4_CALLBACK_AUTHENTICATION_INVALID",
+        "targetRoles": [
+          "hook"
+        ]
+      },
+      {
+        "code": "V4_CALLBACK_POOL_MANAGER_MISMATCH",
+        "targetRoles": [
+          "hook"
+        ]
+      },
+      {
+        "code": "V4_ENABLED_CALLBACK_IMPLEMENTATION_MISSING",
+        "targetRoles": [
+          "hook"
+        ]
+      }
+    ],
+    "warningDisposition": "bound-and-visible",
+    "noBlockingFindingDisposition": "router-simulation-eligible",
+    "blockingFindingDisposition": "action-required",
+    "routerSimulationRequiredBeforeAuthorization": true,
+    "receiptAuthority": "platform-only",
+    "assurance": "launch-admission-only",
+    "safetyClaim": false,
+    "feeBehaviorClaim": false
+  },
+  "projectMetadataPolicy": {
+    "schemaVersion": "programmable.project-metadata-policy.v1",
+    "descriptionMinimumUtf8Bytes": 20,
+    "descriptionMaximumUtf8Bytes": 4096,
+    "descriptionMinimumUnicodeLettersOrNumbers": 8,
+    "imageRequired": true,
+    "imageReceiptSourceManifestBindingRequired": true,
+    "imageMediaTypes": [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/gif"
+    ],
+    "linksMaximumCount": 32,
+    "requiredLinkKinds": [
+      "website",
+      "x"
+    ],
+    "exactlyOneRequiredLinkPerKind": true,
+    "websiteUriPolicy": "canonical-public-credential-free-https",
+    "xUriPattern": "^https://x\\.com/[A-Za-z0-9_]{1,64}$"
+  }
+}

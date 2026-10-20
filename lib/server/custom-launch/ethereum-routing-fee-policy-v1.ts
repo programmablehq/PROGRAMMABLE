@@ -79,6 +79,7 @@ export async function readEthereumFeeClassificationV1(entry: CanonicalTokenExplo
     throw new TypeError("Ethereum launch fee classification is not available yet");
   }
   const metadata = matches[0]!;
+  if (metadata.chainId !== "1" || metadata.routingFeePolicy?.schemaVersion === "programmable.base-launch-routing-fee-policy-binding.v1") throw new TypeError("Ethereum fee policy chain differs");
   const classification = validateEthereumFeeClassificationV1({ launchId: stamp.launchId, stampHash: stamp.stampHash,
     profileVersion: metadata.launchProfileVersion, routingFeePolicy: metadata.routingFeePolicy ?? null }, stamp);
   const record = { schemaVersion: schema, identityKey: key, classification };

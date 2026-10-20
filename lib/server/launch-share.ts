@@ -16,7 +16,10 @@ export async function readLaunchShare(identity: LaunchShareIdentity, { image = t
   } else if (record?.chainId === 1 && record.token) {
     name = record.token.name; symbol = record.token.symbol;
     if (image) presentation = await presentEthereumToken(record.token).catch(() => record.token);
+  } else if (record?.chainId === 8453 && record.token) {
+    name = record.token.name; symbol = record.token.symbol; presentation = record.presentation;
   } else {
+    if (identity.chainId === 8453) return null;
     const recent = await findRecentFoundationLaunch(identity.chainId, identity.address).catch(() => null);
     if (!recent) {
       if (record && "status" in record && record.status === "unavailable") throw new Error("Launch index unavailable");

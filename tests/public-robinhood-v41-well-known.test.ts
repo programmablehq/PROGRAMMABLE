@@ -40,7 +40,7 @@ describe("profile-selected Robinhood well-known discovery", () => {
     const original = await document("4.0.0");
     // Ethereum discovery now selects the active profile from capabilities. The
     // Robinhood 4.0.0 fixture remains historical; the complete document includes
-    // the additive Ethereum 3.6 metadata, protected-launch policy and CLI 4.1.7 pointer.
+    // the additive Ethereum 3.6 and Base metadata, protected-launch policy, and CLI release pointer.
     expect(original.customLaunchApi.ethereumProfileSelection).toMatchObject({
       discoveryIsActivationEvidence: false,
       profile36: {
@@ -48,7 +48,7 @@ describe("profile-selected Robinhood well-known discovery", () => {
         programmableTradeFeePolicyHash: "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
         rateSource: "capabilities.programmableTradeFeePolicy.policy.ratePpm",
       },
-      cli: { sourceCandidateVersion: "4.1.7", publicationVerified: null },
+      cli: { sourceCandidateVersion: "4.2.0", publicationVerified: null },
     });
     expect(original.customLaunchApi.launchProtection).toMatchObject({
       policyVersion: "programmable.launch-protection.v1",
@@ -57,7 +57,7 @@ describe("profile-selected Robinhood well-known discovery", () => {
       minimumFdvUsd: "15000", maximumAdditionalTaxExemptWallets: 6,
     });
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
-      .toBe("66f845e6ce042744d413fa954fa9a424c831601e246b0a511b38879701bcc9a1");
+      .toBe("ac21e02b9612de7b308e43ee243d2bd0135216952260e77a6b43532fce6a200b");
   });
 
   it("publishes successor fee and funding rules while pending authority stays closed", async () => {

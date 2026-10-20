@@ -64,7 +64,7 @@ describe("additive Ethereum 3.6 public client", () => {
     expect(api.ethereumProfileSelection).toMatchObject({ capabilitiesUrl: api.capabilitiesUrl,
       selectionRequiredBeforePacking: true, discoveryIsActivationEvidence: false,
       supportedActiveProfileVersions: ["3.3.0", "3.6.0"], unknownProfileDisposition: "fail-closed",
-      cli: { sourceCandidateVersion: "4.1.7", publicationVerified: null,
+      cli: { sourceCandidateVersion: "4.2.0", publicationVerified: null,
         publicationAuthority: "immutable-github-release",
         releaseTag: "programmable-launch-v4.1.7",
         publishedReleaseAndArtifactVerificationRequired: true },

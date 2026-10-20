@@ -265,8 +265,8 @@ function usage(command) {
       "V3 Ethereum and V4 Robinhood requests can be submitted. V1 and V2 remain readable but their create routes are closed.",
     ],
     status: [
-      "Usage: programmable-launch status <request-id> [--api-version 1|2|3|4] [--chain-id 4663] [--watch] [--until authorized|finalized]",
-      "V3 is the default Ethereum transport. Fresh unversioned packs select active capabilities. V4 requires explicit --api-version 4 --chain-id 4663.",
+      "Usage: programmable-launch status <request-id> [--api-version 1|2|3|4] [--chain-id 4663|8453] [--watch] [--until authorized|finalized]",
+      "V3 is the default Ethereum transport. Base uses --chain-id 8453. Fresh unversioned packs select the chain's active capabilities. Robinhood requires --api-version 4 --chain-id 4663.",
       "This command never signs or broadcasts a wallet transaction.",
     ],
   };

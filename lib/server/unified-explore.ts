@@ -1,6 +1,7 @@
 import { ethereumModuleSourceForStamp, isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
 import { ethereumPairPresentation, launchPresentationDetails } from "@/lib/launch-presentation-details";
 import "server-only";
+import { readBaseExploreCatalog } from "./base-explore";
 
 import { readRobinhoodExploreCatalog } from "./robinhood-index/read";
 import { readEthereumUnifiedExploreCatalog } from "./ethereum-explore";
@@ -21,6 +22,7 @@ import { readRecentFoundationLaunches } from "./module-foundation/recent-launch-
 import { readApprovedLaunchPresentations } from "./approved-launch-presentation";
 
 const readers = {
+  base: readBaseExploreCatalog,
   robinhood: readRobinhoodExploreCatalog,
   ethereum: readEthereumUnifiedExploreCatalog,
   robinhoodMarkets: readRobinhoodMarkets,
@@ -30,7 +32,7 @@ const readers = {
 
 /** Verified launch identities with shared Codex market batches and one global ranking. */
 export async function readUnifiedLaunches(page = 1, query = "", filters: RobinhoodExploreFilters = { sort: "highest", mode: "all" },
-  size: 6 | 8 | 10 | 50 = 10, dependencies: typeof readers = readers, account?: string) {
+  size: 6 | 8 | 10 | 50 = 10, dependencies: Omit<typeof readers, "base"> & Partial<Pick<typeof readers, "base">> = readers, account?: string) {
   const owner = account?.toLowerCase();
   if (owner && !/^0x[0-9a-f]{40}$/.test(owner)) throw new Error("Invalid profile account");
   const catalogSymbols = new Map<string, string | null>();
@@ -38,7 +40,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const observations = readConfirmingEthereumLaunches().catch(() => []);
   // Each network can enrich its catalog as soon as it arrives. A slower index
   // must not hold up the other network's independent market request.
-  const [[rh, rhMarkets], [eth, ethMarkets]] = await Promise.all([
+  const [[rh, rhMarkets], [eth, ethMarkets], [base, baseMarkets]] = await Promise.all([
     dependencies.robinhood().catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], sourceEvidence: null })).then(catalog => {
       for (const row of catalog.items) catalogSymbols.set(exploreIdentityKey({ chainId: 4663, tokenAddress: row.tokenAddress }), row.symbol);
       return { ...catalog, items: catalog.items.filter(row => owned(row.creator)) };
@@ -51,10 +53,15 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     }).then(async catalog => [catalog,
       await dependencies.ethereumMarkets(catalog.entries, 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
     ] as const),
+    (dependencies.base ? dependencies.base() : Promise.reject(new Error("Base reader unavailable")))
+      .catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
+      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator)) }))
+      .then(async catalog => [catalog, catalog.items.length ? await dependencies.ethereumMarkets(catalog.items, 8453)
+        .catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
   ]);
-  const sources = { robinhood: rh.status, ethereum: eth.status };
-  const available = [rh, eth].filter(source => source.status !== "unavailable");
-  const status = !available.length ? "unavailable" as const : available.length < 2 || eth.status === "partial" ? "partial" as const
+  const sources = { robinhood: rh.status, ethereum: eth.status, base: base.status };
+  const available = [rh, eth, ...(dependencies.base ? [base] : [])].filter(source => source.status !== "unavailable");
+  const status = !available.length ? "unavailable" as const : available.length < (dependencies.base ? 3 : 2) || eth.status === "partial" ? "partial" as const
     : available.some(source => source.status === "stale") ? "stale" as const
       : available.some(source => source.status === "syncing") ? "syncing" as const : "ready" as const;
   const updatedAt = available.flatMap(source => source.updatedAt ? [source.updatedAt] : [])
@@ -80,11 +87,14 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     } } : {}),
     ...ethereumPairPresentation(entry),
   }; });
+  const baseRows = base.items;
+  for (const row of baseRows) catalogSymbols.set(exploreIdentityKey(row), row.symbol);
   const markets = new Map<string, RobinhoodCoinMarket>([
     ...[...rhMarkets].map(([address, market]) => [`4663:${address}`, market] as const),
+    ...[...baseMarkets].map(([address, market]) => [`8453:${address}`, market] as const),
     ...[...ethMarkets].map(([address, market]) => [`1:${address}`, market] as const),
   ]);
-  const indexed = new Set([...rhRows, ...ethRows].map(exploreIdentityKey));
+  const indexed = new Set([...rhRows, ...ethRows, ...baseRows].map(exploreIdentityKey));
   const recent = (await readRecentFoundationLaunches(indexed).catch(() => [])).filter(item => owned(item.row.creator));
   const recentRows = recent.map(item => ({ ...item.row, chainId: item.chainId, mode: "module" as const,
     category: "custom" as const, confirmation: "confirmed" as const }));
@@ -110,9 +120,9 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     const value = filters.sort === "activity" ? market.volume24hUsd : coinValuation(market).value;
     if (value !== null && Number.isFinite(value) && value >= 0) values.set(identity, value);
   }
-  const selection = selectUnifiedExplorePage<(typeof rhRows)[number] | (typeof ethRows)[number] | (typeof recentRows)[number] | (typeof confirming)[number]>(
-    [...rhRows, ...ethRows, ...recentRows, ...confirming], page, query, filters, values, size);
-  const symbols = new Map([...catalogSymbols, ...[...rhRows, ...ethRows, ...recentRows, ...confirming].map(row => [exploreIdentityKey(row), row.symbol] as const)]);
+  const selection = selectUnifiedExplorePage<(typeof rhRows)[number] | (typeof ethRows)[number] | (typeof baseRows)[number] | (typeof recentRows)[number] | (typeof confirming)[number]>(
+    [...rhRows, ...ethRows, ...baseRows, ...recentRows, ...confirming], page, query, filters, values, size);
+  const symbols = new Map([...catalogSymbols, ...[...rhRows, ...ethRows, ...baseRows, ...recentRows, ...confirming].map(row => [exploreIdentityKey(row), row.symbol] as const)]);
   // Pair identity belongs to the launch, and survives optional price expiry.
   // Resolve catalog tickers on the same chain before using the exact pool observation.
   const items = selection.items.map(row => {
@@ -141,6 +151,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const metadata = new Map(eth.entries.map(entry => [exploreIdentityKey({ chainId: 1, tokenAddress: entry.tokenAddress }), entry]));
   const recentMetadata = new Map(recent.map(item => [exploreIdentityKey({ chainId: item.chainId, tokenAddress: item.row.tokenAddress }), item.presentation]));
   const presentations = [
+    ...base.presentations.filter(row => selectedKeys.has(exploreIdentityKey(row)))
+      .map(row => ({ ...row, market: markets.get(exploreIdentityKey(row)) ?? null })),
     ...rhPresentations.map(presentation => ({ ...presentation, chainId: 4663 as const })),
     ...selectedEth.map(row => {
       const entry = metadata.get(exploreIdentityKey(row));
@@ -156,9 +168,9 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     })),
   ];
   const enrichedItems = items.map(row => {
-    const details = (row.chainId === 1 ? ethMetadata : rhMetadata).get(row.tokenAddress.toLowerCase());
+    const details = row.chainId === 8453 ? undefined : (row.chainId === 1 ? ethMetadata : rhMetadata).get(row.tokenAddress.toLowerCase());
     return { ...row, name: row.name || details?.name || null, symbol: row.symbol || details?.symbol || null };
   });
-  return { scope: "all" as const, status: status === "unavailable" && fresh.length ? "partial" as const : status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence },
+  return { scope: "all" as const, status: status === "unavailable" && fresh.length ? "partial" as const : status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence, base: base.sourceEvidence },
     updatedAt, ...selection, items: enrichedItems, presentations };
 }

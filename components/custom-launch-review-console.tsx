@@ -120,7 +120,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
         <label className={styles.search}>Search reviews<input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(25); }} placeholder="Name, wallet or request ID" /></label>
         {!busy && !error && visibleReviews.length === 0 && <p>{query.trim() ? "No matching requests in this view." : view === "current" ? "No current requests. Earlier decisions are in History." : "No earlier requests."}</p>}
         {visibleReviews.slice(0, limit).map(review => <button className={styles.row} key={review.reviewId} disabled={busy} aria-pressed={detail?.reviewId === review.reviewId} onClick={() => void select(review.reviewId)}>
-          <strong>{reviewProject(review).name}</strong><span>{review.chainId === "1" ? "Ethereum" : "Robinhood"} · {customLaunchReviewLabel(review, now)}</span>
+          <strong>{reviewProject(review).name}</strong><span>{review.chainId === "8453" ? "Base" : review.chainId === "1" ? "Ethereum" : "Robinhood"} · {customLaunchReviewLabel(review, now)}</span>
           {customLaunchReviewOverdue(review, now) && <strong>Review overdue</strong>}<small>{new Date(review.submittedAt).toLocaleString()}</small>
         </button>)}
         {visibleReviews.length > limit && <button onClick={() => setLimit(previous => previous + 25)}>Show more</button>}

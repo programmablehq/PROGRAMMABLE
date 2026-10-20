@@ -1653,7 +1653,7 @@ describe("developer launch history interface", () => {
     expect(apiKeysSource).toContain('searchParams.get("launchId")');
     expect(apiKeysSource).toContain('searchParams.get("chainId")');
     expect(apiKeysSource).toContain(
-      'setInitialLaunchChainId(chainId === "1" ? null : "4663")',
+      'setInitialLaunchChainId(chainId === "8453" ? "8453" : chainId === "1" ? null : "4663")',
     );
     expect(apiKeysSource).toContain(
       "initialLaunchChainId={initialLaunchChainId}",

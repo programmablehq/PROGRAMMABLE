@@ -1,3 +1,4 @@
+import { readBaseToken } from "./base-explore";
 import "server-only";
 import { cache } from "react";
 
@@ -11,6 +12,7 @@ import { tokenDetailPageChainId } from "@/lib/token-page-chain";
 export const resolveTokenPage = cache(async (address: string, explicitChain?: string | string[]) => {
   const chainId = tokenDetailPageChainId(explicitChain);
   if (chainId === null) return null;
+  if (explicitChain === "8453") return readBaseToken(address);
   if (explicitChain === "1") return readEthereumToken(address);
 
   const robinhood = await readRobinhoodToken(address);

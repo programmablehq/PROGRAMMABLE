@@ -12,7 +12,7 @@ export function chartForNavigation(requested: CodexChart | undefined, previous: 
   const age = previous ? now - Date.parse(previous.observedAt) : Infinity;
   return previous?.tokenAddress.toLowerCase() === tokenAddress.toLowerCase() && previous.chainId === chainId && age >= -30_000 && age <= 3_600_000 ? previous : undefined;
 }
-export function CodexPriceChart({ tokenAddress, chainId, name, market }: { tokenAddress: string; chainId: 1 | 4663; name: string; market?: RobinhoodCoinMarket | null }) {
+export function CodexPriceChart({ tokenAddress, chainId, name, market }: { tokenAddress: string; chainId: 1 | 4663 | 8453; name: string; market?: RobinhoodCoinMarket | null }) {
   const [range, setRange] = useState<CodexChartRange>("1D");
   const key = `${chainId}:${tokenAddress.toLowerCase()}:${range}`;
   const [state, setState] = useState<{ key: string; chart?: CodexChart; failed: boolean }>(() => ({ key, chart: codexChartCache.peek(tokenAddress, chainId, range) ?? codexChartCache.lastKnown(tokenAddress, chainId, range), failed: false }));

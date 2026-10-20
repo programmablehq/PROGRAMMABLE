@@ -6,7 +6,7 @@ import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import styles from "./custom-launch-completion.module.css";
 
 export function CustomLaunchCompletion({chainId,launchId,controller,transactionHash}: {
-  chainId:"1"|"4663";launchId:string|null;controller:string;transactionHash:string|null;
+  chainId:"1"|"4663"|"8453";launchId:string|null;controller:string;transactionHash:string|null;
 }) {
   const query=new URLSearchParams({chainId,launchId:launchId??"",controller,transactionHash:transactionHash??""});
   const identity=launchDestinationIdentity(query);
