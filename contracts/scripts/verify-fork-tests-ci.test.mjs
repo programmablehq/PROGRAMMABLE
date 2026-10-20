@@ -7,7 +7,7 @@ const expand = (glob) => glob.startsWith("test/{")
   ? glob.slice(6, -1).split(",").map((file) => `test/${file}`) : [glob];
 
 test("bounded fork groups cover every original source file exactly once", () => {
-  assert.deepEqual(chains.map((chain) => chain.testGlobs.flatMap(expand).length), [32, 6]);
+  assert.deepEqual(chains.map((chain) => chain.testGlobs.flatMap(expand).length), [32, 6, 1]);
   for (const chain of chains) {
     const original = chain.testGlobs.flatMap(expand);
     const groups = chain.testGlobs.flatMap(splitForkTestGlob);
@@ -29,7 +29,7 @@ test("invalid or duplicate selector paths cannot silently remove fork coverage",
 });
 
 test("the executable runner retains all groups, exact configured providers and timeouts", () => {
-  const environment = { ETHEREUM_RPC_URL: "https://mainnet.example.invalid", SEPOLIA_RPC_URL: "https://sepolia.example.invalid" };
+  const environment = { ETHEREUM_RPC_URL: "https://mainnet.example.invalid", SEPOLIA_RPC_URL: "https://sepolia.example.invalid", BASE_RPC_URL: "https://base.example.invalid" };
   const calls = [];
   assert.equal(runForkTests({ environment, logger: quiet, run: (...args) => { calls.push(args); return { status: 0 }; } }), 0);
   const expected = chains.flatMap((chain) => chain.testGlobs.flatMap(splitForkTestGlob)
@@ -62,7 +62,7 @@ test("a provider retry restarts the complete chain inventory and exhaustion fail
   assert.equal(calls[0][1][2], calls[2][1][2]);
   assert.equal(calls[0][2].env.ETHEREUM_RPC_URL, chains[0].publicEndpoints[0]);
   assert.equal(calls[2][2].env.ETHEREUM_RPC_URL, chains[0].publicEndpoints[1]);
-  assert.equal(calls.length, 8);
+  assert.equal(calls.length, 9);
   let failedCalls = 0;
   assert.equal(runForkTests({ environment: {}, logger: quiet, run: () => { failedCalls++; return { status: 1 }; } }), 1);
   assert.equal(failedCalls, chains[0].publicEndpoints.length);

@@ -40,6 +40,7 @@ contract BaseLaunchLifecycleForkTest is Test {
     BaseProtectedNative30HookV1 hook;
 
     function setUp() public {
+        vm.createSelectFork(vm.envString("BASE_RPC_URL"), 52_866_216);
         require(block.chainid == 8453, "Base fork required");
         require(
             address(MANAGER).codehash == 0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6,
