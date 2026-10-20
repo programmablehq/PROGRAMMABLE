@@ -43,7 +43,7 @@ const count = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
 // Operator-supplied artwork and links apply only to already indexed coin identities.
-function displayOverride(token: RobinhoodLaunch): Pick<Metadata, "imageUrl" | "links"> | null {
+function displayOverride(token: RobinhoodLaunch): (Pick<Metadata, "imageUrl" | "links"> & Partial<Pick<Metadata, "description">>) | null {
   const address = token.tokenAddress.toLowerCase();
   // Owner-provided replacement for the submitted URL, which serves HTML.
   // Bind display data to the existing finalized launch; never create an identity.
@@ -59,6 +59,21 @@ function displayOverride(token: RobinhoodLaunch): Pick<Metadata, "imageUrl" | "l
       { label: "Telegram", url: "https://t.me/InternetRobinhoodLottery" },
       { label: "GitHub", url: "https://github.com/math-crypt/lottery-robinhood" },
     ] };
+  }
+  if (token.sourceKind === "custom-launch-plan-v1"
+    && address === "0x46d4dc5081c20da0872f387a1d2f10beaaf1be2f"
+    && token.launchId === "2a1f2463-32e6-452c-b02e-8036ecbf0196"
+    && same(token.hookAddress, "0x4964B2D2113f4Bee43C840118d1d7D6E239B60Cc")
+    && same(token.poolId, "0x2bd95e3a43342dc11fda98f38e0c122dc470e9118e942aaa9c2572d0bc2e29b5")
+    && same(token.creator, "0xF4b7818912C3480cD1D95010d718a87fdFc1408C")) {
+    return {
+      imageUrl: "https://eulerian.vercel.app/logo-mark.png",
+      description: "Eulerian is the analytics layer for Programmable. It maps every Programmable coin on one live graph, linked by shared holders, with a health signal for each coin and a Wallet X-ray for any address. Buy and sell $EULR on its website or on Programmable.\n\nFixed supply and liquidity locked forever. Normal trades pay 3% in total: 2.7% to the project, which funds development and the upcoming Graph Vault, and 0.3% to Programmable.",
+      links: [
+        { label: "Website", url: "https://www.eulerianxyz.live" },
+        { label: "X", url: "https://x.com/euleri_an" },
+      ],
+    };
   }
   try {
     const raw = process.env.ROBINHOOD_TOKEN_PRESENTATION_OVERRIDES_JSON;
@@ -316,7 +331,7 @@ export async function readRobinhoodPresentations(tokens: readonly RobinhoodLaunc
     return {
       tokenAddress: token.tokenAddress,
       imageUrl: override?.imageUrl ?? presentation?.imageUrl ?? (main ? PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.imageUrl : isRobinhoodModuleSourceKind(token.sourceKind) ? MODULE_DEFAULT_TOKEN_IMAGE : null),
-      description: main ? PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.description : presentation?.description ?? null,
+      description: main ? PROGRAMMABLE_MAIN_TOKEN_PRESENTATION.description : override?.description ?? presentation?.description ?? null,
       links,
       market: markets.status === "fulfilled" ? markets.value.get(key) ?? null : null,
     };
