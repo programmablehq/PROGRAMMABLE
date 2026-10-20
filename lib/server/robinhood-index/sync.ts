@@ -2,6 +2,7 @@ import type { RobinhoodEngineLaunch, RobinhoodLaunch, RobinhoodModuleLaunch } fr
 import { isRobinhoodEngineLaunch, isRobinhoodModuleSourceKind } from "@/lib/robinhood-launches";
 import { parseSnapshot, parseModuleModeSnapshot, moduleModeSnapshots, type Checkpoint, type RobinhoodSnapshot, type ModuleModeSnapshot } from "./model";
 import type { IndexStore } from "./store";
+import { writeIndexLane } from "./lane-write";
 
 export type IndexSource = {
   routerAddress: string;
@@ -79,7 +80,7 @@ export async function syncRobinhoodIndex(source: IndexSource, store: IndexStore,
   };
   if (initial.binding !== source.binding || initial.routerAddress.toLowerCase() !== source.routerAddress.toLowerCase()
     || initial.startBlock !== source.startBlock.toString()) throw new Error("Canonical Router changed; index migration required");
-  return syncRange(source, { read: async () => saved, write: (snapshot, etag) => store.write(parseSnapshot(snapshot), etag) },
+  return syncRange(source, { read: async () => saved, write: (snapshot) => writeIndexLane(store, saved, parseSnapshot(snapshot), { kind: "router" }) },
     initial, parseSnapshot, options);
 }
 
@@ -105,7 +106,7 @@ export async function syncModuleModeIndex(source: ModuleModeIndexSource, store: 
     || initial.startBlock !== source.startBlock.toString()) throw new Error("Module Mode source changed; index migration required");
   return syncRange(source, {
     read: async () => ({ snapshot: initial, etag: saved.etag }),
-    write: async (snapshot, etag) => {
+    write: async (snapshot) => {
       const lane = parseModuleModeSnapshot(snapshot);
       const primary = saved.snapshot.moduleMode;
       const usePrimary = !primary || primary.releaseDigest.toLowerCase() === source.releaseDigest.toLowerCase();
@@ -114,7 +115,7 @@ export async function syncModuleModeIndex(source: ModuleModeIndexSource, store: 
         moduleModeSources: [...(saved.snapshot.moduleModeSources ?? []).filter(item =>
           item.releaseDigest.toLowerCase() !== source.releaseDigest.toLowerCase()), lane],
       });
-      await store.write(merged, etag);
+      await writeIndexLane(store, saved, merged, { kind: "module", releaseDigest: source.releaseDigest });
     },
   }, initial, parseModuleModeSnapshot, options);
 }

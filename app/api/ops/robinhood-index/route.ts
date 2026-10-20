@@ -10,7 +10,7 @@ import { launchProjectionSourceV1, syncLaunchProjectionIndex } from "@/lib/serve
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 180;
-type ModuleLaneResult = Awaited<ReturnType<typeof syncModuleModeIndex>> | { status: "disabled" | "unavailable" };
+type ModuleLaneResult = Awaited<ReturnType<typeof syncModuleModeIndex>> | { status: "disabled" | "unavailable" | "deferred" };
 
 export async function GET(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -75,12 +75,18 @@ export async function GET(request: Request) {
         }
       }
       const ordered = lanes.sort((a, b) => (ages.get(a.releaseDigest.toLowerCase()) ?? 0) - (ages.get(b.releaseDigest.toLowerCase()) ?? 0));
-      for (const [index, lane] of ordered.entries()) {
+      // Splitting the remaining time across every historical generation can leave
+      // each lane less time than its finality reads require, so none advances.
+      // Give a bounded oldest-first subset a useful budget; saved ages rotate it.
+      const slots = Math.max(1, Math.min(3, Math.floor((165_000 - (Date.now() - startedAt)) / 30_000)));
+      const scheduled = ordered.slice(0, slots);
+      for (const lane of ordered) (lane.foundation ? foundationSources : moduleSources)[lane.releaseDigest] = { status: "deferred" };
+      for (const [index, lane] of scheduled.entries()) {
         const results = lane.foundation ? foundationSources : moduleSources;
-        results[lane.releaseDigest] = { status: "unavailable" };
         const budget = 165_000 - (Date.now() - startedAt);
         if (budget <= 0) continue;
-        const laneBudget = Math.max(1, Math.floor(budget / (ordered.length - index)));
+        results[lane.releaseDigest] = { status: "unavailable" };
+        const laneBudget = Math.max(1, Math.floor(budget / (scheduled.length - index)));
         const laneDeadline = Date.now() + laneBudget;
         // A Foundation provider can fail one read without changing canonical history.
         // Repeat that lane once within its original budget; each attempt still verifies
@@ -110,7 +116,7 @@ export async function GET(request: Request) {
       moduleMode = primary ? moduleSources[primary] : { status: modules.status === "fulfilled" ? "disabled" : "unavailable" };
       const states = Object.values(foundationSources).map(source => source.status);
       foundation = foundationUnavailableSources.length || states.includes("unavailable") ? "unavailable"
-        : states.includes("partial") ? "partial" : states.includes("syncing") ? "syncing" : states.length ? "ready" : "disabled";
+        : states.includes("partial") ? "partial" : states.includes("syncing") || states.includes("deferred") ? "syncing" : states.length ? "ready" : "disabled";
     }
     const failed = result === null || result.status === "partial" || launchProjections.status === "unavailable" || moduleMode.status === "partial" || moduleMode.status === "unavailable"
       || foundation === "unavailable" || foundation === "partial" || moduleUnavailableSources.length > 0 || Object.values(moduleSources).some(source => source.status === "partial" || source.status === "unavailable");

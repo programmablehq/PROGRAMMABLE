@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IndexStore } from "@/lib/server/robinhood-index/store";
 import type { ModuleModeIndexSource } from "@/lib/server/robinhood-index/sync";
 import type { ModuleModeUnavailableSource } from "@/lib/server/robinhood-index/module-source";
+import type { RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
 
 const mocks = vi.hoisted(() => ({
   foundationSources: vi.fn(), projectionSync: vi.fn(), projectionSource: vi.fn(), read: vi.fn(), source: vi.fn(), sync: vi.fn(), moduleSync: vi.fn(),
@@ -26,6 +27,7 @@ beforeEach(() => {
   mocks.storeRead.mockResolvedValue(null);
   mocks.store.mockReturnValue({ read: mocks.storeRead, write: mocks.storeWrite });
   vi.stubEnv("CRON_SECRET", "a".repeat(48));
+
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -153,4 +155,44 @@ describe("Robinhood website HTTP boundaries", () => {
     expect(mocks.moduleSync).toHaveBeenCalledWith(source, expect.anything(), expect.not.objectContaining({ rangeSize: 5_000n }));
   });
 
+  it("gives the oldest sources a usable budget and defers the rest without losing their checkpoints", async () => {
+    const started = Date.parse("2026-10-20T12:00:00Z");
+    let clock = started;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const hash = (id: number) => `0x${id.toString(16).padStart(64, "0")}`;
+    const source = (id: number, foundation: boolean): ModuleModeIndexSource => ({
+      sourceKind: foundation ? "module-foundation-v1" : "module-native-v2",
+      ...(foundation ? { factoryVersion: "v2" as const } : {}),
+      sourceAddress: `0x${id.toString(16).padStart(40, "0")}`, releaseDigest: hash(id), startBlock: 1n,
+      finalized: { number: "20", hash: hash(20) },
+      block: async number => ({ number: String(number), hash: hash(Number(number)) }), launches: async () => [],
+    });
+    const modules = [1, 2, 3, 4].map(id => source(id, false));
+    const foundations = [5, 6, 7, 8, 9].map(id => source(id, true));
+    const history = [...modules, ...foundations].map((item, index) => ({
+      version: 1, chainId: 4663, sourceKind: item.sourceKind, factoryVersion: item.factoryVersion,
+      sourceAddress: item.sourceAddress, releaseDigest: item.releaseDigest, startBlock: "1", cursor: { number: "10", hash: hash(10) },
+      checkpoints: [], finalizedBlock: "10", updatedAt: new Date(started - (index < 4 ? 0 : 10 - index) * 60_000).toISOString(), items: [],
+    }));
+    const snapshot = { version: 1, chainId: 4663, routerAddress: `0x${"a".repeat(40)}`, binding: hash(1), startBlock: "1",
+      cursor: { number: "10", hash: hash(10) }, checkpoints: [], finalizedBlock: "10", updatedAt: new Date(started).toISOString(),
+      items: [], moduleMode: history[0], moduleModeSources: history.slice(1) } as RobinhoodSnapshot;
+    try {
+      mocks.source.mockResolvedValue({});
+      mocks.sync.mockImplementation(async () => { clock += 45_000; return { status: "ready" }; });
+      mocks.projectionSync.mockImplementation(async () => { clock += 45_000; return { status: "ready", nextCursor: null }; });
+      mocks.storeRead.mockResolvedValue({ snapshot, etag: "saved" });
+      mocks.moduleSources.mockResolvedValue({ lanes: modules.map(item => ({ releaseDigest: item.releaseDigest, source: async () => item })), unavailableSources: [] });
+      mocks.foundationSources.mockResolvedValue({ lanes: foundations.map(item => ({ releaseDigest: item.releaseDigest, source: async () => item })), unavailableSources: [] });
+      mocks.moduleSync.mockImplementation(async () => { clock += 5_000; return { status: "ready" }; });
+      const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", { headers: { authorization: `Bearer ${"a".repeat(48)}` } }));
+      expect(response.status).toBe(200);
+      expect(mocks.moduleSync).toHaveBeenCalledTimes(2);
+      expect(mocks.moduleSync.mock.calls.map(([item]) => item.releaseDigest)).toEqual([hash(5), hash(6)]);
+      for (const [, , options] of mocks.moduleSync.mock.calls) expect(options.budgetMs).toBeGreaterThanOrEqual(20_000);
+      expect(await response.json()).toMatchObject({ foundation: "syncing", moduleMode: { status: "deferred" },
+        foundationSources: { [hash(5)]: { status: "ready" }, [hash(6)]: { status: "ready" }, [hash(7)]: { status: "deferred" } } });
+      expect(snapshot.moduleModeSources).toEqual(history.slice(1));
+    } finally { now.mockRestore(); }
+  });
 });

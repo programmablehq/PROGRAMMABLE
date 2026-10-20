@@ -21,7 +21,7 @@ function memoryStore(initial:RobinhoodSnapshot=baseSnapshot()) {
     current=structuredClone(parseSnapshot(snapshot)); revision++;
   });
   const store:IndexStore={read:async()=>({snapshot:structuredClone(current),etag:`revision-${revision}`}),write};
-  return {store,write,read:()=>current,concurrentWrite:()=>{revision++;}};
+  return {store,write,read:()=>current,concurrentWrite:(next?:RobinhoodSnapshot)=>{if(next)current=structuredClone(parseSnapshot(next));revision++;}};
 }
 function collector(entries=[moduleEvidenceFixture().evidence]):ModuleModeFinalizedCollector {
   return {
@@ -68,12 +68,15 @@ describe("Module Mode joins the canonical Robinhood index",()=>{
     expect(profileLaunchList(saved.read(),a(90),1,now).items).toHaveLength(2);
     expect(profileLaunchList(saved.read(),a(300),1,now).items).toHaveLength(0);
   });
-  it("uses the same CAS fence and does not overwrite another worker's checkpoint",async()=>{
+  it("retries the unchanged Module source without overwriting a concurrent Router checkpoint",async()=>{
     const saved=memoryStore(); const c=collector(); const original=c.collectRange;
-    c.collectRange=async(...args)=>{const value=await original(...args);saved.concurrentWrite();return value;};
+    const newer={...baseSnapshot(),cursor:point(299),finalizedBlock:"299",checkpoints:[point(199),point(299)]};
+    c.collectRange=async(...args)=>{const value=await original(...args);saved.concurrentWrite(newer);return value;};
     const source=await moduleModeSource(moduleEvidenceFixture().release,c);
-    await expect(syncModuleModeIndex(source,saved.store,options)).rejects.toThrow("Compare-and-swap");
-    expect(saved.read().moduleMode).toBeUndefined(); expect(saved.read().items).toEqual([customRow()]);
+    expect(await syncModuleModeIndex(source,saved.store,options)).toMatchObject({status:"ready",indexedThrough:"199"});
+    expect(saved.write).toHaveBeenCalledTimes(2);
+    expect(saved.read().moduleMode?.items).toHaveLength(1);
+    expect(saved.read().cursor).toEqual(point(299)); expect(saved.read().items).toEqual([customRow()]);
   });
   it("rejects a partial or tampered scan without committing any member of that range",async()=>{
     const second=moduleEvidenceFixture(1).evidence; second.program.selections[0].config="0x01";

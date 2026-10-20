@@ -26,6 +26,14 @@ canonical hash changes. Optimistic Blob writes prevent overlapping jobs from
 advancing an older snapshot over a newer one. Readers retain accepted records
 when the updater is unavailable, with an explicit stale state.
 
+If another source changes the shared Blob while a range is being verified, the
+writer retries against that newer snapshot only when its own source is still
+unchanged. It preserves every other source and its cursor. A changed Router
+binding or a competing checkpoint in the same source rejects the stale write.
+Each pass gives a bounded oldest-first subset of source generations enough time
+for finality checks and useful scanning. Deferred generations retain their saved
+data and take priority after older generations advance.
+
 The job uses the RPC from the Developer example, `https://rpc-robinhood.blockmachine.io`,
 or the single `ROBINHOOD_RPC_URL` override. Requests are spaced by 350 ms and log
 ranges contain at most 10,000 blocks. It runs every minute using the existing
