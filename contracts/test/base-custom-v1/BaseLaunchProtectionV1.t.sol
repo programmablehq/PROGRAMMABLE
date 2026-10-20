@@ -113,22 +113,19 @@ contract BaseLaunchProtectionV1Test is Test {
 
     function setUp() public {
         vm.chainId(_chain());
-        MANAGER =
-            0x498581fF718922c3f8e6A244956aF099B2652b2b;
+        MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
         vm.warp(100_000);
         vm.deal(address(this), 100 ether);
         vm.deal(DEV, 100 ether);
         vm.deal(BUYER, 100 ether);
         deployCodeTo("PoolManager.sol:PoolManager", abi.encode(address(this)), MANAGER);
         manager = IPoolManager(MANAGER);
-        address feedAddress =
-            0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
+        address feedAddress = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
         deployCodeTo("BaseTestPriceFeed", "", feedAddress);
         feed = BaseTestPriceFeed(feedAddress);
         deployCodeTo("BaseTestPriceFeed", "", 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433);
         BaseTestPriceFeed(0xBCF85224fc0756B9Fa45aA7892530B47e10b6433).set(0, 1);
-        address routerAddress =
-            0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40;
+        address routerAddress = 0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40;
         deployCodeTo("BaseTestAuthenticatedRouter", abi.encode(manager), routerAddress);
         router = BaseTestAuthenticatedRouter(routerAddress);
         initializer = new BaseProtectedNativeInitializerV1(

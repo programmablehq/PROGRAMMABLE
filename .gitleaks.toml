@@ -609,3 +609,15 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''^lib/market-data/classic-launch-proof\.ts$''']
 regexes = ['''^CLASSIC_MAIN_TOKEN = "0x7987f03462200b3d8a072e02c89a8a41dcb124ee"$''']
+
+[[allowlists]]
+description = "Exact public Base WETH runtime code commitment in the client and discovery documents"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^packages/launch/src/base-profile-v1\.json$''',
+  '''^docs/operations/releases/custom-launch-v4\.2\.0/cli-release-binding\.json$''',
+  '''^public/openapi/base-custom-launch-v1\.json$''',
+]
+regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",\s*$''']

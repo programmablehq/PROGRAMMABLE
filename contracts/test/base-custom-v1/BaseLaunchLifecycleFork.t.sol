@@ -9,7 +9,9 @@ import { HookMiner } from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import { IV4Router } from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import { ProtectedLaunchTokenV1 } from "../../src/launch-protection/ProtectedLaunchTokenV1.sol";
 import {
-    BaseProtectedNativeInitializerV1, IProtectedLaunchHookV1, ILaunchUsdFeedV1
+    BaseProtectedNativeInitializerV1,
+    IProtectedLaunchHookV1,
+    ILaunchUsdFeedV1
 } from "../../src/base-custom-v1/BaseProtectedNativeInitializerV1.sol";
 import { BaseProtectedNative30HookV1 } from "../../src/base-custom-v1/BaseProtectedNative30HookV1.sol";
 
@@ -39,45 +41,72 @@ contract BaseLaunchLifecycleForkTest is Test {
 
     function setUp() public {
         require(block.chainid == 8453, "Base fork required");
-        require(address(MANAGER).codehash == 0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6, "Manager runtime changed");
-        require(ROUTER.codehash == 0x816c75fe7f6ccf8fe8b14825091e8dff301fe7ffd4b962f89b2981a747facc08, "Router runtime changed");
-        require(FEED.codehash == 0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2, "Oracle runtime changed");
+        require(
+            address(MANAGER).codehash == 0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6,
+            "Manager runtime changed"
+        );
+        require(
+            ROUTER.codehash == 0x816c75fe7f6ccf8fe8b14825091e8dff301fe7ffd4b962f89b2981a747facc08,
+            "Router runtime changed"
+        );
+        require(
+            FEED.codehash == 0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2,
+            "Oracle runtime changed"
+        );
         vm.deal(address(this), 1 ether);
         vm.deal(BUYER, 1 ether);
-        initializer = new BaseProtectedNativeInitializerV1(MANAGER, address(this), ILaunchUsdFeedV1(FEED), FEED.codehash);
-        token = new ProtectedLaunchTokenV1("Base Custom API Check", "BAPICHECK", SUPPLY, address(initializer), address(MANAGER));
+        initializer =
+            new BaseProtectedNativeInitializerV1(MANAGER, address(this), ILaunchUsdFeedV1(FEED), FEED.codehash);
+        token = new ProtectedLaunchTokenV1(
+            "Base Custom API Check", "BAPICHECK", SUPPLY, address(initializer), address(MANAGER)
+        );
         BaseProtectedNative30HookV1.PoolConfig memory config = BaseProtectedNative30HookV1.PoolConfig({
-            token: address(token), lpFee: 0, tickSpacing: 60, initialSqrtPriceX96: TickMath.getSqrtPriceAtTick(START_TICK),
-            initializer: address(initializer), creatorFeeRecipient: DEVELOPER, creatorBuyFeeBps: 70, creatorSellFeeBps: 70,
-            module: address(0), maxModuleLpFeePips: 0
+            token: address(token),
+            lpFee: 0,
+            tickSpacing: 60,
+            initialSqrtPriceX96: TickMath.getSqrtPriceAtTick(START_TICK),
+            initializer: address(initializer),
+            creatorFeeRecipient: DEVELOPER,
+            creatorBuyFeeBps: 70,
+            creatorSellFeeBps: 70,
+            module: address(0),
+            maxModuleLpFeePips: 0
         });
         address[6] memory exemptions;
         bytes memory args = abi.encode(MANAGER, config, DEVELOPER, ROUTER, ROUTER.codehash, exemptions);
         (, bytes32 salt) = HookMiner.find(address(this), 0x20cc, type(BaseProtectedNative30HookV1).creationCode, args);
-        hook = new BaseProtectedNative30HookV1{salt: salt}(MANAGER, config, DEVELOPER, ROUTER, ROUTER.codehash, exemptions);
-        initializer.initialize{value: 0.0001 ether}(IProtectedLaunchHookV1(address(hook)), token, START_TICK, DEVELOPER, 1);
+        hook = new BaseProtectedNative30HookV1{ salt: salt }(
+            MANAGER, config, DEVELOPER, ROUTER, ROUTER.codehash, exemptions
+        );
+        initializer.initialize{ value: 0.0001 ether }(
+            IProtectedLaunchHookV1(address(hook)), token, START_TICK, DEVELOPER, 1
+        );
     }
 
     function _swap(bool buy, uint128 amount) internal {
         PoolKey memory key = hook.poolKey();
         bytes[] memory params = new bytes[](3);
-        params[0] = abi.encode(IV4Router.ExactInputSingleParams({poolKey: key, zeroForOne: buy, amountIn: amount, amountOutMinimum: 1, hookData: ""}));
+        params[0] = abi.encode(
+            IV4Router.ExactInputSingleParams({
+                poolKey: key, zeroForOne: buy, amountIn: amount, amountOutMinimum: 1, hookData: ""
+            })
+        );
         params[1] = abi.encode(buy ? key.currency0 : key.currency1, amount);
         params[2] = abi.encode(buy ? key.currency1 : key.currency0, uint256(1));
         bytes[] memory inputs = new bytes[](1);
         inputs[0] = abi.encode(hex"060c0f", params);
         vm.prank(BUYER);
-        IBaseUniversalRouterV1(ROUTER).execute{value: buy ? amount : 0}(hex"10", inputs, block.timestamp + 60);
+        IBaseUniversalRouterV1(ROUTER).execute{ value: buy ? amount : 0 }(hex"10", inputs, block.timestamp + 60);
     }
 
     function testFork_openingBuyTaxGoesToTreasuryAndSellRemainsAvailable() public {
         uint256 initialPlatform = hook.feeVault().platformAccrued();
         uint256 initialTax = hook.openingTaxVault().platformAccrued();
-        _swap(true, uint128(0.00001 ether));
+        _swap(true, uint128(0.000_01 ether));
         assertGt(token.balanceOf(BUYER), 0);
-        assertEq(hook.feeVault().platformAccrued() - initialPlatform, 0.00000003 ether);
+        assertEq(hook.feeVault().platformAccrued() - initialPlatform, 0.000_000_03 ether);
         uint256 extraTax = hook.openingTaxVault().platformAccrued() - initialTax;
-        assertEq(extraTax, 0.0000098 ether);
+        assertEq(extraTax, 0.000_009_8 ether);
         assertEq(hook.openingTaxVault().PLATFORM_RECIPIENT(), TREASURY);
         uint256 treasuryBefore = TREASURY.balance;
         hook.openingTaxVault().claimPlatform();
@@ -89,11 +118,11 @@ contract BaseLaunchLifecycleForkTest is Test {
         vm.warp(block.timestamp + 31);
         uint256 initialPlatform = hook.feeVault().platformAccrued();
         uint256 initialTax = hook.openingTaxVault().platformAccrued();
-        _swap(true, uint128(0.00001 ether));
-        assertEq(hook.feeVault().platformAccrued() - initialPlatform, 0.00000003 ether);
+        _swap(true, uint128(0.000_01 ether));
+        assertEq(hook.feeVault().platformAccrued() - initialPlatform, 0.000_000_03 ether);
         assertEq(hook.openingTaxVault().platformAccrued(), initialTax);
         _sellBalance();
-        assertGt(hook.feeVault().platformAccrued() - initialPlatform, 0.00000003 ether);
+        assertGt(hook.feeVault().platformAccrued() - initialPlatform, 0.000_000_03 ether);
     }
 
     function _sellBalance() internal {

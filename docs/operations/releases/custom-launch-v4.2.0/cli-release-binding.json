@@ -243,7 +243,7 @@
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/standard-json.json",
-      "sha256": "sha256:992f36c816a8586cce3e6b4ea52536852fee3193e2a7ccad1a6d5d710b62105b"
+      "sha256": "sha256:ce8f39db8b38a1c0b3a0a07a68840557bacbbe1e24a5de9f4dbe1ef2e4576aeb"
     },
     {
       "path": "public/openapi/base-custom-launch-v1.json",
@@ -255,23 +255,23 @@
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/BaseLaunchProtectionModuleV1.artifact.json",
-      "sha256": "sha256:5a6e6e3f157f8ca6b6d989ac96e8c4662745542f98a1967ffdec3c68e520cb10"
+      "sha256": "sha256:3a3d272e98ab2b8409aa770f27ceef2ee521dc97579b2b38a180720ea0f56e75"
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/BaseProtectedNative30HookV1.artifact.json",
-      "sha256": "sha256:a59481b3650efe4a836ec3e53639db2afb141f9b3510d654f3d20b6e6bb8415a"
+      "sha256": "sha256:2f6c32e8101cbc42de0e7fc30c9c11e36969aff7b2412897ef7a2eb16875e3ab"
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/BaseProtectedNativeInitializerV1.artifact.json",
-      "sha256": "sha256:c428d31960191c938045ab32a20134ab855636062ef0ac0070e6aefa48fa7685"
+      "sha256": "sha256:e44bbfc702d872d9c6fecd4b4a0a6ff99cf15f9c245b50668834cfc6032329a7"
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/EthereumNativeFeeVaultV3.artifact.json",
-      "sha256": "sha256:0fe4464a5c46bd67368ff95f71e824bab59286eeaff90cbc50e8c5d7e43605b9"
+      "sha256": "sha256:a1b65cf22efea031d01138046f2720683efa8acbfbf8dad34211be4bb696df67"
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/ProtectedLaunchTokenV1.artifact.json",
-      "sha256": "sha256:61b962831275f49b59b7e141ce1d610e3d8b3b2698cadc2da2b4c37bfe1fedd7"
+      "sha256": "sha256:5905835b10a5da9a8e51eb64ae08cc7477107503eefa7664a3bbc00b83f8264e"
     },
     {
       "path": "packages/launch/src/cli.mjs",

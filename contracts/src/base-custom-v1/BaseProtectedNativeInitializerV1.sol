@@ -126,8 +126,10 @@ contract BaseProtectedNativeInitializerV1 is IUnlockCallback {
             revert InvalidOraclePrice();
         }
         (, int256 sequencerStatus, uint256 startedAt,,) = ILaunchUsdFeedV1(SEQUENCER_FEED).latestRoundData();
-        if (sequencerStatus != 0 || startedAt == 0 || startedAt > block.timestamp
-            || block.timestamp - startedAt <= SEQUENCER_GRACE_SECONDS) revert InvalidOraclePrice();
+        if (
+            sequencerStatus != 0 || startedAt == 0 || startedAt > block.timestamp
+                || block.timestamp - startedAt <= SEQUENCER_GRACE_SECONDS
+        ) revert InvalidOraclePrice();
         (uint80 round, int256 answer,, uint256 updated, uint80 answeredRound) = nativeUsdFeed.latestRoundData();
         if (
             answer <= 0 || updated == 0 || updated > block.timestamp || block.timestamp - updated > MAX_FEED_AGE
@@ -145,7 +147,8 @@ contract BaseProtectedNativeInitializerV1 is IUnlockCallback {
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(poolManager) || _callback == bytes32(0) || keccak256(data) != _callback) {
+        if (msg.sender != address(poolManager)) revert Unauthorized();
+        if (_callback == bytes32(0) || keccak256(data) != _callback) {
             revert Unauthorized();
         }
         _callback = bytes32(0);

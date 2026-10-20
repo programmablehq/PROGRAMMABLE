@@ -48,8 +48,8 @@ contract BaseLaunchProtectionModuleV1 {
         if (
             kernel_ == address(0) || address(token_).code.length == 0 || developer_ == address(0)
                 || developer_ == address(token_) || developer_ == token_.poolManager() || router_.code.length == 0
-                || block.chainid != 8453 || router_ != canonicalRouter
-                || router_.codehash != routerCodeHash_ || creatorBuyFeeBps_ > 1000
+                || block.chainid != 8453 || router_ != canonicalRouter || router_.codehash != routerCodeHash_
+                || creatorBuyFeeBps_ > 1000
         ) revert InvalidConfiguration();
         for (uint256 i; i < exemptWallets_.length; ++i) {
             address wallet = exemptWallets_[i];

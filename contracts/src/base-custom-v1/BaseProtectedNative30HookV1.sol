@@ -126,12 +126,11 @@ contract BaseProtectedNative30HookV1 is BaseHook {
         CHAIN_ID = block.chainid;
         CANONICAL_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
         if (
-            block.chainid != 8453 || address(manager) != CANONICAL_POOL_MANAGER
-                || address(manager).code.length == 0 || config.lpFee != 0 || config.tickSpacing != 60
-                || config.module != address(0) || config.creatorBuyFeeBps > 1000 || config.creatorSellFeeBps > 1000
-                || config.token == address(0) || config.initializer == address(0)
-                || config.creatorFeeRecipient == address(0) || config.initialSqrtPriceX96 == 0
-                || config.tickSpacing <= 0 || config.maxModuleLpFeePips != 0
+            block.chainid != 8453 || address(manager) != CANONICAL_POOL_MANAGER || address(manager).code.length == 0
+                || config.lpFee != 0 || config.tickSpacing != 60 || config.module != address(0)
+                || config.creatorBuyFeeBps > 1000 || config.creatorSellFeeBps > 1000 || config.token == address(0)
+                || config.initializer == address(0) || config.creatorFeeRecipient == address(0)
+                || config.initialSqrtPriceX96 == 0 || config.tickSpacing <= 0 || config.maxModuleLpFeePips != 0
                 || uint256(config.creatorBuyFeeBps) + PLATFORM_FEE_BPS >= FEE_DENOMINATOR
                 || uint256(config.creatorSellFeeBps) + PLATFORM_FEE_BPS >= FEE_DENOMINATOR
         ) revert InvalidConfiguration();
@@ -242,7 +241,8 @@ contract BaseProtectedNative30HookV1 is BaseHook {
         if (params.zeroForOne && block.timestamp < ProtectedLaunchTokenV1(token).startedAt() + 300) {
             activeBuyer = BaseLaunchProtectionModuleV1(module).protectedBuyer(sender);
         }
-        activeOpeningTaxPpm = params.zeroForOne ? BaseLaunchProtectionModuleV1(module).openingTaxPpmForSender(sender) : 0;
+        activeOpeningTaxPpm =
+            params.zeroForOne ? BaseLaunchProtectionModuleV1(module).openingTaxPpmForSender(sender) : 0;
         bool nativeIsSpecified = params.zeroForOne == (params.amountSpecified < 0);
         if (!nativeIsSpecified) return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, overrideFee);
         uint256 nativeAmount = _absolute(params.amountSpecified);
