@@ -582,16 +582,18 @@ export function evaluateReadModelOperationsSourceContracts(
       healthRoute.includes('"Cache-Control": "no-store"') &&
       healthRoute.includes('"X-Programmable-Indexing-Status": health.status') &&
       typeof healthReader === "string" &&
-      importedSpecifiers(healthReader).every(specifier => ["server-only", "./ethereum-explore", "./robinhood-index/read"].includes(specifier)) &&
+      importedSpecifiers(healthReader).every(specifier => ["server-only", "./ethereum-explore", "./robinhood-index/read", "./base-explore"].includes(specifier)) &&
       !/(?:\bfetch\s*\(|\bprocess\.env\b|\bcreate(?:Public|Wallet)Client\b|\bimport\s*\()/u.test(healthReader) &&
       healthReader.includes("ethereum: readEthereumExploreCatalog, robinhood: readRobinhoodExploreCatalog") &&
+      healthReader.includes("base: readBaseExploreCatalog") &&
       healthReader.includes("const CACHE_TTL_MS = 15_000;") &&
       healthReader.includes("const READ_TIMEOUT_MS = 5_000;") &&
       healthReader.includes('schemaVersion: "programmable.operations-health.v2"') &&
       healthReader.includes('scope: "website-launch-indexes"') &&
       healthReader.includes('health: "not-checked"') &&
       healthReader.includes("https://api.programmable.market/readyz") &&
-      healthReader.includes("https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness"),
+      healthReader.includes("https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness") &&
+      healthReader.includes("https://api.programmable.market/v4/chains/8453/readiness"),
     "health reuses bounded cached catalog observations, distinguishes unmeasured provider health and links separate Custom Launch API readiness",
   );
 

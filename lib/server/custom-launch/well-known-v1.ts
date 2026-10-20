@@ -103,7 +103,7 @@ export function programmableWellKnownDocumentV1(
       launchProtection: Object.freeze({
         policyVersion: "programmable.launch-protection.v1",
         statusUrl: "https://api.programmable.market/v1/launch-protection",
-        supportedChainIds: ["1", "4663"],
+        supportedChainIds: ["1", "4663", "8453"],
         builderModule: "@programmable/launch/launch-protection",
         sourceCandidateVersion: "4.2.0",
         minimumFdvUsd: "15000", walletLimitBps: 200, buyerLimitBps: 200, protectionSeconds: 300,

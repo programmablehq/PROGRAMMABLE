@@ -53,11 +53,11 @@ describe("profile-selected Robinhood well-known discovery", () => {
     expect(original.customLaunchApi.launchProtection).toMatchObject({
       policyVersion: "programmable.launch-protection.v1",
       statusUrl: "https://api.programmable.market/v1/launch-protection",
-      supportedChainIds: ["1", "4663"], discoveryIsActivationEvidence: false,
+      supportedChainIds: ["1", "4663", "8453"], discoveryIsActivationEvidence: false,
       minimumFdvUsd: "15000", maximumAdditionalTaxExemptWallets: 6,
     });
     expect(createHash("sha256").update(JSON.stringify(original)).digest("hex"))
-      .toBe("ac21e02b9612de7b308e43ee243d2bd0135216952260e77a6b43532fce6a200b");
+      .toBe("6f140df8a3a6b46c14655cc21b13c0fb6abff12dc623253a3c91eda7adf1886a");
   });
 
   it("publishes successor fee and funding rules while pending authority stays closed", async () => {
