@@ -5,6 +5,7 @@ import { LAUNCH_PROJECTION_FEED_V1, parseLaunchProjectionV1, projectionAddress, 
 import { canonicalBrowserJsonV2 } from "@/lib/custom-launch/browser-authority-v2";
 import { parseSnapshot, projectionCompletedAt } from "./model";
 import type { IndexStore } from "./store";
+import { writeIndexLane } from "./lane-write";
 import { verifyAtomicLaunchProvenanceV2 } from "./atomic-launch-provenance-v2";
 import { readStampEvmBlockNumber } from "./stamp-block-context";
 
@@ -43,11 +44,11 @@ export async function syncLaunchProjectionIndex(source: LaunchProjectionSourceV1
     rows.set(key, projectionToRobinhoodLaunch(projection, verified.launchedAt));
   }
   const observedAt = new Date(now()).toISOString();
-  await store.write(parseSnapshot({ ...saved.snapshot, launchProjections: {
+  await writeIndexLane(store, saved, parseSnapshot({ ...saved.snapshot, launchProjections: {
     version: 1, sourceUrl: LAUNCH_PROJECTION_FEED_V1, updatedAt: observedAt,
     completedAt: page.nextCursor === null ? observedAt : old ? projectionCompletedAt(old) : null,
     nextCursor: page.nextCursor, items: [...rows.values()],
-  } }), saved.etag);
+  } }), { kind: "projections" });
   // A continuation cursor means another verified page remains, not a failed proof.
   return { status: page.nextCursor === null ? "ready" as const : "syncing" as const, indexed: rows.size, nextCursor: page.nextCursor };
 }
