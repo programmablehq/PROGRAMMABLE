@@ -310,6 +310,7 @@
     "cookie": "0.7.2",
     "diff": "8.0.3",
     "hono": "4.13.11",
+    "follow-redirects": "1.16.1",
     "postcss": "8.5.23",
     "serialize-javascript": "7.0.7",
     "sharp": "0.35.5",
