@@ -9,6 +9,7 @@ import {
   type Hex,
 } from "viem";
 
+import { BASE_CUSTOM_ROOTS_V1 } from "./base-release-v1";
 import { CANONICAL_LAUNCH_STAMP_V1 } from "@/lib/tokens";
 
 export const CUSTOM_LAUNCH_WALLET_TRANSACTION_SCHEMA_V1 =
@@ -19,11 +20,16 @@ export const CUSTOM_LAUNCH_MAINNET_ROUTER_V1 =
   CANONICAL_LAUNCH_STAMP_V1.routerAddress;
 
 export const CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1 = "0xBE4bF6Ac8c6F012E1C8f25747A9fBccB2FDAC4C3" as const;
+export function customLaunchChainForRouterV1(value: unknown): "1" | "8453" | undefined {
+  if (sameAddress(value, BASE_CUSTOM_ROOTS_V1.router)) return "8453";
+  if (sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_V1) || sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1)) return "1";
+  return undefined;
+}
 export function isCustomLaunchRouterV1(value: unknown): boolean {
-  return sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_V1) || sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1);
+  return customLaunchChainForRouterV1(value) !== undefined;
 }
 export function customLaunchMaximumLifetimeSecondsV1(router: unknown): bigint {
-  return sameAddress(router, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1) ? 86_400n : 3_600n;
+  return (sameAddress(router, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1) || sameAddress(router, BASE_CUSTOM_ROOTS_V1.router)) ? 86_400n : 3_600n;
 }
 
 const UINT256_MAXIMUM = (1n << 256n) - 1n;
@@ -54,7 +60,7 @@ const LAUNCH_AND_STAMP_PARAMETERS_V1 = parseAbiParameters(
 );
 
 export type CustomLaunchWalletActionV1 = Readonly<{
-  chainId: "1";
+  chainId: "1" | "8453";
   from: Address;
   to: Address;
   data: Hex;
@@ -133,7 +139,7 @@ export function prepareCustomLaunchWalletActionForAuthorizationSchema(
   const to = requiredAddress(transaction.to);
   if (
     !sameAddress(from, controller)
-    || !isCustomLaunchRouterV1(to)
+    || customLaunchChainForRouterV1(to) !== "1"
     || !sameAddress(permit.router, to)
     || !sameAddress(permit.launchWallet, controller)
     || !sameAddress(unsignedTransaction.from, controller)
@@ -210,16 +216,17 @@ export function assertCustomLaunchWalletActionV1(
   const from = requiredAddress(action.from);
   const to = requiredAddress(action.to);
   const valueWei = canonicalUint256(action.valueWei);
+  const chainId = customLaunchChainForRouterV1(to);
   const call = decodeCanonicalCalldata(action.data);
   const decodedPermit: unknown = call.decoded[0];
   if (
-    action.chainId !== "1"
+    !chainId || action.chainId !== chainId
     || !sameAddress(from, controller)
     || !isCustomLaunchRouterV1(to)
     || typeof action.value !== "string"
     || action.value !== toHex(valueWei.parsed)
     || !Array.isArray(decodedPermit)
-    || !numericEquals(decodedPermit[0], 1n)
+    || !numericEquals(decodedPermit[0], BigInt(chainId))
     || !sameAddress(decodedPermit[1], to)
     || !sameAddress(decodedPermit[2], controller)
     || !numericEquals(decodedPermit[3], 1n)
@@ -227,7 +234,7 @@ export function assertCustomLaunchWalletActionV1(
     || call.decoded[3] === "0x"
   ) return invalid();
   return Object.freeze({
-    chainId: "1" as const,
+    chainId,
     from,
     to,
     data: call.calldata,

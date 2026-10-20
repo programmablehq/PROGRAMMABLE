@@ -1,13 +1,13 @@
 import { isAddress } from "viem";
 
-export type LaunchShareIdentity = { address: string; chainId: 1 | 4663 };
+export type LaunchShareIdentity = { address: string; chainId: 1 | 4663 | 8453 };
 export type LaunchShareData = LaunchShareIdentity & {
   name: string; symbol: string; href: string; imageDataUrl: string | null;
 };
 
 export function launchShareIdentity(address: string, chain: string | null): LaunchShareIdentity | null {
-  return isAddress(address) && !/^0x0{40}$/i.test(address) && (chain === "1" || chain === "4663")
-    ? { address: address.toLowerCase(), chainId: chain === "1" ? 1 : 4663 } : null;
+  return isAddress(address) && !/^0x0{40}$/i.test(address) && (chain === "1" || chain === "4663" || chain === "8453")
+    ? { address: address.toLowerCase(), chainId: chain === "8453" ? 8453 : chain === "1" ? 1 : 4663 } : null;
 }
 
 /** Accept only known internal coin routes. Wallet preferences never select the chain. */
@@ -48,7 +48,7 @@ export function launchShareMetadata(identity: LaunchShareIdentity, name: string 
   const image = `https://programmable.market/api/launch-share/image?address=${identity.address.toLowerCase()}&chain=${identity.chainId}&v=2`;
   const description = `${title} is now live on @ProgrammableHQ. ${identity.address.toLowerCase()}`;
   return { title: `${launchShareText(name, 100) || identity.address} · Programmable`, description,
-    alternates: { canonical: `/token/${identity.address}${identity.chainId === 1 ? "?chain=1" : ""}` },
+    alternates: { canonical: `/token/${identity.address}${identity.chainId === 4663 ? "" : `?chain=${identity.chainId}`}` },
     openGraph: { type: "website" as const, title, description, url,
       images: [{ url: image, width: 1200, height: 630, type: "image/png", alt: `${title} · ${identity.address}` }] },
     twitter: { card: "summary_large_image" as const, title, description, images: [image] } };

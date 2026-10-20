@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
+import {gunzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import test from 'node:test';
+import test,{after} from 'node:test';
 import Ajv2020 from 'ajv/dist/2020.js';
 import * as client from '../programmable-launch-v417-release-binding.mjs';
 import {releaseBindingTools} from '../programmable-launch-release-assets.mjs';
-const repositoryRoot=fileURLToPath(new URL('../../',import.meta.url));
+const repositoryRoot=mkdtempSync(join(tmpdir(),'launch-v417-history-'));
+after(()=>rmSync(repositoryRoot,{recursive:true,force:true}));
+const snapshot=readFileSync(new URL('./fixtures/programmable-launch-v417-source.json.gz',import.meta.url));
+assert.equal(createHash('sha256').update(snapshot).digest('hex'),'ddcecd7d5bcd896ae7de7c4fcb864200132f3c18660dee2866e7f9312edd7ea4');
+for(const [relative,bytes] of Object.entries(JSON.parse(gunzipSync(snapshot)))){const file=join(repositoryRoot,relative);mkdirSync(dirname(file),{recursive:true});writeFileSync(file,bytes);}
 test('4.1.7 binds launch protection while retaining historical policy identities',()=>{
  const result=client.auditV417ClientSource({repositoryRoot});
  assert.equal(result.productionEvidenceVerified,false);

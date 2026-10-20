@@ -1,0 +1,3836 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Programmable Base Custom Launch API",
+    "version": "1.0.0",
+    "description": "Base chain 8453. Exact-source Custom Launch only. The request uses the graph V3 schema on a chain-qualified V4 URL. Module Mode and partner credentials are not enabled on this route."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "https://api.programmable.market"
+    }
+  ],
+  "externalDocs": {
+    "url": "https://programmable.market/developers/base-custom-launch-api-v1.md"
+  },
+  "security": [
+    {
+      "CustomLaunchApiKey": []
+    }
+  ],
+  "paths": {
+    "/v4/chains/8453/capabilities": {
+      "get": {
+        "operationId": "getCustomLaunchCapabilitiesV3",
+        "tags": [
+          "V3 general hooks"
+        ],
+        "x-programmable-public-availability": "live",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Current additive V3 capability document.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomLaunchCapabilitiesV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Read the active profile before preparing a fresh request"
+      }
+    },
+    "/v4/chains/8453/finalized-custom-launches": {
+      "get": {
+        "operationId": "listFinalizedCustomLaunchMetadataV3",
+        "tags": [
+          "V3 general hooks"
+        ],
+        "x-programmable-public-availability": "live",
+        "security": [],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25,
+              "default": 10
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque continuation cursor returned by nextCursor.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Finalized-only public metadata page.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Short public cache with bounded stale revalidation.",
+                "schema": {
+                  "const": "public, max-age=15, stale-while-revalidate=300"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalizedCustomLaunchMetadataListV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown, duplicate or invalid pagination parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+                },
+                "example": {
+                  "schemaVersion": "programmable.api-error.v1",
+                  "error": {
+                    "code": "INVALID_PAGINATION",
+                    "message": "Pagination parameters are invalid",
+                    "requestId": "018f1f8e-7d93-7c2f-8d7f-e114942e7f25"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/V3Unavailable"
+          }
+        }
+      }
+    },
+    "/v4/chains/8453/custom-launches/preflight": {
+      "post": {
+        "operationId": "preflightDirectNativeCustomLaunchV3",
+        "tags": [
+          "V3 general hooks"
+        ],
+        "x-programmable-public-availability": "live",
+        "x-programmable-side-effects": {
+          "quotaConsumed": false,
+          "quotaConsumedMeaning": "no-launch-creation-quota-or-durable-reservation",
+          "authenticatedRequestRateBudgetConsumed": true,
+          "nonceAllocated": false,
+          "persisted": false,
+          "walletSignatureRequiredLater": true,
+          "walletBroadcastByService": false
+        },
+        "security": [
+          {
+            "CustomLaunchApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The exact locally validated programmable.custom-launch-create-request.v3 bytes. There is no wrapper and preflight never reserves the request nonce.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomLaunchCreateRequestV3"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Side-effect-free V3 preflight classification for the exact request hash.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomLaunchPreflightV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/V3Unavailable"
+          }
+        },
+        "summary": "Check an exact profile 3.6 request without reserving a launch"
+      }
+    },
+    "/v4/chains/8453/custom-launches": {
+      "post": {
+        "operationId": "createDirectNativeCustomLaunchV3",
+        "tags": [
+          "V3 general hooks"
+        ],
+        "x-programmable-public-availability": "live",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Exact-request idempotency binding. It must not contain an API key or wallet signature.",
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomLaunchCreateRequestV3"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An exact Idempotency-Key replay returns the existing V3 resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomLaunchResourceV3"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "A new request is durably accepted for exact validation and conformance processing.",
+            "headers": {
+              "Location": {
+                "description": "Version-matched single-resource polling path.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^/v4/chains/8453/custom-launches/[A-Za-z0-9_-]{16,128}$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomLaunchResourceV3"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/LaunchQuotaExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "description": "A transient dependency is unavailable. Honor Retry-After and retry only the byte-identical request; never fall back to another create version.",
+            "headers": {
+              "Retry-After": {
+                "description": "Delay before an exact retry.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*$"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+                },
+                "example": {
+                  "schemaVersion": "programmable.api-error.v1",
+                  "error": {
+                    "code": "CUSTOM_LAUNCH_V3_UNAVAILABLE",
+                    "message": "A required production dependency is temporarily unavailable",
+                    "requestId": "018f1f8e-7d93-7c2f-8d7f-e114942e7f25"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Submit an exact profile 3.6 launch request"
+      },
+      "get": {
+        "operationId": "listDirectNativeCustomLaunchesV3",
+        "tags": [
+          "V3 general hooks"
+        ],
+        "x-programmable-public-availability": "live",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25,
+              "default": 10
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credential-principal-scoped V3 resource page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomLaunchListPageV3"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/V3Unavailable"
+          }
+        }
+      }
+    },
+    "/v4/chains/8453/custom-launches/{launchId}": {
+      "get": {
+        "operationId": "getDirectNativeCustomLaunchV3",
+        "tags": [
+          "V3 general hooks"
+        ],
+        "x-programmable-public-availability": "live",
+        "parameters": [
+          {
+            "name": "launchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current durable V3 resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomLaunchResourceV3"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Launch not found for this wallet principal, partner root aggregate or permitted stable subkey lineage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/V3Unavailable"
+          }
+        }
+      }
+    },
+    "/v4/chains/8453/readiness": {
+      "get": {
+        "operationId": "baseCustomReadiness",
+        "security": [],
+        "summary": "Current Base release readiness",
+        "responses": {
+          "200": {
+            "description": "The selected release is ready. Public creation additionally requires mode active and publicLaunchAuthorized true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "chainId",
+                    "releaseId",
+                    "mode",
+                    "ready",
+                    "publicLaunchAuthorized",
+                    "reasonCodes"
+                  ],
+                  "properties": {
+                    "chainId": {
+                      "const": "8453"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "mode": {
+                      "enum": [
+                        "disabled",
+                        "canary",
+                        "active"
+                      ]
+                    },
+                    "publicLaunchAuthorized": {
+                      "type": "boolean"
+                    },
+                    "releaseId": {
+                      "type": "string"
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Release prerequisites are unavailable; retry with backoff."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "headers": {
+      "RequestId": {
+        "description": "HTTP correlation identifier. Preserve it with the HTTP status and UTC time for support; it is not the durable launch resource requestId.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "RetryAfter": {
+        "description": "Whole-second delay before the next safe retry.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        }
+      },
+      "NoStore": {
+        "description": "Partner credential responses are never cacheable.",
+        "schema": {
+          "const": "no-store"
+        }
+      }
+    },
+    "securitySchemes": {
+      "CustomLaunchApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "pm_live_* | pm_partner_root_<22>_<43> | pm_partner_<22>_<43>",
+        "description": "Wallet, partner-root, or bounded partner-subkey credential loaded from the same PROGRAMMABLE_API_KEY or supported operating-system secret store. It is never accepted as an argument or prompt. Partner credentials use the canonical V3 create, preflight, list and status flow and may add server-owned attribution, but no credential grants wallet signing, broadcast, or gate-bypass authority. The Router V1 permit-reissue disposition route is the explicit wallet-key-only exception."
+      },
+      "WalletCustomLaunchApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "pm_live_*",
+        "description": "Wallet-bound API key loaded from PROGRAMMABLE_API_KEY or a supported operating-system secret store. The Router V1 permit-reissue disposition route does not authenticate partner roots or subkeys."
+      },
+      "CustomLaunchWebsiteToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "server-held website service token",
+        "description": "Server-to-server credential held only by the Programmable website BFF. A browser authenticates its own wallet session to the BFF and never receives this token."
+      },
+      "PartnerRootApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "pm_partner_root_<22-char-key-id>_<43-char-secret>",
+        "description": "Partner root credential read from PROGRAMMABLE_API_KEY or an encrypted secret store. The authenticated root must hold partner-subkeys:manage. Wallet keys and child partner subkeys cannot manage subkeys. This credential never grants wallet signing or broadcast authority."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed JSON, query values, Idempotency-Key, hash binding or closed V3 request shape.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The required API key or website service credential is missing, malformed, expired, revoked or unknown.",
+        "headers": {
+          "WWW-Authenticate": {
+            "description": "Bearer challenge.",
+            "schema": {
+              "const": "Bearer"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The required scope, wallet binding or verified website principal is missing.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The idempotency key, nonce, funding intent or durable launch state conflicts with the submitted bytes. Do not mutate a retry merely to bypass the conflict.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "RequestTooLarge": {
+        "description": "The streaming request body exceeded 8,388,608 bytes.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "Content-Type must be application/json, optionally with charset=utf-8.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "Unprocessable": {
+        "description": "The request parsed but failed source, graph, hook-permission, admission, funding, profile or exact-simulation validation.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "LaunchQuotaExceeded": {
+        "description": "The launch admission quota or wallet-admin rate limit was reached. Honor Retry-After before retrying identical bytes.",
+        "headers": {
+          "Retry-After": {
+            "description": "Delay before the next exact retry.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Unexpected server failure. The response includes a correlation requestId and no secret.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "V3Unavailable": {
+        "description": "A required V3 production dependency is temporarily unavailable.",
+        "headers": {
+          "Retry-After": {
+            "description": "Delay before an exact retry.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            },
+            "example": {
+              "schemaVersion": "programmable.api-error.v1",
+              "error": {
+                "code": "CUSTOM_LAUNCH_V3_UNAVAILABLE",
+                "message": "A required production dependency is temporarily unavailable",
+                "requestId": "018f1f8e-7d93-7c2f-8d7f-e114942e7f25"
+              }
+            }
+          }
+        }
+      },
+      "PartnerBadRequest": {
+        "description": "The path/query boundary, JSON body, Idempotency-Key, requested scopes, budgets, expiry, or closed request shape is invalid.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerUnauthorized": {
+        "description": "The partner-root Bearer credential is missing, malformed, expired, revoked, suspended, or unknown.",
+        "headers": {
+          "WWW-Authenticate": {
+            "description": "Bearer challenge.",
+            "schema": {
+              "const": "Bearer"
+            }
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerForbidden": {
+        "description": "The authenticated credential is not a partner root or does not hold partner-subkeys:manage.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerNotFound": {
+        "description": "The path identifier is invalid. DELETE also returns this response when the selected subkey is not owned by this authenticated root.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerConflict": {
+        "description": "The same Idempotency-Key was already committed for a different partner operation target or canonical body.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerRequestTooLarge": {
+        "description": "The streaming partner request body exceeded 32,768 bytes.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerUnsupportedMediaType": {
+        "description": "Content-Type must be exactly application/json.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerRateLimited": {
+        "description": "The authenticated root's partner-subkey-admin hourly budget was reached. Retry the identical operation only after Retry-After.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          },
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            }
+          }
+        }
+      },
+      "PartnerInternalError": {
+        "description": "Unexpected internal failure. The bounded response contains a correlation requestId and never includes a credential, secret, request body, or internal error detail.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/RequestId"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./custom-launch-v2.json#/components/schemas/CustomLaunchApiErrorV2"
+            },
+            "example": {
+              "schemaVersion": "programmable.api-error.v1",
+              "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "The partner administration service is temporarily unavailable.",
+                "requestId": "018f1f8e-7d93-7c2f-8d7f-e114942e7f25"
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApplicantSelectedFeeHundredthsOfBipV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/ApplicantSelectedFeeHundredthsOfBipV1"
+      },
+      "BehaviorScenarioInputsV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "steps"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-behavior-scenario-inputs.v1"
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 128,
+            "items": {
+              "$ref": "#/components/schemas/BehaviorScenarioStepV1"
+            },
+            "x-programmable-order": "caller-declared-and-hash-bound",
+            "x-programmable-uniqueStepIds": true,
+            "x-programmable-aggregateCalldataAndHookDataMaximumBytes": 1048576
+          }
+        },
+        "description": "Hash-bound declarative inputs for the server-owned network-disabled fork runner. prepared-target IDs must resolve against the exact prepared graph. The caller cannot supply scripts, URLs, assertions, expected results, statuses, runner parameters or vector verdicts.",
+        "additionalProperties": false
+      },
+      "BehaviorScenarioStepV1": {
+        "type": "object",
+        "required": [
+          "stepId",
+          "phase",
+          "actor",
+          "target",
+          "valueWei",
+          "calldata",
+          "hookData"
+        ],
+        "properties": {
+          "stepId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+          },
+          "phase": {
+            "enum": [
+              "seed",
+              "swap",
+              "liquidity",
+              "claim",
+              "custom-accounting"
+            ]
+          },
+          "actor": {
+            "enum": [
+              "launch-wallet",
+              "secondary-user",
+              "unauthorized-claimer"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/BehaviorScenarioTargetV1"
+          },
+          "valueWei": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/CanonicalUint256"
+          },
+          "calldata": {
+            "type": "string",
+            "pattern": "^0x(?:[0-9a-f]{2})*$",
+            "maxLength": 131074,
+            "x-programmable-maximumBytes": 65536
+          },
+          "hookData": {
+            "type": "string",
+            "pattern": "^0x(?:[0-9a-f]{2})*$",
+            "maxLength": 32770,
+            "x-programmable-maximumBytes": 16384
+          }
+        },
+        "additionalProperties": false
+      },
+      "BehaviorScenarioTargetV1": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "targetId"
+            ],
+            "properties": {
+              "kind": {
+                "const": "prepared-target"
+              },
+              "targetId": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/CanonicalIdentifier"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "binding"
+            ],
+            "properties": {
+              "kind": {
+                "const": "chain-binding"
+              },
+              "binding": {
+                "const": "poolManager"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "harness"
+            ],
+            "properties": {
+              "kind": {
+                "const": "runner-harness"
+              },
+              "harness": {
+                "const": "v4-actions-v1"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "CompleteProjectMetadataV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/CompleteProjectMetadataV1"
+      },
+      "CustomGraphBundleV3": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/CustomGraphBundleV3"
+      },
+      "CustomLaunchBehaviorAssuranceAxisV3": {
+        "type": "object",
+        "required": [
+          "status",
+          "basis"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "not_verified",
+              "verified",
+              "conditional",
+              "blocked"
+            ]
+          },
+          "basis": {
+            "enum": [
+              "behavior-evidence-required",
+              "exact-ten-bps-evidence-required",
+              "liquidity-lifecycle-evidence-required",
+              "exact-runtime-evidence",
+              "mutable-authority-evidence-required",
+              "behavior-vector-failed",
+              "exact-thirty-bps-evidence-required",
+              "exact-hundred-bps-evidence-required"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CustomLaunchBehaviorAssuranceV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "authorizationScope",
+          "evidenceAuthority",
+          "behaviorExecution",
+          "mutableAuthorityConditional",
+          "routability",
+          "platformFeeConformance",
+          "liquidityConformance",
+          "safety"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-behavior-assurance.v1"
+          },
+          "authorizationScope": {
+            "const": "exact-launch-provenance-only"
+          },
+          "evidenceAuthority": {
+            "enum": [
+              "platform-runtime-executor",
+              "none"
+            ]
+          },
+          "behaviorExecution": {
+            "enum": [
+              "executed",
+              "not_executed"
+            ]
+          },
+          "mutableAuthorityConditional": {
+            "type": "boolean"
+          },
+          "routability": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorAssuranceAxisV3"
+          },
+          "platformFeeConformance": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorAssuranceAxisV3"
+          },
+          "liquidityConformance": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorAssuranceAxisV3"
+          },
+          "safety": {
+            "type": "object",
+            "required": [
+              "status",
+              "basis"
+            ],
+            "properties": {
+              "status": {
+                "const": "not_verified"
+              },
+              "basis": {
+                "const": "no-universal-safety-claim"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Server-authored projection of what the exact per-launch runtime evidence can support. Fresh profile 3.4.0 cannot authorize unless behavior execution and exact launch-bound platform-fee conformance are verified. Missing, not-configured or unavailable execution remains retryable and blocks wallet handoff; an authenticated executed failure blocks terminally. Legacy resources preserve their stored evidence semantics. No universal safety claim is produced.",
+        "additionalProperties": false
+      },
+      "CustomLaunchBehaviorClaimAxesV3": {
+        "type": "object",
+        "required": [
+          "deployability",
+          "platformFeeConformance",
+          "liquidityConformance",
+          "routability",
+          "featured",
+          "finality"
+        ],
+        "properties": {
+          "deployability": {
+            "type": "object",
+            "required": [
+              "status",
+              "scope",
+              "requiredVectorIds",
+              "outstandingVectorIds"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "behavior-hard-invariants-required",
+                  "behavior-hard-invariants-verified",
+                  "blocked"
+                ]
+              },
+              "scope": {
+                "const": "behavior-only"
+              },
+              "requiredVectorIds": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+                },
+                "uniqueItems": true
+              },
+              "outstandingVectorIds": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+                },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          },
+          "platformFeeConformance": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorVerificationAxisV3"
+          },
+          "liquidityConformance": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorVerificationAxisV3"
+          },
+          "routability": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorVerificationAxisV3"
+          },
+          "featured": {
+            "type": "object",
+            "required": [
+              "status",
+              "derivedFromBehaviorEvidence"
+            ],
+            "properties": {
+              "status": {
+                "const": "external-evidence-required"
+              },
+              "derivedFromBehaviorEvidence": {
+                "const": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "finality": {
+            "type": "object",
+            "required": [
+              "status",
+              "derivedFromBehaviorEvidence"
+            ],
+            "properties": {
+              "status": {
+                "const": "independent-evidence-required"
+              },
+              "derivedFromBehaviorEvidence": {
+                "const": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "CustomLaunchBehaviorEvidenceSummaryV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "subjectSha256",
+          "requirements",
+          "status",
+          "execution",
+          "vectors",
+          "outstandingVectorIds",
+          "claimAxes"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-behavior-summary.v1"
+          },
+          "subjectSha256": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorRequirementsV3"
+          },
+          "status": {
+            "enum": [
+              "required",
+              "not_executed",
+              "verified",
+              "failed"
+            ]
+          },
+          "execution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomLaunchBehaviorExecutionV3"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomLaunchBehaviorVectorSummaryV3"
+            },
+            "minItems": 16,
+            "maxItems": 20
+          },
+          "outstandingVectorIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+            },
+            "uniqueItems": true
+          },
+          "claimAxes": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorClaimAxesV3"
+          }
+        },
+        "description": "Platform-owned runtime-evidence summary. not_executed means the vectors remain outstanding; it never means verified and cannot be supplied or promoted by the API caller. Missing execution leaves behavior-derived claims unverified; an authenticated executed failure blocks wallet handoff.",
+        "additionalProperties": false
+      },
+      "CustomLaunchBehaviorExecutionV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "subjectSha256",
+          "requirementsSha256",
+          "evidenceAuthority",
+          "runnerId",
+          "runnerVersion",
+          "runnerBuildSha256",
+          "executedAt",
+          "vectors"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-behavior-execution.v1"
+          },
+          "subjectSha256": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "requirementsSha256": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "evidenceAuthority": {
+            "const": "platform-runtime-executor"
+          },
+          "runnerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runnerVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runnerBuildSha256": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "executedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "vectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomLaunchBehaviorExecutionVectorV3"
+            },
+            "minItems": 16,
+            "maxItems": 20
+          }
+        },
+        "description": "Accepted only from a platform runtime executor and bound to the exact subject and requirement hashes. Caller or agent declarations never satisfy this schema.",
+        "additionalProperties": false
+      },
+      "CustomLaunchBehaviorExecutionVectorV3": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "vectorId",
+              "status",
+              "evidenceSha256",
+              "reasonCode"
+            ],
+            "properties": {
+              "vectorId": {
+                "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+              },
+              "status": {
+                "const": "verified"
+              },
+              "evidenceSha256": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              "reasonCode": {
+                "type": "null"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "vectorId",
+              "status",
+              "evidenceSha256",
+              "reasonCode"
+            ],
+            "properties": {
+              "vectorId": {
+                "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+              },
+              "status": {
+                "const": "failed"
+              },
+              "evidenceSha256": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              "reasonCode": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "vectorId",
+              "status",
+              "evidenceSha256",
+              "reasonCode"
+            ],
+            "properties": {
+              "vectorId": {
+                "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+              },
+              "status": {
+                "const": "not_executed"
+              },
+              "evidenceSha256": {
+                "type": "null"
+              },
+              "reasonCode": {
+                "enum": [
+                  "GENERIC_ROUTER_SIMULATION_ONLY",
+                  "BEHAVIOR_RUNNER_NOT_CONFIGURED",
+                  "BEHAVIOR_RUNNER_UNAVAILABLE",
+                  "VECTOR_NOT_SUPPORTED_BY_RUNNER",
+                  "VECTOR_PREREQUISITE_UNAVAILABLE"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "CustomLaunchBehaviorRequirementsV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "vectorSetVersion",
+          "riskClass",
+          "hookPermissionMask",
+          "liquidityModel",
+          "vectors",
+          "requirementsSha256"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-behavior-requirements.v1"
+          },
+          "vectorSetVersion": {
+            "enum": [
+              "1.1.0",
+              "1.2.0",
+              "1.3.0"
+            ]
+          },
+          "riskClass": {
+            "enum": [
+              "standard-swaps",
+              "advanced-custom-accounting"
+            ]
+          },
+          "hookPermissionMask": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16383
+          },
+          "liquidityModel": {
+            "enum": [
+              "external-concentrated-liquidity",
+              "launch-seeded-concentrated-liquidity",
+              "hook-inventory-custom-accounting"
+            ]
+          },
+          "vectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequiredCustomLaunchBehaviorVectorV3"
+            },
+            "minItems": 16,
+            "maxItems": 20,
+            "uniqueItems": true
+          },
+          "requirementsSha256": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "vectorSetVersion": {
+                  "const": "1.1.0"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "vectors": {
+                  "contains": {
+                    "properties": {
+                      "vectorId": {
+                        "const": "fee.programmable-ten-bps"
+                      }
+                    },
+                    "required": [
+                      "vectorId"
+                    ]
+                  },
+                  "items": {
+                    "properties": {
+                      "vectorId": {
+                        "not": {
+                          "enum": [
+                            "fee.programmable-thirty-bps",
+                            "fee.programmable-hundred-bps"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "vectorSetVersion": {
+                  "const": "1.2.0"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "vectors": {
+                  "contains": {
+                    "properties": {
+                      "vectorId": {
+                        "const": "fee.programmable-thirty-bps"
+                      }
+                    },
+                    "required": [
+                      "vectorId"
+                    ]
+                  },
+                  "items": {
+                    "properties": {
+                      "vectorId": {
+                        "not": {
+                          "enum": [
+                            "fee.programmable-ten-bps",
+                            "fee.programmable-hundred-bps"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "vectorSetVersion": {
+                  "const": "1.3.0"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "vectors": {
+                  "contains": {
+                    "properties": {
+                      "vectorId": {
+                        "const": "fee.programmable-hundred-bps"
+                      }
+                    },
+                    "required": [
+                      "vectorId"
+                    ]
+                  },
+                  "items": {
+                    "properties": {
+                      "vectorId": {
+                        "not": {
+                          "enum": [
+                            "fee.programmable-ten-bps",
+                            "fee.programmable-thirty-bps"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CustomLaunchBehaviorVectorIdV3": {
+        "enum": [
+          "swap.zero-for-one.exact-input.multi-size",
+          "swap.zero-for-one.exact-output.multi-size",
+          "swap.one-for-zero.exact-input.multi-size",
+          "swap.one-for-zero.exact-output.multi-size",
+          "swap.second-user",
+          "swap.time-advance",
+          "liquidity.lifecycle.add-remove-withdraw",
+          "callback.permission-mask-and-declaration",
+          "callback.enabled-entrypoints-and-selectors",
+          "callback.canonical-pool-manager-only",
+          "callback.unauthorized-rejected",
+          "callback.wrong-pool-rejected-or-isolated",
+          "fee.programmable-ten-bps",
+          "fee.no-bypass",
+          "fee.no-overcharge",
+          "fee.claim-isolation",
+          "custom-accounting.delta-solvency",
+          "custom-accounting.inventory-backing",
+          "custom-accounting.refund",
+          "custom-accounting.withdrawal",
+          "fee.programmable-thirty-bps",
+          "fee.programmable-hundred-bps"
+        ]
+      },
+      "CustomLaunchBehaviorVectorSummaryV3": {
+        "type": "object",
+        "required": [
+          "vectorId",
+          "category",
+          "claimAxes",
+          "status",
+          "evidenceSha256",
+          "reasonCode"
+        ],
+        "properties": {
+          "vectorId": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+          },
+          "category": {
+            "enum": [
+              "swap",
+              "liquidity",
+              "callback-authentication",
+              "platform-fee",
+              "custom-accounting"
+            ]
+          },
+          "claimAxes": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "deployability-hard-invariant",
+                "platform-fee-conformance",
+                "liquidity-conformance",
+                "routability"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "status": {
+            "enum": [
+              "required",
+              "not_executed",
+              "verified",
+              "failed"
+            ]
+          },
+          "evidenceSha256": {
+            "oneOf": [
+              {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasonCode": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CustomLaunchBehaviorVerificationAxisV3": {
+        "type": "object",
+        "required": [
+          "status",
+          "requiredVectorIds",
+          "outstandingVectorIds"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "not_verified",
+              "verified",
+              "blocked"
+            ]
+          },
+          "requiredVectorIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+            },
+            "uniqueItems": true
+          },
+          "outstandingVectorIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CustomLaunchCapabilitiesV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "apiVersion",
+          "chain",
+          "serverTime",
+          "releaseId",
+          "mode",
+          "publicLaunchAuthorized",
+          "moduleMode",
+          "profile",
+          "routes",
+          "authentication"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-capabilities.v1"
+          },
+          "apiVersion": {
+            "const": "v4"
+          },
+          "chain": {
+            "const": {
+              "id": "8453",
+              "name": "Base"
+            }
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "releaseId": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "mode": {
+            "enum": [
+              "disabled",
+              "canary",
+              "active"
+            ]
+          },
+          "publicLaunchAuthorized": {
+            "type": "boolean"
+          },
+          "moduleMode": {
+            "const": false
+          },
+          "profile": {
+            "type": "object",
+            "required": [
+              "schemaVersion",
+              "profileId",
+              "profileRevision",
+              "profileVersion",
+              "productionLaunchAuthorized",
+              "chainId",
+              "router",
+              "routerRuntimeCodeHash",
+              "permitAuthority",
+              "permitAuthorityRuntimeCodeHash",
+              "graphFactory",
+              "graphFactoryRuntimeCodeHash",
+              "poolManager",
+              "poolManagerRuntimeCodeHash",
+              "fundingToken",
+              "fundingTokenRuntimeCodeHash",
+              "graphPolicy",
+              "currencyPolicy",
+              "hookPermissionPolicy",
+              "fundingPolicy",
+              "platformFeePolicy",
+              "programmableTradeFeePolicy",
+              "platformAdmissionPolicy",
+              "projectMetadataPolicy"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "const": "programmable.direct-native-hook-graph-profile.v3"
+              },
+              "profileId": {
+                "const": "programmable.direct-native-hook-graph.v1"
+              },
+              "profileRevision": {
+                "const": 3
+              },
+              "profileVersion": {
+                "const": "3.6.0"
+              },
+              "productionLaunchAuthorized": {
+                "type": "boolean"
+              },
+              "chainId": {
+                "const": "8453"
+              },
+              "router": {
+                "const": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4"
+              },
+              "routerRuntimeCodeHash": {
+                "const": "0xce2527e8d94c33fe1b3383297498ad8ed8a1c206ae758b6c18a2ff4e098f4de1"
+              },
+              "permitAuthority": {
+                "const": "0x872478Df54f15f9d0faa3936b174cDaFe70d1B97"
+              },
+              "permitAuthorityRuntimeCodeHash": {
+                "const": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c"
+              },
+              "graphFactory": {
+                "const": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e"
+              },
+              "graphFactoryRuntimeCodeHash": {
+                "const": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8"
+              },
+              "poolManager": {
+                "const": "0x498581fF718922c3f8e6A244956aF099B2652b2b"
+              },
+              "poolManagerRuntimeCodeHash": {
+                "const": "0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6"
+              },
+              "fundingToken": {
+                "const": "0x4200000000000000000000000000000000000006"
+              },
+              "fundingTokenRuntimeCodeHash": {
+                "const": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+              },
+              "graphPolicy": {
+                "const": {
+                  "minimumTargets": 3,
+                  "maximumTargets": 16,
+                  "directTargetsOnly": true
+                }
+              },
+              "currencyPolicy": {
+                "const": {
+                  "native": true,
+                  "erc20": true
+                }
+              },
+              "hookPermissionPolicy": {
+                "const": {
+                  "minimumMask": 0,
+                  "maximumMask": 16383,
+                  "requireHookMinerAddressMaskMatch": true
+                }
+              },
+              "fundingPolicy": {
+                "const": {
+                  "mode": "wallet-transaction-value",
+                  "launchFundingRequired": true,
+                  "signatureRequired": false,
+                  "valueSource": "exact-router-transaction-msg-value"
+                }
+              },
+              "platformFeePolicy": {
+                "const": {
+                  "schemaVersion": "programmable.platform-fee-policy.v1",
+                  "accountingMode": "inclusive-selected-total",
+                  "applicability": "successful-pool-swaps",
+                  "rateDenominator": "1000000",
+                  "programmableFeeHundredthsOfBip": "3000",
+                  "assessmentBase": "executed-gross-declared-quote",
+                  "feeCurrency": "declared-quote-currency",
+                  "roundingMode": "floor",
+                  "claimAuthority": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                }
+              },
+              "programmableTradeFeePolicy": {
+                "const": {
+                  "schemaVersion": "programmable.base-programmable-trade-fee-policy.v1",
+                  "policyVersion": "programmable.base-native-fee.v1",
+                  "scope": "base-custom-launch-trades",
+                  "ratePpm": "3000",
+                  "rateDenominator": "1000000",
+                  "rateBps": 30,
+                  "modeSelection": "server-exact-runtime-and-trade-proof",
+                  "defaultCollection": {
+                    "mode": "pool_enforced",
+                    "routedRateBps": 0,
+                    "basis": "gross-native-by-side",
+                    "buyBasis": "funded-native-input",
+                    "sellBasis": "gross-native-output-credit",
+                    "currency": "native-ETH",
+                    "rounding": "ceil-per-trade",
+                    "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                    "collection": "atomic-pool-fee-accrual"
+                  },
+                  "native30Waiver": null,
+                  "launchAdmissionEstablishesFeeCollection": false,
+                  "externalTradeFeeGuaranteed": false,
+                  "historicalSignedFeeObligations": "preserved"
+                }
+              },
+              "platformAdmissionPolicy": {
+                "const": {
+                  "schemaVersion": "programmable.direct-native-platform-admission-policy.v1",
+                  "mode": "deterministic-exact-source-graph-static-baseline-v1",
+                  "receiptSchemaVersion": "programmable.platform-admission-receipt.v1",
+                  "engineId": "programmable.direct-native-static-admission",
+                  "engineVersion": "1.0.0",
+                  "exactSourceCompilerGraphBindingRequired": true,
+                  "staticBaselineGateVersion": "1.0.0",
+                  "blockingFindingRules": [
+                    {
+                      "code": "RUNTIME_CALLCODE",
+                      "targetRoles": [
+                        "any"
+                      ]
+                    },
+                    {
+                      "code": "RUNTIME_SELFDESTRUCT",
+                      "targetRoles": [
+                        "any"
+                      ]
+                    },
+                    {
+                      "code": "SOURCE_SELFDESTRUCT_SURFACE",
+                      "targetRoles": [
+                        "any"
+                      ]
+                    },
+                    {
+                      "code": "V4_CALLBACK_AUTHENTICATION_MISSING",
+                      "targetRoles": [
+                        "hook"
+                      ]
+                    },
+                    {
+                      "code": "V4_CALLBACK_AUTHENTICATION_INVALID",
+                      "targetRoles": [
+                        "hook"
+                      ]
+                    },
+                    {
+                      "code": "V4_CALLBACK_POOL_MANAGER_MISMATCH",
+                      "targetRoles": [
+                        "hook"
+                      ]
+                    },
+                    {
+                      "code": "V4_ENABLED_CALLBACK_IMPLEMENTATION_MISSING",
+                      "targetRoles": [
+                        "hook"
+                      ]
+                    }
+                  ],
+                  "warningDisposition": "bound-and-visible",
+                  "noBlockingFindingDisposition": "router-simulation-eligible",
+                  "blockingFindingDisposition": "action-required",
+                  "routerSimulationRequiredBeforeAuthorization": true,
+                  "receiptAuthority": "platform-only",
+                  "assurance": "launch-admission-only",
+                  "safetyClaim": false,
+                  "feeBehaviorClaim": false
+                }
+              },
+              "projectMetadataPolicy": {
+                "const": {
+                  "schemaVersion": "programmable.project-metadata-policy.v1",
+                  "descriptionMinimumUtf8Bytes": 20,
+                  "descriptionMaximumUtf8Bytes": 4096,
+                  "descriptionMinimumUnicodeLettersOrNumbers": 8,
+                  "imageRequired": true,
+                  "imageReceiptSourceManifestBindingRequired": true,
+                  "imageMediaTypes": [
+                    "image/png",
+                    "image/jpeg",
+                    "image/webp",
+                    "image/gif"
+                  ],
+                  "linksMaximumCount": 32,
+                  "requiredLinkKinds": [
+                    "website",
+                    "x"
+                  ],
+                  "exactlyOneRequiredLinkPerKind": true,
+                  "websiteUriPolicy": "canonical-public-credential-free-https",
+                  "xUriPattern": "^https://x\\.com/[A-Za-z0-9_]{1,64}$"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "routes": {
+            "type": "object"
+          },
+          "authentication": {
+            "type": "object"
+          }
+        },
+        "description": "Require mode active and publicLaunchAuthorized true for public launch availability. The canary mode admits only the release operator."
+      },
+      "CustomLaunchCreateRequestV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "launchWallet",
+          "chainId",
+          "nonce",
+          "permitWindow",
+          "sourceDescriptor",
+          "sourceBundleManifest",
+          "graphBundle",
+          "launchProfile",
+          "launchProfileSelection",
+          "launchProfileHash",
+          "launchIntentHash",
+          "agentAttestation",
+          "verificationBundle"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-create-request.v3"
+          },
+          "launchWallet": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress",
+            "description": "Exact controller wallet. It must equal a wallet API key's wallet binding. A partner credential may select it in the immutable request but gains no signing authority; this address must review, sign and broadcast the wallet handoff."
+          },
+          "chainId": {
+            "const": "8453"
+          },
+          "nonce": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/NonzeroLowerHex32"
+          },
+          "permitWindow": {
+            "$ref": "#/components/schemas/DirectNativePermitWindowV1"
+          },
+          "sourceDescriptor": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/DeterministicSourceBundleV2"
+          },
+          "sourceBundleManifest": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/SourceBundleManifestV2"
+          },
+          "graphBundle": {
+            "$ref": "#/components/schemas/CustomGraphBundleV3"
+          },
+          "projectMetadata": {
+            "$ref": "#/components/schemas/ProjectMetadataV1",
+            "description": "Complete project metadata is required for every fresh profile 3.6 request, including partner-created requests."
+          },
+          "projectMetadataHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest",
+            "description": "sha256 of the UTF-8 domain programmable.project-metadata.v1, one NUL byte, and canonical projectMetadata JSON."
+          },
+          "behaviorScenarioInputs": {
+            "$ref": "#/components/schemas/BehaviorScenarioInputsV1",
+            "description": "Not accepted by the profile 3.6 request contract."
+          },
+          "behaviorScenarioInputsHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest",
+            "description": "sha256 of the UTF-8 domain programmable.custom-launch-behavior-scenario-inputs.v1, one NUL byte, and canonical behaviorScenarioInputs JSON. It is included in launchIntentHash."
+          },
+          "launchProfile": {
+            "const": {
+              "schemaVersion": "programmable.direct-native-hook-graph-profile.v3",
+              "profileId": "programmable.direct-native-hook-graph.v1",
+              "profileRevision": 3,
+              "profileVersion": "3.6.0",
+              "productionLaunchAuthorized": true,
+              "chainId": "8453",
+              "router": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
+              "routerRuntimeCodeHash": "0xce2527e8d94c33fe1b3383297498ad8ed8a1c206ae758b6c18a2ff4e098f4de1",
+              "permitAuthority": "0x872478Df54f15f9d0faa3936b174cDaFe70d1B97",
+              "permitAuthorityRuntimeCodeHash": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c",
+              "graphFactory": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e",
+              "graphFactoryRuntimeCodeHash": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8",
+              "poolManager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+              "poolManagerRuntimeCodeHash": "0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6",
+              "fundingToken": "0x4200000000000000000000000000000000000006",
+              "fundingTokenRuntimeCodeHash": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+              "graphPolicy": {
+                "minimumTargets": 3,
+                "maximumTargets": 16,
+                "directTargetsOnly": true
+              },
+              "currencyPolicy": {
+                "native": true,
+                "erc20": true
+              },
+              "hookPermissionPolicy": {
+                "minimumMask": 0,
+                "maximumMask": 16383,
+                "requireHookMinerAddressMaskMatch": true
+              },
+              "fundingPolicy": {
+                "mode": "wallet-transaction-value",
+                "launchFundingRequired": true,
+                "signatureRequired": false,
+                "valueSource": "exact-router-transaction-msg-value"
+              },
+              "platformFeePolicy": {
+                "schemaVersion": "programmable.platform-fee-policy.v1",
+                "accountingMode": "inclusive-selected-total",
+                "applicability": "successful-pool-swaps",
+                "rateDenominator": "1000000",
+                "programmableFeeHundredthsOfBip": "3000",
+                "assessmentBase": "executed-gross-declared-quote",
+                "feeCurrency": "declared-quote-currency",
+                "roundingMode": "floor",
+                "claimAuthority": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+              },
+              "programmableTradeFeePolicy": {
+                "schemaVersion": "programmable.base-programmable-trade-fee-policy.v1",
+                "policyVersion": "programmable.base-native-fee.v1",
+                "scope": "base-custom-launch-trades",
+                "ratePpm": "3000",
+                "rateDenominator": "1000000",
+                "rateBps": 30,
+                "modeSelection": "server-exact-runtime-and-trade-proof",
+                "defaultCollection": {
+                  "mode": "pool_enforced",
+                  "routedRateBps": 0,
+                  "basis": "gross-native-by-side",
+                  "buyBasis": "funded-native-input",
+                  "sellBasis": "gross-native-output-credit",
+                  "currency": "native-ETH",
+                  "rounding": "ceil-per-trade",
+                  "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                  "collection": "atomic-pool-fee-accrual"
+                },
+                "native30Waiver": null,
+                "launchAdmissionEstablishesFeeCollection": false,
+                "externalTradeFeeGuaranteed": false,
+                "historicalSignedFeeObligations": "preserved"
+              },
+              "platformAdmissionPolicy": {
+                "schemaVersion": "programmable.direct-native-platform-admission-policy.v1",
+                "mode": "deterministic-exact-source-graph-static-baseline-v1",
+                "receiptSchemaVersion": "programmable.platform-admission-receipt.v1",
+                "engineId": "programmable.direct-native-static-admission",
+                "engineVersion": "1.0.0",
+                "exactSourceCompilerGraphBindingRequired": true,
+                "staticBaselineGateVersion": "1.0.0",
+                "blockingFindingRules": [
+                  {
+                    "code": "RUNTIME_CALLCODE",
+                    "targetRoles": [
+                      "any"
+                    ]
+                  },
+                  {
+                    "code": "RUNTIME_SELFDESTRUCT",
+                    "targetRoles": [
+                      "any"
+                    ]
+                  },
+                  {
+                    "code": "SOURCE_SELFDESTRUCT_SURFACE",
+                    "targetRoles": [
+                      "any"
+                    ]
+                  },
+                  {
+                    "code": "V4_CALLBACK_AUTHENTICATION_MISSING",
+                    "targetRoles": [
+                      "hook"
+                    ]
+                  },
+                  {
+                    "code": "V4_CALLBACK_AUTHENTICATION_INVALID",
+                    "targetRoles": [
+                      "hook"
+                    ]
+                  },
+                  {
+                    "code": "V4_CALLBACK_POOL_MANAGER_MISMATCH",
+                    "targetRoles": [
+                      "hook"
+                    ]
+                  },
+                  {
+                    "code": "V4_ENABLED_CALLBACK_IMPLEMENTATION_MISSING",
+                    "targetRoles": [
+                      "hook"
+                    ]
+                  }
+                ],
+                "warningDisposition": "bound-and-visible",
+                "noBlockingFindingDisposition": "router-simulation-eligible",
+                "blockingFindingDisposition": "action-required",
+                "routerSimulationRequiredBeforeAuthorization": true,
+                "receiptAuthority": "platform-only",
+                "assurance": "launch-admission-only",
+                "safetyClaim": false,
+                "feeBehaviorClaim": false
+              },
+              "projectMetadataPolicy": {
+                "schemaVersion": "programmable.project-metadata-policy.v1",
+                "descriptionMinimumUtf8Bytes": 20,
+                "descriptionMaximumUtf8Bytes": 4096,
+                "descriptionMinimumUnicodeLettersOrNumbers": 8,
+                "imageRequired": true,
+                "imageReceiptSourceManifestBindingRequired": true,
+                "imageMediaTypes": [
+                  "image/png",
+                  "image/jpeg",
+                  "image/webp",
+                  "image/gif"
+                ],
+                "linksMaximumCount": 32,
+                "requiredLinkKinds": [
+                  "website",
+                  "x"
+                ],
+                "exactlyOneRequiredLinkPerKind": true,
+                "websiteUriPolicy": "canonical-public-credential-free-https",
+                "xUriPattern": "^https://x\\.com/[A-Za-z0-9_]{1,64}$"
+              }
+            }
+          },
+          "launchProfileSelection": {
+            "$ref": "#/components/schemas/DirectNativeProfileSelectionBindingV1"
+          },
+          "launchProfileHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "launchIntentHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "fundingAuthorization": false,
+          "fundingIntentHash": false,
+          "agentAttestation": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/AgentLaunchAttestationV2"
+          },
+          "verificationBundle": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/ExactSourceVerificationBundleV2"
+          }
+        },
+        "allOf": [
+          {
+            "properties": {
+              "launchProfile": {
+                "type": "object",
+                "properties": {
+                  "schemaVersion": {
+                    "const": "programmable.direct-native-hook-graph-profile.v3"
+                  },
+                  "profileRevision": {
+                    "const": 3
+                  },
+                  "profileVersion": {
+                    "const": "3.6.0"
+                  }
+                }
+              },
+              "projectMetadata": {
+                "$ref": "#/components/schemas/CompleteProjectMetadataV1"
+              },
+              "launchProfileSelection": {
+                "type": "object",
+                "properties": {
+                  "schemaVersion": {
+                    "const": "programmable.direct-native-hook-graph-profile-selection-binding.v3"
+                  },
+                  "profileRevision": {
+                    "const": 3
+                  }
+                }
+              },
+              "verificationBundle": {
+                "$ref": "#/components/schemas/DirectNativeExactSourceVerificationBundleV3"
+              }
+            },
+            "required": [
+              "launchProfile",
+              "launchProfileSelection",
+              "verificationBundle",
+              "projectMetadata",
+              "projectMetadataHash"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "behaviorScenarioInputs"
+                  ]
+                },
+                {
+                  "required": [
+                    "behaviorScenarioInputsHash"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "launchProfileSelection": {
+                  "properties": {
+                    "fundingMode": {
+                      "const": "eip-3009-receive-with-authorization"
+                    }
+                  },
+                  "required": [
+                    "fundingMode"
+                  ]
+                }
+              },
+              "required": [
+                "launchProfileSelection"
+              ]
+            },
+            "then": {
+              "required": [
+                "fundingAuthorization",
+                "fundingIntentHash"
+              ]
+            },
+            "else": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "fundingAuthorization"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "fundingIntentHash"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Fresh Ethereum profile 3.6 request. Exact source, graph, complete project metadata, profile and intent hashes are required. Use the existing funding-mode-specific authorization rules. Profile 3.6 does not accept the 3.4/3.5 behaviorScenarioInputs fields.",
+        "additionalProperties": false
+      },
+      "CustomLaunchFailureV3": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/CustomLaunchFailureV3"
+      },
+      "CustomLaunchLifecycleQueueV3": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/CustomLaunchLifecycleQueueV3"
+      },
+      "CustomLaunchListPageV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "launches",
+          "nextCursor"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-list.v3"
+          },
+          "launches": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "$ref": "#/components/schemas/CustomLaunchSummaryV3"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 16,
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CustomLaunchOutputV3": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/CustomLaunchOutputV3"
+      },
+      "CustomLaunchPreflightV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/CustomLaunchPreflightV1"
+      },
+      "CustomLaunchResourceV3": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "launchId",
+          "requestId",
+          "onchainLaunchId",
+          "routeId",
+          "ownerWallet",
+          "status",
+          "requestHash",
+          "launchProfileVersion",
+          "projectMetadata",
+          "projectMetadataHash",
+          "launchProfileHash",
+          "launchIntentHash",
+          "fundingIntentHash",
+          "liquidityIntent",
+          "createdAt",
+          "updatedAt",
+          "output",
+          "failure",
+          "lifecycleQueue"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch.v3"
+          },
+          "launchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "onchainLaunchId": {
+            "oneOf": [
+              {
+                "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "routeId": {
+            "const": "custom-launch:create:v3"
+          },
+          "ownerWallet": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress",
+            "description": "The immutable launchWallet/controller selected by the request. For wallet credentials it equals the key binding; for partner credentials it remains the separate wallet that must review, sign and broadcast."
+          },
+          "status": {
+            "type": "string",
+            "description": "Durable lifecycle state. action_required includes bound remediation; it is not a manual approval. authorized exposes the exact wallet transaction only after the mandatory server-side gates and router simulation pass. A preflight or local build cannot advance this state.",
+            "enum": [
+              "received",
+              "validating",
+              "pending_review",
+              "action_required",
+              "prepared",
+              "simulating",
+              "awaiting_funding_authorization",
+              "funding_authorization_verified",
+              "authorized",
+              "submitted",
+              "finalized",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "requestHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "launchProfileVersion": {
+            "enum": [
+              "2.0.0",
+              "3.0.0",
+              "3.1.0",
+              "3.2.0",
+              "3.3.0",
+              "3.4.0",
+              "3.6.0"
+            ],
+            "description": "Immutable stored profile version. Historical resources keep their original metadata and evidence requirements."
+          },
+          "projectMetadata": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectMetadataV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hash-bound current-profile metadata. Null only for byte-compatible legacy requests."
+          },
+          "projectMetadataHash": {
+            "oneOf": [
+              {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "partnerAttribution": {
+            "$ref": "#/components/schemas/LaunchPartnerAttributionV1"
+          },
+          "launchProfileHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "launchIntentHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+          },
+          "fundingIntentHash": {
+            "oneOf": [
+              {
+                "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "liquidityIntent": {
+            "$ref": "#/components/schemas/DirectNativeLiquidityIntentProjectionV3"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "walletHandoffUrl": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HTTPS controller-wallet handoff for the current explicit signing stage. It is absent or null until mandatory server gates and exact Router simulation pass, remains absent outside a wallet action and never grants signing authority to the API key."
+          },
+          "expiresAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Expiry of the current wallet handoff, when one exists. Clients must refetch status instead of signing an expired payload."
+          },
+          "output": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomLaunchOutputV3"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while simulating. CLI, client or model output cannot advance this state. The signed permit and exact wallet transaction are exposed only after objective static server gates and exact Router simulation pass and the resource reaches authorized. Behavior-derived claims remain unverified unless authenticated execution supports them."
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomLaunchFailureV3"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lifecycleQueue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CustomLaunchLifecycleQueueV3"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Durable worker scheduling state. It is operational readback, not launch finality or transaction evidence."
+          },
+          "sourceVerification": {
+            "oneOf": [
+              {
+                "$ref": "./custom-launch-v2.json#/components/schemas/SourceVerificationStatusV1"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "launchProfileVersion": {
+                    "enum": [
+                      "3.3.0",
+                      "3.4.0",
+                      "3.6.0"
+                    ]
+                  },
+                  "projectMetadata": {
+                    "$ref": "#/components/schemas/CompleteProjectMetadataV1"
+                  },
+                  "projectMetadataHash": {
+                    "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+                  }
+                },
+                "required": [
+                  "launchProfileVersion",
+                  "projectMetadata",
+                  "projectMetadataHash"
+                ]
+              },
+              {
+                "properties": {
+                  "launchProfileVersion": {
+                    "const": "3.2.0"
+                  },
+                  "projectMetadata": {
+                    "$ref": "#/components/schemas/ProjectMetadataV1"
+                  },
+                  "projectMetadataHash": {
+                    "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+                  }
+                },
+                "required": [
+                  "launchProfileVersion",
+                  "projectMetadata",
+                  "projectMetadataHash"
+                ]
+              },
+              {
+                "properties": {
+                  "launchProfileVersion": {
+                    "enum": [
+                      "2.0.0",
+                      "3.0.0",
+                      "3.1.0"
+                    ]
+                  },
+                  "projectMetadata": {
+                    "type": "null"
+                  },
+                  "projectMetadataHash": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "launchProfileVersion",
+                  "projectMetadata",
+                  "projectMetadataHash"
+                ]
+              }
+            ]
+          },
+          {
+            "if": {
+              "properties": {
+                "launchProfileVersion": {
+                  "const": "3.4.0"
+                },
+                "status": {
+                  "enum": [
+                    "authorized",
+                    "submitted",
+                    "finalized"
+                  ]
+                }
+              },
+              "required": [
+                "launchProfileVersion",
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "type": "object",
+                  "required": [
+                    "behaviorEvidence",
+                    "behaviorAssurance"
+                  ],
+                  "properties": {
+                    "behaviorEvidence": {
+                      "$ref": "#/components/schemas/FreshWalletHandoffBehaviorEvidenceV3_4"
+                    },
+                    "behaviorAssurance": {
+                      "$ref": "#/components/schemas/FreshWalletHandoffBehaviorAssuranceV3_4"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "simulating"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "output"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "output": {
+                  "type": "object",
+                  "anyOf": [
+                    {
+                      "required": [
+                        "signedPermit"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "walletTransaction"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "output"
+              ]
+            },
+            "then": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "authorized",
+                    "submitted",
+                    "finalized"
+                  ]
+                }
+              },
+              "required": [
+                "status"
+              ]
+            }
+          }
+        ],
+        "additionalProperties": false
+      },
+      "CustomLaunchSummaryV3": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomLaunchResourceV3"
+          },
+          {
+            "type": "object",
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "type": "null"
+              }
+            }
+          }
+        ],
+        "description": "Bounded list projection. Output is always redacted; use the single-resource GET for precise polling and wallet handoff data."
+      },
+      "DirectNativeExactSourceVerificationBundleV3": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativeExactSourceVerificationBundleV3"
+      },
+      "DirectNativeLiquidityIntentProjectionV3": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativeLiquidityIntentProjectionV3"
+      },
+      "DirectNativeLiquidityModelIntentV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativeLiquidityModelIntentV1"
+      },
+      "DirectNativePermitWindowV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativePermitWindowV1"
+      },
+      "DirectNativePlatformFeeBindingV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "targetId",
+          "accountingMode",
+          "applicability",
+          "rateDenominator",
+          "programmableFeeHundredthsOfBip",
+          "assessmentBase",
+          "feeCurrency",
+          "roundingMode",
+          "claimAuthority",
+          "claimBinding",
+          "economics"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.platform-fee-binding.v2"
+          },
+          "targetId": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/CanonicalIdentifier",
+            "description": "Must equal targetRoles.platformFeeBindingTargetId and name an exact graph target."
+          },
+          "accountingMode": {
+            "enum": [
+              "additive-platform-share",
+              "inclusive-selected-total"
+            ]
+          },
+          "applicability": {
+            "const": "successful-pool-swaps"
+          },
+          "rateDenominator": {
+            "const": "1000000"
+          },
+          "programmableFeeHundredthsOfBip": {
+            "enum": [
+              "3000",
+              "10000"
+            ]
+          },
+          "assessmentBase": {
+            "enum": [
+              "executed-gross-declared-quote",
+              "settled-input-before-platform-fee"
+            ]
+          },
+          "feeCurrency": {
+            "enum": [
+              "declared-quote-currency",
+              "input-currency"
+            ]
+          },
+          "roundingMode": {
+            "const": "floor"
+          },
+          "claimAuthority": {
+            "enum": [
+              "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+              "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+            ]
+          },
+          "claimBinding": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "mode",
+                  "claimAuthority",
+                  "payoutRecipient"
+                ],
+                "properties": {
+                  "mode": {
+                    "const": "immutable-payout-recipient"
+                  },
+                  "claimAuthority": {
+                    "enum": [
+                      "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                    ]
+                  },
+                  "payoutRecipient": {
+                    "enum": [
+                      "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "mode",
+                  "claimAuthority",
+                  "destinationConstraint"
+                ],
+                "properties": {
+                  "mode": {
+                    "const": "claim-authority-selected-recipient"
+                  },
+                  "claimAuthority": {
+                    "enum": [
+                      "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                    ]
+                  },
+                  "destinationConstraint": {
+                    "const": "nonzero-address"
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "economics": {
+            "type": "object",
+            "required": [
+              "buy",
+              "sell"
+            ],
+            "properties": {
+              "buy": {
+                "$ref": "#/components/schemas/PlatformFeeEconomicsV2"
+              },
+              "sell": {
+                "$ref": "#/components/schemas/PlatformFeeEconomicsV2"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Declared launch fee obligation at the rate in the selected policy: 10000 ppm for the current policy, 3000 ppm for retained policies. It does not itself prove collection; Programmable-routed collection follows programmableTradeFeePolicy.",
+        "additionalProperties": false
+      },
+      "DirectNativePoolKeyV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativePoolKeyV1"
+      },
+      "DirectNativeProfileSelectionBindingV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "profileId",
+          "profileRevision",
+          "targetRoles",
+          "fundingMode",
+          "routeNamespace",
+          "routeNonce",
+          "hookPermissionMask",
+          "predictedInitializer",
+          "poolKey",
+          "expectedPoolId",
+          "platformFeeBinding"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "enum": [
+              "programmable.direct-native-hook-graph-profile-selection-binding.v2",
+              "programmable.direct-native-hook-graph-profile-selection-binding.v3"
+            ]
+          },
+          "profileId": {
+            "const": "programmable.direct-native-hook-graph.v1"
+          },
+          "profileRevision": {
+            "enum": [
+              2,
+              3
+            ]
+          },
+          "targetRoles": {
+            "$ref": "#/components/schemas/DirectNativeTargetRolesV1"
+          },
+          "fundingMode": {
+            "enum": [
+              "none",
+              "wallet-transaction-value",
+              "eip-3009-receive-with-authorization"
+            ]
+          },
+          "routeNamespace": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+          },
+          "routeNonce": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/NonzeroLowerHex32"
+          },
+          "hookPermissionMask": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16383
+          },
+          "predictedInitializer": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress"
+          },
+          "poolKey": {
+            "$ref": "#/components/schemas/DirectNativePoolKeyV1"
+          },
+          "expectedPoolId": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+          },
+          "fundingSignaturePatch": {
+            "$ref": "#/components/schemas/FundingAuthorizationPatchDescriptor"
+          },
+          "platformFeeBinding": {
+            "$ref": "#/components/schemas/DirectNativePlatformFeeBindingV1"
+          },
+          "liquidityModel": {
+            "$ref": "#/components/schemas/DirectNativeLiquidityModelIntentV1",
+            "description": "Hash-bound liquidity intent. It declares the requested model; execution and routability require separate evidence."
+          }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "schemaVersion": {
+                    "const": "programmable.direct-native-hook-graph-profile-selection-binding.v3"
+                  },
+                  "profileRevision": {
+                    "const": 3
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "schemaVersion": {
+                    "const": "programmable.direct-native-hook-graph-profile-selection-binding.v2"
+                  },
+                  "profileRevision": {
+                    "const": 2
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "if": {
+              "properties": {
+                "fundingMode": {
+                  "const": "eip-3009-receive-with-authorization"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "fundingSignaturePatch"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "fundingSignaturePatch"
+                ]
+              }
+            }
+          }
+        ],
+        "additionalProperties": false
+      },
+      "DirectNativeTargetRolesV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativeTargetRolesV1"
+      },
+      "FinalizedCheckpointV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedCheckpointV1"
+      },
+      "FinalizedCustomLaunchMetadataListV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "generatedAt",
+          "launches",
+          "nextCursor",
+          "quality"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.finalized-custom-launch-metadata-list.v1"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "launches": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "$ref": "#/components/schemas/FinalizedCustomLaunchMetadataV1"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quality": {
+            "$ref": "#/components/schemas/FinalizedCustomLaunchMetadataQualityV1"
+          }
+        },
+        "description": "Finalized-only public backend page. It has no embedded LKG fallback; downstream services must label their own bounded fallback freshness.",
+        "additionalProperties": false
+      },
+      "FinalizedCustomLaunchMetadataQualityV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedCustomLaunchMetadataQualityV1"
+      },
+      "FinalizedCustomLaunchMetadataV1": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "resourceId",
+          "routerLaunchId",
+          "chainId",
+          "router",
+          "token",
+          "hook",
+          "poolManager",
+          "poolId",
+          "launchProfileVersion",
+          "projectMetadata",
+          "projectMetadataHash",
+          "bindings",
+          "tokenMetadataReadback",
+          "finality",
+          "createdAt",
+          "finalizedAt",
+          "creator",
+          "poolKey"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.finalized-custom-launch-metadata.v1"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Public resource correlation only. Consumers key canonical identity by routerLaunchId."
+          },
+          "routerLaunchId": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+          },
+          "chainId": {
+            "const": "8453"
+          },
+          "router": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress"
+          },
+          "token": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress"
+          },
+          "hook": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress"
+          },
+          "poolManager": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress"
+          },
+          "poolId": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+          },
+          "projectMetadata": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectMetadataV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hash-bound launch metadata when the persisted profile defines it. Legacy 2.0.0, 3.0.0 and 3.1.0 entries preserve explicit null metadata semantics."
+          },
+          "projectMetadataHash": {
+            "oneOf": [
+              {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "partnerAttribution": {
+            "$ref": "#/components/schemas/LaunchPartnerAttributionV1"
+          },
+          "tradeAdapterDescriptor": {
+            "$ref": "#/components/schemas/FinalizedTradeAdapterDescriptorV1",
+            "description": "Optional server-authored finalized projection. Omitted for legacy, unavailable, disabled or non-tradeable routes; consumers must not infer trading from submitted metadata."
+          },
+          "bindings": {
+            "type": "object",
+            "required": [
+              "requestHash",
+              "launchIntentHash",
+              "graphBundleHash",
+              "unboundGraphBundleHash",
+              "artifactHash"
+            ],
+            "properties": {
+              "requestHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              "launchIntentHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              "graphBundleHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest",
+                "description": "Metadata-bound graph hash used by the Router launch identity."
+              },
+              "unboundGraphBundleHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              },
+              "artifactHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+              }
+            },
+            "additionalProperties": false
+          },
+          "tokenMetadataReadback": {
+            "$ref": "#/components/schemas/FinalizedCustomLaunchTokenMetadataReadbackV1"
+          },
+          "finality": {
+            "type": "object",
+            "required": [
+              "state",
+              "transactionHash",
+              "blockNumber",
+              "blockHash",
+              "logIndex",
+              "confirmationDepth",
+              "requiredConfirmationDepth",
+              "finalizedCheckpoint"
+            ],
+            "properties": {
+              "state": {
+                "const": "finalized"
+              },
+              "transactionHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+              },
+              "blockNumber": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/CanonicalUint256"
+              },
+              "blockHash": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+              },
+              "logIndex": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "confirmationDepth": {
+                "$ref": "./custom-launch-v2.json#/components/schemas/CanonicalUint256"
+              },
+              "requiredConfirmationDepth": {
+                "const": "64"
+              },
+              "finalizedCheckpoint": {
+                "$ref": "#/components/schemas/FinalizedCheckpointV1"
+              }
+            },
+            "additionalProperties": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finalizedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "launchProfileVersion": {
+            "enum": [
+              "2.0.0",
+              "3.0.0",
+              "3.1.0",
+              "3.2.0",
+              "3.3.0",
+              "3.4.0",
+              "3.6.0"
+            ],
+            "description": "Immutable stored profile version. Historical resources keep their original metadata and evidence requirements."
+          },
+          "routingFeePolicy": {
+            "$ref": "#/components/schemas/RoutingFeePolicyBindingV36"
+          },
+          "creator": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/EthereumAddress"
+          },
+          "poolKey": {
+            "$ref": "#/components/schemas/DirectNativePoolKeyV1"
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "launchProfileVersion": {
+                    "enum": [
+                      "3.3.0",
+                      "3.4.0",
+                      "3.6.0"
+                    ]
+                  },
+                  "projectMetadata": {
+                    "$ref": "#/components/schemas/CompleteProjectMetadataV1"
+                  },
+                  "projectMetadataHash": {
+                    "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+                  }
+                },
+                "required": [
+                  "launchProfileVersion",
+                  "projectMetadata",
+                  "projectMetadataHash"
+                ]
+              },
+              {
+                "properties": {
+                  "launchProfileVersion": {
+                    "const": "3.2.0"
+                  },
+                  "projectMetadata": {
+                    "$ref": "#/components/schemas/ProjectMetadataV1"
+                  },
+                  "projectMetadataHash": {
+                    "$ref": "./custom-launch-v2.json#/components/schemas/Sha256Digest"
+                  }
+                },
+                "required": [
+                  "launchProfileVersion",
+                  "projectMetadata",
+                  "projectMetadataHash"
+                ]
+              },
+              {
+                "properties": {
+                  "launchProfileVersion": {
+                    "enum": [
+                      "2.0.0",
+                      "3.0.0",
+                      "3.1.0"
+                    ]
+                  },
+                  "projectMetadata": {
+                    "type": "null"
+                  },
+                  "projectMetadataHash": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "launchProfileVersion",
+                  "projectMetadata",
+                  "projectMetadataHash"
+                ]
+              }
+            ]
+          },
+          {
+            "if": {
+              "properties": {
+                "launchProfileVersion": {
+                  "const": "3.6.0"
+                }
+              },
+              "required": [
+                "launchProfileVersion"
+              ]
+            },
+            "then": {
+              "required": [
+                "routingFeePolicy"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "routingFeePolicy"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "FinalizedCustomLaunchTokenMetadataReadbackV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedCustomLaunchTokenMetadataReadbackV1"
+      },
+      "FinalizedTradeAdapterDescriptorV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedTradeAdapterDescriptorV1"
+      },
+      "FreshWalletHandoffBehaviorAssuranceV3_4": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorAssuranceV3"
+          },
+          {
+            "type": "object",
+            "required": [
+              "evidenceAuthority",
+              "behaviorExecution",
+              "platformFeeConformance"
+            ],
+            "properties": {
+              "evidenceAuthority": {
+                "const": "platform-runtime-executor"
+              },
+              "behaviorExecution": {
+                "const": "executed"
+              },
+              "platformFeeConformance": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "verified"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Fresh profile 3.4.0 wallet-handoff assurance. Conditional platform-fee status is insufficient; mutable fee-path authority fails before handoff with PLATFORM_FEE_PATH_NOT_IMMUTABLE."
+      },
+      "FreshWalletHandoffBehaviorEvidenceV3_4": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorEvidenceSummaryV3"
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "claimAxes"
+            ],
+            "properties": {
+              "status": {
+                "const": "verified"
+              },
+              "claimAxes": {
+                "type": "object",
+                "required": [
+                  "platformFeeConformance"
+                ],
+                "properties": {
+                  "platformFeeConformance": {
+                    "type": "object",
+                    "required": [
+                      "status",
+                      "outstandingVectorIds"
+                    ],
+                    "properties": {
+                      "status": {
+                        "const": "verified"
+                      },
+                      "outstandingVectorIds": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Fresh profile 3.4.0 wallet-handoff evidence. The server owns execution and verdicts; exact platform-fee conformance must be verified, not conditional or caller-declared."
+      },
+      "FundingAuthorizationPatchDescriptor": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/FundingAuthorizationPatchDescriptor"
+      },
+      "LaunchPartnerAttributionV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/LaunchPartnerAttributionV1"
+      },
+      "PlatformFeeEconomicsV2": {
+        "type": "object",
+        "required": [
+          "applicantSelectedHundredthsOfBip",
+          "projectHundredthsOfBip",
+          "effectiveTotalHundredthsOfBip"
+        ],
+        "properties": {
+          "applicantSelectedHundredthsOfBip": {
+            "$ref": "#/components/schemas/ApplicantSelectedFeeHundredthsOfBipV1"
+          },
+          "projectHundredthsOfBip": {
+            "$ref": "#/components/schemas/SelectedFeeHundredthsOfBipV1"
+          },
+          "effectiveTotalHundredthsOfBip": {
+            "$ref": "#/components/schemas/SelectedFeeHundredthsOfBipV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProgrammableTradeFeePolicyV36": {
+        "oneOf": [
+          {
+            "const": {
+              "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
+              "policyVersion": "programmable.ethereum-routed-native-fee.v1",
+              "scope": "programmable-routed-ethereum-trades",
+              "ratePpm": "3000",
+              "rateDenominator": "1000000",
+              "rateBps": 30,
+              "modeSelection": "server-exact-runtime-and-trade-proof",
+              "defaultCollection": {
+                "mode": "programmable_routed",
+                "routedRateBps": 30,
+                "basis": "gross-native-by-side",
+                "buyBasis": "funded-native-input",
+                "sellBasis": "gross-native-output-credit",
+                "currency": "native-ETH",
+                "rounding": "floor-once-per-swap",
+                "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                "collection": "atomic-native-transfer-in-swap"
+              },
+              "native30Waiver": {
+                "mode": "pool_enforced_native30",
+                "routedRateBps": 0,
+                "basis": "authenticated-gross-native",
+                "currency": "native-ETH",
+                "rounding": "ceil-per-trade",
+                "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                "hook": "EthereumNative30HookV2",
+                "vault": "EthereumNativeFeeVaultV2",
+                "proof": "exact-runtime-and-trade-accrual",
+                "applicantAssertionsAccepted": false
+              },
+              "launchAdmissionEstablishesFeeCollection": false,
+              "externalTradeFeeGuaranteed": false,
+              "historicalSignedFeeObligations": "preserved"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
+              "policyVersion": "programmable.ethereum-routed-native-fee.v2",
+              "scope": "programmable-routed-ethereum-trades",
+              "ratePpm": "3000",
+              "rateDenominator": "1000000",
+              "rateBps": 30,
+              "modeSelection": "server-exact-runtime-and-trade-proof",
+              "defaultCollection": {
+                "mode": "programmable_routed",
+                "routedRateBps": 30,
+                "basis": "gross-native-by-side",
+                "buyBasis": "funded-native-input",
+                "sellBasis": "gross-native-output-credit",
+                "currency": "native-ETH",
+                "rounding": "floor-once-per-swap",
+                "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                "collection": "atomic-native-transfer-in-swap"
+              },
+              "native30Waiver": {
+                "mode": "pool_enforced_native30",
+                "routedRateBps": 0,
+                "basis": "authenticated-gross-native",
+                "currency": "native-ETH",
+                "rounding": "ceil-per-trade",
+                "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                "hook": "EthereumNative30HookV3",
+                "vault": "EthereumNativeFeeVaultV3",
+                "proof": "exact-runtime-and-trade-accrual",
+                "applicantAssertionsAccepted": false
+              },
+              "launchAdmissionEstablishesFeeCollection": false,
+              "externalTradeFeeGuaranteed": false,
+              "historicalSignedFeeObligations": "preserved"
+            }
+          },
+          {
+            "const": {
+              "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
+              "policyVersion": "programmable.ethereum-routed-native-fee.v3",
+              "scope": "programmable-routed-ethereum-trades",
+              "ratePpm": "10000",
+              "rateDenominator": "1000000",
+              "rateBps": 100,
+              "modeSelection": "server-exact-runtime-and-trade-proof",
+              "defaultCollection": {
+                "mode": "programmable_routed",
+                "routedRateBps": 100,
+                "basis": "gross-native-by-side",
+                "buyBasis": "funded-native-input",
+                "sellBasis": "gross-native-output-credit",
+                "currency": "native-ETH",
+                "rounding": "floor-once-per-swap",
+                "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                "collection": "atomic-native-transfer-in-swap"
+              },
+              "native30Waiver": null,
+              "launchAdmissionEstablishesFeeCollection": false,
+              "externalTradeFeeGuaranteed": false,
+              "historicalSignedFeeObligations": "preserved"
+            }
+          }
+        ]
+      },
+      "ProjectMetadataV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/ProjectMetadataV1"
+      },
+      "RequiredCustomLaunchBehaviorVectorV3": {
+        "type": "object",
+        "required": [
+          "vectorId",
+          "category",
+          "requirement",
+          "claimAxes"
+        ],
+        "properties": {
+          "vectorId": {
+            "$ref": "#/components/schemas/CustomLaunchBehaviorVectorIdV3"
+          },
+          "category": {
+            "enum": [
+              "swap",
+              "liquidity",
+              "callback-authentication",
+              "platform-fee",
+              "custom-accounting"
+            ]
+          },
+          "requirement": {
+            "const": "required"
+          },
+          "claimAxes": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "deployability-hard-invariant",
+                "platform-fee-conformance",
+                "liquidity-conformance",
+                "routability"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutingFeePolicyBindingV36": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.ethereum-launch-routing-fee-policy-binding.v1"
+          },
+          "launchProfileVersion": {
+            "const": "3.6.0"
+          },
+          "launchProfileHash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "policyHash": {
+            "enum": [
+              "sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3",
+              "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
+              "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a"
+            ]
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ProgrammableTradeFeePolicyV36"
+          },
+          "stampBinding": {
+            "type": "object",
+            "properties": {
+              "launchId": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{64}$"
+              },
+              "stampHash": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{64}$"
+              },
+              "permitDigest": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{64}$"
+              },
+              "routePayloadHash": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{64}$"
+              }
+            },
+            "required": [
+              "launchId",
+              "stampHash",
+              "permitDigest",
+              "routePayloadHash"
+            ],
+            "additionalProperties": false
+          },
+          "bindingHash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "enforcementBoundary": {
+            "const": {
+              "chainId": "1",
+              "blockNumber": "26142122",
+              "blockHash": "0x823e99cec0bb5b6011afc44891a1fd897b7efcbd83658cb9bc176dc35f5f86a3"
+            }
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "launchProfileVersion",
+          "launchProfileHash",
+          "policyHash",
+          "policy",
+          "stampBinding",
+          "bindingHash",
+          "enforcementBoundary"
+        ],
+        "additionalProperties": false,
+        "description": "sha256(schemaVersion + NUL + canonicalJson(all fields except bindingHash)); canonicalJson sorts object keys, compact separators. Join this server-authored record to the exact finalized onchain stamp, router, token, hook, pool and transaction. Persist the validated classification; missing or inconsistent classification after the boundary prevents trade preparation.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "policy": {
+                  "const": {
+                    "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
+                    "policyVersion": "programmable.ethereum-routed-native-fee.v1",
+                    "scope": "programmable-routed-ethereum-trades",
+                    "ratePpm": "3000",
+                    "rateDenominator": "1000000",
+                    "rateBps": 30,
+                    "modeSelection": "server-exact-runtime-and-trade-proof",
+                    "defaultCollection": {
+                      "mode": "programmable_routed",
+                      "routedRateBps": 30,
+                      "basis": "gross-native-by-side",
+                      "buyBasis": "funded-native-input",
+                      "sellBasis": "gross-native-output-credit",
+                      "currency": "native-ETH",
+                      "rounding": "floor-once-per-swap",
+                      "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                      "collection": "atomic-native-transfer-in-swap"
+                    },
+                    "native30Waiver": {
+                      "mode": "pool_enforced_native30",
+                      "routedRateBps": 0,
+                      "basis": "authenticated-gross-native",
+                      "currency": "native-ETH",
+                      "rounding": "ceil-per-trade",
+                      "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
+                      "hook": "EthereumNative30HookV2",
+                      "vault": "EthereumNativeFeeVaultV2",
+                      "proof": "exact-runtime-and-trade-accrual",
+                      "applicantAssertionsAccepted": false
+                    },
+                    "launchAdmissionEstablishesFeeCollection": false,
+                    "externalTradeFeeGuaranteed": false,
+                    "historicalSignedFeeObligations": "preserved"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "policyHash": {
+                  "const": "sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "policy": {
+                  "const": {
+                    "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
+                    "policyVersion": "programmable.ethereum-routed-native-fee.v2",
+                    "scope": "programmable-routed-ethereum-trades",
+                    "ratePpm": "3000",
+                    "rateDenominator": "1000000",
+                    "rateBps": 30,
+                    "modeSelection": "server-exact-runtime-and-trade-proof",
+                    "defaultCollection": {
+                      "mode": "programmable_routed",
+                      "routedRateBps": 30,
+                      "basis": "gross-native-by-side",
+                      "buyBasis": "funded-native-input",
+                      "sellBasis": "gross-native-output-credit",
+                      "currency": "native-ETH",
+                      "rounding": "floor-once-per-swap",
+                      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                      "collection": "atomic-native-transfer-in-swap"
+                    },
+                    "native30Waiver": {
+                      "mode": "pool_enforced_native30",
+                      "routedRateBps": 0,
+                      "basis": "authenticated-gross-native",
+                      "currency": "native-ETH",
+                      "rounding": "ceil-per-trade",
+                      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                      "hook": "EthereumNative30HookV3",
+                      "vault": "EthereumNativeFeeVaultV3",
+                      "proof": "exact-runtime-and-trade-accrual",
+                      "applicantAssertionsAccepted": false
+                    },
+                    "launchAdmissionEstablishesFeeCollection": false,
+                    "externalTradeFeeGuaranteed": false,
+                    "historicalSignedFeeObligations": "preserved"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "policyHash": {
+                  "const": "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "policy": {
+                  "const": {
+                    "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
+                    "policyVersion": "programmable.ethereum-routed-native-fee.v3",
+                    "scope": "programmable-routed-ethereum-trades",
+                    "ratePpm": "10000",
+                    "rateDenominator": "1000000",
+                    "rateBps": 100,
+                    "modeSelection": "server-exact-runtime-and-trade-proof",
+                    "defaultCollection": {
+                      "mode": "programmable_routed",
+                      "routedRateBps": 100,
+                      "basis": "gross-native-by-side",
+                      "buyBasis": "funded-native-input",
+                      "sellBasis": "gross-native-output-credit",
+                      "currency": "native-ETH",
+                      "rounding": "floor-once-per-swap",
+                      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                      "collection": "atomic-native-transfer-in-swap"
+                    },
+                    "native30Waiver": null,
+                    "launchAdmissionEstablishesFeeCollection": false,
+                    "externalTradeFeeGuaranteed": false,
+                    "historicalSignedFeeObligations": "preserved"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "policyHash": {
+                  "const": "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SelectedFeeHundredthsOfBipV1": {
+        "type": "string",
+        "pattern": "^(?:0|[1-9][0-9]{0,5})$",
+        "description": "Derived fee-economics amount. Additive accounting uses selected + the policy rate; inclusive accounting uses max(selected, the policy rate), with project share equal to the result minus 3000."
+      }
+    }
+  }
+}

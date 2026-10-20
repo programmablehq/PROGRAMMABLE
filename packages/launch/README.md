@@ -648,3 +648,12 @@ For Ethereum, fetch `/v3/capabilities` and use `buildProtectedEthereumLaunchV1({
 Both routes require manual review of the exact submitted source and launch graph. Approval also requires authenticated operator evidence for the wallet/buyer limits, fee decay, exemptions, USD floor, locked liquidity, normal fees and treasury custody. Old approvals lacking that evidence cannot issue a new protected permit. Legacy factories that cannot install these immutable rules remain paused for new launches; existing tokens remain tradable.
 
 This limits early accumulation per wallet. It cannot identify a person operating several independent wallets. Helpers prepare requests only; they do not sign or broadcast transactions.
+
+
+## Base Custom Launch API (4.2.0)
+
+Base uses `chainId: "8453"`, the exact graph V3 request schema and `/v4/chains/8453/custom-launches`. Check [Base readiness](https://api.programmable.market/v4/chains/8453/readiness) and [the Base guide](https://programmable.market/developers/base-custom-launch-api-v1.md) before submission. Public creation requires `mode: "active"` and `publicLaunchAuthorized: true`.
+
+The package exports `buildProtectedBaseLaunchV1`. Its Base profile, graph factory, permit authority, router, oracle and protected contract artifacts are distinct from Ethereum and Robinhood. Base uses wallet transaction value, not EIP-3009. Use `programmable-launch status REQUEST_UUID --chain-id 8453 --watch --until finalized`.
+
+After finality, consume `/v4/chains/8453/finalized-custom-launches`, exhaust pagination and key records by chain, router and launch ID. The same finalized records feed Explore. Module Mode is not offered on Base. Package installation does not authorize a launch or activate a release.

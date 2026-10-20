@@ -30,7 +30,7 @@ const ETHEREUM_PROFILE_SELECTION = Object.freeze({
   unknownProfileDisposition: "fail-closed" as const,
   requiresCliForDirectHttp: false as const,
   cli: Object.freeze({
-    sourceCandidateVersion: "4.1.7" as const,
+    sourceCandidateVersion: "4.2.0" as const,
     publicationVerified: null,
     publicationAuthority: "immutable-github-release" as const,
     releaseUrl: "https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.1.7",
@@ -99,12 +99,13 @@ export function programmableWellKnownDocumentV1(
       readyzUrl: "https://api.programmable.market/readyz",
       capabilitiesUrl: "https://api.programmable.market/v3/capabilities",
       ethereumProfileSelection: ETHEREUM_PROFILE_SELECTION,
+      base: PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.base,
       launchProtection: Object.freeze({
         policyVersion: "programmable.launch-protection.v1",
         statusUrl: "https://api.programmable.market/v1/launch-protection",
         supportedChainIds: ["1", "4663"],
         builderModule: "@programmable/launch/launch-protection",
-        sourceCandidateVersion: "4.1.7",
+        sourceCandidateVersion: "4.2.0",
         minimumFdvUsd: "15000", walletLimitBps: 200, buyerLimitBps: 200, protectionSeconds: 300,
         openingTotalFeePpm: 990000, openingFeeSeconds: 30, maximumAdditionalTaxExemptWallets: 6,
         discoveryIsActivationEvidence: false,
@@ -726,6 +727,7 @@ export function programmableWellKnownDocumentV1(
       }),
     }),
     chains: Object.freeze([
+      Object.freeze({ chainId: 8453, caip2: "eip155:8453", name: "Base", explorerUrl: "https://basescan.org", customLaunchApiVersion: "4", moduleMode: false, availability: "requires-live-capabilities", capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities", readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness", publicAuthorizationPath: "publicLaunchAuthorized", finalizedMetadataUrl: "https://api.programmable.market/v4/chains/8453/finalized-custom-launches" }),
       Object.freeze({
         chainId: 1,
         caip2: "eip155:1" as const,

@@ -20,5 +20,6 @@ export default async function LaunchPage() {
   const initialViewChainId = parseViewChainId(
     requestCookies.get(VIEW_CHAIN_COOKIE_NAME)?.value,
   );
+  if (initialViewChainId === 8453) return <main><h1>Launch on Base</h1><p>Base supports Custom Launches through the API.</p><a href="/developers/api-keys?chainId=8453">Create a Custom Launch</a></main>;
   return <ModuleFoundationLaunchHost key={initialViewChainId} layout="studio" chainId={initialViewChainId} />;
 }

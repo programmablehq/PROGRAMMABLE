@@ -1,3 +1,4 @@
+import { BASE_CUSTOM_ROOTS_V1 } from "./base-release-v1";
 import {
   concatHex,
   decodeAbiParameters,
@@ -20,6 +21,7 @@ import {
 import {
   assertCustomLaunchWalletActionV1,
   isCustomLaunchRouterV1,
+  customLaunchChainForRouterV1,
   customLaunchMaximumLifetimeSecondsV1,
   CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1,
   type CustomLaunchWalletActionV1,
@@ -671,14 +673,15 @@ export function prepareCustomLaunchRouterReviewV3(
   );
   const valueWei = canonicalUint256(transaction.valueWei);
   const data = exactLowerHexData(transaction.calldata);
-  if (hasCurrentHandoff) assertCurrentRouterHandoffV3(required);
+  const chainId = customLaunchChainForRouterV1(transaction.to);
+  if (hasCurrentHandoff) assertCurrentRouterHandoffV3(required, chainId);
   if (
     required.kind !== "send-router-transaction"
     || transaction.schemaVersion !== CUSTOM_LAUNCH_EXACT_WALLET_TRANSACTION_SCHEMA_V3
-    || transaction.chainId !== "1"
+    || !chainId || transaction.chainId !== chainId
   ) return invalid();
   const action = assertCustomLaunchWalletActionV1(Object.freeze({
-    chainId: "1" as const,
+    chainId,
     from: requiredAddress(transaction.from),
     to: requiredAddress(transaction.to),
     data,
@@ -723,6 +726,8 @@ function assertExactCustomGraphRouterCalldataV3(
   expectedPermitDigest: Hex,
   expectedInitializerCalldataHash: Hex,
 ) {
+  const chainId = BigInt(action.chainId);
+  const graphFactory = action.chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.graphFactory : CUSTOM_GRAPH_FACTORY_V1;
   const calldata = exactLowerHexData(action.data);
   if (calldata.slice(0, 10) !== CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1) {
     return invalid();
@@ -762,7 +767,7 @@ function assertExactCustomGraphRouterCalldataV3(
     domain: {
       name: "ProgrammableLaunchStampRouter",
       version: "1",
-      chainId: 1,
+      chainId: Number(chainId),
       verifyingContract: action.to,
     },
     primaryType: "ProgrammableLaunchPermitV1",
@@ -797,7 +802,7 @@ function assertExactCustomGraphRouterCalldataV3(
   });
   const now = BigInt(Math.floor(Date.now() / 1_000));
   if (
-    permitChainId !== 1n
+    permitChainId !== chainId
     || !sameAddress(permitRouter, action.to)
     || deadline <= validAfter || deadline - validAfter > customLaunchMaximumLifetimeSecondsV1(action.to)
     || !sameAddress(permitWallet, action.from)
@@ -865,8 +870,8 @@ function assertExactCustomGraphRouterCalldataV3(
       "bytes32,uint256,address,bytes32,bytes32,bytes32,bytes32,address",
       [
         GRAPH_TARGET_SALT_TYPEHASH,
-        1n,
-        CUSTOM_GRAPH_FACTORY_V1,
+        chainId,
+        graphFactory,
         routeNamespace,
         routeNonce,
         targetIdHash,
@@ -875,7 +880,7 @@ function assertExactCustomGraphRouterCalldataV3(
       ],
     );
     const predictedAddress = getCreate2Address({
-      from: CUSTOM_GRAPH_FACTORY_V1,
+      from: graphFactory,
       salt: effectiveSalt,
       bytecodeHash: initCodeHash,
     });
@@ -923,8 +928,8 @@ function assertExactCustomGraphRouterCalldataV3(
     "bytes32,uint256,address,bytes32,bytes32,bytes32,address,uint256,bytes32",
     [
       GRAPH_COMMITMENT_TYPEHASH,
-      1n,
-      CUSTOM_GRAPH_FACTORY_V1,
+      chainId,
+      graphFactory,
       routeNamespace,
       routeNonce,
       topologyHash,
@@ -1260,6 +1265,7 @@ function assertAuthorizedEvidenceV3(
 
 function assertCurrentRouterHandoffV3(
   action: Readonly<Record<string, unknown>>,
+  chainId: "1" | "8453" | undefined,
 ) {
   if (typeof action.walletHandoffUrl !== "string"
     || typeof action.expiresAt !== "string") return invalid();
@@ -1275,7 +1281,8 @@ function assertCurrentRouterHandoffV3(
     || url.hash !== ""
     || launchIds.length !== 1
     || !UUID.test(launchIds[0] ?? "")
-    || [...url.searchParams.keys()].some((key) => key !== "launchId")
+    || (chainId === "8453" ? url.searchParams.getAll("chainId").join() !== "8453" : url.searchParams.has("chainId"))
+    || [...url.searchParams.keys()].some((key) => key !== "launchId" && !(chainId === "8453" && key === "chainId"))
     || url.toString() !== action.walletHandoffUrl) return invalid();
   const expiresAtMs = Date.parse(action.expiresAt);
   if (!Number.isFinite(expiresAtMs)
@@ -1286,8 +1293,9 @@ function assertExactWalletTransactionV3(
   value: unknown,
 ): Readonly<Record<string, unknown>> {
   const transaction = exactRecord(value, EXACT_TRANSACTION_KEYS);
+  const chainId = customLaunchChainForRouterV1(transaction.to);
   if (transaction.schemaVersion !== CUSTOM_LAUNCH_EXACT_WALLET_TRANSACTION_SCHEMA_V3
-    || transaction.chainId !== "1") return invalid();
+    || !chainId || transaction.chainId !== chainId) return invalid();
   requiredAddress(transaction.from);
   requiredAddress(transaction.to);
   canonicalUint256(transaction.valueWei);
@@ -1299,8 +1307,10 @@ function exactWalletActionV3(
   transaction: Readonly<Record<string, unknown>>,
 ): CustomLaunchWalletActionV1 {
   const valueWei = canonicalUint256(transaction.valueWei);
+  const chainId = customLaunchChainForRouterV1(transaction.to);
+  if (!chainId || transaction.chainId !== chainId) return invalid();
   return Object.freeze({
-    chainId: "1",
+    chainId,
     from: requiredAddress(transaction.from),
     to: requiredAddress(transaction.to),
     data: exactLowerHexData(transaction.calldata),
@@ -1341,7 +1351,7 @@ function assertPreparedArtifactBindingsV3(
     || (expected.artifactHash !== undefined && artifactHash !== expected.artifactHash)
     || (expected.permitDigest !== undefined && permitDigest !== expected.permitDigest)
     || (expected.graphCommitment !== undefined && graphCommitment !== expected.graphCommitment)
-    || unsigned.chainId !== "1"
+    || unsigned.chainId !== expected.transaction.chainId
     || !sameAddress(unsigned.from, expected.transaction.from)
     || !sameAddress(unsigned.to, expected.transaction.to)
     || unsigned.valueWei !== expected.transaction.valueWei) return invalid();
@@ -1368,7 +1378,8 @@ function assertSignedPermitV3(
   const validAfter = canonicalUint256(permit.validAfter).parsed;
   const deadline = canonicalUint256(permit.deadline).parsed;
   if (permit.schemaVersion !== "programmable.signed-prepared-launch-permit.v1"
-    || permit.chainId !== "1"
+    || !customLaunchChainForRouterV1(expected.router) || permit.chainId !== customLaunchChainForRouterV1(expected.router)
+    || (permit.chainId === "8453" && (!sameAddress(permit.authoritySafe, BASE_CUSTOM_ROOTS_V1.permitAuthority) || !sameAddress(permit.signerAddress, BASE_CUSTOM_ROOTS_V1.permitSigner)))
     || (expected.artifactHash !== undefined
       && exactSha256(permit.artifactHash) !== expected.artifactHash)
     || (expected.permitDigest !== undefined
@@ -1389,7 +1400,7 @@ function assertObservationWindowV3(value: unknown, router: unknown) {
   const fromBlock = canonicalUint256(observation.fromBlock).parsed;
   const toBlock = canonicalUint256(observation.toBlock).parsed;
   if (observation.schemaVersion !== "programmable.custom-launch-observation-window.v1"
-    || observation.chainId !== "1"
+    || !customLaunchChainForRouterV1(router) || observation.chainId !== customLaunchChainForRouterV1(router)
     || !sameAddress(observation.router, router)
     || toBlock < fromBlock) return invalid();
 }
@@ -1405,7 +1416,7 @@ function assertOnchainEvidenceV3(value: unknown, router: unknown) {
   const blockNumber = canonicalUint256(evidence.blockNumber).parsed;
   if (evidence.schemaVersion !== "programmable.custom-launch-onchain-evidence.v1"
     || !["submitted", "finalized"].includes(String(evidence.finalityState))
-    || evidence.chainId !== "1"
+    || !customLaunchChainForRouterV1(router) || evidence.chainId !== customLaunchChainForRouterV1(router)
     || !sameAddress(evidence.router, router)
     || exactLowerBytes32(evidence.onchainLaunchId) !== evidence.onchainLaunchId
     || exactLowerBytes32(evidence.transactionHash) !== evidence.transactionHash
@@ -1426,6 +1437,7 @@ function assertOnchainEvidenceV3(value: unknown, router: unknown) {
   }
   if (Object.hasOwn(evidence, "finalizedCheckpoint")) {
     assertFinalizedCheckpointV3(evidence.finalizedCheckpoint, Object.freeze({
+      chainId: customLaunchChainForRouterV1(router)!,
       launchBlockNumber: blockNumber,
       observedAtBlockNumber: observedAt,
       launchFinalityState: evidence.finalityState,
@@ -1436,6 +1448,7 @@ function assertOnchainEvidenceV3(value: unknown, router: unknown) {
 function assertFinalizedCheckpointV3(
   value: unknown,
   context: Readonly<{
+    chainId: "1" | "8453";
     launchBlockNumber: bigint;
     observedAtBlockNumber: bigint;
     launchFinalityState: unknown;
@@ -1445,7 +1458,7 @@ function assertFinalizedCheckpointV3(
   const blockNumber = canonicalUint256(checkpoint.blockNumber).parsed;
   const blockHash = exactLowerBytes32(checkpoint.blockHash);
   if (checkpoint.schemaVersion
-      !== "programmable.ethereum-finalized-checkpoint-quorum.v1"
+      !== (context.chainId === "8453" ? "programmable.base-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
     || checkpoint.quorumSize !== 2
     || blockNumber > context.observedAtBlockNumber
     || (context.launchFinalityState === "finalized"

@@ -10,6 +10,10 @@ export const PROTECTED_LAUNCH_POLICY_V1 = Object.freeze({ minimumFdvUsd: '15000'
   buyerLimitBps: 200, protectionSeconds: 300, openingTotalFeePpm: 990000, openingFeeSeconds: 30,
   maximumAdditionalTaxExemptWallets: 6, treasury: '0xD88539d3c4C460136a733A3Fd60cf6BF269079da' });
 export const PROTECTED_LAUNCH_CHAIN_PINS_V1 = Object.freeze({
+  8453: Object.freeze({manager:'0x498581fF718922c3f8e6A244956aF099B2652b2b',
+    router:'0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40',routerCodeHash:'0x816c75fe7f6ccf8fe8b14825091e8dff301fe7ffd4b962f89b2981a747facc08',
+    feed:'0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',feedCodeHash:'0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2',maxAge:3600n,
+    sequencerFeed:'0xBCF85224fc0756B9Fa45aA7892530B47e10b6433'}),
   1: Object.freeze({ manager: '0x000000000004444c5dc75cB358380D2e3dE08A90',
     router: '0xd92A36B0000531EF3063dEd4De20A0783308446C',
     routerCodeHash: '0x41ccd905c8e4de29ce9536ff49233b79e3085a0987d490664e703ee1e7b1dc49',
@@ -66,10 +70,13 @@ export function protectedOpeningPriceV1({ supply, answer, feedDecimals = 8, targ
   const initialTick = lo * 60;
   return { initialTick, sqrtPriceX96: protectedSqrtPriceAtTickV1(initialTick), openingFdvUsd: value(initialTick) };
 }
-async function kit() {
-  const standardJsonBytes = await readFile(new URL('standard-json.json', kitUrl));
-  const artifacts = Object.fromEntries(await Promise.all(Object.entries(names).map(async ([role, name]) =>
-    [role, JSON.parse(await readFile(new URL(name + '.artifact.json', kitUrl), 'utf8'))])));
+async function kit(chainId) {
+  const baseKit = Number(chainId) === 8453;
+  const root = baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
+  const contractNames = baseKit ? { ...names, initializer: 'BaseProtectedNativeInitializerV1', hook:'BaseProtectedNative30HookV1', module:'BaseLaunchProtectionModuleV1' } : names;
+  const standardJsonBytes = await readFile(new URL('standard-json.json', root));
+  const artifacts = Object.fromEntries(await Promise.all(Object.entries(contractNames).map(async ([role, name]) =>
+    [role, JSON.parse(await readFile(new URL(name + '.artifact.json', root), 'utf8'))])));
   for (const a of Object.values(artifacts)) if (a.sourceArtifactHash !== digest(standardJsonBytes)) throw new TypeError('Protected source package changed');
   return { artifacts, standardJsonBytes, sourceArtifactHash: digest(standardJsonBytes) };
 }
@@ -117,7 +124,14 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
   if (!feedCode || keccak256(feedCode) !== pins.feedCodeHash || !routerCode || keccak256(routerCode) !== pins.routerCodeHash || !factoryCode || factoryCode === '0x') throw new TypeError('Trusted infrastructure runtime differs');
   if (round[0] === 0n || round[1] <= 0n || round[3] === 0n || round[3] > block.timestamp || block.timestamp - round[3] > pins.maxAge || round[4] < round[0]) throw new TypeError('USD feed is invalid or expired');
   const price = protectedOpeningPriceV1({ supply, answer: round[1], feedDecimals: decimals, targetFdvUsd });
-  const k = await kit(), a = k.artifacts;
+  let sequencerFeedCodeHash;
+  if (pins.sequencerFeed) {
+    const code = await client.getCode({address:pins.sequencerFeed,blockNumber:block.number});
+    const seq = await client.readContract({address:pins.sequencerFeed,abi:parseAbi(['function latestRoundData() view returns(uint80,int256,uint256,uint256,uint80)']),functionName:'latestRoundData',blockNumber:block.number});
+    if(!code || code==='0x' || seq[1]!==0n || seq[2]===0n || seq[2]>=block.timestamp || block.timestamp-seq[2]<=3600n) throw new TypeError('Base sequencer is unavailable or recovering');
+    sequencerFeedCodeHash=keccak256(code);
+  }
+  const k = await kit(chainId), a = k.artifacts;
   const salt = (role, attempt = 0n) => keccak256(encodeAbiParameters(parseAbiParameters('uint256,address,bytes32,string,uint256'), [BigInt(chainId), owner, nonce, role, attempt]));
   const root = (role, args, flags) => {
     const initCode = encodeDeployData({ abi: a[role].abi, bytecode: a[role].creationBytecode, args });
@@ -141,7 +155,7 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
     router: pins.router, routerCodeHash: pins.routerCodeHash, normalBuyFeePpm: (30 + buyBps) * 100 }, moduleArgs, protectionModule);
   const contracts = {
     initializer: materialize(a.initializer, { poolManager: pins.manager, graphFactory: authority, nativeUsdFeed: pins.feed,
-      feedCodeHash: pins.feedCodeHash, feedDecimals: decimals, MAX_FEED_AGE: pins.maxAge }, init.args, init.address),
+      feedCodeHash: pins.feedCodeHash, feedDecimals: decimals, MAX_FEED_AGE: pins.maxAge, sequencerFeedCodeHash }, init.args, init.address),
     token: materialize(a.token, { initializer: init.address, poolManager: pins.manager, launchSupply: amount, walletTokenLimit: amount / 50n }, token.args, token.address),
     hook: materialize(a.hook, { poolManager: pins.manager, CANONICAL_POOL_MANAGER: pins.manager, CHAIN_ID: chainId, token: token.address,
       lpFee: 0, tickSpacing: 60, initialSqrtPriceX96: price.sqrtPriceX96, initializer: init.address, creatorBuyFeeBps: buyBps,

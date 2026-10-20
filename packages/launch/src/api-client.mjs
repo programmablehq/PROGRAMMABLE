@@ -1,3 +1,4 @@
+import BASE_PROFILE_V1 from "./base-profile-v1.json" with { type: "json" };
 import { assertDirectNativeProgrammableTradeFeePolicyV36, directNativeProgrammableTradeFeePolicyHashV36 } from "./profile-v36.mjs";
 import { assertRobinhoodInitialBuyReviewV1 } from "./initial-buy-review-v1.mjs";
 import { assertRobinhoodFeeReviewV1 } from "./fee-review-v1.mjs";
@@ -138,11 +139,12 @@ export class ProgrammableApiError extends Error {
 
 export async function getLaunchCapabilities(options = {}) {
   const apiOrigin = productionApiOrigin(options.apiOrigin);
-  const apiVersion = normalizeApiVersion(options.apiVersion ?? 3);
+  const isBase = String(options.chainId) === "8453";
+  const apiVersion = isBase ? 3 : normalizeApiVersion(options.apiVersion ?? 3);
   const chainId = apiVersion === 4
     ? normalizeV4ChainId(options.chainId)
     : undefined;
-  const capabilitiesPath = apiVersion === 4
+  const capabilitiesPath = isBase ? "/v4/chains/8453/capabilities" : apiVersion === 4
     ? v4Path(CAPABILITIES_PATH_TEMPLATE_V4, chainId)
     : CAPABILITIES_PATH_V3;
   const result = await requestWithRetry({
@@ -156,7 +158,9 @@ export async function getLaunchCapabilities(options = {}) {
     sleepImpl: options.sleepImpl,
     retryExplicit503Only: apiVersion === 4,
   });
-  if (apiVersion === 4) {
+  if (isBase) {
+    assertBaseCapabilitiesResponse(result.body);
+  } else if (apiVersion === 4) {
     assertCapabilitiesResponseV4(result.body, { chainId });
   } else {
     assertCapabilitiesResponse(result.body);
@@ -189,7 +193,8 @@ export async function validateLaunchRemote(options) {
   const request = isV4
     ? parseV4RequestBytes(requestBytes)
     : parseStrictJson(decodeExactUtf8(requestBytes, "V3 request"), { maximumBytes: MAX_REQUEST_BYTES });
-  const chainId = isV4 ? normalizeV4ChainId(request.chainId) : undefined;
+  const isBase = !isV4 && request.chainId === "8453";
+  const chainId = isBase ? "8453" : isV4 ? normalizeV4ChainId(request.chainId) : undefined;
   const serverRequestHash = isV4
     ? customLaunchRequestHashV4(request)
     : customLaunchRequestHashV3(requestBytes);
@@ -197,7 +202,7 @@ export async function validateLaunchRemote(options) {
   const apiOrigin = productionApiOrigin(options.apiOrigin);
   const capabilities = await getLaunchCapabilities({
     apiOrigin,
-    ...(isV4 ? { apiVersion: 4, chainId } : {}),
+    ...(isBase ? { chainId: "8453" } : isV4 ? { apiVersion: 4, chainId } : {}),
     maxAttempts: options.maxAttempts,
     timeoutMs: options.timeoutMs,
     fetchImpl: options.fetchImpl,
@@ -206,7 +211,7 @@ export async function validateLaunchRemote(options) {
   if (isV4) assertV4RequestMatchesCapabilities(request, capabilities.resource);
   else assertProfile36RequestMatchesCapabilities(request, capabilities.resource);
   const apiKey = await (options.loadApiKeyImpl ?? loadApiKey)();
-  const preflightPath = isV4
+  const preflightPath = isBase ? "/v4/chains/8453/custom-launches/preflight" : isV4
     ? v4Path(PREFLIGHT_PATH_TEMPLATE_V4, chainId)
     : PREFLIGHT_PATH_V3;
   const result = await requestWithRetry({
@@ -241,7 +246,7 @@ export async function validateLaunchRemote(options) {
   return {
     ...validation,
     remoteValidation: true,
-    apiVersion: isV4 ? "v4" : "v3",
+    apiVersion: isBase || isV4 ? "v4" : "v3",
     capabilitiesHttpStatus: capabilities.httpStatus,
     preflightHttpStatus: result.status,
     capabilities: capabilities.resource,
@@ -304,8 +309,9 @@ export async function submitLaunch(options) {
   const localArtifactBindings = isV4
     ? exactLocalV4ArtifactBindings(validation, request, localCommitments)
     : null;
-  const chainId = isV4 ? normalizeV4ChainId(request.chainId) : undefined;
-  const requestPath = isV4
+  const isBase = !isV4 && request.chainId === "8453";
+  const chainId = isBase ? "8453" : isV4 ? normalizeV4ChainId(request.chainId) : undefined;
+  const requestPath = isBase ? "/v4/chains/8453/custom-launches" : isV4
     ? v4Path(CREATE_PATH_TEMPLATE_V4, chainId)
     : CREATE_PATH_V3;
   const idempotencyKey = normalizeIdempotencyKey(
@@ -316,7 +322,7 @@ export async function submitLaunch(options) {
   const apiOrigin = productionApiOrigin(options.apiOrigin);
   const capabilities = await getLaunchCapabilities({
       apiOrigin,
-      ...(isV4 ? { apiVersion: 4, chainId } : {}),
+      ...(isBase ? { chainId: "8453" } : isV4 ? { apiVersion: 4, chainId } : {}),
       maxAttempts: options.maxAttempts,
       timeoutMs: options.timeoutMs,
       fetchImpl: options.fetchImpl,
@@ -425,9 +431,10 @@ export async function statusLaunch(options) {
     throw new TypeError("status requires the Custom launch request UUID");
   }
   const apiOrigin = productionApiOrigin(options.apiOrigin);
-  const apiVersion = normalizeApiVersion(options.apiVersion ?? 3);
+  const isBase = String(options.chainId) === "8453";
+  const apiVersion = isBase ? 3 : normalizeApiVersion(options.apiVersion ?? 3);
   const chainId = apiVersion === 4 ? normalizeV4ChainId(options.chainId) : undefined;
-  const requestPath = createPathForApiVersion(apiVersion, chainId);
+  const requestPath = isBase ? "/v4/chains/8453/custom-launches" : createPathForApiVersion(apiVersion, chainId);
   const capabilities = apiVersion === 4
     ? await getLaunchCapabilities({
         apiOrigin,
@@ -480,9 +487,9 @@ export async function statusLaunch(options) {
         "awaiting_wallet_signature",
       ]).has(status))
       || (requestPath === CREATE_PATH_V3 && status === "awaiting_funding_authorization");
-    const reviewPending = (requestPath === CREATE_PATH_V3 || apiVersion === 4)
+    const reviewPending = (isBase || requestPath === CREATE_PATH_V3 || apiVersion === 4)
       && status === "pending_review";
-    const reviewActionRequired = (requestPath === CREATE_PATH_V3 || apiVersion === 4)
+    const reviewActionRequired = (isBase || requestPath === CREATE_PATH_V3 || apiVersion === 4)
       && status === "action_required";
     const stopped = TERMINAL_STATUSES.has(status)
       || reviewActionRequired
@@ -2337,12 +2344,38 @@ function assertPreflightV4Field(condition, field) {
 
 
 function assertProfile36RequestMatchesCapabilities(request, capabilities) {
+  if (request?.chainId === "8453") {
+    assertBaseCapabilitiesResponse(capabilities);
+    assertCapabilitiesField(canonicalizeJson(request.launchProfile) === canonicalizeJson(BASE_PROFILE_V1), "profile.exactBaseBindings");
+    return;
+  }
   if (request?.launchProfile?.profileVersion !== DIRECT_NATIVE_PROFILE_VERSION_V36) return;
   assertCapabilitiesField(capabilities.profile?.profileVersion === DIRECT_NATIVE_PROFILE_VERSION_V36,
     "profile.requestProfileVersion");
   assertDirectNativeProgrammableTradeFeePolicyV36(request.launchProfile.programmableTradeFeePolicy);
   assertCapabilitiesField(canonicalizeJson(request.launchProfile.programmableTradeFeePolicy)
     === canonicalizeJson(capabilities.programmableTradeFeePolicy?.policy), "profile.currentTreasuryPolicy");
+}
+
+export function assertBaseCapabilitiesResponse(value) {
+  assertCapabilitiesField(isPlainObject(value), "$");
+  assertCapabilitiesField(value.schemaVersion === "programmable.custom-launch-capabilities.v1" && value.apiVersion === "v4", "schemaVersion");
+  assertCapabilitiesField(value.chain?.id === "8453" && value.chain?.name === "Base", "chain");
+  assertCapabilitiesField(Number.isFinite(Date.parse(value.serverTime)) && SHA256.test(value.releaseId), "release");
+  assertCapabilitiesField(["active", "canary"].includes(value.mode), "mode");
+  assertCapabilitiesField(value.publicLaunchAuthorized === (value.mode === "active") && value.moduleMode === false, "publicLaunchAuthorized");
+  const { productionLaunchAuthorized, ...profile } = value.profile ?? {};
+  const { productionLaunchAuthorized: _staticAuthorization, ...expectedProfile } = BASE_PROFILE_V1;
+  assertCapabilitiesField(productionLaunchAuthorized === value.publicLaunchAuthorized
+    && canonicalizeJson(profile) === canonicalizeJson(expectedProfile), "profile.exactBaseBindings");
+  const prefix = "/v4/chains/8453";
+  for (const [key, expected] of Object.entries({ create: prefix + "/custom-launches", list: prefix + "/custom-launches",
+    status: prefix + "/custom-launches/{launchId}", preflight: prefix + "/custom-launches/preflight",
+    capabilities: prefix + "/capabilities", readiness: prefix + "/readiness", finalizedMetadata: prefix + "/finalized-custom-launches" })) {
+    assertCapabilitiesField(value.routes?.[key] === expected, "routes." + key);
+  }
+  assertCapabilitiesField(value.authentication?.create === "bearer-api-key"
+    && canonicalizeJson(value.authentication.requiredScopes) === canonicalizeJson(["custom-launch:create", "custom-launch:read"]), "authentication");
 }
 
 function assertProfile36Capabilities(value) {

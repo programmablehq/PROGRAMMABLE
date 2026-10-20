@@ -1,3 +1,4 @@
+import { BaseTokenView } from "@/components/base-token-view";
 import { isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
 import { presentEthereumToken } from "@/lib/server/ethereum-explore";
 import type { Metadata } from "next";
@@ -39,6 +40,7 @@ export async function generateMetadata({
   ]);
   if (isAddress(address) && tokenDetailPageChainId(resolvedSearchParams.chain) !== null) {
     const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
+    if (resolved?.chainId === 8453 && resolved.token) return { ...launchShareMetadata({address: resolved.token.tokenAddress, chainId: 8453}, resolved.token.name, resolved.token.symbol) };
     if (resolved?.chainId === 1 && resolved.token) return {
       ...launchShareMetadata({ address: resolved.token.tokenAddress, chainId: 1 }, resolved.token.name, resolved.token.symbol),
     };
@@ -74,6 +76,7 @@ export default async function TokenPage({
   }
   const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
   if (resolved === null) notFound();
+  if (resolved.chainId === 8453) return <TokenRouteChainSync chainId={8453}><BaseTokenView address={address} token={resolved.token} presentation={resolved.presentation} status={resolved.status} /></TokenRouteChainSync>;
   // Explore can display a receipt-confirmed launch before the finalized index
   // catches up. Use the same verified observation for direct links, without
   // changing the finalized resolver used by transaction and claim readers.

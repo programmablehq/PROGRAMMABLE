@@ -174,3 +174,5 @@ export { DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, assertDirectNativeProg
 
 export * from "./launch-protection-v1.mjs";
 export { buildProtectedEthereumLaunchV1 } from "./launch-protection-ethereum-v1.mjs";
+
+export { buildProtectedBaseLaunchV1 } from './launch-protection-base-v1.mjs';

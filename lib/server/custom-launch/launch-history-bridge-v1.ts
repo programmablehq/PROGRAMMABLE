@@ -159,6 +159,7 @@ export type DeveloperCustomLaunchV2 = Readonly<{
 }>;
 
 export type DeveloperCustomLaunchV3 = Readonly<{
+  chainId?: "1" | "8453";
   manualReview?: CustomLaunchReview;
   schemaVersion: "programmable.custom-launch.v3";
   launchId: string;
@@ -437,7 +438,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         const expectedWallet = walletAddress.toLowerCase();
         const readVersion = async (version: BackendHistoryVersion) => {
           const cursorState = query.cursor?.[version];
-          if (cursorState?.done) {
+          if (cursorState?.done || (query.chainId === "8453" && version !== "v3")) {
             return Object.freeze({
               version,
               launches: Object.freeze([] as DeveloperCustomLaunch[]),
@@ -446,7 +447,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             });
           }
           const backendUrl = new URL(
-            version === "v4"
+            query.chainId === "8453" && version === "v3"
+              ? "/v4/chains/8453/wallet-admin/custom-launches"
+              : version === "v4"
               ? "/v4/chains/4663/wallet-admin/custom-launches"
               : `/${version}/wallet-admin/custom-launches`,
             backendBaseUrl,
@@ -531,7 +534,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             version === "v4"
               ? parseLaunchSummaryV4(launch, expectedWallet)
               : parseLaunch(launch, expectedWallet, version, {
-                  requireAuthorizedArtifactBinding: false,
+                  requireAuthorizedArtifactBinding: false, chainId: query.chainId,
                 })
           ));
           const nextCursor = record.nextCursor === null
@@ -587,7 +590,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         );
         const readVersion = async (version: BackendHistoryVersion) => {
           const backendUrl = new URL(
-            version === "v4"
+            walletInput.chainId === "8453" && version === "v3"
+              ? `/v4/chains/8453/wallet-admin/custom-launches/${encodeURIComponent(launchId.toLowerCase())}`
+              : version === "v4"
               ? `/v4/chains/4663/wallet-admin/custom-launches/${
                   encodeURIComponent(launchId.toLowerCase())
                 }`
@@ -626,7 +631,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
                 resource,
                 walletAddress.toLowerCase(),
                 version,
-                { requireAuthorizedArtifactBinding: true },
+                { requireAuthorizedArtifactBinding: true, chainId: walletInput.chainId },
               );
         };
         let launch: DeveloperCustomLaunch | null = null;
@@ -847,7 +852,7 @@ export function getProductionDeveloperLaunchHistoryBridgeV1() {
 function exactHistoryQuery(request: Request) {
   const search = new URL(request.url).searchParams;
   for (const key of search.keys()) {
-    if (key !== "walletAddress" && key !== "limit" && key !== "cursor") {
+    if (key !== "walletAddress" && key !== "limit" && key !== "cursor" && key !== "chainId") {
       throw new BrowserRequestErrorV1(400, "request_schema_invalid");
     }
     if (search.getAll(key).length !== 1) {
@@ -858,13 +863,15 @@ function exactHistoryQuery(request: Request) {
   if (walletAddress === null) {
     throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   }
+  const chainId = search.get("chainId") ?? "1";
+  if (chainId !== "1" && chainId !== "8453") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   const limitValue = search.get("limit");
   const limit = limitValue === null
     ? DEFAULT_PAGE_SIZE
     : parsePageSize(limitValue);
   const cursorValue = search.get("cursor");
   return Object.freeze({
-    walletAddress,
+    walletAddress, chainId,
     limit,
     cursor: cursorValue === null
       ? null
@@ -875,7 +882,7 @@ function exactHistoryQuery(request: Request) {
 function exactWalletQuery(request: Request) {
   const search = new URL(request.url).searchParams;
   for (const key of search.keys()) {
-    if (key !== "walletAddress" && key !== "version") {
+    if (key !== "walletAddress" && key !== "version" && key !== "chainId") {
       throw new BrowserRequestErrorV1(400, "request_schema_invalid");
     }
     if (search.getAll(key).length !== 1) {
@@ -884,6 +891,8 @@ function exactWalletQuery(request: Request) {
   }
   const walletAddress = search.get("walletAddress");
   const versionValue = search.get("version");
+  const chainId = search.get("chainId") ?? "1";
+  if (chainId !== "1" && chainId !== "8453" || chainId === "8453" && versionValue !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   if (
     !walletAddress ||
     (versionValue !== null
@@ -893,7 +902,7 @@ function exactWalletQuery(request: Request) {
       && versionValue !== "v4")
   ) throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   return Object.freeze({
-    walletAddress,
+    walletAddress, chainId,
     version: versionValue as BackendHistoryVersion | null,
   });
 }
@@ -1710,9 +1719,10 @@ function parseLaunch(
   value: JsonValue,
   expectedWallet: string,
   version: BackendHistoryVersion,
-  options: Readonly<{ requireAuthorizedArtifactBinding: boolean }>,
+  options: Readonly<{ requireAuthorizedArtifactBinding: boolean; chainId?: "1" | "8453" }>,
 ): DeveloperCustomLaunch {
   const record = jsonRecord(value);
+  if (record.chainId !== undefined && record.chainId !== (options.chainId ?? "1")) throw new BackendContractErrorV1();
   const expectedSchema = version === "v1"
     ? "programmable.custom-launch.v1"
     : version === "v2"
@@ -1836,6 +1846,7 @@ function parseLaunch(
       })
     : Object.freeze({
         ...profileBase,
+        ...(options.chainId === "8453" ? { chainId: "8453" as const } : {}),
         schemaVersion: "programmable.custom-launch.v3" as const,
         routeId: "custom-launch:create:v3" as const,
         launchProfileVersion: launchProfileVersion!,

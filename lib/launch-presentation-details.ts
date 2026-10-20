@@ -53,7 +53,7 @@ export function launchModuleDetailsBinding(launch: LaunchPresentationSource): Mo
 export function launchPresentationDetails(launch: LaunchPresentationSource, chainId: number,
   market?: LaunchPairObservation | null, moduleDetails?: PublicModuleDetails | null) {
   let quote: string | null = null;
-  if (chainId === 4663 || chainId === 1) {
+  if (chainId === 4663 || chainId === 1 || chainId === 8453) {
     if (launch.poolId && launch.quoteAsset && ADDRESS.test(launch.quoteAsset)) quote = launch.quoteAsset;
     else if (chainId === 4663 && ["module-native-v1", "module-native-v2"].includes(launch.sourceKind ?? "") && launch.poolId) quote = NATIVE;
     else if (launch.launchProjection) {

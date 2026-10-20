@@ -30,7 +30,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { mainnet, sepolia } from "viem/chains";
+import { base, mainnet, sepolia } from "viem/chains";
 import { bytesToHex, hexToBytes, type Address, type Hex } from "viem";
 
 import {
@@ -784,7 +784,7 @@ const privyConfig = {
       createOnLogin: "users-without-wallets",
     },
   },
-  supportedChains: [robinhoodChain, mainnet],
+  supportedChains: [robinhoodChain, mainnet, base],
   defaultChain: robinhoodChain,
 } satisfies PrivyClientConfig;
 
@@ -3033,14 +3033,17 @@ function PrivyWalletBridge({
     if (!connectedWallet || !wallet) {
       throw new Error("Connect your wallet before continuing");
     }
+    const targetChain = input.chainId === "8453" ? base : appChain;
+    const targetChainHex = `0x${targetChain.id.toString(16)}`;
+    const targetNetworkName = targetChain.name;
     if (
-      input.chainId !== String(appChain.id)
+      input.chainId !== String(targetChain.id)
       || input.from.toLowerCase() !== wallet.account.toLowerCase()
       || !isEthereumAddress(input.to)
       || !/^0x(?:[0-9a-fA-F]{2})*$/.test(input.data)
       || !/^0x[0-9a-fA-F]+$/.test(input.value)
     ) {
-      throw new Error(`The prepared launch is not valid for ${appNetworkName}`);
+      throw new Error(`The prepared launch is not valid for ${targetNetworkName}`);
     }
     const isEmbeddedWallet =
       connectedWallet.walletClientType === "privy" ||
@@ -3061,8 +3064,8 @@ function PrivyWalletBridge({
       }
     };
     try {
-      if (wallet.chainId !== appChainHex) {
-        await connectedWallet.switchChain(appChain.id);
+      if (wallet.chainId !== targetChainHex) {
+        await connectedWallet.switchChain(targetChain.id);
         assertCurrentSession();
       }
       const sendLocked = (execute: () => Promise<Hex>) =>
@@ -3081,12 +3084,12 @@ function PrivyWalletBridge({
               to: input.to,
               data: input.data,
               value: BigInt(input.value),
-              chainId: appChain.id,
+              chainId: targetChain.id,
             },
             {
               address: wallet.account,
               uiOptions: {
-                description: "Submit the approved Custom launch on Ethereum",
+                description: `Submit the approved Custom launch on ${targetNetworkName}`,
                 buttonText: "Launch token",
                 successHeader: "Launch submitted",
               },
@@ -3098,8 +3101,8 @@ function PrivyWalletBridge({
       const provider = await connectedWallet.getEthereumProvider();
       await assertExternalWalletAuthorityCurrent({
         expectedAccount: wallet.account,
-        expectedChainId: appChainHex,
-        networkName: appNetworkName,
+        expectedChainId: targetChainHex,
+        networkName: targetNetworkName,
         request: (method) => provider.request({ method }),
       });
       assertCurrentSession();

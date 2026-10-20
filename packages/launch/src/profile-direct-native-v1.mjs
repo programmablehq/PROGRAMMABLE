@@ -1,3 +1,4 @@
+import BASE_PROFILE_V1 from "./base-profile-v1.json" with {type: "json"};
 import { DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, assertDirectNativeProgrammableTradeFeePolicyV36 } from "./profile-v36.mjs";
 import { validateCanonicalSettlementFeeVaultV2Graph, validateCanonicalSettlementFeeVaultV2Build } from "./canonical-settlement-fee-vault-v2.mjs";
 import {
@@ -296,6 +297,19 @@ export function validateDirectNativeProfileSelection(value) {
 }
 
 export function resolveDirectNativeProfile(selection, options = {}) {
+  if (options.chainId === "8453") {
+    const selected = validateDirectNativeProfileSelection(selection);
+    if (options.profileVersion !== "3.6.0" || selected.fundingMode !== "wallet-transaction-value"
+      || selected.accountingMode !== BASE_PROFILE_V1.platformFeePolicy.accountingMode
+      || selected.assessmentBase !== BASE_PROFILE_V1.platformFeePolicy.assessmentBase
+      || selected.feeCurrency !== BASE_PROFILE_V1.platformFeePolicy.feeCurrency
+      || options.router !== undefined && options.router !== BASE_PROFILE_V1.router
+      || options.programmableTradeFeePolicy !== undefined && canonicalizeJson(options.programmableTradeFeePolicy) !== canonicalizeJson(BASE_PROFILE_V1.programmableTradeFeePolicy)) {
+      throw new TypeError("Base requires its exact profile 3.6, native funding and fixed fee policy");
+    }
+    return structuredClone(BASE_PROFILE_V1);
+  }
+  if (options.chainId !== undefined && options.chainId !== "1" || options.programmableTradeFeePolicy?.schemaVersion === BASE_PROFILE_V1.programmableTradeFeePolicy.schemaVersion) throw new TypeError("Profile chain differs");
   const normalized = validateDirectNativeProfileSelection(selection);
   const profileContract = directNativeProfileContract(
     normalized,
@@ -366,6 +380,10 @@ export function resolveDirectNativeProfile(selection, options = {}) {
 }
 
 export function validateEmbeddedDirectNativeProfile(value) {
+  if (value?.chainId === "8453") {
+    if (canonicalizeJson(value) !== canonicalizeJson(BASE_PROFILE_V1)) throw new TypeError("Base profile differs from the canonical deployment");
+    return structuredClone(BASE_PROFILE_V1);
+  }
   if (value?.profileVersion === DIRECT_NATIVE_PROFILE_VERSION_V36) {
     try { assertDirectNativeProgrammableTradeFeePolicyV36(value.programmableTradeFeePolicy); }
     catch { throw new TypeError("direct-native request does not contain the closed embedded launchProfile"); }

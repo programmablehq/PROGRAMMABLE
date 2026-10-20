@@ -1,3 +1,4 @@
+import BASE_PROFILE_V1 from "./base-profile-v1.json" with {type: "json"};
 import { canonicalizeJson } from "./canonical-json.mjs";
 import { sha256Digest } from "./io.mjs";
 
@@ -56,7 +57,7 @@ export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3 = deepFre
 });
 
 export function assertDirectNativeProgrammableTradeFeePolicyV36(value) {
-  if (![DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
+  if (![BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
     throw new TypeError("PROFILE_36_PROGRAMMABLE_TRADE_FEE_POLICY_MISMATCH");
   }
   return value;

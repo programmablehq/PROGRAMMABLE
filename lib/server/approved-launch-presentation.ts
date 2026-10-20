@@ -14,7 +14,7 @@ const object = (value: unknown): value is ObjectValue => Boolean(value) && typeo
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 export type ApprovedPresentationIdentity = {
-  chainId?: 1 | 4663;
+  chainId?: 1 | 4663 | 8453;
   tokenAddress: string;
   hookAddress?: string | null;
   poolId?: string | null;
