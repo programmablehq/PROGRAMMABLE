@@ -73,6 +73,16 @@ describe("concurrent Robinhood index sources", () => {
     expect(m.saved()).toEqual(newer);
   });
 
+  it("rejects an older checkpoint in the same Module source", async () => {
+    const m = memory({ ...snapshot(), moduleMode: moduleLane(2) }), saved = await m.store.read();
+    const newer = { ...m.saved(), moduleMode: { ...moduleLane(2), cursor: point(20) } };
+    m.replace(newer);
+    const next = { ...saved!.snapshot, moduleMode: { ...moduleLane(2), cursor: point(15) } };
+    await expect(writeIndexLane(m.store, saved, next, { kind: "module", releaseDigest: hash(2) })).rejects.toThrow("CAS conflict");
+    expect(m.saved()).toEqual(newer);
+    expect(m.writes()).toBe(1);
+  });
+
   it("accepts an uncertain write only after reading back the exact source", async () => {
     const m = memory(), saved = await m.store.read(), write = m.store.write;
     m.store.write = async (next, etag) => { await write(next, etag); throw Error("connection closed after commit"); };
