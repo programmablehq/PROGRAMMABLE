@@ -101,6 +101,22 @@ function assertFiles(findings, paths, count = paths.length) {
   assert.deepEqual([...new Set(findings.map(({ File }) => File))].sort(), [...paths].sort());
 }
 
+test("Eulerian public identity comparisons do not hide changed or adjacent credentials", t => {
+  const path = "lib/server/robinhood-presentation.ts";
+  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  const branch = source.slice(source.indexOf('&& address === "0x46d4'), source.indexOf('description: "Eulerian'));
+  const lines = branch.split("\n").filter(line => /&& (token\.launchId|same\(token\.(hookAddress|poolId|creator))/.test(line));
+  assert.equal(lines.length, 4);
+  for (const line of lines) {
+    const value = line.match(/"([^"]+)"/)[1];
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    assert.ok(scan(t, { [path]: line.replace(value, material) }, { raw: true }).length > 0);
+    assert.ok(scan(t, { [path]: `const apiKey = "${value}";` }, { raw: true }).length > 0);
+    assert.ok(scan(t, { [path]: `${line} const apiKey = "${material}";` }, { raw: true }).length > 0);
+    assert.ok(scan(t, { [`${path}.backup`]: line }, { raw: true }).length > 0);
+  }
+});
+
 test("atomic module lifecycle allows only its exact public evidence fields", (t) => {
   const path = "contracts/deployments/ethereum-module-foundation-v2.json";
   const fields = [
