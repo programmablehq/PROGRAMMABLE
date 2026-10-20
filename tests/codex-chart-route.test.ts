@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ chart: vi.fn(), robinhood: vi.fn(), ethereum: vi.fn() }));
+const mocks = vi.hoisted(() => ({ chart: vi.fn(), robinhood: vi.fn(), ethereum: vi.fn(), base: vi.fn() }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexChart: mocks.chart }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodToken: mocks.robinhood }));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumExploreCatalog: mocks.ethereum }));
+vi.mock("@/lib/server/base-explore", () => ({ readBaseToken: mocks.base }));
 import { GET } from "@/app/api/market/chart/route";
 const address = `0x${"ab".repeat(20)}`;
 afterEach(() => vi.resetAllMocks());
@@ -21,9 +22,19 @@ describe("verified chart identity", () => {
     expect(mocks.chart).toHaveBeenCalledExactlyOnceWith(address, 4663, "1m");
     expect(await response.json()).toMatchObject({ range: "1m", source: "codex" });
   });
+  it("binds a Base chart to the verified Base token record", async () => {
+    mocks.base.mockResolvedValue({ chainId: 8453, status: "ready", token: { tokenAddress: address } });
+    mocks.chart.mockResolvedValue({ tokenAddress: address, chainId: 8453, range: "1m", source: "codex", points: [{ time: 1, price: 1 }] });
+    const response = await GET(new Request(`https://example.com/api/market/chart?token=${address}&chain=8453&range=1m`));
+    expect(response.status).toBe(200);
+    expect(mocks.base).toHaveBeenCalledExactlyOnceWith(address);
+    expect(mocks.chart).toHaveBeenCalledExactlyOnceWith(address, 8453, "1m");
+    expect(mocks.robinhood).not.toHaveBeenCalled();
+    expect(mocks.ethereum).not.toHaveBeenCalled();
+  });
   it("does not request Codex for an address outside either launch index", async () => {
-    mocks.robinhood.mockResolvedValue({ token: null }); mocks.ethereum.mockResolvedValue({ entries: [] });
-    for (const chain of [1,4663]) expect((await GET(new Request(`https://example.com/api/market/chart?token=${address}&chain=${chain}`))).status).toBe(404);
+    mocks.robinhood.mockResolvedValue({ token: null }); mocks.ethereum.mockResolvedValue({ entries: [] }); mocks.base.mockResolvedValue({ token: null });
+    for (const chain of [1,4663,8453]) expect((await GET(new Request(`https://example.com/api/market/chart?token=${address}&chain=${chain}`))).status).toBe(404);
     expect(mocks.chart).not.toHaveBeenCalled();
   });
   it("does not report a missing launch when its index is unavailable", async () => {

@@ -181,7 +181,7 @@ describe("production wallet request lock", () => {
 
     for (const [entrypoint, switchExpression] of [
       [provider.slice(preparedStart, preparedEnd), "switchChain(target.chain.id)"],
-      [provider.slice(customStart, customEnd), "switchChain(appChain.id)"],
+      [provider.slice(customStart, customEnd), "switchChain(targetChain.id)"],
     ] as const) {
       const switchChain = entrypoint.indexOf(switchExpression);
       const postSwitchSessionCheck = entrypoint.indexOf(

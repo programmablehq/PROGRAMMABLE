@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   cookie: vi.fn(),
   readToken: vi.fn(),
   readEthereumToken: vi.fn(),
+  readBaseToken: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -27,6 +28,8 @@ vi.mock("../lib/server/ethereum-explore", () => ({
   readEthereumTokenPresentation: vi.fn(async () => ({ presentation: null })),
 }));
 
+vi.mock("../lib/server/base-explore", () => ({ readBaseToken: mocks.readBaseToken }));
+
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import ExplorePage from "../app/explore/page";
 import ExploreChainPage from "../app/explore/[chain]/page";
@@ -40,6 +43,7 @@ const token = { tokenAddress: address, name: "Example token" };
 
 beforeEach(() => {
   mocks.cookie.mockReset();
+  mocks.readBaseToken.mockReset().mockResolvedValue({ chainId: 8453, status: "ready", token: null, updatedAt: null });
   mocks.readToken.mockReset().mockResolvedValue({ status: "ready", token: null, updatedAt: null });
   mocks.readEthereumToken.mockReset().mockResolvedValue({ chainId: 1, status: "ready", token: null, updatedAt: null });
 });
@@ -51,7 +55,7 @@ describe("Explore chain routes", () => {
   });
 
   it("opens one combined catalog independently of wallet preferences and legacy query values", async () => {
-    for (const query of [{}, { chain: "1" }, { chain: "4663" }]) {
+    for (const query of [{}, { chain: "1" }, { chain: "4663" }, { chain: "8453" }]) {
       mocks.cookie.mockReturnValue({ value: "1" });
       expect((await ExplorePage({ searchParams: Promise.resolve(query) })).type.name).toBe("UnifiedLaunchesView");
       expect(mocks.cookie).not.toHaveBeenCalled();
@@ -59,20 +63,20 @@ describe("Explore chain routes", () => {
   });
 
   it("rejects unsupported and repeated legacy chain parameters", async () => {
-    for (const chain of ["8453", ["1", "4663"]]) {
+    for (const chain of ["10", ["1", "4663"]]) {
       await expect(ExplorePage({ searchParams: Promise.resolve({ chain }) }))
         .rejects.toThrow("NOT_FOUND");
     }
   });
 
-  it.each(["robinhood", "ethereum"])("redirects the legacy %s bookmark to the same combined catalog", async chain => {
+  it.each(["robinhood", "ethereum", "base"])("redirects the legacy %s bookmark to the same combined catalog", async chain => {
     expect(exploreChainIdFromSlug(chain)).not.toBeNull();
     await expect(ExploreChainPage({ params: Promise.resolve({ chain }) })).rejects.toThrow("REDIRECT:/explore");
   });
 
   it("does not interpret arbitrary path segments as a chain", async () => {
-    expect(exploreChainIdFromSlug("base")).toBeNull();
-    await expect(ExploreChainPage({ params: Promise.resolve({ chain: "base" }) }))
+    expect(exploreChainIdFromSlug("unknown")).toBeNull();
+    await expect(ExploreChainPage({ params: Promise.resolve({ chain: "unknown" }) }))
       .rejects.toThrow("NOT_FOUND");
   });
 });
@@ -106,6 +110,15 @@ describe("verified token routing", () => {
     expect(mocks.readToken).not.toHaveBeenCalled();
   });
 
+  it("keeps explicit Base authoritative without reading either other chain", async () => {
+    const baseResult = { chainId: 8453, status: "ready", token: { ...token, name: "Base token" }, updatedAt: null };
+    mocks.readBaseToken.mockResolvedValue(baseResult);
+    expect(await resolveTokenPage(address, "8453")).toEqual(baseResult);
+    expect(mocks.readBaseToken).toHaveBeenCalledExactlyOnceWith(address);
+    expect(mocks.readEthereumToken).not.toHaveBeenCalled();
+    expect(mocks.readToken).not.toHaveBeenCalled();
+  });
+
   it("keeps explicit Robinhood links scoped even when the index is unavailable", async () => {
     mocks.readToken.mockResolvedValue({ status: "unavailable", token: null, updatedAt: null });
     expect(await resolveTokenPage(address, "4663")).toMatchObject({ chainId: 4663, token: null });
@@ -118,7 +131,7 @@ describe("verified token routing", () => {
   });
 
   it("rejects invalid or repeated chain values before reading a token", async () => {
-    expect(await resolveTokenPage(address, "8453")).toBeNull();
+    expect(await resolveTokenPage(address, "10")).toBeNull();
     expect(await resolveTokenPage(address, ["1", "4663"])).toBeNull();
     expect(mocks.readToken).not.toHaveBeenCalled();
     expect(mocks.readEthereumToken).not.toHaveBeenCalled();

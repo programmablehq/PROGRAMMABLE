@@ -79,7 +79,7 @@
     "contracts/scripts/test/custom-registry-v2-source-verification-core.test.mjs": "0x5fcab841acf435d9996ee4de1ffc0a75627cc090d41eb3c032c8da1978de9aa7",
     "contracts/test/CustomRegistryV2SafeAtomicBatchMainnetFork.t.sol": "0x2a282c4a124bfb8fdad8ead768c930fff8401e06a84a36cf741b4723fd38a17b",
     "contracts/test/CustomRegistryV2SafePublicMigrationMainnetFork.t.sol": "0xa2b019da84a56bd6082d8c2e77cced8112fb451cc02dec0a0c7acd34c7956834",
-    "contracts/scripts/verify-fork-tests-ci.mjs": "0xbee97019b7f8d56ed9163a85664456bfd238891da7e0257047f59eaf177f8a1f",
+    "contracts/scripts/verify-fork-tests-ci.mjs": "0xbb02b1d7860b70291bd650459474fb55694718d7440cc01b37cbd1c74eab5987",
     "config/custom-registry-v2-release-policy.json": "0xa01899a7cc22de0d36d5a90faa312bdae433de6ae9affc555145604a2848bbb2",
     "config/custom-registry-v2-production-policy.json": "0x21211974049e4e10bcc0935447fbcc01d9c4f335e2caeceb44003341bb63d90d",
     "config/custom-registry-v2-production-constructor.json": "0x2219c4cfb63a2ea040f2d1e04f1c7c5b94be217de4150bac08bbe282ceac1689",
