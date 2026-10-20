@@ -681,8 +681,10 @@ jobs:
         env:
           LATE_MIGRATION_FORK_RPC_URL: https://eth-mainnet.public.blastapi.io
           FOUNDATION_RPC_URL: ${{ secrets.ROBINHOOD_FOUNDATION_FORK_RPC_URL }}
+          FOUNDATION_ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_FOUNDATION_FORK_RPC_URL }}
         run: |
           : "${FOUNDATION_RPC_URL:?Configure the funded Robinhood fork RPC secret}"
+          : "${FOUNDATION_ETHEREUM_RPC_URL:?Configure the Ethereum fork RPC secret}"
           node scripts/ci/contracts-ci.mjs release
 
   contracts-analysis:
