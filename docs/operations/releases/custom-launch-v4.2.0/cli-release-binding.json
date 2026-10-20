@@ -219,7 +219,7 @@
     },
     {
       "path": "packages/launch/npm-shrinkwrap.json",
-      "sha256": "sha256:b19701f6b042959545669b7ba154d141da146f2c5bbc99f3f3c690a6b33fe995"
+      "sha256": "sha256:db2d7d06c1678f9b0331c5ddbfebe3bfe7fbb2a7a27b217bface73095b05ee69"
     },
     {
       "path": "packages/launch/src/constants.mjs",
