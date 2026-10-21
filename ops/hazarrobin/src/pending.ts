@@ -65,6 +65,10 @@ export const walletExecutionAbi = parseAbi(['function redeemDelegations(bytes[] 
 const delegationType = parseAbiParameters('(address delegate,address delegator,bytes32 authority,(address enforcer,bytes terms,bytes args)[] caveats,uint256 salt,bytes signature)[]');
 const ROOT_AUTHORITY = `0x${'ff'.repeat(32)}`;
 const ANY_DELEGATE = '0x0000000000000000000000000000000000000a11';
+const BATCH_MODE = `0x01${'00'.repeat(31)}`;
+const EXACT_BATCH_ENFORCER = '0x1e141e455d08721Dd5BCDA1BaA6Ea5633Afd5017';
+const batchType = parseAbiParameters('(address target,uint256 value,bytes callData)[]');
+const tokenPaymentAbi = parseAbi(['function transfer(address to,uint256 amount) returns(bool)']);
 
 /** Inspect only a mined wallet envelope. This never creates a delegation. */
 export function matchesWalletExecution(entry: PendingClaim, tx: { from: string; to: string | null; input: Hex; value: bigint }) {
@@ -74,11 +78,10 @@ export function matchesWalletExecution(entry: PendingClaim, tx: { from: string; 
   try {
     const decoded = decodeFunctionData({ abi: walletExecutionAbi, data: tx.input });
     const [contexts, modes, executions] = decoded.args;
-    if (contexts.length !== 1 || modes.length !== 1 || executions.length !== 1 || BigInt(modes[0]!) !== 0n ||
+    if (contexts.length !== 1 || modes.length !== 1 || executions.length !== 1 ||
+      !(BigInt(modes[0]!) === 0n || same(modes[0], BATCH_MODE)) ||
       !same(encodeFunctionData({ abi: walletExecutionAbi, functionName: 'redeemDelegations', args: decoded.args }), tx.input)) return null;
     const packed = executions[0]!;
-    if (packed.length < 106 || !same(packed.slice(0, 42), entry.to) ||
-      BigInt(`0x${packed.slice(42, 106)}`) !== 0n || !same(`0x${packed.slice(106)}`, entry.data)) return null;
     // The manager executes as the root delegator, not necessarily the outer
     // transaction's gas payer. Its pinned runtime validates the signatures and
     // authority chain; bind that root to the wallet that prepared this claim.
@@ -91,6 +94,25 @@ export function matchesWalletExecution(entry: PendingClaim, tx: { from: string; 
       if (!same(root.delegator, entry.account) || !same(root.authority, ROOT_AUTHORITY) ||
         !(same(leaf.delegate, tx.from) || same(leaf.delegate, ANY_DELEGATE))) return null;
     }
+    if (same(modes[0], BATCH_MODE)) {
+      const [calls] = decodeAbiParameters(batchType, packed);
+      if (!same(encodeAbiParameters(batchType, [calls]), packed) || calls.length < 1 || calls.length > 2) return null;
+      const claim = calls[0]!;
+      if (!same(claim.target, entry.to) || claim.value !== 0n || !same(claim.callData, entry.data)) return null;
+      // MetaMask can append a token payment for gas. Recognize this only in a
+      // strict batch committed in full by the root wallet's signed delegation.
+      // This inspects a mined receipt; it never constructs or authorizes a payment.
+      const root = delegations[delegations.length - 1];
+      if (!root?.caveats.some(c => same(c.enforcer, EXACT_BATCH_ENFORCER) && same(c.terms, packed))) return null;
+      if (calls.length === 2) {
+        const payment = calls[1]!;
+        if (payment.value !== 0n || BigInt(payment.target) === 0n || same(payment.target, entry.to)) return null;
+        const decodedPayment = decodeFunctionData({ abi: tokenPaymentAbi, data: payment.callData });
+        if (BigInt(decodedPayment.args[0]) === 0n || decodedPayment.args[1] === 0n ||
+          !same(encodeFunctionData({ abi: tokenPaymentAbi, functionName: 'transfer', args: decodedPayment.args }), payment.callData)) return null;
+      }
+    } else if (packed.length < 106 || !same(packed.slice(0, 42), entry.to) ||
+      BigInt(`0x${packed.slice(42, 106)}`) !== 0n || !same(`0x${packed.slice(106)}`, entry.data)) return null;
     return 'metamask';
   } catch { return null; }
 }

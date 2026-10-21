@@ -17,13 +17,15 @@ const entry: PendingClaim = { chainId: 4663, account, to, data: '0x12345678', no
 const receipt = (transactionHash = hash, status = 'success') => ({ transactionHash, blockHash, blockNumber: 20n, status });
 const direct = { hash, from: account, to, input: entry.data, value: 0n, nonce: 7 };
 const missing = (name: string) => Object.assign(Error('Not available'), { name });
-function relayed() {
+function relayed(batch = false) {
   const types = parseAbiParameters('(address delegate,address delegator,bytes32 authority,(address enforcer,bytes terms,bytes args)[] caveats,uint256 salt,bytes signature)[]');
+  const execution = batch ? encodeAbiParameters(parseAbiParameters('(address target,uint256 value,bytes callData)[]'), [[{target:to,value:0n,callData:entry.data}]])
+    : concat([to, toHex(0, { size: 32 }), entry.data]);
   const context = encodeAbiParameters(types, [[{ delegate: relayer, delegator: account,
-    authority: toHex(2n ** 256n - 1n, { size: 32 }), caveats: [], salt: 0n, signature: '0x01' }]]);
+    authority: toHex(2n ** 256n - 1n, { size: 32 }), caveats: batch ? [{enforcer:'0x1e141e455d08721Dd5BCDA1BaA6Ea5633Afd5017',terms:execution,args:'0x'}] : [], salt: 0n, signature: '0x01' }]]);
   return { ...direct, from: relayer, nonce: 83, to: '0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3',
     input: encodeFunctionData({ abi: walletExecutionAbi, functionName: 'redeemDelegations',
-      args: [[context], [toHex(0, { size: 32 })], [concat([to, toHex(0, { size: 32 }), entry.data])]] }) };
+      args: [[context], [batch ? `0x01${'00'.repeat(31)}` : toHex(0, { size: 32 })], [execution]] }) };
 }
 beforeEach(() => {
   const data = new Map<string, string>();
@@ -44,6 +46,14 @@ it('recovers a mined relayed claim and preserves the other chain journal', async
   mocks.clients.forEach(client => { client.getTransaction = async () => relayed(); });
   const result = await checkPending(() => {}, 4663);
   expect(result).toMatchObject({ outcome: 'confirmed', hash });
+  expect(pending(4663)).toBeNull();
+  expect(pending(1)?.hash).toBe(hash);
+});
+
+it('clears a verified strict MetaMask batch without submitting another claim', async () => {
+  remember(entry); remember({ ...entry, chainId: 1 });
+  mocks.clients.forEach(client => { client.getTransaction = async () => relayed(true); });
+  expect(await checkPending(() => {}, 4663)).toMatchObject({ outcome:'confirmed', hash });
   expect(pending(4663)).toBeNull();
   expect(pending(1)?.hash).toBe(hash);
 });
