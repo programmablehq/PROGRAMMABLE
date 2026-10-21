@@ -372,6 +372,11 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     <div ref={listRef} className={`${styles.page} ${profile ? styles.profilePage : "page-width"}`}>
       <header className={profile ? styles.profileHeading : styles.heading}>
         <Heading data-explore-heading id={headingId} tabIndex={-1}>{profile ? "Launches" : "Explore"}</Heading>
+        {profile?.enableClaims && profile.onAllRewards ? (
+          <button type="button" className={styles.rewardsButton} onClick={profile.onAllRewards}>
+            Claim rewards
+          </button>
+        ) : null}
       </header>
 
       <section className={styles.body} aria-labelledby={headingId}>
