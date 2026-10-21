@@ -828,7 +828,11 @@ export function DeveloperApiKeys({
 }: DeveloperApiKeysProps) {
   const searchParams = useSearchParams();
   const {
-    sessionReady: authReady,
+    authReady: identityReady,
+    sessionReady,
+    authenticated,
+    walletLinked,
+    disconnecting,
     connecting,
     getAccessToken,
     getIdentityToken,
@@ -840,6 +844,11 @@ export function DeveloperApiKeys({
     wallet,
   } = useWallet();
   const account = wallet?.account ?? null;
+  // Key management needs the authenticated wallet identity, while signing
+  // continues to use the provider readiness checks in the wallet actions.
+  const authReady = !disconnecting && (sessionReady || (
+    identityReady && authenticated && walletLinked && account !== null
+  ));
   const sessionKey = authReady ? (account ?? "disconnected") : "loading";
 
   return (
