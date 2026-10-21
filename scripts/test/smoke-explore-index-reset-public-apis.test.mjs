@@ -134,12 +134,15 @@ function responseSpec(url, method) {
         indexes: [
           { chainId: 1, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/ethereum" },
           { chainId: 4663, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/robinhood" },
+          { chainId: 8453, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/base" },
         ],
         providers: [{ name: "codex", roles: ["ethereum-classic-launch-discovery", "ethereum-and-robinhood-market-data"], health: "not-checked" }],
         customLaunchReadiness: [
           { chainId: 1, readinessUrl: "https://api.programmable.market/readyz", capabilitiesUrl: "https://api.programmable.market/v3/capabilities" },
           { chainId: 4663, readinessUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness",
             capabilitiesUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-capabilities" },
+          { chainId: 8453, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness",
+            capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities" },
         ],
       },
       headers: { ...RUNTIME_HEADERS, "x-programmable-indexing-status": "ready" },
@@ -441,6 +444,27 @@ test("smoke rejects retired operation, paused trigger, and health drift", async 
       }),
       /does not match the exact reset contract/u,
     );
+  }
+});
+
+test("smoke requires Base catalog and readiness evidence with exact endpoints", async () => {
+  const mutations = [
+    body => ({ ...body, indexes: body.indexes.slice(0, 2) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.slice(0, 2) }),
+    body => ({ ...body, indexes: body.indexes.map(index => index.chainId === 8453
+      ? { ...index, catalogUrl: "https://programmable.market/api/explore/ethereum" } : index) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 8453
+      ? { ...entry, readinessUrl: "https://api.programmable.market/readyz" } : entry) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 8453
+      ? { ...entry, capabilitiesUrl: "https://api.programmable.market/v3/capabilities" } : entry) }),
+  ];
+  for (const mutate of mutations) {
+    const fixture = resetFetch(({ spec, url }) => url.pathname === "/api/ops/health"
+      ? { ...spec, body: mutate(spec.body) } : spec);
+    await assert.rejects(runStagedExploreIndexResetSmokeV1({
+      environment: stagedEnvironment(), fetchImpl: fixture.fetchImpl,
+      appendOutput: () => undefined, now: () => new Date(NOW),
+    }), /does not match the exact reset contract/u);
   }
 });
 
