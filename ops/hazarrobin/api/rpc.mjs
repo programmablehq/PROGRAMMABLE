@@ -1,6 +1,17 @@
 import { rpcClients } from '../server/rpc.mjs';
 const allowed=new Set(['eth_chainId','eth_blockNumber','eth_getBlockByNumber','eth_getCode','eth_call','eth_estimateGas','eth_getTransactionReceipt','eth_getTransactionByHash','eth_getBalance','eth_gasPrice','eth_maxPriorityFeePerGas','eth_feeHistory','eth_getTransactionCount']);
 const limits=new Map();
+export function publicRpcError(error,method){
+  let current=error,gasLimit=false,data,code=-32000;
+  for(let i=0;current&&i<8;i++,current=current.cause){
+    if(Number.isInteger(current.code))code=current.code;
+    if(typeof current.data==='string'&&/^0x[0-9a-f]{0,4096}$/i.test(current.data))data=current.data;
+    if(/out of gas|Multicall3: call failed|gas required exceeds allowance|exceeds.*gas limit|gas.*cap|intrinsic gas too low/i.test(String(current.shortMessage??current.message??'')))gasLimit=true;
+  }
+  // Preserve only a safe capacity signal so the browser can split a batch.
+  // Provider URLs, credentials and raw error bodies never cross this boundary.
+  return {code,message:method==='eth_estimateGas'&&gasLimit?'Simulation gas cap exceeded.':'Netzwerkanfrage fehlgeschlagen.',...(data?{data}:{})};
+}
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
   if(req.method!=='POST')return res.status(405).end();
@@ -22,7 +33,7 @@ export default async function handler(req,res){
         const call=input.params[0];if(!call||call.value&&BigInt(call.value)!==0n||call.gas&&BigInt(call.gas)>16000000n)return {jsonrpc:'2.0',id:input.id,error:{code:-32602,message:'Dieser Aufruf ist nicht erlaubt.'}};
       }
       try{return {jsonrpc:'2.0',id:input.id,result:await client.request({method:input.method,params:input.params??[]})};}
-      catch(error){return {jsonrpc:'2.0',id:input.id,error:{code:error.code??-32000,message:'Netzwerkanfrage fehlgeschlagen.',...(typeof error.data==='string'&&/^0x[0-9a-f]*$/i.test(error.data)?{data:error.data}:{})}};}
+      catch(error){return {jsonrpc:'2.0',id:input.id,error:publicRpcError(error,input.method)};}
     }));
     return res.status(200).json(Array.isArray(body)?replies:replies[0]);
   }catch{return res.status(400).json({jsonrpc:'2.0',id:null,error:{code:-32600,message:'Ungültige Leseanfrage.'}});}

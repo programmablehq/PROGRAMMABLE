@@ -189,7 +189,7 @@ async function scanFees({ clients, releases, progress = () => {}, minimumBlock =
     need(!identities.has(key) && BigInt(key) !== 0n, "Ein Gebührenkonto wurde doppelt gefunden.");
     identities.add(key);
   }
-  await mapLimit(launches, 12, async launch => {
+  await mapLimit(launches.filter(launch=>!launch.quorumVerified), 12, async launch => {
     // Receipt validation checks event integrity. Both providers independently
     // verify every immutable factory, hook and ledger binding below.
     const receipt = await clients[1].getTransactionReceipt({ hash: launch.log.transactionHash });
@@ -202,7 +202,7 @@ async function scanFees({ clients, releases, progress = () => {}, minimumBlock =
   // This callback does not authorize a payout; validateLedger still checks it.
   onDiscovered(launches);
   const batches = [];
-  for (let index = 0; index < launches.length; index += 6) batches.push(launches.slice(index, index + 6));
+  for (let index = 0; index < launches.length; index += 24) batches.push(launches.slice(index, index + 24));
   let verified = 0;
   const checked = (await mapLimit(batches, 2, async batch => {
     const descriptors = batch.map(launch => {

@@ -11,7 +11,8 @@ vi.mock('../vendor/deployments.json',async()=>{
     ethereum:{canonicalStamp:{graphFactory:{address:'0x0000000000000000000000000000000000000033'}}}}};
 });
 vi.mock('./rpc.mjs',async original=>({...await original(),pin:mocks.pin,
-  rangeLogs:async()=>mocks.logs,readBoth:async(_c,calls)=>{mocks.reads(calls);return mocks.values;}}));
+  quorumLogs:async()=>mocks.logs,
+  readCodeHashes:async(clients,addresses)=>Promise.all(addresses.map(async address=>{const codes=await Promise.all(clients.map(c=>c.getCode({address})));if(codes[0]!==codes[1])throw Error("Anbietern");return keccak256(codes[0]);})),readBoth:async(_c,calls)=>{mocks.reads(calls);return mocks.values;}}));
 import { ethereumDiscovery } from './scanner.mjs';
 
 const a=n=>`0x${n.toString(16).padStart(40,'0')}`;

@@ -68,7 +68,7 @@ import {
   withTimeout,
 } from "../vendor/logic.mjs";
 
-import { legacyReader } from "./rpc.mjs";
+import { mapLimit, legacyReader } from "./rpc.mjs";
 import { claimData } from "../vendor/logic.mjs";
 
 export async function scanLegacyEthereum({clients, progress=()=>{}, balanceBlockNumber, excludedTokens=new Set()}) {
@@ -202,29 +202,11 @@ async function readCustomRegistryLogs(blockTag) {
 }
 
 async function readClassicLauncherLogs(launcher, blockTag) {
-  const latest = BigInt(blockTag);
-  const logs = [];
-  for (
-    let fromBlock = launcher.startBlock;
-    fromBlock <= latest;
-    fromBlock += EVENT_LOG_CHUNK_SIZE
-  ) {
-    const toBlock =
-      fromBlock + EVENT_LOG_CHUNK_SIZE - 1n < latest
-        ? fromBlock + EVENT_LOG_CHUNK_SIZE - 1n
-        : latest;
-    logs.push(
-      ...(await request("eth_getLogs", [
-        {
-          address: launcher.address,
-          fromBlock: toQuantityHex(fromBlock),
-          toBlock: toQuantityHex(toBlock),
-          topics: [launcher.eventTopic],
-        },
-      ])),
-    );
-  }
-  return logs;
+  const latest=BigInt(blockTag),ranges=[];
+  for(let first=launcher.startBlock;first<=latest;first+=EVENT_LOG_CHUNK_SIZE)
+    ranges.push({address:launcher.address,fromBlock:toQuantityHex(first),
+      toBlock:toQuantityHex(first+EVENT_LOG_CHUNK_SIZE-1n<latest?first+EVENT_LOG_CHUNK_SIZE-1n:latest),topics:[launcher.eventTopic]});
+  return (await mapLimit(ranges,6,filter=>request("eth_getLogs",[filter]))).flat();
 }
 
 async function readClassicLaunches(blockTag) {
@@ -271,30 +253,18 @@ async function readClassicLaunches(blockTag) {
 }
 
 async function readLaunchStampLogs(toBlock) {
-  const logs = [];
-  for (
-    let fromBlock = LAUNCH_STAMP_ROUTER.startBlock;
-    fromBlock <= toBlock;
-    fromBlock += EVENT_LOG_CHUNK_SIZE
-  ) {
-    const chunkEnd =
-      fromBlock + EVENT_LOG_CHUNK_SIZE - 1n < toBlock
-        ? fromBlock + EVENT_LOG_CHUNK_SIZE - 1n
-        : toBlock;
-    const filter = {
-      address: LAUNCH_STAMP_ROUTER.address,
-      fromBlock: toQuantityHex(fromBlock),
-      toBlock: toQuantityHex(chunkEnd),
-      topics: [LAUNCH_STAMP_TOPICS.launchStamped],
-    };
-    const responses = await routerQuorumRequest("eth_getLogs", [filter]);
-    const fingerprints = responses.map(launchStampLogSetFingerprint);
-    if (new Set(fingerprints).size !== 1)
-      throw new Error("Die Router-Loghistorie stimmt im RPC-Quorum nicht überein");
-    logs.push(...responses[0]);
-    if (logs.length > MAX_ROUTER_LAUNCHES)
-      throw new Error("Die Router-Launchliste überschreitet das sichere Scan-Limit");
-  }
+  const ranges=[];
+  for(let first=LAUNCH_STAMP_ROUTER.startBlock;first<=toBlock;first+=EVENT_LOG_CHUNK_SIZE)
+    ranges.push({address:LAUNCH_STAMP_ROUTER.address,fromBlock:toQuantityHex(first),
+      toBlock:toQuantityHex(first+EVENT_LOG_CHUNK_SIZE-1n<toBlock?first+EVENT_LOG_CHUNK_SIZE-1n:toBlock),topics:[LAUNCH_STAMP_TOPICS.launchStamped]});
+  const pages=await mapLimit(ranges,6,async filter=>{
+    const responses=await routerQuorumRequest("eth_getLogs",[filter]);
+    const fingerprints=responses.map(launchStampLogSetFingerprint);
+    if(new Set(fingerprints).size!==1)throw new Error("Die Router-Loghistorie stimmt im RPC-Quorum nicht überein");
+    return responses[0];
+  });
+  const logs=pages.flat();
+  if(logs.length>MAX_ROUTER_LAUNCHES)throw new Error("Die Router-Launchliste überschreitet das sichere Scan-Limit");
   return logs;
 }
 
@@ -1524,6 +1494,9 @@ async function readClaim(claim, blockTag) {
  await Promise.all(HOOKS.map(async hook=>state.hooks.set(hook.id,await readHook(hook,blockTag))));
  await Promise.all(CLAIMS.map(async claim=>state.claims.set(claim.id,await readClaim(claim,blockTag))));
  const error=claimSafetyError(); if(error) throw new Error(error);
- const claims=claimableClaims().map(def=>({...def,...state.claims.get(def.id),to:def.address,data:claimData(def),recipient:TREASURY,permissionless:false}));
+ const claims=claimableClaims().map(def=>({...def,...state.claims.get(def.id),to:def.address,data:claimData(def),recipient:TREASURY,
+  // EthCreatorFeeHookV2.claimLauncherFees pays its immutable treasury for any
+  // caller. Its pinned runtime and recipient were verified by readHook above.
+  permissionless:def.hookId==='classic-v2'&&state.hooks.get('classic-v2')?.verified===true&&claimData(def)===SELECTORS.claimLauncherFees}));
  return {claims, blockNumber:state.router.finalizedBlock, launches:state.router.launches, unsupported:routerClaimCoverage(state.router.launches).unsupported, launchCount:state.router.launches.length+state.classic.launches.length};
 }

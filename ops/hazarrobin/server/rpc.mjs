@@ -29,7 +29,8 @@ function cached(client, label) {
   const request=client.request.bind(client);
   client.request=async args=>{
     const p=args.params??[];
-    const stable=args.method==='eth_getLogs' || (args.method==='eth_getCode' && /^0x[0-9a-f]+$/i.test(p[1]??''));
+    // Event sets are fetched fresh so both providers detect reorgs together.
+    const stable=args.method==='eth_getCode' && /^0x[0-9a-f]+$/i.test(p[1]??'');
     if(!stable) return request(args);
     const key=json([label,args]);
     if(immutable.has(key)) return immutable.get(key);
@@ -42,7 +43,7 @@ function cached(client, label) {
 export function rpcClients(chainId) {
   need(chainId===1||chainId===4663, 'Unbekannte Chain.');
   if(clientsByChain.has(chainId)) return clientsByChain.get(chainId);
-  const urls=chainId===1 ? [process.env.ETH_PRIMARY,process.env.ETH_SECONDARY??'https://mainnet.gateway.tenderly.co',process.env.ETH_TERTIARY??'https://rpc.mevblocker.io'] : [process.env.RH_PRIMARY,process.env.RH_SECONDARY];
+  const urls=chainId===1 ? [process.env.ETH_PRIMARY,process.env.ETH_SECONDARY?.trim()||'https://mainnet.gateway.tenderly.co',process.env.ETH_TERTIARY?.trim()||'https://rpc.mevblocker.io'] : [process.env.RH_PRIMARY,process.env.RH_SECONDARY];
   need(urls.every(u=>typeof u==='string'&&u.startsWith('https://')), 'Die Netzwerkverbindung ist noch nicht eingerichtet.');
   // The archive fallback can reject large batches with a single rate-limit
   // object. A conservative batch size preserves viem's response mapping.
@@ -53,6 +54,26 @@ export async function pin(clients, binding, blockNumber) {
   const codes=await Promise.all(clients.map(c=>c.getCode({address:binding.address,blockNumber})));
   need(codes.every(code=>code&&code!=='0x'&&same(keccak256(code),binding.runtimeCodeHash)), `Vertragsprüfung fehlgeschlagen: ${binding.address}`);
   return codes[0];
+}
+
+// Read EXTCODEHASH for many accounts in one eth_call. This fixed program only
+// reads account code hashes and returns memory; it never calls submitted code,
+// writes storage, signs a transaction, or deploys a contract.
+export function codeHashProbe(addresses) {
+  need(addresses.length > 0 && addresses.length <= 128 && addresses.every(a => /^0x[0-9a-f]{40}$/i.test(a)), 'Ungültige Vertragsadressen.');
+  const word = n => n.toString(16).padStart(4, '0');
+  return '0x' + addresses.map((a, i) => `73${a.slice(2)}3f61${word(i * 32)}52`).join('') + `61${word(addresses.length * 32)}6000f3`;
+}
+export async function readCodeHashes(clients, addresses, blockNumber) {
+  if (!addresses.length) return [];
+  const chunks=[];
+  for(let i=0;i<addresses.length;i+=128) chunks.push(addresses.slice(i,i+128));
+  return (await mapLimit(chunks,2,async chunk=>{
+    const replies=await Promise.all(clients.map(c=>c.call({data:codeHashProbe(chunk),blockNumber})));
+    const data=replies[0]?.data;
+    need(/^0x[0-9a-f]+$/i.test(data??'') && data.length===2+64*chunk.length && replies.every(r=>same(r.data,data)), 'Vertrags-Hashes unterscheiden sich zwischen Anbietern.');
+    return chunk.map((_,i)=>'0x'+data.slice(2+i*64,2+(i+1)*64));
+  })).flat();
 }
 export async function readBoth(clients, calls, blockNumber, allowFailure=false) {
   if(!calls.length) return [];
@@ -109,6 +130,21 @@ export async function rangeLogs(client, filter, from, to, window=10000n) {
     catch(e){if(fromBlock>=toBlock||!/range|too many|more than|response size|limit exceeded/i.test(String(e.details??e.message)))throw e;const mid=(fromBlock+toBlock)/2n;return [...await rangeLogs(client,filter,fromBlock,mid,window),...await rangeLogs(client,filter,mid+1n,toBlock,window)];}
   });
   return groups.flat();
+}
+
+/** Both nodes must return the exact mined events, including receipt identity.
+ * Reverted transactions cannot produce these canonical logs. This replaces
+ * one receipt RPC per launch without trusting an indexer or a single provider.
+ */
+export async function quorumLogs(clients, filter, from, to, window=10000n) {
+  const results=await Promise.all(clients.map(c=>rangeLogs(c,filter,from,to,window)));
+  const fingerprint=logs=>json(logs.map(l=>{
+    need(!l.removed && /^0x[0-9a-f]{64}$/i.test(l.blockHash??'') && /^0x[0-9a-f]{64}$/i.test(l.transactionHash??'') && l.blockNumber>=from && l.blockNumber<=to && Number.isInteger(l.logIndex), 'Ungültiger bestätigter Launch-Eintrag.');
+    return [l.address.toLowerCase(),l.blockNumber,l.blockHash.toLowerCase(),l.transactionHash.toLowerCase(),l.logIndex,l.data.toLowerCase(),l.topics.map(t=>t.toLowerCase())];
+  }).sort((a,b)=>json(a).localeCompare(json(b))));
+  const hashes=results.map(fingerprint);
+  need(hashes.every(h=>h===hashes[0]), 'Die Launch-Historie unterscheidet sich zwischen Anbietern.');
+  return results[0];
 }
 
 /** Batch pure getter reads, preserving sender-sensitive simulations as direct calls. */

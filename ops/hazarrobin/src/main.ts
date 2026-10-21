@@ -1,5 +1,6 @@
 import '@fontsource-variable/geist';
 import './styles.css';
+import { runClaimQueue } from './claim-queue';
 import { formatUnits, type Address } from 'viem';
 import { readSnapshot, claimFees, type ChainSnapshot, type WalletConnection } from './chain';
 import { FEE_RECIPIENT, TOKEN_ID, LOCKER, CLAIM_CALLDATA } from './config';
@@ -12,7 +13,8 @@ const groups:Group[]=[
  {id:'robinhood',title:'Robinhood Ecosystem',description:'Module Mode und Custom Launches',network:'Robinhood',chainId:4663,busy:false,message:'Noch nicht gescannt',error:''},
  {id:'ethereum',title:'Ethereum Ecosystem',description:'Module Mode und Custom Launches',network:'Ethereum',chainId:1,busy:false,message:'Noch nicht gescannt',error:''},
 ];
-let wallet:WalletConnection|null=null,claiming=false,notice='';
+let wallet:WalletConnection|null=null,claiming=false,claimAllRunning=false,notice='';
+const scans=new Map<GroupId,Promise<void>>();
 const app=document.querySelector<HTMLDivElement>('#app')!;
 const escape=(s:unknown)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const short=(s:string)=>`${s.slice(0,6)}…${s.slice(-4)}`;
@@ -32,8 +34,8 @@ function card(g:Group,index:number){
  <div class="amounts">${v.length?v.filter(x=>x.amount>0n||v.every(y=>y.amount===0n)).map(x=>`<div class="amount"><strong>${amount(x.amount,x.decimals)}</strong><span>${escape(x.symbol)}</span></div>`).join(''):'<div class="amount empty"><strong>—</strong><span>Gebühren</span></div>'}</div>
  <div class="status-line"><span class="dot"></span><span>${statusText}</span></div>
  <p class="progress" aria-live="polite">${escape(g.error||g.message)}</p>
- <button class="claim primary" data-claim="${g.id}" ${canClaim(g)?'':'disabled'}>${claiming&&g.busy?'Wird geclaimt…':g.busy?'Wird gescannt…':loaded&&!positive(g)?'Keine offenen Fees':'Fees claimen'}<span aria-hidden="true">↗</span></button>
- <button class="secondary scan-one" data-scan="${g.id}" ${g.busy||claiming?'disabled':''}>Neu scannen</button>
+ <button class="claim primary" data-claim="${g.id}" ${canClaim(g)&&!claimAllRunning?'':'disabled'}>${claiming&&g.busy?'Wird geclaimt…':g.busy?'Wird gescannt…':loaded&&!positive(g)?'Keine offenen Fees':'Fees claimen'}<span aria-hidden="true">↗</span></button>
+ <button class="secondary scan-one" data-scan="${g.id}" ${g.busy||claiming||claimAllRunning?'disabled':''}>Neu scannen</button>
  ${loaded?`<details><summary>Details ansehen</summary><div class="details-body">
  ${g.id==='v4'?`<p>V4 LP-Position ${TOKEN_ID}. Es werden nur Gebühren ausgezahlt; die Liquidität bleibt gesperrt.</p>`:`<p>${g.scan!.launchCount} Launches geprüft · ${g.scan!.claims.length} offene Gebührenkonten</p>`}
  ${recipients(g).map(r=>`<div class="recipient"><span>Empfänger</span><a href="${explorer(g)}/address/${r}" target="_blank" rel="noreferrer">${short(r)}</a></div>`).join('')}
@@ -45,12 +47,12 @@ function card(g:Group,index:number){
  </div></details>`:''}</section>`;
 }
 function render(){
- app.innerHTML=`<header><a class="brand" href="https://programmable.market" target="_blank" rel="noreferrer"><img src="/programmable.png" alt=""/><span>programmable<span class="brand-sub">fee claims</span></span></a><button class="wallet" id="connect" ${claiming?'disabled':''}><span class="wallet-dot ${wallet?'connected':''}"></span>${wallet?short(wallet.account):'Wallet verbinden'}</button></header>
- <main><div class="hero"><span class="eyebrow">HAZARROBIN</span><h1>Alle Fees.<br><span>Drei Claims.</span></h1><p>Scanne die Gebühren unseres Coins und beider Ecosystems.<br>ETH und Token werden an die hinterlegten Wallets ausgezahlt.</p><div class="hero-actions"><button id="scan-all" class="primary" ${groups.some(g=>g.busy)||claiming?'disabled':''}>${groups.some(g=>g.busy)&&!claiming?'Scan läuft…':'Alles scannen'}<span aria-hidden="true">↻</span></button><button id="claim-all" class="outline" ${!groups.some(canClaim)||groups.some(g=>g.busy)||claiming?'disabled':''}>Alles claimen <span aria-hidden="true">↗</span></button></div></div>
+ app.innerHTML=`<header><a class="brand" href="https://programmable.market" target="_blank" rel="noreferrer"><img src="/programmable.png" alt=""/><span>programmable<span class="brand-sub">fee claims</span></span></a><button class="wallet" id="connect" ${claiming||claimAllRunning?'disabled':''}><span class="wallet-dot ${wallet?'connected':''}"></span>${wallet?short(wallet.account):'Wallet verbinden'}</button></header>
+ <main><div class="hero"><span class="eyebrow">HAZARROBIN</span><h1>Alle Fees.<br><span>Ein Ablauf.</span></h1><p>Scanne die Gebühren unseres Coins und beider Ecosystems.<br>ETH und Token werden an die hinterlegten Wallets ausgezahlt.</p><div class="hero-actions"><button id="scan-all" class="primary" ${groups.some(g=>g.busy)||claiming||claimAllRunning?'disabled':''}>${groups.some(g=>g.busy)&&!claiming?'Scan läuft…':'Alles scannen'}<span aria-hidden="true">↻</span></button><button id="claim-all" class="outline" ${!groups.some(canClaim)||claiming||claimAllRunning?'disabled':''}>${claimAllRunning?'Claims laufen…':'Alles claimen'} <span aria-hidden="true">↗</span></button></div></div>
  <div id="notice" class="notice ${notice?'visible':''}" role="status">${escape(notice)}</div>
- ${pendingClaims().map(p=>`<div class="pending">${p.chainId===1?'Ethereum':'Robinhood'}: Vorherigen Auftrag prüfen. ${p.hash?`<a href="${p.chainId===1?'https://etherscan.io':'https://robinhoodchain.blockscout.com'}/tx/${p.hash}" target="_blank" rel="noreferrer">Transaktion ansehen</a> · `:''}<button data-pending="${p.chainId}">Status prüfen</button></div>`).join('')}
+ ${pendingClaims().map(p=>`<div class="pending">${p.chainId===1?'Ethereum':'Robinhood'}: Vorherigen Auftrag prüfen. ${p.hash?`<a href="${p.chainId===1?'https://etherscan.io':'https://robinhoodchain.blockscout.com'}/tx/${p.hash}" target="_blank" rel="noreferrer">Transaktion ansehen</a> · `:''}<button data-pending="${p.chainId}" ${claiming||claimAllRunning?'disabled':''}>Status prüfen</button></div>`).join('')}
  <div class="grid">${groups.map(card).join('')}</div>
- <p class="footnote">Kein Mindestbetrag. Keine Freigabe deiner Token. Pro Chain bestätigst du die Auszahlung in deiner Wallet.</p>
+ <p class="footnote">Kein Mindestbetrag. Keine Freigabe deiner Token. Bestätige die Auszahlungen in deiner Wallet. Je nach Anzahl der Konten sind mehrere Transaktionen nötig.</p>
  </main><footer><span>Programmable Treasury</span><div><a href="/privacy.html">Datenschutz</a><a href="/terms.html">Hinweise</a></div></footer>`;
  document.querySelector('#connect')?.addEventListener('click',()=>void connectWallet());
  document.querySelector('#scan-all')?.addEventListener('click',()=>void scanAll());
@@ -61,13 +63,18 @@ function render(){
 }
 const message=(error:unknown)=>error instanceof Error?(('shortMessage' in error?String(error.shortMessage):error.message).slice(0,260)):'Bitte erneut versuchen.';
 async function connectWallet(){try{wallet=await connect();notice='Wallet verbunden.';}catch(e){notice=message(e);}render();}
-async function scanGroup(g:Group){if(g.busy||claiming)return;g.busy=true;g.error='';g.message='Gebühren werden geprüft…';render();try{
+function scanGroup(g:Group):Promise<void>{
+ const existing=scans.get(g.id);if(existing)return existing;
+ if(g.busy||claiming)return Promise.resolve();
+ const task=(async()=>{g.busy=true;g.error='';g.message='Gebühren werden geprüft…';render();try{
  if(g.id==='v4'){g.snapshot=await readSnapshot();if(!g.snapshot.trusted)throw Error('LP-Vertragsprüfung fehlgeschlagen. Auszahlung pausiert.');g.message='LP-Gebühren live gelesen.';}
  else{g.scan=await scanChain(g.chainId,s=>{g.message=s;render();});g.message=g.scan.complete?'Alle unterstützten Quellen geprüft.':g.scan.issues.length?'Ein Teil der Quellen ist noch nicht erreichbar.':'Verfügbare Fees bereit. Weitere Informationen siehe Details.';}
- }catch(e){g.error=message(e);}finally{g.busy=false;render();}}
+ }catch(e){g.error=message(e);g.scan=undefined;g.snapshot=undefined;}finally{g.busy=false;render();}})();
+ const tracked=task.finally(()=>{scans.delete(g.id);});scans.set(g.id,tracked);return tracked;
+}
 async function scanAll(){notice='';await Promise.all(groups.map(scanGroup));}
-async function recover(chainId:1|4663){if(claiming)return;claiming=true;try{await checkPending(s=>{notice=s;render();},chainId);}catch(e){notice=message(e);}finally{claiming=false;render();}if(!pending(chainId))await Promise.all(groups.filter(g=>g.chainId===chainId).map(scanGroup));}
-async function claimGroup(g:Group){if(claiming)return;if(!wallet){await connectWallet();if(!wallet)return;}
+async function recover(chainId:1|4663){if(claiming||claimAllRunning)return;claiming=true;try{await checkPending(s=>{notice=s;render();},chainId);}catch(e){notice=message(e);}finally{claiming=false;render();}if(!pending(chainId))await Promise.all(groups.filter(g=>g.chainId===chainId).map(scanGroup));}
+async function claimGroup(g:Group,refreshAfter=true){if(claiming)return;if(!wallet){await connectWallet();if(!wallet)return;}
  if(g.id!=='v4'&&(!g.scan||Date.now()-g.scan.scannedAt>90000)){await scanGroup(g);if(!g.scan)return;}
  claiming=true;g.busy=true;g.error='';notice='';render();
  try{
@@ -76,11 +83,22 @@ async function claimGroup(g:Group){if(claiming)return;if(!wallet){await connectW
  let nonce=0;
  await claimFees(wallet,p=>{if(p.nonce!==undefined)nonce=p.nonce;g.message=p.stage==='wallet'?'In der Wallet bestätigen…':p.stage==='confirmed'?'Claim bestätigt.':'Auf Bestätigung warten…';if(p.stage==='wallet')remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now()});if(p.hash)remember({chainId:4663,account:wallet!.account,to:LOCKER,data:CLAIM_CALLDATA,nonce,created:Date.now(),hash:p.hash});render();});remember(null,g.chainId);
  }else{const result=await claimEcosystem(g.scan!,wallet,s=>{g.message=s;render();});if(result.remaining)notice=`${result.count} Gebührenkonten ausgezahlt. Für ${result.remaining} weitere Konten bitte die Empfänger-Wallet verbinden.`;}
+ if(g.scan)g.scan={...g.scan,claims:g.scan.claims.filter(c=>!eligible([c],wallet!.account).length)};
+ if(g.snapshot)g.snapshot={...g.snapshot,claimableEth:0n,claimableV4:0n};
  g.message='Auszahlung bestätigt.';if(!notice)notice=`${g.title}: Fees ausgezahlt.`;
  }catch(e){if(walletRequestNotSent(e))remember(null,g.chainId);g.error=message(e);notice=g.error;}
  finally{g.busy=false;claiming=false;render();}
- if(!g.error)await scanGroup(g);
+ if(!g.error&&refreshAfter)await scanGroup(g);
 }
-async function claimAll(){const blocked=new Set<number>();for(const g of groups){if(!blocked.has(g.chainId)&&canClaim(g)){await claimGroup(g);if(g.error||pending(g.chainId))blocked.add(g.chainId);}}}
+async function claimAll(){
+ if(claimAllRunning||claiming)return;claimAllRunning=true;render();
+ try{await runClaimQueue(groups,{
+  scanning:g=>scans.has(g.id),wait:g=>scans.get(g.id)??Promise.resolve(),
+  eligible:g=>!!canClaim(g),chain:g=>g.chainId,claim:g=>claimGroup(g,false),
+  failed:g=>!!g.error||!!pending(g.chainId),
+ });}finally{claimAllRunning=false;render();}
+ // Preserve failures and refresh only after the entire wallet queue.
+ await Promise.all(groups.filter(g=>!g.error&&!pending(g.chainId)).map(scanGroup));
+}
 window.ethereum?.on?.('accountsChanged',()=>{wallet=null;notice='Wallet gewechselt. Bitte erneut verbinden.';render();});
 render();void scanAll();
