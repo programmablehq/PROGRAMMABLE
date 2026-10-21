@@ -3026,7 +3026,67 @@
         "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativeTargetRolesV1"
       },
       "FinalizedCheckpointV1": {
-        "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedCheckpointV1"
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "blockNumber",
+          "blockHash",
+          "quorumSize",
+          "observations"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.base-launch-finalized-checkpoint-quorum.v1"
+          },
+          "blockNumber": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/CanonicalUint256"
+          },
+          "blockHash": {
+            "$ref": "./custom-launch-v2.json#/components/schemas/LowerHex32"
+          },
+          "quorumSize": {
+            "const": 2
+          },
+          "observations": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/FinalizedProviderObservationV1"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "const": "primary"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/FinalizedProviderObservationV1"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "const": "secondary"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "description": "Two-provider finalized checkpoint quorum. It may coexist with submitted evidence when the agreed checkpoint still trails the launch block.",
+        "additionalProperties": false
       },
       "FinalizedCustomLaunchMetadataListV1": {
         "type": "object",
@@ -3355,6 +3415,9 @@
       "FinalizedCustomLaunchTokenMetadataReadbackV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedCustomLaunchTokenMetadataReadbackV1"
       },
+      "FinalizedProviderObservationV1": {
+        "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedProviderObservationV1"
+      },
       "FinalizedTradeAdapterDescriptorV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/FinalizedTradeAdapterDescriptorV1"
       },
@@ -3463,108 +3526,30 @@
         "additionalProperties": false
       },
       "ProgrammableTradeFeePolicyV36": {
-        "oneOf": [
-          {
-            "const": {
-              "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
-              "policyVersion": "programmable.ethereum-routed-native-fee.v1",
-              "scope": "programmable-routed-ethereum-trades",
-              "ratePpm": "3000",
-              "rateDenominator": "1000000",
-              "rateBps": 30,
-              "modeSelection": "server-exact-runtime-and-trade-proof",
-              "defaultCollection": {
-                "mode": "programmable_routed",
-                "routedRateBps": 30,
-                "basis": "gross-native-by-side",
-                "buyBasis": "funded-native-input",
-                "sellBasis": "gross-native-output-credit",
-                "currency": "native-ETH",
-                "rounding": "floor-once-per-swap",
-                "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                "collection": "atomic-native-transfer-in-swap"
-              },
-              "native30Waiver": {
-                "mode": "pool_enforced_native30",
-                "routedRateBps": 0,
-                "basis": "authenticated-gross-native",
-                "currency": "native-ETH",
-                "rounding": "ceil-per-trade",
-                "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                "hook": "EthereumNative30HookV2",
-                "vault": "EthereumNativeFeeVaultV2",
-                "proof": "exact-runtime-and-trade-accrual",
-                "applicantAssertionsAccepted": false
-              },
-              "launchAdmissionEstablishesFeeCollection": false,
-              "externalTradeFeeGuaranteed": false,
-              "historicalSignedFeeObligations": "preserved"
-            }
+        "const": {
+          "schemaVersion": "programmable.base-programmable-trade-fee-policy.v1",
+          "policyVersion": "programmable.base-native-fee.v1",
+          "scope": "base-custom-launch-trades",
+          "ratePpm": "3000",
+          "rateDenominator": "1000000",
+          "rateBps": 30,
+          "modeSelection": "server-exact-runtime-and-trade-proof",
+          "defaultCollection": {
+            "mode": "pool_enforced",
+            "routedRateBps": 0,
+            "basis": "gross-native-by-side",
+            "buyBasis": "funded-native-input",
+            "sellBasis": "gross-native-output-credit",
+            "currency": "native-ETH",
+            "rounding": "ceil-per-trade",
+            "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+            "collection": "atomic-pool-fee-accrual"
           },
-          {
-            "const": {
-              "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
-              "policyVersion": "programmable.ethereum-routed-native-fee.v2",
-              "scope": "programmable-routed-ethereum-trades",
-              "ratePpm": "3000",
-              "rateDenominator": "1000000",
-              "rateBps": 30,
-              "modeSelection": "server-exact-runtime-and-trade-proof",
-              "defaultCollection": {
-                "mode": "programmable_routed",
-                "routedRateBps": 30,
-                "basis": "gross-native-by-side",
-                "buyBasis": "funded-native-input",
-                "sellBasis": "gross-native-output-credit",
-                "currency": "native-ETH",
-                "rounding": "floor-once-per-swap",
-                "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                "collection": "atomic-native-transfer-in-swap"
-              },
-              "native30Waiver": {
-                "mode": "pool_enforced_native30",
-                "routedRateBps": 0,
-                "basis": "authenticated-gross-native",
-                "currency": "native-ETH",
-                "rounding": "ceil-per-trade",
-                "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                "hook": "EthereumNative30HookV3",
-                "vault": "EthereumNativeFeeVaultV3",
-                "proof": "exact-runtime-and-trade-accrual",
-                "applicantAssertionsAccepted": false
-              },
-              "launchAdmissionEstablishesFeeCollection": false,
-              "externalTradeFeeGuaranteed": false,
-              "historicalSignedFeeObligations": "preserved"
-            }
-          },
-          {
-            "const": {
-              "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
-              "policyVersion": "programmable.ethereum-routed-native-fee.v3",
-              "scope": "programmable-routed-ethereum-trades",
-              "ratePpm": "10000",
-              "rateDenominator": "1000000",
-              "rateBps": 100,
-              "modeSelection": "server-exact-runtime-and-trade-proof",
-              "defaultCollection": {
-                "mode": "programmable_routed",
-                "routedRateBps": 100,
-                "basis": "gross-native-by-side",
-                "buyBasis": "funded-native-input",
-                "sellBasis": "gross-native-output-credit",
-                "currency": "native-ETH",
-                "rounding": "floor-once-per-swap",
-                "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                "collection": "atomic-native-transfer-in-swap"
-              },
-              "native30Waiver": null,
-              "launchAdmissionEstablishesFeeCollection": false,
-              "externalTradeFeeGuaranteed": false,
-              "historicalSignedFeeObligations": "preserved"
-            }
-          }
-        ]
+          "native30Waiver": null,
+          "launchAdmissionEstablishesFeeCollection": false,
+          "externalTradeFeeGuaranteed": false,
+          "historicalSignedFeeObligations": "preserved"
+        }
       },
       "ProjectMetadataV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/ProjectMetadataV1"
@@ -3613,7 +3598,7 @@
         "type": "object",
         "properties": {
           "schemaVersion": {
-            "const": "programmable.ethereum-launch-routing-fee-policy-binding.v1"
+            "const": "programmable.base-launch-routing-fee-policy-binding.v1"
           },
           "launchProfileVersion": {
             "const": "3.6.0"
@@ -3623,11 +3608,7 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           },
           "policyHash": {
-            "enum": [
-              "sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3",
-              "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
-              "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a"
-            ]
+            "const": "sha256:415895be4475524db1639987a48cd5b6a64603c14ee41c4e05800c06aff3bd56"
           },
           "policy": {
             "$ref": "#/components/schemas/ProgrammableTradeFeePolicyV36"
@@ -3665,11 +3646,29 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           },
           "enforcementBoundary": {
-            "const": {
-              "chainId": "1",
-              "blockNumber": "26142122",
-              "blockHash": "0x823e99cec0bb5b6011afc44891a1fd897b7efcbd83658cb9bc176dc35f5f86a3"
-            }
+            "type": "object",
+            "required": [
+              "chainId",
+              "blockNumber",
+              "blockHash",
+              "releaseId"
+            ],
+            "properties": {
+              "chainId": {
+                "const": "8453"
+              },
+              "blockNumber": {
+                "const": "52866196"
+              },
+              "blockHash": {
+                "const": "0x77c7a70a0a1d538879c9247ba16efc716f1d2226b2c56d385daa6ddcd30d33b9"
+              },
+              "releaseId": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            },
+            "additionalProperties": false
           }
         },
         "required": [
@@ -3683,148 +3682,7 @@
           "enforcementBoundary"
         ],
         "additionalProperties": false,
-        "description": "sha256(schemaVersion + NUL + canonicalJson(all fields except bindingHash)); canonicalJson sorts object keys, compact separators. Join this server-authored record to the exact finalized onchain stamp, router, token, hook, pool and transaction. Persist the validated classification; missing or inconsistent classification after the boundary prevents trade preparation.",
-        "allOf": [
-          {
-            "if": {
-              "properties": {
-                "policy": {
-                  "const": {
-                    "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
-                    "policyVersion": "programmable.ethereum-routed-native-fee.v1",
-                    "scope": "programmable-routed-ethereum-trades",
-                    "ratePpm": "3000",
-                    "rateDenominator": "1000000",
-                    "rateBps": 30,
-                    "modeSelection": "server-exact-runtime-and-trade-proof",
-                    "defaultCollection": {
-                      "mode": "programmable_routed",
-                      "routedRateBps": 30,
-                      "basis": "gross-native-by-side",
-                      "buyBasis": "funded-native-input",
-                      "sellBasis": "gross-native-output-credit",
-                      "currency": "native-ETH",
-                      "rounding": "floor-once-per-swap",
-                      "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                      "collection": "atomic-native-transfer-in-swap"
-                    },
-                    "native30Waiver": {
-                      "mode": "pool_enforced_native30",
-                      "routedRateBps": 0,
-                      "basis": "authenticated-gross-native",
-                      "currency": "native-ETH",
-                      "rounding": "ceil-per-trade",
-                      "recipient": "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                      "hook": "EthereumNative30HookV2",
-                      "vault": "EthereumNativeFeeVaultV2",
-                      "proof": "exact-runtime-and-trade-accrual",
-                      "applicantAssertionsAccepted": false
-                    },
-                    "launchAdmissionEstablishesFeeCollection": false,
-                    "externalTradeFeeGuaranteed": false,
-                    "historicalSignedFeeObligations": "preserved"
-                  }
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "policyHash": {
-                  "const": "sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3"
-                }
-              }
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "policy": {
-                  "const": {
-                    "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
-                    "policyVersion": "programmable.ethereum-routed-native-fee.v2",
-                    "scope": "programmable-routed-ethereum-trades",
-                    "ratePpm": "3000",
-                    "rateDenominator": "1000000",
-                    "rateBps": 30,
-                    "modeSelection": "server-exact-runtime-and-trade-proof",
-                    "defaultCollection": {
-                      "mode": "programmable_routed",
-                      "routedRateBps": 30,
-                      "basis": "gross-native-by-side",
-                      "buyBasis": "funded-native-input",
-                      "sellBasis": "gross-native-output-credit",
-                      "currency": "native-ETH",
-                      "rounding": "floor-once-per-swap",
-                      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                      "collection": "atomic-native-transfer-in-swap"
-                    },
-                    "native30Waiver": {
-                      "mode": "pool_enforced_native30",
-                      "routedRateBps": 0,
-                      "basis": "authenticated-gross-native",
-                      "currency": "native-ETH",
-                      "rounding": "ceil-per-trade",
-                      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                      "hook": "EthereumNative30HookV3",
-                      "vault": "EthereumNativeFeeVaultV3",
-                      "proof": "exact-runtime-and-trade-accrual",
-                      "applicantAssertionsAccepted": false
-                    },
-                    "launchAdmissionEstablishesFeeCollection": false,
-                    "externalTradeFeeGuaranteed": false,
-                    "historicalSignedFeeObligations": "preserved"
-                  }
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "policyHash": {
-                  "const": "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5"
-                }
-              }
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "policy": {
-                  "const": {
-                    "schemaVersion": "programmable.ethereum-programmable-trade-fee-policy.v1",
-                    "policyVersion": "programmable.ethereum-routed-native-fee.v3",
-                    "scope": "programmable-routed-ethereum-trades",
-                    "ratePpm": "10000",
-                    "rateDenominator": "1000000",
-                    "rateBps": 100,
-                    "modeSelection": "server-exact-runtime-and-trade-proof",
-                    "defaultCollection": {
-                      "mode": "programmable_routed",
-                      "routedRateBps": 100,
-                      "basis": "gross-native-by-side",
-                      "buyBasis": "funded-native-input",
-                      "sellBasis": "gross-native-output-credit",
-                      "currency": "native-ETH",
-                      "rounding": "floor-once-per-swap",
-                      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                      "collection": "atomic-native-transfer-in-swap"
-                    },
-                    "native30Waiver": null,
-                    "launchAdmissionEstablishesFeeCollection": false,
-                    "externalTradeFeeGuaranteed": false,
-                    "historicalSignedFeeObligations": "preserved"
-                  }
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "policyHash": {
-                  "const": "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a"
-                }
-              }
-            }
-          }
-        ]
+        "description": "sha256(schemaVersion + NUL + canonicalJson(all fields except bindingHash)); canonicalJson sorts object keys, compact separators. Join this server-authored record to the exact finalized onchain stamp, router, token, hook, pool and transaction. Persist the validated classification; missing or inconsistent classification after the boundary prevents trade preparation."
       },
       "SelectedFeeHundredthsOfBipV1": {
         "type": "string",

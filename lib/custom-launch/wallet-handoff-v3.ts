@@ -1458,7 +1458,7 @@ function assertFinalizedCheckpointV3(
   const blockNumber = canonicalUint256(checkpoint.blockNumber).parsed;
   const blockHash = exactLowerBytes32(checkpoint.blockHash);
   if (checkpoint.schemaVersion
-      !== (context.chainId === "8453" ? "programmable.base-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
+      !== (context.chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
     || checkpoint.quorumSize !== 2
     || blockNumber > context.observedAtBlockNumber
     || (context.launchFinalityState === "finalized"

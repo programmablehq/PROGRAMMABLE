@@ -1,11 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { canonicalizeJson } from "../packages/launch/src/canonical-json.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = name => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 const profile = read("packages/launch/src/base-profile-v1.json");
 const source = read("public/openapi/custom-launch-v3.6.json");
+const legacy = read("public/openapi/custom-launch-v3.json");
 const prefix = "/v4/chains/8453";
 const replace = value => {
   if (Array.isArray(value)) return value.map(replace);
@@ -17,9 +20,26 @@ const replace = value => {
   }
   return typeof value === "string" ? value.replaceAll("/v3/", prefix + "/")
     .replaceAll("Ethereum Mainnet", "Base").replaceAll("Ethereum mainnet", "Base")
-    .replaceAll("programmable.ethereum-finalized-checkpoint-quorum.v1", "programmable.base-finalized-checkpoint-quorum.v1") : value;
+    .replaceAll("programmable.ethereum-finalized-checkpoint-quorum.v1", "programmable.base-launch-finalized-checkpoint-quorum.v1") : value;
 };
 const schemas = replace(source.components.schemas);
+// Resolve the chain-specific legacy schema before translating it. Keeping its
+// external reference would still require Ethereum's checkpoint on Base.
+schemas.FinalizedCheckpointV1 = replace(legacy.components.schemas.FinalizedCheckpointV1);
+schemas.ProgrammableTradeFeePolicyV36 = { const: profile.programmableTradeFeePolicy };
+const routingFee = schemas.RoutingFeePolicyBindingV36;
+routingFee.properties.schemaVersion = { const: "programmable.base-launch-routing-fee-policy-binding.v1" };
+routingFee.properties.policyHash = { const: "sha256:" + createHash("sha256")
+  .update(profile.programmableTradeFeePolicy.schemaVersion + "\0" + canonicalizeJson(profile.programmableTradeFeePolicy)).digest("hex") };
+routingFee.properties.enforcementBoundary = {
+  type: "object", required: ["chainId", "blockNumber", "blockHash", "releaseId"],
+  properties: {
+    chainId: { const: "8453" }, blockNumber: { const: "52866196" },
+    blockHash: { const: "0x77c7a70a0a1d538879c9247ba16efc716f1d2226b2c56d385daa6ddcd30d33b9" },
+    releaseId: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+  }, additionalProperties: false,
+};
+delete routingFee.allOf;
 schemas.DirectNativeHookGraphProfileV1 = { const: profile };
 schemas.CustomLaunchCreateRequestV3.properties.launchProfile = { const: profile };
 schemas.CustomLaunchCreateRequestV3.properties.chainId = { const: "8453" };
