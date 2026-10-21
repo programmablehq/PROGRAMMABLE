@@ -204,6 +204,6 @@
 .loadingSwap { background: var(--panel-fill-soft); border-radius: 16px; min-height: 520px; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .market { animation: marketEnter 220ms var(--webde-ease) both; }
+  .market { animation: marketEnter 220ms var(--webde-ease) backwards; }
   @keyframes marketEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 }
