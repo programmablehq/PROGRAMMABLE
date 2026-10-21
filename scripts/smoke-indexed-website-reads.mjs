@@ -23,6 +23,7 @@ const HASH = /^0x(?!0{64}$)[0-9a-f]{64}$/iu;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const BLOCK = /^(?:0|[1-9][0-9]{0,19})$/u;
 const PAGE_SIZE = 50;
+const PAGE_CONCURRENCY = 4;
 // The canonical Robinhood token occupies the first slot on every Explore page.
 const ROBINHOOD_PIN = "0xc60ba256b44334a0cd2c7242e98b88f031abb006";
 const hasPersistentPin = (body, route) => route.chainId === 4663 && typeof body.items?.[0]?.tokenAddress === "string" &&
@@ -329,7 +330,7 @@ async function observeReads(input, target, headers, observedAt) {
     let confirmingItems = 0;
     const identities = new Set();
     const pages = [];
-    for (let number = 1; number <= (first?.page.totalPages ?? 1); number += 1) {
+    async function observePage(number) {
       const result = await request(`${route.path}?page=${number}&pageSize=${PAGE_SIZE}&sort=newest&mode=all`, "application/json");
       let body;
       try { body = JSON.parse(result.text); } catch { throw new Error("indexed website JSON is invalid"); }
@@ -353,8 +354,18 @@ async function observeReads(input, target, headers, observedAt) {
         identities.add(launchIdentity(item));
         if (item.confirmation === "confirming") confirmingItems += 1;
       }
-      pages.push({ number, status: body.status, count: body.items.length, updatedAt: body.updatedAt,
-        sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest: result.bodyDigest });
+      pages[number - 1] = { number, status: body.status, count: body.items.length, updatedAt: body.updatedAt,
+        sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest: result.bodyDigest };
+    }
+    await observePage(1);
+    // A serial full-catalog walk can outlast the short-lived receipt overlay.
+    // Bound read concurrency while retaining every page and integrity check.
+    for (let number = 2; number <= first.page.totalPages; number += PAGE_CONCURRENCY) {
+      const batch = await Promise.allSettled(Array.from({ length: Math.min(PAGE_CONCURRENCY, first.page.totalPages - number + 1) },
+        (_, index) => observePage(number + index)));
+      const failures = batch.filter(result => result.status === "rejected");
+      const failure = failures.find(result => !retryableCatalog(result.reason)) ?? failures[0];
+      if (failure) throw failure.reason;
     }
     check(identities.size === first.page.totalItems, "catalog count");
     check(confirmingItems <= 32, "provisional receipt count");
