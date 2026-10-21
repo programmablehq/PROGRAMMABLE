@@ -159,22 +159,24 @@ export function createDashboard(app: HTMLDivElement, groups: Group[], actions: A
       const loaded = !!(group.scan || group.snapshot);
       const active = state.activeGroup === group.id;
       const incomplete = group.scan && !group.scan.complete;
+      const changed = card.scan !== group.scan || card.snapshot !== group.snapshot;
+      if (changed) {
+        card.scan = group.scan; card.snapshot = group.snapshot;
+        card.totals = values(group).filter(value => value.amount > 0n);
+      }
       const status = group.busy || active ? 'scan' : group.error || incomplete ? 'partial' : loaded ? 'ready' : 'idle';
       if (card.root.className !== `card ${status}`) card.root.className = `card ${status}`;
       text(card.status, active ? 'Claim läuft' : group.busy ? 'Scan läuft' : group.error ? 'Erneut prüfen' : incomplete ? 'Hinweise zur Prüfung' : loaded ? 'Geprüft' : 'Bereit zum Scan');
       text(card.progress, group.error || group.message);
       card.claim.disabled = locked || !state.claimable.has(group.id);
-      text(get('.label', card.claim), active ? 'Claim läuft…' : group.busy ? 'Wird gescannt…' : loaded && !card.totals.some(value => value.amount > 0n) && card.scan === group.scan && card.snapshot === group.snapshot ? 'Keine offenen Fees' : 'Fees claimen');
+      text(get('.label', card.claim), active ? 'Claim läuft…' : group.busy ? 'Wird gescannt…' : loaded && !card.totals.length ? incomplete ? 'Keine geprüften Fees' : 'Keine offenen Fees' : 'Fees claimen');
       card.refresh.disabled = locked || group.busy;
-      if (card.scan === group.scan && card.snapshot === group.snapshot) continue;
-      card.scan = group.scan; card.snapshot = group.snapshot;
-      card.totals = values(group).filter(value => value.amount > 0n);
+      if (!changed) continue;
       const lead = card.totals.find(value => value.symbol === 'ETH') ?? card.totals[0];
-      text(card.amount, loaded ? lead ? amount(lead.amount, lead.decimals) : '0' : '—');
+      text(card.amount, loaded ? lead ? amount(lead.amount, lead.decimals) : incomplete ? '—' : '0' : '—');
       text(card.symbol, loaded ? lead?.symbol ?? 'ETH' : 'Gebühren');
       text(card.caption, !loaded ? 'Scan nicht abgeschlossen' : card.totals.length > 1 ? `+ ${number(card.totals.length - 1)} weitere Token` : card.totals.length ? 'Zur Auszahlung bereit' : incomplete ? 'Noch kein geprüfter Betrag' : 'Keine offenen Fees');
       text(card.coverage, group.scan ? `${number(group.scan.launchCount)} Launches · ${number(group.scan.claims.length)} Gebührenkonten` : loaded ? 'V4 LP-Position' : '');
-      if (!active && !group.busy) text(get('.label', card.claim), loaded && !card.totals.length ? 'Keine offenen Fees' : 'Fees claimen');
       card.assets.hidden = !loaded || card.totals.length < 2;
       text(get('summary', card.assets), `Alle ${number(card.totals.length)} Währungen`);
       card.assetList.replaceChildren(); showAssets(card);
