@@ -458,6 +458,47 @@ function addEthereumPageItem(spec) {
   spec.body.presentations = [];
 }
 
+function largeEthereumCatalog(spec) {
+  const number = spec.body.page.number;
+  const rows = Array.from({ length: 201 }, (_, index) => ethereumItem(index + 1));
+  spec.body.items = rows.slice((number - 1) * 50, number * 50);
+  spec.body.presentations = [];
+  spec.body.page = { number, size: 50, totalItems: 201, totalPages: 5, hasMore: number < 5 };
+}
+
+test("large catalogs use four bounded concurrent reads and retain ordered complete evidence", { timeout: 2000 }, async () => {
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname === "/api/explore/ethereum") largeEthereumCatalog(spec);
+  });
+  let active = 0, peak = 0, release;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: async (url, init) => {
+    const number = Number(url.searchParams.get("page"));
+    if (url.pathname !== "/api/explore/ethereum" || number === 1) return f.fetchImpl(url, init);
+    peak = Math.max(peak, ++active);
+    if (active === 4) release();
+    await barrier;
+    await new Promise(resolve => setTimeout(resolve, 6 - number));
+    try { return await f.fetchImpl(url, init); } finally { active -= 1; }
+  } }));
+  assert.equal(peak, 4);
+  assert.equal(result.chains[0].totalItems, 201);
+  assert.deepEqual(result.chains[0].pages.map(page => page.number), [1, 2, 3, 4, 5]);
+  assert.deepEqual(result.chains[0].pages.map(page => page.count), [50, 50, 50, 50, 1]);
+});
+
+test("a concurrent integrity failure wins over a count change without retrying", async () => {
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname !== "/api/explore/ethereum") return;
+    largeEthereumCatalog(spec);
+    if (spec.body.page.number === 2) spec.body.page.totalItems = 202;
+    if (spec.body.page.number === 3) spec.body.sourceEvidence.classic.commitment = "invalid";
+  });
+  await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+    waitImpl: async () => assert.fail("concurrent source failure was retried") })), /Ethereum source evidence/u);
+  assert.equal(f.calls.filter(call => call.url.hostname === "api.vercel.com").length, 1);
+});
+
 test("a staged count change discards both catalog walks before collecting a coherent snapshot", async () => {
   let firstPages = 0;
   const waits = [], retries = [];
