@@ -101,7 +101,7 @@ const cachedMarkets = unstable_cache(async (identities: readonly Identity[], cha
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
 export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
-  if (![1, 4663].includes(chainId) || tokens.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market request");
+  if (![1, 4663, 8453].includes(chainId) || tokens.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market request");
   if (!process.env.CODEX_API_KEY?.trim()) return new Map();
   const poolsByToken = new Map<string, string>();
   for (const token of tokens) {
@@ -185,7 +185,7 @@ function currentChart(chart: CodexChart) {
 }
 
 export async function readCodexChart(address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> {
-  if (!marketAddress.test(address) || ![1, 4663].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)) throw new Error("Invalid chart request");
+  if (!marketAddress.test(address) || ![1, 4663, 8453].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)) throw new Error("Invalid chart request");
   const normalized = address.toLowerCase();
   return sharedRead(`chart:${chainId}:${normalized}:${range}`, async () => {
     const cached = await cachedChart(normalized, chainId, range);

@@ -122,11 +122,12 @@ describe("Codex server market adapter", () => {
     vi.stubGlobal("fetch", fetcher);
     await readCodexMarkets([{ tokenAddress: address, poolId }], 4663);
     await readCodexMarkets([{ tokenAddress: address, poolId }], 1);
+    await readCodexMarkets([{ tokenAddress: address, poolId }], 8453);
     await readCodexMarkets([{ tokenAddress: address, poolId: `0x${"12".repeat(32)}` }], 4663);
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
-  it.each([4663, 1])("reads the paired ticker in the existing batch on chain %s", async chainId => {
+  it.each([4663, 1, 8453])("reads the paired ticker in the existing batch on chain %s", async chainId => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const quote = `0x${"cd".repeat(20)}`;
     const fetcher = vi.fn().mockResolvedValue(Response.json({ data: {
@@ -205,15 +206,24 @@ describe("Codex server market adapter", () => {
     expect(await readCodexMarkets([{ tokenAddress: address, poolId }])).toEqual(new Map());
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it("returns only fixed chart data and rejects unknown periods before requesting", async () => {
+  it.each([4663, 1, 8453])("returns chart data for chain %s and rejects unknown periods before requesting", async chainId => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const now = Math.floor(Date.now() / 1000);
-    const fetcher = vi.fn().mockResolvedValue(Response.json({ data: { getTokenBars: bars({ t: [now - 60, now], c: [.001, .002] }) } }));
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ data: { getTokenBars: bars({ token: { address, networkId: chainId }, t: [now - 60, now], c: [.001, .002] }) } }));
     vi.stubGlobal("fetch", fetcher);
-    expect(await readCodexChart(address, 4663, "1H")).toMatchObject({ source: "codex", chainId: 4663, tokenAddress: address, points: [{ time: (now - 60) * 1000, price: .001 }, { time: now * 1000, price: .002 }] });
+    expect(await readCodexChart(address, chainId, "1H")).toMatchObject({ source: "codex", chainId, tokenAddress: address, points: [{ time: (now - 60) * 1000, price: .001 }, { time: now * 1000, price: .002 }] });
     // @ts-expect-error -- malformed public input must fail closed.
-    await expect(readCodexChart(address, 4663, "unknown")).rejects.toThrow("Invalid chart request");
+    await expect(readCodexChart(address, chainId, "unknown")).rejects.toThrow("Invalid chart request");
     expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).variables.symbol).toBe(`${address}:${chainId}`);
+  });
+  it.each([10, 84532])("rejects unsupported network %s before requesting market data", async chainId => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await expect(readCodexMarkets([{ tokenAddress: address, poolId }], chainId)).rejects.toThrow("Invalid market request");
+    await expect(readCodexChart(address, chainId, "1D")).rejects.toThrow("Invalid chart request");
+    expect(fetcher).not.toHaveBeenCalled();
   });
   it("requests thirty minutes of one-minute candles and accepts a resolution-aligned leading candle", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
