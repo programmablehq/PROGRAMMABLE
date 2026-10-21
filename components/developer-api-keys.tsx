@@ -1560,7 +1560,7 @@ export function DeveloperApiKeysView({
       {activeSection === "keys" ? <div className={styles.setupBar}>
         <label className={styles.field} htmlFor="builder-chain"><span>Build on</span><select id="builder-chain" ref={chainSelectRef} value={setupChainId}
           onChange={event => { setSetupChainId(event.target.value as "1" | "4663" | "8453" | ""); setSetupCopyState("idle"); setConnectionCopyState("idle"); setSetupFallbackText(""); }}>
-          <option value="">Choose a chain</option><option value="1">Ethereum Mainnet</option><option value="4663">Robinhood Chain</option>
+          <option value="">Choose a chain</option><option value="1">Ethereum Mainnet</option><option value="4663">Robinhood Chain</option><option value="8453">Base</option>
         </select></label>
         {account ? <div className={styles.walletAssignment}><span>Connected wallet</span><code>{account}</code><button type="button" className={styles.textLink} onClick={openWallet}>Change wallet</button></div> : null}
       </div> : null}
@@ -2144,8 +2144,9 @@ export function DeveloperApiKeysView({
       )}
 
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        {setupChainId !== "1" ? <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
-        {setupChainId !== "4663" ? <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></Link> : null}
+        {!setupChainId || setupChainId === "4663" ? <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {!setupChainId || setupChainId === "1" ? <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></Link> : null}
+        {!setupChainId || setupChainId === "8453" ? <a href="/developers/base-custom-launch-api-v1.md">Base launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
       </nav>
       </div>
     </div>

@@ -47,6 +47,9 @@ export async function verifyBaseCustomLive(evidence, request = fetch) {
   const explore = await read("https://programmable.market/api/explore/base?q=" + encodeURIComponent(evidence.token));
   assert.ok(explore.items?.some(item => item.chainId === 8453 && item.tokenAddress?.toLowerCase() === evidence.token.toLowerCase()),
     "Base launch missing from public Explore");
+  const unified = await read("https://programmable.market/api/explore/launches?q=" + encodeURIComponent(evidence.token));
+  assert.ok(unified.items?.some(item => item.chainId === 8453 && item.tokenAddress?.toLowerCase() === evidence.token.toLowerCase()
+    && item.transactionHash === evidence.launchTransactionHash), "Base launch missing from the shared Explore catalog");
   return { status: "passed", releaseId: readiness.releaseId, requestId: evidence.requestId };
 }
 

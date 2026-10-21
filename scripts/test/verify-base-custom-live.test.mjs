@@ -26,7 +26,8 @@ function fixture(change = () => {}) {
   const launch = { chainId: "8453", resourceId: evidence.requestId, router: profile.router,
     token: evidence.token, finality: { transactionHash: evidence.launchTransactionHash } };
   const explore = { items: [{ chainId: 8453, tokenAddress: evidence.token }] };
-  const state = { readiness, capabilities, launch, explore, repeatCursor: false };
+  const unified = { items: [{ chainId: 8453, tokenAddress: evidence.token, transactionHash: evidence.launchTransactionHash }] };
+  const state = { readiness, capabilities, launch, explore, unified, repeatCursor: false };
   change(state);
   const visited = [];
   return { visited, request: async url => {
@@ -42,6 +43,7 @@ function fixture(change = () => {}) {
       launches: state.repeatCursor ? [] : [state.launch], nextCursor: state.repeatCursor ? "second-page" : null,
     };
     else if (url.startsWith("https://programmable.market/api/explore/base?")) body = state.explore;
+    else if (url.startsWith("https://programmable.market/api/explore/launches?")) body = state.unified;
     else throw new Error("Unexpected endpoint");
     return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
   } };
@@ -59,6 +61,8 @@ test("inactive releases, substituted transactions or roots, missing indexing and
     s => s.launch.router = "0x" + "d".repeat(40),
     s => s.launch.chainId = "1",
     s => s.explore.items = [],
+    s => s.unified.items = [],
+    s => s.unified.items[0].transactionHash = "0x" + "d".repeat(64),
     s => s.repeatCursor = true,
   ]) await assert.rejects(verifyBaseCustomLive(evidence, fixture(mutate).request));
   await assert.rejects(verifyBaseCustomLive({ ...evidence, status: "pending" }, fixture().request));

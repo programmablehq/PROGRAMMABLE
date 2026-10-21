@@ -8,7 +8,7 @@ Read [live capabilities](https://api.programmable.market/v4/chains/8453/capabili
 
 Use the [Base API reference](https://programmable.market/openapi/base-custom-launch-v1.json). The endpoint is chain-qualified V4; its exact request schema is `programmable.custom-launch-create-request.v3`, with `chainId: "8453"` and the complete Base profile returned by capabilities. Do not send the Robinhood V4 request layout or substitute Ethereum contract addresses.
 
-Create a wallet API key in the [Base setup](https://programmable.market/developers/api-keys?start=custom&chainId=8453), with `custom-launch:create` and `custom-launch:read` and a Base grant. The request's `launchWallet` must match that key's wallet. Partner keys are not accepted on this route. Fund that wallet with ETH on Base for deployment, initial liquidity and gas. An Ethereum balance cannot pay Base gas.
+Create a wallet API key in the [Base setup](https://programmable.market/developers/api-keys?guide=custom-hook&chainId=8453), with `custom-launch:create` and `custom-launch:read` and a Base grant. The request's `launchWallet` must match that key's wallet. Partner keys are not accepted on this route. Fund that wallet with ETH on Base for deployment, initial liquidity and gas. An Ethereum balance cannot pay Base gas.
 
 ## Prepare, review and launch
 
@@ -56,7 +56,7 @@ Only admit records for chain `8453` and the exact Base router below. Verify the 
 
 Base finality is tied to Ethereum finality. Require the common finalized Base checkpoint from both independent providers to cover the launch block. A sequencer receipt or an arbitrary confirmation count is insufficient. See the [Base derivation specification](https://docs.base.org/base-chain/specs/protocol/consensus/derivation).
 
-The canonical coin page is `/token/{token}?chain=8453`; the chain view is [Explore Base](https://programmable.market/explore/base). Verify quote assets from `poolKey`: the zero address is native ETH, and wrapped ETH is a separate asset. Match market data by chain, token, PoolManager and pool ID. An external terminal must consume this source and support the contract's actual trading route; Programmable cannot guarantee a third-party listing or swap route.
+The canonical coin page is `/token/{token}?chain=8453`. Finalized Base launches appear in the shared [Explore catalog](https://programmable.market/explore) alongside Ethereum and Robinhood launches. Verify quote assets from `poolKey`: the zero address is native ETH, and wrapped ETH is a separate asset. Match market data by chain, token, PoolManager and pool ID. An external terminal must consume this source and support the contract's actual trading route; Programmable cannot guarantee a third-party listing or swap route.
 
 ## Base deployment bindings
 
