@@ -202,10 +202,11 @@ function exactHealthBody(body, nowMs) {
     || body.schemaVersion !== "programmable.operations-health.v2" || body.scope !== "website-launch-indexes"
     || typeof body.checkedAt !== "string" || !Number.isFinite(Date.parse(body.checkedAt))
     || Math.abs(nowMs - Date.parse(body.checkedAt)) > MAXIMUM_GENERATED_AT_SKEW_MS
-    || !Array.isArray(body.indexes) || body.indexes.length !== 2) return false;
+    || !Array.isArray(body.indexes) || body.indexes.length !== 3) return false;
   const indexes = [
     { chainId: 1, path: "ethereum", statuses: ["ready", "partial", "stale", "unavailable"] },
     { chainId: 4663, path: "robinhood", statuses: ["ready", "syncing", "stale", "unavailable"] },
+    { chainId: 8453, path: "base", statuses: ["ready", "stale", "unavailable"] },
   ];
   if (!indexes.every((expected, index) => {
     const actual = body.indexes[index];
@@ -223,8 +224,9 @@ function exactHealthBody(body, nowMs) {
   const readiness = [
     { chainId: 1, readiness: "/readyz", capabilities: "/v3/capabilities" },
     { chainId: 4663, readiness: "/v4/chains/4663/custom-launch-plans/readiness", capabilities: "/v4/chains/4663/custom-launch-capabilities" },
+    { chainId: 8453, readiness: "/v4/chains/8453/readiness", capabilities: "/v4/chains/8453/capabilities" },
   ];
-  return Array.isArray(body.customLaunchReadiness) && body.customLaunchReadiness.length === 2
+  return Array.isArray(body.customLaunchReadiness) && body.customLaunchReadiness.length === 3
     && readiness.every((expected, index) => {
       const actual = body.customLaunchReadiness[index];
       return exactObjectKeys(actual, ["chainId", "readinessUrl", "capabilitiesUrl"])
