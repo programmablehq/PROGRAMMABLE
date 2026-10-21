@@ -506,6 +506,7 @@ function routerFixture({
   });
   const signedPermit = Object.freeze({
     schemaVersion: "programmable.signed-prepared-launch-permit.v1",
+    ...(chainId === "8453" ? { releaseId: baseFeed.launches[0].routingFeePolicy.enforcementBoundary.releaseId } : {}),
     artifactHash,
     chainId,
     router: router,
@@ -563,6 +564,17 @@ function routerFixture({
 }
 
 describe("custom launch V3 wallet handoff", () => {
+  it("requires the Base signed permit release identity", () => {
+    const fixture = routerFixture({ quote: ZERO_ADDRESS, chainId: "8453" });
+    expect(prepareCustomLaunchRouterReviewV3(fixture.output, account.address).walletAction.chainId).toBe("8453");
+    for (const releaseId of [undefined, "invalid", `sha256:${"ff".repeat(31)}`]) {
+      expect(() => prepareCustomLaunchRouterReviewV3({
+        ...fixture.output,
+        signedPermit: { ...fixture.output.signedPermit, releaseId },
+      }, account.address)).toThrow();
+    }
+  });
+
   it("accepts the Base checkpoint contract while retaining its chain and quorum checks", () => {
     const fixture = routerFixture({ quote: ZERO_ADDRESS, chainId: "8453" });
     const finality = baseFeed.launches[0].finality;

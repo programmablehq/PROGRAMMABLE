@@ -1374,7 +1374,10 @@ function assertSignedPermitV3(
     router: unknown;
   }>,
 ) {
-  const permit = exactRecord(value, SIGNED_PERMIT_KEYS);
+  const isBase = customLaunchChainForRouterV1(expected.router) === "8453";
+  const permit = exactRecord(value, isBase
+    ? [...SIGNED_PERMIT_KEYS, "releaseId"] : SIGNED_PERMIT_KEYS);
+  if (isBase) exactSha256(permit.releaseId);
   const validAfter = canonicalUint256(permit.validAfter).parsed;
   const deadline = canonicalUint256(permit.deadline).parsed;
   if (permit.schemaVersion !== "programmable.signed-prepared-launch-permit.v1"
