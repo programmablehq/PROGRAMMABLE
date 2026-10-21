@@ -154,7 +154,7 @@ type ProjectTokenMetadataFieldBindingV1 = Readonly<{
 }>;
 
 type FinalizedCheckpointV1 = Readonly<{
-  schemaVersion: typeof FINALIZED_CHECKPOINT_SCHEMA_V1 | "programmable.base-finalized-checkpoint-quorum.v1";
+  schemaVersion: typeof FINALIZED_CHECKPOINT_SCHEMA_V1 | "programmable.base-launch-finalized-checkpoint-quorum.v1";
   blockNumber: string;
   blockHash: Hex32;
   quorumSize: 2;
@@ -1060,7 +1060,7 @@ function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" = "
 }
 
 function parseFinalizedCheckpointV1(value: JsonValue | undefined, chainId: "1" | "8453" = "1"): FinalizedCheckpointV1 {
-  const expectedSchema = chainId === "8453" ? "programmable.base-finalized-checkpoint-quorum.v1" : FINALIZED_CHECKPOINT_SCHEMA_V1;
+  const expectedSchema = chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : FINALIZED_CHECKPOINT_SCHEMA_V1;
   const record = exactRecord(value, [
     "schemaVersion", "blockNumber", "blockHash", "quorumSize", "observations",
   ], "finalized checkpoint");
