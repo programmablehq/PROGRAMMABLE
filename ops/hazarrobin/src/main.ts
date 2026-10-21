@@ -95,13 +95,22 @@ async function claimGroup(group: Group, refreshAfter = true) {
     // Keep this account bound to this operation even if the global wallet changes.
     const current = wallet ?? await connectWallet();
     if (!current) return;
+    if (pending(group.chainId)) {
+      await checkPending(value => { notice = value; render(); }, group.chainId);
+      // The recovered transaction may already have paid some of these fees.
+      // Refresh this group before preparing any further wallet request.
+      group.scan = undefined; group.snapshot = undefined;
+    }
     if (group.id !== 'v4' && (!group.scan || Date.now() - group.scan.scannedAt > 90000)) {
       group.message = 'Aktuelle Gebühren werden geprüft…'; render();
       await scanGroup(group, true);
       if (!group.scan) return;
     }
+    if (group.id !== 'v4' && !eligible(group.scan!.claims, current.account).length) {
+      group.message = 'Keine weiteren Gebühren für diese Wallet offen.';
+      return;
+    }
     group.busy = true; group.message = 'Auszahlung wird vorbereitet…'; render();
-    if (pending(group.chainId)) await checkPending(value => { notice = value; render(); }, group.chainId);
     if (group.id === 'v4') {
       let nonce = 0;
       await claimFees(current, progress => {

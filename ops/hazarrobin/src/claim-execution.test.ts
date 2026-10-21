@@ -31,6 +31,12 @@ beforeEach(()=>{
   getGasPrice:async()=>1000000000n,getBalance:async()=>10n**18n,getTransactionCount:async()=>0,getTransactionReceipt:async()=>({})};
 });
 describe('wallet execution with large claim sets',()=>{
+ it('requires fresh balances after recovering a previous transaction before another send',async()=>{
+  mocks.entry={chainId:1,hash:toHex(123,{size:32})};
+  await expect(claimEcosystem(scan(2),connection,()=>{})).rejects.toThrow('Gebühren neu laden');
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(mocks.entry).toBeNull();
+ });
  it('splits oversized packets before asking the wallet, then simulates both smaller packets on both providers',async()=>{
   await claimEcosystem(scan(256),connection,()=>{});
   expect(mocks.send).toHaveBeenCalledTimes(2);

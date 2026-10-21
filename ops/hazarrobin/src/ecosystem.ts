@@ -75,17 +75,24 @@ export async function checkPending(progress:(message:string)=>void,chainId?:1|46
     try{await clients[0]!.getTransactionReceipt({hash:mined});}
     catch(error){
       if((error as Error).name!=='TransactionReceiptNotFoundError')throw error;
-      mined=await findMinedClaim(entry,clients)??undefined;
+      // A wallet may hand back a relayer's hash. The user's nonce cannot find
+      // its replacement; only use nonce recovery for an observed own-wallet tx.
+      mined=undefined;
+      try{
+        const submitted=await Promise.all(clients.map(c=>c.getTransaction({hash:entry.hash!})));
+        if(submitted.every(t=>same(t.hash,entry.hash)&&same(t.from,entry.account)&&t.nonce===entry.nonce))
+          mined=await findMinedClaim(entry,clients)??undefined;
+      }catch(error){if((error as Error).name!=='TransactionNotFoundError')throw error;}
     }
   }else mined=await findMinedClaim(entry,clients)??undefined;
   if(!mined&&entry.hash){
     progress('Auf Bestätigung warten…');
-    const receipt=await clients[0]!.waitForTransactionReceipt({hash:entry.hash,timeout:30000,
-      onReplaced:({transaction})=>{entry.hash=transaction.hash;remember(entry);}});
+    const receipt=await clients[0]!.waitForTransactionReceipt({hash:entry.hash,timeout:30000});
     mined=receipt.transactionHash;
   }
   if(!mined)throw Error('Der letzte Wallet-Auftrag ist noch offen. Bitte in der Wallet abschließen oder ablehnen.');
-  if(entry.hash!==mined){entry.hash=mined;remember(entry);}
+  // Keep the wallet-returned hash intact until the candidate is verified.
+  // Replacing it here would make an unrelated hash look wallet-authorized.
   const result=await verifyPendingClaim(entry,mined,clients);
   confirmedBlocks.set(entry.chainId,result.blockNumber);
   remember(null,entry.chainId);
@@ -101,7 +108,10 @@ function gasResourceLimit(error:unknown):boolean{
 }
 
 export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provider;account:Address},progress:(message:string)=>void){
-  if(pending(scan.chainId))await checkPending(progress,scan.chainId);
+  if(pending(scan.chainId)){
+    await checkPending(progress,scan.chainId);
+    throw Error('Vorheriger Auftrag geprüft. Bitte die Gebühren neu laden, bevor du weiter claimst.');
+  }
   await ensureChain(connection.provider,scan.chainId);
   const accounts=await connection.provider.request({method:'eth_accounts'}) as Address[];
   if(!same(accounts[0],connection.account))throw Error('Wallet wurde gewechselt. Bitte erneut verbinden.');

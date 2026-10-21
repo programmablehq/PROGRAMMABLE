@@ -12,6 +12,8 @@ Ready areas can be claimed while the other chain is still scanning. The queue re
 
 Streaming progress keeps the same controls and open disclosures mounted. Totals are calculated once per result, asset details render on demand, and the account list loads 25 rows at a time. Wallet connection and preparation share one operation lock. An oversized batch lowers the starting size of later batches in that run; every resulting transaction still receives a fresh gas estimate and both provider simulations.
 
+On resume, mined MetaMask delegated calls are bound to the original wallet through the delegation root, the exact wallet-returned transaction hash, and the pinned execution contract on both providers. Recovery preserves the original transaction ID until verification succeeds and reloads fees before preparing another claim.
+
 ## Local verification
 
 `npm ci`, `npm test`, `npm run build`. Vercel serves `api/scan.mjs` and the read-only `api/rpc.mjs`. Production configures RH_PRIMARY, RH_SECONDARY, ETH_PRIMARY, ETH_SECONDARY and ETH_TERTIARY. Use independent providers with archive access; the legacy Ethereum history requires three providers. Values must never be exposed to the browser or committed.
