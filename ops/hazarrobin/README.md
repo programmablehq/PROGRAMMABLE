@@ -10,6 +10,8 @@ The app has no signing key. Users sign with their wallets. Fixed-recipient claim
 
 Ready areas can be claimed while the other chain is still scanning. The queue refreshes balances once after all wallet requests, rather than running the entire history scan between payouts. Each detected payout is simulated against two providers. Large batches split to fit the current gas and simulation limits before requesting a signature. Already-collected amounts are removed. Token contracts that reject payment are shown separately and do not block other claims. Reviewed fee-free and non-project sources are distinguished from unknown adapters.
 
+Streaming progress keeps the same controls and open disclosures mounted. Totals are calculated once per result, asset details render on demand, and the account list loads 25 rows at a time. Wallet connection and preparation share one operation lock. An oversized batch lowers the starting size of later batches in that run; every resulting transaction still receives a fresh gas estimate and both provider simulations.
+
 ## Local verification
 
 `npm ci`, `npm test`, `npm run build`. Vercel serves `api/scan.mjs` and the read-only `api/rpc.mjs`. Production configures RH_PRIMARY, RH_SECONDARY, ETH_PRIMARY, ETH_SECONDARY and ETH_TERTIARY. Use independent providers with archive access; the legacy Ethereum history requires three providers. Values must never be exposed to the browser or committed.

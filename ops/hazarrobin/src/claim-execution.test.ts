@@ -12,7 +12,12 @@ vi.mock('./pending',()=>({pending:()=>mocks.entry,remember:(value:unknown)=>{moc
  findMinedClaim:vi.fn(),verifyPendingClaim:async()=>({outcome:'confirmed',blockNumber:100n}),walletRequestNotSent:()=>false}));
 const account='0xD88539d3c4C460136a733A3Fd60cf6BF269079da';
 const connection={account,provider:{request:async({method}:{method:string})=>method==='eth_chainId'?'0x1':[account]}} as unknown as Parameters<typeof claimEcosystem>[1];
-const size=(data:Hex)=>decodeFunctionData({abi:multicall3Abi,data}).args![0]!.length;
+function batch(data:Hex){
+ const decoded=decodeFunctionData({abi:multicall3Abi,data});
+ if(decoded.functionName!=='aggregate3')throw Error('Unexpected wallet call');
+ return decoded.args[0];
+}
+const size=(data:Hex)=>batch(data).length;
 function scan(count:number):Scan{
  const claims:FeeClaim[]=Array.from({length:count},(_,i)=>({id:String(i),chainId:1,to:toHex(i+1,{size:20}),data:'0x8d19d6ea',
   recipient:account,amount:'1',asset:toHex(0,{size:20}),symbol:'ETH',decimals:18,source:'Module Mode',permissionless:true,runtimeCodeHash:null}));
@@ -38,6 +43,31 @@ describe('wallet execution with large claim sets',()=>{
   mocks.client.getBalance=async()=>0n;
   await expect(claimEcosystem(scan(2),connection,()=>{})).rejects.toThrow('ETH für Gas');
   expect(mocks.send).not.toHaveBeenCalled();
+ });
+ it('learns a smaller batch count for this run without skipping estimates or either provider',async()=>{
+  await claimEcosystem(scan(768),connection,()=>{});
+  const estimates=(mocks.client.estimateGas as ReturnType<typeof vi.fn>).mock.calls.map(([tx])=>size(tx.data));
+  expect(estimates).toEqual([256,128,128,128,128,128,128]);
+  expect(mocks.send).toHaveBeenCalledTimes(6);
+  expect(mocks.client.call).toHaveBeenCalledTimes(12);
+  const sent=mocks.send.mock.calls.flatMap(([tx])=>batch(tx.data));
+  expect(new Set(sent.map(call=>call.target.toLowerCase())).size).toBe(768);
+  expect(sent.every(call=>!call.allowFailure)).toBe(true);
+ });
+ it('continues splitting when a later group costs more and forgets its limit on the next run',async()=>{
+  mocks.client.estimateGas=vi.fn(async({data}:{data:Hex})=>{
+   const calls=batch(data);
+   const limit=BigInt(calls[0]!.target)>256n?64:128;
+   if(calls.length>limit)throw Error('out of gas');
+   return 11500000n;
+  });
+  await claimEcosystem(scan(512),connection,()=>{});
+  expect(mocks.send.mock.calls.map(([tx])=>size(tx.data))).toEqual([128,128,64,64,64,64]);
+  expect(mocks.client.call).toHaveBeenCalledTimes(12);
+  mocks.send.mockClear();
+  mocks.client.estimateGas=vi.fn(async()=>1000000n);
+  await claimEcosystem(scan(256),connection,()=>{});
+  expect(mocks.send.mock.calls.map(([tx])=>size(tx.data))).toEqual([256]);
  });
  it('does not interpret network errors as permission to split and send',async()=>{
   mocks.client.estimateGas=async()=>{throw Error('RPC rate limit');};

@@ -120,8 +120,18 @@ export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provi
   if(atomic){for(let i=0;i<restricted.length;i+=10)packets.push({to:connection.account,data:'0x',value:0n,batch:false,atomic:restricted.slice(i,i+10)});}
   else for(const c of restricted)packets.push({to:c.to,data:c.data,value:0n,batch:false});
   const wallet=createWalletClient({account:connection.account,chain:chain(scan.chainId),transport:custom(connection.provider)});
+  let batchLimit=MAX_BATCH_CLAIMS;
   for(let i=0;i<packets.length;i++){
-    const packet=packets[i]!;progress(`Claim ${i+1}/${packets.length} wird vorbereitet…`);
+    const packet=packets[i]!;
+    // Once a packet exceeds this run's gas capacity, avoid probing the same
+    // oversized count again. Every smaller packet is still estimated and
+    // simulated independently; a different cost profile can split it further.
+    if(packet.claims&&packet.claims.length>batchLimit){
+      const smaller=[];
+      for(let j=0;j<packet.claims.length;j+=batchLimit){const chunk=packet.claims.slice(j,j+batchLimit);smaller.push({...buildBatch(chunk),batch:true,claims:chunk});}
+      packets.splice(i,1,...smaller);i--;continue;
+    }
+    progress(`Claim ${i+1}/${packets.length} wird vorbereitet…`);
     const heads=await Promise.all(clients.map(c=>c.getBlockNumber({cacheTime:0})));const blockNumber=heads.reduce((a,b)=>a<b?a:b);
     if(packet.atomic){
       for(const c of packet.atomic){const results=await Promise.all(clients.map(client=>client.call({to:c.to,data:c.data,account:connection.account,blockNumber})));if(!same(results[0]!.data,results[1]!.data))throw Error('Sammelclaim-Simulation stimmt nicht überein.');}
@@ -138,6 +148,7 @@ export async function claimEcosystem(scan:Scan,connection:{provider:EIP1193Provi
     const splitPacket=()=>{
       if(!packet.claims||packet.claims.length<2)return false;
       const mid=Math.ceil(packet.claims.length/2);
+      batchLimit=Math.min(batchLimit,mid);
       packets.splice(i,1,...[packet.claims.slice(0,mid),packet.claims.slice(mid)].map(chunk=>({...buildBatch(chunk),batch:true,claims:chunk})));
       i--;return true;
     };
