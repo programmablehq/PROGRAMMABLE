@@ -191,7 +191,7 @@ test("4.1.1 asset manifest requires its own exact client record and no future re
   assert.equal(releaseBindingTools("4.1.1"), client);
   assert.equal(releaseBindingTools("4.1.0"), api);
   assert.equal(releaseBindingTools("4.0.0"), legacy);
-  for (const version of ["4.999.999", "4.2.0", "4.1.1-preview"]) {
+  for (const version of ["4.999.999", "4.2.1", "4.1.1-preview"]) {
     assert.throws(() => releaseBindingTools(version), /Unsupported/);
   }
   const names = releaseNames("4.1.1");

@@ -67,7 +67,7 @@ test("release selection is closed and 4.1 uses independent backend promotion evi
   assert.equal(releaseBindingTools("4.0.0"), legacy);
   assert.equal(releaseBindingTools("4.1.0"), successor);
   assert.equal(releaseBindingTools("3.0.0"), null);
-  assert.throws(() => releaseBindingTools("4.2.0"), /Unsupported/);
+  assert.throws(() => releaseBindingTools("4.2.1"), /Unsupported/);
   assert.throws(() => releaseBindingTools("4.1.0-preview"), /Unsupported/);
   assert.notEqual(successor.V4_BACKEND_AUTHORIZATION_WORKFLOW, legacy.V4_BACKEND_AUTHORIZATION_WORKFLOW);
   assert.match(successor.V4_ROBINHOOD_BACKEND_AUTHORIZATION_PATH, /\/v4\.1\//);
