@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "programmable.finalized-custom-launch-metadata-list.v1",
+  "generatedAt": "2026-10-21T18:27:04.209Z",
+  "quality": {
+    "status": "complete",
+    "sourceRowCount": 1,
+    "publishedRowCount": 1,
+    "quarantinedRowCount": 0,
+    "diagnostics": []
+  },
+  "launches": [
+    {
+      "schemaVersion": "programmable.finalized-custom-launch-metadata.v1",
+      "resourceId": "25e327fa-3eb5-438d-af49-5017e13766ae",
+      "launchProfileVersion": "3.6.0",
+      "routingFeePolicy": {
+        "schemaVersion": "programmable.base-launch-routing-fee-policy-binding.v1",
+        "launchProfileVersion": "3.6.0",
+        "launchProfileHash": "sha256:802c05814ee5e598d0d01c889f83f3abf136727fdb50bd93931bc27cfda865fc",
+        "policyHash": "sha256:415895be4475524db1639987a48cd5b6a64603c14ee41c4e05800c06aff3bd56",
+        "policy": {
+          "scope": "base-custom-launch-trades",
+          "rateBps": 30,
+          "ratePpm": "3000",
+          "modeSelection": "server-exact-runtime-and-trade-proof",
+          "policyVersion": "programmable.base-native-fee.v1",
+          "schemaVersion": "programmable.base-programmable-trade-fee-policy.v1",
+          "native30Waiver": null,
+          "rateDenominator": "1000000",
+          "defaultCollection": {
+            "mode": "pool_enforced",
+            "basis": "gross-native-by-side",
+            "buyBasis": "funded-native-input",
+            "currency": "native-ETH",
+            "rounding": "ceil-per-trade",
+            "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+            "sellBasis": "gross-native-output-credit",
+            "collection": "atomic-pool-fee-accrual",
+            "routedRateBps": 0
+          },
+          "externalTradeFeeGuaranteed": false,
+          "historicalSignedFeeObligations": "preserved",
+          "launchAdmissionEstablishesFeeCollection": false
+        },
+        "enforcementBoundary": {
+          "chainId": "8453",
+          "blockNumber": "52866196",
+          "blockHash": "0x77c7a70a0a1d538879c9247ba16efc716f1d2226b2c56d385daa6ddcd30d33b9",
+          "releaseId": "sha256:5eb35ec9950cf71bbebab151811786257d5f6ab6ea70b40f52fb367de57cbb89"
+        },
+        "stampBinding": {
+          "launchId": "0x9f23685324634e852930bf2adfdf6c5b1a139ffb62663b989933bbfec1a772a3",
+          "stampHash": "0x0aaf201e666b2ce2024c5de3577c20a4a11b614bf3371528372db4b82a547601",
+          "permitDigest": "0x67ddf47b2d441684439dca79b6f54c8cc2255a09c8af09fa14740f4170f86c8a",
+          "routePayloadHash": "0x31e1b63d30660b186d1a877cb1b94bd753462e9c238e88af7240faa6b95406fa"
+        },
+        "bindingHash": "sha256:364ac49e745b8239b666426839ca5c1120e704b87e1ba03bffb6673d3ecfa101"
+      },
+      "routerLaunchId": "0x9f23685324634e852930bf2adfdf6c5b1a139ffb62663b989933bbfec1a772a3",
+      "chainId": "8453",
+      "creator": "0x0dBE4F551b318fbba7E7A1975C3A62b9392b8595",
+      "poolKey": {
+        "fee": 0,
+        "hooks": "0x5f7Fa2DF95bAD8e323eE3b7c53Ba2712FFC1e0CC",
+        "currency0": "0x0000000000000000000000000000000000000000",
+        "currency1": "0xBC87674d279F701253dae23233222744d1232B5A",
+        "tickSpacing": 60
+      },
+      "router": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
+      "token": "0xBC87674d279F701253dae23233222744d1232B5A",
+      "hook": "0x5f7Fa2DF95bAD8e323eE3b7c53Ba2712FFC1e0CC",
+      "poolManager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+      "poolId": "0x41162963cdee3b55036368923f614902a9655fb67db4f137f4e388e8d9a51593",
+      "projectMetadata": {
+        "schemaVersion": "programmable.project-metadata.v1",
+        "token": {
+          "name": "Programmable Base Check",
+          "symbol": "PMBASE21"
+        },
+        "presentation": {
+          "schemaVersion": "programmable.launch-presentation-draft.v1",
+          "description": "Programmable Base integration test. This coin verifies launch, trading, platform fees and indexing. It has no investment purpose.",
+          "image": {
+            "uri": "https://programmable.market/brand/loop/programmable-loop-mark-64.png",
+            "contentSha256": "sha256:03ad1017f05d15ba204ece3d8df38e6b0dbe5d1740d2726eda7d587b46a68517",
+            "mediaType": "image/png",
+            "byteLength": 3195,
+            "width": 64,
+            "height": 64
+          },
+          "links": [
+            {
+              "kind": "documentation",
+              "uri": "https://programmable.market/developers"
+            },
+            {
+              "kind": "website",
+              "uri": "https://programmable.market/"
+            },
+            {
+              "kind": "x",
+              "uri": "https://x.com/ProgrammableHQ"
+            }
+          ]
+        },
+        "tokenMetadataBinding": {
+          "schemaVersion": "programmable.project-token-metadata-binding.v1",
+          "tokenTargetId": "token",
+          "declarationBinding": "request-and-launch-id",
+          "standardReadModel": {
+            "name": true,
+            "symbol": true
+          },
+          "name": {
+            "staticSource": "constructor-argument",
+            "argumentIndex": 0,
+            "argumentName": "name_"
+          },
+          "symbol": {
+            "staticSource": "constructor-argument",
+            "argumentIndex": 1,
+            "argumentName": "symbol_"
+          },
+          "postDeploymentReadback": "required"
+        }
+      },
+      "projectMetadataHash": "sha256:c0e02318bb0abec1b4a2392eb57fd981d12d6e5c387bbb7b1111f2b92b272677",
+      "bindings": {
+        "requestHash": "sha256:f6b0df554f1883f9c0ad41aa409329794fae5188b5cfe2a967bdf1b499c33310",
+        "launchIntentHash": "sha256:5d818d03029192135e053d3a2835378e252fd93110245ceb6cc159516cb7224a",
+        "graphBundleHash": "sha256:98b8012de17a4af53b8a65cbd1b02927a6718bd38615936285219faf21d23036",
+        "unboundGraphBundleHash": "sha256:664b998d8b130455c3be80a3b2787316f2b0dbd364a06e6dcc4732d57460419c",
+        "artifactHash": "sha256:1c0d5c23ee507d0321d7084de4aba87c72ae4dc23e4b59f01841e927be1919f2"
+      },
+      "tokenMetadataReadback": {
+        "status": "matching",
+        "declared": {
+          "name": "Programmable Base Check",
+          "symbol": "PMBASE21"
+        },
+        "observed": {
+          "name": "Programmable Base Check",
+          "symbol": "PMBASE21"
+        },
+        "observedAtBlockNumber": "52907679",
+        "observedAt": "2026-10-21T18:24:02.703Z"
+      },
+      "finality": {
+        "state": "finalized",
+        "transactionHash": "0x9b5bfefbb34433ddf6614c31331f6ed1fdadc6656337f5ae9bd863fe38beac7a",
+        "blockNumber": "52907615",
+        "blockHash": "0x04481e1a837b5128b4edd78ffab8cbe6dfb6a630668eb23a3be5d6864052daf9",
+        "logIndex": 865,
+        "confirmationDepth": "1226",
+        "requiredConfirmationDepth": "64",
+        "finalizedCheckpoint": {
+          "schemaVersion": "programmable.base-launch-finalized-checkpoint-quorum.v1",
+          "blockNumber": "52907679",
+          "blockHash": "0x79d185653cb6d000f43210f80374db3a79798d8a47b297379c4f40e30b871e60",
+          "quorumSize": 2,
+          "observations": [
+            {
+              "provider": "primary",
+              "finalizedBlockNumber": "52908263",
+              "finalizedBlockHash": "0x48cde9473ff6bd2007560a71703ad33cd0851f99a1b320a5260f9b581b259c07",
+              "commonBlockHash": "0x79d185653cb6d000f43210f80374db3a79798d8a47b297379c4f40e30b871e60"
+            },
+            {
+              "provider": "secondary",
+              "finalizedBlockNumber": "52907679",
+              "finalizedBlockHash": "0x79d185653cb6d000f43210f80374db3a79798d8a47b297379c4f40e30b871e60",
+              "commonBlockHash": "0x79d185653cb6d000f43210f80374db3a79798d8a47b297379c4f40e30b871e60"
+            }
+          ]
+        }
+      },
+      "createdAt": "2026-10-21T03:52:47.385Z",
+      "finalizedAt": "2026-10-21T18:23:50.586Z"
+    }
+  ],
+  "nextCursor": null
+}
