@@ -27,9 +27,30 @@ describe("profile selected public Robinhood API contract", () => {
 
   it("preserves the historical launch profile while website OpenAPI adds completed and early index observations", async () => {
     const actual = await document("4.0.0");
-    expect(actual.info.version).toBe("1.18.0");
+    expect(actual.info.version).toBe("1.19.0");
+    expect(actual.paths["/api/explore/base"].get).toMatchObject({
+      operationId: "listBaseExploreLaunches", security: [],
+      responses: { "200": { content: { "application/json": { schema: { $ref: "#/components/schemas/BaseExplorePage" } } } } },
+    });
+    expect(actual.components.schemas.BaseExplorePage.properties).toMatchObject({
+      chainId: { const: 8453 },
+      sourceEvidence: { properties: { source: { const: "base-finalized-custom-launch-feed-v1" } } },
+    });
+    expect(actual["x-programmable-availability"].chainExplore.base).toEqual({
+      path: "/api/explore/base", chainId: 8453, statuses: ["ready", "stale", "unavailable"], moduleMode: false,
+      openApiUrl: "https://programmable.market/openapi/base-custom-launch-v1.json",
+      finalizedFeedUrl: "https://api.programmable.market/v4/chains/8453/finalized-custom-launches",
+    });
     const previous = JSON.parse(JSON.stringify(actual));
     previous.info.version = "1.15.0";
+    // Remove only the verified additive Base surface before comparing the historical contract.
+    delete previous.paths["/api/explore/base"];
+    delete previous.components.schemas.BaseExplorePage;
+    delete previous["x-programmable-availability"].chainExplore.base;
+    previous.info.summary = previous.info.summary.replace("Ethereum, Robinhood and Base Explore feeds", "Ethereum and Robinhood Explore feeds");
+    previous.info.description = previous.info.description
+      .replace("GET /api/explore/ethereum, GET /api/explore/robinhood and GET /api/explore/base", "GET /api/explore/ethereum and GET /api/explore/robinhood")
+      .replace("Base Custom Launch requests use the chain-qualified /v4/chains/8453 API and require active readiness with publicLaunchAuthorized. Its finalized feed and Explore catalog are documented in /openapi/base-custom-launch-v1.json. Base Module Mode is unavailable. ", "");
     const health = JSON.parse(readFileSync(new URL("./fixtures/public-ops-health-website-v116.json", import.meta.url), "utf8"));
     previous.paths["/api/ops/health"].get = health.operation;
     previous.components.schemas.OperationsHealth = health.schema;
