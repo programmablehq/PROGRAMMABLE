@@ -4,7 +4,7 @@ import type { SwapReceipt, SwapReview } from "@/lib/swap/types";
 export async function runSwapFlow(input: {
   review: SwapReview;
   assertCurrent: () => void;
-  prepare: () => Promise<SwapReview>;
+  prepare: (previous: SwapReview) => Promise<SwapReview>;
   submit: (review: SwapReview) => Promise<{ wait: () => Promise<SwapReceipt> }>;
 }) {
   const intent = input.review;
@@ -26,6 +26,6 @@ export async function runSwapFlow(input: {
     if (receipt.status !== "success" || review.kind === "swap") return { receipt, kind: review.kind };
     approvals += 1;
     input.assertCurrent();
-    review = await input.prepare();
+    review = await input.prepare(review);
   }
 }

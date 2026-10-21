@@ -38,6 +38,16 @@ interface SwapBinding {
   state: "ready" | "pending" | "submitted";
 }
 const bindings = new WeakMap<SwapReview, SwapBinding>();
+interface SwapIntent {
+  input: PrepareSwapInput;
+  deadline?: bigint;
+  approvalBlock?: bigint;
+  confirmedApprovals: Set<string>;
+}
+const intents = new WeakMap<SwapReview, SwapIntent>();
+const approvalContinuations = new WeakMap<SwapReview, "confirmed" | "consumed">();
+const approvalIdentity = (binding: SwapBinding) =>
+  `${binding.transaction.to.toLowerCase()}:${binding.transaction.data.toLowerCase()}:${binding.transaction.value}`;
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const now = () => BigInt(Math.floor(Date.now() / 1000));
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -173,6 +183,43 @@ function display(input: PrepareSwapInput, fields: Pick<SwapReview, "kind" | "amo
 }
 
 export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletActions): Promise<SwapReview> {
+  return prepareSwapForIntent({ input: { ...input }, confirmedApprovals: new Set() }, wallet);
+}
+
+/** Refresh state after a mined approval without extending its authorized deadline. */
+export async function prepareSwapContinuation(previous: SwapReview, wallet: SwapWalletActions): Promise<SwapReview> {
+  const intent = intents.get(previous);
+  requireValue(intent && previous.kind === "approval" && approvalContinuations.get(previous) === "confirmed",
+    "Wait for the approval to confirm before continuing.");
+  approvalContinuations.set(previous, "consumed");
+  return prepareSwapForIntent(intent, wallet);
+}
+
+async function prepareSwapForIntent(intent: SwapIntent, wallet: SwapWalletActions): Promise<SwapReview> {
+  for (let attempt = 0; ; attempt++) {
+    const review = await prepareSwapTransaction(intent, wallet);
+    const binding = bindings.get(review)!;
+    // Independent simulation deliberately trails the chain tip. A mined
+    // approval cannot authorize a quote from before that approval's block.
+    if (intent.approvalBlock !== undefined && BigInt(binding.transaction.preparedBlock) < intent.approvalBlock) {
+      requireValue(attempt < 5, "Your approval is confirmed. Trading checks are still catching up. Try again shortly.");
+      await new Promise(resolve => setTimeout(resolve, Math.min(2_000 * 2 ** attempt, 8_000)));
+      continue;
+    }
+    requireValue(review.kind !== "approval" || !intent.confirmedApprovals.has(approvalIdentity(binding)),
+      "Your approval is confirmed, but the latest quote has not picked it up yet. Refresh the quote.");
+    intents.set(review, intent);
+    return review;
+  }
+}
+
+async function prepareSwapTransaction(intent: SwapIntent, wallet: SwapWalletActions): Promise<SwapReview> {
+  const input = intent.input;
+  const intentDeadline = (lifetime: bigint) => {
+    intent.deadline ??= now() + lifetime;
+    requireValue(intent.deadline > now(), "The quote expired. Get a fresh quote.");
+    return intent.deadline.toString();
+  };
   requireValue(input.descriptor.status === "ready", input.descriptor.status === "unavailable" ? input.descriptor.reason : "The swap route is unavailable.");
   requireValue(isAddress(input.owner) && ["buy", "sell"].includes(input.side) && input.amountIn > 0n && input.amountIn < (1n << 127n), "Enter an amount greater than zero.");
   const slippageBps = input.slippageBps ?? 300;
@@ -252,7 +299,7 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     });
   }
   if (route.kind === "custom-v4") {
-    const request = { token, owner: account, buy: input.side === "buy", amountIn: input.amountIn.toString(), slippageBps, deadline: (now() + 600n).toString() };
+    const request = { token, owner: account, buy: input.side === "buy", amountIn: input.amountIn.toString(), slippageBps, deadline: intentDeadline(600n) };
     const reviewed = await wallet.sendCustomV4SwapWalletAction({ action: "review", descriptor: route.descriptor, request });
     requireValue(typeof reviewed !== "string", "The wallet returned no swap review.");
     const preparation = reviewed.preparation, tx = preparation.transaction;
@@ -282,7 +329,7 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     const irlMarket = same(resolveProjectionAddress(projection, market.hooks), irl.hook.address)
       && same(token, irl.token.address) && same(quoteCurrency, irl.wrappedEth.address);
     const request = api.parseLaunchPlanTradeRequestV1({ schemaVersion: api.ROUTED_TRADE_REQUEST_V1, chainId: "4663", launchId: projection.launchId,
-      planHash: projection.planHash, marketId: market.marketId, owner: account, zeroForOne: same(inputCurrency, currency0), amountIn: input.amountIn.toString(), slippageBps, deadline: (now() + 600n).toString(),
+      planHash: projection.planHash, marketId: market.marketId, owner: account, zeroForOne: same(inputCurrency, currency0), amountIn: input.amountIn.toString(), slippageBps, deadline: intentDeadline(600n),
       hookData: irlMarket ? encodeAbiParameters([{ type: "address" }], [account]) : "0x",
       ...(same(quoteCurrency, api.ROUTED_TRADE_WRAPPED_ETH_V1.address) ? { nativeFunding: true } : {}) });
     const reviewed = await wallet.sendLaunchPlanTradeWalletAction({ action: "review", projection, request });
@@ -307,7 +354,7 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     const request = api.parseCustomMarketTradeRequestV1({ schemaVersion: api.CUSTOM_TRADE_REQUEST_SCHEMA_V1,
       projectId: descriptor.route.projectId, marketId: descriptor.route.marketId, tradeCapabilityBindingHash: capability.tradeCapabilityBindingHash,
       chainId: 1, owner: account, recipient: account, side: input.side === "buy" ? "quote-to-base" : "base-to-quote",
-      amountIn: input.amountIn.toString(), slippageBps, deadline: (now() + BigInt(deadlineWindow)).toString() });
+      amountIn: input.amountIn.toString(), slippageBps, deadline: intentDeadline(BigInt(deadlineWindow)) });
     const fetchPrepared = async () => api.validateCustomMarketTradePreparationV1({
       value: await jsonResponse(await fetch("/api/custom-launch/v2/trade/prepare", { method: "POST", cache: "no-store", credentials: "same-origin",
         redirect: "error", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) })),
@@ -334,7 +381,7 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
     const api = await import("./ethereum-stamped"), selected = descriptor.route.descriptor;
     const request = api.parseEthereumStampedSwapRequest({ schemaVersion: "programmable.ethereum-stamped-swap-request.v1", chainId: 1,
       token, owner: account, side: input.side, amountIn: input.amountIn.toString(), slippageBps,
-      deadline: (now() + 240n).toString(), routeBindingHash: selected.routeBindingHash });
+      deadline: intentDeadline(240n), routeBindingHash: selected.routeBindingHash });
     const fetchPrepared = async () => api.validateEthereumStampedPreparation(
       await jsonResponse(await fetch("/api/swap/ethereum/prepare", { method: "POST", cache: "no-store", credentials: "same-origin", redirect: "error",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) })), selected, request, now());
@@ -354,8 +401,8 @@ export async function prepareSwap(input: PrepareSwapInput, wallet: SwapWalletAct
       submit: actions => actions.sendTransaction(tx),
     });
   }
-  const api = await import("@/lib/trade/client"), deadline = (now() + 300n).toString();
-  const request = { chainId: 1 as const, owner: account, token, side: input.side, amountIn: input.amountIn.toString(), slippageBps, deadline };
+  const api = await import("@/lib/trade/client");
+  const request = { chainId: 1 as const, owner: account, token, side: input.side, amountIn: input.amountIn.toString(), slippageBps, deadline: intentDeadline(300n) };
   const context = { ...request, hook: route.hook, poolId: route.poolId, launchModel: route.launchModel, launchModelVersion: route.launchModelVersion, quoteAsset: route.quoteAsset };
   const fetchPrepared = async () => api.validatePreparedTradeResponse(await jsonResponse(await fetch("/api/trade/prepare", { method: "POST", cache: "no-store", credentials: "same-origin", redirect: "error", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) })), context);
   const prepared = await fetchPrepared(), client = createPublicClient({ chain: mainnet, transport: http() }), block = await client.getBlockNumber();
@@ -392,6 +439,14 @@ export async function submitSwap(review: SwapReview, wallet: SwapWalletActions):
   return { hash: transactionHash, wait: async () => {
     const result = binding.wait ? await binding.wait(transactionHash) : await recoverSwap(recorded, transactionHash);
     await clearPendingSwap(pending);
+    if (result.status === "success" && review.kind === "approval") {
+      const intent = intents.get(review);
+      if (intent) {
+        intent.confirmedApprovals.add(approvalIdentity(binding));
+        if (intent.approvalBlock === undefined || result.blockNumber > intent.approvalBlock) intent.approvalBlock = result.blockNumber;
+      }
+      if (!approvalContinuations.has(review)) approvalContinuations.set(review, "confirmed");
+    }
     return result;
   } };
 }

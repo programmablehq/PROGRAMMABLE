@@ -58,6 +58,30 @@ test('Ethereum cards retain the unified index mode instead of Robinhood source h
 });
 
 for (const width of [1440, 390]) {
+  for (const state of ['empty', 'unavailable']) {
+    test(`owner rewards remain accessible with ${state} launches at ${width}px`, async ({page}) => {
+      await page.setViewportSize({width,height:900});
+      await page.route('**/api/profile/launches?*', route => state === 'unavailable'
+        ? route.fulfill({status:503,json:{error:'temporarily unavailable'}})
+        : route.fulfill({json:{scope:'all',status:'ready',account:'0x'+'aa'.repeat(20),items:[],presentations:[],
+          page:{number:1,size:10,totalItems:0,totalPages:0,hasMore:false}}}));
+      await page.goto(origin+'?profile&chain=1');
+      const trigger = page.getByRole('button',{name:'Claim rewards',exact:true});
+      await expect(trigger).toBeVisible(); await trigger.click();
+      await expect(page.getByLabel('Rewards account')).toHaveText('0x'+'aa'.repeat(20));
+      await page.getByRole('button',{name:'Switch fixture wallet',exact:true}).click();
+      await trigger.click();
+      await expect(page.getByLabel('Rewards account')).toHaveText('0x'+'bb'.repeat(20));
+    });
+  }
+
+  test(`public profiles do not expose the owner's rewards action at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width,height:900});
+    await page.goto(origin+'?profile&public&chain=1');
+    await expect(page.locator('article')).toHaveCount(10);
+    await expect(page.getByRole('button',{name:'Claim rewards',exact:true})).toHaveCount(0);
+  });
+
   test(`profile owner can open and dismiss the fomo team-tag dialog at ${width}px`, async ({page}) => {
     await page.setViewportSize({width,height:900});
     await page.goto(origin+'?profile&chain=1');
