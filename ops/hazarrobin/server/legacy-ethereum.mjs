@@ -257,7 +257,9 @@ async function readLaunchStampLogs(toBlock) {
   for(let first=LAUNCH_STAMP_ROUTER.startBlock;first<=toBlock;first+=EVENT_LOG_CHUNK_SIZE)
     ranges.push({address:LAUNCH_STAMP_ROUTER.address,fromBlock:toQuantityHex(first),
       toBlock:toQuantityHex(first+EVENT_LOG_CHUNK_SIZE-1n<toBlock?first+EVENT_LOG_CHUNK_SIZE-1n:toBlock),topics:[LAUNCH_STAMP_TOPICS.launchStamped]});
-  const pages=await mapLimit(ranges,6,async filter=>{
+  // Each provider batches ten JSON-RPC reads per HTTP request. Keep several
+  // batches in flight; the shared transport still caps connections and calls/s.
+  const pages=await mapLimit(ranges,24,async filter=>{
     const responses=await routerQuorumRequest("eth_getLogs",[filter]);
     const fingerprints=responses.map(launchStampLogSetFingerprint);
     if(new Set(fingerprints).size!==1)throw new Error("Die Router-Loghistorie stimmt im RPC-Quorum nicht überein");

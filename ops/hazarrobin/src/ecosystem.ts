@@ -26,7 +26,7 @@ export function validateScan(value:Scan):Scan {
   }return value;
 }
 export async function scanChain(id:1|4663,progress:(s:string)=>void):Promise<Scan>{
-  const response=await fetch(`/api/scan?chainId=${id}&minimumBlock=${confirmedBlocks.get(id)??0n}`,{cache:'no-store',signal:AbortSignal.timeout(180000)});if(!response.ok||!response.body)throw Error('Scan ist gerade nicht erreichbar.');
+  const response=await fetch(`/api/scan?chainId=${id}&minimumBlock=${confirmedBlocks.get(id)??0n}`,{cache:'no-store',signal:AbortSignal.timeout(310000)});if(!response.ok||!response.body)throw Error('Scan ist gerade nicht erreichbar.');
   const reader=response.body.getReader(),decoder=new TextDecoder();let text='',result:Scan|undefined;
   const line=(s:string)=>{if(!s.trim())return;const data=JSON.parse(s);if(data.type==='progress')progress(data.message);if(data.type==='error')throw Error(data.message);if(data.type==='result')result=validateScan(data.result);};
   try{for(;;){const chunk=await reader.read();text+=decoder.decode(chunk.value,{stream:!chunk.done});let n;while((n=text.indexOf('\n'))>=0){line(text.slice(0,n));text=text.slice(n+1);}if(chunk.done)break;}if(text)line(text);}finally{reader.releaseLock();}
