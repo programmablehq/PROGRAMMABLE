@@ -38,6 +38,15 @@ describe("token trade amount interface", () => {
     );
   });
 
+  it("locks every editable control during balance or quote preparation", () => {
+    expect(source).toContain("const formBusy = pending || maxPending;");
+    expect(source).toContain("if (formBusy) return;");
+    expect(source.match(/disabled=\{formBusy\}/gu)).toHaveLength(4);
+    expect(source).toContain("disabled={formBusy || !owner}");
+    expect(source).toContain("aria-busy={formBusy}");
+    expect(styles).toContain(".sideButton:disabled");
+  });
+
   it("uses a compact amount surface without shrinking touch controls", () => {
     expect(styles).toMatch(
       /\.amountCard\s*\{[^}]*min-height:\s*116px;[^}]*padding:\s*10px 14px 9px;/s,
