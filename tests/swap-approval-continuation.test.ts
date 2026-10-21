@@ -45,8 +45,9 @@ const projection: LaunchProjectionV1 = { ...originalProjection,
   status: "disclosed", witness: { kind: "policy", ref: "fixture:fee", details: {} }, assessor: "fixture", assessorVersion: "1", validAt: nowIso, blockNumber: "42" }],
 };
 
-function fixture(kind: "custom-v4" | "custom-vnext", options: { staleAllowance?: boolean; receiptDelay?: number; receiptStatus?: "reverted" } = {}) {
+function fixture(kind: "custom-v4" | "custom-vnext", options: { staleAllowance?: boolean; receiptDelay?: number; receiptStatus?: "reverted"; checkpointDelayReads?: number } = {}) {
   let time = 1_800_000_000, blockNumber = 100n, tokenApproved = false, permitExpires = 0n;
+  let previousTokenApproved = false, previousPermitExpires = 0n, staleReads = 0;
   const transactions: { kind: string; hash: Hex; from: typeof owner; to: typeof owner; input: Hex; value: bigint; chainId: number; blockNumber: bigint; blockHash: Hex }[] = [];
   const deadlines: string[] = [];
   vi.spyOn(Date, "now").mockImplementation(() => time * 1000);
@@ -56,6 +57,8 @@ function fixture(kind: "custom-v4" | "custom-vnext", options: { staleAllowance?:
       const tx = transactions.find(item => item.hash === hash)!;
       time += options.receiptDelay ?? 2;
       blockNumber = tx.blockNumber;
+      previousTokenApproved = tokenApproved; previousPermitExpires = permitExpires;
+      staleReads = options.checkpointDelayReads ?? 0;
       if (tx.kind === "token_approval") tokenApproved = true;
       if (tx.kind === "permit2_approval") {
         permitExpires = BigInt(decodeFunctionData({ abi: ROUTED_TRADE_PERMIT2_ABI_V1, data: tx.input }).args[3]!);
@@ -67,13 +70,16 @@ function fixture(kind: "custom-v4" | "custom-vnext", options: { staleAllowance?:
   });
   const review = (request: { deadline: string; amountIn: string }) => {
     deadlines.push(request.deadline);
-    const step = !tokenApproved ? "token_approval" : options.staleAllowance || permitExpires < BigInt(request.deadline) ? "permit2_approval" : "swap";
+    const stale = staleReads-- > 0;
+    const tokenAllowance = stale ? previousTokenApproved : tokenApproved;
+    const permitExpiration = stale ? previousPermitExpires : permitExpires;
+    const step = !tokenAllowance ? "token_approval" : options.staleAllowance || permitExpiration < BigInt(request.deadline) ? "permit2_approval" : "swap";
     // Use the real approval builders so the simulated allowance has the actual expiry.
     const transaction = kind === "custom-v4"
       ? step === "swap" ? buildCustomV4Swap(descriptor, request as never, 50_000n) : buildCustomV4SwapApproval(request as never, step)
       : step === "swap" ? buildLaunchPlanRoutedSwapV1(projection, request as never, 50_000n) : buildLaunchPlanTradeApprovalV1(request as never, token, step);
     return { preparation: { status: step === "swap" ? "ready" : "approval_required", transaction: { ...transaction, gasLimit: "100000" },
-      quote: { amountOut: "50000", amountOutMinimum: "48500", blockNumber: blockNumber.toString(), validUntil: String(time + 25) } } };
+      quote: { amountOut: "50000", amountOutMinimum: "48500", blockNumber: (stale ? blockNumber - 1n : blockNumber).toString(), validUntil: String(time + 25) } } };
   };
   const action = vi.fn(async (input: { action: string; request: { deadline: string; amountIn: string }; reviewed?: ReturnType<typeof review> }) => {
     if (input.action === "review") return review(input.request);
@@ -92,7 +98,7 @@ function fixture(kind: "custom-v4" | "custom-vnext", options: { staleAllowance?:
 }
 
 beforeEach(() => { vi.clearAllMocks(); mocked.pending = null; });
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe.each(["custom-v4", "custom-vnext"] as const)("%s approval continuation", kind => {
   it("keeps the original deadline across two mined approvals and reaches the sell", async () => {
@@ -109,6 +115,30 @@ describe.each(["custom-v4", "custom-vnext"] as const)("%s approval continuation"
     await expect(runSwapFlow({ review: await prepareSwap(f.input, f.wallet), assertCurrent() {},
       prepare: previous => prepareSwapContinuation(previous, f.wallet), submit: review => submitSwap(review, f.wallet) })).rejects.toThrow("approval is confirmed");
     expect(f.transactions.map(tx => tx.kind)).toEqual(["token_approval", "permit2_approval"]);
+  });
+
+  it("waits for the simulation checkpoint to include each approval before continuing", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const f = fixture(kind, { checkpointDelayReads: 2 }), review = await prepareSwap(f.input, f.wallet);
+    const task = runSwapFlow({ review, assertCurrent() {},
+      prepare: previous => prepareSwapContinuation(previous, f.wallet), submit: value => submitSwap(value, f.wallet) });
+    const result = expect(task).resolves.toMatchObject({ kind: "swap", receipt: { status: "success" } });
+    await vi.runAllTimersAsync(); await result;
+    expect(f.transactions.map(tx => tx.kind)).toEqual(["token_approval", "permit2_approval", "swap"]);
+    expect(f.deadlines).toHaveLength(7);
+    expect(new Set(f.deadlines)).toEqual(new Set(["1800000600"]));
+  });
+
+  it("bounds checkpoint retries without sending another approval", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const f = fixture(kind, { checkpointDelayReads: Infinity }), review = await prepareSwap(f.input, f.wallet);
+    const task = runSwapFlow({ review, assertCurrent() {},
+      prepare: previous => prepareSwapContinuation(previous, f.wallet), submit: value => submitSwap(value, f.wallet) });
+    const result = expect(task).rejects.toThrow("Trading checks are still catching up");
+    await vi.runAllTimersAsync(); await result;
+    expect(f.transactions.map(tx => tx.kind)).toEqual(["token_approval"]);
+    expect(f.deadlines).toHaveLength(7);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("asks for a fresh quote if confirmation outlasts the original deadline", async () => {

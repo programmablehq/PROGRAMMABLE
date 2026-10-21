@@ -41,6 +41,7 @@ const bindings = new WeakMap<SwapReview, SwapBinding>();
 interface SwapIntent {
   input: PrepareSwapInput;
   deadline?: bigint;
+  approvalBlock?: bigint;
   confirmedApprovals: Set<string>;
 }
 const intents = new WeakMap<SwapReview, SwapIntent>();
@@ -195,12 +196,21 @@ export async function prepareSwapContinuation(previous: SwapReview, wallet: Swap
 }
 
 async function prepareSwapForIntent(intent: SwapIntent, wallet: SwapWalletActions): Promise<SwapReview> {
-  const review = await prepareSwapTransaction(intent, wallet);
-  const binding = bindings.get(review)!;
-  requireValue(review.kind !== "approval" || !intent.confirmedApprovals.has(approvalIdentity(binding)),
-    "Your approval is confirmed, but the latest quote has not picked it up yet. Refresh the quote.");
-  intents.set(review, intent);
-  return review;
+  for (let attempt = 0; ; attempt++) {
+    const review = await prepareSwapTransaction(intent, wallet);
+    const binding = bindings.get(review)!;
+    // Independent simulation deliberately trails the chain tip. A mined
+    // approval cannot authorize a quote from before that approval's block.
+    if (intent.approvalBlock !== undefined && BigInt(binding.transaction.preparedBlock) < intent.approvalBlock) {
+      requireValue(attempt < 5, "Your approval is confirmed. Trading checks are still catching up. Try again shortly.");
+      await new Promise(resolve => setTimeout(resolve, Math.min(2_000 * 2 ** attempt, 8_000)));
+      continue;
+    }
+    requireValue(review.kind !== "approval" || !intent.confirmedApprovals.has(approvalIdentity(binding)),
+      "Your approval is confirmed, but the latest quote has not picked it up yet. Refresh the quote.");
+    intents.set(review, intent);
+    return review;
+  }
 }
 
 async function prepareSwapTransaction(intent: SwapIntent, wallet: SwapWalletActions): Promise<SwapReview> {
@@ -430,7 +440,11 @@ export async function submitSwap(review: SwapReview, wallet: SwapWalletActions):
     const result = binding.wait ? await binding.wait(transactionHash) : await recoverSwap(recorded, transactionHash);
     await clearPendingSwap(pending);
     if (result.status === "success" && review.kind === "approval") {
-      intents.get(review)?.confirmedApprovals.add(approvalIdentity(binding));
+      const intent = intents.get(review);
+      if (intent) {
+        intent.confirmedApprovals.add(approvalIdentity(binding));
+        if (intent.approvalBlock === undefined || result.blockNumber > intent.approvalBlock) intent.approvalBlock = result.blockNumber;
+      }
       if (!approvalContinuations.has(review)) approvalContinuations.set(review, "confirmed");
     }
     return result;
