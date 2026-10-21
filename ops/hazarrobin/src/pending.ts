@@ -1,4 +1,4 @@
-import { decodeFunctionData, encodeFunctionData, keccak256, parseAbi, type Address, type Hex, type PublicClient } from 'viem';
+import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, keccak256, parseAbi, parseAbiParameters, type Address, type Hex, type PublicClient } from 'viem';
 
 export interface PendingClaim {
   chainId: 1 | 4663;
@@ -62,11 +62,14 @@ const WALLET_MANAGER_HASH = {
   4663: '0xe45747f90ecec2ba96ae9f4a15c36289653efdfef7690bcfb90a1945bb0fe207',
 };
 export const walletExecutionAbi = parseAbi(['function redeemDelegations(bytes[] permissionContexts,bytes32[] modes,bytes[] executionCallDatas)']);
+const delegationType = parseAbiParameters('(address delegate,address delegator,bytes32 authority,(address enforcer,bytes terms,bytes args)[] caveats,uint256 salt,bytes signature)[]');
+const ROOT_AUTHORITY = `0x${'ff'.repeat(32)}`;
+const ANY_DELEGATE = '0x0000000000000000000000000000000000000a11';
 
 /** Inspect only a mined wallet envelope. This never creates a delegation. */
-export function matchesWalletExecution(entry: PendingClaim, tx: { to: string | null; input: Hex; value: bigint }) {
+export function matchesWalletExecution(entry: PendingClaim, tx: { from: string; to: string | null; input: Hex; value: bigint }) {
   if (tx.value !== 0n) return null;
-  if (same(tx.to, entry.to) && same(tx.input, entry.data)) return 'direct';
+  if (same(tx.from, entry.account) && same(tx.to, entry.to) && same(tx.input, entry.data)) return 'direct';
   if (!same(tx.to, WALLET_MANAGER)) return null;
   try {
     const decoded = decodeFunctionData({ abi: walletExecutionAbi, data: tx.input });
@@ -76,6 +79,18 @@ export function matchesWalletExecution(entry: PendingClaim, tx: { to: string | n
     const packed = executions[0]!;
     if (packed.length < 106 || !same(packed.slice(0, 42), entry.to) ||
       BigInt(`0x${packed.slice(42, 106)}`) !== 0n || !same(`0x${packed.slice(106)}`, entry.data)) return null;
+    // The manager executes as the root delegator, not necessarily the outer
+    // transaction's gas payer. Its pinned runtime validates the signatures and
+    // authority chain; bind that root to the wallet that prepared this claim.
+    const [delegations] = decodeAbiParameters(delegationType, contexts[0]!);
+    if (!same(encodeAbiParameters(delegationType, [delegations]), contexts[0])) return null;
+    if (!delegations.length) {
+      if (!same(tx.from, entry.account)) return null;
+    } else {
+      const root = delegations[delegations.length - 1]!, leaf = delegations[0]!;
+      if (!same(root.delegator, entry.account) || !same(root.authority, ROOT_AUTHORITY) ||
+        !(same(leaf.delegate, tx.from) || same(leaf.delegate, ANY_DELEGATE))) return null;
+    }
     return 'metamask';
   } catch { return null; }
 }
@@ -104,9 +119,9 @@ export async function verifyPendingClaim(entry: PendingClaim, hash: Hex, clients
     Promise.all(clients.map(c => c.getTransactionReceipt({ hash }))),
   ]);
   const tx = transactions[0]!, receipt = receipts[0]!;
-  need(transactions.every(t => same(t.hash, hash) && same(t.from, entry.account) && t.nonce === tx.nonce &&
+  need(transactions.every(t => same(t.hash, hash) && same(t.from, tx.from) && t.nonce === tx.nonce &&
     same(t.to, tx.to) && same(t.input, tx.input) && t.value === tx.value),
-  'Die Wallet-Transaktion stimmt nicht mit dem gespeicherten Auftrag überein.');
+  'Die Verbindungen melden unterschiedliche Transaktionsdaten. Bitte den Status erneut prüfen.');
   need(receipts.every(r => same(r.transactionHash, hash) && same(r.blockHash, receipt.blockHash) &&
     r.blockNumber === receipt.blockNumber && r.status === receipt.status),
   'Die Bestätigung ist noch nicht auf beiden Verbindungen verfügbar.');
@@ -119,9 +134,15 @@ export async function verifyPendingClaim(entry: PendingClaim, hash: Hex, clients
       'Der Wallet-Ausführungsvertrag stimmt nicht mit der geprüften Version überein.');
   }
   const exact = execution !== null;
+  const ownTransaction = same(tx.from, entry.account);
+  const storedHash = same(entry.hash, hash);
+  // A relayer's nonce belongs to the relayer. Only the exact hash returned by
+  // the wallet can bind a relayed execution to this pending request.
+  need(ownTransaction || (execution === 'metamask' && storedHash),
+    'Die Wallet-Transaktion stimmt nicht mit dem gespeicherten Auftrag überein.');
   // Older V4 builds recorded the nonce before the wallet selected its final
   // transaction. An exact stored hash still proves the intended zero-value call.
-  need(tx.nonce === entry.nonce || (exact && same(entry.hash, hash)),
+  need((ownTransaction && tx.nonce === entry.nonce) || (exact && storedHash),
     'Die Wallet-Transaktion stimmt nicht mit dem gespeicherten Auftrag überein.');
   return { hash, blockNumber: receipt.blockNumber,
     outcome: !exact ? 'replaced' as const : receipt.status === 'success' ? 'confirmed' as const : 'reverted' as const };
