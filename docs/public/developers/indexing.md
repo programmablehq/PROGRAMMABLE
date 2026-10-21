@@ -1,5 +1,5 @@
 ---
-description: Index Module Mode and Custom Launches on Ethereum and Robinhood Chain
+description: Index Programmable launches on Ethereum, Robinhood Chain and Base
 ---
 
 # Index launches
@@ -18,6 +18,7 @@ Base Custom Launches use the chain-qualified [Base finalized feed](base-custom-l
 | Module Mode | Robinhood Chain · `4663` | [Foundation: Robinhood](foundation-indexing.md#robinhood-module-launches). Verify the factory release and launch record. |
 | Custom Launch | Ethereum Mainnet · `1` | [Ethereum Custom indexing](ethereum-custom-indexing.md). Include every published Router generation. |
 | Custom Launch | Robinhood Chain · `4663` | [Robinhood Custom indexing](robinhood-terminal-indexer.md). Read finalized projections and retain the historical source adapters. |
+| Custom Launch | Base · `8453` | [Base Custom indexing](base-custom-launch.md#index-base-launches). Follow the finalized feed with its Base Router binding and independent finality evidence. |
 
 For older Robinhood Module Mode launches, retain the [Native and Engine adapter](module-mode-indexing.md). A new module within the same interface does not need a name-based allowlist. A new source interface needs its own adapter.
 
@@ -30,6 +31,7 @@ The website feeds are the shortest path to discovering currently listed coins:
 ```text
 https://programmable.market/api/explore/ethereum?page=1&pageSize=50&sort=newest
 https://programmable.market/api/explore/robinhood?page=1&pageSize=50&sort=newest
+https://programmable.market/api/explore/base?page=1&pageSize=50&sort=newest
 ```
 
 Read every page through `page.totalPages`, deduplicate by chain and token address, and retain each record's `sourceEvidence`. These are website discovery feeds. For a complete onchain history, backfill the original sources in the selected guide, including historical releases and launches excluded from the website's display.
