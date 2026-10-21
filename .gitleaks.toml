@@ -621,3 +621,11 @@ paths = [
   '''^public/openapi/base-custom-launch-v1\.json$''',
 ]
 regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",\s*$''']
+
+[[allowlists]]
+description = "Base finalized-feed regression contains the exact public canary token address"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/fixtures/base-finalized-custom-launch-metadata-feed-v1\.json$''']
+regexes = ['''^\s*"token": "0xBC87674d279F701253dae23233222744d1232B5A",\s*$''']
