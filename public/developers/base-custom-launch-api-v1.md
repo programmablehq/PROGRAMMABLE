@@ -10,6 +10,8 @@ Use the [Base API reference](https://programmable.market/openapi/base-custom-lau
 
 Create a wallet API key in the [Base setup](https://programmable.market/developers/api-keys?guide=custom-hook&chainId=8453), with `custom-launch:create` and `custom-launch:read` and a Base grant. The request's `launchWallet` must match that key's wallet. Partner keys are not accepted on this route. Fund that wallet with ETH on Base for deployment, initial liquidity and gas. An Ethereum balance cannot pay Base gas.
 
+The Base client is included in [CLI 4.2.0](https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.2.0). Use that immutable release and verify its published asset checksums and GitHub attestations before installation. Direct HTTP access uses the same review and signing requirements.
+
 ## Prepare, review and launch
 
 1. Compile with the exact compiler and settings. Include the complete source closure, creation bytecode, constructor bindings and materialized runtime for every target and relevant externally created contract. Include complete token metadata, image and project links.
