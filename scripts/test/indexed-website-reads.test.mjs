@@ -452,6 +452,62 @@ test("persistent staged incompleteness exhausts three attempts without accepting
   }
 });
 
+function addEthereumPageItem(spec) {
+  spec.body.page.totalItems = 52;
+  spec.body.items.push(ethereumItem(52));
+  spec.body.presentations = [];
+}
+
+test("a staged count change discards both catalog walks before collecting a coherent snapshot", async () => {
+  let firstPages = 0;
+  const waits = [], retries = [];
+  const f = fixture(({ url, spec }) => {
+    if (url.pathname !== "/api/explore/ethereum") return;
+    if (spec.body.page.number === 1) firstPages += 1;
+    else if (firstPages === 1) addEthereumPageItem(spec);
+  });
+  const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+    waitImpl: async delay => { waits.push(delay); }, onCatalogRetry: value => retries.push(value) }));
+  assert.deepEqual(waits, [5_000]);
+  assert.equal(firstPages, 2);
+  assert.match(retries[0].detail, /chain=1, page=2, initialTotal=51, observedTotal=52/u);
+  assert.equal(f.calls.filter(call => call.url.pathname === "/api/explore/robinhood").length, 2);
+  assert.deepEqual(result.chains.map(chain => chain.totalItems), [51, 1]);
+  assert.equal(result.chains[0].pages[1].count, 1);
+  assert.equal(f.calls.filter(call => call.url.hostname === "api.vercel.com").length, 2);
+});
+
+test("persistent count changes stop after three complete observations; production is never retried", async () => {
+  for (const targetKind of ["staged", "production"]) {
+    const waits = [];
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 2) addEthereumPageItem(spec);
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ targetKind,
+      ...(targetKind === "production" ? { targetUrl: "https://programmable.market" } : {}),
+      fetchImpl: f.fetchImpl, waitImpl: async delay => { waits.push(delay); } })), /catalog changed during pagination/u);
+    assert.equal(waits.length, targetKind === "staged" ? 2 : 0);
+    assert.equal(f.calls.filter(call => call.url.hostname === "api.vercel.com").length, 1);
+  }
+});
+
+test("count changes cannot hide invalid sources on either chain", async () => {
+  for (const damagedChain of ["ethereum", "robinhood"]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 2) {
+        addEthereumPageItem(spec);
+        if (damagedChain === "ethereum") spec.body.sourceEvidence.classic.commitment = "invalid";
+      }
+      if (damagedChain === "robinhood" && url.pathname === "/api/explore/robinhood") {
+        spec.body.sourceEvidence.router.binding = "invalid";
+      }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
+      waitImpl: async () => assert.fail("invalid source was retried") })),
+    damagedChain === "ethereum" ? /Ethereum source evidence/u : /Robinhood Router binding/u);
+  }
+});
+
 test("malformed or untrusted incomplete source envelopes never trigger availability retries", async () => {
   for (const mutate of [
     spec => { spec.body.chainId = 4663; },

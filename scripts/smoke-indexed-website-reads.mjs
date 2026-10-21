@@ -54,6 +54,8 @@ function responseStatusSummary(body, response) {
 }
 
 class IncompleteEthereumCatalogError extends Error {}
+class ChangingCatalogError extends Error {}
+const retryableCatalog = error => error instanceof IncompleteEthereumCatalogError || error instanceof ChangingCatalogError;
 
 function isIncompleteEthereumCatalog(body, response, expectations, nowMs) {
   if (!record(body) || body.chainId !== 1 || !record(body.sources) || !record(body.sourceEvidence) ||
@@ -337,7 +339,10 @@ async function observeReads(input, target, headers, observedAt) {
       }
       validateIndexedWebsiteList({ body, response: result.response, route, pageNumber: number, expectations, nowMs: Date.parse(observedAt) });
       first ??= body;
-      check(body.page.totalItems === first.page.totalItems, "catalog changed during pagination; rerun smoke");
+      if (body.page.totalItems !== first.page.totalItems) {
+        throw new ChangingCatalogError(`indexed website catalog changed during pagination: chain=${route.chainId}, page=${number}, ` +
+          `initialTotal=${first.page.totalItems}, observedTotal=${body.page.totalItems}; no snapshot accepted`);
+      }
       check(hasPersistentPin(body, route) === hasPersistentPin(first, route), "persistent pin changed during pagination");
       for (const [index, item] of body.items.entries()) {
         if (number > 1 && index === 0 && hasPersistentPin(body, route)) {
@@ -400,9 +405,9 @@ async function observeReads(input, target, headers, observedAt) {
       tokenPage: { path: tokenPath, tokenAddress: item.tokenAddress, bodyDigest: token.bodyDigest } };
   }));
   const failures = results.filter(result => result.status === "rejected");
-  // Settle both chains and never let a transient Ethereum response hide a
+  // Settle both chains and never let a transient catalog response hide a
   // source, identity, pagination or transport failure in the other observation.
-  const failure = failures.find(result => !(result.reason instanceof IncompleteEthereumCatalogError)) ?? failures[0];
+  const failure = failures.find(result => !retryableCatalog(result.reason)) ?? failures[0];
   if (failure) throw failure.reason;
   return results.map(result => result.value);
 }
@@ -440,7 +445,7 @@ export async function runIndexedWebsiteReadSmoke(input) {
       chains = await observeReads(input, target, headers, observedAt);
       break;
     } catch (error) {
-      if (!(error instanceof IncompleteEthereumCatalogError) || attempt === STAGED_CATALOG_ATTEMPTS ||
+      if (input.targetKind !== "staged" || !retryableCatalog(error) || attempt === STAGED_CATALOG_ATTEMPTS ||
         Date.now() + STAGED_CATALOG_RETRY_DELAY_MS >= retryDeadlineMs) throw error;
       input.onCatalogRetry?.({ attempt, nextAttempt: attempt + 1, detail: error.message });
       // Discard the complete failed observation and capture a fresh timestamp
