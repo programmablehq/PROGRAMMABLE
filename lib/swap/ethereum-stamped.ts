@@ -10,6 +10,7 @@ import { ETHEREUM_ROUTING_FEE_BOUNDARY_V1, ethereumPoolFeeMatchesPolicy,
   validateEthereumFeeClassificationV1, type EthereumFeeClassificationV1 } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
 import { assertIssuedEthereumNative30RuntimeProofV1, rebuildEthereumNative30RuntimeProofV1, ethereumNative30FeeAmountV1,
   type EthereumNative30RuntimeProofV1 } from "@/lib/custom-launch/ethereum-native30-runtime-v1";
+import { ethereumStampedBridge, type EthereumStampedBridge } from "./ethereum-stamped-bridges";
 
 const NATIVE = "0x0000000000000000000000000000000000000000";
 const UINT128_MAX = (1n << 128n) - 1n;
@@ -33,6 +34,7 @@ export interface EthereumStampedSwapRoute {
   stamp: LaunchStampProvenanceV1;
   routeBindingHash: `sha256:${string}`;
   feeClassification?: EthereumFeeClassificationV1;
+  bridge?: EthereumStampedBridge;
 }
 export interface EthereumStampedSwapRequest {
   schemaVersion: "programmable.ethereum-stamped-swap-request.v1";
@@ -74,7 +76,8 @@ export class EthereumStampedSwapError extends Error {
 }
 function requireValue(value: unknown, message: string): asserts value { if (!value) throw new EthereumStampedSwapError(message); }
 
-function routeHash(stamp: LaunchStampProvenanceV1, tokenDecimals: number, feeClassification?: EthereumFeeClassificationV1) {
+function routeHash(stamp: LaunchStampProvenanceV1, tokenDecimals: number, feeClassification?: EthereumFeeClassificationV1,
+  bridge?: EthereumStampedBridge) {
   // Presentation and later observation checkpoints are deliberately excluded.
   return canonicalBrowserSha256V2("programmable.ethereum-stamped-swap-route-binding.v1", {
     chainId: 1, tokenDecimals, launchId: stamp.launchId.toLowerCase(), stampHash: stamp.stampHash.toLowerCase(),
@@ -83,6 +86,7 @@ function routeHash(stamp: LaunchStampProvenanceV1, tokenDecimals: number, feeCla
     poolKey: { ...stamp.poolKey, currency0: stamp.poolKey.currency0.toLowerCase(), currency1: stamp.poolKey.currency1.toLowerCase(), hooks: stamp.poolKey.hooks.toLowerCase() },
     protocol: ETHEREUM_STAMPED_SWAP_PROTOCOL,
     ...(feeClassification ? { feeClassification } : {}),
+    ...(bridge ? { bridge } : {}),
   });
 }
 
@@ -94,14 +98,16 @@ export function ethereumStampedSwapRoute(entry: CanonicalTokenExploreEntry, feeC
   if (!stamp || stamp.kind !== "custom-graph" || stamp.chainId !== 1
     || !isLaunchStampProvenanceV1(stamp, { chainId: 1, tokenAddress: entry.tokenAddress, hookAddress: entry.hookAddress, poolId: entry.poolId })
     || !Number.isInteger(entry.tokenDecimals) || Number(entry.tokenDecimals) < 0 || Number(entry.tokenDecimals) > 36
-    || !same(stamp.poolKey.currency0, NATIVE) || !same(stamp.poolKey.currency1, entry.tokenAddress)
     || !same(stamp.poolManagerAddress, ETHEREUM_STAMPED_SWAP_PROTOCOL.poolManager.address)
     || !same(computeOfficialV4PoolId(stamp.poolKey), stamp.poolId)) return null;
+  const native = same(stamp.poolKey.currency0, NATIVE) && same(stamp.poolKey.currency1, entry.tokenAddress);
+  const bridge = native ? undefined : ethereumStampedBridge(stamp.poolKey, entry.tokenAddress);
+  if (!native && !bridge) return null;
   if (BigInt(stamp.blockNumber) > BigInt(ETHEREUM_ROUTING_FEE_BOUNDARY_V1.blockNumber) && !feeClassification) return null;
   try { if (feeClassification) validateEthereumFeeClassificationV1(feeClassification, stamp); } catch { return null; }
   return Object.freeze({ schemaVersion: "programmable.ethereum-stamped-swap-route.v1", chainId: 1,
-    tokenDecimals: entry.tokenDecimals!, stamp, routeBindingHash: routeHash(stamp, entry.tokenDecimals!, feeClassification),
-    ...(feeClassification ? { feeClassification } : {}) });
+    tokenDecimals: entry.tokenDecimals!, stamp, routeBindingHash: routeHash(stamp, entry.tokenDecimals!, feeClassification, bridge),
+    ...(feeClassification ? { feeClassification } : {}), ...(bridge ? { bridge } : {}) });
 }
 
 export function parseEthereumStampedSwapRoute(value: unknown, expected: { token: string; decimals: number }): EthereumStampedSwapRoute {
@@ -112,6 +118,7 @@ export function parseEthereumStampedSwapRoute(value: unknown, expected: { token:
   const rebuilt = ethereumStampedSwapRoute({ tokenAddress: expected.token, tokenDecimals: expected.decimals,
     hookAddress: candidate.stamp.poolKey.hooks, poolId: candidate.stamp.poolId, launchStampProvenance: candidate.stamp } as CanonicalTokenExploreEntry, candidate.feeClassification);
   requireValue(rebuilt && rebuilt.routeBindingHash === candidate.routeBindingHash, "The Ethereum route does not match this coin.");
+  requireValue(canonicalBrowserJsonV2(rebuilt.bridge ?? null) === canonicalBrowserJsonV2(candidate.bridge ?? null), "The Ethereum bridge does not match this route.");
   return rebuilt;
 }
 
@@ -133,7 +140,8 @@ export function ethereumStampedRuntimeBindings(route: EthereumStampedSwapRoute):
   const stamp = route.stamp;
   const bindings = [...Object.values(ETHEREUM_STAMPED_SWAP_PROTOCOL),
     { address: stamp.routerAddress, runtimeCodeHash: stamp.routerRuntimeCodeHash },
-    { address: stamp.routeLauncherAddress, runtimeCodeHash: stamp.routeLauncherRuntimeCodeHash }, ...stamp.components];
+    { address: stamp.routeLauncherAddress, runtimeCodeHash: stamp.routeLauncherRuntimeCodeHash }, ...stamp.components,
+    ...(route.bridge ? [route.bridge.quoteToken] : [])];
   const result = new Map<string, EthereumSwapRuntimeBinding>();
   for (const item of bindings) {
     const address = getAddress(item.address), runtimeCodeHash = item.runtimeCodeHash.toLowerCase() as Hex;
@@ -165,8 +173,20 @@ function swapTransaction(route: EthereumStampedSwapRoute, request: EthereumStamp
   const amountIn = BigInt(request.amountIn) - upfrontFee;
   requireValue(minimum > 0n && minimum <= UINT128_MAX, "The swap returned no usable output.");
   const planner = new V4Planner();
-  planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [{ poolKey: route.stamp.poolKey, zeroForOne: request.side === "buy",
-    amountIn: amountIn.toString(), amountOutMinimum: minimum.toString(), hookData: "0x" }], URVersion.V2_0);
+  if (route.bridge) {
+    const quote = route.bridge.quoteToken.address;
+    const pools = request.side === "buy"
+      ? [route.bridge.poolKey, route.stamp.poolKey] : [route.stamp.poolKey, route.bridge.poolKey];
+    const inputs = [request.side === "buy" ? NATIVE : request.token, quote];
+    // Both swaps share one PoolManager unlock. OPEN_DELTA (0) consumes the
+    // first hop's actual UNI credit, without guessing or rounding its output.
+    pools.forEach((poolKey, index) => planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [{ poolKey,
+      zeroForOne: same(poolKey.currency0, inputs[index]!), amountIn: index === 0 ? amountIn.toString() : "0",
+      amountOutMinimum: index === 0 ? "1" : minimum.toString(), hookData: "0x" }], URVersion.V2_0));
+  } else {
+    planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [{ poolKey: route.stamp.poolKey, zeroForOne: request.side === "buy",
+      amountIn: amountIn.toString(), amountOutMinimum: minimum.toString(), hookData: "0x" }], URVersion.V2_0);
+  }
   planner.addAction(Actions.SETTLE_ALL, [request.side === "buy" ? NATIVE : request.token, amountIn.toString()], URVersion.V2_0);
   if (charge && request.side === "sell") planner.addAction(Actions.TAKE_PORTION,
     [NATIVE, feePolicy!.policy.defaultCollection.recipient, feePolicy!.policy.defaultCollection.routedRateBps], URVersion.V2_0);
