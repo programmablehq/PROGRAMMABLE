@@ -222,7 +222,7 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
     quoteCache.clear();
     mutex.current = true; setBusy("signing"); setError(""); setOutcome(null);
     try {
-      const { prepareSwap, submitSwap } = await import("@/lib/swap/client");
+      const { prepareSwapContinuation, submitSwap } = await import("@/lib/swap/client");
       const assertCurrent = () => {
         const current = walletRef.current;
         if (!mounted.current || !current.authenticated || !current.sessionReady
@@ -240,9 +240,9 @@ export function SwapPanel({ initialAddress = "", initialChainId = 4663, embedded
       };
       const result = await runSwapFlow({
         review, assertCurrent,
-        prepare: async () => {
+        prepare: async previous => {
           setBusy("preparing"); setSubmitted(null);
-          const next = await prepareSwap({ descriptor, owner, side, amountIn: parsed, slippageBps }, actions);
+          const next = await prepareSwapContinuation(previous, actions);
           if (mounted.current) setQuotation({ key: quoteKey, review: next, receivedAt: Date.now() });
           return next;
         },

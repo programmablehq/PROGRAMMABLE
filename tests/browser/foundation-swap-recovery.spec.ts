@@ -10,14 +10,32 @@ test.beforeAll(async () => {
   // boundaries. No provider, signature or transaction is used by this fixture.
   const stubs: Record<string, string> = {
     wallet: `export const useWallet = () => ({ wallet: { account: '0x'+'a'.repeat(40), chainId: '4663' }, authenticated: true, sessionReady: true,
-      readTradeBalances: async () => ({nativeBalanceWei: 1000000000000000000n, tokenBalanceRaw: 0n, gasPriceWei: 1n}) });`,
-    client: `export async function fetchSwapToken() { return {schemaVersion:'programmable.swap-token.v1',chainId:4663,status:'ready',
-      token:{address:'0x'+'b'.repeat(40),name:'Module coin',symbol:'MOD',decimals:18},route:{kind:'module-foundation',transactionHash:'0x'+'1'.repeat(64)}}; }
+      readTradeBalances: async () => ({nativeBalanceWei: 1000000000000000000n, tokenBalanceRaw: 1000000000000000000n, gasPriceWei: 1n}) });`,
+    client: `const continuation = new URLSearchParams(location.search).get('mode') === 'permit-continuation';
+      const activity = window.fixtureSwap = { prepared: 0, continued: 0, sent: [] };
+      let confirmed;
+      const review = (input, kind) => ({kind, chainId:4663, owner:input.owner, token:input.descriptor.token.address,
+        side:input.side, amountIn:input.amountIn, amountOut:1000n, minimumOutput:970n, expiresAt:BigInt(Math.floor(Date.now()/1000)+25)});
+      export async function fetchSwapToken() { return {schemaVersion:'programmable.swap-token.v1',chainId:4663,status:'ready',
+        token:{address:'0x'+'b'.repeat(40),name:'Test coin',symbol:continuation?'BLOB':'MOD',decimals:18},
+        route:continuation?{kind:'custom-v4'}:{kind:'module-foundation',transactionHash:'0x'+'1'.repeat(64)}}; }
       export function getPendingSwap() { const mode=new URLSearchParams(location.search).get('mode');
         if(mode==='storage-error') throw Error('storage unavailable');
         return mode==='pending' || mode==='unknown-hash' ? {kind:'swap',chainId:4663,hash:mode==='pending'?'0x'+'2'.repeat(64):null} : null; }
       export function subscribePendingSwap(){return () => {}};
-      export function prepareSwap(){throw Error('Generic preparation must not run for Foundation')}
+      export async function prepareSwap(input){
+        if(!continuation) throw Error('Generic preparation must not run for Foundation');
+        activity.prepared++; return review(input,'approval');
+      }
+      export async function prepareSwapContinuation(previous){
+        if(previous!==confirmed) throw Error('Continuation must use the confirmed review');
+        activity.continued++; return {...previous,kind:activity.continued===1?'approval':'swap'};
+      }
+      export async function submitSwap(value){
+        activity.sent.push(value.kind); const hash='0x'+String(activity.sent.length).repeat(64);
+        return {hash,wait:async()=>{await new Promise(resolve=>setTimeout(resolve,25)); confirmed=value;
+          return {hash,chainId:4663,blockNumber:100n,status:'success'};}};
+      }
       export function recoverSwap(){throw Error('Not used by fixture')}`,
     foundation: `import React from 'react'; export function ModuleFoundationMarketHost(){return React.createElement('button',null,'Foundation trade')}`,
     dynamic: `import React from 'react'; export default function dynamic(load){const Component=React.lazy(async()=>({default:await load()}));return props=>React.createElement(React.Suspense,{fallback:null},React.createElement(Component,props))}`,
@@ -67,3 +85,17 @@ for (const mode of ["pending", "unknown-hash", "storage-error"]) {
     await expect(page.locator('button[type="submit"]')).toBeDisabled();
   });
 }
+
+test("custom sell continues each confirmed approval without starting a fresh trade", async ({ page }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await page.goto(`${origin}/?mode=permit-continuation`);
+  await page.getByRole("button", { name: "Sell", exact: true }).first().click();
+  await page.getByLabel("Amount of BLOB to sell").fill("0.1");
+  const submit = page.locator('button[type="submit"]');
+  await expect(submit).toBeEnabled(); await submit.click();
+  await expect(page.getByRole("status").filter({ hasText: "Trade complete." })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { fixtureSwap: unknown }).fixtureSwap)).toEqual({
+    prepared: 1, continued: 2, sent: ["approval", "approval", "swap"],
+  });
+  expect(errors).toEqual([]);
+});

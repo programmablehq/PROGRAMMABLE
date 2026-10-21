@@ -11,8 +11,11 @@ export async function createExploreVisibilityServer() {
     const params=new URLSearchParams(location.search);
     function Profile() {
       const [account,setAccount]=useState('0x'+'aa'.repeat(20));
+      const [rewardsAccount,setRewardsAccount]=useState(null);
       return <main className="page-width"><h1>Profile</h1><button onClick={()=>setAccount('0x'+'bb'.repeat(20))}>Switch fixture wallet</button>
-        <UnifiedProfileLaunches account={account} launchChainId={params.get('chain')==='1'?1:4663} enableClaims onEthereumClaim={()=>{}}/>
+        <UnifiedProfileLaunches account={account} launchChainId={params.get('chain')==='1'?1:4663}
+          enableClaims={!params.has('public')} onEthereumClaim={()=>{}} onAllRewards={()=>setRewardsAccount(account)}/>
+        {rewardsAccount?<output aria-label="Rewards account">{rewardsAccount}</output>:null}
       </main>;
     }
     createRoot(document.getElementById('root')).render(params.has('profile')?<Profile/>:<main>
