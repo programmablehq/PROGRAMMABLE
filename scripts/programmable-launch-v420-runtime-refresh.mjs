@@ -10,11 +10,11 @@ import { decodeExactUtf8, sha256Digest } from "../packages/launch/src/io.mjs";
 import { runRobinhoodV41PostdeploymentCli } from "../contracts/scripts/finalize-robinhood-custom-launch-v41-deployment.mjs";
 import { robinhoodV41BackendPromotionTools } from "../contracts/scripts/robinhood-backend-promotion-v41.mjs";
 
-// Retain the authenticated 4.1.7 runtime capture until a new backend is promoted.
-// This historical receipt is never treated as a current observation.
+// Authenticate the runtime capture from the completed Base backend promotion.
+// This signed capture is never treated as a current observation.
 // Fresh verification remains mandatory and does not itself activate the backend.
-export const RUNTIME_CAPTURE_PATH = "release/robinhood-chain-4663/v4.1.7/backend-promotion-input.public.json";
-export const RUNTIME_ATTESTATION_PATH = "release/robinhood-chain-4663/v4.1.7/backend-promotion-input.attestation.json";
+export const RUNTIME_CAPTURE_PATH = "release/robinhood-chain-4663/v4.2.0/backend-promotion-input.public.json";
+export const RUNTIME_ATTESTATION_PATH = "release/robinhood-chain-4663/v4.2.0/backend-promotion-input.attestation.json";
 const MAXIMUM_BYTES = 16 * 1024 * 1024;
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 

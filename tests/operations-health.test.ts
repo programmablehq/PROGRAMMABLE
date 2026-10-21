@@ -2,10 +2,12 @@ import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const readers = vi.hoisted(() => ({ ethereum: vi.fn(), robinhood: vi.fn() }));
+const readers = vi.hoisted(() => ({ ethereum: vi.fn(), robinhood: vi.fn(), base: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumExploreCatalog: readers.ethereum }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalog: readers.robinhood }));
+
+vi.mock("@/lib/server/base-explore", () => ({ readBaseExploreCatalog: readers.base }));
 
 import { createOperationsHealthReader } from "../lib/server/operations-health";
 import { programmablePublicOpenApi } from "../lib/public-openapi";
@@ -21,6 +23,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(NOW));
   readers.ethereum.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, entries: [] });
+  readers.base.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, items: [] });
   readers.robinhood.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, items: [] });
 });
 afterEach(() => { vi.useRealTimers(); });
@@ -41,16 +44,19 @@ describe("observed website indexing health", () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ schemaVersion: "programmable.operations-health.v2",
       scope: "website-launch-indexes", status: "ready", checkedAt: NOW,
-      indexes: [{ chainId: 1, status: "ready", updatedAt: UPDATED }, { chainId: 4663, status: "ready", updatedAt: UPDATED }],
+      indexes: [{ chainId: 1, status: "ready", updatedAt: UPDATED }, { chainId: 4663, status: "ready", updatedAt: UPDATED }, { chainId: 8453, status: "ready", updatedAt: UPDATED }],
       providers: [{ name: "codex", health: "not-checked" }],
     });
     expect(body.customLaunchReadiness).toEqual([
       { chainId: 1, readinessUrl: "https://api.programmable.market/readyz", capabilitiesUrl: "https://api.programmable.market/v3/capabilities" },
       { chainId: 4663, readinessUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness",
         capabilitiesUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-capabilities" },
+      { chainId: 8453, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness",
+        capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities" },
     ]);
     expect(readers.ethereum).toHaveBeenCalledTimes(1);
     expect(readers.robinhood).toHaveBeenCalledTimes(1);
+    expect(readers.base).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -61,10 +67,19 @@ describe("observed website indexing health", () => {
     const { response, body } = await getHealth();
     expect(response.status).toBe(200);
     expect(body.status).toBe("degraded");
-    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual([ethereum, robinhood]);
+    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual([ethereum, robinhood, "ready"]);
   });
 
-  it("returns 503 for two failed readers without exposing private errors", async () => {
+  it.each(["stale", "unavailable"])("reports Base %s even when the other chains are ready", async status => {
+    readers.base.mockResolvedValue({ status, updatedAt: status === "unavailable" ? null : UPDATED });
+    const { response, body } = await getHealth();
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("degraded");
+    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual(["ready", "ready", status]);
+  });
+
+  it("returns 503 for all failed readers without exposing private errors", async () => {
+    readers.base.mockRejectedValue(new Error("private Base credential"));
     readers.ethereum.mockRejectedValue(new Error("private provider credential"));
     readers.robinhood.mockRejectedValue(new Error("private database endpoint"));
     const { response, body } = await getHealth();
@@ -75,12 +90,12 @@ describe("observed website indexing health", () => {
   });
 
   it("bounds a stalled chain read and retains the available chain", async () => {
-    const read = createOperationsHealthReader({ ethereum: () => new Promise(() => {}), robinhood: readers.robinhood });
+    const read = createOperationsHealthReader({ ethereum: () => new Promise(() => {}), robinhood: readers.robinhood, base: readers.base });
     const pending = read();
     await vi.advanceTimersByTimeAsync(5_000);
     const body = await pending;
     expect(body.status).toBe("degraded");
-    expect(body.indexes.map(index => index.status)).toEqual(["unavailable", "ready"]);
+    expect(body.indexes.map(index => index.status)).toEqual(["unavailable", "ready", "ready"]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -95,6 +110,7 @@ describe("observed website indexing health", () => {
     expect(await read()).toBe(body);
     expect(readers.ethereum).toHaveBeenCalledTimes(1);
     expect(readers.robinhood).toHaveBeenCalledTimes(1);
+    expect(readers.base).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(15_000);
     readers.ethereum.mockResolvedValue({ status: "stale", updatedAt: UPDATED });
     const refreshed = await read();
@@ -110,6 +126,6 @@ describe("observed website indexing health", () => {
     expect(operation.description).toContain("simulator availability");
     expect(validate({ status: "index-reset", providers: [] })).toBe(false);
     expect(validate({ ...body, providers: [{ ...body.providers[0], health: "healthy" }] })).toBe(false);
-    expect(validate({ ...body, customLaunchReadiness: [{ ...body.customLaunchReadiness[0], readinessUrl: body.indexes[0].catalogUrl }, body.customLaunchReadiness[1]] })).toBe(false);
+    expect(validate({ ...body, customLaunchReadiness: [{ ...body.customLaunchReadiness[0], readinessUrl: body.indexes[0].catalogUrl }, body.customLaunchReadiness[1], body.customLaunchReadiness[2]] })).toBe(false);
   });
 });

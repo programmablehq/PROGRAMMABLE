@@ -431,9 +431,11 @@ test("Claus kernel exceptions permit only exact public source lines", t => {
   assertFiles(scan(t,{[self]:`${historical} const apiKey = \"${material}\";`},{raw:true}),[self],2);
 });
 
-test("Base finalized-feed exception is confined to its exact public token line", t => {
-  const path = "tests/fixtures/base-finalized-custom-launch-metadata-feed-v1.json";
-  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+for (const path of [
+  "tests/fixtures/base-finalized-custom-launch-metadata-feed-v1.json",
+  "docs/operations/releases/custom-launch-v4.2.0/base-live-acceptance.json",
+]) test(`Base public token exception is confined to its exact line in ${path}`, t => {
+  const source = readFileSync(new URL("../../tests/fixtures/base-finalized-custom-launch-metadata-feed-v1.json", import.meta.url), "utf8");
   const line = source.split("\n").find(value => value.trimStart().startsWith('"token": "0x'));
   assert.ok(line);
   assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);

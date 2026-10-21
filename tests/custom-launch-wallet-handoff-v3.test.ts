@@ -1,3 +1,5 @@
+import { BASE_CUSTOM_ROOTS_V1 } from "../lib/custom-launch/base-release-v1";
+import baseFeed from "./fixtures/base-finalized-custom-launch-metadata-feed-v1.json";
 import { describe, expect, it } from "vitest";
 import {
   concatHex,
@@ -201,6 +203,7 @@ function packedHash(values: readonly Hex[]) {
 
 function routerFixture({
   quote,
+  chainId = "1",
   targetCount = 3,
   hookApplicantSalt = VALID_HOOK_APPLICANT_SALT,
   stampHook,
@@ -208,12 +211,15 @@ function routerFixture({
   tickSpacing = 60,
 }: Readonly<{
   quote: Address;
+  chainId?: "1" | "8453";
   targetCount?: 2 | 3;
   hookApplicantSalt?: Hex;
   stampHook?: Address;
   fee?: number;
   tickSpacing?: number;
 }>) {
+  const router = chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.router : CUSTOM_LAUNCH_MAINNET_ROUTER_V1;
+  const graphFactory = chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.graphFactory : CUSTOM_GRAPH_FACTORY;
   const targets: RouterTargetFixture[] = Array.from(
     { length: targetCount },
     (_, index) => {
@@ -230,13 +236,13 @@ function routerFixture({
         "bytes32,uint256,address,bytes32,bytes32,bytes32,bytes32,address",
         [
           GRAPH_TARGET_SALT_TYPEHASH,
-          1n,
-          CUSTOM_GRAPH_FACTORY,
+          BigInt(chainId),
+          graphFactory,
           ROUTE_NAMESPACE,
           ROUTE_NONCE,
           targetIdHash,
           applicantSalt,
-          CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+          router,
         ],
       );
       return Object.freeze({
@@ -249,7 +255,7 @@ function routerFixture({
         initializerCalldataHash,
         effectiveSalt,
         account: getCreate2Address({
-          from: CUSTOM_GRAPH_FACTORY,
+          from: graphFactory,
           salt: effectiveSalt,
           bytecodeHash: initCodeHash,
         }),
@@ -292,12 +298,12 @@ function routerFixture({
     "bytes32,uint256,address,bytes32,bytes32,bytes32,address,uint256,bytes32",
     [
       GRAPH_COMMITMENT_TYPEHASH,
-      1n,
-      CUSTOM_GRAPH_FACTORY,
+      BigInt(chainId),
+      graphFactory,
       ROUTE_NAMESPACE,
       ROUTE_NONCE,
       TOPOLOGY_HASH,
-      CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+      router,
       0n,
       targetCommitmentsHash,
     ],
@@ -400,8 +406,8 @@ function routerFixture({
   ] as const;
   const now = BigInt(Math.floor(Date.now() / 1_000));
   const permit = [
-    1n,
-    CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+    BigInt(chainId),
+    router,
     account.address,
     1,
     keccak256(routePayload),
@@ -417,8 +423,8 @@ function routerFixture({
     domain: {
       name: "ProgrammableLaunchStampRouter",
       version: "1",
-      chainId: 1,
-      verifyingContract: CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+      chainId: Number(chainId),
+      verifyingContract: router,
     },
     primaryType: "ProgrammableLaunchPermitV1",
     types: {
@@ -457,18 +463,18 @@ function routerFixture({
     ).slice(2)
   }` as Hex;
   const walletAction = Object.freeze({
-    chainId: "1" as const,
+    chainId,
     from: account.address,
-    to: CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+    to: router,
     data: calldata,
     value: toHex(0n),
     valueWei: "0",
   });
   const transaction = Object.freeze({
     schemaVersion: "programmable.exact-wallet-transaction.v3",
-    chainId: "1",
+    chainId,
     from: account.address,
-    to: CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+    to: router,
     valueWei: "0",
     calldata,
   });
@@ -487,9 +493,9 @@ function routerFixture({
       })),
     }),
     unsignedRouterTransaction: Object.freeze({
-      chainId: "1",
+      chainId,
       from: account.address,
-      to: CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+      to: router,
       valueWei: "0",
       functionName: "launchAndStampV1",
       selector: CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1,
@@ -500,11 +506,12 @@ function routerFixture({
   });
   const signedPermit = Object.freeze({
     schemaVersion: "programmable.signed-prepared-launch-permit.v1",
+    ...(chainId === "8453" ? { releaseId: baseFeed.launches[0].routingFeePolicy.enforcementBoundary.releaseId } : {}),
     artifactHash,
-    chainId: "1",
-    router: CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
-    authoritySafe: account.address,
-    signerAddress: account.address,
+    chainId,
+    router: router,
+    authoritySafe: chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.permitAuthority : account.address,
+    signerAddress: chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.permitSigner : account.address,
     permitDigest,
     safeMessageDigest: `0x${"88".repeat(32)}`,
     signature: permitSignature,
@@ -513,8 +520,8 @@ function routerFixture({
   });
   const observationWindow = Object.freeze({
     schemaVersion: "programmable.custom-launch-observation-window.v1",
-    chainId: "1",
-    router: CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
+    chainId,
+    router: router,
     fromBlock: "25832300",
     toBlock: "25832393",
   });
@@ -557,6 +564,51 @@ function routerFixture({
 }
 
 describe("custom launch V3 wallet handoff", () => {
+  it("requires the Base signed permit release identity", () => {
+    const fixture = routerFixture({ quote: ZERO_ADDRESS, chainId: "8453" });
+    expect(prepareCustomLaunchRouterReviewV3(fixture.output, account.address).walletAction.chainId).toBe("8453");
+    for (const releaseId of [undefined, "invalid", `sha256:${"ff".repeat(31)}`]) {
+      expect(() => prepareCustomLaunchRouterReviewV3({
+        ...fixture.output,
+        signedPermit: { ...fixture.output.signedPermit, releaseId },
+      }, account.address)).toThrow();
+    }
+  });
+
+  it("accepts the Base checkpoint contract while retaining its chain and quorum checks", () => {
+    const fixture = routerFixture({ quote: ZERO_ADDRESS, chainId: "8453" });
+    const finality = baseFeed.launches[0].finality;
+    const onchain = {
+      schemaVersion: "programmable.custom-launch-onchain-evidence.v1",
+      finalityState: "finalized",
+      chainId: "8453",
+      router: BASE_CUSTOM_ROOTS_V1.router,
+      onchainLaunchId: STAMP_LAUNCH_ID,
+      transactionHash: finality.transactionHash,
+      blockNumber: finality.blockNumber,
+      blockHash: finality.blockHash,
+      logIndex: finality.logIndex,
+      token: fixture.token,
+      hook: fixture.hook,
+      poolManager: BASE_CUSTOM_ROOTS_V1.poolManager,
+      poolId: baseFeed.launches[0].poolId,
+      stampHash: baseFeed.launches[0].routingFeePolicy.stampBinding.stampHash,
+      confirmationDepth: finality.confirmationDepth,
+      requiredConfirmationDepth: finality.requiredConfirmationDepth,
+      observedAtBlockNumber: "52908841",
+      finalizedCheckpoint: structuredClone(finality.finalizedCheckpoint),
+    };
+    const review = () => prepareCustomLaunchRouterReviewV3({ ...fixture.output, onchain }, account.address);
+    expect(review().walletAction.chainId).toBe("8453");
+    for (const schema of ["programmable.ethereum-finalized-checkpoint-quorum.v1", "programmable.base-finalized-checkpoint-quorum.v1"]) {
+      onchain.finalizedCheckpoint.schemaVersion = schema;
+      expect(review).toThrow();
+    }
+    onchain.finalizedCheckpoint.schemaVersion = finality.finalizedCheckpoint.schemaVersion;
+    onchain.finalizedCheckpoint.observations[1].commonBlockHash = ZERO_BYTES32;
+    expect(review).toThrow();
+  });
+
   it("binds, signs, locally recovers, and submits one exact EIP-3009 challenge", async () => {
     const prepared = prepareCustomLaunchFundingAuthorizationV3(
       fundingOutput(),

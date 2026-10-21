@@ -1,4 +1,79 @@
 {
   "schemaVersion": "programmable.base-public-acceptance.v1",
-  "status": "pending"
+  "status": "passed",
+  "chainId": "8453",
+  "releaseId": "sha256:5eb35ec9950cf71bbebab151811786257d5f6ab6ea70b40f52fb367de57cbb89",
+  "requestId": "25e327fa-3eb5-438d-af49-5017e13766ae",
+  "launchId": "25e327fa-3eb5-438d-af49-5017e13766ae",
+  "token": "0xBC87674d279F701253dae23233222744d1232B5A",
+  "artifactHash": "sha256:1c0d5c23ee507d0321d7084de4aba87c72ae4dc23e4b59f01841e927be1919f2",
+  "launchTransactionHash": "0x9b5bfefbb34433ddf6614c31331f6ed1fdadc6656337f5ae9bd863fe38beac7a",
+  "buyTransactionHash": "0x448a862d0fafb93589bb446ee13573286f71579f4c5220a22d829cde1c7031a9",
+  "sellTransactionHash": "0xfd9c87240f461ed7584370fb16e0ba0795320425eaef5001ede19ae9c0a014d3",
+  "openingBuyTransactionHash": "0xbc4f95845e56cfd8dbf98b0c34f7c66e0bd8c6355bd757f5fb122d56c42612b4",
+  "platformFeesVerified": true,
+  "openingTaxVerified": true,
+  "sourcesVerified": true,
+  "treasury": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+  "claims": [
+    {
+      "label": "base-live-opening-tax-claim",
+      "vault": "0xCB217c82B2ace01fcbdEA83c9b01cE0E3DcF05b9",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "amount": "9146660000000",
+      "transactionHash": "0x5475193ee9c936859a962b4516b27811100e40e13779cbe9a4e408bb733dfadb",
+      "blockNumber": "52907637",
+      "blockHash": "0x3a3de0d88ec443694de08eaa4f59e727121dde808a031d1f1b8bb60b3f9edc06"
+    },
+    {
+      "label": "base-live-platform-fee-claim",
+      "vault": "0x0dA0deED91FF8e4532Eb7d9640E39005BF3598e1",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "amount": "391960020000",
+      "transactionHash": "0xe10b3067a63ec95b72a928080e22fa6ebc8e8cdef7b1a9833442efba280c509c",
+      "blockNumber": "52907639",
+      "blockHash": "0x0c7226feb92dac66e6dbf1645b23bec66af237b52ca18eeadf3b8eb382fcf0cc"
+    }
+  ],
+  "openingFdvUsd": "16562",
+  "finalizedCheckpoint": {
+    "schemaVersion": "programmable.base-finalized-checkpoint-quorum.v1",
+    "chainId": "8453",
+    "blockNumber": "52907679",
+    "blockHash": "0x79d185653cb6d000f43210f80374db3a79798d8a47b297379c4f40e30b871e60",
+    "blockTimestamp": "1792604705",
+    "providers": [
+      {
+        "providerId": "drpc",
+        "trustDomain": "drpc.org",
+        "finalizedBlockNumber": "52908263",
+        "finalizedBlockHash": "0x48cde9473ff6bd2007560a71703ad33cd0851f99a1b320a5260f9b581b259c07"
+      },
+      {
+        "providerId": "alchemy",
+        "trustDomain": "alchemy.com",
+        "finalizedBlockNumber": "52907679",
+        "finalizedBlockHash": "0x79d185653cb6d000f43210f80374db3a79798d8a47b297379c4f40e30b871e60"
+      }
+    ]
+  },
+  "ordinaryWalletKeyIssuedViaPublicWebsite": true,
+  "baseReadAccepted": true,
+  "basePreflightAccepted": true,
+  "finalizedFeedVerified": true,
+  "exploreVerified": true,
+  "evidence": {
+    "fundedLifecycle": "sha256:b6e9f8f2bc70c71611e4f3bac1e94c456a222f22adf566a0b1c4217aaf9900d9",
+    "finalizedResource": "sha256:d98b372a8a111302ccf3b1b9788c204b28a09c8f362c71faeef59adfa4eaae16",
+    "finalizedTransactions": "sha256:9d1c510fe753c732104cf3b29932150dd43c0457b765c143c8c7be7d39fd7bb1",
+    "exactFork": "sha256:c3665d8a05550af95bbfb6b5d54f989be51d87ca21c1be54e8ce9f4f90ad62a1",
+    "acceptance": "sha256:2cc0880baffc36e58a20080954a814758ec4a6baa835ac3523206b7b9306bc34",
+    "publicAccess": "sha256:1e52d9f30522f36b67c83b3966ec6cb7fce6d09e70fec7b97cbbf659118de179",
+    "runtimeCapture": {
+      "runId": 39654135550,
+      "archiveDigest": "sha256:4760566db527721f33e05ca42fa1038e2e2ff33d94d4766635ff23b7b93035c5",
+      "sourceCommit": "1a0eb587b4b87084433436bc9acca7783f4a6af5"
+    }
+  },
+  "checkedAt": "2026-10-21T19:53:46.988Z"
 }

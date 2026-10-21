@@ -652,6 +652,8 @@ This limits early accumulation per wallet. It cannot identify a person operating
 
 ## Base Custom Launch API (4.2.0)
 
+Download the [immutable 4.2.0 release](https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.2.0) and verify its checksums and GitHub attestations. Earlier CLI versions do not provide this Base client.
+
 Base uses `chainId: "8453"`, the exact graph V3 request schema and `/v4/chains/8453/custom-launches`. Check [Base readiness](https://api.programmable.market/v4/chains/8453/readiness) and [the Base guide](https://programmable.market/developers/base-custom-launch-api-v1.md) before submission. Public creation requires `mode: "active"` and `publicLaunchAuthorized: true`.
 
 The package exports `buildProtectedBaseLaunchV1`. Its Base profile, graph factory, permit authority, router, oracle and protected contract artifacts are distinct from Ethereum and Robinhood. Base uses wallet transaction value, not EIP-3009. Use `programmable-launch status REQUEST_UUID --chain-id 8453 --watch --until finalized`.

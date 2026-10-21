@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ snapshot: vi.fn(),
+  baseFeed: vi.fn(),
   markets: vi.fn().mockResolvedValue(new Map()), presentations: vi.fn().mockResolvedValue([]),
   codexMarkets: vi.fn().mockResolvedValue(new Map()),
 }));
@@ -17,10 +18,14 @@ vi.mock("@/lib/server/robinhood-presentation", () => ({
   readRobinhoodMarkets: mocks.markets, readRobinhoodPresentations: mocks.presentations,
 }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: mocks.codexMarkets }));
+vi.mock("@/lib/server/custom-launch/finalized-custom-launch-metadata-feed-v1", () => ({
+  createFinalizedCustomLaunchMetadataFeedReaderV1: () => mocks.baseFeed,
+}));
 
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { programmablePublicOpenApi } from "../lib/public-openapi";
 import { readEthereumLaunches } from "../lib/server/ethereum-explore";
+import { readBaseLaunches } from "../lib/server/base-explore";
 import { readRobinhoodLaunches, readRobinhoodToken } from "../lib/server/robinhood-index/read";
 import { parseEthereumExploreQuery } from "../lib/ethereum-explore";
 import { parseRobinhoodExploreQuery } from "../lib/robinhood-explore-filters";
@@ -30,7 +35,7 @@ import { projectionFixture } from "./fixtures/universal-launch-v1";
 
 const launchContract = JSON.parse(readFileSync(new URL("../public/openapi/custom-launch-v4.2.json", import.meta.url), "utf8"));
 
-function validator(name: "ExploreIndexResetError" | "EthereumExplorePage" | "RobinhoodExplorePage") {
+function validator(name: "ExploreIndexResetError" | "EthereumExplorePage" | "RobinhoodExplorePage" | "BaseExplorePage") {
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   addFormats(ajv);
   ajv.addSchema(launchContract, "https://programmable.market/openapi/custom-launch-v4.2.json");
@@ -48,6 +53,34 @@ const explorePaths = [
 ] as const;
 
 describe("public Explore OpenAPI contract", () => {
+  it("validates the actual Base projection and preserves its chain and finalized source", async () => {
+    const token = `0x${"11".repeat(20)}`, hook = `0x${"22".repeat(20)}`, zero = `0x${"00".repeat(20)}`;
+    const id = `0x${"33".repeat(32)}`, time = "2026-10-20T20:00:00.000Z";
+    mocks.baseFeed.mockResolvedValue({ status: "current", generatedAt: time, launches: [{
+      creator: `0x${"44".repeat(20)}`, routerLaunchId: id, resourceId: "synthetic-base-resource",
+      token, hook, poolId: id, poolKey: { currency0: zero, currency1: token, fee: 8388608, tickSpacing: 60, hooks: hook },
+      finalizedAt: time, finality: { transactionHash: id, blockNumber: "52870000" }, routingFeePolicy: {},
+      tokenMetadataReadback: { observed: { name: "Synthetic Base", symbol: "TEST" } },
+      projectMetadata: { token: { name: "Synthetic Base", symbol: "TEST" }, presentation: {} },
+    }] });
+    const response = await readBaseLaunches(1, "", { sort: "newest", mode: "all" }, 10);
+    const valid = validator("BaseExplorePage");
+    expect(valid(response), JSON.stringify(valid.errors)).toBe(true);
+    expect(response.items).toHaveLength(1);
+    expect(response.sourceEvidence).toMatchObject({ chainId: "8453", records: 1 });
+    expect(valid({ ...response, chainId: 1 })).toBe(false);
+    expect(valid({ ...response, status: "ready", sourceEvidence: null })).toBe(false);
+    const operation = programmablePublicOpenApi.paths["/api/explore/base"].get;
+    expect(Object.keys(operation.responses)).toEqual(["200", "400", "503"]);
+    expect(operation.description).toContain("Base Module Mode is unavailable");
+    const { GET } = await import("../app/api/explore/base/route");
+    expect((await GET(new Request("https://programmable.market/api/explore/base?chainId=1"))).status).toBe(400);
+    mocks.baseFeed.mockRejectedValueOnce(new Error("private provider URL"));
+    const unavailable = await GET(new Request("https://programmable.market/api/explore/base"));
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get("cache-control")).toBe("no-store");
+    expect(await unavailable.json()).toEqual({ status: "unavailable", error: "Launches are temporarily unavailable" });
+  });
   it("documents early receipt observations without inventing finalized provenance", async () => {
     const row = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
       category: "custom" as const, mode: "custom" as const, launchId: `0x${"aa".repeat(32)}`,

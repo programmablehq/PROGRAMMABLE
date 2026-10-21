@@ -227,11 +227,11 @@
     },
     {
       "path": "scripts/verify-base-custom-live.mjs",
-      "sha256": "sha256:d79c6fd2233596e03c08d46e9c6e21f835b2764d72430d90bcad8e99f9425791"
+      "sha256": "sha256:0cc8c5be454b6e9268946a4eb7ccf9c34df8b325b032ea51b45fdf25366ec950"
     },
     {
       "path": "docs/operations/releases/custom-launch-v4.2.0/base-live-acceptance.json",
-      "sha256": "sha256:c1217b402a14e772eb358f88869b1187931fc0aba1cd57e49c0a137c5a14430d"
+      "sha256": "sha256:85e1f754d71c894441699e2a851ea67762b1e9946a165b5edf38b9e2265811fb"
     },
     {
       "path": "packages/launch/src/base-profile-v1.json",
@@ -247,11 +247,11 @@
     },
     {
       "path": "public/openapi/base-custom-launch-v1.json",
-      "sha256": "sha256:84f40b8f18db91ececd01972c7588dec2a8567498e5e95fc3a5cf65ddf598add"
+      "sha256": "sha256:c3cb089e7247d374f4fc617aae9ab97e4ca28b11eda58fd8a101590961bb27d0"
     },
     {
       "path": "public/developers/base-custom-launch-api-v1.md",
-      "sha256": "sha256:64e8436ad0e819303a46b435e5a59ba21932350f264e9ce954dc05e326e5a231"
+      "sha256": "sha256:d8bfee542a780f57da7ba090e5d16601e4814956e797a91356adaeedbfa4a3ec"
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/BaseLaunchProtectionModuleV1.artifact.json",
@@ -311,7 +311,7 @@
     },
     {
       "path": "packages/launch/README.md",
-      "sha256": "sha256:f07f40b1fc2e00c271659eaa82ce1a096d21e61b45e37327fb8e937f2dec362c"
+      "sha256": "sha256:9b4a1e4ccc240e734e5fc2283f0374ce98f221eaa4ead9612526e80475ef1687"
     },
     {
       "path": "packages/launch/src/pack.mjs",

@@ -86,8 +86,24 @@ const launchProjectionSource = nullable(object({
   updatedAt: timestamp, nextCursor: nullable(text),
   completedAt: { ...nullable(timestamp), description: "Last fully verified traversal. Background page progress does not renew this timestamp." },
 }, ["sourceUrl", "updatedAt", "nextCursor"]));
+const baseItem = object({
+  chainId: { const: 8453 }, mode: { const: "custom" }, category: { const: "custom" },
+  launchId: hash, resourceId: text, tokenAddress: address, hookAddress: address, creator: address,
+  transactionHash: hash, blockNumber: block, launchedAt: timestamp, name: text, symbol: text,
+  decimals: { type: "null" }, poolId: hash,
+  poolKey: object({ currency0: address, currency1: address,
+    fee: { anyOf: [{ type: "integer", minimum: 0, maximum: 1000000 }, { const: 8388608 }] },
+    tickSpacing: { type: "integer", minimum: 1, maximum: 32767 }, hooks: address }),
+  quoteAsset: address, quoteSymbol: { enum: ["ETH", null] },
+});
+const basePresentation = presentation(market);
 
 export const chainExploreSchemas = {
+  BaseExplorePage: object({ chainId: { const: 8453 }, status: { enum: ["ready", "stale"] },
+    updatedAt: timestamp, items: { ...array(baseItem), maxItems: 50 }, page,
+    sourceEvidence: object({ source: { const: "base-finalized-custom-launch-feed-v1" },
+      generatedAt: timestamp, chainId: { const: "8453" }, records: integer }),
+    presentations: { ...array(object({ ...basePresentation.properties, chainId: { const: 8453 } })), maxItems: 50 } }),
   EthereumExplorePage: object({ chainId: { const: 1 }, status: { enum: ["ready", "partial", "stale", "unavailable"] },
     sources: object({ classic: sourceStatus, custom: sourceStatus }),
     sourceEvidence: object({ classic: ethereumSource, custom: ethereumSource }), updatedAt: nullable(timestamp),
@@ -117,6 +133,16 @@ const headers = (statuses: readonly string[], cache: readonly string[]) => ({
   "Cache-Control": { schema: { enum: cache } },
 });
 export const chainExplorePaths = {
+  "/api/explore/base": { get: {
+    operationId: "listBaseExploreLaunches", summary: "Read Base Custom Launch pages",
+    description: "Reads the complete finalized Base Custom Launch feed before filtering and paging. ready means the feed is current; stale means a previously verified feed is retained. Records include chain-qualified identities, pool keys and transaction hashes. Optional market values are separate observations. Base Module Mode is unavailable. Follow /v4/chains/8453/finalized-custom-launches cursors on api.programmable.market for machine indexing; this presentation page is not a complete archive or proof of tradability. Unknown or repeated query parameters and chain overrides are rejected.",
+    tags: ["Discovery"], security: [], parameters: parameters("ethereum"), responses: {
+      "200": { ...response(ref("BaseExplorePage"), "Current or saved verified Base launch identities."),
+        headers: headers(["ready", "stale"], ["public, max-age=0, s-maxage=15"]) },
+      "400": response(ref("ChainExploreInvalidQuery"), "Unsupported, duplicated or out-of-range query."),
+      "503": response(ref("EthereumExploreUnavailable"), "No usable finalized Base feed or a read failure. The response is not cached."),
+    },
+  } },
   "/api/explore/ethereum": { get: {
     operationId: "listEthereumExploreLaunches", summary: "Read Ethereum launch pages",
     description: "Combines the verified Classic catalog and finalized Ethereum Router identities. ready means both sources are current; partial means one source is unavailable; stale means a saved source is being used. No source yields unavailable. updatedAt is the oldest included source observation. Market values are null. Unknown or repeated query parameters are rejected; no chain override is accepted. This presentation feed is not a complete archive or proof of tradability.",

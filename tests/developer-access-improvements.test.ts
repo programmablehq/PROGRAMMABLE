@@ -45,7 +45,9 @@ describe("unified launch overview", () => {
   it("preserves source and chain identity even with matching ids", () => {
     const ethereum = launchOverviewItem({ launchId: id, routeId: "custom-launch:create:v3", status: "finalized", createdAt: "2026-10-12T12:00:00Z", projectMetadata: { token: { name: "Hive", symbol: "HIVE" } } }, "legacy", Date.now());
     const robinhood = launchOverviewItem({ planId: id, status: "accepted", plan: { publication: { name: "ROBIN" } }, createdAt: "2026-10-12T13:00:00Z" }, "custom_launch_plan_v1", Date.now());
-    expect(mergeLaunchOverview([ethereum], [robinhood, ethereum])).toEqual([robinhood, ethereum]);
+    const base = launchOverviewItem({ launchId: id, routeId: "custom-launch:create:v3", status: "finalized", manualReview: { chainId: "8453" }, createdAt: "2026-10-12T14:00:00Z" }, "legacy", Date.now());
+    expect(mergeLaunchOverview([ethereum], [robinhood, ethereum, base])).toEqual([base, robinhood, ethereum]);
+    expect(base.chainId).toBe("8453"); expect(base.version).toBe("v3");
     expect(ethereum.status).toBe("Completed"); expect(robinhood.chainId).toBe("4663");
   });
   it("confirmation takes precedence over stale approval", () => {

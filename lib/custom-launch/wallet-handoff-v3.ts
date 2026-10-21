@@ -1374,7 +1374,10 @@ function assertSignedPermitV3(
     router: unknown;
   }>,
 ) {
-  const permit = exactRecord(value, SIGNED_PERMIT_KEYS);
+  const isBase = customLaunchChainForRouterV1(expected.router) === "8453";
+  const permit = exactRecord(value, isBase
+    ? [...SIGNED_PERMIT_KEYS, "releaseId"] : SIGNED_PERMIT_KEYS);
+  if (isBase) exactSha256(permit.releaseId);
   const validAfter = canonicalUint256(permit.validAfter).parsed;
   const deadline = canonicalUint256(permit.deadline).parsed;
   if (permit.schemaVersion !== "programmable.signed-prepared-launch-permit.v1"
@@ -1458,7 +1461,7 @@ function assertFinalizedCheckpointV3(
   const blockNumber = canonicalUint256(checkpoint.blockNumber).parsed;
   const blockHash = exactLowerBytes32(checkpoint.blockHash);
   if (checkpoint.schemaVersion
-      !== (context.chainId === "8453" ? "programmable.base-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
+      !== (context.chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
     || checkpoint.quorumSize !== 2
     || blockNumber > context.observedAtBlockNumber
     || (context.launchFinalityState === "finalized"

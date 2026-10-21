@@ -6,6 +6,31 @@ import { useWallet } from "../components/wallet-provider";
 vi.mock("../components/wallet-provider", () => ({ useWallet: vi.fn() }));
 
 describe("API keys session restoration", () => {
+  it.each([
+    { identityReady: true, authenticated: true, walletLinked: true, disconnecting: false, allowed: true },
+    { identityReady: false, authenticated: true, walletLinked: true, disconnecting: false, allowed: false },
+    { identityReady: true, authenticated: false, walletLinked: true, disconnecting: false, allowed: false },
+    { identityReady: true, authenticated: true, walletLinked: false, disconnecting: false, allowed: false },
+    { identityReady: true, authenticated: true, walletLinked: true, disconnecting: true, allowed: false },
+  ])("requires current authenticated ownership before provider discovery finishes: %j", (state) => {
+    vi.mocked(useWallet).mockReturnValue({
+      authReady: state.identityReady,
+      sessionReady: false,
+      authenticated: state.authenticated,
+      walletLinked: state.walletLinked,
+      disconnecting: state.disconnecting,
+      connecting: false,
+      wallet: { account: "0x1111111111111111111111111111111111111111" },
+      getAccessToken: vi.fn(async () => null),
+      getIdentityToken: vi.fn(async () => null),
+      openWallet: vi.fn(),
+    } as unknown as ReturnType<typeof useWallet>);
+
+    const html = renderToStaticMarkup(<DeveloperApiKeys />);
+    expect(html.includes("Loading wallet session")).toBe(!state.allowed);
+    expect(html).not.toContain('id="connect-title"');
+  });
+
   it.each([false, true])(
     "waits for the wallet list when authentication is already ready (sessionReady=%s)",
     (sessionReady) => {
