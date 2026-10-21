@@ -10,7 +10,8 @@ import { uerc20ReadAbi } from "../onchain/abis";
 import { buildTokenLinks, sanitizeImageUrl } from "../onchain/metadata";
 import { canonicalSha256 } from "../server/projection-target/hashing";
 import { PROGRAMMABLE_MAIN_TOKEN_PRESENTATION } from "../programmable-main-token-presentation";
-import { hasUnsafeDisplayCharacters, characterLength, MAX_TOKEN_NAME_CHARACTERS, isValidTokenSymbol } from "../metadata-policy";
+import { hasUnsafeDisplayCharacters, characterLength, MAX_TOKEN_NAME_CHARACTERS } from "../metadata-policy";
+import { isValidClassicDisplaySymbol } from "./classic-launch-metadata";
 import { discoverCodexLaunches, type CodexLaunchCandidate } from "../server/codex-launch-discovery";
 import type { CanonicalTokenExploreEntry, LauncherToken } from "../tokens";
 import { CLASSIC_MAIN_TOKEN, classicLaunchEvents, classicV2Events, parseClassicLaunchLogs, type ClassicRawLog } from "./classic-launch-proof";
@@ -63,7 +64,7 @@ const hydrate = unstable_cache(async (serialized: string, metadataBucket: number
         const [name,symbol,decimals,extended,creator]=results.slice(index*5,index*5+5);
         if (name?.status!=="success" || typeof name.result!=="string" || !name.result.trim()
           || hasUnsafeDisplayCharacters(name.result) || characterLength(name.result)>MAX_TOKEN_NAME_CHARACTERS
-          || symbol?.status!=="success" || typeof symbol.result!=="string" || !isValidTokenSymbol(symbol.result)
+          || symbol?.status!=="success" || !isValidClassicDisplaySymbol(symbol.result)
           || decimals?.status!=="success" || typeof decimals.result!=="number" || decimals.result>36
           || creator?.status!=="success" || typeof creator.result!=="string" || creator.result.toLowerCase()!==proof.launcherAddress.toLowerCase()) throw fail();
         const header=headersByNumber.get(proof.launchBlockNumber!);
