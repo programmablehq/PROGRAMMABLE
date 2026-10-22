@@ -82,6 +82,7 @@ export const sharpRuntimeFiles = [
 
 const customAIWorkerFiles = [
   "./scripts/custom-ai/compile-worker.mjs", "./scripts/custom-ai/lifecycle-worker.mjs",
+  "./scripts/custom-ai/artifact-hash.mjs",
   "./scripts/custom-ai/validate-module.mjs", "./scripts/custom-ai/validate-lifecycle.mjs",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];

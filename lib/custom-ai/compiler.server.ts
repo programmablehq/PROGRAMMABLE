@@ -9,7 +9,8 @@ import { CustomAIError, type Draft } from "./types";
 
 export async function compileDraft(source: string, signal?: AbortSignal): Promise<Draft> {
   if (!source || source.length > 32_000) throw new CustomAIError("source", "The generated module is too large.", 502);
-  const compiler = await realpath(process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
+  // The sandbox toolchain is included explicitly in next.config.ts.
+  const compiler = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
   const worker = join(process.cwd(), "scripts/custom-ai/compile-worker.mjs");
   const directory = await mkdtemp(join(tmpdir(), "custom-ai-compile-"));
   const input = JSON.stringify({ language: "Solidity", sources: { ...core.sources, "GeneratedFeeModule.sol": { content: source } },

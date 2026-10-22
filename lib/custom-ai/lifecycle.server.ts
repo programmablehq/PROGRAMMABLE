@@ -1,6 +1,6 @@
 import "server-only";
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { artifactHash } from "../../scripts/custom-ai/artifact-hash.mjs";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,10 +18,11 @@ export async function compileLaunchDraft(source: string, signal?: AbortSignal): 
 
 export async function checkLifecycle(draft: Draft, signal?: AbortSignal): Promise<LifecycleCheck> {
   if (!draft.compiled || !draft.artifact || draft.validation?.status !== "passed"
-    || createHash("sha256").update(JSON.stringify(draft.artifact)).digest("hex") !== draft.validation.artifactHash) {
+    || artifactHash(draft.artifact) !== draft.validation.artifactHash) {
     throw new CustomAIError("module", "Use the exact checked fee module.", 422);
   }
-  const compiler = await realpath(process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
+  // The sandbox toolchain is included explicitly in next.config.ts.
+  const compiler = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
   const directory = join(process.cwd(), "scripts/custom-ai");
   const output = await new Promise<string>((resolve, reject) => {
     const child = execFile(process.execPath, ["--permission", `--allow-fs-read=${compiler}`, `--allow-fs-read=${directory}`,

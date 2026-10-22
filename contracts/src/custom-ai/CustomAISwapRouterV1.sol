@@ -18,7 +18,14 @@ contract CustomAISwapRouterV1 is ReentrancyGuardTransient, IUnlockCallback {
     bytes32 public immutable managerCodeHash;
     bytes32 private _context;
 
-    event SwapSettled(address indexed payer, address indexed recipient, address indexed input, address output, uint256 paid, uint256 received);
+    event SwapSettled(
+        address indexed payer,
+        address indexed recipient,
+        address indexed input,
+        address output,
+        uint256 paid,
+        uint256 received
+    );
 
     error InvalidSwap();
     error DeadlineExpired();

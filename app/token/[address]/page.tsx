@@ -83,8 +83,8 @@ export default async function TokenPage({
   ) {
     notFound();
   }
-  let aiUnavailable=false;
-  const ai=await customAITokenPage(address,resolvedSearchParams.chain).catch(()=>{aiUnavailable=true;return null;});
+  const { ai, aiUnavailable } = await customAITokenPage(address,resolvedSearchParams.chain)
+    .then(ai => ({ ai, aiUnavailable: false }), () => ({ ai: null, aiUnavailable: true }));
   if (ai) {
     const markets=await readCodexMarkets([ai],ai.chainId).catch(()=>new Map());
     return <TokenRouteChainSync chainId={ai.chainId}><CustomAITokenView token={ai} market={markets.get(ai.tokenAddress.toLowerCase())??null}/></TokenRouteChainSync>;

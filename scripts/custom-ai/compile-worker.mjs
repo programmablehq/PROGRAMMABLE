@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
+import { artifactHash } from "./artifact-hash.mjs";
 import { inspectModule, simulateModule } from "./validate-module.mjs";
 
 const requireCompiler = createRequire(join(process.argv[2], "package.json"));
@@ -30,10 +30,9 @@ process.stdin.on("end", async () => {
     const artifact = { compiler: solc.version(), optimizerRuns: 200, evmVersion: "cancun", abi: contract.abi,
       initCode: `0x${contract.evm.bytecode.object}`, runtimeTemplate: `0x${contract.evm.deployedBytecode.object}`,
       immutableReferences: contract.evm.deployedBytecode.immutableReferences };
-    const artifactHash = createHash("sha256").update(JSON.stringify(artifact)).digest("hex");
     process.stdout.write(JSON.stringify({ compiled: true, diagnostics: simulation.diagnostics,
       validation: { version: "self-contained-fee-v1", status: simulation.diagnostics.length ? "blocked" : "passed",
-        artifactHash, cases: simulation.cases, maxGas: simulation.maxGas, samples: simulation.samples,
+        artifactHash: artifactHash(artifact), cases: simulation.cases, maxGas: simulation.maxGas, samples: simulation.samples,
         deployments: simulation.deployments ?? [] }, artifact: simulation.diagnostics.length ? undefined : artifact }));
   } catch {
     // Host errors must never include paths, environment values or input source.

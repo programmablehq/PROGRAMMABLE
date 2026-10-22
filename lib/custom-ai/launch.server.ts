@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { artifactHash } from "../../scripts/custom-ai/artifact-hash.mjs";
 import { decodeFunctionResult, encodeFunctionData, getAddress, getCreateAddress, getCreate2Address, keccak256,
   parseAbi, toHex, zeroAddress, zeroHash, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -45,7 +46,7 @@ async function checkedDraft(store: AIStore, owner: string, id: string): Promise<
   const job = await store.read(owner, id), draft = job?.result?.draft;
   if (job?.state !== "completed" || !draft?.artifact || !draft.hookSummary || draft.validation?.status !== "passed"
     || draft.lifecycle?.status !== "passed" || draft.lifecycle.bundleHash !== CUSTOM_AI_BUNDLE_HASH
-    || digest(draft.artifact) !== draft.validation.artifactHash
+    || artifactHash(draft.artifact) !== draft.validation.artifactHash
     || createHash("sha256").update(draft.source).digest("hex") !== draft.sourceHash) {
     throw new CustomAIError("draft", "Build your hook in the chat before creating the coin.", 422);
   }

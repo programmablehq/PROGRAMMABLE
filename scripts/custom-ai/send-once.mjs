@@ -29,16 +29,16 @@ export function maximumCost(record) {
 export async function sendOnce({ directory, id, account, chainId, transaction, rpcs,
   totalCap, chainCap, expectedAddress = null, expectedRuntime = null, expiresAt = null }) {
   if (!/^[a-z0-9-]{1,90}$/.test(id) || ![1,4663].includes(chainId) || rpcs.length !== 2) throw Error("Invalid release request");
+  const request = { from: account.address.toLowerCase(), to: transaction.to?.toLowerCase() ?? null,
+    data: transaction.data.toLowerCase(), value: number(transaction.value).toString(),
+    gas: number(transaction.gas).toString(), nonce: number(transaction.nonce).toString(), chainId };
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if ((await stat(directory)).mode & 0o077) throw Error("The transaction journal must be private");
   const lock = join(directory, "sender.lock");
   const held = await open(lock, "wx", 0o600);
-  await held.writeFile(json({ pid: process.pid, id })); await held.sync();
   const path = join(directory, `${id}.json`);
-  const request = { from: account.address.toLowerCase(), to: transaction.to?.toLowerCase() ?? null,
-    data: transaction.data.toLowerCase(), value: number(transaction.value).toString(),
-    gas: number(transaction.gas).toString(), nonce: number(transaction.nonce).toString(), chainId };
   try {
+    await held.writeFile(json({ pid: process.pid, id })); await held.sync();
     const chainIds = await Promise.all(rpcs.map(rpc => rpc("eth_chainId", [])));
     if (chainIds.some(value => number(value) !== BigInt(chainId))) throw Error("Wrong release network");
     let record;
