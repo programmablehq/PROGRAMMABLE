@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   readToken: vi.fn(),
   readEthereumToken: vi.fn(),
   readBaseToken: vi.fn(),
+  readCustomAIToken: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -29,6 +30,7 @@ vi.mock("../lib/server/ethereum-explore", () => ({
 }));
 
 vi.mock("../lib/server/base-explore", () => ({ readBaseToken: mocks.readBaseToken }));
+vi.mock("../lib/custom-ai/index.server", () => ({ readCustomAIToken: mocks.readCustomAIToken }));
 
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import ExplorePage from "../app/explore/page";
@@ -43,6 +45,7 @@ const token = { tokenAddress: address, name: "Example token" };
 
 beforeEach(() => {
   mocks.cookie.mockReset();
+  mocks.readCustomAIToken.mockReset().mockResolvedValue(null);
   mocks.readBaseToken.mockReset().mockResolvedValue({ chainId: 8453, status: "ready", token: null, updatedAt: null });
   mocks.readToken.mockReset().mockResolvedValue({ status: "ready", token: null, updatedAt: null });
   mocks.readEthereumToken.mockReset().mockResolvedValue({ chainId: 1, status: "ready", token: null, updatedAt: null });
@@ -82,6 +85,13 @@ describe("Explore chain routes", () => {
 });
 
 describe("verified token routing", () => {
+  it("keeps a verified existing coin readable when the Custom AI index is unavailable", async () => {
+    mocks.readCustomAIToken.mockRejectedValue(new Error("Custom AI store unavailable"));
+    mocks.readToken.mockResolvedValue({ status: "ready", token, updatedAt: null });
+    const page = await TokenPage({ params: Promise.resolve({ address }), searchParams: Promise.resolve({ chain: "4663" }) });
+    expect(page.props.children.type.name).toBe("RobinhoodTokenView");
+    expect(page.props.children.props.token).toEqual(token);
+  });
   it("opens a refreshing observation page without changing the canonical transaction resolver", async () => {
     vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([{
       chainId: 1, confirmation: "confirming", observationExpiresAt: Date.now() + 30_000,

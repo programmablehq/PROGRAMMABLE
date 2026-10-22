@@ -456,3 +456,17 @@ test("Custom AI source hash exceptions retain credential and path boundaries", t
     assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
   }
 });
+
+test("Custom AI funded evidence permits only the exact public token address lines", t => {
+  const path = "docs/operations/custom-ai/funded-acceptance-20261022.json";
+  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  const lines = source.split("\n").filter(line => line.trimStart().startsWith('"tokenAddress":'));
+  assert.equal(lines.length, 2);
+  for (const line of lines) {
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    assertFiles(scan(t, { [path]: line.replace(/0x[0-9a-fA-F]{40}/, material) }, { raw: true }), [path]);
+    assertFiles(scan(t, { [path]: line.replace('"tokenAddress":', '"apiKey":') }, { raw: true }), [path]);
+    assertFiles(scan(t, { [path]: `${line} "apiKey": "${material}"` }, { raw: true }), [path], 2);
+    assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+  }
+});

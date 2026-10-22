@@ -6,7 +6,8 @@ import type { CanonicalTokenExploreEntry } from "@/lib/tokens";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 
 vi.mock("server-only", () => ({}));
-const sources = vi.hoisted(() => ({ rh: vi.fn(), eth: vi.fn(), base: vi.fn(), rhMarkets: vi.fn(), ethMarkets: vi.fn(), presentations: vi.fn() }));
+const sources = vi.hoisted(() => ({ rh: vi.fn(), eth: vi.fn(), base: vi.fn(), ai: vi.fn(), rhMarkets: vi.fn(), ethMarkets: vi.fn(), presentations: vi.fn() }));
+vi.mock("@/lib/custom-ai/index.server", () => ({ readCustomAICatalog: sources.ai }));
 const recent = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/server/module-foundation/recent-launch-store", () => ({ readRecentFoundationLaunches: recent }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalog: sources.rh }));
@@ -36,6 +37,7 @@ beforeEach(() => {
   metadata.mockResolvedValue(new Map());
   approved.mockResolvedValue(new Map());
   recent.mockResolvedValue([]);
+  sources.ai.mockResolvedValue({ status: "inactive", updatedAt: null, items: [] });
   sources.base.mockResolvedValue({status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [], presentations: [], sourceEvidence: { verified: "base" }});
   sources.rh.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [rh], sourceEvidence: { verified: "rh" } });
   sources.eth.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", entries: [eth], sourceEvidence: { verified: "eth" } });
@@ -47,6 +49,21 @@ beforeEach(() => {
 });
 
 describe("Unified verified source adapter", () => {
+  it("keeps existing launches visible and marks a failed Custom AI source as partial", async () => {
+    sources.ai.mockRejectedValue(new Error("Custom AI store unavailable"));
+    const result = await readUnifiedLaunches();
+    expect(result).toMatchObject({ status: "partial", sources: { customAI: "unavailable" } });
+    expect(result.items).toHaveLength(2);
+  });
+  it("includes a finalized Custom AI coin with its saved image and description", async () => {
+    const coin = { ...rh, chainId: 4663, tokenAddress: other, sourceKind: "custom-ai-v1", mode: "custom", category: "custom",
+      name: "AI coin", symbol: "AI", imageUrl: "https://example.com/ai.png", description: "A fixed fee schedule" };
+    sources.ai.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [coin] });
+    const result = await readUnifiedLaunches();
+    expect(result).toMatchObject({ status: "ready", sources: { customAI: "ready" } });
+    expect(result.items).toContainEqual(expect.objectContaining({ chainId: 4663, tokenAddress: other, sourceKind: "custom-ai-v1" }));
+    expect(result.presentations).toContainEqual(expect.objectContaining({ chainId: 4663, tokenAddress: other, imageUrl: coin.imageUrl, description: coin.description }));
+  });
   it("combines both chains for one creator and filters other wallets before market reads", async () => {
     const owner = `0x${"33".repeat(20)}`;
     sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [
