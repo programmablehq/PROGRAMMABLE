@@ -130,4 +130,16 @@ describe("shared wallet credentials", () => {
     expect(await credentials.getIdentityToken()).not.toBeNull();
     expect(identityToken).toHaveBeenCalledTimes(2);
   });
+
+  it("discards even a cached identity if the session changes before it is delivered", async () => {
+    let revision = 1;
+    const credentials = createWalletSessionCredentials({
+      session: () => ({ userId: "alice", active: true, revision }),
+      accessToken: async () => "access", identityToken: async () => null,
+      cachedIdentityToken: () => token("alice"),
+    });
+    const result = credentials.getIdentityToken();
+    revision++;
+    expect(await result).toBeNull();
+  });
 });

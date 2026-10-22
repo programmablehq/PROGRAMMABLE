@@ -36,12 +36,13 @@ export function createWalletSessionCredentials(initialSources?: Sources, timeout
     if (kind === "identity") {
       if (identity?.key !== key) identity = null;
       const cached = currentIdentityToken(sources.cachedIdentityToken(), before.userId);
-      if (cached) return Promise.resolve(cached);
+      if (cached) return Promise.resolve().then(() => matches(before) ? cached : null);
       // Some valid sessions have no identity token. Remember that successful
       // response too, instead of refreshing /users/me on every draft save.
       if (identity && identity.until > Date.now()
         && (identity.token === null || currentIdentityToken(identity.token, before.userId))) {
-        return Promise.resolve(identity.token);
+        const token = identity.token;
+        return Promise.resolve().then(() => matches(before) ? token : null);
       }
     }
     const current = pending.get(key);
