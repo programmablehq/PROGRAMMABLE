@@ -1,1 +1,53 @@
-{"version":1,"networks":{"1":null,"4663":null}}
+{
+  "version": 1,
+  "networks": {
+    "1": {
+      "chainId": 1,
+      "bundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
+      "status": "staged",
+      "deploymentBlock": "26245676",
+      "factory": {
+        "address": "0x8E40C2917Bf43f6d93710f8Dcc7A449BD76525aD",
+        "runtimeHash": "0x1147a447de01a2de6a93ed83a655780ff24a3db970486bc5ee1f233afb2eabf0"
+      },
+      "hookDeployer": {
+        "address": "0x53CB31E9aa55EeCA2F4c8c82Ac0f1E8Ccf87A108",
+        "runtimeHash": "0x60711a56a33b5d01f33aa4d55deac06771f9d306535561f890c192983d9a67e7"
+      },
+      "liquidityDeployer": {
+        "address": "0xbaEE9706753924cBDD03ED52C66Da67aff1456ca",
+        "runtimeHash": "0x11f69d3b7ab05f52b694197ad13e678c3a348a677468d80d4e494fd2ee23a047"
+      },
+      "router": {
+        "address": "0x34F9De6a6c5bF6EbD377c1e4D75a950d71Bd32DD",
+        "runtimeHash": "0x5c4ea174d54e3174e32b0c96927970abb8de773ea89742261ca01a7b32c3aa35"
+      },
+      "priceSigner": "0x1406e986f2cf99F8aB25Cf73057Ad0aB11D5D9C5",
+      "acceptanceEvidenceHash": null
+    },
+    "4663": {
+      "chainId": 4663,
+      "bundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
+      "status": "staged",
+      "deploymentBlock": "94826255",
+      "factory": {
+        "address": "0xEE92C51F4d99b269e50Bb567d2Adf04141A603b4",
+        "runtimeHash": "0x3b8ae01c7542dcfd6c144d11d239c5b4086804703702da6061948d9e6b5baa60"
+      },
+      "hookDeployer": {
+        "address": "0xfF41caE2a13f6e18Ca9325F1Ac6d1F14F9C9b326",
+        "runtimeHash": "0x60711a56a33b5d01f33aa4d55deac06771f9d306535561f890c192983d9a67e7"
+      },
+      "liquidityDeployer": {
+        "address": "0x8e94815192A73a505CC53Ed138dc68dD702c1191",
+        "runtimeHash": "0x11f69d3b7ab05f52b694197ad13e678c3a348a677468d80d4e494fd2ee23a047"
+      },
+      "router": {
+        "address": "0x1eB7D1B2EabfAF89bAC79298D56Df89b82cAe8b9",
+        "runtimeHash": "0x8110df77039bf7a196c5070482032c78253042375f501d7f91c1fb341f39bce2"
+      },
+      "priceSigner": "0x1406e986f2cf99F8aB25Cf73057Ad0aB11D5D9C5",
+      "acceptanceEvidenceHash": null
+    }
+  }
+}
