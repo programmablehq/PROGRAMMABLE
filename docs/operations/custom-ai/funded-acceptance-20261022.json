@@ -1,0 +1,689 @@
+{
+  "version": 1,
+  "bundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
+  "checkedAt": "2026-10-22T04:58:26.066Z",
+  "sourceCommit": "c7cac51e4b95917a82444f7cfce55a42902ddc4f",
+  "sourceVerification": [
+    {
+      "chainId": 1,
+      "address": "0x53CB31E9aa55EeCA2F4c8c82Ac0f1E8Ccf87A108",
+      "contract": "CustomAIHookDeployerV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x53CB31E9aa55EeCA2F4c8c82Ac0f1E8Ccf87A108",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.503Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0xbaEE9706753924cBDD03ED52C66Da67aff1456ca",
+      "contract": "CustomAILiquidityDeployerV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0xbaEE9706753924cBDD03ED52C66Da67aff1456ca",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.511Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0x34F9De6a6c5bF6EbD377c1e4D75a950d71Bd32DD",
+      "contract": "CustomAISwapRouterV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x34F9De6a6c5bF6EbD377c1e4D75a950d71Bd32DD",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.518Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0x8E40C2917Bf43f6d93710f8Dcc7A449BD76525aD",
+      "contract": "CustomAIFactoryV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x8E40C2917Bf43f6d93710f8Dcc7A449BD76525aD",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.526Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0xfF41caE2a13f6e18Ca9325F1Ac6d1F14F9C9b326",
+      "contract": "CustomAIHookDeployerV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0xfF41caE2a13f6e18Ca9325F1Ac6d1F14F9C9b326",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.556Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x8e94815192A73a505CC53Ed138dc68dD702c1191",
+      "contract": "CustomAILiquidityDeployerV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0x8e94815192A73a505CC53Ed138dc68dD702c1191",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.563Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x1eB7D1B2EabfAF89bAC79298D56Df89b82cAe8b9",
+      "contract": "CustomAISwapRouterV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0x1eB7D1B2EabfAF89bAC79298D56Df89b82cAe8b9",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.570Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0xEE92C51F4d99b269e50Bb567d2Adf04141A603b4",
+      "contract": "CustomAIFactoryV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0xEE92C51F4d99b269e50Bb567d2Adf04141A603b4",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:13:15.577Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x49885ab6a28b63E21c9C68ddd2946A5d034881E0",
+      "contract": "CustomAITokenV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0x49885ab6a28b63E21c9C68ddd2946A5d034881E0",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.619Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x8852A9539bFD57C621dbcD53A06c1FCCE529a0Cc",
+      "contract": "CustomAIHookV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0x8852A9539bFD57C621dbcD53A06c1FCCE529a0Cc",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.628Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0x8cCC59756E872aeB37b816B20A90b6d999224761",
+      "contract": "CustomAIFeeLedgerV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0x8cCC59756E872aeB37b816B20A90b6d999224761",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.636Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0xEa101D40073dc32114D3d679c7c3a4C8859ccC4b",
+      "contract": "CustomAIRewardVaultV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0xEa101D40073dc32114D3d679c7c3a4C8859ccC4b",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.644Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0xbE1AfAEAB5E661A8b65cE18a7B5573bf27f1dfe1",
+      "contract": "CustomAILiquidityVaultV1",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0xbE1AfAEAB5E661A8b65cE18a7B5573bf27f1dfe1",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.654Z"
+    },
+    {
+      "chainId": 4663,
+      "address": "0xB186777d81840689F5c7F5D3a6a7aaf6F880181c",
+      "contract": "GeneratedFeeModule",
+      "url": "https://sourcify.dev/server/v2/contract/4663/0xB186777d81840689F5c7F5D3a6a7aaf6F880181c",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "checkedAt": "2026-10-22T04:17:23.662Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0x9a5c5A7C582D7d7729c7e10b6E65B327E50a77E1",
+      "contract": "CustomAITokenV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x9a5c5A7C582D7d7729c7e10b6E65B327E50a77E1",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.867Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0x44Dd34F2899A77143F2F94035F1E767708A260CC",
+      "contract": "CustomAIHookV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x44Dd34F2899A77143F2F94035F1E767708A260CC",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.877Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0x77955B714B9A5002896b3890Eb913A491F432988",
+      "contract": "CustomAIFeeLedgerV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x77955B714B9A5002896b3890Eb913A491F432988",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.887Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0xC554F2B57f8df90F776051Fb15CA7FA6DaD298B5",
+      "contract": "CustomAIRewardVaultV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0xC554F2B57f8df90F776051Fb15CA7FA6DaD298B5",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.896Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0xD5b92517d31568954a17f9D9D38D3569b3C63de8",
+      "contract": "CustomAILiquidityVaultV1",
+      "url": "https://sourcify.dev/server/v2/contract/1/0xD5b92517d31568954a17f9D9D38D3569b3C63de8",
+      "match": "match",
+      "creationMatch": "match",
+      "runtimeMatch": "match",
+      "checkedAt": "2026-10-22T04:17:23.905Z"
+    },
+    {
+      "chainId": 1,
+      "address": "0x78deEDf92e6b2831eE56bE813Ec37AAcEf89E282",
+      "contract": "GeneratedFeeModule",
+      "url": "https://sourcify.dev/server/v2/contract/1/0x78deEDf92e6b2831eE56bE813Ec37AAcEf89E282",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "checkedAt": "2026-10-22T04:17:23.913Z"
+    }
+  ],
+  "chains": {
+    "1": {
+      "finalizedBlock": {
+        "number": "26245848",
+        "hash": "0x82885e4f29a60edbcad49ab32ac4d06ee67edc75435a2455f005fd6add1eaa23",
+        "timestamp": "1792644311"
+      },
+      "latestTransactionBlock": "26245829",
+      "actualSpendWei": "10984047483477610",
+      "reservedSpendWei": "11242038793179433",
+      "transactions": [
+        {
+          "hash": "0x97b07f3ae73a38564e2c6ca927d2d54ee311e87cfe2d19c5793770dfd83629f9",
+          "blockHash": "0xd413a69479ad659f118fafbcc0c815d072b3a30174c9b39d963163f7ca6a7e31",
+          "block": "0x1907a2c",
+          "status": "0x1",
+          "gasUsed": "0x46a5a4",
+          "effectiveGasPrice": "0x36d0d0f"
+        },
+        {
+          "hash": "0x325cf62e56066f8cd174a0375c325d314664924759dd01300652219d50ee5290",
+          "blockHash": "0x7a0bb087ae5ec0786b68447e5dc21b50bd1f8ec60ea522e8a3e8d4302e09de3a",
+          "block": "0x1907a29",
+          "status": "0x1",
+          "gasUsed": "0x447e30",
+          "effectiveGasPrice": "0x38d1d04"
+        },
+        {
+          "hash": "0xfc9ceb0f3bdc339100b03ab342c9c12b2c2333d9b3c1a68eab844842aa5a2e8d",
+          "blockHash": "0x4174caab2bc7536b0edc2819be3d5425775ff0faeb10b832be2f7a44db4739ab",
+          "block": "0x1907a2a",
+          "status": "0x1",
+          "gasUsed": "0x1a491a",
+          "effectiveGasPrice": "0x379e22f"
+        },
+        {
+          "hash": "0x30f46105e14d1916d6b13a839508750d9a44ed7eb1b3715beb1ad69cd441b596",
+          "blockHash": "0xdd21ef3c4ac8de9962b183590401ab9253d6146187e1a2091d0e471354d560b2",
+          "block": "0x1907a2b",
+          "status": "0x1",
+          "gasUsed": "0xf64dc",
+          "effectiveGasPrice": "0x37776d1"
+        },
+        {
+          "hash": "0x4ea6905a92d86bbfa0d887ddfcc4f5ced3d661995006314cf952546d81358d8e",
+          "blockHash": "0x2c2d7eced00675d9141586bdd053ec5e6b90b124b8666782e4d29a4963142fe4",
+          "block": "0x1907a36",
+          "status": "0x1",
+          "gasUsed": "0x3be2a",
+          "effectiveGasPrice": "0x312e9d5"
+        },
+        {
+          "hash": "0x99a46e4d55406a67383399347150bbaf46a9aa3042398d47b94df286a3ec795f",
+          "blockHash": "0xf6ab778017c95feae84d2ca2962987c92c64f2ee528cd30e15ad0c60e215a099",
+          "block": "0x1907a3d",
+          "status": "0x1",
+          "gasUsed": "0xb3d8",
+          "effectiveGasPrice": "0x31cd01b"
+        },
+        {
+          "hash": "0x2f1e1887037b9842722013a37d86008d98cfa7ef84740114a17972f6840c192e",
+          "blockHash": "0x44b4ced5ff61473a6a23981a126e478bda590156409997181e4c0bf9d1327abe",
+          "block": "0x1907a40",
+          "status": "0x1",
+          "gasUsed": "0x6d1551",
+          "effectiveGasPrice": "0x2ffed51"
+        },
+        {
+          "hash": "0xdb48503615dc94b28b2f34b0c0f6e1d07db7a0eb31e96647f597a6b22d1b0f23",
+          "blockHash": "0x5f1d65998bd47ff2127e6f30adc46bb408ce879fcd5986d4bbcdda79c77ed897",
+          "block": "0x1907a3a",
+          "status": "0x1",
+          "gasUsed": "0x6d22",
+          "effectiveGasPrice": "0x2fb6489"
+        },
+        {
+          "hash": "0x06ada9c951331983f5517b5f75bfed9985f2fa866cd1e33511a7cb9d54bc3935",
+          "blockHash": "0x8605d91f79e1ac30978bca133b26d1a27dd56eddea1d58b39514eaa5168ae61e",
+          "block": "0x1907aa8",
+          "status": "0x1",
+          "gasUsed": "0xafee",
+          "effectiveGasPrice": "0x3612604"
+        },
+        {
+          "hash": "0xad1204b29d600b25459d97ea7094007497f6df814f181a0be8e613ca802abaf4",
+          "blockHash": "0xc129fa42093a8666387515f487d6c736b8a646ea684a3bb0c481d4ba9359e3f3",
+          "block": "0x1907ab9",
+          "status": "0x1",
+          "gasUsed": "0x35324",
+          "effectiveGasPrice": "0x30bb5da"
+        },
+        {
+          "hash": "0x738ed7851be19587158b29388ccaafbcab0d83053c09ee392bf70e460ca06171",
+          "blockHash": "0xacdbaceb96c15e2e650c8cb79fd8bf980e77ec17c4d34a16533110472c67b58c",
+          "block": "0x1907ab0",
+          "status": "0x1",
+          "gasUsed": "0x35e5f",
+          "effectiveGasPrice": "0x3705f4a"
+        },
+        {
+          "hash": "0xaa4c5ce62c063b41353e4a339e70caa9330694a80c5a5d5cb987b34acd9e8688",
+          "blockHash": "0x45a9105a4e6f6c8971058bebb8b0c3272005da9f299839a704396f0ba8e33af5",
+          "block": "0x1907ac5",
+          "status": "0x1",
+          "gasUsed": "0x1a90e",
+          "effectiveGasPrice": "0x3105a94"
+        },
+        {
+          "hash": "0x29097ebf733a27946811740ee5a21d13613da079b9c03bb5205b6fe729848dbd",
+          "blockHash": "0x7f7ae5d517c36165dc4133e2dad11fb9191a9ebb335154a993982d0794907486",
+          "block": "0x1907abe",
+          "status": "0x1",
+          "gasUsed": "0x1bd1d",
+          "effectiveGasPrice": "0x335b81f"
+        },
+        {
+          "hash": "0x2e0e4eaebfa96af487829a317d5500f85b2562fc579587fb3f16d6fb53b28395",
+          "blockHash": "0x06fa6f8ac2197615a57a904b6e05ffce56ecca106f690b7bb14652ed7ef0b611",
+          "block": "0x1907aac",
+          "status": "0x1",
+          "gasUsed": "0xb3d8",
+          "effectiveGasPrice": "0x394310d"
+        },
+        {
+          "hash": "0x75c081afd3e7210eeddb9cc015ae91b5071a97a9f4bd99db40845bfb08542a47",
+          "blockHash": "0x68cf084e093abeda7e2ffa2c1e855171aa3c7f27861f32f7162ec754b6eea42c",
+          "block": "0x1907ab5",
+          "status": "0x1",
+          "gasUsed": "0xb3d7",
+          "effectiveGasPrice": "0x2fc4179"
+        },
+        {
+          "hash": "0x57007f8b5aa4d7c0a549910dd41af5f109393a07bca1d67bead9243f17117b1a",
+          "blockHash": "0x465e5313d7b57ffffec33ebcc6806389e620168efc38d63ca4e344f59da47ffa",
+          "block": "0x1907ac1",
+          "status": "0x1",
+          "gasUsed": "0x1ba00",
+          "effectiveGasPrice": "0x33fd32d"
+        }
+      ],
+      "complete": true,
+      "token": {
+        "mode": "custom",
+        "name": "Custom AI Test",
+        "ledger": "0x77955B714B9A5002896b3890Eb913A491F432988",
+        "poolId": "0xfe0bed42bc204bfa1a122d635a624341fc7e00a1ea304525af125a7122ef11e0",
+        "schema": "programmable.custom-ai-launch.v1",
+        "symbol": "AITEST",
+        "chainId": 1,
+        "creator": "0x9e1339Eaed0EfF31Eda7D714A341Eb09a7e4513e",
+        "factory": "0x8E40C2917Bf43f6d93710f8Dcc7A449BD76525aD",
+        "poolKey": {
+          "fee": 0,
+          "hooks": "0x44Dd34F2899A77143F2F94035F1E767708A260CC",
+          "currency0": "0x9a5c5A7C582D7d7729c7e10b6E65B327E50a77E1",
+          "currency1": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+          "tickSpacing": 60
+        },
+        "version": 1,
+        "category": "custom",
+        "decimals": 18,
+        "imageUrl": "https://k2uoipt9wchjtz3h.public.blob.vercel-storage.com/token-images/custom-ai-2ba7ad5a1d959e2701f4f0027f5a153febfb9b625eda8136016ad3c179cc16f5.webp",
+        "launchId": "0xe43418382624bd9e912877e753c0de6826d1f68fbe941e8b651027698b6db99f",
+        "logIndex": 323,
+        "blockHash": "0x44b4ced5ff61473a6a23981a126e478bda590156409997181e4c0bf9d1327abe",
+        "launchSalt": "0x112fcb70364f62b92fb304eec99fd94c20adc117c5becdc99d93d24f40bcbaba",
+        "launchedAt": "2026-10-22T04:14:47.000Z",
+        "quoteAsset": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "sourceKind": "custom-ai-v1",
+        "blockNumber": "26245696",
+        "description": "Custom AI Test is a coin with a hook that charges 3% on buys and sells for the first 24 hours after launch, then 1% on both.",
+        "finalizedAt": {
+          "hash": "0x8293d6fc709614bcb4bf990550d02fc241ae3f90c58c6fd43a1a09d37fddb9a0",
+          "number": "26245720"
+        },
+        "hookAddress": "0x44Dd34F2899A77143F2F94035F1E767708A260CC",
+        "rewardVault": "0xC554F2B57f8df90F776051Fb15CA7FA6DaD298B5",
+        "tokenAddress": "0x9a5c5A7C582D7d7729c7e10b6E65B327E50a77E1",
+        "quoteDecimals": 18,
+        "coreBundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
+        "liquidityVault": "0xD5b92517d31568954a17f9D9D38D3569b3C63de8",
+        "transactionHash": "0x2f1e1887037b9842722013a37d86008d98cfa7ef84740114a17972f6840c192e"
+      },
+      "swaps": [
+        {
+          "poolId": "0xfe0bed42bc204bfa1a122d635a624341fc7e00a1ea304525af125a7122ef11e0",
+          "router": "0x34F9De6a6c5bF6EbD377c1e4D75a950d71Bd32DD",
+          "buy": true,
+          "exactInput": true,
+          "grossQuote": "10000000000000000",
+          "platformQuote": "50000000000000",
+          "additionalQuote": "250000000000000",
+          "additionalBps": 250,
+          "moduleStatus": 0,
+          "transactionHash": "0x2f1e1887037b9842722013a37d86008d98cfa7ef84740114a17972f6840c192e"
+        },
+        {
+          "poolId": "0xfe0bed42bc204bfa1a122d635a624341fc7e00a1ea304525af125a7122ef11e0",
+          "router": "0x34F9De6a6c5bF6EbD377c1e4D75a950d71Bd32DD",
+          "buy": false,
+          "exactInput": true,
+          "grossQuote": "9796999999999999",
+          "platformQuote": "48984999999999",
+          "additionalQuote": "244925000000000",
+          "additionalBps": 250,
+          "moduleStatus": 0,
+          "transactionHash": "0xad1204b29d600b25459d97ea7094007497f6df814f181a0be8e613ca802abaf4"
+        },
+        {
+          "poolId": "0xfe0bed42bc204bfa1a122d635a624341fc7e00a1ea304525af125a7122ef11e0",
+          "router": "0x34F9De6a6c5bF6EbD377c1e4D75a950d71Bd32DD",
+          "buy": true,
+          "exactInput": true,
+          "grossQuote": "100000000000000",
+          "platformQuote": "500000000000",
+          "additionalQuote": "2500000000000",
+          "additionalBps": 250,
+          "moduleStatus": 0,
+          "transactionHash": "0x738ed7851be19587158b29388ccaafbcab0d83053c09ee392bf70e460ca06171"
+        }
+      ],
+      "ledger": {
+        "platformReceived": "99484999999999",
+        "platformClaimed": "99484999999999",
+        "additionalReceived": "497425000000000",
+        "additionalClaimed": "497425000000000",
+        "outstandingBacking": "0"
+      },
+      "claims": {
+        "platform": {
+          "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+          "amount": "99484999999999"
+        },
+        "creator": {
+          "recipient": "0x9e1339Eaed0EfF31Eda7D714A341Eb09a7e4513e",
+          "amount": "497425000000000"
+        }
+      }
+    },
+    "4663": {
+      "finalizedBlock": {
+        "number": "94845600",
+        "hash": "0xcf154aedbbac1083d388c3ef47f79992b81542acb27097da865a1cd332085cfa",
+        "timestamp": "1792644291"
+      },
+      "latestTransactionBlock": "94839996",
+      "actualSpendWei": "10274793555038933",
+      "reservedSpendWei": "10520078106827168",
+      "transactions": [
+        {
+          "hash": "0xb741fc78e64ed05f055521f5cf9e6b78742fbb8ea989c5f2c4b82370f74cf09f",
+          "blockHash": "0xd453b6cb24ead3b76027f0d4b697aaa577da4eeaa57dee7f147b64f4110bee70",
+          "block": "0x5a6ef0f",
+          "status": "0x1",
+          "gasUsed": "0x46a5d4",
+          "effectiveGasPrice": "0x1312d00"
+        },
+        {
+          "hash": "0xbb76e9b623b54374571a62304bd9cbac3879f50213fe12fc9f06f7305f81af57",
+          "blockHash": "0x05b067ff9bc9ba1eab0985622942e90bebd69868ec0cc10263390f7e05905bfd",
+          "block": "0x5a6ee53",
+          "status": "0x1",
+          "gasUsed": "0x447e30",
+          "effectiveGasPrice": "0x13449e0"
+        },
+        {
+          "hash": "0x0569afb9226c19ee263dfba620c3a4184d96b46709ab01beed805fc921f41e15",
+          "blockHash": "0x4aca35887c86852bbb27c40e2f4146ea4d613a44a4e3723177b4057a3bc28d3e",
+          "block": "0x5a6ee91",
+          "status": "0x1",
+          "gasUsed": "0x1a491a",
+          "effectiveGasPrice": "0x1315410"
+        },
+        {
+          "hash": "0x54bf8980386a718515b4d1bddc28f9a5ee3c3293d9501437a392d6a454e05551",
+          "blockHash": "0x7feace50dcab169c96859ff335b26f5369a094ddf8630af460b91566b389faa4",
+          "block": "0x5a6eed2",
+          "status": "0x1",
+          "gasUsed": "0xf650c",
+          "effectiveGasPrice": "0x133f3f0"
+        },
+        {
+          "hash": "0x6d7c1f9e796cd8f9eb997d8aad044845f11b850055820616f9431c74f73861f9",
+          "blockHash": "0xc9bc273c713987905a7255b923fa0405797e813968c256264170a1caf0201779",
+          "block": "0x5a6f86b",
+          "status": "0x1",
+          "gasUsed": "0xd0a5",
+          "effectiveGasPrice": "0x131e0b0"
+        },
+        {
+          "hash": "0xb4a71c937e62dc7ce31231bb08eaca3f3f3713de4ba54de536dd9962561f3932",
+          "blockHash": "0x9a98fa7970a8eaf411b078e0a8236b65b8e1c86ce2427370ab137c125bf07add",
+          "block": "0x5a6f803",
+          "status": "0x1",
+          "gasUsed": "0x9e63",
+          "effectiveGasPrice": "0x1312d00"
+        },
+        {
+          "hash": "0x71c5321aa0b9d9d36263405a7d36f70a1206f715c9fd0abfe161031c8bad1f2e",
+          "blockHash": "0x592da7eb9d0392e34483d2b4a8fe26acf3404ddcc7fcede238354a1984a27965",
+          "block": "0x5a6f8d4",
+          "status": "0x1",
+          "gasUsed": "0x6d7ed4",
+          "effectiveGasPrice": "0x1312d00"
+        },
+        {
+          "hash": "0x86c9199b0b2979f5e85f10709aa399a61e797ef530b68a12d5a8d3b3102a0e5b",
+          "blockHash": "0xa67248566bc5ae7c850b0064aae47a3a509421088acf95446e09fa3a69217de9",
+          "block": "0x5a6f7a2",
+          "status": "0x1",
+          "gasUsed": "0x3be2a",
+          "effectiveGasPrice": "0x13134d0"
+        },
+        {
+          "hash": "0xc07d2fb4c8cb0e39c2e888564f20b8e569f38383c8f03c3c21ec505eff996f4c",
+          "blockHash": "0xfb8bee7151f30ff321e1719f1846d242a6d9d5aed818c34a33953b60aba63d22",
+          "block": "0x5a7226e",
+          "status": "0x1",
+          "gasUsed": "0xb3d7",
+          "effectiveGasPrice": "0x133cce0"
+        },
+        {
+          "hash": "0x13b9b60e22ed2ece64d0a2234ea2fda0b0be4dcf8853a02c850555c34f05a3d3",
+          "blockHash": "0x32e1c7802e8c1516ec6b872ae8791de5d877d356a88d738eb6eabb05aae81df2",
+          "block": "0x5a724bc",
+          "status": "0x1",
+          "gasUsed": "0x1d093",
+          "effectiveGasPrice": "0x1326d50"
+        },
+        {
+          "hash": "0xf962489ab346252efe0d880cb56bfc0d03e3c44580118f3730229fbc17c83f72",
+          "blockHash": "0x7776def046ba3d9878d8558263c9ee366f65875510f3438e70112ec217f7b014",
+          "block": "0x5a72123",
+          "status": "0x1",
+          "gasUsed": "0xd0a5",
+          "effectiveGasPrice": "0x131a230"
+        },
+        {
+          "hash": "0xc6229d041192e506c5b284ccbf92321a95ddbbb5fe94e6bc373968b13aebfdf3",
+          "blockHash": "0x25d6a919e5cd7ae99264efeb23a38af5c3e03dfe626102f66b445778f9cc4a68",
+          "block": "0x5a72393",
+          "status": "0x1",
+          "gasUsed": "0x1e4a2",
+          "effectiveGasPrice": "0x1312d00"
+        },
+        {
+          "hash": "0xf3566b5922c9fb66c556f1a4b4a6de362c98a154698bd8162e5d4e4e34fb93d7",
+          "blockHash": "0xc2f89a219ea766e824104cad860942195b74460023e5190306d1f52ada658d06",
+          "block": "0x5a7209e",
+          "status": "0x1",
+          "gasUsed": "0xe12f",
+          "effectiveGasPrice": "0x132cb10"
+        },
+        {
+          "hash": "0x667aea294d0241c87f4bf2f7a6292b4496ff59f686dd9759be49ebb1f25f1ceb",
+          "blockHash": "0x79ed1aa9505b0019f0deb1b743e3e5b2d5df0d5044734bbc8ac438a8cb9737db",
+          "block": "0x5a722ec",
+          "status": "0x1",
+          "gasUsed": "0x3738e",
+          "effectiveGasPrice": "0x1316b80"
+        },
+        {
+          "hash": "0xa56e2d30317e7795d50c117222c177a7810122f0ede3c4714ab7484656c48c55",
+          "blockHash": "0x3f8bb54883f3846b8e85143078f76a71e4ff19ab3031870198144dc4bb01a491",
+          "block": "0x5a721b1",
+          "status": "0x1",
+          "gasUsed": "0x3891e",
+          "effectiveGasPrice": "0x131e0b0"
+        },
+        {
+          "hash": "0xaf1b3741c2a66ee276bc64caceaa594d1ffdd8a37e74b5e919f876699072ee14",
+          "blockHash": "0x2caef6c2aa7e3617ec209e301444414a86f65429613e4980fc3caec4db6229ab",
+          "block": "0x5a72405",
+          "status": "0x1",
+          "gasUsed": "0x1e476",
+          "effectiveGasPrice": "0x13255e0"
+        }
+      ],
+      "complete": true,
+      "token": {
+        "mode": "custom",
+        "name": "Custom AI Test",
+        "ledger": "0x8cCC59756E872aeB37b816B20A90b6d999224761",
+        "poolId": "0x975cd17b840ac180870c969fd831070fbce662fe3f8ea529f3da7119686b6d8c",
+        "schema": "programmable.custom-ai-launch.v1",
+        "symbol": "AITEST",
+        "chainId": 4663,
+        "creator": "0x9e1339Eaed0EfF31Eda7D714A341Eb09a7e4513e",
+        "factory": "0xEE92C51F4d99b269e50Bb567d2Adf04141A603b4",
+        "poolKey": {
+          "fee": 0,
+          "hooks": "0x8852A9539bFD57C621dbcD53A06c1FCCE529a0Cc",
+          "currency0": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+          "currency1": "0x49885ab6a28b63E21c9C68ddd2946A5d034881E0",
+          "tickSpacing": 60
+        },
+        "version": 1,
+        "category": "custom",
+        "decimals": 18,
+        "imageUrl": "https://k2uoipt9wchjtz3h.public.blob.vercel-storage.com/token-images/custom-ai-2ba7ad5a1d959e2701f4f0027f5a153febfb9b625eda8136016ad3c179cc16f5.webp",
+        "launchId": "0x082e01a7d2585f720c4a6bc98dcb93c9aec72108ae77a6670a73f345c038c09e",
+        "logIndex": 21,
+        "blockHash": "0x592da7eb9d0392e34483d2b4a8fe26acf3404ddcc7fcede238354a1984a27965",
+        "launchSalt": "0x383b410893a05b21c9698e09483150af004d42e722a91e9713eb7258b6e52676",
+        "launchedAt": "2026-10-22T04:15:28.000Z",
+        "quoteAsset": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+        "sourceKind": "custom-ai-v1",
+        "blockNumber": "94828756",
+        "description": "Custom AI Test is a coin with a hook that charges 3% on buys and sells for the first 24 hours after launch, then 1% on both.",
+        "finalizedAt": {
+          "hash": "0xde6baeb21bb3d19c4f58532df81da08b6f751e0ed80a98d937ae38481ad3fed8",
+          "number": "94831018"
+        },
+        "hookAddress": "0x8852A9539bFD57C621dbcD53A06c1FCCE529a0Cc",
+        "rewardVault": "0xEa101D40073dc32114D3d679c7c3a4C8859ccC4b",
+        "tokenAddress": "0x49885ab6a28b63E21c9C68ddd2946A5d034881E0",
+        "quoteDecimals": 18,
+        "coreBundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
+        "liquidityVault": "0xbE1AfAEAB5E661A8b65cE18a7B5573bf27f1dfe1",
+        "transactionHash": "0x71c5321aa0b9d9d36263405a7d36f70a1206f715c9fd0abfe161031c8bad1f2e"
+      },
+      "swaps": [
+        {
+          "poolId": "0x975cd17b840ac180870c969fd831070fbce662fe3f8ea529f3da7119686b6d8c",
+          "router": "0x1eB7D1B2EabfAF89bAC79298D56Df89b82cAe8b9",
+          "buy": true,
+          "exactInput": true,
+          "grossQuote": "10000000000000000",
+          "platformQuote": "50000000000000",
+          "additionalQuote": "250000000000000",
+          "additionalBps": 250,
+          "moduleStatus": 0,
+          "transactionHash": "0x71c5321aa0b9d9d36263405a7d36f70a1206f715c9fd0abfe161031c8bad1f2e"
+        },
+        {
+          "poolId": "0x975cd17b840ac180870c969fd831070fbce662fe3f8ea529f3da7119686b6d8c",
+          "router": "0x1eB7D1B2EabfAF89bAC79298D56Df89b82cAe8b9",
+          "buy": false,
+          "exactInput": true,
+          "grossQuote": "9796999999999999",
+          "platformQuote": "48984999999999",
+          "additionalQuote": "244925000000000",
+          "additionalBps": 250,
+          "moduleStatus": 0,
+          "transactionHash": "0x667aea294d0241c87f4bf2f7a6292b4496ff59f686dd9759be49ebb1f25f1ceb"
+        },
+        {
+          "poolId": "0x975cd17b840ac180870c969fd831070fbce662fe3f8ea529f3da7119686b6d8c",
+          "router": "0x1eB7D1B2EabfAF89bAC79298D56Df89b82cAe8b9",
+          "buy": true,
+          "exactInput": true,
+          "grossQuote": "100000000000000",
+          "platformQuote": "500000000000",
+          "additionalQuote": "2500000000000",
+          "additionalBps": 250,
+          "moduleStatus": 0,
+          "transactionHash": "0xa56e2d30317e7795d50c117222c177a7810122f0ede3c4714ab7484656c48c55"
+        }
+      ],
+      "ledger": {
+        "platformReceived": "99484999999999",
+        "platformClaimed": "99484999999999",
+        "additionalReceived": "497425000000000",
+        "additionalClaimed": "497425000000000",
+        "outstandingBacking": "0"
+      },
+      "claims": {
+        "platform": {
+          "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+          "amount": "99484999999999"
+        },
+        "creator": {
+          "recipient": "0x9e1339Eaed0EfF31Eda7D714A341Eb09a7e4513e",
+          "amount": "497425000000000"
+        }
+      }
+    }
+  },
+  "complete": true,
+  "actualSpendWei": "21258841038516543",
+  "reservedSpendWei": "21762116900006601"
+}
