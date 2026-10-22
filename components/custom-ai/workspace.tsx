@@ -11,6 +11,14 @@ import type { ImageReceipt, StoredStudio, StudioState } from "@/lib/custom-ai/st
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import styles from "./workspace.module.css";
 
+// Compare values, not JSONB key order. Restoring a saved draft is not an edit.
+function studioSnapshot(state: StudioState) {
+  const { settings, image } = state;
+  return JSON.stringify([settings.name, settings.symbol, settings.chainId, settings.pairToken, settings.initialBuy,
+    state.messages.map(message => [message.role, message.content]), state.draftId ?? null,
+    image ? [image.id, image.url, image.hash] : null]);
+}
+
 // Reveal only the complete provider answer. Partial display text never enters
 // the conversation sent to the API, and stopping reveals the received answer.
 function revealReply(text: string, signal: AbortSignal, update: (text: string) => void) {
@@ -74,7 +82,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const retry = useRef<ChatRequest | null>(null);
   const headersRef = useRef(headers);
   useLayoutEffect(() => { headersRef.current = headers; }, [headers]);
-  const remote = useRef({ ready: false, revision: 0, blocked: false });
+  const remote = useRef({ ready: false, revision: 0, blocked: false, saved: "" });
   const saveQueue = useRef(Promise.resolve());
   const storageKey = `programmable.custom-ai.studio.v1:${owner}`;
   const [chatRevision, setChatRevision] = useState(0);
@@ -113,7 +121,8 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
               setMessages(server.state.messages); setSettings(server.state.settings);
               setDraftId(server.state.draftId); setDraft(server.draft); setImageReceipt(server.state.image);
             }
-            remote.current = { ready: true, revision: server?.revision ?? 0, blocked: false };
+            remote.current = { ready: true, revision: server?.revision ?? 0, blocked: false,
+              saved: server ? studioSnapshot(server.state) : "" };
           } catch { if (!cancelled) setNotice("Your online draft could not be loaded. This device still has its copy."); }
         }
         if (!cancelled) setRestored(true);
@@ -130,15 +139,19 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     if (!restored || localPreview || busy || !remote.current.ready || remote.current.blocked) return;
     try { parseCoinSetupPatch(settings); } catch { return; }
     const state: StudioState = { settings, messages, draftId, image: imageReceipt };
+    const snapshot = studioSnapshot(state);
+    if (snapshot === remote.current.saved) return;
     const timer = setTimeout(() => {
       saveQueue.current = saveQueue.current.then(async () => {
-        if (remote.current.blocked) return;
+        if (remote.current.blocked || snapshot === remote.current.saved) return;
         try {
           const saved = await aiRequest<{ revision: number }>("/studio", headersRef.current, { account: owner, revision: remote.current.revision, state });
           remote.current.revision = saved.revision;
-        } catch {
+          remote.current.saved = snapshot;
+        } catch (cause) {
           remote.current.blocked = true;
-          setNotice("Your changes are saved on this device. Reload before editing the online draft again.");
+          setNotice(cause instanceof Error ? `Saved on this device. ${cause.message}`
+            : "Your changes are saved on this device. Reload before editing the online draft again.");
         }
       });
     }, 750);
