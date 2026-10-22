@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { encodeFunctionData, zeroAddress, zeroHash, type Address, type Hex } from "viem";
+import { encodeFunctionData, zeroAddress, zeroHash, type Abi, type Address, type Hex } from "viem";
+import coreBundle from "../scripts/custom-ai/core-bundle.json";
 import { privateKeyToAccount } from "viem/accounts";
 import { bindCustomAILaunch, CUSTOM_AI_BUNDLE_HASH, predictCustomAIToken, customAIOrderMatchesTransaction, customAIPlanHash, customAIPriceTypedData,
   customAIPriceBounds, planCustomAIPrice, reconcileCustomAILaunch, type LaunchParameters, type LaunchOrder, type LaunchPrice } from "../lib/custom-ai/launch-plan";
@@ -50,8 +50,8 @@ describe("Custom AI wallet order", () => {
   it("encodes the actual compiled factory ABI and isolates the stored parameters", async () => {
     const input = await signedInput();
     const order = await bindCustomAILaunch(input, now);
-    const actual = JSON.parse(readFileSync(new URL("../contracts/out/custom-ai/CustomAIFactoryV1.sol/CustomAIFactoryV1.json", import.meta.url), "utf8"));
-    expect(order.transaction.data).toBe(encodeFunctionData({ abi: actual.abi, functionName: "launch", args: [input.parameters, input.price, input.signature] }));
+    const actual = coreBundle.contracts.CustomAIFactoryV1;
+    expect(order.transaction.data).toBe(encodeFunctionData({ abi: actual.abi as Abi, functionName: "launch", args: [input.parameters, input.price, input.signature] }));
     input.parameters.metadata.name = "Changed";
     expect(order.parameters.metadata.name).toBe("Example");
     expect(reconcileCustomAILaunch(order, observation(order), now)).toEqual({ state: "not-sent", canSend: true });

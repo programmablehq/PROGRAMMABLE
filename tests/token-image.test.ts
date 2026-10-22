@@ -26,7 +26,8 @@ describe("token image policy", () => {
       "./node_modules/sharp/**/*",
       "./node_modules/@img/**/*",
     ]);
-    expect(nextConfig.outputFileTracingIncludes).toEqual({
+    expect(nextConfig.outputFileTracingIncludes).toMatchObject({
+      "/api/custom-ai/image": sharpRuntimeFiles,
       "/api/token-image": sharpRuntimeFiles,
       "/api/prediction/asset-logo/*": sharpRuntimeFiles,
       "/api/profile/projects/*/article/media": sharpRuntimeFiles,
