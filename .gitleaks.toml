@@ -2,6 +2,17 @@
 useDefault = true
 
 [[allowlists]]
+description = "Custom AI finalized acceptance identifies only its two public canary token addresses"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/operations/custom-ai/funded-acceptance-20261022\.json$''']
+regexes = [
+  '''^\s*"tokenAddress": "0x9a5c5A7C582D7d7729c7e10b6E65B327E50a77E1",\s*$''',
+  '''^\s*"tokenAddress": "0x49885ab6a28b63E21c9C68ddd2946A5d034881E0",\s*$''',
+]
+
+[[allowlists]]
 description = "Eulerian display update checks only its exact public launch, hook, pool and creator identities"
 targetRules = ["generic-api-key"]
 condition = "AND"
