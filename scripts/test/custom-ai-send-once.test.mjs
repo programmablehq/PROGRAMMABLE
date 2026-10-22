@@ -11,14 +11,14 @@ async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(),"custom-ai-sender-"));
   t.after(() => rm(directory,{recursive:true,force:true}));
   const account=privateKeyToAccount(generatePrivateKey());
-  const state={ sends:0, failSend:false, receipt:null };
+  const state={ sends:0, failSend:false, receipt:null, nonce:"0x0", failReceipt:false };
   const rpc=async (method, params) => {
     if(method==="eth_chainId") return "0x1";
-    if(method==="eth_getTransactionCount") return "0x0";
+    if(method==="eth_getTransactionCount") return state.nonce;
     if(method==="eth_gasPrice") return "0x3b9aca00";
     if(method==="eth_estimateGas") return "0x5208";
     if(method==="eth_getBalance") return "0xde0b6b3a7640000";
-    if(method==="eth_getTransactionReceipt") return state.receipt;
+    if(method==="eth_getTransactionReceipt") { if(state.failReceipt) throw Error("Interrupted before dispatch"); return state.receipt; }
     if(method==="eth_getTransactionByHash") return null;
     if(method==="eth_getBlockByNumber") return {hash:`0x${"12".repeat(32)}`};
     if(method==="eth_sendRawTransaction") {
@@ -42,6 +42,14 @@ test("persisted dispatch is never broadcast again, including a lost response",as
   assert.equal((await sendOnce(options)).hash,first.hash);assert.equal(state.sends,1);
   await assert.rejects(sendOnce({...options,id:"eth-duplicate"}),/nonce is already journaled/);
   await assert.rejects(sendOnce({...options,transaction:{...options.transaction,value:"0x2"}}),/Saved request differs/);
+});
+
+test("a signed but unsent request rechecks expiry and nonce after interruption",async t=>{
+  const {state,options}=await fixture(t);state.failReceipt=true;
+  await assert.rejects(sendOnce(options),/Interrupted before dispatch/);
+  state.failReceipt=false;state.nonce="0x1";
+  await assert.rejects(sendOnce(options),/nonce changed before dispatch/);assert.equal(state.sends,0);
+  await assert.rejects(sendOnce({...options,id:"expired",expiresAt:1}),/expired before signing/);
 });
 
 test("cap rejects signing and dispatch; confirmed receipt reconciles exact gas",async t=>{

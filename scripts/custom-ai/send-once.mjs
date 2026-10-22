@@ -23,7 +23,7 @@ export function maximumCost(record) {
 }
 
 export async function sendOnce({ directory, id, account, chainId, transaction, rpcs,
-  totalCap, chainCap, expectedAddress = null, expectedRuntime = null }) {
+  totalCap, chainCap, expectedAddress = null, expectedRuntime = null, expiresAt = null }) {
   if (!/^[a-z0-9-]{1,90}$/.test(id) || ![1,4663].includes(chainId) || rpcs.length !== 2) throw Error("Invalid release request");
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if ((await stat(directory)).mode & 0o077) throw Error("The transaction journal must be private");
@@ -40,8 +40,9 @@ export async function sendOnce({ directory, id, account, chainId, transaction, r
     let record;
     try { record = JSON.parse(await readFile(path, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; }
     if (record && (json(record.request) !== json(request) || record.expectedAddress !== expectedAddress
-      || record.expectedRuntime !== expectedRuntime)) throw Error("Saved request differs; do not sign again");
+      || record.expectedRuntime !== expectedRuntime || record.expiresAt !== expiresAt)) throw Error("Saved request differs; do not sign again");
     if (!record) {
+      if (expiresAt !== null && expiresAt <= Math.floor(Date.now()/1000)+5) throw Error("Release request expired before signing");
       const nonces = await Promise.all(rpcs.flatMap(rpc => ["latest", "pending"].map(tag => rpc("eth_getTransactionCount", [account.address, tag]))));
       if (nonces.some(value => number(value) !== number(request.nonce))) throw Error("Account nonce changed or has pending work");
       const gasPrices = await Promise.all(rpcs.map(rpc => rpc("eth_gasPrice", [])));
@@ -56,8 +57,11 @@ export async function sendOnce({ directory, id, account, chainId, transaction, r
       for (const file of await readdir(directory)) if (/^[a-z0-9-]+\.json$/.test(file)) previous.push(JSON.parse(await readFile(join(directory,file),"utf8")));
       if (previous.some(item => item.request.chainId === chainId && item.request.nonce === request.nonce)) throw Error("This nonce is already journaled");
       const reserve = unsigned.value + unsigned.gas * gasPrice;
-      const allCost = previous.reduce((sum,item) => sum + maximumCost(item), 0n);
-      const networkCost = previous.filter(item => item.request.chainId === chainId).reduce((sum,item) => sum + maximumCost(item), 0n);
+      // Reserve the signed maximum even after mining; a reorg must never make
+      // another transaction appear affordable by spending the old gas refund.
+      const reserved = item => number(item.transaction.value) + number(item.transaction.gas) * number(item.transaction.gasPrice);
+      const allCost = previous.reduce((sum,item) => sum + reserved(item), 0n);
+      const networkCost = previous.filter(item => item.request.chainId === chainId).reduce((sum,item) => sum + reserved(item), 0n);
       if (allCost + reserve > totalCap || networkCost + reserve > chainCap) throw Error("The approved release spending cap would be exceeded");
       const balances = await Promise.all(rpcs.map(rpc => rpc("eth_getBalance", [account.address,"latest"])));
       if (balances.some(value => number(value) < reserve)) throw Error("Insufficient release balance");
@@ -66,7 +70,7 @@ export async function sendOnce({ directory, id, account, chainId, transaction, r
       if (!same(sender, account.address) || parsed.chainId !== chainId || number(parsed.nonce) !== BigInt(unsigned.nonce)
         || !same(parsed.to, unsigned.to) || (parsed.data ?? "0x") !== unsigned.data || number(parsed.value) !== unsigned.value
         || parsed.gas !== unsigned.gas || parsed.gasPrice !== gasPrice) throw Error("Signed release request differs");
-      record = { version:1, request, transaction: unsigned, expectedAddress, expectedRuntime, raw,
+      record = { version:1, request, transaction: unsigned, expectedAddress, expectedRuntime, expiresAt, raw,
         hash: keccak256(raw), state:"signed", signedAt:new Date().toISOString() };
       await durable(path, record, true);
     }
@@ -96,6 +100,9 @@ export async function sendOnce({ directory, id, account, chainId, transaction, r
     if (record.state !== "signed") return { hash:record.hash,state:"pending" };
     const seen = await Promise.all(rpcs.map(rpc => rpc("eth_getTransactionByHash",[record.hash])));
     if (seen.some(Boolean)) { record.state="pending"; await durable(path,record); return {hash:record.hash,state:"pending"}; }
+    if (expiresAt !== null && expiresAt <= Math.floor(Date.now()/1000)+5) throw Error("Signed request expired; preserve it for reconciliation");
+    const currentNonces = await Promise.all(rpcs.flatMap(rpc => ["latest","pending"].map(tag => rpc("eth_getTransactionCount",[account.address,tag]))));
+    if (currentNonces.some(value => number(value) !== number(request.nonce))) throw Error("Account nonce changed before dispatch; reconcile the signed request");
     record.state="dispatching";record.dispatchedAt=new Date().toISOString();await durable(path,record);
     try {
       const hash=await rpcs[0]("eth_sendRawTransaction",[record.raw]);
