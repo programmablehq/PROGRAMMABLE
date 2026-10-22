@@ -175,13 +175,15 @@ function sortJsonKeys(value: unknown): unknown {
 }
 
 describe("Robinhood terminal and indexer documentation", () => {
-  it("excludes the native Ethereum alias from the GitBook rewrite even before redirects run", async () => {
+  it("preserves native guides before the GitBook rewrite", async () => {
     const rewriteOnly = { ...nextConfig, redirects: async () => [] };
-    const native = await unstable_getResponseFromNextConfig({
-      url: "https://programmable.market/docs/ethereum-direct-custom-hook", nextConfig: rewriteOnly,
-    });
-    expect(getRewrittenUrl(native)).toBeNull();
-    for (const path of ["launch/launch", "ethereum-direct-custom-hook-other"]) {
+    for (const path of ["ethereum-direct-custom-hook", "models/custom-ai"]) {
+      const native = await unstable_getResponseFromNextConfig({
+        url: `https://programmable.market/docs/${path}`, nextConfig: rewriteOnly,
+      });
+      expect(getRewrittenUrl(native)).toBeNull();
+    }
+    for (const path of ["launch/launch", "ethereum-direct-custom-hook-other", "models/custom-ai-other"]) {
       const gitbook = await unstable_getResponseFromNextConfig({
         url: `https://programmable.market/docs/${path}`, nextConfig: rewriteOnly,
       });
@@ -203,7 +205,7 @@ describe("Robinhood terminal and indexer documentation", () => {
           destination: "https://proxy.gitbook.site/sites/site_V93gQ",
         },
         {
-          source: "/docs/:match((?!ethereum-direct-custom-hook$).*)",
+          source: "/docs/:match((?!ethereum-direct-custom-hook$|models/custom-ai$).*)",
           destination: "https://proxy.gitbook.site/sites/site_V93gQ/:match*",
         },
       ],
