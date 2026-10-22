@@ -6,7 +6,7 @@ import styles from "@/components/developer-docs.module.css";
 export const metadata: Metadata = {
   title: "Custom AI · Programmable Docs",
   description: "Create a coin with chat-defined fee rules on Ethereum or Robinhood.",
-  alternates: { canonical: "/docs/models/custom-ai" },
+  alternates: { canonical: "/developer-reference/custom-ai" },
 };
 const sections = [
   { id: "launch", label: "Create a coin" },
