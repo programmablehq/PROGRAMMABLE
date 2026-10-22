@@ -18,6 +18,7 @@ export type DocsNavigationGroup = {
 };
 
 const tokenModelPaths = [
+  "/docs/models/custom-ai",
   "/docs/models/module-mode",
   "/docs/models/classic",
   "/docs/models/custom",
@@ -83,6 +84,7 @@ export const docsNavigation: readonly DocsNavigationGroup[] = [
         relatedPaths: tokenModelPaths,
       },
       { depth: 1, href: "/docs/models/module-mode", label: "Module Mode" },
+      { depth: 1, href: "/docs/models/custom-ai", label: "Custom AI" },
       { depth: 1, href: "/docs/models/classic", label: "Classic" },
       { depth: 1, href: "/docs/models/custom", label: "Custom hooks" },
       {

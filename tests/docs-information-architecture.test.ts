@@ -66,6 +66,7 @@ describe("Docs information architecture", () => {
           { depth: 0, href: "/docs", label: "Overview" },
           { depth: 0, href: "/docs/tokens", label: "Launch models" },
           { depth: 1, href: "/docs/models/module-mode", label: "Module Mode" },
+          { depth: 1, href: "/docs/models/custom-ai", label: "Custom AI" },
           { depth: 1, href: "/docs/models/classic", label: "Classic" },
           { depth: 1, href: "/docs/models/custom", label: "Custom hooks" },
           {

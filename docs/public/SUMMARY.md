@@ -7,6 +7,7 @@
 - [Module Mode](models/module-mode.md)
   - [Launch a coin](creators/launch.md)
 - [Custom Launch](models/custom.md)
+- [Custom AI](models/custom-ai.md)
 - [Fees and revenue](economics.md)
   - [Creator earnings](creators/earnings.md)
 - [V4 token](v4-token.md)

@@ -611,15 +611,16 @@ export function evaluateReadModelOperationsSourceContracts(
     "ops-cron-exact-set",
     Array.isArray(activeCrons) &&
       activeCrons.length === ACTIVE_CRONS.length &&
-      crons?.size === ACTIVE_CRONS.length + 1 &&
+      crons?.size === ACTIVE_CRONS.length + 2 &&
       crons.get("/api/ops/robinhood-index") === "* * * * *" &&
+      crons.get("/api/ops/custom-ai-index") === "* * * * *" &&
       ACTIVE_CRONS.every((expected, index) =>
         activeCrons[index]?.id === expected.id &&
         activeCrons[index]?.path === expected.path &&
         activeCrons[index]?.schedule === expected.schedule &&
         crons.get(expected.path) === expected.schedule
       ),
-    "Vercel schedules protocol revenue, Custom Launch V2 and the isolated Robinhood stamp index; retired workers stay disabled",
+    "Vercel schedules protocol revenue, Custom Launch V2 and the isolated Robinhood and Custom AI indexes; retired workers stay disabled",
   );
 
   const protocolCron = activeCrons?.find(({ id }) => id === "protocol-revenue");

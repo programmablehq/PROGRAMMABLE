@@ -1,0 +1,26 @@
+{
+  "weth9": {
+    "runtimeHash": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+    "compiler": "0.4.19+commit.c4cbbb05",
+    "contract": "WETH9.sol:WETH9",
+    "sourceHash": "991e959fe30a34f1545e19953a72e091e55a4c6660691bc1a5a65e594b1e3941",
+    "sourceUrl": "https://sourcify.dev/server/v2/contract/1/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2?fields=sources,runtimeBytecode.onchainBytecode,compilation",
+    "match": "match"
+  },
+  "transparentProxy": {
+    "runtimeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+    "compiler": "0.8.16+commit.07a7930e",
+    "contract": "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
+    "sourceHash": "bd398e8f474e1b99ea436b74c133785f0121abfd72cb979a713d595b294e4f49",
+    "sourceUrl": "https://sourcify.dev/server/v2/contract/4663/0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73?fields=sources,runtimeBytecode.onchainBytecode,compilation",
+    "match": "exact_match"
+  },
+  "aeWETH": {
+    "runtimeHash": "0xbe1295f37be34ffe03ad779bda0ef278907e1856b51a3be2f35ee541d75d4650",
+    "compiler": "0.8.16+commit.07a7930e",
+    "contract": "contracts/tokenbridge/libraries/aeWETH.sol:aeWETH",
+    "sourceHash": "3b259003a21b90204799814d1e25499468fbe3961ec30ee7bb45715808ce1644",
+    "sourceUrl": "https://sourcify.dev/server/v2/contract/4663/0xc6b81b429797e0f555440b70cd99e032d7ae947e?fields=sources,runtimeBytecode.onchainBytecode,compilation",
+    "match": "match"
+  }
+}

@@ -109,6 +109,31 @@ test("a newer registry router preserves the exact reviewed official deployment a
   }
 });
 
+test("a newer quoter requires the exact immutable official record while runtime pins stay enforced", async () => {
+  const dataset = await readFixture("official-deployments.json");
+  const snapshot = await readFixture("ethereum-mainnet.json");
+  const original = structuredClone(snapshot);
+  const quoter = dataset.records.find(record => record.contract === "V4Quoter" && record.chainId === 1);
+  quoter.address = "0x99bd42B2B22e531f283b7F8a86dFf631EB16A9D1";
+  const deployment = { chainId: "1", latest: { V4Quoter: {
+    address: snapshot.contracts.v4Quoter.address, proxy: false,
+    deploymentTxn: `0x${"34".repeat(32)}`, commitHash: snapshot.contracts.v4Quoter.sourceRef,
+  } } };
+  assert.throws(() => verifierImport.verifyOfficialDeploymentSnapshot({ dataset, snapshot }), /v4Quoter address mismatch/);
+  const result = verifierImport.verifyOfficialDeploymentSnapshot({ dataset, snapshot, pinnedQuoterDeployment: deployment });
+  assert.equal(result.verifiedCount, 6);
+  assert.match(result.reviewWarnings[0], /V4Quoter registry address drift/);
+  assert.deepEqual(snapshot, original);
+  for (const invalid of [
+    { ...deployment, chainId: "11155111" },
+    ...[{ address: quoter.address }, { commitHash: "abcdef0" }, { proxy: true }, { deploymentTxn: "0x" }]
+      .map(change => ({ ...deployment, latest: { V4Quoter: { ...deployment.latest.V4Quoter, ...change } } })),
+  ]) assert.throws(() => verifierImport.verifyOfficialDeploymentSnapshot({ dataset, snapshot, pinnedQuoterDeployment: invalid }));
+  const hashes = Object.fromEntries(Object.entries(snapshot.contracts).map(([key, value]) => [key, value.runtimeCodeHash]));
+  hashes.v4Quoter = `0x${"ab".repeat(32)}`;
+  assert.throws(() => verifierImport.verifyMainnetRuntimeHashes({ snapshot, runtimeCodeHashes: hashes }), /v4Quoter runtime hash mismatch/);
+});
+
 test("flags registry metadata drift for review without rewriting the pinned snapshot", async () => {
   const dataset = await readFixture("official-deployments.json");
   const snapshot = await readFixture("ethereum-mainnet.json");

@@ -12,6 +12,7 @@ import {
   verifyMainnetRuntimeHashes,
   verifyOfficialDeploymentSnapshot,
   verifyOfficialPinnedRouter,
+  verifyOfficialPinnedQuoter,
 } from "./verify-official-deployments-lib.mjs";
 
 const EXPECTED_DATASET_REPOSITORY = "https://github.com/Uniswap/contracts";
@@ -167,13 +168,25 @@ for (const network of networks) {
     record.chainId === snapshot.chainId &&
     record.protocol === "universal-router" && record.contract === "UniversalRouter");
   let pinnedRouterDeployment;
-  if (currentRouter?.address.toLowerCase() !== snapshot.contracts.universalRouter.address.toLowerCase()) {
+  let pinnedQuoterDeployment;
+  const currentQuoter = dataset.records.find((record) =>
+    record.chainId === snapshot.chainId && record.protocol === "v4" && record.contract === "V4Quoter");
+  const routerDrift = currentRouter?.address.toLowerCase() !== snapshot.contracts.universalRouter.address.toLowerCase();
+  const quoterDrift = currentQuoter?.address.toLowerCase() !== snapshot.contracts.v4Quoter.address.toLowerCase();
+  if (routerDrift || quoterDrift) {
     const pinnedResponse = await fetch(pinnedRouterDeploymentUrl(snapshot), {
       headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000),
     });
-    assert(pinnedResponse.ok, `Pinned official router deployment returned HTTP ${pinnedResponse.status}`);
-    pinnedRouterDeployment = await pinnedResponse.json();
-    verifyOfficialPinnedRouter({ snapshot, deployment: pinnedRouterDeployment });
+    assert(pinnedResponse.ok, `Pinned official deployment returned HTTP ${pinnedResponse.status}`);
+    const deployment = await pinnedResponse.json();
+    if (routerDrift) {
+      pinnedRouterDeployment = deployment;
+      verifyOfficialPinnedRouter({ snapshot, deployment });
+    }
+    if (quoterDrift) {
+      pinnedQuoterDeployment = deployment;
+      verifyOfficialPinnedQuoter({ snapshot, deployment });
+    }
   }
   if (network.file === "ethereum-mainnet.json") {
     mainnetSnapshot = snapshot;
@@ -181,6 +194,7 @@ for (const network of networks) {
       dataset,
       snapshot,
       pinnedRouterDeployment,
+      pinnedQuoterDeployment,
     });
     reviewWarnings.push(...verification.reviewWarnings);
   } else {
@@ -221,6 +235,13 @@ for (const network of networks) {
     if (key === "universalRouter" && pinnedRouterDeployment) {
       if (network.file !== "ethereum-mainnet.json") {
         reviewWarnings.push(`Universal Router registry address drift on ${network.file}: pinned ${local.address}, upstream ${official.address}; pinned deployment verified at ${pinnedRouterDeploymentUrl(snapshot)}`);
+      }
+      verifiedCount += 1;
+      continue;
+    }
+    if (key === "v4Quoter" && pinnedQuoterDeployment) {
+      if (network.file !== "ethereum-mainnet.json") {
+        reviewWarnings.push(`V4Quoter registry address drift on ${network.file}: pinned ${local.address}, upstream ${official.address}; pinned deployment verified at ${pinnedRouterDeploymentUrl(snapshot)}`);
       }
       verifiedCount += 1;
       continue;

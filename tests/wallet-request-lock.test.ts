@@ -129,7 +129,7 @@ describe("production wallet request lock", () => {
   it("routes native and engine preparations through one account lock and the same wallet authority checks", () => {
     const provider = readFileSync(join(process.cwd(), "components/wallet-provider.tsx"), "utf8");
     const start = provider.indexOf("const sendModuleModeTransaction = useCallback");
-    const entrypoint = provider.slice(start, provider.indexOf("const signPredictionPermit = useCallback", start));
+    const entrypoint = provider.slice(start, provider.indexOf("const sendCustomAIWalletStep = useCallback", start));
     expect(entrypoint).toContain("prepared: PreparedModuleModeTransaction");
     expect(entrypoint.match(/runWithBrowserWalletRequestLock\(/g)).toHaveLength(1);
     expect(entrypoint.match(/method: "eth_sendTransaction"/g)).toHaveLength(1);

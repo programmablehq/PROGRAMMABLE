@@ -130,12 +130,16 @@ describe("displayed-coin indexing reset operations", () => {
     expect(network).not.toHaveBeenCalled();
   });
 
-  it("allows the isolated Robinhood stamp index alongside the independent production jobs", async () => {
+  it("allows the isolated Robinhood and Custom AI indexes alongside the independent production jobs", async () => {
     const config = JSON.parse(await readFile("vercel.json", "utf8")) as {
       crons?: ReadonlyArray<{ path: string; schedule: string }>;
     };
 
     expect(config.crons).toEqual([
+      {
+        path: "/api/ops/custom-ai-index",
+        schedule: "* * * * *",
+      },
       {
         path: "/api/ops/protocol-revenue",
         schedule: "* * * * *",

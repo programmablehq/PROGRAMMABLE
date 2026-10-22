@@ -13,7 +13,7 @@ cbor_metadata = false
 ffi = false
 # These surfaces use separate source-bound compiler profiles. The protected
 # Contracts release lane and npm verify run their complete suites separately.
-skip = ["src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**"]
+skip = ["src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**", "src/custom-ai/**", "test/custom-ai/**", "script/custom-ai/**"]
 fs_permissions = [
   { access = "read", path = "./dependencies" },
   { access = "read", path = "./spec" },
@@ -32,6 +32,22 @@ fail_on_revert = false
 [profile.ci]
 fuzz = { runs = 10_000, max_test_rejects = 65_536 }
 invariant = { runs = 1_000, depth = 128, fail_on_revert = false }
+
+# Isolated Custom AI core and local lifecycle verification; no production deployment scripts.
+[profile.custom-ai]
+skip = []
+src = "src/custom-ai"
+test = "test/custom-ai"
+script = "script/custom-ai"
+out = "out/custom-ai"
+cache_path = "cache/custom-ai"
+via_ir = true
+optimizer_runs = 200
+auto_detect_remappings = false
+
+[profile.custom-ai.fuzz]
+runs = 1_000
+max_test_rejects = 65_536
 
 # Source-bound foundation compiler profile; does not change existing deployments.
 [profile.module-foundation]

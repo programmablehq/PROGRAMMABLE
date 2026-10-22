@@ -59,7 +59,22 @@ export function verifyOfficialPinnedRouter({ snapshot, deployment }) {
   return { url, deploymentTransaction: official.deploymentTxn };
 }
 
-export function verifyOfficialDeploymentSnapshot({ dataset, snapshot, pinnedRouterDeployment }) {
+export function verifyOfficialPinnedQuoter({ snapshot, deployment }) {
+  const url = pinnedRouterDeploymentUrl(snapshot);
+  assert(Number(deployment?.chainId) === snapshot.chainId, "Pinned quoter deployment chain mismatch");
+  const local = snapshot.contracts?.v4Quoter;
+  const official = deployment.latest?.V4Quoter;
+  assert(local && official, "Pinned official V4Quoter deployment is missing");
+  assert(official.proxy === false, "Pinned V4Quoter must not be a proxy");
+  assert(/^0x[0-9a-fA-F]{64}$/.test(official.deploymentTxn ?? ""), "Pinned quoter deployment transaction is missing");
+  assert(official.address?.toLowerCase() === local.address.toLowerCase(), "v4Quoter address mismatch in pinned official deployment");
+  if (official.commitHash) {
+    assert(normalizeSourceRef(local.sourceRef) === official.commitHash.toLowerCase(), "v4Quoter source reference mismatch in pinned official deployment");
+  }
+  return { url, deploymentTransaction: official.deploymentTxn };
+}
+
+export function verifyOfficialDeploymentSnapshot({ dataset, snapshot, pinnedRouterDeployment, pinnedQuoterDeployment }) {
   assert(dataset.version === "1.0.0", `Unsupported dataset ${dataset.version}`);
   assert(
     dataset.source?.repo === EXPECTED_DATASET_REPOSITORY,
@@ -108,6 +123,13 @@ export function verifyOfficialDeploymentSnapshot({ dataset, snapshot, pinnedRout
         official.address.toLowerCase() !== local.address.toLowerCase()) {
       const pinned = verifyOfficialPinnedRouter({ snapshot, deployment: pinnedRouterDeployment });
       reviewWarnings.push(`Universal Router registry address drift: pinned ${local.address}, upstream ${official.address}; pinned deployment verified at ${pinned.url}`);
+      verifiedCount += 1;
+      continue;
+    }
+    if (key === "v4Quoter" && pinnedQuoterDeployment &&
+        official.address.toLowerCase() !== local.address.toLowerCase()) {
+      const pinned = verifyOfficialPinnedQuoter({ snapshot, deployment: pinnedQuoterDeployment });
+      reviewWarnings.push(`V4Quoter registry address drift: pinned ${local.address}, upstream ${official.address}; pinned deployment verified at ${pinned.url}`);
       verifiedCount += 1;
       continue;
     }

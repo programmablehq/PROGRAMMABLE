@@ -1,0 +1,104 @@
+.workspace { width: min(1040px, calc(100% - 48px)); margin: 32px auto 64px; color: #f4f1eb; }
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: clamp(24px, 4vw, 48px); align-items: stretch; }
+.conversation { display: flex; flex-direction: column; min-width: 0; min-height: 480px; padding: 12px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.transcript { flex: 1; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; padding: 12px 8px 24px; }
+.empty { min-height: 100%; display: grid; align-content: center; text-align: center; padding: 24px; }
+.empty h2 { margin: 0; font-size: clamp(25px, 3vw, 30px); line-height: 1.25; font-weight: 400; letter-spacing: -.035em; text-wrap: balance; }
+.message { width: fit-content; max-width: 100%; margin-block: 0 28px; }
+.message:last-child { margin-bottom: 0; }
+.message[data-role="user"] { max-width: min(85%, 580px); margin-inline-start: auto; padding: 11px 16px; border-radius: 18px 18px 5px 18px; background: #20201e; }
+.message[data-role="assistant"] { padding-block: 2px; }
+.messageText { font-size: 16px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.revealing::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-inline-start: 3px; vertical-align: -.1em; background: #b8b4ad; }
+.typing { display: flex; align-items: center; gap: 5px; width: fit-content; min-height: 40px; padding: 0 15px; border-radius: 16px 16px 16px 5px; background: #20201e; }
+.typing span { width: 5px; height: 5px; border-radius: 50%; background: #c7c2ba; }
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 4px; border: 1px solid #3a3935; border-radius: 12px; background: #171716; }
+.composer:focus-within { border-color: #77736b; box-shadow: 0 0 0 1px #77736b; }
+.composer textarea { --input-focus-fill: transparent; display: block; flex: 1; min-width: 0; width: 100%; min-height: 40px; max-height: 176px; box-sizing: border-box; padding: 8px 8px 8px 10px; resize: none; overflow-y: auto; scrollbar-width: thin; border: 0; border-radius: 8px; background: transparent; color: #f4f1eb; font: inherit; font-size: 16px; line-height: 24px; }
+.composer textarea::placeholder { color: #a5a19a; }
+.send { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border: 0; border-radius: 8px; background: #ede7dc; color: #22201c; cursor: pointer; }
+.send[data-empty="true"] { background: #30302d; color: #b8b4ad; }
+.send:hover { background: #fff8ed; color: #22201c; }
+.workspace button:disabled { opacity: .4; cursor: default; }
+.workspace button:focus-visible, .workspace summary:focus-visible, .workspace pre:focus-visible { outline: 2px solid #ede7dc; outline-offset: 4px; border-radius: 4px; }
+.notice, .error { margin: 0 0 12px; font-size: 13px; line-height: 1.5; }
+.notice { color: #b8b4ad; }
+.error { color: #ffc2af; }
+.note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
+/* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */
+.coinPanel { min-width: 0; }
+.coinPreview { text-align: center; }
+.artworkWrap { position: relative; width: min(100%, 200px); margin: 0 auto 20px; }
+.artwork { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px dashed #4a4842; border-radius: 22px; background: #171716; color: #aaa69f; font: inherit; font-size: 13px; cursor: pointer; }
+.artwork:has(img) { border: 0; outline: 1px solid rgb(255 255 255 / .1); outline-offset: -1px; }
+.artwork img { object-fit: cover; }
+.artwork:hover { background: #20201e; color: #f4f1eb; border-color: #77736b; }
+.removeImage { position: absolute; top: -8px; right: -8px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid #44413b; border-radius: 50%; background: #22211f; color: #f4f1eb; cursor: pointer; }
+.imageLoading { position: absolute; inset: 0; display: grid; place-content: center; background: #171716b3; }
+.coinIdentity { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 8px; overflow-wrap: anywhere; }
+.coinIdentity h2 { margin: 0; font-size: 22px; line-height: 1.35; font-weight: 500; letter-spacing: -.025em; }
+.coinIdentity > span { font-size: 13px; color: #aaa69f; }
+.coinBio { margin: 12px 0 0; font-size: 14px; line-height: 1.65; color: #c7c2ba; overflow-wrap: anywhere; text-wrap: pretty; }
+.coinForm { margin-top: 32px; }
+.coinForm fieldset { padding: 0; margin: 0; min-width: 0; border: 0; display: grid; gap: 18px; }
+.coinForm label { display: grid; gap: 8px; color: #c7c2ba; font-size: 13px; }
+.fieldLabel { display: block; margin-bottom: 8px; color: #c7c2ba; font-size: 13px; }
+.fieldPair { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; }
+.networkPair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chainOptions { display: flex; gap: 4px; min-height: 46px; padding: 3px; border: 1px solid #44413b; border-radius: 12px; background: #171716; }
+.chainOptions button { display: grid; place-items: center; flex: 1; min-width: 40px; min-height: 38px; padding: 6px; border: 0; border-radius: 8px; background: transparent; color: #aaa69f; cursor: pointer; }
+.chainOptions button[aria-pressed="true"] { background: #3b3934; color: #f4f1eb; }
+.chainOptions button:hover:not(:disabled) { background: #302e29; color: #f4f1eb; }
+.chainOptions button[aria-pressed="true"]:hover:not(:disabled) { background: #45423b; }
+.chainOptions button:focus-visible { outline-offset: 1px; }
+.chainLogo { display: block; width: 20px; height: 22px; object-fit: contain; }
+.tickerInput { position: relative; }
+.tickerInput > span { position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%); color: #aaa69f; pointer-events: none; }
+.coinForm .tickerInput input { padding-inline-start: 27px; }
+.coinForm input, .selectTrigger { --input-focus-fill: #171716; box-sizing: border-box; min-width: 0; width: 100%; min-height: 46px; padding: 11px 12px; border: 1px solid #44413b; border-radius: 12px; background: #171716; color: #f4f1eb; font: inherit; font-size: 14px; }
+.coinForm input::placeholder { color: #8f8b84; }
+.coinForm input:focus-visible { outline: 2px solid #ede7dc; outline-offset: 2px; }
+.coinForm input[aria-invalid="true"] { border-color: #db9b88; }
+.coinPanel .error:empty { display: none; }
+.coinPanel .error { margin: 8px 0 0; font-size: 12px; }
+.coinForm .note { margin: -10px 0 0; }
+.coinForm #custom-ai-buy-help { margin-top: -10px; }
+.select { position: relative; min-width: 0; }
+.selectTrigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: start; cursor: pointer; }
+.selectTrigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selectTrigger > svg { flex-shrink: 0; color: #aaa69f; }
+.selectMenu { position: absolute; inset-inline: 0; top: calc(100% + 6px); padding: 5px; border: 1px solid #44413b; border-radius: 14px; background: #22211e; box-shadow: 0 6px 20px #0006, 0 1px 4px #0008; z-index: 5; }
+.selectMenu button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px; border: 0; border-radius: 9px; background: transparent; color: #f4f1eb; font: inherit; font-size: 13px; text-align: start; cursor: pointer; }
+.selectMenu button:hover, .selectMenu button:focus { background: #393630; }
+.selectMenu button:focus-visible { outline-offset: -2px; }
+.amountInput { position: relative; }
+.amountInput input { padding-inline-end: 65px; }
+.amountInput > span { position: absolute; inset-inline-end: 13px; top: 50%; transform: translateY(-50%); color: #aaa69f; font-size: 13px; pointer-events: none; }
+.createButton { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 26px; padding: 12px 16px; border: 0; border-radius: 13px; background: #ede7dc; color: #22201c; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.workspace .createButton:disabled { opacity: .65; cursor: not-allowed; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .typing span { animation: pulse 1.15s ease-in-out infinite; }
+  .typing span:nth-child(2) { animation-delay: .14s; }
+  .typing span:nth-child(3) { animation-delay: .28s; }
+  .composer { transition: border-color 150ms ease-out; }
+  .send { transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+  .send:active { scale: .96; }
+  .artwork, .selectTrigger { transition: background-color 150ms ease-out, border-color 150ms ease-out; }
+  .createButton { transition: scale 150ms ease-out; }
+  .createButton:active:not(:disabled) { scale: .96; }
+  .imageLoading > svg { animation: spin 1s linear infinite; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 740px) {
+  .studio { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .conversation { height: clamp(360px, 60dvh, 520px); min-height: 0; }
+  .coinPanel { width: min(100%, 440px); margin-inline: auto; }
+  .coinForm input { font-size: 16px; }
+}
+@keyframes pulse { 0%, 70%, 100% { opacity: .35; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
+@media (max-width: 560px) {
+  .workspace { width: calc(100% - 32px); margin: 24px auto 40px; }
+  .transcript { padding-inline: 4px; }
+  .message[data-role="user"] { max-width: 91%; }
+}
