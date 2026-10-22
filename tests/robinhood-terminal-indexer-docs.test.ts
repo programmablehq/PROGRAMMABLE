@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { toEventSelector, type AbiEvent } from "viem";
 import { describe, expect, it } from "vitest";
-import { getRewrittenUrl, unstable_getResponseFromNextConfig } from "next/experimental/testing/server";
+import { getRedirectUrl, getRewrittenUrl, unstable_getResponseFromNextConfig } from "next/experimental/testing/server";
 
 import nextConfig from "../next.config";
 
@@ -175,6 +175,32 @@ function sortJsonKeys(value: unknown): unknown {
 }
 
 describe("Robinhood terminal and indexer documentation", () => {
+  it("redirects the Custom AI guide before the edge GitBook rewrite", async () => {
+    const redirect = {
+      source: "/docs/models/custom-ai",
+      destination: "/developer-reference/custom-ai",
+      permanent: false,
+    };
+    expect(vercelConfig.redirects).toContainEqual(redirect);
+    for (const suffix of ["", "/"]) {
+      let response = await unstable_getResponseFromNextConfig({
+        url: `https://programmable.market/docs/models/custom-ai${suffix}`,
+        nextConfig,
+      });
+      if (suffix) {
+        expect(getRedirectUrl(response)).toBe("https://programmable.market/docs/models/custom-ai");
+        response = await unstable_getResponseFromNextConfig({
+          url: getRedirectUrl(response)!, nextConfig,
+        });
+      }
+      expect(getRedirectUrl(response)).toBe("https://programmable.market/developer-reference/custom-ai");
+    }
+    const native = await unstable_getResponseFromNextConfig({
+      url: "https://programmable.market/developer-reference/custom-ai", nextConfig,
+    });
+    expect(getRewrittenUrl(native)).toBeNull();
+    expect(getRedirectUrl(native)).toBeNull();
+  });
   it("preserves native guides before the GitBook rewrite", async () => {
     const rewriteOnly = { ...nextConfig, redirects: async () => [] };
     for (const path of ["ethereum-direct-custom-hook", "models/custom-ai"]) {
