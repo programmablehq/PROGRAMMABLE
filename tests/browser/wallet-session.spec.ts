@@ -81,7 +81,7 @@ test("only the admin wallet gets one dashboard entry, including keyboard and acc
   const link = header.getByRole("link", { name: "Admin Dashboard", exact: true });
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute("href", "/admin/modules");
-  for (const name of ["API keys", "Docs", "Analytics", "Profile"]) {
+  for (const name of ["Custom AI", "API keys", "Docs", "Analytics", "Profile"]) {
     await page.keyboard.press("Tab");
     await expect(header.getByRole("link", { name, exact: true })).toBeFocused();
   }
