@@ -6,18 +6,11 @@ import type { ChatMessage, ChatRequest, Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import { useWallet } from "@/components/wallet-provider";
-import { aiRequest, sendAIChat, type AISessionHeaders } from "@/lib/custom-ai/client";
+import { sendAIChat, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ImageReceipt, StoredStudio, StudioState } from "@/lib/custom-ai/studio";
+import { loadStudio, restoreStudio, saveStudio, studioBase, studioSnapshot, StudioConflictError, type StudioBase } from "@/lib/custom-ai/studio-sync";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import styles from "./workspace.module.css";
-
-// Compare values, not JSONB key order. Restoring a saved draft is not an edit.
-function studioSnapshot(state: StudioState) {
-  const { settings, image } = state;
-  return JSON.stringify([settings.name, settings.symbol, settings.chainId, settings.pairToken, settings.initialBuy,
-    state.messages.map(message => [message.role, message.content]), state.draftId ?? null,
-    image ? [image.id, image.url, image.hash] : null]);
-}
 
 // Reveal only the complete provider answer. Partial display text never enters
 // the conversation sent to the API, and stopping reveals the received answer.
@@ -83,6 +76,14 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const headersRef = useRef(headers);
   useLayoutEffect(() => { headersRef.current = headers; }, [headers]);
   const remote = useRef({ ready: false, revision: 0, blocked: false, saved: "" });
+  const lifetime = useRef<AbortController | null>(null);
+  const cachedBase = useRef<StudioBase | undefined>(undefined);
+  const saveEpoch = useRef(0);
+  const [saveRevision, setSaveRevision] = useState(0);
+  const [restoreRevision, setRestoreRevision] = useState(0);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [conflict, setConflict] = useState<{ server: StoredStudio | null } | null>(null);
+  const [previewRevision, setPreviewRevision] = useState(0);
   const saveQueue = useRef(Promise.resolve());
   const storageKey = `programmable.custom-ai.studio.v1:${owner}`;
   const [chatRevision, setChatRevision] = useState(0);
@@ -94,19 +95,30 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
 
   useEffect(() => {
     let cancelled = false;
+    let local: StudioState | null = null;
+    let previousBase: StudioBase | undefined;
+    const controller = new AbortController();
+    lifetime.current = controller;
+    saveEpoch.current += 1;
+    remote.current.ready = false;
     void readDraftCache<string>(storageKey).then(raw => {
       if (cancelled) return;
       if (typeof raw === "string" && raw.length < 400_000) {
         const saved = JSON.parse(raw);
         if (saved.version === 1 && Array.isArray(saved.messages) && saved.messages.length <= 48
           && saved.messages.every((message: ChatMessage) => ["user","assistant"].includes(message.role) && typeof message.content === "string")) {
-          setMessages(saved.messages); setSettings(applyCoinSetupPatch(EMPTY_COIN_SETUP, saved.settings));
+          const settings = applyCoinSetupPatch(EMPTY_COIN_SETUP, saved.settings);
+          local = { messages: saved.messages, settings, draftId: saved.draftId, image: saved.image };
+          if (Number.isSafeInteger(saved.syncBase?.revision) && saved.syncBase.revision >= 0 && typeof saved.syncBase.snapshot === "string") previousBase = saved.syncBase;
+          cachedBase.current = previousBase;
+          setMessages(saved.messages); setSettings(settings); setImageReceipt(saved.image);
           if (saved.draft && typeof saved.draft.source === "string") setDraft(saved.draft);
           if (typeof saved.draftId === "string") setDraftId(saved.draftId);
           retry.current = saved.retry ?? null;
           if (saved.retry?.messages?.at(-1)?.role === "user") {
             setMessages(saved.retry.messages.slice(0, -1));
             setInput(saved.retry.messages.at(-1).content);
+            local.messages = saved.retry.messages.slice(0, -1);
           }
         }
       }
@@ -115,25 +127,32 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         if (cancelled) return;
         if (!localPreview && owner !== "signed-out") {
           try {
-            const server = await aiRequest<StoredStudio | null>(`/studio?account=${owner}`, headersRef.current);
+            const server = await loadStudio(owner, () => headersRef.current(), controller.signal);
             if (cancelled) return;
-            if (server) {
+            const restored = restoreStudio(local, previousBase, server);
+            if (server && !restored.keepLocal) {
               setMessages(server.state.messages); setSettings(server.state.settings);
               setDraftId(server.state.draftId); setDraft(server.draft); setImageReceipt(server.state.image);
             }
-            remote.current = { ready: true, revision: server?.revision ?? 0, blocked: false,
-              saved: server ? studioSnapshot(server.state) : "" };
-          } catch { if (!cancelled) setNotice("Your online draft could not be loaded. This device still has its copy."); }
+            remote.current = { ready: true, revision: restored.base.revision, blocked: restored.conflict, saved: restored.base.snapshot };
+            if (!restored.conflict) cachedBase.current = restored.base;
+            if (restored.conflict) { setConflict({ server }); setNotice("This device has unsaved changes and your online draft is different. Choose which draft to keep."); }
+            else setNotice("");
+          } catch {
+            if (!cancelled) { setSaveFailed(true); setNotice("Your online draft could not be loaded. This device still has its copy."); }
+          }
         }
         if (!cancelled) setRestored(true);
       });
-    return () => { cancelled = true; };
-  }, [storageKey, localPreview, owner]);
+    return () => { cancelled = true; controller.abort(); };
+  }, [storageKey, localPreview, owner, restoreRevision]);
   useEffect(() => {
     if (!restored || owner === "signed-out") return;
-    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, settings, draft, draftId, retry: retry.current }))
+    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, settings, draft, draftId, image: imageReceipt, retry: retry.current,
+      // Keep the last shared version so a failed save survives a reload.
+      syncBase: cachedBase.current }))
       .catch(() => setNotice("This browser could not save your draft. Keep this tab open."));
-  }, [storageKey, owner, restored, messages, settings, draft, draftId]);
+  }, [storageKey, owner, restored, messages, settings, draft, draftId, imageReceipt, saveRevision]);
 
   useEffect(() => {
     if (!restored || localPreview || busy || !remote.current.ready || remote.current.blocked) return;
@@ -141,22 +160,51 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     const state: StudioState = { settings, messages, draftId, image: imageReceipt };
     const snapshot = studioSnapshot(state);
     if (snapshot === remote.current.saved) return;
+    const signal = lifetime.current!.signal;
+    const epoch = saveEpoch.current;
     const timer = setTimeout(() => {
       saveQueue.current = saveQueue.current.then(async () => {
-        if (remote.current.blocked || snapshot === remote.current.saved) return;
+        if (signal.aborted || epoch !== saveEpoch.current || remote.current.blocked || snapshot === remote.current.saved) return;
         try {
-          const saved = await aiRequest<{ revision: number }>("/studio", headersRef.current, { account: owner, revision: remote.current.revision, state });
+          const saved = await saveStudio({ account: owner, headers: () => headersRef.current(), state,
+            base: { revision: remote.current.revision, snapshot: remote.current.saved }, signal,
+            onRetry: () => setNotice("Saved on this device. Reconnecting to save online…") });
+          if (signal.aborted) return;
           remote.current.revision = saved.revision;
-          remote.current.saved = snapshot;
+          remote.current.saved = saved.snapshot;
+          cachedBase.current = saved;
+          setSaveRevision(value => value + 1); setSaveFailed(false);
+          setNotice(current => current.startsWith("Saved on this device.") ? "" : current);
         } catch (cause) {
+          if (signal.aborted) return;
           remote.current.blocked = true;
+          if (cause instanceof StudioConflictError) setConflict({ server: cause.server });
+          else setSaveFailed(true);
           setNotice(cause instanceof Error ? `Saved on this device. ${cause.message}`
             : "Your changes are saved on this device. Reload before editing the online draft again.");
         }
       });
     }, 750);
     return () => clearTimeout(timer);
-  }, [restored, localPreview, busy, settings, messages, draftId, imageReceipt, owner]);
+  }, [restored, localPreview, busy, settings, messages, draftId, imageReceipt, owner, saveRevision]);
+
+  async function resolveConflict(useOnline: boolean) {
+    if (!conflict) return;
+    const server = conflict.server;
+    if (useOnline) {
+      try { await writeDraftCache(`${storageKey}:image`, null); }
+      catch { setNotice("This browser could not update the saved image. Keep this tab open."); return; }
+      if (lifetime.current?.signal.aborted) return;
+      setMessages(server?.state.messages ?? []); setSettings(server?.state.settings ?? EMPTY_COIN_SETUP);
+      setDraftId(server?.state.draftId); setDraft(server?.draft); setImageReceipt(server?.state.image); retry.current = null;
+      setPreviewRevision(value => value + 1);
+    }
+    const base = studioBase(server);
+    cachedBase.current = base;
+    saveEpoch.current += 1;
+    remote.current = { ready: true, revision: base.revision, saved: base.snapshot, blocked: false };
+    setConflict(null); setNotice(""); setSaveRevision(value => value + 1);
+  }
 
   useEffect(() => () => pending.current?.abort(), []);
   useLayoutEffect(() => {
@@ -234,6 +282,16 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         {busy ? "Custom AI is working on your reply." : notice}
       </span>
       {notice && <p className={styles.notice}>{notice}</p>}
+      {conflict && <div className={styles.saveActions}>
+        <button type="button" disabled={busy} onClick={() => resolveConflict(false)}>Keep this device’s draft</button>
+        <button type="button" disabled={busy} onClick={() => resolveConflict(true)}>Use online draft</button>
+      </div>}
+      {saveFailed && !conflict && <div className={styles.saveActions}>
+        <button type="button" disabled={busy} onClick={() => {
+          if (!remote.current.ready) { setRestored(false); setSaveFailed(false); setConflict(null); setRestoreRevision(value => value + 1); }
+          else { remote.current.blocked = false; setSaveFailed(false); setSaveRevision(value => value + 1); }
+        }}>Retry saving</button>
+      </div>}
       {error && <p className={styles.error} role="alert" id="custom-ai-error">{error}</p>}
 
       <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send(); }}>
@@ -259,7 +317,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. Messages are sent to Claude.</p>
     </section>
 
-    <CustomAILaunchPreview draft={draft} disabled={busy || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
+    <CustomAILaunchPreview key={previewRevision} draft={draft} disabled={busy || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}
       imageReceipt={imageReceipt} onImageReceipt={setImageReceipt} />
     </div>
