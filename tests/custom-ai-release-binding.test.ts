@@ -12,7 +12,10 @@ it("binds active Custom AI deployments to finalized funded acceptance", () => {
   expect(proof.bundleHash).toBe(bundle.bundleHash);
   expect(proof.sourceVerification).toHaveLength(20);
   for (const [chainId, deployment] of Object.entries(deployments.networks)) {
-    if (deployment.status !== "active") continue;
+    if (!deployment.acceptanceEvidenceHash) {
+      expect(deployment.status).not.toBe("active");
+      continue;
+    }
     expect(deployment.acceptanceEvidenceHash).toBe(digest);
     const chain = proof.chains[chainId];
     expect(chain.complete).toBe(true);
