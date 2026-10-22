@@ -23,6 +23,12 @@ New Custom Launch approvals on Ethereum Mainnet and Robinhood require a **0.3% (
 
 Before approval, Programmable records buy and sell checks for the exact submitted source and configuration, including the fee asset, assessment base, fixed recipient, backing and claim path. The Ethereum Native30 reference contracts use the gross native ETH leg and round up per trade. External routes depend on that hook's enforcement. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
 
+## Custom AI
+
+[Custom AI](models/custom-ai.md) allocates **0.5% (50 bps)** to Programmable on every buy and sell through the launch pool, including the initial buy. The generated fee module can add a fee, with a maximum combined trading fee of **15%**. Normal token transfers are free.
+
+Fees accrue in the paired asset. A **1 WETH** trade with a **3% total fee** allocates **0.005 WETH** to Programmable and **0.025 WETH** to the generated module's recipients. The fixed platform fee and the module's fees have separate accounting and claim paths.
+
 ## Platform revenue
 
 Programmable allocates fee revenue after it has actually been collected. This includes its platform fees and the quote-asset fees collected from its own V4 liquidity position.
@@ -40,7 +46,7 @@ Fee tracking covers these Programmable wallets together on Ethereum and Robinhoo
 
 | Wallet | Main role |
 | --- | --- |
-| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Current platform fees from Module Mode and Custom Launches |
+| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Current platform fees from Module Mode, Custom Launches and Custom AI |
 | `0x39544A7023081B56D7405c1af0bFaf72da7e24F6` | V4 liquidity fees and the project's burn wallet |
 | `0x4957f49620AFf3Adbbe8195a4f633E49cc93376c` | Fees from earlier Ethereum contracts |
 
