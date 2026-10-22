@@ -4,7 +4,7 @@
     "1": {
       "chainId": 1,
       "bundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
-      "status": "staged",
+      "status": "active",
       "deploymentBlock": "26245676",
       "factory": {
         "address": "0x8E40C2917Bf43f6d93710f8Dcc7A449BD76525aD",
@@ -28,7 +28,7 @@
     "4663": {
       "chainId": 4663,
       "bundleHash": "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249",
-      "status": "staged",
+      "status": "active",
       "deploymentBlock": "94826255",
       "factory": {
         "address": "0xEE92C51F4d99b269e50Bb567d2Adf04141A603b4",
