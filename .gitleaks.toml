@@ -632,3 +632,17 @@ paths = [
   '''^docs/operations/releases/custom-launch-v4\.2\.0/base-live-acceptance\.json$''',
 ]
 regexes = ['''^\s*"token": "0xBC87674d279F701253dae23233222744d1232B5A",\s*$''']
+
+[[allowlists]]
+description = "Custom AI compiler exports contain exact public Solidity source hashes"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''^contracts/spec/custom-ai/verification-bundle/manifest\.json$''',
+  '''^scripts/custom-ai/core-bundle\.json$''',
+]
+regexes = [
+  '''^PoolKey\.sol":\s*"99e1afe285b5c614ebc9586ab5196db9d24a63fd924a449f5d99f490a6a6d6a9"$''',
+  '''^CustomAITokenV1\.sol":\s*"1b7f5673ca7d31449f04eb23732930a969e6ea895e07d80f4b60b8b792841575"$''',
+]

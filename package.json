@@ -7,6 +7,7 @@
     "node": ">=24.14.0 <25"
   },
   "scripts": {
+    "prebuild": "node scripts/custom-ai/install-toolchain.mjs",
     "dev": "next dev",
     "dev:sepolia": "PROGRAMMABLE_ONCHAIN_NETWORK=rehearsal NEXT_PUBLIC_PROGRAMMABLE_ONCHAIN_NETWORK=rehearsal next dev",
     "build": "npm run docs:gitbook-openapi:check && npm run verify:candidate-neutrality && next build && npm run verify:candidate-neutrality:build && node scripts/verify-custom-launch-production-bundle.mjs",

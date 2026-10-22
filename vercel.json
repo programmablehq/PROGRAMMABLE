@@ -90,6 +90,10 @@
   ],
   "crons": [
     {
+      "path": "/api/ops/custom-ai-index",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/ops/protocol-revenue",
       "schedule": "* * * * *"
     },

@@ -2,6 +2,7 @@
 
 import type { LaunchPlanTradeWalletInputV1, LaunchPlanTradeWalletReviewV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
+import type { LaunchStep } from "@/lib/custom-ai/launch-session";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import Image from "next/image";
 import Link from "next/link";
@@ -235,6 +236,7 @@ type WalletContextValue = {
     transaction: ParsedPredictionV2PreparedTransactionV2,
   ) => Promise<Hex>;
   sendModuleModeTransaction: (transaction: PreparedModuleModeTransaction) => Promise<Hex>;
+  sendCustomAIWalletStep: (launchId: string, step: LaunchStep, action?: "launch" | "trade") => Promise<Hex>;
   readNativeBalance: (chainId?: 1 | 4663) => Promise<WalletNativeBalance>;
   readConnectedAccountCode: () => Promise<Hex>;
   readTradeBalances: (token: `0x${string}`, chainId?: 1 | 4663) => Promise<WalletTradeBalances>;
@@ -1125,6 +1127,7 @@ function DeferredWalletProvider({
       sendModuleModeTransaction: async () => {
         throw new Error("Wallet sign-in is still loading");
       },
+      sendCustomAIWalletStep: async () => { throw new Error("Wallet sign-in is still loading"); },
       readNativeBalance: async () => {
         throw new Error("Wallet sign-in is still loading");
       },
@@ -2792,6 +2795,73 @@ function PrivyWalletBridge({
     [connectedWallet, sendPrivyTransaction, user?.id, wallet],
   );
 
+  const sendCustomAIWalletStep = useCallback(async (launchId: string, step: LaunchStep, action: "launch" | "trade" = "launch"): Promise<Hex> => {
+    if (!connectedWallet || !wallet || !user?.id) throw Error("Connect your wallet to continue.");
+    const account = wallet.account, subject = user.id, bound = connectedWallet;
+    if (step.transaction.from.toLowerCase() !== account.toLowerCase() || ![1,4663].includes(step.transaction.chainId)) throw Error("This request belongs to another wallet or chain.");
+    const generation = walletIdentityGenerationRef.current;
+    const assertSession = () => {
+      const current = walletRequestSessionRef.current;
+      if (generation !== walletIdentityGenerationRef.current || !current.authenticated || current.privyUserId !== subject
+        || current.account?.toLowerCase() !== account.toLowerCase()
+        || current.walletCapability?.walletClientType !== bound.walletClientType
+        || current.walletCapability?.connectorType !== bound.connectorType) throw Error("Your wallet changed. Review the request again.");
+    };
+    const headers = async (): Promise<Record<string,string>> => {
+      assertSession();
+      const access = await getSessionAccessToken(), identity = await getCurrentIdentityToken();
+      assertSession();
+      if (!access) throw Error("Reconnect your wallet to continue.");
+      return { Authorization: `Bearer ${access}`, ...(identity ? { "X-Privy-Identity-Token": identity } : {}) };
+    };
+    const { requestWalletAction, sameLaunchStep, saveLocalWalletAction } = await import("@/lib/custom-ai/launch-client");
+    const { launchStepLabel } = await import("@/lib/custom-ai/launch-session");
+    return runWithBrowserWalletRequestLock({ sessionSubject: subject, account, chainId: String(step.transaction.chainId),
+      requestSubject: `custom-ai-${action}-v1`, assertCurrentSession: assertSession, execute: async () => {
+        const provider = await getWalletProviderOnChain({ wallet: bound, chainId: step.transaction.chainId,
+          networkName: step.transaction.chainId === 1 ? "Ethereum" : "Robinhood", assertCurrentSession: assertSession });
+        const assertAuthority = async () => {
+          assertSession();
+          const currentProvider = await bound.getEthereumProvider();
+          if (currentProvider !== provider) throw Error("Your wallet connection changed. Try again.");
+          await assertExternalWalletAuthorityCurrent({ expectedAccount: account, expectedChainId: `0x${step.transaction.chainId.toString(16)}`,
+            networkName: step.transaction.chainId === 1 ? "Ethereum" : "Robinhood",
+            request: async method => { assertSession(); const result = await provider.request({ method }); assertSession(); return result; } });
+        };
+        await assertAuthority();
+        const saved = await requestWalletAction(action, headers, { action: "dispatch", id: launchId, stepId: step.id });
+        const current = saved.session.steps.at(-1);
+        if (!current || !sameLaunchStep(step, current)) throw Error("The wallet request changed. Refresh it before signing.");
+        let attempted = false;
+        try {
+          saveLocalWalletAction(action, saved);
+          await assertAuthority();
+          if (step.expiresAt <= Math.floor(Date.now()/1000)+3) throw Error("The price expired. Refresh the request.");
+          const tx = step.transaction;
+          attempted = true;
+          const embedded = bound.walletClientType === "privy" || bound.walletClientType === "privy-v2";
+          const raw = embedded ? (await sendPrivyTransaction({ ...(tx.to ? { to: tx.to } : {}), data: tx.data,
+            value: BigInt(tx.value), gasLimit: BigInt(tx.gas), nonce: Number(BigInt(tx.nonce)), chainId: tx.chainId },
+          { address: account, uiOptions: { description: launchStepLabel(step.kind), buttonText: "Confirm", successHeader: "Transaction submitted" } })).hash
+            : await provider.request({ method: "eth_sendTransaction", params: [{ from: account,
+              ...(tx.to ? { to: tx.to } : {}), data: tx.data, value: tx.value, gas: tx.gas, nonce: tx.nonce, chainId: `0x${tx.chainId.toString(16)}` }] });
+          const hash = parseSubmittedTransactionHash(raw);
+          current.hash = hash; current.state = "submitted";
+          // Keep the hash even if session refresh or the acknowledgement fails.
+          let localError: unknown;
+          try { saveLocalWalletAction(action, saved); } catch (error) { localError = error; }
+          const acknowledged = await requestWalletAction(action, headers, { action: "submitted", id: launchId, stepId: step.id, hash }).then(() => true, () => false);
+          if (localError && !acknowledged) throw Error("Your transaction was sent. Keep this tab open while it is recovered from the network.");
+          return hash;
+        } catch (error) {
+          if (!attempted || errorIsExplicitWalletRejection(error)) {
+            await requestWalletAction(action, headers, { action: "rejected", id: launchId, stepId: step.id }).catch(() => undefined);
+          }
+          throw error;
+        }
+      } });
+  }, [connectedWallet, wallet, user, getSessionAccessToken, getCurrentIdentityToken, sendPrivyTransaction]);
+
   const signPredictionPermit = useCallback(async (input: Readonly<{
     deadline: bigint;
     factoryAddress: Address;
@@ -3622,6 +3692,7 @@ function PrivyWalletBridge({
       sendTransaction,
       sendPredictionV2Transaction,
       sendModuleModeTransaction,
+      sendCustomAIWalletStep,
       readNativeBalance,
       readConnectedAccountCode,
       readTradeBalances,
@@ -3661,6 +3732,7 @@ function PrivyWalletBridge({
       signCustomLaunchFundingAuthorization,
       sendPredictionV2Transaction,
       sendModuleModeTransaction,
+      sendCustomAIWalletStep,
       sendTransaction,
       signLaunchMessage,
       reviewPrivyPolicyOwnerRequest,
@@ -3796,6 +3868,7 @@ function UnconfiguredWalletProvider({ children }: { children: ReactNode }) {
       sendModuleModeTransaction: async () => {
         throw new Error("Wallet sign-in is unavailable");
       },
+      sendCustomAIWalletStep: async () => { throw new Error("Wallet sign-in is unavailable"); },
       readNativeBalance: async () => {
         throw new Error("Wallet sign-in is unavailable");
       },

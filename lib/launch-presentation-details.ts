@@ -4,7 +4,8 @@ import type { CanonicalTokenExploreEntry } from "./tokens";
 import { moduleDetailsForLaunch, type ModuleLaunchDetailsBinding, type PublicModuleDetails } from "./module-mode/public-details";
 
 export type LaunchPresentationSource = Pick<RobinhoodLaunch, "tokenAddress"> & Partial<Pick<RobinhoodLaunch,
-  "sourceKind" | "poolId" | "quoteAsset" | "launchProjection" | "modulePackageIds" | "moduleFamilyIds" | "sourceReleaseDigest">> & {
+  "poolId" | "quoteAsset" | "launchProjection" | "modulePackageIds" | "moduleFamilyIds" | "sourceReleaseDigest">> & {
+    sourceKind?: RobinhoodLaunch["sourceKind"] | "custom-ai-v1";
     /** Display-only symbol read alongside the source-bound quote asset. */
     quoteSymbol?: string | null;
   };

@@ -443,3 +443,16 @@ for (const path of [
   assertFiles(scan(t, { [path]: line.replace('"token":', '"apiKey":') }, { raw: true }), [path]);
   assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
 });
+
+test("Custom AI source hash exceptions retain credential and path boundaries", t => {
+  const paths = ["contracts/spec/custom-ai/verification-bundle/manifest.json", "scripts/custom-ai/core-bundle.json"];
+  const manifest = JSON.parse(readFileSync(new URL(`../../${paths[0]}`, import.meta.url), "utf8"));
+  for (const path of paths) for (const name of ["lib/v4-core/src/types/PoolKey.sol", "src/custom-ai/CustomAITokenV1.sol"]) {
+    const value = manifest.sourceSha256[name];
+    const line = JSON.stringify({ [name]: value });
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    assertFiles(scan(t, { [path]: line.replace(value, material) }, { raw: true }), [path]);
+    assertFiles(scan(t, { [path]: JSON.stringify({ [name]: value, apiKey: material }) }, { raw: true }), [path]);
+    assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+  }
+});

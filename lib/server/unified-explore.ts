@@ -20,6 +20,7 @@ import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { readRecentFoundationLaunches } from "./module-foundation/recent-launch-store";
 import { readApprovedLaunchPresentations } from "./approved-launch-presentation";
+import { readCustomAICatalog } from "@/lib/custom-ai/index.server";
 
 const readers = {
   base: readBaseExploreCatalog,
@@ -38,6 +39,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const catalogSymbols = new Map<string, string | null>();
   const owned = (creator: string | undefined) => !owner || creator?.toLowerCase() === owner;
   const observations = readConfirmingEthereumLaunches().catch(() => []);
+  const aiRead = readCustomAICatalog().catch(() => ({ status:"unavailable" as const, updatedAt:null, items:[] }));
   // Each network can enrich its catalog as soon as it arrives. A slower index
   // must not hold up the other network's independent market request.
   const [[rh, rhMarkets], [eth, ethMarkets], [base, baseMarkets]] = await Promise.all([
@@ -59,9 +61,13 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
       .then(async catalog => [catalog, catalog.items.length ? await dependencies.ethereumMarkets(catalog.items, 8453)
         .catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
   ]);
-  const sources = { robinhood: rh.status, ethereum: eth.status, base: base.status };
-  const available = [rh, eth, ...(dependencies.base ? [base] : [])].filter(source => source.status !== "unavailable");
-  const status = !available.length ? "unavailable" as const : available.length < (dependencies.base ? 3 : 2) || eth.status === "partial" ? "partial" as const
+  const ai = await aiRead;
+  const aiRows = ai.items.filter(row => owned(row.creator) && isPublicExploreIdentityV1(row,row.chainId));
+  const aiMetadata = new Map(aiRows.map(row=>[exploreIdentityKey(row),row]));
+  const sources = { robinhood: rh.status, ethereum: eth.status, base: base.status, customAI: ai.status };
+  const activeSources = [rh, eth, ...(dependencies.base ? [base] : []), ...(ai.status === "inactive" ? [] : [ai])];
+  const available = activeSources.filter(source => source.status !== "unavailable");
+  const status = !available.length ? "unavailable" as const : available.length < activeSources.length || eth.status === "partial" ? "partial" as const
     : available.some(source => source.status === "stale") ? "stale" as const
       : available.some(source => source.status === "syncing") ? "syncing" as const : "ready" as const;
   const updatedAt = available.flatMap(source => source.updatedAt ? [source.updatedAt] : [])
@@ -94,7 +100,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     ...[...baseMarkets].map(([address, market]) => [`8453:${address}`, market] as const),
     ...[...ethMarkets].map(([address, market]) => [`1:${address}`, market] as const),
   ]);
-  const indexed = new Set([...rhRows, ...ethRows, ...baseRows].map(exploreIdentityKey));
+  const indexed = new Set([...rhRows, ...ethRows, ...baseRows, ...aiRows].map(exploreIdentityKey));
   const recent = (await readRecentFoundationLaunches(indexed).catch(() => [])).filter(item => owned(item.row.creator));
   const recentRows = recent.map(item => ({ ...item.row, chainId: item.chainId, mode: "module" as const,
     category: "custom" as const, confirmation: "confirmed" as const }));
@@ -103,7 +109,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     && !PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1.some(hidden => hidden.tokenAddress.toLowerCase() === row.tokenAddress.toLowerCase() && hidden.launchId.toLowerCase() === row.launchId.toLowerCase()));
   // Receipt-backed launches need Codex data immediately too, not only after
   // the historical catalog catches up. Membership still comes from receipts.
-  const fresh = [...recentRows, ...confirming];
+  const fresh = [...recentRows, ...confirming, ...aiRows];
   await Promise.all(([1, 4663] as const).map(async chainId => {
     const rows = fresh.filter(row => row.chainId === chainId && typeof row.poolId === "string" && marketPool.test(row.poolId));
     if (!rows.length) return;
@@ -120,9 +126,9 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     const value = filters.sort === "activity" ? market.volume24hUsd : coinValuation(market).value;
     if (value !== null && Number.isFinite(value) && value >= 0) values.set(identity, value);
   }
-  const selection = selectUnifiedExplorePage<(typeof rhRows)[number] | (typeof ethRows)[number] | (typeof baseRows)[number] | (typeof recentRows)[number] | (typeof confirming)[number]>(
-    [...rhRows, ...ethRows, ...baseRows, ...recentRows, ...confirming], page, query, filters, values, size);
-  const symbols = new Map([...catalogSymbols, ...[...rhRows, ...ethRows, ...baseRows, ...recentRows, ...confirming].map(row => [exploreIdentityKey(row), row.symbol] as const)]);
+  const selection = selectUnifiedExplorePage<(typeof rhRows)[number] | (typeof ethRows)[number] | (typeof baseRows)[number] | (typeof recentRows)[number] | (typeof confirming)[number] | (typeof aiRows)[number]>(
+    [...rhRows, ...ethRows, ...baseRows, ...recentRows, ...confirming, ...aiRows], page, query, filters, values, size);
+  const symbols = new Map([...catalogSymbols, ...[...rhRows, ...ethRows, ...baseRows, ...recentRows, ...confirming, ...aiRows].map(row => [exploreIdentityKey(row), row.symbol] as const)]);
   // Pair identity belongs to the launch, and survives optional price expiry.
   // Resolve catalog tickers on the same chain before using the exact pool observation.
   const items = selection.items.map(row => {
@@ -156,7 +162,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     ...rhPresentations.map(presentation => ({ ...presentation, chainId: 4663 as const })),
     ...selectedEth.map(row => {
       const entry = metadata.get(exploreIdentityKey(row));
-      const saved = recentMetadata.get(exploreIdentityKey(row));
+      const aiCoin = aiMetadata.get(exploreIdentityKey(row));
+      const saved = aiCoin ? {imageUrl:aiCoin.imageUrl,description:aiCoin.description,links:[]} : recentMetadata.get(exploreIdentityKey(row));
       return { chainId: 1 as const, tokenAddress: row.tokenAddress,
         ...mergeCoinMetadata(mergeCoinMetadata(saved ?? { imageUrl: entry?.imageUrl ?? null, description: entry?.description ?? null,
           links: (entry?.links ?? []).map(link => ({ label: link.kind, url: link.url })) }, approved.get(row.tokenAddress.toLowerCase())), ethMetadata.get(row.tokenAddress.toLowerCase())),
@@ -171,6 +178,9 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     const details = row.chainId === 8453 ? undefined : (row.chainId === 1 ? ethMetadata : rhMetadata).get(row.tokenAddress.toLowerCase());
     return { ...row, name: row.name || details?.name || null, symbol: row.symbol || details?.symbol || null };
   });
+  presentations.push(...aiRows.filter(row=>row.chainId===4663 && selectedKeys.has(exploreIdentityKey(row))).map(row=>({
+    chainId:4663 as const,tokenAddress:row.tokenAddress,imageUrl:row.imageUrl,description:row.description,links:[],market:markets.get(exploreIdentityKey(row))??null,
+  })));
   return { scope: "all" as const, status: status === "unavailable" && fresh.length ? "partial" as const : status, sources, sourceEvidence: { robinhood: rh.sourceEvidence, ethereum: eth.sourceEvidence, base: base.sourceEvidence },
     updatedAt, ...selection, items: enrichedItems, presentations };
 }

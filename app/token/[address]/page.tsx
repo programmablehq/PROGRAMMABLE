@@ -22,10 +22,17 @@ import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { ConfirmingLaunchView } from "@/components/confirming-launch-view";
 import { launchShareMetadata } from "@/lib/launch-share";
+import { readCustomAIToken } from "@/lib/custom-ai/index.server";
+import { CustomAITokenView } from "@/components/custom-ai/token-view";
+import { readCodexMarkets } from "@/lib/server/codex-market";
 
 type TokenPageSearchParams = Promise<
   Record<string, string | string[] | undefined>
 >;
+async function customAITokenPage(address:string,chain:unknown) {
+  const chainId=chain === "1" ? 1 : chain === undefined || chain === "4663" ? 4663 : null;
+  return chainId ? readCustomAIToken(chainId,address) : null;
+}
 
 export async function generateMetadata({
   params,
@@ -39,6 +46,8 @@ export async function generateMetadata({
     searchParams,
   ]);
   if (isAddress(address) && tokenDetailPageChainId(resolvedSearchParams.chain) !== null) {
+    const ai=await customAITokenPage(address,resolvedSearchParams.chain).catch(()=>null);
+    if (ai) return {...launchShareMetadata({address:ai.tokenAddress,chainId:ai.chainId},ai.name,ai.symbol)};
     const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
     if (resolved?.chainId === 8453 && resolved.token) return { ...launchShareMetadata({address: resolved.token.tokenAddress, chainId: 8453}, resolved.token.name, resolved.token.symbol) };
     if (resolved?.chainId === 1 && resolved.token) return {
@@ -74,7 +83,14 @@ export default async function TokenPage({
   ) {
     notFound();
   }
+  let aiUnavailable=false;
+  const ai=await customAITokenPage(address,resolvedSearchParams.chain).catch(()=>{aiUnavailable=true;return null;});
+  if (ai) {
+    const markets=await readCodexMarkets([ai],ai.chainId).catch(()=>new Map());
+    return <TokenRouteChainSync chainId={ai.chainId}><CustomAITokenView token={ai} market={markets.get(ai.tokenAddress.toLowerCase())??null}/></TokenRouteChainSync>;
+  }
   const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
+  if (aiUnavailable && (!resolved || !("token" in resolved) || !resolved.token)) return <TokenIndexResetView unresolved/>;
   if (resolved === null) notFound();
   if (resolved.chainId === 8453) return <TokenRouteChainSync chainId={8453}><BaseTokenView address={address} token={resolved.token} presentation={resolved.presentation} status={resolved.status} /></TokenRouteChainSync>;
   // Explore can display a receipt-confirmed launch before the finalized index

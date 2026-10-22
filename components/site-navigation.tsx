@@ -330,16 +330,21 @@ export function SiteHeader() {
           </Link>
         </div>
 
-        <DesktopNavigation />
-
-        <Link
-          className={styles.mobileLaunch}
-          href="/launch"
-          prefetch={false}
-          aria-current={pathname.startsWith("/launch") ? "page" : undefined}
-        >
-          Launch a token
-        </Link>
+        {pathname === "/launch/custom-ai" ? (
+          <h1 className={styles.pageTitle}>Custom AI</h1>
+        ) : (
+          <>
+            <DesktopNavigation />
+            <Link
+              className={styles.mobileLaunch}
+              href="/launch"
+              prefetch={false}
+              aria-current={pathname.startsWith("/launch") ? "page" : undefined}
+            >
+              Launch a token
+            </Link>
+          </>
+        )}
 
         <div className={`header-actions ${styles.headerActions}`}>
           <button

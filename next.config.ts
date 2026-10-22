@@ -80,9 +80,18 @@ export const sharpRuntimeFiles = [
   "./node_modules/@img/**/*",
 ];
 
+const customAIWorkerFiles = [
+  "./scripts/custom-ai/compile-worker.mjs", "./scripts/custom-ai/lifecycle-worker.mjs",
+  "./scripts/custom-ai/validate-module.mjs", "./scripts/custom-ai/validate-lifecycle.mjs",
+  "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   outputFileTracingIncludes: {
+    "/api/custom-ai": customAIWorkerFiles,
+    "/api/custom-ai/preview": customAIWorkerFiles,
+    "/api/custom-ai/image": sharpRuntimeFiles,
     "/api/token-image": sharpRuntimeFiles,
     "/api/prediction/asset-logo/*": sharpRuntimeFiles,
     "/api/profile/projects/*/article/media": sharpRuntimeFiles,
