@@ -1,6 +1,7 @@
 // Local release operator. Signed transactions stay in a private journal, never
 // in a web response or a repository artifact. Callers supply reviewed requests.
-import { mkdir, open, readFile, readdir, rename, stat, unlink } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, stat, unlink, link } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { keccak256, parseTransaction, recoverTransactionAddress, toHex } from "viem";
 
@@ -8,10 +9,13 @@ const same = (a, b) => a?.toLowerCase() === b?.toLowerCase();
 const json = value => JSON.stringify(value, (_, item) => typeof item === "bigint" ? item.toString() : item, 2) + "\n";
 const number = value => BigInt(value ?? 0);
 async function durable(path, value, create = false) {
-  const temporary = create ? path : `${path}.${process.pid}.tmp`;
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   const file = await open(temporary, "wx", 0o600);
   try { await file.writeFile(json(value)); await file.sync(); } finally { await file.close(); }
-  if (!create) await rename(temporary, path);
+  // Publish a complete, fsynced initial record without ever replacing an
+  // existing journal. A crash before publication leaves only an ignored temp.
+  if (create) { await link(temporary, path); await unlink(temporary); }
+  else await rename(temporary, path);
   const directory = await open(join(path, ".."), "r");
   try { await directory.sync(); } finally { await directory.close(); }
 }
