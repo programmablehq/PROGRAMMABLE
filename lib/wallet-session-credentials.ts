@@ -23,6 +23,7 @@ export function createWalletSessionCredentials(initialSources?: Sources, timeout
   let sources = initialSources ?? { session: () => ({ userId: null, active: false, revision: 0 }),
     accessToken: async () => null, identityToken: async () => null, cachedIdentityToken: () => null };
   const pending = new Map<string, Promise<string | null>>();
+  let identity: { key: string; token: string | null; until: number } | null = null;
   const matches = (before: Session) => {
     const after = sources.session();
     return before.active && after.active && before.userId !== null
@@ -30,8 +31,20 @@ export function createWalletSessionCredentials(initialSources?: Sources, timeout
   };
   const read = (kind: "access" | "identity") => {
     const before = sources.session();
-    if (!before.active || !before.userId) return Promise.resolve(null);
+    if (!before.active || !before.userId) { identity = null; return Promise.resolve(null); }
     const key = `${kind}:${before.userId}:${before.revision}`;
+    if (kind === "identity") {
+      if (identity?.key !== key) identity = null;
+      const cached = currentIdentityToken(sources.cachedIdentityToken(), before.userId);
+      if (cached) return Promise.resolve().then(() => matches(before) ? cached : null);
+      // Some valid sessions have no identity token. Remember that successful
+      // response too, instead of refreshing /users/me on every draft save.
+      if (identity && identity.until > Date.now()
+        && (identity.token === null || currentIdentityToken(identity.token, before.userId))) {
+        const token = identity.token;
+        return Promise.resolve().then(() => matches(before) ? token : null);
+      }
+    }
     const current = pending.get(key);
     if (current) return current;
     let timer: ReturnType<typeof setTimeout>;
@@ -40,7 +53,13 @@ export function createWalletSessionCredentials(initialSources?: Sources, timeout
         : currentIdentityToken(sources.cachedIdentityToken(), before.userId!) ?? sources.identityToken()),
       new Promise<never>((_, reject) => { timer = setTimeout(() => reject(
         new Error("Wallet access is temporarily unavailable. Please try again.")), timeoutMs); }),
-    ]).then(token => matches(before) ? kind === "identity" ? currentIdentityToken(token, before.userId!) : token : null).finally(() => {
+    ]).then(token => {
+      if (!matches(before)) return null;
+      if (kind === "access") return token;
+      const fresh = currentIdentityToken(token, before.userId!);
+      if (token === null || fresh) identity = { key, token: fresh, until: Date.now() + 60_000 };
+      return fresh;
+    }).finally(() => {
       clearTimeout(timer);
       if (pending.get(key) === operation) pending.delete(key);
     });

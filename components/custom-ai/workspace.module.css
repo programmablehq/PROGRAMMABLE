@@ -23,6 +23,8 @@
 .workspace button:focus-visible, .workspace summary:focus-visible, .workspace pre:focus-visible { outline: 2px solid #ede7dc; outline-offset: 4px; border-radius: 4px; }
 .notice, .error { margin: 0 0 12px; font-size: 13px; line-height: 1.5; }
 .notice { color: #b8b4ad; }
+.saveActions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -6px 0 12px; }
+.saveActions button { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #ede7dc; font: inherit; font-size: 13px; text-align: start; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 .error { color: #ffc2af; }
 .note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
 /* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */

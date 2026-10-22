@@ -74,4 +74,72 @@ describe("shared wallet credentials", () => {
       expect(await credentials.getAccessToken()).toBe("recovered");
     } finally { vi.useRealTimers(); }
   });
+
+  it("does not refresh an optional missing identity token on every request", async () => {
+    vi.useFakeTimers();
+    try {
+      const identityToken = vi.fn(async () => null);
+      let revision = 1;
+      const credentials = createWalletSessionCredentials({
+        session: () => ({ userId: "alice", active: true, revision }),
+        accessToken: async () => "access", identityToken, cachedIdentityToken: () => null,
+      });
+      for (let index = 0; index < 20; index++) expect(await credentials.getIdentityToken()).toBeNull();
+      expect(identityToken).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(60_001);
+      await credentials.getIdentityToken();
+      expect(identityToken).toHaveBeenCalledTimes(2);
+      revision++;
+      await credentials.getIdentityToken();
+      expect(identityToken).toHaveBeenCalledTimes(3);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("uses a refreshed identity while the hook catches up, but rechecks expiry and the session", async () => {
+    vi.useFakeTimers();
+    try {
+      const fresh = token("alice", Date.now() / 1000 + 45);
+      const next = token("alice");
+      const identityToken = vi.fn().mockResolvedValueOnce(fresh).mockResolvedValue(next);
+      let active = true;
+      const credentials = createWalletSessionCredentials({
+        session: () => ({ userId: "alice", active, revision: 1 }),
+        accessToken: async () => "access", identityToken, cachedIdentityToken: () => null,
+      });
+      expect(await credentials.getIdentityToken()).toBe(fresh);
+      expect(await credentials.getIdentityToken()).toBe(fresh);
+      expect(identityToken).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(await credentials.getIdentityToken()).toBe(next);
+      active = false;
+      expect(await credentials.getIdentityToken()).toBeNull();
+      active = true;
+      expect(await credentials.getIdentityToken()).toBe(next);
+      expect(identityToken).toHaveBeenCalledTimes(3);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("does not treat failed refreshes as an absent identity token", async () => {
+    const identityToken = vi.fn().mockRejectedValueOnce(Object.assign(new Error("Rate limited"), { status: 429 }))
+      .mockResolvedValue(token("alice"));
+    const credentials = createWalletSessionCredentials({
+      session: () => ({ userId: "alice", active: true, revision: 1 }),
+      accessToken: async () => "access", identityToken, cachedIdentityToken: () => null,
+    });
+    await expect(credentials.getIdentityToken()).rejects.toThrow("Rate limited");
+    expect(await credentials.getIdentityToken()).not.toBeNull();
+    expect(identityToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards even a cached identity if the session changes before it is delivered", async () => {
+    let revision = 1;
+    const credentials = createWalletSessionCredentials({
+      session: () => ({ userId: "alice", active: true, revision }),
+      accessToken: async () => "access", identityToken: async () => null,
+      cachedIdentityToken: () => token("alice"),
+    });
+    const result = credentials.getIdentityToken();
+    revision++;
+    expect(await result).toBeNull();
+  });
 });

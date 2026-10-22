@@ -1,14 +1,26 @@
 import type { ChatRequest, ChatResult } from "./types";
 
 export type AISessionHeaders = () => Promise<Record<string, string>>;
+export class AIRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly retryAfterMs = 0) { super(message); }
+}
 export async function aiRequest<T>(path: string, headers: AISessionHeaders, body?: unknown, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
+  const credentials = await headers();
+  signal?.throwIfAborted();
   const response = await fetch(`/api/custom-ai${path}`, {
     method: body === undefined ? "GET" : "POST", cache: "no-store", credentials: "same-origin",
-    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...await headers() },
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...credentials },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal,
   });
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.error || "The request could not finish. Try again shortly.");
+  const value = await response.json().catch(error => { if (response.ok) throw error; return null; });
+  if (!response.ok) {
+    const retry = response.headers.get("retry-after");
+    const seconds = retry === null ? 0 : Number(retry);
+    const retryAfterMs = Number.isFinite(seconds) ? seconds * 1000 : Math.max(0, Date.parse(retry!) - Date.now());
+    throw new AIRequestError(value?.error || "The request could not finish. Try again shortly.", response.status,
+      Number.isFinite(retryAfterMs) ? Math.max(0, retryAfterMs) : 0);
+  }
   return value as T;
 }
 
