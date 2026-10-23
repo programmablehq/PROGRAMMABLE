@@ -8,6 +8,6 @@ let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => { input += chunk; if (Buffer.byteLength(input) > 200_000) process.exit(3); });
 process.stdin.on("end", async () => {
-  try { process.stdout.write(JSON.stringify(await simulateLifecycle(requireTool, JSON.parse(input), bundle))); }
+  try { const value = JSON.parse(input); process.stdout.write(JSON.stringify(await simulateLifecycle(requireTool, value.artifact ?? value, bundle, value.feed))); }
   catch { process.exitCode = 4; }
 });

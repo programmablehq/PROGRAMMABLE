@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { CustomAIError, isBriefChat, type ChatRequest, type ChatResult } from "./types";
+import { CustomAIError, isBriefChat, type AIUsage, type ChatRequest, type ChatResult } from "./types";
 import type { WalletAction, WalletSession } from "./launch-session";
 
 export interface AIConnection {
@@ -90,7 +90,10 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         const charged = await db.query(`INSERT INTO programmable_custom_ai_v1.budgets(subject,period,used)
           VALUES($1,$2,$3) ON CONFLICT(subject,period) DO UPDATE SET used=programmable_custom_ai_v1.budgets.used+$3
           WHERE programmable_custom_ai_v1.budgets.used+$3 <= $4 RETURNING used`, [subject, period, units, limit]);
-        if (units > limit || !charged.rows.length) throw new CustomAIError("budget", "The build allowance is used up. Your draft is saved; try again later.", 429);
+        if (units > limit || !charged.rows.length) {
+          const duration = subject.startsWith("account-hour:") ? 3_600_000 : 86_400_000;
+          throw new CustomAIError("budget", "The current allowance is used up. Your draft is saved; check Usage for the reset time.", 429, (period + 1) * duration - time);
+        }
       }
       const lease = randomUUID();
       await db.query(`INSERT INTO programmable_custom_ai_v1.jobs(owner,id,payload_hash,request,state,lease,reserved,hour,day)
@@ -104,7 +107,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       const row = (await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2 AND lease=$3 FOR UPDATE", [owner, id, lease])).rows[0];
       if (!row || row.state !== "running") return;
       const request = row.request as ChatRequest;
-      const refund = result && request.intent === "chat" && !result.draft ? Number(row.reserved) - 1 : 0;
+      const refund = result && request.intent === "chat" && !result.draft && !result.chargedAs ? Number(row.reserved) - 1 : 0;
       if (refund > 0) for (const [subject, period] of [[`account-hour:${owner}`,row.hour],[`account-day:${owner}`,row.day],["global-day",row.day]]) {
         await db.query("UPDATE programmable_custom_ai_v1.budgets SET used=used-$3 WHERE subject=$1 AND period=$2", [subject,period,refund]);
       }
@@ -114,6 +117,24 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
   }
   async function list(owner: string) {
     return transaction(async db => (await db.query("SELECT id,state,created_at,result,error_code FROM programmable_custom_ai_v1.jobs WHERE owner=$1 ORDER BY created_at DESC LIMIT 30", [owner])).rows.map(job));
+  }
+  async function usage(owner: string): Promise<AIUsage> {
+    return transaction(async db => {
+      const time = now(), hour = Math.floor(time / 3_600_000), day = Math.floor(time / 86_400_000);
+      const { rows } = await db.query(`SELECT subject,used FROM programmable_custom_ai_v1.budgets
+        WHERE (subject=$1 AND period=$2) OR (subject=$3 AND period=$4) OR (subject='global-day' AND period=$4)`,
+      [`account-hour:${owner}`, hour, `account-day:${owner}`, day]);
+      const used = (subject: string) => Number(rows.find(row => row.subject === subject)?.used ?? 0);
+      const window = (subject: string, limit: number, period: number, duration: number) => ({
+        used: used(subject), limit, remaining: Math.max(0, limit - used(subject)), resetsAt: (period + 1) * duration,
+      });
+      const hourly = window(`account-hour:${owner}`, limits.hourlyUnits, hour, 3_600_000);
+      const daily = window(`account-day:${owner}`, limits.dailyUnits, day, 86_400_000);
+      const globalRemaining = limits.globalDailyUnits - used("global-day");
+      const active = Number((await db.query("SELECT count(*)::integer AS n FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND state='running' AND created_at >= now()-interval '10 minutes'", [owner])).rows[0].n);
+      return { hourly, daily, active, available: Math.min(hourly.remaining, daily.remaining, globalRemaining) >= 5 && active < limits.concurrent,
+        resumesAt: Math.max(hourly.remaining < 5 ? hourly.resetsAt : 0, daily.remaining < 5 || globalRemaining < 5 ? daily.resetsAt : 0) };
+    });
   }
   async function readObject<T>(owner: string, kind: string, id: string): Promise<{ revision: number; value: T } | null> {
     return transaction(async db => {
@@ -222,7 +243,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { reserve, finish, read, list, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, saveIndexBatch };
+  return { reserve, finish, read, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;

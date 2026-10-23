@@ -5,10 +5,10 @@ import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileDraft } from "./compiler.server";
-import { CustomAIError, type Draft, type LifecycleCheck } from "./types";
+import { CustomAIError, type Draft, type FeeExpectation, type LifecycleCheck } from "./types";
 
-export async function compileLaunchDraft(source: string, signal?: AbortSignal): Promise<Draft> {
-  const draft = await compileDraft(source, signal);
+export async function compileLaunchDraft(source: string, signal?: AbortSignal, expectations: FeeExpectation[] = [], feed?: import("./feed").FeedBinding): Promise<Draft> {
+  const draft = await compileDraft(source, signal, expectations, feed);
   if (!draft.compiled || draft.validation?.status !== "passed") return draft;
   const lifecycle = await checkLifecycle(draft, signal);
   return { ...draft, lifecycle, diagnostics: lifecycle.diagnostics,
@@ -30,7 +30,7 @@ export async function checkLifecycle(draft: Draft, signal?: AbortSignal): Promis
       { cwd: tmpdir(), env: { NODE_ENV: "production" }, encoding: "utf8", timeout: 45_000, maxBuffer: 200_000, signal },
       (error, stdout) => error ? reject(new CustomAIError("lifecycle", "The launch simulation did not finish. Try again shortly.", 503)) : resolve(stdout));
     child.stdin?.on("error", () => undefined);
-    child.stdin?.end(JSON.stringify(draft.artifact));
+    child.stdin?.end(JSON.stringify({ artifact: draft.artifact, feed: draft.feed }));
   });
   return JSON.parse(output) as LifecycleCheck;
 }

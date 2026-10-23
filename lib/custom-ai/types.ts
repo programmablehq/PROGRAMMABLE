@@ -1,7 +1,25 @@
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetup, type CoinSetupPatch } from "./coin-setup";
 
-export type ChatMessage = { role: "user" | "assistant"; content: string };
-export type ChatRequest = { id: string; intent: "chat" | "build"; messages: ChatMessage[]; coin?: CoinSetup };
+export type ChatMessage = { role: "user" | "assistant"; content: string; sources?: import("./knowledge").KnowledgeSource[] };
+export type ChatRequest = { id: string; intent: "chat" | "build"; messages: ChatMessage[]; coin?: CoinSetup; draftId?: string; contextId?: string };
+export type FeeExpectation = { afterSeconds: number; buy: boolean; totalFeeBps: number; feedValue?: string | null; feedFresh?: boolean | null };
+export type RuleVerification = {
+  status: "passed" | "blocked";
+  sourceHash: string;
+  previousSourceHash?: string;
+  requirements: string[];
+  checks: FeeExpectation[];
+  cases: number;
+};
+export type AIUsage = {
+  hourly: { used: number; limit: number; remaining: number; resetsAt: number };
+  daily: { used: number; limit: number; remaining: number; resetsAt: number };
+  active: number;
+  available: boolean;
+  resumesAt: number;
+};
+export type ChatProgress = { type: "phase"; phase: "thinking" | "reading" | "building" | "checking" | "repairing" }
+  | { type: "reply"; text: string };
 export type LifecycleCheck = {
   status: "passed" | "blocked";
   scope: "isolated-core-with-synthetic-quotes";
@@ -14,6 +32,9 @@ export type LifecycleCheck = {
     fixedRecipientsPaid: boolean; replayWithoutPayment: boolean }[];
 };
 export type Draft = {
+  feed?: import("./feed").FeedBinding;
+  program?: { spec: import("./program").ProgramSpec; bundleHash: string; chainId: 1 | 4663; quote: `0x${string}`; available: boolean };
+  verification?: RuleVerification;
   hookSummary?: string;
   source: string;
   sourceHash: string;
@@ -28,6 +49,7 @@ export type Draft = {
     maxGas?: string;
     samples: { afterSeconds: number; buy: boolean; totalFeeBps: number }[];
     deployments: { chainId: number; timestamp: number; runtimeHash: string; configurationHash: string }[];
+    expectationCases?: number;
   };
   artifact?: {
     compiler: string;
@@ -39,16 +61,18 @@ export type Draft = {
     immutableReferences: Record<string, { start: number; length: number }[]>;
   };
 };
-export type ChatResult = { reply: string; draft?: Draft; setupPatch?: CoinSetupPatch };
+export type ChatResult = { reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  memory?: string; change?: "applied" | "unchanged" | "blocked"; unresolved?: string[]; chargedAs?: "build" | "research";
+  sources?: import("./knowledge").KnowledgeSource[] };
 
 export function isBriefChat(request: ChatRequest): boolean {
-  return request.intent === "chat" && request.messages.length === 1
+  return request.intent === "chat" && request.messages.length === 1 && !request.contextId && !request.draftId
     && /^(hi|hello|hey|thanks|thank you|ok|okay|cool|good morning|good evening)[!. ]*$/i
-      .test(request.messages[0].content.trim());
+      .test(request.messages.at(-1)?.content.trim() ?? "");
 }
 
 export class CustomAIError extends Error {
-  constructor(public code: string, message: string, public status = 400) {
+  constructor(public code: string, message: string, public status = 400, public retryAfterMs = 0) {
     super(message);
     this.name = "CustomAIError";
   }
@@ -81,5 +105,11 @@ export function parseChatRequest(value: unknown): ChatRequest {
     try { coin = applyCoinSetupPatch(EMPTY_COIN_SETUP, parseCoinSetupPatch(input.coin)); }
     catch { throw new CustomAIError("settings", "The coin details could not be read. Try again."); }
   }
-  return { id: input.id, intent: input.intent!, messages: input.messages.map(({ role, content }) => ({ role, content })), ...(coin ? { coin } : {}) };
+  for (const key of ["draftId", "contextId"] as const) {
+    if (input[key] !== undefined && (typeof input[key] !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(input[key]!))) {
+      throw new CustomAIError("context", "The saved conversation could not be read. Reload it before continuing.");
+    }
+  }
+  return { id: input.id, intent: input.intent!, messages: input.messages.map(({ role, content }) => ({ role, content })), ...(coin ? { coin } : {}),
+    ...(input.draftId ? { draftId: input.draftId } : {}), ...(input.contextId ? { contextId: input.contextId } : {}) };
 }

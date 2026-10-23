@@ -1,7 +1,8 @@
 // Trusted harness; generated EVM bytecode runs only in this networkless VM.
+import { seedEventFeed } from "./event-module.mjs";
 import { createHash } from "node:crypto";
 
-export async function simulateLifecycle(requireTool, artifact, bundle) {
+export async function simulateLifecycle(requireTool, artifact, bundle, feed) {
   const { createVM } = requireTool("@ethereumjs/vm");
   const { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block");
@@ -31,6 +32,7 @@ export async function simulateLifecycle(requireTool, artifact, bundle) {
       let timestamp = startedAt - 172800n, blockNumber = 1n, maxSwapExecutionGas = 0n;
       const unit = 10n ** BigInt(decimals);
       const run = async ({ to, data, from = caller, read = false, revert = false }) => {
+        if (feed) await seedEventFeed(requireTool, vm, feed, timestamp, decimals === 18 ? feed.rule.threshold : (BigInt(feed.rule.threshold) - 1n).toString());
         await vm.evm.journal.cleanup();
         vm.stateManager.originalStorageCache.clear();
         const result = await vm.evm.runCall({ caller: createAddressFromString(from),

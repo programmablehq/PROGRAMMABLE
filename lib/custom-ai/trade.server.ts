@@ -4,6 +4,7 @@ import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi, toHex, 
 import { bytesV1, objectV1, quantityV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 import { asAddress, asHash, customAIChain, type CustomAIChain } from "./chain.server";
 import { verifiedAIMarket } from "./market.server";
+import { prepareProgramAction, readProgram } from "./program-actions.server";
 import { CustomAIError } from "./types";
 import { initialBuyRaw } from "./preview";
 import { makeStep, pendingNonce, verifiedStepReceipt } from "./transaction.server";
@@ -34,7 +35,7 @@ export async function saveAITrade(store:AIStore,owner:string,saved:StoredAITrade
   return saved;
 }
 export async function createAITrade(store:AIStore,owner:string,wallets:readonly Address[],input:{id:string;account:string;chainId:number;token:string;intent:AITradeIntent;amount?:string;slippageBps?:number}) {
-  if (input.chainId!==1 && input.chainId!==4663 || !["buy","sell","claim-creator","claim-platform","claim-reward"].includes(input.intent)) throw new CustomAIError("input","Choose a supported trade.");
+  if (input.chainId!==1 && input.chainId!==4663 || !["buy","sell","claim-creator","claim-platform","claim-reward","program-execute","program-stake","program-withdraw","program-claim"].includes(input.intent)) throw new CustomAIError("input","Choose a supported trade.");
   const account=getAddress(input.account),token=getAddress(input.token);
   if (!wallets.some(wallet=>wallet.toLowerCase()===account.toLowerCase())) throw new CustomAIError("wallet","Reconnect the selected wallet.",403);
   const amount=input.amount??"0",slippageBps=input.slippageBps??100;
@@ -153,12 +154,12 @@ export async function advanceAITrade(store:AIStore,owner:string,saved:StoredAITr
       }
     }
     await chain.finish();
-    if (["swap","claim-creator","claim-platform","claim-reward"].includes(last.kind)) session.state="confirmed";
+    if (["swap","claim-creator","claim-platform","claim-reward","program-action"].includes(last.kind)) session.state="confirmed";
     saved=await saveAITrade(store,owner,saved);
     if (session.state==="confirmed") return saved;
   }
   if (last?.state==="prepared" && last.expiresAt>Math.floor(Date.now()/1000)+10) return saved;
-  const step=await (["buy","sell"].includes(session.intent)?prepareSwap(chain,session,market):prepareClaim(chain,session,market));
+  const step=await (session.intent.startsWith("program-")?prepareProgramAction(chain,session,market):["buy","sell"].includes(session.intent)?prepareSwap(chain,session,market):prepareClaim(chain,session,market));
   if (last?.state==="prepared") last.state="rejected";
   session.steps.push(step);session.state="ready";
   return saveAITrade(store,owner,saved);
@@ -169,6 +170,10 @@ export async function dispatchAITrade(store:AIStore,owner:string,saved:StoredAIT
   const chain=await customAIChain(saved.session.chainId);
   await verifiedAIMarket(chain,saved.session.token,{account:saved.session.account,executionReady:["buy","sell"].includes(saved.session.intent)});
   if (await pendingNonce(chain,saved.session.account)!==BigInt(step.transaction.nonce)) throw new CustomAIError("nonce","Your wallet changed. Refresh this trade.",409);
+  if (saved.session.intent.startsWith("program-")) {
+    const market = await verifiedAIMarket(chain,saved.session.token,{account:saved.session.account,executionReady:false});
+    if (!await readProgram(chain,market.token,market.deployment.factory.address,saved.session.account)) throw new CustomAIError("program","The program could not be verified.",409);
+  }
   const gas=await Promise.all(chain.rpcs.map(async rpc=>quantityV1(await rpc("eth_estimateGas",[{...step.transaction,chainId:toHex(chain.chainId)}]))));
   if (gas.some(value=>value>BigInt(step.transaction.gas))) throw new CustomAIError("gas","Refresh the trade before signing.",409);
   await chain.finish();

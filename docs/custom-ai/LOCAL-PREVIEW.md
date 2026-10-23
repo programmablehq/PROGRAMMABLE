@@ -12,13 +12,19 @@ The hook supplies its immutable `launchTimestamp` to the fee module. A rule such
 
 ## Conversation and generation
 
-One server-side Anthropic integration uses Haiku for standalone greetings, Sonnet for substantive conversation and generation, and Opus for one final repair after two unsuccessful Sonnet attempts. Errors in authentication, transport, quota or the isolated compiler do not trigger a more expensive fallback. Public replies use short, natural English.
+One server-side Anthropic integration uses Haiku for conversation and independent rule interpretation, Sonnet for fee generation, and Opus for one final repair after two unsuccessful Sonnet attempts. Replies stream from the provider while phases distinguish interpretation, research, building and checking. Errors in authentication, transport, quota or the isolated compiler do not trigger a more expensive fallback. Public replies use short, natural English.
 
 The chat can update the name, ticker, chain, pair and initial buy. Generated descriptions stay bound to the successfully checked source. The interface does not present a failed replacement as a successful draft.
 
-The current generator supports self-contained immutable fee expressions and schedules. It does not generate arbitrary reward strategies or connect weather, sports or news feeds. The core includes bounded reward and signed-data primitives, but a primitive is not a connected data service. The assistant must explain a missing integration rather than substitute a different strategy or ask a user for provider keys.
+The generator supports self-contained immutable fee expressions and schedules. It receives the exact saved source, verified rules and a server-owned compact conversation memory. The browser sends a bounded recent window, so a thirteenth turn does not fail solely because earlier turns exist. Starting a new conversation preserves the design; starting a new coin keeps a local previous-coin copy.
 
-Generated Solidity runs only through the pinned solc 0.8.26 compiler and the networkless EVM worker. The child receives no production environment, network access, file-write access or process-spawning permission. Its imports are supplied explicitly. Mutable storage, external calls, loops, assembly and unsupported capabilities are rejected. Each accepted module is also executed with the exact factory, hook, router and vault bundle on both chain configurations. Sampled checks are not an audit or proof of all possible program behavior.
+Before generation, a separate interpretation specifies the complete requirements and expected fee examples. The networkless EVM compares those examples with executed quotes in both directions/modes and both chain configurations. A failed edit stays visibly pending; a source-bound rule review is required for a new launch. These sampled checks are not a formal proof of the user's intent.
+
+Read-only tools query the indexed launch catalog, inspect contract metadata/code through two agreeing RPCs, and perform bounded web research with source links. Search results do not activate onchain rules or establish contract safety.
+
+Optional fixed templates add a single configured signed event feed or a funded distribution, staking or buyback program. See `ADVANCED-PROGRAMS.md` for exact behavior and activation requirements. Public launch of these new mechanisms is disabled by default; a local draft or simulation does not activate them. The assistant must explain a missing integration rather than substitute another strategy or ask users for provider keys.
+
+Generated Solidity runs only through the pinned solc 0.8.26 compiler and the networkless EVM worker. The child receives no production environment, network access, file-write access or process-spawning permission. Its imports are supplied explicitly. Generated mutable storage, external calls, loops, assembly and unsupported capabilities are rejected. The only external-call exception is an exact platform event template bound to a checked feed runtime; modifying that template fails validation. Each accepted module is also executed with the exact factory, hook, router and vault bundle on both chain configurations. Sampled checks are not an audit or proof of all possible program behavior.
 
 ## Accounts, drafts and wallet operations
 

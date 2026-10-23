@@ -3,6 +3,7 @@ import { concatHex, encodeAbiParameters, encodeFunctionData, formatUnits, getAdd
 import { foundationSqrtPriceAtTick } from "@/lib/module-foundation/price";
 import { parseCoinSettings } from "./preview";
 import launchCode from "./launch-code.json";
+import programManifest from "./program-manifest.json";
 import { requireMinimumInitialBuy } from "./initial-buy";
 
 export const customAIFactoryAbi = parseAbi([
@@ -30,6 +31,7 @@ export type LaunchPrice = { quoteUsdE18: bigint; ethUsdE18: bigint; observedAt: 
 export type LaunchOrder = {
   version: 1; chainId: 1 | 4663; factory: Address; account: Address; planHash: Hex;
   sourceHash: string; artifactHash: string; coreBundleHash: string;
+  rewardProgram?: { bundleHash: string; binding: ModuleBinding; creatorShareBps: number };
   predictedToken: Address;
   parameters: LaunchParameters; price: LaunchPrice; signature: Hex; priceSigner: Address;
   transaction: { from: Address; to: Address; data: Hex; value: 0n; chainId: 1 | 4663 };
@@ -116,10 +118,19 @@ export async function bindCustomAILaunch(input: Omit<LaunchOrder, "version" | "p
   for (const b of [p.feeModule, p.rewards.module]) {
     if (!/^0x[0-9a-f]{64}$/i.test(b.runtimeHash) || !/^0x[0-9a-f]{64}$/i.test(b.configurationHash)) throw Error("Invalid module binding.");
   }
-  if (p.feeModule.runtimeHash === zeroHash || p.feeModule.configurationHash === zeroHash
-    || p.rewards.creatorShareBps !== 10000 || p.rewards.module.instance !== zeroAddress
+  if (p.feeModule.runtimeHash === zeroHash || p.feeModule.configurationHash === zeroHash) throw Error("Invalid fee module binding.");
+  const program = input.rewardProgram;
+  if (program) {
+    if (program.bundleHash !== programManifest.bundleHash || !Number.isInteger(program.creatorShareBps)
+      || program.creatorShareBps < 0 || program.creatorShareBps >= 10000
+      || program.creatorShareBps !== p.rewards.creatorShareBps
+      || program.binding.instance === zeroAddress || program.binding.runtimeHash === zeroHash || program.binding.configurationHash === zeroHash
+      || (["instance", "runtimeHash", "configurationHash"] as const).some(key => program.binding[key].toLowerCase() !== p.rewards.module[key].toLowerCase())) {
+      throw Error("The reward program differs from the checked launch binding.");
+    }
+  } else if (p.rewards.creatorShareBps !== 10000 || p.rewards.module.instance !== zeroAddress
     || p.rewards.module.runtimeHash !== zeroHash || p.rewards.module.configurationHash !== zeroHash) {
-    throw Error("This builder supports self-contained fee modules with creator fees only.");
+    throw Error("A separately checked reward program is required.");
   }
   const planHash = customAIPlanHash(chainId, factory, account, p);
   if (!await verifyTypedData({ ...customAIPriceTypedData(chainId, factory, planHash, price), address: input.priceSigner, signature: input.signature })) throw Error("The launch price signature does not match this order.");

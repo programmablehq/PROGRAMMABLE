@@ -18,6 +18,25 @@ contract GeneratedFeeModule is ICustomAIFeeModuleV1 {
 const validQuote = "return(this.quoteFee.selector,150,type(uint64).max,configurationHash);";
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("isolated Custom AI compiler", () => {
+  it("blocks a technically valid module that charges a different fee than requested", async () => {
+    const result = await compileDraft(feeModule(validQuote), undefined, [
+      { afterSeconds: 0, buy: true, totalFeeBps: 200 }, { afterSeconds: 0, buy: false, totalFeeBps: 300 },
+    ]);
+    expect(result.compiled).toBe(true);
+    expect(result.validation?.status).toBe("blocked");
+    expect(result.artifact).toBeUndefined();
+    expect(result.diagnostics.join(" ")).toContain("expected 300 total bps, received 200");
+  });
+  it("checks independently requested time boundaries on both chains and swap modes", async () => {
+    const source = feeModule("return(this.quoteFee.selector, block.timestamp < context.launchTimestamp + 117 ? 250 : 50, type(uint64).max, configurationHash);");
+    const checks = [116, 117, 118].flatMap(afterSeconds => [true, false].map(buy => ({ afterSeconds, buy, totalFeeBps: afterSeconds < 117 ? 300 : 100 })));
+    const result = await compileDraft(source, undefined, checks);
+    expect(result.validation?.status).toBe("passed");
+    expect(result.validation?.expectationCases).toBe(24);
+    checks[2].totalFeeBps = 300;
+    const wrong = await compileDraft(source, undefined, checks);
+    expect(wrong.validation?.status).toBe("blocked");
+  });
   it("compiles an exact-interface fee module", async () => {
     const result = await compileDraft(`// SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;

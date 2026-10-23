@@ -39,7 +39,7 @@ export function createPreviewBudget() {
     // Reserve conservatively, including failed/aborted provider calls. Never
     // auto-retry a transport or billing error on a more expensive model.
     const result = Promise.resolve().then(run).then(value => {
-      if (request.intent === "chat" && !value.draft) used -= reserve - 1;
+      if (request.intent === "chat" && !value.draft && !value.chargedAs) used -= reserve - 1;
       return value;
     }).finally(() => { active--; });
     requests.set(request.id, { hash, result });

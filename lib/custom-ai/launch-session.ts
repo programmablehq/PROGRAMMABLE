@@ -5,7 +5,7 @@ import type { AITradeQuote } from "./trade-types";
 
 export type LaunchStep = {
   id: string;
-  kind: "module" | "wrap" | "reset-approval" | "approve" | "launch" | "swap" | "collect-fees" | "claim-creator" | "claim-platform" | "claim-reward";
+  kind: "module" | "program" | "program-action" | "wrap" | "reset-approval" | "approve" | "launch" | "swap" | "collect-fees" | "claim-creator" | "claim-platform" | "claim-reward";
   state: "prepared" | "dispatching" | "submitted" | "confirmed" | "rejected" | "failed";
   transaction: { from: Address; to: Address | null; data: Hex; value: Hex; chainId: 1 | 4663; nonce: Hex; gas: Hex };
   preparedBlock: string;
@@ -24,6 +24,8 @@ export type LaunchSession = {
   coreBundleHash: string; launchSalt: Hex; inputHash: string;
   state: "preparing" | "waiting" | "ready" | "confirmed" | "failed";
   steps: LaunchStep[]; module?: ModuleBinding; order?: LaunchOrder; token?: Address;
+  rewardModule?: ModuleBinding;
+  program?: import("./types").Draft["program"];
   quoteNotice?: string;
   priceEvidence?: unknown;
 };
@@ -44,7 +46,7 @@ export function stepMatchesTransaction(step: LaunchStep, transaction: {
 }
 
 export const launchStepLabel = (kind: LaunchStep["kind"]) => ({
-  module: "Create your hook", wrap: "Prepare ETH", "reset-approval": "Reset token approval",
+  module: "Create your hook", program: "Create your reward program", "program-action": "Confirm program action", wrap: "Prepare ETH", "reset-approval": "Reset token approval",
   approve: "Approve your initial buy", launch: "Create coin",
   swap: "Confirm swap", "collect-fees": "Collect earned fees", "claim-creator": "Claim creator fees",
   "claim-platform": "Claim platform fees", "claim-reward": "Claim rewards",

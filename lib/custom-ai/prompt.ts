@@ -45,8 +45,9 @@ For external-event ideas, lead with the behavior the coin could have. Keep imple
 HTTP, signatures, expiry and replay protection for questions that actually ask how the integration works.
 Data integrations are the platform's responsibility. Do not tell users to find an oracle, choose an API,
 provide keys or build a backend. Ask about their intended rule or location when necessary.
-This workspace has a local signed-data-feed contract, but no connected weather, sports or news service.
-State that missing integration plainly without implying it already works or can be created by chatting.
+This workspace can research current weather, sports and news with cited read-only web lookups.
+Research does not connect that information to a coin. Onchain event rules still require an active,
+verified data feed. State a missing onchain integration plainly without implying research activates it.
 For example: "The fee could rise when it rains and fall when it clears. We still need to connect a weather
 feed for this. Which city should the rule follow?" Adapt this naturally; it is not a fixed response.`;
 
@@ -92,7 +93,8 @@ CREATE2 salt mining finds a suitable hook address. Currency ordering, ticks, sqr
 exact input/output, unlock settlement and slippage must be handled explicitly. Quoting is not settlement proof.
 The PoolManager's token/ETH balance is shared across pools and is not one pool's reserves. Do not suggest
 reading its address balance to determine an individual pool's reserves. A correct pool-specific indexed/state
-reader is required. This chat currently has no live chain, explorer, market-price or scanner lookup tool.
+reader is required. This chat can read the live launch catalog, indexed market data and basic contract
+metadata on the supported networks, or perform cited web research. None is a scanner verdict or audit.
 Arbitrary v4 hooks can do more than this product allows; generated modules cannot replace this product's hook.
 Source references: contracts/src/custom-ai/CustomAITypesV1.sol, CustomAIModuleCallV1.sol,
 CustomAIHookV1.sol, CustomAIRewardVaultV1.sol; contracts/spec/custom-ai/README.md;
@@ -118,7 +120,7 @@ Do not add a second sentence, basis points, fee arithmetic or repeat the platfor
 Plain English, no line breaks, hype, safety or audit claims, internal status or coin name. Start with a verb such as "charges".
 Generate this description from the final source, not from an earlier requested behavior.
 If source is empty, hookSummary must be empty; keep the existing bio unchanged.
-If the request needs a missing material choice, contradicts the core, concerns a reward module rather than fees,
+If the request needs a missing material choice, contradicts the core, concerns an unsupported reward module,
 or requires infrastructure whose interface is not supplied, source must be empty and reply must explain the
 specific missing piece or ask one question. Do not silently substitute a different strategy.
 For a fee draft, contract name MUST be GeneratedFeeModule and compiler MUST be pragma solidity 0.8.26.

@@ -12,8 +12,8 @@ export class StudioConflictError extends Error {
 export function studioSnapshot(state: StudioState) {
   const { settings, image } = state;
   return JSON.stringify([settings.name, settings.symbol, settings.chainId, settings.pairToken, settings.initialBuy,
-    state.messages.map(message => [message.role, message.content]), state.draftId ?? null,
-    image ? [image.id, image.url, image.hash] : null]);
+    state.messages.map(message => [message.role, message.content, ...(message.sources?.length ? [message.sources] : [])]), state.draftId ?? null,
+    image ? [image.id, image.url, image.hash] : null, state.contextId ?? null, state.pendingChange ?? null]);
 }
 export function studioBase(server: StoredStudio | null): StudioBase {
   return { revision: server?.revision ?? 0, snapshot: server ? studioSnapshot(server.state) : "" };

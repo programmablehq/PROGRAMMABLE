@@ -14,18 +14,22 @@ import { useCustomAILaunch } from "./use-launch";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 import styles from "./workspace.module.css";
+import { RuleReview } from "./rule-review";
 
-export function CustomAILaunchPreview({ draft, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt }: {
+export function CustomAILaunchPreview({ draft, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother }: {
   draft?: Draft; disabled: boolean; settings: CoinSetup; chatRevision: number; onChange: (patch: CoinSetupPatch) => void;
   draftId?: string; headers: AISessionHeaders; localPreview: boolean;
   cacheKey: string;
   onLaunchLocked: (locked: boolean) => void;
   imageReceipt?: ImageReceipt; onImageReceipt: (receipt: ImageReceipt | undefined) => void;
+  pendingChange?: string; onKeepRules: () => void; onStartAnother: () => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const imageRequest = useRef(0);
   const [image, setImage] = useState<{ blob: Blob; url: string }>();
-  const launch = useCustomAILaunch({ settings: editingSettings, draftId, image: image?.blob, imageReceipt, headers, localPreview });
+  const [reviewed, setReviewed] = useState<string>();
+  const reviewedSourceHash = !pendingChange && draft?.verification?.status === "passed" && reviewed === draft.sourceHash ? reviewed : undefined;
+  const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview });
   const bound = launch.saved?.session;
   const settings: CoinSetup = useMemo(() => bound ? { ...editingSettings, name: bound.settings.name, symbol: bound.settings.symbol,
     chainId: bound.chainId, initialBuy: bound.settings.initialBuy,
@@ -162,9 +166,11 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
         </label>
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (isEth ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent")}</p>
       </fieldset>
+      {!bound && <RuleReview draft={draft} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
+        onReview={checked => setReviewed(checked ? draft?.sourceHash : undefined)} onKeepRules={onKeepRules} />}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
       <button type="button" className={styles.createButton} disabled={localPreview || disabled || imageBusy || launch.busy}
-        onClick={() => { if (bound?.state === "confirmed") { if (launch.startAnother()) onChange({name:"",symbol:""}); } else void launch.proceed(); }}>
+        onClick={() => { if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>
         {bound?.state === "confirmed" ? "Create another coin" : launch.label}<ArrowRight size={16} aria-hidden="true" /></button>
       {launch.message && <p className={styles.note} role="status">{launch.message}</p>}
       {bound?.state === "confirmed" && bound.token && <a href={`/token/${bound.token}?chain=${bound.chainId}`} className={styles.note}>View {bound.settings.name}</a>}
