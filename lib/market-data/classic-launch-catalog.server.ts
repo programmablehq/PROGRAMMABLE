@@ -1,6 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { createPublicClient, decodeEventLog, formatUnits, http, keccak256, type Address, type Hex, type PublicClient } from "viem";
+import { createPublicClient, decodeEventLog, formatUnits, http, keccak256, type Address, type Hex, type PublicClient, type Transport } from "viem";
 import { mainnet } from "viem/chains";
 import release from "../../config/classic-launch-catalog.v1.json";
 import { canonicalTokenExploreEntryV1 } from "../explore-entry-v1";
@@ -30,11 +30,43 @@ export type ClassicLaunchCatalogV1 = {
 };
 const fail = () => new Error("Canonical Classic launch data is unavailable");
 
+let nextRpcReadAt = 0;
+function isRateLimited(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  while (error && typeof error === "object" && !seen.has(error)) {
+    seen.add(error);
+    const candidate = error as { code?: number; status?: number; cause?: unknown };
+    if (candidate.code === -32_007 || candidate.code === 429 || candidate.status === 429) return true;
+    error = candidate.cause;
+  }
+  return false;
+}
+
+function catalogTransport(rpcUrl: string): Transport {
+  return options => {
+    const transport = http(rpcUrl, { retryCount: 0, timeout: 6_000 })(options);
+    return { ...transport, request: async (args, requestOptions) => {
+      for (let attempt = 0; ; attempt++) {
+        // Budget individual JSON-RPC calls, including multicall chunks and background refreshes.
+        const now = Date.now();
+        const at = Math.max(now, nextRpcReadAt);
+        nextRpcReadAt = at + 35;
+        if (at > now) await new Promise(resolve => setTimeout(resolve, at - now));
+        try { return await transport.request(args, requestOptions); }
+        catch (error) {
+          if (attempt >= 1 || !isRateLimited(error)) throw error;
+          nextRpcReadAt = Math.max(nextRpcReadAt, Date.now() + 1_100);
+        }
+      }
+    } };
+  };
+}
+
 async function withClient<T>(read: (client: PublicClient) => Promise<T>): Promise<T> {
   const deployment = getWebsiteReadOnchainDeployment("production");
   if (deployment.status !== "ready") throw fail();
   return withOperationalRpcFailover(deployment, selected => read(createPublicClient({
-    chain: mainnet, transport: http(selected.rpcUrl, { batch: { batchSize: 50, wait: 5 }, retryCount: 0, timeout: 6_000 }),
+    chain: mainnet, transport: catalogTransport(selected.rpcUrl),
   }) as PublicClient));
 }
 
@@ -45,15 +77,23 @@ async function batches<T, R>(values: readonly T[], size: number, read: (values: 
 }
 
 /** Cache immutable launch provenance separately from the current chain boundary. */
+let hydrationQueue = Promise.resolve();
+async function withHydrationSlot<T>(read: () => Promise<T>): Promise<T> {
+  const previous = hydrationQueue;
+  let release!: () => void;
+  hydrationQueue = new Promise<void>(resolve => { release = resolve; });
+  await previous;
+  try { return await read(); }
+  finally { release(); }
+}
 const hydrate = unstable_cache(async (serialized: string) => {
-  const started = Date.now();
   const proofs = parseClassicLaunchLogs(JSON.parse(serialized) as ClassicRawLog[]);
-  const entries = await withClient(async client => {
+  return withHydrationSlot(() => withClient(async client => {
     const blocks = [...new Set(proofs.map(proof=>proof.launchBlockNumber!))];
     const headers = await batches(blocks, 50, batch=>Promise.all(batch.map(blockNumber=>client.getBlock({ blockNumber:BigInt(blockNumber), includeTransactions:false }))));
     const headersByNumber = new Map(headers.map(header=>[String(header.number),header]));
     const metadata = await batches(proofs, 24, async batch => {
-      const results = await client.multicall({ allowFailure:true, contracts:batch.flatMap(proof=>[
+      const results = await client.multicall({ allowFailure:true, batchSize:32_768, contracts:batch.flatMap(proof=>[
         {address:proof.tokenAddress,abi:uerc20ReadAbi,functionName:"name" as const},
         {address:proof.tokenAddress,abi:uerc20ReadAbi,functionName:"symbol" as const},
         {address:proof.tokenAddress,abi:uerc20ReadAbi,functionName:"decimals" as const},
@@ -88,10 +128,7 @@ const hydrate = unstable_cache(async (serialized: string) => {
       });
     });
     return metadata;
-  });
-  // Only uncached hydration consumes this budget; cached groups return immediately.
-  if (Date.now() - started < 800) await new Promise(resolve => setTimeout(resolve, 800 - (Date.now() - started)));
-  return entries;
+  }));
 }, ["canonical-classic-hydration-v2",CLASSIC_CATALOG_RELEASE], {revalidate:300});
 
 type Candidate = ClassicLaunchCandidate;
@@ -176,7 +213,7 @@ export async function readClassicLaunchCatalogV1(options:ReadOptions={}): Promis
   let abort:(()=>void)|undefined;
   try {
     return await Promise.race([operation,new Promise<never>((_resolve,reject)=>{
-      timer=setTimeout(()=>reject(fail()),Math.max(1,Math.min(20_000,(options.deadlineMs??Date.now()+20_000)-Date.now())));
+      timer=setTimeout(()=>reject(fail()),Math.max(1,Math.min(25_000,(options.deadlineMs??Date.now()+25_000)-Date.now())));
       abort=()=>reject(fail());options.signal?.addEventListener("abort",abort,{once:true});
     })]);
   } catch {
