@@ -37,6 +37,7 @@
   "pnpm": {
     "overrides": {
       "esbuild": "0.28.1",
+      "body-parser": "1.20.9",
       "express": "4.22.2",
       "react-dom": "19.2.5",
       "viem": "2.55.10",
