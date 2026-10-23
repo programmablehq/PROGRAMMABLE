@@ -288,6 +288,7 @@
     "vitest": "4.1.10"
   },
   "overrides": {
+    "zod": "4.6.7",
     "@uniswap/swap-router-contracts": {
       "hardhat-watcher": {
         "chokidar": "4.0.3"
