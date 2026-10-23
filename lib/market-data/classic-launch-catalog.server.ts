@@ -1,6 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { createPublicClient, formatUnits, http, keccak256, toEventSelector, type Address, type Hex, type PublicClient } from "viem";
+import { createPublicClient, decodeEventLog, formatUnits, http, keccak256, type Address, type Hex, type PublicClient } from "viem";
 import { mainnet } from "viem/chains";
 import release from "../../config/classic-launch-catalog.v1.json";
 import { canonicalTokenExploreEntryV1 } from "../explore-entry-v1";
@@ -12,21 +12,21 @@ import { canonicalSha256 } from "../server/projection-target/hashing";
 import { PROGRAMMABLE_MAIN_TOKEN_PRESENTATION } from "../programmable-main-token-presentation";
 import { hasUnsafeDisplayCharacters, characterLength, MAX_TOKEN_NAME_CHARACTERS } from "../metadata-policy";
 import { isValidClassicDisplaySymbol } from "./classic-launch-metadata";
-import { discoverCodexLaunches, type CodexLaunchCandidate } from "../server/codex-launch-discovery";
+import { CLASSIC_RPC_LOG_WINDOW, discoverClassicRpcLaunches, type ClassicLaunchCandidate } from "./classic-rpc-discovery";
 import type { CanonicalTokenExploreEntry, LauncherToken } from "../tokens";
 import { CLASSIC_MAIN_TOKEN, classicLaunchEvents, classicV2Events, parseClassicLaunchLogs, type ClassicRawLog } from "./classic-launch-proof";
 
-export const CLASSIC_CATALOG_SOURCE = "codex-classic-launches" as const;
+export const CLASSIC_CATALOG_SOURCE = "canonical-classic-launcher-rpc" as const;
 export const CLASSIC_CATALOG_RELEASE = canonicalSha256("programmable.classic-launch-catalog.v1", release);
 type ReadOptions = { signal?: AbortSignal; deadlineMs?: number };
 export type ClassicLaunchCatalogV1 = {
-  source: typeof CLASSIC_CATALOG_SOURCE;
+  source: typeof CLASSIC_CATALOG_SOURCE | "codex-classic-launches";
   status: "current" | "last-known-good";
   generatedAt: string;
   asOfBlock: string;
   asOfBlockHash: Hex;
   entries: readonly CanonicalTokenExploreEntry[];
-  evidence: { commitment: `sha256:${string}`; releaseDigest: `sha256:${string}`; provider: "codex"; observedAt: string };
+  evidence: { commitment: `sha256:${string}`; releaseDigest: `sha256:${string}`; provider: "rpc" | "codex"; observedAt: string };
 };
 const fail = () => new Error("Canonical Classic launch data is unavailable");
 
@@ -45,10 +45,10 @@ async function batches<T, R>(values: readonly T[], size: number, read: (values: 
 }
 
 /** Cache immutable launch provenance separately from the current chain boundary. */
-const hydrate = unstable_cache(async (serialized: string, metadataBucket: number) => {
-  if (!Number.isSafeInteger(metadataBucket)) throw fail();
+const hydrate = unstable_cache(async (serialized: string) => {
+  const started = Date.now();
   const proofs = parseClassicLaunchLogs(JSON.parse(serialized) as ClassicRawLog[]);
-  return withClient(async client => {
+  const entries = await withClient(async client => {
     const blocks = [...new Set(proofs.map(proof=>proof.launchBlockNumber!))];
     const headers = await batches(blocks, 50, batch=>Promise.all(batch.map(blockNumber=>client.getBlock({ blockNumber:BigInt(blockNumber), includeTransactions:false }))));
     const headersByNumber = new Map(headers.map(header=>[String(header.number),header]));
@@ -89,41 +89,26 @@ const hydrate = unstable_cache(async (serialized: string, metadataBucket: number
     });
     return metadata;
   });
-}, ["canonical-classic-hydration-v1",CLASSIC_CATALOG_RELEASE], {revalidate:300});
+  // Only uncached hydration consumes this budget; cached groups return immediately.
+  if (Date.now() - started < 800) await new Promise(resolve => setTimeout(resolve, 800 - (Date.now() - started)));
+  return entries;
+}, ["canonical-classic-hydration-v2",CLASSIC_CATALOG_RELEASE], {revalidate:300});
 
-type Candidate = { poolId: string; token: string; hook: string; transaction: Hex; block: number };
-const weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
-const topics = new Set([...classicLaunchEvents, ...classicV2Events].map(event => toEventSelector(event)));
-const receipts = unstable_cache(async (candidates: readonly Candidate[]) => withClient(async client => {
-  const responses = await Promise.all(candidates.map(candidate => client.getTransactionReceipt({ hash: candidate.transaction })));
-  return responses.flatMap((receipt, index): ClassicRawLog[] => {
-    const candidate = candidates[index]!;
-    const source = release.sources.find(source => source.hook === candidate.hook)!;
-    if (receipt.status !== "success" || receipt.blockNumber !== BigInt(candidate.block)
-      || receipt.transactionHash.toLowerCase() !== candidate.transaction) throw fail();
-    const logs = receipt.logs.filter(log => log.address.toLowerCase() === source.launcher
-      && topics.has(log.topics[0]!) && log.topics.some(topic => topic.toLowerCase() === `0x${candidate.token.slice(2).padStart(64, "0")}`));
-    const raw = logs.map(log => ({ address: log.address, blockNumber: String(receipt.blockNumber), blockHash: receipt.blockHash,
-      transactionHash: receipt.transactionHash, transactionIndex: receipt.transactionIndex, logIndex: log.logIndex!,
-      data: log.data, topics: [...log.topics], removed: log.removed }));
-    const proofs = parseClassicLaunchLogs(raw);
-    if (proofs.length !== 1 || proofs[0]!.tokenAddress.toLowerCase() !== candidate.token
-      || proofs[0]!.poolId.toLowerCase() !== candidate.poolId
-      || proofs[0]!.hookAddress.toLowerCase() !== candidate.hook) throw fail();
-    return raw;
-  });
-}), ["codex-classic-receipts-v1", CLASSIC_CATALOG_RELEASE], { revalidate: 300 });
+type Candidate = ClassicLaunchCandidate;
 
-function classicCandidate(pair: CodexLaunchCandidate): Candidate | null {
-  const source = release.sources.find(source => source.hook === pair.hookAddress);
-  if (!source) throw fail();
-  const token = pair.tokens.find(token => token.address !== weth && token.address !== "0x0000000000000000000000000000000000000000");
-  if (!token || ![weth, "0x0000000000000000000000000000000000000000"].some(quote => pair.token0 === quote || pair.token1 === quote)) throw fail();
-  // Retain the same historical V2 scope as the existing public catalog.
-  if (source.version === "classic-v2" && token.address !== CLASSIC_MAIN_TOKEN) return null;
-  if (!token.creationTransaction || token.creationBlock === null || token.creationBlock < Number(source.startBlock)) throw fail();
-  return { poolId: pair.poolId, token: token.address, hook: pair.hookAddress, transaction: token.creationTransaction as Hex, block: token.creationBlock };
+async function readLogWindow(from: string, to: string): Promise<ClassicRawLog[]> {
+  return withClient(async client => (await client.getLogs({
+    address: release.sources.map(source => source.launcher as Address), events: [...classicLaunchEvents, ...classicV2Events],
+    fromBlock: BigInt(from), toBlock: BigInt(to),
+  })).map(log => {
+    if (log.blockNumber === null || !log.blockHash || !log.transactionHash || log.transactionIndex === null || log.logIndex === null) throw fail();
+    return { address: log.address, blockNumber: String(log.blockNumber), blockHash: log.blockHash,
+      transactionHash: log.transactionHash, transactionIndex: log.transactionIndex, logIndex: log.logIndex,
+      data: log.data, topics: [...log.topics], removed: log.removed };
+  }));
 }
+// Fixed historical ranges are shared across pages and server instances. Only the tail is refreshed.
+const historicalLogs = unstable_cache(readLogWindow, ["canonical-classic-rpc-logs-v1", CLASSIC_CATALOG_RELEASE], { revalidate: 3_600 });
 
 async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
   const anchor = await withClient(async client => {
@@ -144,19 +129,28 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
     });
     return anchor;
   });
-  const discovered = await discoverCodexLaunches(1, release.sources.map(source => source.hook), Number(anchor.timestamp));
   const observedAt = new Date().toISOString();
-  const candidates = discovered.map(classicCandidate).filter((candidate): candidate is Candidate => candidate !== null);
+  const { candidates, logs } = await discoverClassicRpcLaunches(anchor.number, (from, to) =>
+    to - from + 1n === CLASSIC_RPC_LOG_WINDOW ? historicalLogs(String(from), String(to)) : readLogWindow(String(from), String(to)));
   if (candidates.some(candidate => BigInt(candidate.block) > anchor.number)
     || new Set(candidates.map(candidate => candidate.token)).size !== candidates.length) throw fail();
   candidates.sort((a,b) => a.block-b.block || a.token.localeCompare(b.token));
+  const byToken = new Map<string, ClassicRawLog[]>();
+  for (const log of logs) {
+    const source = release.sources.find(source => source.launcher === log.address.toLowerCase())!;
+    const event = decodeEventLog({ abi: source.version === "classic-v2" ? classicV2Events : classicLaunchEvents,
+      data: log.data as Hex, topics: log.topics as [Hex, ...Hex[]], strict: true });
+    const token = String(event.args.token).toLowerCase();
+    const group = byToken.get(token) ?? [];
+    group.push(log); byToken.set(token, group);
+  }
   const chunks: Candidate[][] = [];
   for (let offset=0; offset<candidates.length; offset+=24) chunks.push(candidates.slice(offset,offset+24));
-  const groups = await batches(chunks, 4, batch => Promise.all(batch.map(chunk => receipts(chunk))));
-  const logs = groups.flat();
-  parseClassicLaunchLogs(logs);
-  const entries = await batches(groups, 4, async batch => (await Promise.all(batch.map(group =>
-    hydrate(JSON.stringify(group), Math.floor(Date.now()/300_000))
+  const groups = chunks.map(chunk => chunk.flatMap(candidate => byToken.get(candidate.token)!));
+  // Complete canonical getLogs groups already prove successful transaction events;
+  // hydrate additionally checks each recorded block hash against the node's headers.
+  const entries = await batches(groups, 1, async batch => (await Promise.all(batch.map(group =>
+    hydrate(JSON.stringify(group))
   ))).flat());
   if (!entries.some(entry => entry.tokenAddress.toLowerCase() === CLASSIC_MAIN_TOKEN)) throw fail();
   await withClient(async client => {
@@ -166,7 +160,7 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
   });
   return { source: CLASSIC_CATALOG_SOURCE, status:"current", generatedAt:observedAt,
     asOfBlock:String(anchor.number), asOfBlockHash:anchor.hash!, entries,
-    evidence:{provider:"codex",observedAt,releaseDigest:CLASSIC_CATALOG_RELEASE,commitment:canonicalSha256("programmable.codex-classic-launch-catalog-evidence.v1",{
+    evidence:{provider:"rpc",observedAt,releaseDigest:CLASSIC_CATALOG_RELEASE,commitment:canonicalSha256("programmable.rpc-classic-launch-catalog-evidence.v1",{
       releaseDigest:CLASSIC_CATALOG_RELEASE, blockNumber:String(anchor.number), blockHash:anchor.hash, candidates, logs,
     })} };
 }
@@ -182,7 +176,7 @@ export async function readClassicLaunchCatalogV1(options:ReadOptions={}): Promis
   let abort:(()=>void)|undefined;
   try {
     return await Promise.race([operation,new Promise<never>((_resolve,reject)=>{
-      timer=setTimeout(()=>reject(fail()),Math.max(1,Math.min(12_000,(options.deadlineMs??Date.now()+12_000)-Date.now())));
+      timer=setTimeout(()=>reject(fail()),Math.max(1,Math.min(20_000,(options.deadlineMs??Date.now()+20_000)-Date.now())));
       abort=()=>reject(fail());options.signal?.addEventListener("abort",abort,{once:true});
     })]);
   } catch {

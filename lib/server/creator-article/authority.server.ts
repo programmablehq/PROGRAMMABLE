@@ -26,6 +26,7 @@ export type CreatorArticleAuthorityV1 = Readonly<{
   creatorAddress: `0x${string}`;
   source:
     | "codex-classic-launches"
+    | "canonical-classic-launcher-rpc"
     | "registry.custom-launched"
     | "canonical-launch-stamp-router"
     | "official-main-token";
@@ -97,7 +98,7 @@ export function createCreatorArticleAuthorityReaderV1(input: Readonly<{
             ? "official-main-token"
             : entry.launchModel === "classic"
                 && ["classic-v3", "classic-v4"].includes(entry.launchModelVersion ?? "")
-              ? "codex-classic-launches"
+              ? "canonical-classic-launcher-rpc"
               : null;
         } else if (lane === "custom" && entry.exploreKind === "custom-project") {
           if (

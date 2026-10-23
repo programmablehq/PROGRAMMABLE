@@ -30,9 +30,9 @@ const presentation = (marketSchema: Schema) => object({ tokenAddress: address,
   imageUrl: nullable(text), description: nullable(text),
   links: array(object({ label: text, url: text })), market: marketSchema });
 
-const ethereumSource = nullable(object({ source: { enum: ["codex-classic-launches", "canonical-launch-stamp-router"] },
+const ethereumSource = nullable(object({ source: { enum: ["codex-classic-launches", "canonical-classic-launcher-rpc", "canonical-launch-stamp-router"] },
   asOfBlock: block, asOfBlockHash: hash, commitment: ref("Sha256Digest"), generatedAt: timestamp,
-  releaseDigest: ref("Sha256Digest"), provider: { const: "codex" }, observedAt: timestamp }, ["source", "asOfBlock", "asOfBlockHash", "commitment", "generatedAt"]));
+  releaseDigest: ref("Sha256Digest"), provider: { enum: ["codex", "rpc"] }, observedAt: timestamp }, ["source", "asOfBlock", "asOfBlockHash", "commitment", "generatedAt"]));
 const ethereumProvenance = { oneOf: [
   object({ schemaVersion: { const: "programmable.explore-launch-category-provenance.v1" },
     category: { const: "classic" }, source: { const: "canonical-launch-read-model" },
