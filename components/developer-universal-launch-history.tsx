@@ -2,6 +2,7 @@
 import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import { launchStatusFingerprint, launchStatusUpdateMessage } from "@/lib/custom-launch-status-update";
+import { settleSequentially } from "@/lib/settle-sequentially";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Hex } from "viem";
@@ -86,7 +87,8 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
     const loaders = credentials.current;
     const sharedTokens = Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
 
-    const results = await Promise.allSettled(sources.filter(source => !props.sourceOnly || source === props.sourceOnly).map(async source => {
+    const requestedSources = sources.filter(source => !props.sourceOnly || source === props.sourceOnly);
+    const results = await settleSequentially(requestedSources, async source => {
       const tokens = await sharedTokens;
       if (props.initialLaunchId) {
         try {
@@ -99,7 +101,7 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
       }
       return { source, selectedUnavailable: false,
         ...parseEntries(await request(source, undefined, { signal }, "", undefined, tokens), account) };
-    }));
+    });
     if (signal.aborted) return;
     const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
     setEntries(previous => [...new Map([...previous, ...successful.flatMap(result => result.entries)].map(entry => [identity(entry), entry])).values()]
