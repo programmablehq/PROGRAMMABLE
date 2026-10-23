@@ -821,36 +821,62 @@ contract CustomAILifecycleV1Test is Test {
         assertLe(type(CustomAIHookV1).creationCode.length + 1024, 49_152);
         assertLe(type(CustomAIFactoryV1).creationCode.length + 1024, 49_152);
     }
+
     function test_fundedProgramBuybackUsesRealPoolAndPreservesCore() public {
-        CustomAIProgramV1 program = new CustomAIProgramV1(CustomAIProgramV1.Configuration({
-            factory: factory, creator: address(this), launchSalt: params.launchSalt, quote: address(quote),
-            quoteDecimals: 18, mode: CustomAIProgramV1.Mode.Buyback, recipient: OTHER,
-            interval: 3600, maximumBatch: 1 ether, minimumTokensPerQuote: 90 ether
-        }));
+        CustomAIProgramV1 program = new CustomAIProgramV1(
+            CustomAIProgramV1.Configuration({
+                factory: factory,
+                creator: address(this),
+                launchSalt: params.launchSalt,
+                quote: address(quote),
+                quoteDecimals: 18,
+                mode: CustomAIProgramV1.Mode.Buyback,
+                recipient: OTHER,
+                interval: 3600,
+                maximumBatch: 1 ether,
+                minimumTokensPerQuote: 90 ether
+            })
+        );
         params.rewards.creatorShareBps = 4000;
-        params.rewards.module = T.ModuleBinding(address(program), address(program).codehash, program.configurationHash());
-        _prepare(); _launch();
+        params.rewards.module =
+            T.ModuleBinding(address(program), address(program).codehash, program.configurationHash());
+        _prepare();
+        _launch();
         CustomAIFeeLedgerV1(launched.ledger).claimAdditional();
         uint256 supplyBefore = IERC20(launched.token).totalSupply();
         uint256 balanceBefore = IERC20(launched.token).balanceOf(OTHER);
         (uint256 paid, uint256 received) = program.buyback();
-        assertGt(paid, 0); assertLe(paid, 1 ether); assertGt(received, 0);
+        assertGt(paid, 0);
+        assertLe(paid, 1 ether);
+        assertGt(received, 0);
         assertEq(IERC20(launched.token).balanceOf(OTHER), balanceBefore + received);
         assertEq(IERC20(launched.token).totalSupply(), supplyBefore);
         assertEq(quote.allowance(address(program), address(router)), 0);
-        assertLe(address(program).code.length, 24576);
-        vm.expectRevert(CustomAIProgramV1.NotReady.selector); program.buyback();
+        assertLe(address(program).code.length, 24_576);
+        vm.expectRevert(CustomAIProgramV1.NotReady.selector);
+        program.buyback();
     }
 
     function test_fundedProgramStakingUsesLaunchedCoinAndActualFeeRevenue() public {
-        CustomAIProgramV1 program = new CustomAIProgramV1(CustomAIProgramV1.Configuration({
-            factory: factory, creator: address(this), launchSalt: params.launchSalt, quote: address(quote),
-            quoteDecimals: 18, mode: CustomAIProgramV1.Mode.Staking, recipient: address(0),
-            interval: 3600, maximumBatch: 0, minimumTokensPerQuote: 0
-        }));
+        CustomAIProgramV1 program = new CustomAIProgramV1(
+            CustomAIProgramV1.Configuration({
+                factory: factory,
+                creator: address(this),
+                launchSalt: params.launchSalt,
+                quote: address(quote),
+                quoteDecimals: 18,
+                mode: CustomAIProgramV1.Mode.Staking,
+                recipient: address(0),
+                interval: 3600,
+                maximumBatch: 0,
+                minimumTokensPerQuote: 0
+            })
+        );
         params.rewards.creatorShareBps = 5000;
-        params.rewards.module = T.ModuleBinding(address(program), address(program).codehash, program.configurationHash());
-        _prepare(); _launch();
+        params.rewards.module =
+            T.ModuleBinding(address(program), address(program).codehash, program.configurationHash());
+        _prepare();
+        _launch();
         uint256 amount = IERC20(launched.token).balanceOf(address(this));
         IERC20(launched.token).approve(address(program), amount);
         program.stake(amount);
@@ -858,9 +884,10 @@ contract CustomAILifecycleV1Test is Test {
         program.collect();
         uint256 beforeQuote = quote.balanceOf(address(this));
         uint256 claimed = program.claim();
-        assertGt(claimed, 0); assertEq(quote.balanceOf(address(this)), beforeQuote + claimed);
-        program.withdraw(amount); assertEq(IERC20(launched.token).balanceOf(address(this)), amount);
+        assertGt(claimed, 0);
+        assertEq(quote.balanceOf(address(this)), beforeQuote + claimed);
+        program.withdraw(amount);
+        assertEq(IERC20(launched.token).balanceOf(address(this)), amount);
         assertEq(program.totalStaked(), 0);
     }
-
 }
