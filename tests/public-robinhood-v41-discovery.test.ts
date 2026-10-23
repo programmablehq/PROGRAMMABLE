@@ -66,9 +66,9 @@ describe("profile selected public Robinhood API contract", () => {
     ethereumItems.items = ethereumItems.items.oneOf[0];
     for (const kind of ["classic", "custom"]) {
       const source = previous.components.schemas.EthereumExplorePage.properties.sourceEvidence.properties[kind].anyOf[0].properties;
-      expect(source.source).toEqual({ enum: ["codex-classic-launches", "canonical-launch-stamp-router"] });
+      expect(source.source).toEqual({ enum: ["codex-classic-launches", "canonical-classic-launcher-rpc", "canonical-launch-stamp-router"] });
       expect(source.releaseDigest).toEqual({ $ref: "#/components/schemas/Sha256Digest" });
-      expect(source.provider).toEqual({ const: "codex" });
+      expect(source.provider).toEqual({ enum: ["codex", "rpc"] });
       expect(source.observedAt).toEqual({ type: "string", format: "date-time" });
       source.source = { enum: ["envio-classic-v3", "canonical-launch-stamp-router"] };
       delete source.releaseDigest;
