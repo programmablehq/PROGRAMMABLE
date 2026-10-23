@@ -1,6 +1,6 @@
 .workspace { width: min(1040px, calc(100% - 48px)); margin: 32px auto 64px; color: #f4f1eb; }
 .studio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: clamp(24px, 4vw, 48px); align-items: stretch; }
-.conversation { display: flex; flex-direction: column; min-width: 0; min-height: 480px; padding: 12px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.conversation { position: sticky; top: 84px; align-self: start; display: flex; flex-direction: column; min-width: 0; height: clamp(360px, calc(100dvh - 124px), 800px); padding: 12px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
 .transcript { flex: 1; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; padding: 12px 8px 24px; }
 .empty { min-height: 100%; display: grid; align-content: center; text-align: center; padding: 24px; }
 .empty h2 { margin: 0; font-size: clamp(25px, 3vw, 30px); line-height: 1.25; font-weight: 400; letter-spacing: -.035em; text-wrap: balance; }
@@ -94,7 +94,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 740px) {
   .studio { grid-template-columns: minmax(0, 1fr); gap: 40px; }
-  .conversation { height: clamp(360px, 60dvh, 520px); min-height: 0; }
+  .conversation { position: static; height: clamp(360px, 60dvh, 520px); min-height: 0; }
   .coinPanel { width: min(100%, 440px); margin-inline: auto; }
   .coinForm input { font-size: 16px; }
 }
@@ -104,3 +104,24 @@
   .transcript { padding-inline: 4px; }
   .message[data-role="user"] { max-width: 91%; }
 }
+.chatToolbar { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 0 8px 8px; border-bottom: 1px solid #343431; }
+.chatToolbar button, .textButton { min-height: 40px; padding: 4px 0; border: 0; background: transparent; color: #c7c2ba; font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.usage { position: relative; font-size: 13px; color: #c7c2ba; }
+.usage summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; }
+.usage > div { position: absolute; inset-inline-end: 0; top: 100%; z-index: 8; width: min(270px, 70vw); padding: 12px 16px; border: 1px solid #44413b; border-radius: 12px; background: #22211e; box-shadow: 0 6px 20px #0006; }
+.usage p { line-height: 1.6; margin: 0 0 8px; }
+.progress { display: block; margin: 8px 0; color: #c7c2ba; font-size: 13px; line-height: 1.5; }
+.ruleReview { margin-top: 24px; padding-top: 18px; border-top: 1px solid #44413b; color: #c7c2ba; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.ruleReview h3 { margin: 0 0 10px; color: #f4f1eb; font-size: 15px; font-weight: 500; }
+.ruleReview ul { padding-inline-start: 18px; margin: 12px 0; }
+.ruleReview li + li { margin-top: 6px; }
+.ruleReview summary { cursor: pointer; min-height: 40px; align-content: center; }
+.ruleReview table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ruleReview td, .ruleReview th { padding: 6px 4px; text-align: start; border-bottom: 1px solid #343431; font-weight: 400; }
+.ruleReview thead th { color: #f4f1eb; }
+.pendingRequest { max-height: 96px; overflow-y: auto; padding-inline-start: 10px; border-inline-start: 2px solid #aaa69f; }
+.coinForm .ruleConsent { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; cursor: pointer; }
+.coinForm .ruleConsent input { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; margin: 0; accent-color: #ede7dc; }
+.sources { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.sources a { color: #c7c2ba; text-decoration: underline; text-underline-offset: 3px; }
+.sources a:focus-visible { outline: 2px solid #ede7dc; outline-offset: 3px; }

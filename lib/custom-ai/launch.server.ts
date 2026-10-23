@@ -22,6 +22,9 @@ import { type LaunchSession, type LaunchStep, type StoredLaunchSession } from ".
 import type { AIStore } from "./store.server";
 import { reconcileWalletStep } from "./reconcile-step.server";
 import { pendingNonce, receiptState, makeStep } from "./transaction.server";
+import { prepareEventFeed } from "./feed.server";
+import { eventModuleSource } from "../../scripts/custom-ai/event-module.mjs";
+import { checkProgram, programArtifact, programInitCode } from "./program.server";
 
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const json = (value: unknown) => JSON.parse(encodeLaunchValue(value));
@@ -50,6 +53,8 @@ async function checkedDraft(store: AIStore, owner: string, id: string): Promise<
     || createHash("sha256").update(draft.source).digest("hex") !== draft.sourceHash) {
     throw new CustomAIError("draft", "Build your hook in the chat before creating the coin.", 422);
   }
+  checkProgram(draft);
+  if (draft.feed && draft.source.replace(/\n?\/\/ @programmable-program-v1 [^\n]*/g, "").trim() !== eventModuleSource(draft.feed).trim()) throw new CustomAIError("feed", "The saved event rule differs from its checked source.", 422);
   return draft;
 }
 async function checkedDeployment(chain: CustomAIChain, account: Address): Promise<CoreDeployment> {
@@ -65,6 +70,7 @@ async function checkedDeployment(chain: CustomAIChain, account: Address): Promis
 
 export async function createLaunchSession(store: AIStore, owner: string, wallets: readonly Address[], input: {
   id: string; account: string; draftId: string; imageId: string; settings: CoinSettings;
+  reviewedSourceHash?: string;
 }): Promise<StoredLaunchSession> {
   if (!/^[a-zA-Z0-9-]{16,64}$/.test(input.id)) throw new CustomAIError("input", "Invalid launch request.");
   const account = getAddress(input.account);
@@ -80,6 +86,27 @@ export async function createLaunchSession(store: AIStore, owner: string, wallets
   const image = await store.readObject<{ url: string }>(owner, "image", input.imageId);
   if (!image || image.value.url !== settings.imageURI) throw new CustomAIError("image", "Choose and upload your coin image first.");
   const draft = await checkedDraft(store, owner, input.draftId);
+  if (draft.verification?.status !== "passed" || draft.verification.sourceHash !== draft.sourceHash
+    || !draft.verification.checks.length || draft.verification.cases !== draft.verification.checks.length * 4
+    || input.reviewedSourceHash !== draft.sourceHash) {
+    throw new CustomAIError("rules", "Check this draft in the chat, then select the exact rules for this coin.", 422);
+  }
+  if (draft.feed) {
+    if (draft.feed.chainId !== settings.chainId) throw new CustomAIError("feed", "Recheck the event rule after changing its network.", 422);
+    if (process.env.CUSTOM_AI_EVENTS_ENABLED !== "true"
+      && !process.env.CUSTOM_AI_CANARY_WALLETS?.toLowerCase().split(",").map(value => value.trim()).includes(account.toLowerCase())) throw new CustomAIError("feed", "Event launches are prepared for testing; public launch is not enabled yet.", 503);
+    const current = await prepareEventFeed(draft.feed.rule, settings.chainId);
+    if (current.runtimeHash !== draft.feed.runtimeHash || current.address !== draft.feed.address) throw new CustomAIError("feed", "The selected feed changed. Recheck the draft.", 422);
+  }
+  if (draft.program) {
+    if (draft.program.chainId !== settings.chainId || draft.program.quote.toLowerCase() !== settings.quote.toLowerCase()) {
+      throw new CustomAIError("program", "Recheck the program in the chat after changing its network or pair.", 422);
+    }
+    if (process.env.CUSTOM_AI_PROGRAMS_ENABLED !== "true"
+      && !process.env.CUSTOM_AI_CANARY_WALLETS?.toLowerCase().split(",").map(value => value.trim()).includes(account.toLowerCase())) {
+      throw new CustomAIError("program", "Funded programs are prepared for testing; public launch is not enabled yet.", 503);
+    }
+  }
   const chain = await customAIChain(settings.chainId);
   await checkedDeployment(chain, account);
   const quote = await inspectCustomAIQuote(settings.chainId, settings.quote, chain, account);
@@ -98,6 +125,7 @@ export async function createLaunchSession(store: AIStore, owner: string, wallets
   const session: LaunchSession = { id: input.id, inputHash, account, chainId: settings.chainId, settings, description,
     draftId: input.draftId, imageId: input.imageId, sourceHash: draft.sourceHash, artifactHash: draft.validation!.artifactHash,
     coreBundleHash: CUSTOM_AI_BUNDLE_HASH, launchSalt: keccak256(toHex(`${owner}:${input.id}`)), state: "preparing", steps: [],
+    ...(draft.program ? { program: draft.program } : {}),
     ...(quote.message ? { quoteNotice: quote.message } : {}), priceEvidence: priced.evidence };
   await store.createLaunch(owner, input.id, json(session), `${settings.chainId}:${account.toLowerCase()}`);
   return loadLaunch(store, owner, input.id);
@@ -127,7 +155,7 @@ async function prepareFinalOrder(chain: CustomAIChain, deployment: CoreDeploymen
   const parameters: LaunchParameters = { metadata: { name: session.settings.name, symbol: session.settings.symbol,
     description: session.description, imageURI: session.settings.imageURI, website: "", socialData: "0x" },
     quote: session.settings.quote, quoteDecimals: priced.quote.decimals, initialTick: 0, launchSalt: session.launchSalt, hookSalt: zeroHash,
-    feeModule: session.module!, rewards: { creatorRecipient: session.account, creatorShareBps: 10000, module: zeroModule },
+    feeModule: session.module!, rewards: { creatorRecipient: session.account, creatorShareBps: 10000 - (session.program?.spec.rewardShareBps ?? 0), module: session.rewardModule ?? zeroModule },
     initialBuyQuote: BigInt(priced.quote.initialBuyRaw), minimumBuyTokens: 1n, maximumFeeBps: 1500, deadline: price.validUntil };
   const token = predictCustomAIToken(deployment.factory.address, session.account, parameters);
   parameters.initialTick = planCustomAIPrice(token, parameters.quote, parameters.quoteDecimals, price.quoteUsdE18).initialTick;
@@ -142,7 +170,9 @@ async function prepareFinalOrder(chain: CustomAIChain, deployment: CoreDeploymen
     if ((BigInt(address) & 16383n) === 8396n) { parameters.hookSalt = salt; found = true; break; }
   }
   if (!found) throw new CustomAIError("salt", "The hook address could not be prepared. Try again.", 503);
-  const sign = async () => bindCustomAILaunch({ chainId: chain.chainId, factory: deployment.factory.address, account: session.account,
+  const sign = async () => bindCustomAILaunch({
+    ...(session.program && session.rewardModule ? { rewardProgram: { bundleHash: session.program.bundleHash,
+      binding: session.rewardModule, creatorShareBps: parameters.rewards.creatorShareBps } } : {}), chainId: chain.chainId, factory: deployment.factory.address, account: session.account,
     sourceHash: session.sourceHash, artifactHash: session.artifactHash, coreBundleHash: session.coreBundleHash, predictedToken: token,
     parameters, price, priceSigner: signer.address, signature: await signer.signTypedData(customAIPriceTypedData(chain.chainId,
       deployment.factory.address, customAIPlanHash(chain.chainId, deployment.factory.address, session.account, parameters), price)) }, BigInt(Math.floor(Date.now()/1000)));
@@ -190,6 +220,24 @@ export async function advanceLaunch(store: AIStore, owner: string, saved: Stored
   if (last?.state === "prepared" && last.expiresAt > Math.floor(Date.now()/1000) + 10) return saved;
   const draft = await checkedDraft(store, owner, session.draftId);
   if (draft.sourceHash !== session.sourceHash || draft.validation!.artifactHash !== session.artifactHash) throw Error("Draft changed");
+  if (draft.program) {
+    const decimals = Number(await chain.call(session.settings.quote, "function decimals() view returns (uint8)"));
+    const data = programInitCode(draft, { factory: deployment.factory.address, account: session.account,
+      launchSalt: session.launchSalt, quote: session.settings.quote, quoteDecimals: decimals });
+    const completedProgram = session.steps.find(step => step.kind === "program" && step.state === "confirmed");
+    if (!completedProgram) {
+      const next = await makeStep(chain, session, "program", null, data);
+      if (last?.state === "prepared") last.state = "rejected";
+      session.steps.push(next); session.state = "ready";
+      return saveLaunch(store, owner, saved);
+    }
+    if (completedProgram.transaction.data !== data) throw new CustomAIError("program", "The program configuration changed. Keep this launch for recovery.", 409);
+    const instance = getCreateAddress({ from: session.account, nonce: BigInt(completedProgram.transaction.nonce) });
+    const code = await chain.code(instance);
+    if (!matchesRuntime(code, programArtifact)) throw new CustomAIError("program", "The deployed reward program differs from the checked template.", 409);
+    session.rewardModule = { instance, runtimeHash: keccak256(code),
+      configurationHash: asHash(await chain.call(instance, "function configurationHash() view returns (bytes32)")) };
+  }
   const moduleStep = session.steps.find(step => step.kind === "module" && step.state === "confirmed");
   let next: LaunchStep;
   if (!moduleStep) next = await makeStep(chain, session, "module", null, draft.artifact!.initCode);

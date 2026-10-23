@@ -263,7 +263,7 @@
     "@vercel/blob": "2.6.1",
     "@vercel/oidc": "3.8.1",
     "lucide-react": "1.26.0",
-    "next": "16.3.8",
+    "next": "16.4.2",
     "pg": "8.22.0",
     "postgres": "3.4.7",
     "react": "19.2.8",
@@ -282,12 +282,13 @@
     "ajv-formats": "^3.0.1",
     "esbuild": "0.28.1",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.2",
     "parse5": "^8.0.1",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
   },
   "overrides": {
+    "zod": "4.6.7",
     "@uniswap/swap-router-contracts": {
       "hardhat-watcher": {
         "chokidar": "4.0.3"

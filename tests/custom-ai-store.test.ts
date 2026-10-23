@@ -24,6 +24,23 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("shared Custom AI storage", () => {
+  it("reports account allowance, exact resets and no other account's usage", async () => {
+    const before = await store.usage("alice");
+    expect(before.hourly).toEqual({ used: 0, limit: 10, remaining: 10, resetsAt: clock + 3_600_000 });
+    const reserved = await store.reserve("alice", request());
+    await store.finish("alice", request().id, reserved.lease!, { reply: "Failed to build", chargedAs: "build", change: "blocked" });
+    expect((await store.usage("alice")).hourly.remaining).toBe(5);
+    expect((await store.usage("bob")).hourly.remaining).toBe(10);
+    clock += 3_600_000;
+    expect((await store.usage("alice")).hourly.remaining).toBe(10);
+    expect((await store.usage("alice")).daily.remaining).toBe(10);
+  });
+  it("keeps the full reservation when a chat-requested build produces no usable draft", async () => {
+    const input = { ...request(), intent: "chat" as const };
+    const reserved = await store.reserve("alice", input);
+    await store.finish("alice", input.id, reserved.lease!, { reply: "Couldn't build", chargedAs: "build", change: "blocked" });
+    expect((await store.usage("alice")).hourly.used).toBe(5);
+  });
   it("holds a wallet across launch and trade dispatches until a definite outcome", async () => {
     const make=(id:string):WalletSession=>({id,account:"0x1000000000000000000000000000000000000001",chainId:1,state:"waiting",steps:[{
       id:`step-${id}`,kind:"approve",state:"dispatching",preparedBlock:"100",expiresAt:1800000000,

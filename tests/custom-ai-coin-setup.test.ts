@@ -9,6 +9,10 @@ const request: ChatRequest = { id: "coin-setup-test-0001", intent: "chat", coin:
   messages: [{ role: "user", content: "Call it Example, ticker EXM, on Robinhood with an ETH pair." }] };
 const response = (value: object) => ({ text: JSON.stringify(value), inputTokens: 20, outputTokens: 20 });
 
+const plan = (action: string, setupPatch: object = {}) => response({ reply: "Requested coin details.", action,
+  memory: "Keep the requested coin details.", requirements: ["1% total fees"], unresolved: [], setupPatch,
+  feeChecks: [{ afterSeconds: 0, buy: true, totalFeeBps: 100 }, { afterSeconds: 0, buy: false, totalFeeBps: 100 }] });
+
 describe("Chat-driven coin details", () => {
   it("applies only the named fields and retains the rest", () => {
     expect(applyCoinSetupPatch(EMPTY_COIN_SETUP, { name: "Example", symbol: "EXM" })).toEqual({ ...EMPTY_COIN_SETUP, name: "Example", symbol: "EXM" });
@@ -35,8 +39,7 @@ describe("Chat-driven coin details", () => {
   });
   it("changes settings without compiling a new hook", async () => {
     const compile = vi.fn();
-    const call = vi.fn(async () => response({ reply: "Example is set to Robinhood with ETH.", source: "", hookSummary: "",
-      setupPatch: { name: "Example", symbol: "EXM", chainId: 4663, pairToken: "ETH", initialBuy: null } }));
+    const call = vi.fn(async () => plan("answer", { name: "Example", symbol: "EXM", chainId: 4663, pairToken: "ETH", initialBuy: null }));
     const result = await runCustomAI(request, undefined, { call, compile });
     expect(result.setupPatch).toEqual({ name: "Example", symbol: "EXM", chainId: 4663, pairToken: "ETH" });
     expect(result.draft).toBeUndefined();
@@ -44,16 +47,16 @@ describe("Chat-driven coin details", () => {
     expect(call.mock.calls).toHaveLength(1);
   });
   it("rejects a model-invented payment address and accepts one actually supplied", async () => {
-    const call = async () => response({ reply: "Pair selected.", source: "", setupPatch: { pairToken: address } });
+    const call = async () => plan("answer", { pairToken: address });
     await expect(runCustomAI(request, undefined, { call, compile: vi.fn() })).rejects.toThrow("pair address");
     const result = await runCustomAI({ ...request, messages: [{ role: "user", content: `Use the pair token ${address}.` }] }, undefined, { call, compile: vi.fn() });
     expect(result.setupPatch?.pairToken).toBe(address);
   });
   it("binds the bio to the successful source and derives its name from the current form", async () => {
     const draft: Draft = { source: "example", sourceHash: "exact-source", compiled: true, diagnostics: [],
-      validation: { version: "self-contained-fee-v1", status: "passed", artifactHash: "exact-artifact", cases: 1, samples: [], deployments: [] } };
+      validation: { version: "self-contained-fee-v1", status: "passed", artifactHash: "exact-artifact", cases: 1, samples: [], deployments: [], expectationCases: 8 } };
     const result = await runCustomAI(request, undefined, {
-      call: async () => response({ reply: "Done.", source: "example", hookSummary: "charges 3% on buys and sells for 24 hours, then 1%", setupPatch: {} }),
+      call: vi.fn().mockResolvedValueOnce(plan("build")).mockResolvedValue(response({ reply: "Done.", source: "example", hookSummary: "charges 3% on buys and sells for 24 hours, then 1%", setupPatch: {} })),
       compile: async () => draft,
     });
     expect(result.draft?.sourceHash).toBe("exact-source");
@@ -61,17 +64,18 @@ describe("Chat-driven coin details", () => {
   });
   it("never attaches a new claimed bio to a failed build", async () => {
     const result = await runCustomAI(request, undefined, {
-      call: async () => response({ reply: "Done.", source: "invalid", hookSummary: "pays everyone", setupPatch: {} }),
+      call: vi.fn().mockResolvedValueOnce(plan("build")).mockResolvedValue(response({ reply: "Done.", source: "invalid", hookSummary: "pays everyone", setupPatch: {} })),
       compile: async () => ({ source: "invalid", sourceHash: "failed", compiled: false, diagnostics: ["invalid"] }),
     });
     expect(result.draft?.hookSummary).toBeUndefined();
   });
   it("preserves the requested coin details across compiler repairs", async () => {
-    const call = vi.fn().mockResolvedValueOnce(response({ reply: "Draft.", source: "first",
+    const call = vi.fn().mockResolvedValueOnce(plan("build", { name: "Example", symbol: "EXM", chainId: 4663 }))
+      .mockResolvedValueOnce(response({ reply: "Draft.", source: "first",
       setupPatch: { name: "Example", symbol: "EXM", chainId: 4663 } }))
       .mockResolvedValueOnce(response({ reply: "Done.", source: "repaired", hookSummary: "charges 1% on swaps", setupPatch: { name: null, initialBuy: "500" } }));
     const compile = vi.fn().mockResolvedValueOnce({ source: "first", sourceHash: "first", compiled: false, diagnostics: ["repair"] })
-      .mockResolvedValueOnce({ source: "repaired", sourceHash: "repaired", compiled: true, diagnostics: [], validation: { status: "passed" } });
+      .mockResolvedValueOnce({ source: "repaired", sourceHash: "repaired", compiled: true, diagnostics: [], validation: { status: "passed", expectationCases: 8 } });
     const result = await runCustomAI(request, undefined, { call, compile });
     expect(result.setupPatch).toEqual({ name: "Example", symbol: "EXM", chainId: 4663 });
     expect(result.draft?.sourceHash).toBe("repaired");

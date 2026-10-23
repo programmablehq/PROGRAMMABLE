@@ -6,6 +6,7 @@ import { DeveloperUniversalLaunchHistory, parseEntries } from "./developer-unive
 import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
 import { launchOverviewItem, mergeLaunchOverview, type LaunchOverviewItem, type LaunchOverviewSource } from "@/lib/developer-launch-overview";
+import { settleSequentially } from "@/lib/settle-sequentially";
 import shared from "./developer-api-keys.module.css";
 import styles from "./developer-launch-workspace.module.css";
 type Props = DeveloperLaunchHistoryProps & {
@@ -60,9 +61,9 @@ export function DeveloperLaunchWorkspace(props: Props) {
       const headers = new Headers({ Accept: "application/json", Authorization: `Bearer ${access}` });
       if (identity) headers.set("X-Privy-Identity-Token", identity);
       const id = !deepLinkDone.current ? props.initialLaunchId : null;
-      const results = await Promise.allSettled(sources.filter(source => (!more || more[source]) && (!id || (props.initialLaunchChainId === "8453"
-        ? source === "base" : source !== "base" && (props.initialLaunchChainId !== null || source === "legacy"))))
-        .map(source => read(source, headers, signal, more?.[source], id)));
+      const requestedSources = sources.filter(source => (!more || more[source]) && (!id || (props.initialLaunchChainId === "8453"
+        ? source === "base" : source !== "base" && (props.initialLaunchChainId !== null || source === "legacy"))));
+      const results = await settleSequentially(requestedSources, source => read(source, headers, signal, more?.[source], id));
       if (signal.aborted) return;
       const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
       const found = successful.flatMap(result => result.items);

@@ -9,7 +9,7 @@ import { launchStepLabel, type StoredLaunchSession } from "@/lib/custom-ai/launc
 import { setupQuoteAddress, type CoinSetup } from "@/lib/custom-ai/coin-setup";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 
-export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string; image?: Blob; imageReceipt?: ImageReceipt; headers: AISessionHeaders; localPreview: boolean }) {
+export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string; reviewedSourceHash?: string; image?: Blob; imageReceipt?: ImageReceipt; headers: AISessionHeaders; localPreview: boolean }) {
   const wallet = useWallet();
   const [saved, setSaved] = useState<StoredLaunchSession | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -85,6 +85,7 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
       else if (value && value.session.state !== "confirmed") value = await refresh(value);
       else {
         if (!input.draftId) throw Error("Describe your hook in the chat first.");
+        if (!input.reviewedSourceHash) throw Error("Review and select the rules for this coin before continuing.");
         if (!input.image && !input.imageReceipt) throw Error("Choose your coin image first.");
         if (!input.settings.name.trim() || !input.settings.symbol.trim()) throw Error("Add a name and ticker first.");
         if (!input.imageReceipt && input.image && receipt.current?.blob !== input.image) {
@@ -95,7 +96,7 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
         }
         const image = input.imageReceipt ?? receipt.current!;
         const payload = { action: "create", account,
-          draftId: input.draftId, imageId: image.id,
+          draftId: input.draftId, reviewedSourceHash: input.reviewedSourceHash, imageId: image.id,
           settings: { name: input.settings.name, symbol: input.settings.symbol, chainId: input.settings.chainId,
             quote: setupQuoteAddress(input.settings), initialBuy: input.settings.initialBuy, imageURI: image.url } };
         value = await requestLaunch(headersRef.current, { ...payload, id: launchRequestId(account, payload) });

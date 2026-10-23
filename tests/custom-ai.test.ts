@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { parseChatRequest, type ChatRequest, type Draft } from "../lib/custom-ai/types";
 import { runCustomAI } from "../lib/custom-ai/service.server";
-import { callClaude, MODELS, type ClaudeInput, type ClaudeResult } from "../lib/custom-ai/claude.server";
+import { callClaude, MODELS } from "../lib/custom-ai/claude.server";
 import { allowLocalPreview, createPreviewBudget, readPreviewBody } from "../lib/custom-ai/access.server";
 import core from "../lib/custom-ai/core-sources.json";
 
@@ -12,7 +12,7 @@ const request: ChatRequest = { id: "test-request-0000001", intent: "chat", messa
 const result = (value: object) => ({ text: JSON.stringify(value), inputTokens: 100, outputTokens: 50 });
 const draft = (compiled: boolean): Draft => ({ source: "contract GeneratedFeeModule {}", sourceHash: "example", compiled,
   diagnostics: compiled ? [] : ["Missing interface implementation."], validation: compiled ? { version: "self-contained-fee-v1", status: "passed",
-    artifactHash: "fixture", cases: 1, samples: [], deployments: [] } : undefined });
+    artifactHash: "fixture", cases: 1, samples: [], deployments: [], expectationCases: 8 } : undefined });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 describe("Custom AI boundaries", () => {
@@ -68,63 +68,76 @@ describe("Custom AI boundaries", () => {
   });
 });
 
-describe("Claude cascade", () => {
-  it("uses only Haiku for an unmistakable greeting and never compiles it", async () => {
-    const call = vi.fn<(input: ClaudeInput) => Promise<ClaudeResult>>().mockResolvedValue(result({ reply: "What should your coin do?" })); const compile = vi.fn();
-    expect(await runCustomAI({ ...request, messages: [{ role: "user", content: "Hi!" }] }, undefined, { call, compile })).toEqual({ reply: "What should your coin do?" });
-    expect(call).toHaveBeenCalledTimes(1); expect(call.mock.calls[0][0].model).toBe(MODELS.chat); expect(compile).not.toHaveBeenCalled();
+const checks = [{ afterSeconds: 0, buy: true, totalFeeBps: 300 }, { afterSeconds: 0, buy: false, totalFeeBps: 300 }];
+const plan = (action = "build", extra: object = {}) => result({ reply: "A 3% total fee on buys and sells.",
+  action, memory: "The user requested 3% total fees.", requirements: ["3% total fees on buys and sells"],
+  feeChecks: checks, unresolved: [], setupPatch: {}, ...extra });
+const generated = () => result({ reply: "The coin charges 3% on buys and sells.", source: "contract GeneratedFeeModule {}", hookSummary: "charges 3% on buys and sells" });
+
+describe("Claude planning and generation", () => {
+  it("uses only Haiku for a greeting and never compiles it", async () => {
+    const call = vi.fn().mockResolvedValue(result({ reply: "What should your coin do?" })); const compile = vi.fn();
+    expect(await runCustomAI({ ...request, messages: [{ role: "user", content: "Hi!" }] }, undefined, { call, compile })).toMatchObject({ reply: "What should your coin do?", change: "unchanged" });
+    expect(call.mock.calls[0][0].model).toBe(MODELS.chat); expect(compile).not.toHaveBeenCalled();
   });
-  it("sends all substantive questions directly to Sonnet, including ones starting with a greeting", async () => {
-    const call = vi.fn<(input: ClaudeInput) => Promise<ClaudeResult>>().mockResolvedValue(result({ reply: "The platform fee is 0.5%.", source: "" }));
-    for (const content of ["How do fees work?", "Hi! Can we blacklist the buyer?", "Antwort bitte auf Deutsch."]) {
-      await runCustomAI({ ...request, messages: [{ role: "user", content }] }, undefined, { call, compile: vi.fn() });
-    }
-    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.build, MODELS.build, MODELS.build]);
-  });
-  it("builds through an ordinary chat turn and keeps a confirmation in context", async () => {
-    const call = vi.fn<(input: ClaudeInput) => Promise<ClaudeResult>>(async () => result({ reply: "The fee drops after one day.", source: "contract GeneratedFeeModule {}" }));
-    const compile = vi.fn(async () => draft(true));
-    const answer = await runCustomAI({ ...request, messages: [
-      { role: "user", content: "Write a 3% total fee that becomes 1% after a day." },
-      { role: "assistant", content: "I can build that schedule." },
-      { role: "user", content: "okay" },
-    ] }, undefined, { call, compile });
-    expect(answer.draft?.compiled).toBe(true);
-    expect(call).toHaveBeenCalledTimes(1);
-    expect(call.mock.calls[0][0].model).toBe(MODELS.build);
-    expect(compile).toHaveBeenCalledTimes(1);
-  });
-  it("does not compile a conversational explanation or a missing data integration", async () => {
-    const compile = vi.fn();
-    const answer = await runCustomAI(request, undefined, {
-      call: async () => result({ reply: "We still need to connect a weather feed.", source: "" }), compile,
-    });
-    expect(answer.draft).toBeUndefined();
+  it("answers substantive questions without paying for a code-generation call", async () => {
+    const call = vi.fn().mockResolvedValue(plan("answer", { feeChecks: [] })); const compile = vi.fn();
+    await runCustomAI(request, undefined, { call, compile });
+    expect(call).toHaveBeenCalledTimes(1); expect(call.mock.calls[0][0].model).toBe(MODELS.chat);
     expect(compile).not.toHaveBeenCalled();
   });
-  it("repairs a compiler error once with Sonnet and escalates once to Opus", async () => {
-    const call = vi.fn<(input: ClaudeInput) => Promise<ClaudeResult>>().mockResolvedValue(result({ reply: "The fee drops after one day.", source: "contract GeneratedFeeModule {}" }));
+  it("interprets a confirmation before generation and checks its independent examples", async () => {
+    const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(generated());
+    const compile = vi.fn(async () => draft(true));
+    const answer = await runCustomAI({ ...request, contextId: "previous-context-001", messages: [
+      { role: "assistant", content: "I can build that schedule." }, { role: "user", content: "okay" },
+    ] }, undefined, { call, compile });
+    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.chat, MODELS.build]);
+    expect(compile).toHaveBeenCalledWith("contract GeneratedFeeModule {}", undefined, checks, undefined);
+    expect(answer.draft?.verification).toMatchObject({ status: "passed", checks, cases: 8 });
+  });
+  it("gives both planner and generator the exact existing contract, not just its description", async () => {
+    const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(generated());
+    await runCustomAI(request, undefined, { call, compile: async () => draft(true) }, {
+      draft: { ...draft(true), source: "THE_EXACT_SAVED_CONTRACT", sourceHash: "prior-hash" }, memory: "Keep the existing sell schedule.",
+    });
+    for (const [input] of call.mock.calls) {
+      expect(input.system).toContain("THE_EXACT_SAVED_CONTRACT"); expect(input.system).toContain("Keep the existing sell schedule.");
+    }
+  });
+  it("keeps an unsupported change unresolved without manufacturing a replacement draft", async () => {
+    const compile = vi.fn();
+    const answer = await runCustomAI(request, undefined, { call: async () => plan("clarify", { unresolved: ["A connected weather adapter"], feeChecks: [] }), compile });
+    expect(answer).toMatchObject({ change: "blocked", unresolved: ["A connected weather adapter"] });
+    expect(answer.draft).toBeUndefined(); expect(compile).not.toHaveBeenCalled();
+  });
+  it("repairs only code against the original expectations and then escalates", async () => {
+    const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValue(generated());
     const compile = vi.fn().mockResolvedValueOnce(draft(false)).mockResolvedValueOnce(draft(false)).mockResolvedValueOnce(draft(true));
     const answer = await runCustomAI({ ...request, intent: "build" }, undefined, { call, compile });
-    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.build, MODELS.build, MODELS.escalation]);
-    expect(answer.draft?.compiled).toBe(true);
+    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.chat, MODELS.build, MODELS.build, MODELS.escalation]);
+    expect(compile.mock.calls.every(args => JSON.stringify(args[2]) === JSON.stringify(checks))).toBe(true);
+    expect(answer.change).toBe("applied");
   });
-  it("stops after three failed builds and exposes the exact draft diagnostics", async () => {
-    const call = vi.fn(async () => result({ reply: "Draft.", source: "contract GeneratedFeeModule {}" }));
-    const answer = await runCustomAI({ ...request, intent: "build" }, undefined, { call, compile: async () => draft(false) });
-    expect(call).toHaveBeenCalledTimes(3); expect(answer.draft?.compiled).toBe(false);
+  it("preserves the earlier draft after three failed builds and charges the build allowance", async () => {
+    const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValue(generated());
+    const answer = await runCustomAI(request, undefined, { call, compile: async () => draft(false) });
+    expect(call).toHaveBeenCalledTimes(4); expect(answer.draft).toBeUndefined();
+    expect(answer).toMatchObject({ change: "blocked", chargedAs: "build" });
   });
-  it("does not compile or pretend to build when a material detail is missing", async () => {
+  it("rejects a green compiler result that never checked the requested behavior", async () => {
+    const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValue(generated());
+    const unchecked = draft(true); delete unchecked.validation!.expectationCases;
+    await expect(runCustomAI(request, undefined, { call, compile: async () => unchecked })).rejects.toMatchObject({ code: "verification" });
+  });
+  it("rejects incomplete rule plans before compiling", async () => {
     const compile = vi.fn();
-    await runCustomAI({ ...request, intent: "build" }, undefined, { call: async () => result({ reply: "Which event should change the fee?", source: "" }), compile });
+    await expect(runCustomAI(request, undefined, { call: async () => plan("build", { feeChecks: checks.slice(0, 1) }), compile })).rejects.toMatchObject({ code: "plan" });
     expect(compile).not.toHaveBeenCalled();
   });
-  it("does not escalate billing, transport or isolated compiler failures", async () => {
+  it("does not automatically repeat paid requests after transport failures", async () => {
     const call = vi.fn().mockRejectedValue(new Error("provider failure"));
-    await expect(runCustomAI({ ...request, intent: "build" }, undefined, { call, compile: vi.fn() })).rejects.toThrow();
-    expect(call).toHaveBeenCalledTimes(1);
-    call.mockReset().mockResolvedValue(result({ reply: "Draft.", source: "contract GeneratedFeeModule {}" }));
-    await expect(runCustomAI({ ...request, intent: "build" }, undefined, { call, compile: async () => { throw Error("sandbox unavailable"); } })).rejects.toThrow();
+    await expect(runCustomAI(request, undefined, { call, compile: vi.fn() })).rejects.toThrow();
     expect(call).toHaveBeenCalledTimes(1);
   });
   it("rejects a truncated provider answer", async () => {

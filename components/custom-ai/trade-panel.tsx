@@ -23,6 +23,7 @@ function TradeSession({token}:{token:CustomAIPublicToken}) {
   const [saved,setSaved]=useState<StoredAITrade|null>(null),[balances,setBalances]=useState<AIMarketBalances|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[ready,setReady]=useState(!account);
   const [slippage,setSlippage]=useState(100);
+  const [programAmount,setProgramAmount]=useState("");
   const current=useRef(saved),working=useRef(false),request=useRef<{payload:string;id:string}|null>(null);
   const headers=useCallback(async ():Promise<Record<string,string>>=> {
     const access=await wallet.getAccessToken(),identity=await wallet.getIdentityToken();
@@ -77,7 +78,8 @@ function TradeSession({token}:{token:CustomAIPublicToken}) {
   const locked=!!saved && saved.session.state!=="confirmed";
   const quote=saved?.session.quote,step=saved?.session.steps.at(-1);
   const quoteName=balances?.wrappedNative?"WETH":`${token.quoteAsset.slice(0,6)}…${token.quoteAsset.slice(-4)}`;
-  const claiming = saved?.session.intent.startsWith("claim") ?? false;
+  const programAction = saved?.session.intent.startsWith("program-") ?? false;
+  const claiming = (saved?.session.intent.startsWith("claim") ?? false) || programAction;
   const activeSide=saved?.session.intent==="buy"||saved?.session.intent==="sell"?saved.session.intent:side;
   const outputName=activeSide==="buy"?token.symbol:quoteName;
   const label=busy?"Preparing…":!account?"Connect wallet":saved?.session.state==="confirmed"?"New trade":saved?.session.state==="failed"?"Try transaction again":
@@ -93,7 +95,7 @@ function TradeSession({token}:{token:CustomAIPublicToken}) {
     try {
       let value=current.current;
       if (!value) {
-        const payload={action:"create",account,token:token.tokenAddress,chainId:token.chainId,intent,amount:["buy","sell"].includes(intent)?amount:"0",slippageBps:slippage};
+        const payload={action:"create",account,token:token.tokenAddress,chainId:token.chainId,intent,amount:intent==="program-stake"||intent==="program-withdraw"?programAmount:["buy","sell"].includes(intent)?amount:"0",slippageBps:slippage};
         const encoded=JSON.stringify(payload),key=`programmable.custom-ai.trade-request.v1:${account.toLowerCase()}`;
         if (!request.current) {const raw=localStorage.getItem(key);if (raw) request.current=JSON.parse(raw);}
         if (request.current?.payload!==encoded) request.current={payload:encoded,id:crypto.randomUUID()};
@@ -133,13 +135,29 @@ function TradeSession({token}:{token:CustomAIPublicToken}) {
     <fieldset className={styles.slippage} disabled={busy||locked}><legend>Slippage</legend>{[50,100,300].map(value=><button key={value} type="button" aria-pressed={slippage===value} onClick={()=>setSlippage(value)}>{value/100}%</button>)}</fieldset>
     <p className={styles.summary}>0.5% platform fee included · Total trading fee never exceeds 15%</p>
     </>}
-    {claiming && <p className={styles.summary}>Claim to the recipient fixed by this coin.</p>}
+    {claiming && <p className={styles.summary}>{programAction ? `Program: ${saved?.session.intent.replace("program-", "")} ${["program-stake", "program-withdraw"].includes(saved?.session.intent ?? "") ? saved?.session.amount + " " + token.symbol : ""}` : "Claim to the recipient fixed by this coin."}</p>}
     {balances?.quoteNotice && <p className={styles.note}>{balances.quoteNotice}</p>}
     <button type="button" className={styles.primary} disabled={busy||!!account&&!ready} onClick={()=>void proceed()}>{label}</button>
     {saved?.session.state==="waiting" && <p className={styles.note} role="status">Waiting for the transaction to confirm.</p>}
     {saved?.session.state==="confirmed" && <p className={styles.success} role="status">{saved.session.claimSettlement ? `${readable(saved.session.claimSettlement.amount,token.quoteDecimals)} ${quoteName} claimed.` : saved.session.settlement ? `Received ${readable(saved.session.settlement.received,quote?.outputDecimals??18)} ${outputName}.` : "Transaction confirmed."}</p>}
     {step?.hash && <p className={styles.note}><a href={`${token.chainId===1?"https://etherscan.io":"https://robinhoodchain.blockscout.com"}/tx/${step.hash}`} target="_blank" rel="noreferrer">View transaction</a></p>}
     {error && <p className={styles.error} role="alert">{error}</p>}
+    {!saved && balances?.program && account && <section aria-label="Coin program">
+      <h3>{balances.program.kind === "staking" ? "Staking rewards" : balances.program.kind === "buyback" ? "Buyback program" : "Fee distribution"}</h3>
+      <p className={styles.note}>{balances.program.rewardShareBps / 100}% of additional fees fund this program. Execution is permissionless and uses collected funds only.</p>
+      {balances.program.kind === "staking" && <>
+        <p className={styles.note}>Staked: {readable(balances.program.staked, 18)} {token.symbol} · Rewards: {readable(balances.program.claimable, token.quoteDecimals)} {quoteName}</p>
+        <label htmlFor="custom-ai-staking-amount">Stake or withdraw amount</label>
+        <input id="custom-ai-staking-amount" className={styles.amountInput} inputMode="decimal" value={programAmount} onChange={event => setProgramAmount(event.target.value)} disabled={busy}/>
+        <div className={styles.pendingActions}>
+          <button type="button" disabled={busy || !programAmount} onClick={() => void proceed("program-stake")}>Stake {token.symbol}</button>
+          <button type="button" disabled={busy || !programAmount} onClick={() => void proceed("program-withdraw")}>Withdraw stake</button>
+          <button type="button" disabled={busy || BigInt(balances.program.claimable) === 0n} onClick={() => void proceed("program-claim")}>Claim staking rewards</button>
+        </div>
+      </>}
+      {balances.program.kind === "buyback" && <p className={styles.note}>Up to {readable(balances.program.maximumBatch, token.quoteDecimals)} {quoteName} per execution, accepting at least {readable(balances.program.minimumTokensPerQuote, 18)} {token.symbol} per {quoteName}.</p>}
+      <div className={styles.pendingActions}><button type="button" disabled={busy} onClick={() => void proceed("program-execute")}>{balances.program.kind === "staking" ? "Collect new rewards" : balances.program.kind === "buyback" ? "Execute buyback" : "Distribute collected fees"}</button></div>
+    </section>}
     {!saved && balances && account && <div className={styles.pendingActions}>
       {balances.creatorRecipient.toLowerCase()===account.toLowerCase() && BigInt(balances.creatorAvailable)>0n && <button type="button" onClick={()=>void proceed("claim-creator")} disabled={busy}>Claim {readable(balances.creatorAvailable,token.quoteDecimals)} {quoteName}</button>}
       {BigInt(balances.balances?.reward??"0")>0n && <button type="button" onClick={()=>void proceed("claim-reward")} disabled={busy}>Claim rewards</button>}

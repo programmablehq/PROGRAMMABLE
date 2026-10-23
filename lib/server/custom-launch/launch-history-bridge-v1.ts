@@ -547,12 +547,10 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             done: nextCursor === null,
           });
         };
-        const [v1, v2, v3, v4] = await Promise.all([
-          readVersion("v1"),
-          readVersion("v2"),
-          readVersion("v3"),
-          readVersion("v4"),
-        ]);
+        const v1 = await readVersion("v1");
+        const v2 = await readVersion("v2");
+        const v3 = await readVersion("v3");
+        const v4 = await readVersion("v4");
         const launches = Object.freeze([
           ...v1.launches,
           ...v2.launches,

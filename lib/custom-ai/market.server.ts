@@ -8,6 +8,7 @@ import { customAIChain, type CustomAIChain } from "./chain.server";
 import { customAIFactoryAbi } from "./launch-plan";
 import { inspectCustomAIQuote } from "./quote.server";
 import { matchesRuntime } from "./runtime";
+import { readProgram } from "./program-actions.server";
 import { CustomAIError } from "./types";
 
 export async function verifiedAIMarket(chain: CustomAIChain, address: string, options: { account?: string; executionReady?: boolean } = {}) {
@@ -60,6 +61,7 @@ export async function readAIMarketBalances(chainId:1|4663,address:string,account
   const incoming = vaultBalance > vaultAccounted ? vaultBalance-vaultAccounted : 0n;
   const additional = additionalReceived-additionalClaimed;
   const creatorAvailable = (totalReceived+incoming+additional)*BigInt(creatorShareBps)/10000n-creatorClaimed;
+  const program = await readProgram(chain, token, deployment.factory.address, account);
   const balances = account ? await Promise.all([
     chain.call(token.tokenAddress,"function balanceOf(address) view returns (uint256)",[account]),
     chain.call(token.quoteAsset,"function balanceOf(address) view returns (uint256)",[account]),
@@ -67,7 +69,7 @@ export async function readAIMarketBalances(chainId:1|4663,address:string,account
     chain.call(token.rewardVault,"function claimable(address) view returns (uint256)",[account]),
   ]) : null;
   await chain.finish();
-  return {chainId,address:token.tokenAddress,router:deployment.router.address,quoteAddress:token.quoteAsset,quoteDecimals:token.quoteDecimals,
+  return {program,chainId,address:token.tokenAddress,router:deployment.router.address,quoteAddress:token.quoteAsset,quoteDecimals:token.quoteDecimals,
     wrappedNative:token.quoteAsset.toLowerCase() === chain.profile.wrappedEth.address.toLowerCase(),quoteNotice:quote?.message ?? (token.quoteAsset.toLowerCase() !== chain.profile.wrappedEth.address.toLowerCase() ? "The pair token may have admin rights, including freezes, upgrades or balance changes." : chainId === 4663 ? "The pair token is upgradeable, and its bridge can burn balances." : null),
     creatorRecipient,creatorAvailable:creatorAvailable.toString(),platformAvailable:(platformReceived-platformClaimed).toString(),
     balances:balances?{token:String(balances[0]),quote:String(balances[1]),native:String(balances[2]),reward:String(balances[3])}:null,

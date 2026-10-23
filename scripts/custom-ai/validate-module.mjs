@@ -1,3 +1,4 @@
+import { seedEventFeed } from "./event-module.mjs";
 // Runs only inside the compiler's permission-restricted child process.
 // This gate supports self-contained fee rules. External data adapters must be
 // added with their own dependency validation, never accepted by address alone.
@@ -83,7 +84,7 @@ export function inspectModule(ast) {
   return [...diagnostics];
 }
 
-export async function simulateModule(requireTool, contract, ast) {
+export async function simulateModule(requireTool, contract, ast, expectations = [], feed) {
   const { createVM } = requireTool("@ethereumjs/vm");
   const { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block");
@@ -109,12 +110,14 @@ export async function simulateModule(requireTool, contract, ast) {
   literals(ast);
   if (offsets.size > 96) return { diagnostics: ["The fee schedule has too many boundaries for this validator."], cases: 0, samples: [] };
   let cases = 0;
+  let expectationCases = 0;
   let maxGas = 0n;
   const deployments = [];
   for (const chainId of [1, 4663]) {
     const common = createCustomCommon({ chainId }, Mainnet, { hardfork: Hardfork.Cancun });
     const vm = await createVM({ common });
     const block = timestamp => createBlock({ header: { number: 1n, timestamp, gasLimit: 30_000_000n } }, { common });
+    if (feed) await seedEventFeed(requireTool, vm, feed, startedAt);
     const deployed = await vm.evm.runCall({ caller, data: hexToBytes(`0x${contract.evm.bytecode.object}`), gasLimit: 5_000_000n, block: block(startedAt - 172800n) });
     if (deployed.execResult.exceptionError || !deployed.createdAddress) return { diagnostics: [`The module constructor failed on chain ${chainId}.`], cases, samples: [] };
     const to = deployed.createdAddress;
@@ -133,6 +136,24 @@ export async function simulateModule(requireTool, contract, ast) {
       if (!/^0x[0-9a-f]{64}$/i.test(configurationHash) || /^0x0+$/.test(configurationHash)) throw Error();
     } catch { return { diagnostics: ["configurationHash must return a nonzero bytes32."], cases, samples: [] }; }
     deployments.push({ chainId, timestamp: Number(startedAt), runtimeHash: keccak256(await vm.stateManager.getCode(to)), configurationHash });
+    // These expected values come from a separate interpretation of the user's
+    // request, before the generator sees or emits source. A safe but incorrect
+    // fee schedule must not become a launchable artifact.
+    for (const expected of expectations) for (const exactInput of [true, false]) {
+      const timestamp = startedAt + BigInt(expected.afterSeconds);
+      try {
+        if (feed) await seedEventFeed(requireTool, vm, feed, timestamp, expected.feedValue, expected.feedFresh);
+        const data = await call("quoteFee", [{ poolId: `0x${"00".repeat(32)}`, router: caller.toString(),
+          buy: expected.buy, exactInput, launchTimestamp: startedAt, specifiedAmount: 10n ** 18n }], timestamp);
+        const [magic, bps, until, hash] = decodeFunctionResult({ abi: contract.abi, functionName: "quoteFee", data });
+        if (magic !== selector || until < timestamp || hash !== configurationHash) throw Error("invalid fee quote");
+        if (Number(bps) + 50 !== expected.totalFeeBps) throw Error(`expected ${expected.totalFeeBps} total bps, received ${Number(bps) + 50}`);
+        expectationCases++;
+      } catch (error) {
+        return { diagnostics: [`Requested rule mismatch on chain ${chainId}, ${expected.buy ? "buy" : "sell"}, t+${expected.afterSeconds}s: ${error.message}.`],
+          cases, samples: [], expectationCases, maxGas: maxGas.toString() };
+      }
+    }
     for (const offset of [...offsets].sort((a, b) => a < b ? -1 : 1)) {
       for (const buy of [true, false]) for (const exactInput of [true, false]) {
         // Full direction/mode coverage at each boundary; zero, dust, normal,
@@ -140,6 +161,7 @@ export async function simulateModule(requireTool, contract, ast) {
         for (const [index, amount] of [0n, 1n, 10n ** 18n, (1n << 127n) - 1n].entries()) {
           const timestamp = startedAt + offset;
           try {
+            if (feed) await seedEventFeed(requireTool, vm, feed, timestamp);
             const data = await call("quoteFee", [{ poolId: `0x${(index % 2 ? "ab" : "00").repeat(32)}`,
               router: index % 2 ? "0x2000000000000000000000000000000000000002" : caller.toString(), buy, exactInput, launchTimestamp: startedAt, specifiedAmount: amount }], timestamp);
             if (data.length !== 258) throw new Error("returned an invalid response length");
@@ -158,5 +180,5 @@ export async function simulateModule(requireTool, contract, ast) {
       }
     }
   }
-  return { diagnostics, cases, samples, maxGas: maxGas.toString(), deployments };
+  return { diagnostics, cases, samples, maxGas: maxGas.toString(), deployments, expectationCases };
 }

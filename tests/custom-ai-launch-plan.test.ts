@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { encodeFunctionData, zeroAddress, zeroHash, type Abi, type Address, type Hex } from "viem";
+import programManifest from "../lib/custom-ai/program-manifest.json";
 import coreBundle from "../scripts/custom-ai/core-bundle.json";
 import { privateKeyToAccount } from "viem/accounts";
 import { bindCustomAILaunch, CUSTOM_AI_BUNDLE_HASH, predictCustomAIToken, customAIOrderMatchesTransaction, customAIPlanHash, customAIPriceTypedData,
@@ -31,6 +32,16 @@ const observation = (order: LaunchOrder) => ({ chainId: order.chainId, factory, 
   finalizedPlanHash: zeroHash, finalizedToken: zeroAddress, dispatch: "not-sent" as const });
 
 describe("Custom AI wallet order", () => {
+  it("binds a checked funded program and rejects an altered fee split or template", async () => {
+    const binding = { instance: token, runtimeHash: hash, configurationHash: hash };
+    const input = await signedInput({ rewards: { creatorRecipient: account.address, creatorShareBps: 5000, module: binding } });
+    await expect(bindCustomAILaunch(input, now)).rejects.toThrow("separately checked");
+    const program = { bundleHash: programManifest.bundleHash, creatorShareBps: 5000, binding };
+    const order = await bindCustomAILaunch({ ...input, rewardProgram: program }, now);
+    expect(order.parameters.rewards.creatorShareBps).toBe(5000);
+    await expect(bindCustomAILaunch({ ...input, rewardProgram: { ...program, creatorShareBps: 4000 } }, now)).rejects.toThrow("differs");
+    await expect(bindCustomAILaunch({ ...input, rewardProgram: { ...program, bundleHash: "a".repeat(64) } }, now)).rejects.toThrow("differs");
+  });
   it("requires the signed ETH-equivalent minimum even with an otherwise valid signature", async () => {
     const minimum = 30n * 10n ** 18n;
     for (const amount of [0n, minimum - 1n]) {
