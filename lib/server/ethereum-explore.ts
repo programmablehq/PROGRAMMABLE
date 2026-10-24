@@ -17,13 +17,13 @@ import type { readEthereumPublicTokenMetadata } from "./ethereum-public-token-me
 
 type SourceStatus = "current" | "last-known-good" | "unavailable";
 type SourceEvidence = {
-  source: "codex-classic-launches" | "canonical-launch-stamp-router";
+  source: "codex-classic-launches" | "canonical-classic-launcher-rpc" | "canonical-launch-stamp-router";
   asOfBlock: string;
   asOfBlockHash: string;
   commitment: string;
   generatedAt: string;
   releaseDigest?: string;
-  provider?: "codex";
+  provider?: "codex" | "rpc";
   observedAt?: string;
 };
 type CatalogSource = { entries: readonly CanonicalTokenExploreEntry[]; status: Exclude<SourceStatus, "unavailable">; generatedAt: string; evidence?: SourceEvidence };

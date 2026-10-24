@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
-import { classicLaunchEvents, parseClassicLaunchLogs, type ClassicRawLog } from "../lib/market-data/classic-launch-proof";
+import { classicLaunchEvents, classicV2Events, parseClassicLaunchLogs, type ClassicRawLog } from "../lib/market-data/classic-launch-proof";
+import { discoverClassicRpcLaunches } from "../lib/market-data/classic-rpc-discovery";
 import config from "../config/classic-launch-catalog.v1.json";
 
 const source = config.sources[1]!;
@@ -39,5 +40,34 @@ describe("canonical Classic launch proofs without Envio", () => {
     expect(()=>parseClassicLaunchLogs(receipt)).toThrow();
     const block = events(); block[1]!.blockHash=pool;
     expect(()=>parseClassicLaunchLogs(block)).toThrow();
+  });
+
+  it("discovers the complete launch from bounded RPC windows without a market provider", async () => {
+    const result = await discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async (from, to) =>
+      events().filter(log => BigInt(log.blockNumber) >= from && BigInt(log.blockNumber) <= to));
+    expect(result.candidates).toEqual([{ token, poolId: pool, hook: source.hook, transaction: hash, block: source.startBlock + 1 }]);
+    expect(result.logs).toHaveLength(4);
+  });
+
+  it("does not accept incomplete history or logs outside the requested boundary", async () => {
+    await expect(discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async (from, to) =>
+      events().slice(0, 3).filter(log => BigInt(log.blockNumber) >= from && BigInt(log.blockNumber) <= to))).rejects.toThrow();
+    await expect(discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async () => events())).rejects.toThrow();
+    await expect(discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async () => { throw Error("RPC unavailable"); })).rejects.toThrow();
+  });
+
+  it("retains the existing V2 main-token scope while discovering later releases", async () => {
+    const old = config.sources[0]!;
+    const event = classicV2Events[0]!;
+    const args = { creator, token, poolId: pool, feeHook: old.hook, positionRecipient: creator, positionTokenId: 1n,
+      totalSwapFeeBps: 100, launchHash: hash };
+    const dataInputs = event.inputs.filter(input => !("indexed" in input && input.indexed));
+    const excluded: ClassicRawLog = { ...events()[0]!, address: old.launcher, blockNumber: String(old.startBlock),
+      topics: encodeEventTopics({ abi: [event], eventName: event.name, args } as never) as string[],
+      data: encodeAbiParameters(dataInputs, dataInputs.map(input => args[input.name as keyof typeof args]) as never) };
+    const result = await discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async (from, to) =>
+      [...events(), excluded].filter(log => BigInt(log.blockNumber) >= from && BigInt(log.blockNumber) <= to));
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.hook).toBe(source.hook);
   });
 });

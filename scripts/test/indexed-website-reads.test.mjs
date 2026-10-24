@@ -316,6 +316,18 @@ function input(overrides = {}) {
     automationBypassSecret: BYPASS, sourceExpectations: EXPECTATIONS, nowMs: NOW, ...overrides };
 }
 
+test("Classic RPC discovery retains the release proof and rejects a mismatched provider label", async () => {
+  const rpcFixture = provider => fixture(({ url, spec }) => {
+    if (url.pathname === "/api/explore/ethereum") {
+      spec.body.sourceEvidence.classic.source = "canonical-classic-launcher-rpc";
+      spec.body.sourceEvidence.classic.provider = provider;
+    }
+  });
+  const valid = rpcFixture("rpc");
+  assert.equal((await runIndexedWebsiteReadSmoke(input({ fetchImpl: valid.fetchImpl }))).chains[0].totalItems, 51);
+  await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: rpcFixture("codex").fetchImpl })), /Ethereum source release binding/u);
+});
+
 const ROBINHOOD_PIN = "0xc60ba256b44334a0cd2c7242e98b88f031abb006";
 function pinnedFixture(totalItems, mutate = () => {}) {
   return fixture(context => {

@@ -7,17 +7,42 @@ vi.mock("next/cache", () => ({ unstable_cache: (fn: (...args: unknown[]) => unkn
 } }));
 let readCodexChart: typeof import("@/lib/server/codex-market").readCodexChart;
 let readCodexMarkets: typeof import("@/lib/server/codex-market").readCodexMarkets;
+let codexQuery: typeof import("@/lib/server/codex-market").codexQuery;
 const address = `0x${"ab".repeat(20)}`, poolId = `0x${"ef".repeat(32)}`;
 beforeEach(async () => {
   vi.resetModules(); vi.useFakeTimers({ now: new Date("2026-10-03T09:30:00Z") });
   cacheMock.calls.length = 0;
   cacheMock.value = undefined;
-  ({ readCodexChart, readCodexMarkets } = await import("@/lib/server/codex-market"));
+  ({ readCodexChart, readCodexMarkets, codexQuery } = await import("@/lib/server/codex-market"));
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 const bars = (overrides = {}) => ({ token: { address, networkId: 4663 }, s: "ok", t: [100, 160, 220], c: [.001, null, .002], ...overrides });
 const pool = (overrides = {}) => ({ address: poolId, networkId: 4663, token0: `0x${"00".repeat(20)}`, token1: address, ...overrides });
 const row = () => ({ token: { address, networkId: 4663 }, priceUSD: "0.001", marketCap: "1000000", circulatingMarketCap: "500000", liquidity: "215595", totalLiquidityUsd: "2027259", volume24: "0", change24: "-0.05" });
+
+describe("Codex provider backoff", () => {
+  it("shares a paused-account backoff across distinct queries and recovers after it", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ errors: [{ message: "private billing response" }] }, { status: 403 }))
+      .mockImplementation(async () => Response.json({ data: { recovered: true }, errors: [] }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(codexQuery("query First { value }", {})).rejects.toThrow("Market data unavailable");
+    await expect(codexQuery("query Different { value }", {})).rejects.toThrow("Market data unavailable");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 60_001);
+    await expect(codexQuery("query Different { value }", {})).resolves.toEqual({ recovered: true });
+  });
+
+  it("honors a provider capacity retry window even when HTTP is successful", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ errors: [{ extensions: { code: "OVER_CAPACITY", retryAfterSeconds: 45 } }] }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(codexQuery("query First { value }", {})).rejects.toThrow();
+    vi.setSystemTime(Date.now() + 44_000);
+    await expect(codexQuery("query Second { value }", {})).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("Codex price history", () => {
   it("recovers an expired shared cache through one coalesced provider read", async () => {

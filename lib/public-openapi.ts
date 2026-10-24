@@ -1697,7 +1697,7 @@ export const programmablePublicOpenApi = {
               type: "object", required: ["name", "roles", "health"], additionalProperties: false,
               properties: {
                 name: { const: "codex" }, health: { const: "not-checked" },
-                roles: { const: ["ethereum-classic-launch-discovery", "ethereum-and-robinhood-market-data"] },
+                roles: { const: ["ethereum-and-robinhood-market-data"] },
               },
             },
           },

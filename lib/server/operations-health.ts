@@ -53,7 +53,7 @@ async function observe(readers: Readers) {
     ],
     // Catalog availability is evidence about a read path, not a provider-wide probe.
     providers: [{ name: "codex" as const,
-      roles: ["ethereum-classic-launch-discovery", "ethereum-and-robinhood-market-data"],
+      roles: ["ethereum-and-robinhood-market-data"],
       health: "not-checked" as const }],
     customLaunchReadiness: [
       { chainId: 1, readinessUrl: "https://api.programmable.market/readyz",

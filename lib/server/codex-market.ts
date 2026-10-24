@@ -11,16 +11,40 @@ const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
 }`;
 // Fixed windows are already below the provider's point limit. countback overrides from.
 const barsQuery = `query Chart($symbol:String!,$from:Int!,$to:Int!,$resolution:String!) { getTokenBars(symbol:$symbol,from:$from,to:$to,resolution:$resolution,currencyCode:USD,removeEmptyBars:false,removeLeadingNullValues:true) { t c s token {address networkId} } }`;
+let providerRetryAt = 0;
+function pauseProvider(seconds: number) {
+  providerRetryAt = Math.max(providerRetryAt, Date.now() + Math.min(300, Math.max(1, Number.isFinite(seconds) ? seconds : 15)) * 1_000);
+}
 
 export async function codexQuery(query: string, variables: Record<string, unknown>) {
   const key = process.env.CODEX_API_KEY?.trim();
-  if (!key) throw new Error("Market data unavailable");
+  if (!key || Date.now() < providerRetryAt) throw new Error("Market data unavailable");
   const signal = AbortSignal.timeout(8_000);
-  const response = await fetch(endpoint, { method: "POST", headers: { Authorization: key, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }), cache: "no-store", redirect: "error", signal });
-  if (!response.ok) { void response.body?.cancel(); throw new Error("Market data unavailable"); }
+  let response: Response;
+  try {
+    response = await fetch(endpoint, { method: "POST", headers: { Authorization: key, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }), cache: "no-store", redirect: "error", signal });
+  } catch {
+    pauseProvider(5);
+    throw new Error("Market data unavailable");
+  }
+  if (!response.ok) {
+    // A paused billing account affects every endpoint. Do not retry it per token or page.
+    const retry = Number(response.headers.get("Retry-After"));
+    pauseProvider(response.status === 401 || response.status === 403 ? 60 : retry > 0 ? retry : response.status >= 500 ? 2 : 15);
+    void response.body?.cancel();
+    throw new Error("Market data unavailable");
+  }
   const body: unknown = JSON.parse(await readBoundedUtf8BodyV1(response, 512_000, { signal }));
   // Provider errors may contain request context. Never forward them to the browser or logs.
-  if (!marketObject(body) || body.errors || !marketObject(body.data)) throw new Error("Market data unavailable");
+  if (!marketObject(body) || !marketObject(body.data) || body.errors != null && (!Array.isArray(body.errors) || body.errors.length > 0)) {
+    const errors = marketObject(body) && Array.isArray(body.errors) ? body.errors : [];
+    for (const error of errors) if (marketObject(error) && marketObject(error.extensions)) {
+      if (["OVER_CAPACITY", "TOO_MANY_REQUESTS"].includes(String(error.extensions.code))) {
+        pauseProvider(Number(error.extensions.retryAfterSeconds) || 30);
+      } else if (["UNAUTHENTICATED", "FORBIDDEN", "NOT_AUTHORIZED"].includes(String(error.extensions.code))) pauseProvider(60);
+    }
+    throw new Error("Market data unavailable");
+  }
   return body.data;
 }
 
