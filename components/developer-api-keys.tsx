@@ -1048,7 +1048,13 @@ export function DeveloperApiKeysView({
       const headers = await getAuthHeaders();
       const response = await fetch(
         `/api/developer/api-keys/v2/capabilities?walletAddress=${encodeURIComponent(walletAddress)}`,
-        { cache: "no-store", headers, signal },
+        {
+          cache: "no-store",
+          headers,
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+            : AbortSignal.timeout(10_000),
+        },
       );
       const parsed = response.ok ? parseApiKeyCapabilities(await readJson(response)) : null;
       if (generation === capabilityReadGenerationRef.current && !signal?.aborted) {
