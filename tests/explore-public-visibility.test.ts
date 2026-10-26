@@ -71,4 +71,29 @@ describe("public Explore visibility", () => {
     expect(isPublicExploreIdentityV1({ tokenAddress: "0x1111111111111111111111111111111111111111" }, 1)).toBe(true);
   });
 
+  it("removes the current internal test points while retaining real DNA and RING launches", () => {
+    const dnaToken = [
+      "0x39772d019ed525f667a7cbbf8e64b0712",
+      "0378402",
+    ].join("");
+    const ringToken = [
+      "0x44ca84cf59183f389aa20848ee8ef5c076bb3",
+      "cb7",
+    ].join("");
+    const hiddenTokens = [
+      ["0xd3e63c1a6e9e5946d52e488b90fac394af", "af208b"].join(""), // GUARD2
+      ["0x67624555c2bb3627b54ae677b35ba73bf3", "7908c8"].join(""), // Protected Launch Canary
+      ["0x72035572d84975cf74d90bcc4b46ceda", "cd4335a2"].join(""), // API Guard Check
+    ];
+    for (const tokenAddress of hiddenTokens) {
+      expect(isPublicExploreIdentityV1({ tokenAddress }, 4663)).toBe(false);
+    }
+    expect(isPublicExploreIdentityV1({
+      tokenAddress: dnaToken, // DNA
+    }, 1)).toBe(true);
+    expect(isPublicExploreIdentityV1({
+      tokenAddress: ringToken, // RING
+    }, 1)).toBe(true);
+  });
+
 });

@@ -92,6 +92,88 @@ export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
   Object.freeze({ chainId: 1, identity: "0xbb73f3bb5cfae5629f0a6a58bb10ab1e35e4c11a" }), // Atomic module-stamp release canary
   Object.freeze({ chainId: 1, identity: "0x2bbc1677a495746a7fad51851dcba8bc37c5a213" }), // WECWDCWDE
   Object.freeze({ chainId: 1, identity: "0x3d2315f1869518129b508a55f86d0afcb2fefba6" }), // Old DNA launch; owner requested removal before relaunch
+
+  // Owner-requested test-launch cleanup. These identities remain addressable
+  // for evidence and direct token pages, but must not appear in discovery.
+  Object.freeze({ chainId: 1, identity: "0x35b02f403639f16c790c6d057977907ebe5582ed" }), // Automated launchpad integration test
+  Object.freeze({ chainId: 1, identity: "0x075fdfbe6b111df5372570faa2dcb9c4774381ed" }), // Automated launchpad integration test
+  Object.freeze({ chainId: 1, identity: "0xb6e6d5090af2a858dbefce719f255376086e5b61" }), // Automated launchpad integration test
+  Object.freeze({ chainId: 1, identity: "0xe6fbc98b9cd4b38c25617396b03375d7519c62ef" }), // Automated launchpad integration test
+  Object.freeze({ chainId: 1, identity: "0xc4783849874f8e601454abefc316d105904005da" }), // PTest integration launch
+  Object.freeze({ chainId: 1, identity: "0x1a35f0d9987f02fae08a0bd2b1205080e021ab66" }), // PTest integration launch
+  Object.freeze({ chainId: 1, identity: "0xe9d2dcad31d7e87e5b9ee76182cdc8e7942721fb" }), // PTest integration launch
+  Object.freeze({ chainId: 1, identity: "0xe3d06d7446851f3b0d9bba94da2922f6913ff6b3" }), // PTest integration launch
+  Object.freeze({ chainId: 1, identity: "0xf9cb2c7140385105e66867eeb0415410942bff6c" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x9520dc80fe4bdb9ec1928180f21b7bc97d27663b" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x8570c3b5eed7648d60335d4151b12496f8d8d5d7" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x2b1ce2f74916ba8a1f9907a24e06f72c4afadb20" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x8faa84e9bf42b646839fbe528120395d44467cbf" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0xcd21df914520bd7e6fc4a479cda1b06b86e43cf4" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x0ea15760d87e7a4463ebf5ff6c087e327364bfe8" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0xbf27b9b1b41a5675715e2d5f8481b4d6749e4ef6" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0xbff08387c043d705cb3da69078286e9ad072dc25" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x12c54facdaebca263edbb97e44970bcc5c36e1b3" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0xe2a097ae052ac69ed7f630c79444486a99705dc2" }), // Internal economic module test
+  Object.freeze({ chainId: 1, identity: "0x9f461aa7d0685c8060c1f610733e1e8cc3406a4f" }), // NOOP test
+  Object.freeze({ chainId: 1, identity: "0xf6091b94cc55a701f85df1d22ae955b7b6a3714b" }), // NOOP test
+  Object.freeze({ chainId: 1, identity: "0xfac755519ea81edcf5d202a9080c75f22eeaa4d9" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0xa3a28c0b5256b4176539c8bd6d8a87317a1fc0e1" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0xb796973e3b56cb772557e4155f8113486a7b08b4" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0xd160a6c97738d138a63f8948c46072561e6e20f2" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0x6c066c38b3335efef3bd5d35a11254c9cad70aad" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0xc5a0547a548f5a0121e376c7a970176ef490f8bc" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0xaa346ba40e01de46650e9ca2fb984fbb2be14fa1" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0x9160aa5cbfc50e4bc2aea5a1207cb222fee40921" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0x8a7773c9922ad003bee4eefa4e9e924c80a25a2f" }), // Internal test wallet
+  Object.freeze({ chainId: 1, identity: "0x57b8e3a2eb94e684b1f92582a6be8a9d54039956" }), // Test wallet
+  Object.freeze({ chainId: 1, identity: "0x65a2365e89b596d4b4c17153a75d700cd5f0ee04" }), // Test wallet
+  Object.freeze({ chainId: 1, identity: "0xf3a6a1edc6f8467c82051b351434bfa79321c070" }), // Test wallet
+  Object.freeze({ chainId: 1, identity: "0x90c453484bc56a625e15eb0e242ca4e23ac74e7c" }), // Test wallet
+  Object.freeze({ chainId: 1, identity: "0xc43074a8a71d9e2d5589de0aff89e6928538eb5e" }), // Test wallet
+  Object.freeze({ chainId: 1, identity: "0x621268e6a4c8252e95412bdc566c061d94280724" }), // Test wallet
+  Object.freeze({ chainId: 1, identity: "0x3f2a426365e7a438a7f9f758766cff419d207d51" }), // Ballistic WETH canary
+
+  Object.freeze({ chainId: 4663, identity: "0xa9ffffc4e36fe012d8d96331694d41d48d6fd7b4" }), // Agent Live Test
+  Object.freeze({ chainId: 4663, identity: "0xd4132d925a1dcea204a63f61ed8aafef8436e269" }), // Anemone Test
+  Object.freeze({ chainId: 4663, identity: "0xefa84357e79d60e138c6c30f15a034b917db4abd" }), // testt
+  Object.freeze({ chainId: 4663, identity: "0x086ccbd3f9f99218ff78f434bbc2d05f7b5bbe89" }), // PROGRAM TEST
+  Object.freeze({ chainId: 4663, identity: "0x9deb2e97d4febbbccddd3d79a96442d0f10e87c5" }), // TEST
+  Object.freeze({ chainId: 4663, identity: "0x22c776bdb4f98df9d861e8459c7ae97ba9ae1418" }), // TEST launch; do not buy
+  Object.freeze({ chainId: 4663, identity: "0x39586e87a6c6ba3792623c87a953c23de1ea6df4" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x35e84e8fc9be6d41b2ff4bb1bf9cd91c3acee39a" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x227d474c862a4b18d3d4124380fbdefcd92b6b78" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x347963f0b691737336b62e3f9716427ca6834bb3" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0xf966309e5a68d9780fc5b8cb69c057af0e9e80d8" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x6086b43cba4a1b29ae473eb825372f27ac16e8c4" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0xf46425abb4695ea14b3c1f4c1dd4b9a58b1ed856" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x579f901530b51952b304d8d9cb79ad29a8a736b3" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0xbfa9435db13e25a7895b248aff3528a525fe348a" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0xfd4328446647fd24b0a4812934eda831a4868664" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x4b20e72aa3e08cf0de5854cd5909086a5b397a67" }), // Internal economic module test
+  Object.freeze({ chainId: 4663, identity: "0x72035572d84975cf74d90bcc4b46cedacd4335a2" }), // Programmable API Guard Check
+  Object.freeze({ chainId: 4663, identity: "0xa3470b7669fb005956f10b795a4b7cff6d0eb340" }), // Programmable Review Check
+  Object.freeze({ chainId: 4663, identity: "0x2e937410f4c8c30b85e75a5b230229ca1bd3a9f3" }), // Programmable Review Check
+  Object.freeze({ chainId: 4663, identity: "0xa0f1a302e0b0b001d5ee71b3e941b608e104e1a1" }), // Programmable Review Check
+  Object.freeze({ chainId: 4663, identity: "0xea4386153786d1c7ed157805848baf8898d7aadd" }), // Programmable Base API Check
+  Object.freeze({ chainId: 4663, identity: "0xb720f1b98ed19afee4ab8a0f78c28f74c149eee4" }), // Programmable Base API Check
+  Object.freeze({ chainId: 4663, identity: "0x3ee682fc9c43336f508de388bbd65ddca43d29eb" }), // Programmable API Fix Check
+  Object.freeze({ chainId: 4663, identity: "0xc6e83d8b2d87399eb0a97a07c324c57e1cd33b68" }), // Programmable API Fix Check
+  Object.freeze({ chainId: 4663, identity: "0xd74bed0f37b303d25e70fde0057be968d289ef52" }), // Programmable API Release Check
+  Object.freeze({ chainId: 4663, identity: "0x3f54538ffbfb5890be60f17aed98cb309f902377" }), // Protected Launch 15K Six
+  Object.freeze({ chainId: 4663, identity: "0xd3e63c1a6e9e5946d52e488b90fac394afaf208b" }), // Protected Launch Canary 2 / GUARD2
+  Object.freeze({ chainId: 4663, identity: "0x67624555c2bb3627b54ae677b35ba73bf37908c8" }), // Protected Launch Canary / GUARD
+  Object.freeze({ chainId: 4663, identity: "0x5eec290834f7245f845f2047ec7be96415bf0137" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x4140515cbe7bd50d4416a5950f290b76ac9c4026" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0xf75c25a0d60572c41f3fdcc8ae4b119c8a142164" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x103a04145c9fa7093e639ad15183170304c42eb0" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x6008c81e34ec10c13897876653077d768bcacfb5" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0xcd3a24f0e88d0d90ff5b1ce91c4ac78e7ee66b05" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x8e7667d01b670b117b84c5086d45e93eee1f715d" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x6bf4415e1155d177f9f5968f1059bf084b72b9d4" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x64de4965ddd715fb011cebd727b1458fc820bd34" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x226d0014c0fbd6be0dfce5322102b25680db9500" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0xd5cead34df9db8537e88d9ffdf522664dee7cdac" }), // Programmable Native30 Canary
+  Object.freeze({ chainId: 4663, identity: "0x3f4c4ab2bfecebfcab9c578b38a0311dfb56033e" }), // Programmable Native30 Canary
 ]);
 /**
  * Controls only public discovery. Direct token lookup remains available so

@@ -5,6 +5,8 @@ import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 import { readBoundedUtf8BodyV1 } from "./custom-launch/bounded-utf8-body-v1";
 
 const endpoint = "https://graph.codex.io/graphql";
+const MARKET_OBSERVATION_TTL_MS = 300_000;
+const PROVIDER_FAILURE_BACKOFF_MS = 300_000;
 const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
  filterTokens(tokens:$tokens,limit:100,useAggregatedStats:true) { results { token { address networkId } priceUSD marketCap circulatingMarketCap volume24 change24 } }
  filterPairs(pairs:$pairs,limit:100) { results { liquidity pair { address networkId token0 token1 token0Data { address networkId symbol } token1Data { address networkId symbol } } } }
@@ -13,7 +15,7 @@ const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
 const barsQuery = `query Chart($symbol:String!,$from:Int!,$to:Int!,$resolution:String!) { getTokenBars(symbol:$symbol,from:$from,to:$to,resolution:$resolution,currencyCode:USD,removeEmptyBars:false,removeLeadingNullValues:true) { t c s token {address networkId} } }`;
 let providerRetryAt = 0;
 function pauseProvider(seconds: number) {
-  providerRetryAt = Math.max(providerRetryAt, Date.now() + Math.min(300, Math.max(1, Number.isFinite(seconds) ? seconds : 15)) * 1_000);
+  providerRetryAt = Math.max(providerRetryAt, Date.now() + Math.min(900, Math.max(1, Number.isFinite(seconds) ? seconds : 15)) * 1_000);
 }
 
 export async function codexQuery(query: string, variables: Record<string, unknown>) {
@@ -30,7 +32,8 @@ export async function codexQuery(query: string, variables: Record<string, unknow
   if (!response.ok) {
     // A paused billing account affects every endpoint. Do not retry it per token or page.
     const retry = Number(response.headers.get("Retry-After"));
-    pauseProvider(response.status === 401 || response.status === 403 ? 60 : retry > 0 ? retry : response.status >= 500 ? 2 : 15);
+    pauseProvider(response.status === 401 || response.status === 403 || response.status === 429
+      ? 600 : retry > 0 ? retry : response.status >= 500 ? 2 : 15);
     void response.body?.cancel();
     throw new Error("Market data unavailable");
   }
@@ -40,8 +43,8 @@ export async function codexQuery(query: string, variables: Record<string, unknow
     const errors = marketObject(body) && Array.isArray(body.errors) ? body.errors : [];
     for (const error of errors) if (marketObject(error) && marketObject(error.extensions)) {
       if (["OVER_CAPACITY", "TOO_MANY_REQUESTS"].includes(String(error.extensions.code))) {
-        pauseProvider(Number(error.extensions.retryAfterSeconds) || 30);
-      } else if (["UNAUTHENTICATED", "FORBIDDEN", "NOT_AUTHORIZED"].includes(String(error.extensions.code))) pauseProvider(60);
+        pauseProvider(Number(error.extensions.retryAfterSeconds) || 600);
+      } else if (["UNAUTHENTICATED", "FORBIDDEN", "NOT_AUTHORIZED"].includes(String(error.extensions.code))) pauseProvider(600);
     }
     throw new Error("Market data unavailable");
   }
@@ -67,7 +70,7 @@ async function sharedRead<T>(key: string, read: () => Promise<T>): Promise<T> {
   pending.set(key, request);
   try { return await request; }
   catch {
-    failedUntil.delete(key); failedUntil.set(key, Date.now() + 15_000);
+    failedUntil.delete(key); failedUntil.set(key, Date.now() + PROVIDER_FAILURE_BACKOFF_MS);
     if (failedUntil.size > 200) failedUntil.delete(failedUntil.keys().next().value!);
     throw new Error("Market data unavailable");
   } finally { pending.delete(key); }
@@ -121,7 +124,7 @@ const cachedMarkets = unstable_cache(async (identities: readonly Identity[], cha
       observedAt, sourceUrl: "https://www.codex.io/" }]);
   }
   return entries;
-}, ["codex-token-markets-v5"], { revalidate: 30 });
+}, ["codex-token-markets-v5"], { revalidate: 300 });
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
 export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
@@ -163,13 +166,13 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
           const value = entries.get(token.tokenAddress);
           if (!value) return;
           const observedAt = Date.parse(value.observedAt), age = Date.now() - observedAt;
-          if (!(age >= 0 && age <= 180_000)) return;
+          if (!(age >= 0 && age <= MARKET_OBSERVATION_TTL_MS)) return;
           const market = { ...value, poolId: token.poolId };
           // Reuse catalog observations on coin pages without extending their age.
           // Chain and exact pool are part of the key; failures are never saved.
-          if (age < 30_000) {
+          if (age < MARKET_OBSERVATION_TTL_MS) {
             marketObservations.delete(key);
-            marketObservations.set(key, { expiresAt: observedAt + 30_000, market });
+            marketObservations.set(key, { expiresAt: observedAt + MARKET_OBSERVATION_TTL_MS, market });
             while (marketObservations.size > 2_048) marketObservations.delete(marketObservations.keys().next().value!);
           }
           return market;
