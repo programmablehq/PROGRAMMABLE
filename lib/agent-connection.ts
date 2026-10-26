@@ -115,10 +115,24 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
 export function buildAgentInstructions(input?: { scopes?: readonly string[]; wallet?: string; intent?: string; chainId?: "1" | "4663" | "8453" }) {
   const chain = input?.chainId;
   const readOnly = input?.scopes?.length === 1 && input.scopes[0] === "custom-launch:read";
+  const capabilityUrl = chain === "8453"
+    ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.base.capabilities
+    : chain === "1"
+      ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.ethereum.capabilities
+      : chain === "4663"
+        ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.capabilities
+        : null;
+  const workflowInstruction = chain === "8453"
+    ? `Use workflows.customLaunch.base and ${capabilityUrl}.`
+    : chain === "1"
+      ? `Use workflows.customLaunch.ethereum and ${capabilityUrl}.`
+      : chain === "4663"
+        ? `Use workflows.customLaunchPlan and ${capabilityUrl}.`
+        : "Follow the selected chain's workflow.";
   return [
     chain ? `Selected chain: ${chain === "8453" ? "Base" : chain === "1" ? "Ethereum Mainnet" : "Robinhood Chain"} (${chain}). Use only this chain for this setup.` : "Select Ethereum Mainnet (1), Base (8453) or Robinhood Chain (4663) with the user before building.",
     readOnly ? "Use this Programmable API key to read launch status on the selected chain." : "Use this Programmable API key to build custom hooks and read launch status on the selected chain.",
-    `Read ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}. ${chain === "8453" ? "Use workflows.customLaunch.base and /v4/chains/8453/custom-launch-capabilities." : chain === "1" ? "Use workflows.customLaunch.ethereum and /v3/capabilities." : chain === "4663" ? "Use workflows.customLaunchPlan and /v4/chains/4663/custom-launch-capabilities." : "Follow the selected chain's workflow."} Read its current profile, packer and fee policy before preparing a request.`,
+    `Read ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}. ${workflowInstruction} Read its current profile, packer and fee policy before preparing a request.`,
     "Read the API key from PROGRAMMABLE_API_KEY in the environment or your secret store. Send it only in the Authorization header to https://api.programmable.market. Never print the key or put it in a URL, logs or committed files.",
     input?.scopes ? `This connection was issued with: ${input.scopes.join(", ")}. Check current API authorization on each operation; documentation does not add permissions to a key.` : "Use the key's actual permissions. Read-only keys cannot create launch requests.",
     "Launch history can include requests from other keys and linked wallets in the same account. The key is not isolated to one project; its saved chain restrictions still apply. Verify authorization for the selected chain; do not switch chains to work around a denied request.",

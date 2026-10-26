@@ -14,6 +14,8 @@ describe("developer setup and diagnostics", () => {
     expect(data.instructions).not.toContain("robinhood-only-setup");
     expect(data.instructions).not.toContain("Programmable-Launch-Response-Version");
     expect(buildAgentInstructions({ chainId: "4663" })).toContain("Programmable-Launch-Response-Version: 1.2");
+    expect(buildAgentInstructions({ chainId: "8453" })).toContain("/v4/chains/8453/capabilities");
+    expect(buildAgentInstructions({ chainId: "8453" })).not.toContain("/v4/chains/8453/custom-launch-capabilities");
   });
   it("does not instruct a read-only agent to prepare a launch", () => {
     const instructions = buildAgentInstructions({ scopes: ["custom-launch:read"], chainId: "1" });
