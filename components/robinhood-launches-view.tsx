@@ -76,21 +76,84 @@ const HASH = /^0x[0-9a-f]{64}$/i;
 const REFRESH_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const ROBINHOOD_WEBSITE_FILTERS: RobinhoodExploreFilters = { ...DEFAULT_EXPLORE_FILTERS, sort: "highest" };
+const PAGE_SNAPSHOT_TTL_MS = 300_000;
+const MAX_PAGE_SNAPSHOTS = 24;
 
 // Public, browser-only navigation state. Nothing is written during server rendering.
 const rememberedSnapshots = new Map<ExploreScope | string, { value: Snapshot; savedAt: number }>();
-function readRememberedSnapshot(chainId: ExploreScope | string) {
-  const rememberedSnapshot = rememberedSnapshots.get(chainId);
-  if (typeof window === "undefined" || !rememberedSnapshot || Date.now() - rememberedSnapshot.savedAt >= 300_000) return null;
-  const value = rememberedSnapshot.value;
+const rememberedPageSnapshots = new Map<string, { value: Snapshot; savedAt: number }>();
+
+function snapshotScope(value: Snapshot) {
+  return value.data.account ? `profile:${value.data.account.toLowerCase()}` : value.data.scope ?? value.data.chainId!;
+}
+
+function snapshotKey(scope: ExploreScope | string, request: Request) {
+  return `${scope}\u0000${request.page}\u0000${request.q}\u0000${request.sort}\u0000${request.mode ?? "all"}\u0000${request.chain ?? "all"}`;
+}
+
+function clientSnapshot(value: Snapshot) {
   return { ...value, data: { ...value.data,
     presentations: mergeRobinhoodPresentations([], value.data.presentations).items,
   } };
 }
+
+function readPageSnapshot(scope: ExploreScope | string, request: Request, now = Date.now()) {
+  if (typeof window === "undefined") return null;
+  const key = snapshotKey(scope, request);
+  const remembered = rememberedPageSnapshots.get(key);
+  if (!remembered || now - remembered.savedAt >= PAGE_SNAPSHOT_TTL_MS) {
+    if (remembered) rememberedPageSnapshots.delete(key);
+    return null;
+  }
+  return clientSnapshot(remembered.value);
+}
+
+function readRememberedSnapshot(chainId: ExploreScope | string) {
+  const rememberedSnapshot = rememberedSnapshots.get(chainId);
+  if (typeof window === "undefined" || !rememberedSnapshot || Date.now() - rememberedSnapshot.savedAt >= 300_000) return null;
+  return clientSnapshot(rememberedSnapshot.value);
+}
+
+function rememberPageSnapshot(value: Snapshot) {
+  value = { ...value, data: { ...value.data, items: liveLaunchObservations(value.data.items) } };
+  if (typeof window !== "undefined") {
+    rememberedPageSnapshots.set(snapshotKey(snapshotScope(value), value.request), { value, savedAt: Date.now() });
+    while (rememberedPageSnapshots.size > MAX_PAGE_SNAPSHOTS) {
+      const oldest = rememberedPageSnapshots.keys().next().value;
+      if (oldest === undefined) break;
+      rememberedPageSnapshots.delete(oldest);
+    }
+  }
+  return value;
+}
+
 function rememberSnapshot(value: Snapshot) {
   value = { ...value, data: { ...value.data, items: liveLaunchObservations(value.data.items) } };
-  if (typeof window !== "undefined") rememberedSnapshots.set(value.data.account ? `profile:${value.data.account.toLowerCase()}` : value.data.scope ?? value.data.chainId!, { value, savedAt: Date.now() });
+  if (typeof window !== "undefined") {
+    const scope = snapshotScope(value);
+    const entry = { value, savedAt: Date.now() };
+    rememberedSnapshots.set(scope, entry);
+    rememberedPageSnapshots.set(snapshotKey(scope, value.request), entry);
+    while (rememberedPageSnapshots.size > MAX_PAGE_SNAPSHOTS) {
+      const oldest = rememberedPageSnapshots.keys().next().value;
+      if (oldest === undefined) break;
+      rememberedPageSnapshots.delete(oldest);
+    }
+  }
   return value;
+}
+
+function exploreRequestUrl(chainId: ExploreScope, profileAccount: string | undefined, request: Request) {
+  const query = new URLSearchParams({ page: String(request.page), pageSize: String(ROBINHOOD_EXPLORE_PAGE_SIZE),
+    q: request.q, sort: request.sort, mode: request.mode ?? "all" });
+  // Make the combined catalog's cache identity explicit. This lets a
+  // provider recovery replace an older degraded all-chain response
+  // without adding a per-request nonce or bypassing shared caching.
+  if (chainId === "all" && !profileAccount && (!request.chain || request.chain === "all")) query.set("chain", "all");
+  if (chainId === "all" && request.chain && request.chain !== "all") query.set("chain", String(request.chain));
+  if (profileAccount) query.set("account", profileAccount);
+  const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 8453 ? "base" : chainId === 4663 ? "robinhood" : "ethereum"}`;
+  return `${endpoint}?${query}`;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -203,13 +266,15 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const profileAccount = profile?.account;
   const refreshInterval = profileAccount ? 30_000 : REFRESH_MS;
   const cacheKey = profile ? `profile:${profile.account.toLowerCase()}` : chainId;
-  const [initial] = useState(() => readRememberedSnapshot(cacheKey));
+  const defaultRequest = { page: 1, q: "", ...defaultFilters };
+  const [initial] = useState(() => readPageSnapshot(cacheKey, defaultRequest) ?? readRememberedSnapshot(cacheKey));
   const [search, setSearch] = useState(initial?.request.q ?? "");
-  const [request, setRequest] = useState<Request>(initial?.request ?? { page: 1, q: "", ...defaultFilters });
+  const [request, setRequest] = useState<Request>(initial?.request ?? defaultRequest);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(initial);
   const [loading, setLoading] = useState(!initial);
   const [failedRequest, setFailedRequest] = useState<Request | null>(null);
   const [now, setNow] = useState(Date.now);
+  const prefetchingRequests = useRef(new Set<string>());
   const presentations = new Map((snapshot?.data.presentations ?? []).map((item) => [exploreIdentityKey(item), item]));
 
   useEffect(() => {
@@ -231,7 +296,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     let controller: AbortController | null = null;
     let refreshTimer: number | undefined;
     const isVisible = () => document.visibilityState !== "hidden";
-    const remembered = readRememberedSnapshot(cacheKey);
+    const remembered = readPageSnapshot(cacheKey, request) ?? readRememberedSnapshot(cacheKey);
     let lastAttemptAt = remembered && sameRobinhoodExploreRequest(remembered.request, request)
       ? remembered.fetchedAt : 0;
 
@@ -248,16 +313,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
       setLoading(true);
 
       try {
-        const query = new URLSearchParams({ page: String(request.page), pageSize: String(ROBINHOOD_EXPLORE_PAGE_SIZE),
-          q: request.q, sort: request.sort, mode: request.mode ?? "all" });
-        // Make the combined catalog's cache identity explicit. This lets a
-        // provider recovery replace an older degraded all-chain response
-        // without adding a per-request nonce or bypassing shared caching.
-        if (chainId === "all" && !profileAccount && (!request.chain || request.chain === "all")) query.set("chain", "all");
-        if (chainId === "all" && request.chain && request.chain !== "all") query.set("chain", String(request.chain));
-        if (profileAccount) query.set("account", profileAccount);
-        const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 8453 ? "base" : chainId === 4663 ? "robinhood" : "ethereum"}`;
-        const response = await fetch(`${endpoint}?${query}`, {
+        const response = await fetch(exploreRequestUrl(chainId, profileAccount, request), {
           signal: activeController.signal,
           cache: profileAccount ? "no-store" : "default",
           headers: { accept: "application/json" },
@@ -335,7 +391,16 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   }
 
   function changePage(page: number) {
-    setRequest((current) => current.page === page ? current : { ...current, page });
+    if (request.page === page) return;
+    const next = { ...request, page };
+    const cached = readPageSnapshot(cacheKey, next);
+    if (cached) {
+      setSnapshot(cached);
+      setFailedRequest(null);
+      setLoading(false);
+      setNow(Date.now());
+    }
+    setRequest(next);
   }
 
   const failed = sameRobinhoodExploreRequest(failedRequest, request);
@@ -356,6 +421,30 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const slots = pending && !profile ? Math.max(0, ROBINHOOD_EXPLORE_PAGE_SIZE - items.length) : 0;
   const canPrevious = enabled && !pending && !updatingSearch && Boolean(data && data.page.number > 1);
   const canNext = enabled && !pending && !updatingSearch && Boolean(data?.page.hasMore);
+
+  function prefetchPage(page: number) {
+    if (profileAccount || !data?.page.hasMore || page < 1) return;
+    const next = { ...request, page };
+    const key = snapshotKey(cacheKey, next);
+    if (readPageSnapshot(cacheKey, next) || prefetchingRequests.current.has(key)) return;
+    prefetchingRequests.current.add(key);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    void fetch(exploreRequestUrl(chainId, profileAccount, next), {
+      signal: controller.signal,
+      cache: "default",
+      headers: { accept: "application/json" },
+    }).then(async (response) => {
+      if (!response.ok) return;
+      const prefetched = readLaunchListResponse(await response.json(), chainId, profileAccount);
+      rememberPageSnapshot({ request: next, fetchedAt: Date.now(), data: prefetched });
+    }).catch(() => {
+      // Prefetch is an optimization. The normal page request remains authoritative.
+    }).finally(() => {
+      window.clearTimeout(timeout);
+      prefetchingRequests.current.delete(key);
+    });
+  }
   const Heading = embedded ? "h2" : "h1";
   const StateHeading = embedded ? "h3" : "h2";
   const count = displayedData?.page.matchingItems ?? displayedData?.page.totalItems ?? 0;
@@ -428,6 +517,8 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
               <ChevronLeft aria-hidden="true" size={18} />
             </button>
             <button type="button" aria-disabled={!canNext} aria-label="Next page" title="Next page" aria-controls={listId}
+              onPointerEnter={() => { if (canNext && data) prefetchPage(data.page.number + 1); }}
+              onFocus={() => { if (canNext && data) prefetchPage(data.page.number + 1); }}
               onClick={() => { if (canNext && data) changePage(data.page.number + 1); }}>
               <ChevronRight aria-hidden="true" size={18} />
             </button>
