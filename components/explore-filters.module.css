@@ -56,6 +56,20 @@
 .choices { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
 .modeChoices { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .chainChoices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chainChoice {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 48px;
+  padding: 8px !important;
+}
+.chainChoiceMark {
+  color: currentColor;
+  display: block;
+  height: 20px;
+  object-fit: contain;
+  width: 20px;
+}
 .sortChoices { grid-template-columns: 1fr; }
 .modeChoices button { padding-inline: 8px; }
 .choices button { color: var(--webde-muted); }

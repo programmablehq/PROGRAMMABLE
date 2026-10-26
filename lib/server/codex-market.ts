@@ -14,6 +14,10 @@ const PROVIDER_FAILURE_BACKOFF_MS = 300_000;
 // the same stable batches without turning a page refresh into an unbounded
 // request fan-out.
 const MAX_MARKET_PROVIDER_BATCHES_PER_READ = 20;
+// Address-sorted slices shift every time a new token is inserted. Stable
+// buckets keep a new launch from invalidating the provider cache for the
+// entire catalog and make a cold refresh spend at most one new batch.
+const MARKET_BATCH_BUCKETS = 20;
 const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
  filterTokens(tokens:$tokens,limit:100,useAggregatedStats:true) { results { token { address networkId } priceUSD marketCap circulatingMarketCap volume24 change24 } }
  filterPairs(pairs:$pairs,limit:100) { results { liquidity pair { address networkId token0 token1 token0Data { address networkId symbol } token1Data { address networkId symbol } } } }
@@ -68,6 +72,11 @@ const copyMarket = (market: RobinhoodCoinMarket): RobinhoodCoinMarket => ({ ...m
 });
 const pending = new Map<string, Promise<unknown>>();
 const failedUntil = new Map<string, number>();
+
+function marketBucket(address: string) {
+  return Number.parseInt(address.slice(2, 10), 16) % MARKET_BATCH_BUCKETS;
+}
+
 // Coalesce cold reads and briefly back off failures, without automatic provider retries.
 async function sharedRead<T>(key: string, read: () => Promise<T>): Promise<T> {
   const active = pending.get(key);
@@ -143,16 +152,25 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
     if (poolsByToken.has(address) && poolsByToken.get(address) !== pool) throw new Error("Ambiguous market identity");
     poolsByToken.set(address, pool);
   }
-  const identities = [...new Map(tokens.map(token => [token.tokenAddress.toLowerCase(), { tokenAddress: token.tokenAddress.toLowerCase(), poolId: token.poolId.toLowerCase() }])).values()].sort((a,b) => a.tokenAddress.localeCompare(b.tokenAddress));
+  const identities = [...new Map(tokens.map(token => [token.tokenAddress.toLowerCase(), { tokenAddress: token.tokenAddress.toLowerCase(), poolId: token.poolId.toLowerCase() }])).values()];
   const result = new Map<string, RobinhoodCoinMarket>();
-  // One HTTP request for token stats and exact-pool liquidity per 100 verified identities.
+  // One HTTP request for token stats and exact-pool liquidity per 100 verified
+  // identities. Bucket membership is stable across catalog growth, so adding
+  // a launch does not reshuffle every cached provider request.
   const deadline = Date.now() + 8_000;
   let providerBatches = 0;
-  for (let offset = 0; offset < identities.length && Date.now() < deadline && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; offset += 400) {
-    const wave = identities.slice(offset, offset + 400);
+  const buckets = identities.length <= 100
+    ? [identities]
+    : Array.from({ length: MARKET_BATCH_BUCKETS }, () => [] as Identity[]);
+  if (identities.length > 100) {
+    for (const token of identities) buckets[marketBucket(token.tokenAddress)]!.push(token);
+  }
+  for (const bucket of buckets) {
+    if (Date.now() >= deadline || providerBatches >= MAX_MARKET_PROVIDER_BATCHES_PER_READ) break;
+    bucket.sort((a, b) => a.tokenAddress.localeCompare(b.tokenAddress));
     const reads = new Map<string, MarketRead>();
     const missing: Identity[] = [];
-    for (const token of wave) {
+    for (const token of bucket) {
       const key = marketIdentity(token, chainId), observation = marketObservations.get(key);
       if (observation && Date.now() < observation.expiresAt) {
         result.set(token.tokenAddress, copyMarket(observation.market));
@@ -166,8 +184,6 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
     for (let index = 0; index < missing.length && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
       const batch = missing.slice(index, index + 100);
       providerBatches += 1;
-      // A stable cache key lets Next serve the last observation while refreshing.
-      // A time bucket here creates a cold blocking request every 30 seconds.
       const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId)).then(entries => new Map(entries));
       for (const token of batch) {
         const key = marketIdentity(token, chainId);

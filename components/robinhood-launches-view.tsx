@@ -250,6 +250,10 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
       try {
         const query = new URLSearchParams({ page: String(request.page), pageSize: String(ROBINHOOD_EXPLORE_PAGE_SIZE),
           q: request.q, sort: request.sort, mode: request.mode ?? "all" });
+        // Make the combined catalog's cache identity explicit. This lets a
+        // provider recovery replace an older degraded all-chain response
+        // without adding a per-request nonce or bypassing shared caching.
+        if (chainId === "all" && !profileAccount && (!request.chain || request.chain === "all")) query.set("chain", "all");
         if (chainId === "all" && request.chain && request.chain !== "all") query.set("chain", String(request.chain));
         if (profileAccount) query.set("account", profileAccount);
         const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 8453 ? "base" : chainId === 4663 ? "robinhood" : "ethereum"}`;
