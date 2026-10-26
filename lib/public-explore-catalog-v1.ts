@@ -42,6 +42,32 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
 ): T {
   if (entry.exploreKind !== "token") return entry;
   const provenance = entry.launchStampProvenance;
+  // Keep the official project artwork bound to the exact launch identity.
+  // Provider metadata must not replace these owner-selected images.
+  if (provenance?.chainId === 1 &&
+    entry.tokenAddress.toLowerCase() === "0xd118264a7b9ac2cd795834186e86ffa83c26f6ed" &&
+    provenance.launchId.toLowerCase() === "0x63fc6e67d017e6d9d3b5c01fcf905dc39f86757db671bc49445df9e80bd4a8dc") {
+    return Object.freeze({
+      ...entry,
+      imageUrl: "https://genomedna.xyz/token.png",
+    }) as T;
+  }
+  if (provenance?.chainId === 1 &&
+    entry.tokenAddress.toLowerCase() === "0x39772d019ed525f667a7cbbf8e64b07120378402" &&
+    provenance.launchId.toLowerCase() === "0xc6eb69cdb5bf4b18947651a8288e9fdc4de694c4f0d4705403222fc2d88600b0") {
+    return Object.freeze({
+      ...entry,
+      imageUrl: "https://genomedna.xyz/token.png",
+    }) as T;
+  }
+  if (provenance?.chainId === 1 &&
+    entry.tokenAddress.toLowerCase() === "0x44ca84cf59183f389aa20848ee8ef5c076bb3cb7" &&
+    provenance.launchId.toLowerCase() === "0xc052d82ef023a8d15097d879edd91dd1b9b2ea8131aa8ac08c5a65d558ae6a8e") {
+    return Object.freeze({
+      ...entry,
+      imageUrl: "https://www.someonev4.xyz/launch/ring-protected-6/token.png",
+    }) as T;
+  }
   // Owner-supplied artwork and social link for this verified, finalized launch.
   // This display correction never creates or changes launch provenance.
   if (provenance?.chainId === 1 &&

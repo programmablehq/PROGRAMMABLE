@@ -29,7 +29,7 @@ describe("Codex provider backoff", () => {
     await expect(codexQuery("query First { value }", {})).rejects.toThrow("Market data unavailable");
     await expect(codexQuery("query Different { value }", {})).rejects.toThrow("Market data unavailable");
     expect(fetcher).toHaveBeenCalledTimes(1);
-    vi.setSystemTime(Date.now() + 60_001);
+    vi.setSystemTime(Date.now() + 600_001);
     await expect(codexQuery("query Different { value }", {})).resolves.toEqual({ recovered: true });
   });
 
@@ -116,7 +116,7 @@ describe("Codex server market adapter", () => {
     expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).get(address))
       .toMatchObject({ priceUsd: .001, observedAt });
     expect(fetcher).toHaveBeenCalledTimes(1);
-    vi.setSystemTime(Date.now() + 10_001);
+    vi.setSystemTime(Date.now() + 280_001);
     await readCodexMarkets([{ tokenAddress: address, poolId }]);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
@@ -266,7 +266,7 @@ describe("Codex server market adapter", () => {
     const fetcher = vi.fn().mockRejectedValue(new Error("private provider response")); vi.stubGlobal("fetch", fetcher);
     for (let attempt = 0; attempt < 3; attempt++) await expect(readCodexChart(address, 4663, "1H")).rejects.toThrow("Market data unavailable");
     expect(fetcher).toHaveBeenCalledTimes(1);
-    vi.setSystemTime(Date.now() + 15_001);
+    vi.setSystemTime(Date.now() + 300_001);
     await expect(readCodexChart(address, 4663, "1H")).rejects.toThrow("Market data unavailable");
     expect(fetcher).toHaveBeenCalledTimes(2);
   });

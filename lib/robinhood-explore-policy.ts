@@ -91,6 +91,14 @@ const EXPLORE_EXCLUDED_TOKENS = new Set([
   "0x688ec8730893d3254021d356f4dd6c4cf30d5f01", // PSniper Ten
   "0xbc0d6909b8ea31623662e694f276d146a70afa88", // PSniper Twelve
   "0x3daf6a7bd6c95d0eac7e56ab761dc60a7c836f3c", // PSniper Fourteen
+
+  // These addresses are also used by Ethereum test fixtures. Keep this
+  // exclusion scoped to Robinhood so the shared visibility contract stays
+  // chain-specific.
+  "0xf3a6a1edc6f8467c82051b351434bfa79321c070",
+  "0x90c453484bc56a625e15eb0e242ca4e23ac74e7c",
+  "0xc43074a8a71d9e2d5589de0aff89e6928538eb5e",
+  "0x621268e6a4c8252e95412bdc566c061d94280724",
 ]);
 
 export function isDiscoverableRobinhoodToken(address: string) {

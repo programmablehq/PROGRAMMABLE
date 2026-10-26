@@ -72,6 +72,27 @@ describe("public Explore catalog exclusions", () => {
     ])).toEqual([addressOnly, launchOnly]);
   });
 
+  it("binds the DNA and RING artwork to their exact launches", () => {
+    const dna = routerEntry(
+      "0xd118264a7b9ac2cd795834186e86ffa83c26f6ed",
+      "0x63fc6e67d017e6d9d3b5c01fcf905dc39f86757db671bc49445df9e80bd4a8dc",
+    );
+    const ring = routerEntry(
+      "0x44ca84cf59183f389aa20848ee8ef5c076bb3cb7",
+      "0xc052d82ef023a8d15097d879edd91dd1b9b2ea8131aa8ac08c5a65d558ae6a8e",
+    );
+    expect(publicExplorePresentationEntryV1(dna).imageUrl).toBe(
+      "https://genomedna.xyz/token.png",
+    );
+    expect(publicExplorePresentationEntryV1(ring).imageUrl).toBe(
+      "https://www.someonev4.xyz/launch/ring-protected-6/token.png",
+    );
+    expect(publicExplorePresentationEntryV1({
+      ...dna,
+      tokenAddress: "0x1111111111111111111111111111111111111111",
+    }).imageUrl).toBeUndefined();
+  });
+
   it("attaches the exact SHARD image and social links only to its launch stamp", () => {
     const exact = {
       ...routerEntry(
