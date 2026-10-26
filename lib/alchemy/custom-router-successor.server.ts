@@ -135,18 +135,31 @@ async function readOptionalSuccessorMetadataFeedV1() {
  * 64 confirmations independently establish the canonical onchain identity. */
 export async function readAllEthereumCustomIdentitySourcesV1(
   savedEntries: readonly CanonicalTokenExploreEntry[] = [],
+  dependencies: Readonly<{
+    readLegacy?: typeof readAlchemyRouterCustomIdentitySourceV1;
+    readMetadata?: typeof readOptionalSuccessorMetadataFeedV1;
+    verifyCandidates?: typeof readVerifiedSuccessorTokensV1;
+  }> = {},
 ): Promise<AlchemyRouterCustomIdentitySourceV1> {
   const [legacy, feed] = await Promise.all([
-    readAlchemyRouterCustomIdentitySourceV1(),
-    readOptionalSuccessorMetadataFeedV1(),
+    (dependencies.readLegacy ?? readAlchemyRouterCustomIdentitySourceV1)(),
+    (dependencies.readMetadata ?? readOptionalSuccessorMetadataFeedV1)(),
   ]);
-  if (!feed) return legacy;
   const boundary = BigInt(legacy.slice.cursor.blockNumber);
   const candidates = filterUnseenSuccessorDiscoveryCandidatesV1(
-    mergeSuccessorDiscoveryCandidatesV1(feed.launches, savedEntries, boundary),
+    mergeSuccessorDiscoveryCandidatesV1(feed?.launches ?? [], savedEntries, boundary),
     legacy.slice.tokens,
   );
   if (candidates.length === 0) return legacy;
+  const tokens = await (dependencies.verifyCandidates ?? readVerifiedSuccessorTokensV1)(legacy, candidates);
+  return { ...legacy, status: statusAfterVerifiedSuccessorReadV1(legacy.status),
+    slice: { ...legacy.slice, tokens: [...legacy.slice.tokens, ...tokens] } };
+}
+
+async function readVerifiedSuccessorTokensV1(
+  legacy: AlchemyRouterCustomIdentitySourceV1, candidates: readonly DiscoveryCandidate[],
+): Promise<readonly LauncherToken[]> {
+  const boundary = BigInt(legacy.slice.cursor.blockNumber);
   const deployment = getWebsiteReadOnchainDeployment("production");
   if (deployment.status !== "ready") throw new Error("Ethereum launch identity reader unavailable");
   const client = createPublicClient({ chain: mainnet, transport: http(deployment.rpcUrl, { retryCount: 1, timeout: 12_000 }) });
@@ -188,8 +201,5 @@ export async function readAllEthereumCustomIdentitySourcesV1(
     }));
     tokens.push(...batches.flat());
   }
-  // The feed only supplies discovery hints. Once every hint has passed the
-  // canonical onchain checks above, freshness is owned by that onchain cursor.
-  return { ...legacy, status: statusAfterVerifiedSuccessorReadV1(legacy.status),
-    slice: { ...legacy.slice, tokens: [...legacy.slice.tokens, ...tokens] } };
+  return tokens;
 }

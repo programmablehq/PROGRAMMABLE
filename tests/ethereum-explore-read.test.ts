@@ -7,12 +7,14 @@ import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
 import { shardRouterTradeEntry } from "./shard-router-trade-fixture";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/market-data/classic-launch-catalog.server", () => ({ readClassicLaunchCatalogV1: vi.fn() }));
-vi.mock("@/lib/alchemy/router-custom-public.server", () => ({ readWebsiteRouterCustomIdentitySnapshotV1: vi.fn() }));
+vi.mock("@/lib/alchemy/router-custom-public.server", () => ({ readWebsiteRouterCustomIdentitySnapshotV1: vi.fn(), readFinalizedRouterCustomIdentitySnapshotCoreV1: vi.fn() }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexMarkets: vi.fn(async () => new Map()) }));
 vi.mock("@/lib/server/codex-token-metadata", () => ({ readCodexTokenMetadata: vi.fn(async () => new Map()) }));
 import { readConfirmingEthereumLaunches } from "@/lib/server/confirming-launches";
 import { readCodexTokenMetadata } from "@/lib/server/codex-token-metadata";
-import { readEthereumCustomExploreCatalog, readEthereumUnifiedExploreCatalog, readEthereumLaunches, readEthereumToken, readEthereumTokenPresentation } from "@/lib/server/ethereum-explore";
+import { readEthereumCustomExploreCatalog, readEthereumUnifiedExploreCatalog, readEthereumLaunches, readEthereumToken, readEthereumTokenPresentation, readEthereumIndexHealth } from "@/lib/server/ethereum-explore";
+import { readClassicLaunchCatalogV1 } from "@/lib/market-data/classic-launch-catalog.server";
+import { readFinalizedRouterCustomIdentitySnapshotCoreV1, readWebsiteRouterCustomIdentitySnapshotV1 } from "@/lib/alchemy/router-custom-public.server";
 const hex = (n: number, size: number) => `0x${n.toString(16).padStart(size, "0")}` as `0x${string}`;
 function entry(n: number): CanonicalTokenExploreEntry {
   return canonicalTokenExploreEntryV1({ id: `1:${hex(n,40)}`, name: `Coin ${n}`, symbol: `C${n}`, tokenAddress: hex(n,40),
@@ -25,6 +27,23 @@ const source = (entries: CanonicalTokenExploreEntry[], status: "current" | "last
 const unavailable = async (): Promise<never> => { throw new Error("source unavailable"); };
 
 describe("Ethereum verified Explore adapter", () => {
+  it("checks canonical index health without waiting for presentation metadata", async () => {
+    vi.mocked(readClassicLaunchCatalogV1).mockResolvedValue({
+      status: "current", entries: [], generatedAt: "2026-10-27T01:00:00Z",
+      evidence: {},
+    } as unknown as Awaited<ReturnType<typeof readClassicLaunchCatalogV1>>);
+    vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue({
+      status: "current", entries: [customGraphExploreEntry], generatedAt: "2026-10-27T01:00:00Z",
+    } as Awaited<ReturnType<typeof readFinalizedRouterCustomIdentitySnapshotCoreV1>>);
+    const calls = vi.mocked(readWebsiteRouterCustomIdentitySnapshotV1).mock.calls.length;
+    await expect(readEthereumIndexHealth()).resolves.toEqual({ status: "ready", updatedAt: "2026-10-27T01:00:00Z" });
+    expect(readWebsiteRouterCustomIdentitySnapshotV1).toHaveBeenCalledTimes(calls);
+    vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue({
+      status: "last-known-good", entries: [customGraphExploreEntry], generatedAt: "2026-10-27T01:00:00Z",
+    } as Awaited<ReturnType<typeof readFinalizedRouterCustomIdentitySnapshotCoreV1>>);
+    await expect(readEthereumIndexHealth()).resolves.toMatchObject({ status: "stale" });
+  });
+
   it("keeps a fresh receipt's public presentation available without promoting it to a canonical token", async () => {
     const launch = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
       category: "custom" as const, mode: "custom" as const, tokenAddress: hex(7,40), name: "New coin", symbol: "NEW",

@@ -534,11 +534,6 @@ export function createRouterCustomIdentitySnapshotReaderV1(
   const now = dependencies.now ?? Date.now;
   const readDurableSnapshot = dependencies.readDurableSnapshot ??
     readDurableRouterCustomIdentitySnapshotV1;
-  const readCurrentSource = dependencies.readCurrentSource ?? (async () => {
-    const saved = await withinDuration(readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS)
-      .catch(() => null);
-    return readAllEthereumCustomIdentitySourcesV1(saved?.entries);
-  });
   const persistDurableSnapshot = dependencies.persistDurableSnapshot ??
     persistDurableRouterCustomIdentitySnapshotV1;
   const currentReadTimeoutMs = dependencies.currentReadTimeoutMs ??
@@ -565,21 +560,26 @@ export function createRouterCustomIdentitySnapshotReaderV1(
   };
 
   const refresh = async () => {
+    // Discovery and comparison consume the same saved boundary. A cold read
+    // must not download and parse the full identity snapshot twice in series.
+    const savedRead = withinDuration(readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS);
+    // Attach a handler immediately while the independent source read runs.
+    void savedRead.catch(() => undefined);
     try {
       let previous = cached
         ? lastKnownGoodRouterCustomSnapshotV1(cached.snapshot)
         : null;
       const source = await withinDuration(
-        readCurrentSource,
+        dependencies.readCurrentSource ?? (async () => {
+          const saved = await savedRead.catch(() => null);
+          return readAllEthereumCustomIdentitySourcesV1(saved?.entries);
+        }),
         ROUTER_CUSTOM_SNAPSHOT_SOURCE_REFRESH_TIMEOUT_MS,
       );
       const snapshot = routerCustomIdentitySnapshotFromSourceV1(source);
       try {
         const durable = lastKnownGoodRouterCustomSnapshotV1(
-          await withinDuration(
-            readDurableSnapshot,
-            ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS,
-          ),
+          await savedRead,
         );
         const generatedAtMs = Date.parse(durable.generatedAt);
         const ageMs = now() - generatedAtMs;
@@ -711,10 +711,7 @@ export function createRouterCustomIdentitySnapshotReaderV1(
       }
       try {
         const durable = lastKnownGoodRouterCustomSnapshotV1(
-          await withinDuration(
-            readDurableSnapshot,
-            ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS,
-          ),
+          await savedRead,
         );
         const generatedAtMs = Date.parse(durable.generatedAt);
         const ageMs = now() - generatedAtMs;
@@ -752,7 +749,12 @@ export function createRouterCustomIdentitySnapshotReaderV1(
       if (error instanceof RouterCustomSnapshotConflictError) throw error;
       if (snapshotConflict) throw snapshotConflict;
       if (cached) {
-        return lastKnownGoodRouterCustomSnapshotV1(cached.snapshot);
+        // Validation may have finished while persistence is still running.
+        // Only a new validated cache entry can be fresh here: the initial
+        // fast path already returned any entry fresh before this refresh.
+        return cached.expiresAt > now()
+          ? cached.snapshot
+          : lastKnownGoodRouterCustomSnapshotV1(cached.snapshot);
       }
       if (error instanceof DOMException && error.name === "TimeoutError") {
         const durable = lastKnownGoodRouterCustomSnapshotV1(await withinDuration(
