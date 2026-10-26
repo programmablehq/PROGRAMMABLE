@@ -548,6 +548,7 @@ export function createRouterCustomIdentitySnapshotReaderV1(
     snapshot: RouterCustomIdentitySnapshotV1;
   }> | null = null;
   let inFlight: Promise<RouterCustomIdentitySnapshotV1> | null = null;
+  let savedSnapshotForRefresh: RouterCustomIdentitySnapshotV1 | undefined;
   let snapshotConflict: RouterCustomSnapshotConflictError | null = null;
   const latestCachedSnapshot = () => cached?.snapshot;
 
@@ -562,7 +563,9 @@ export function createRouterCustomIdentitySnapshotReaderV1(
   const refresh = async () => {
     // Discovery and comparison consume the same saved boundary. A cold read
     // must not download and parse the full identity snapshot twice in series.
-    const savedRead = withinDuration(readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS);
+    savedSnapshotForRefresh = undefined;
+    const savedRead = withinDuration(readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS)
+      .then(snapshot => { savedSnapshotForRefresh = snapshot; return snapshot; });
     // Attach a handler immediately while the independent source read runs.
     void savedRead.catch(() => undefined);
     try {
@@ -757,7 +760,7 @@ export function createRouterCustomIdentitySnapshotReaderV1(
           : lastKnownGoodRouterCustomSnapshotV1(cached.snapshot);
       }
       if (error instanceof DOMException && error.name === "TimeoutError") {
-        const durable = lastKnownGoodRouterCustomSnapshotV1(await withinDuration(
+        const durable = lastKnownGoodRouterCustomSnapshotV1(savedSnapshotForRefresh ?? await withinDuration(
           readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS,
         ));
         const ageMs = now() - Date.parse(durable.generatedAt);

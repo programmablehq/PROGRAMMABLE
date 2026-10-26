@@ -658,11 +658,12 @@ describe("finalized Router Custom public projection", () => {
   it("falls back durably when the cold current read never settles", async () => {
     vi.useFakeTimers();
     const durable = routerCustomIdentitySnapshotFromSourceV1(source());
+    const readDurableSnapshot = vi.fn().mockResolvedValue(durable);
     const reader = createRouterCustomIdentitySnapshotReaderV1({
       now: () => Date.parse("2026-08-25T06:01:00.000Z"),
       currentReadTimeoutMs: 10,
       readCurrentSource: vi.fn(() => new Promise<never>(() => undefined)),
-      readDurableSnapshot: vi.fn().mockResolvedValue(durable),
+      readDurableSnapshot,
       persistDurableSnapshot: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -673,6 +674,7 @@ describe("finalized Router Custom public projection", () => {
         status: "last-known-good",
         entries: [customGraphExploreEntry],
       });
+      expect(readDurableSnapshot).toHaveBeenCalledOnce();
       await vi.advanceTimersByTimeAsync(30_000);
     } finally { vi.useRealTimers(); }
   });
