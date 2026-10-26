@@ -32,7 +32,10 @@ export type RobinhoodCoinPresentation = Readonly<{
   market: RobinhoodCoinMarket | null;
 }>;
 
-export const ROBINHOOD_MARKET_MAX_AGE_MS = 180_000;
+// Keep a verified market observation usable throughout the provider cache
+// window. The client may refresh the catalog more often for launch discovery,
+// but those refreshes must not discard the cached market value.
+export const ROBINHOOD_MARKET_MAX_AGE_MS = 900_000;
 
 export function mergeRobinhoodPresentations(
   previous: readonly RobinhoodCoinPresentation[],

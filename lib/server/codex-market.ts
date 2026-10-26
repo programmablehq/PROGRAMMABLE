@@ -5,7 +5,9 @@ import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 import { readBoundedUtf8BodyV1 } from "./custom-launch/bounded-utf8-body-v1";
 
 const endpoint = "https://graph.codex.io/graphql";
-const MARKET_OBSERVATION_TTL_MS = 300_000;
+// Explore refreshes can happen every 30 seconds. Keep provider observations
+// long enough that those refreshes never turn into a provider polling loop.
+const MARKET_OBSERVATION_TTL_MS = 900_000;
 const PROVIDER_FAILURE_BACKOFF_MS = 300_000;
 const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
  filterTokens(tokens:$tokens,limit:100,useAggregatedStats:true) { results { token { address networkId } priceUSD marketCap circulatingMarketCap volume24 change24 } }
@@ -124,7 +126,7 @@ const cachedMarkets = unstable_cache(async (identities: readonly Identity[], cha
       observedAt, sourceUrl: "https://www.codex.io/" }]);
   }
   return entries;
-}, ["codex-token-markets-v5"], { revalidate: 300 });
+}, ["codex-token-markets-v5"], { revalidate: 900 });
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
 export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {

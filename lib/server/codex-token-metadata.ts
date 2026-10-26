@@ -38,9 +38,9 @@ const cachedMetadata = unstable_cache(async (addresses: string[], chainId: 1 | 4
     result.push([address, { name: tokenText(token.name, 128), symbol: tokenText(token.symbol, 32), imageUrl, description, links }]);
   }
   return result;
-// New coins often arrive before their artwork/socials. Retry that same batch
-// shortly instead of keeping an empty presentation for ten minutes.
-}, ["codex-coin-metadata-v2"], { revalidate: 15 });
+// Metadata is display enrichment, so it follows the same bounded refresh
+// window as market observations instead of polling the provider per page load.
+}, ["codex-coin-metadata-v2"], { revalidate: 900 });
 
 /** Display-only enrichment of known identities, independent of price refreshes. */
 export async function readCodexTokenMetadata(addresses: readonly string[], chainId: 1 | 4663): Promise<Map<string, CodexTokenMetadata>> {
