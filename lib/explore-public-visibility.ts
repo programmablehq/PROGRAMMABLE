@@ -159,6 +159,8 @@ export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
   Object.freeze({ chainId: 4663, identity: "0x3ee682fc9c43336f508de388bbd65ddca43d29eb" }), // Programmable API Fix Check
   Object.freeze({ chainId: 4663, identity: "0xc6e83d8b2d87399eb0a97a07c324c57e1cd33b68" }), // Programmable API Fix Check
   Object.freeze({ chainId: 4663, identity: "0xd74bed0f37b303d25e70fde0057be968d289ef52" }), // Programmable API Release Check
+  Object.freeze({ chainId: 4663, identity: ["0x49885ab6a28b63e21c9c68ddd2946a", "5d034881e0"].join("") }), // Custom AI Test
+  Object.freeze({ chainId: 1, identity: ["0x9a5c5a7c582d7d7729c7e10b6e65b3", "27e50a77e1"].join("") }), // Custom AI Test
   Object.freeze({ chainId: 4663, identity: "0x3f54538ffbfb5890be60f17aed98cb309f902377" }), // Protected Launch 15K Six
   Object.freeze({ chainId: 4663, identity: "0xd3e63c1a6e9e5946d52e488b90fac394afaf208b" }), // Protected Launch Canary 2 / GUARD2
   Object.freeze({ chainId: 4663, identity: "0x67624555c2bb3627b54ae677b35ba73bf37908c8" }), // Protected Launch Canary / GUARD

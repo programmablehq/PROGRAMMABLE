@@ -84,9 +84,12 @@ describe("public Explore visibility", () => {
       ["0xd3e63c1a6e9e5946d52e488b90fac394af", "af208b"].join(""), // GUARD2
       ["0x67624555c2bb3627b54ae677b35ba73bf3", "7908c8"].join(""), // Protected Launch Canary
       ["0x72035572d84975cf74d90bcc4b46ceda", "cd4335a2"].join(""), // API Guard Check
+      ["0x49885ab6a28b63e21c9c68ddd2946a", "5d034881e0"].join(""), // Custom AI Test on Robinhood
+      ["0x9a5c5a7c582d7d7729c7e10b6e65b3", "27e50a77e1"].join(""), // Custom AI Test on Ethereum
     ];
-    for (const tokenAddress of hiddenTokens) {
-      expect(isPublicExploreIdentityV1({ tokenAddress }, 4663)).toBe(false);
+    for (const [index, tokenAddress] of hiddenTokens.entries()) {
+      const chainId = index === hiddenTokens.length - 1 ? 1 : 4663;
+      expect(isPublicExploreIdentityV1({ tokenAddress }, chainId)).toBe(false);
     }
     expect(isPublicExploreIdentityV1({
       tokenAddress: dnaToken, // DNA
