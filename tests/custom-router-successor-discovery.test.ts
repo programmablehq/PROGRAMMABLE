@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { filterUnseenSuccessorDiscoveryCandidatesV1, mergeSuccessorDiscoveryCandidatesV1 } from "../lib/alchemy/custom-router-successor.server";
+import { filterUnseenSuccessorDiscoveryCandidatesV1, mergeSuccessorDiscoveryCandidatesV1, statusAfterVerifiedSuccessorReadV1 } from "../lib/alchemy/custom-router-successor.server";
 import { CANONICAL_LAUNCH_STAMP_24H_V1 } from "../lib/tokens";
 import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
 const saved = () => ({ ...customGraphExploreEntry, launchStampProvenance: {
@@ -39,5 +39,10 @@ describe("successor discovery survives optional metadata removal", () => {
     expect(() => filterUnseenSuccessorDiscoveryCandidatesV1([
       { ...hints[0], token: "0x2222222222222222222222222222222222222222" },
     ], [entry])).toThrow("Conflicting successor");
+  });
+
+  it("keeps freshness owned by the verified onchain cursor", () => {
+    expect(statusAfterVerifiedSuccessorReadV1("current")).toBe("current");
+    expect(statusAfterVerifiedSuccessorReadV1("last-known-good")).toBe("last-known-good");
   });
 });
