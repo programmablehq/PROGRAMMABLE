@@ -7,7 +7,7 @@ vi.mock("@/components/view-chain", () => {
   return { useViewChain, useRouteViewChain: useViewChain };
 });
 vi.mock("next/navigation", () => ({ usePathname: () => "/explore/robinhood", useRouter: () => ({ push: vi.fn() }) }));
-import { RobinhoodLaunchesView, UnifiedLaunchesView } from "@/components/robinhood-launches-view";
+import { readLaunchListResponse, RobinhoodLaunchesView, UnifiedLaunchesView } from "@/components/robinhood-launches-view";
 import { ChainMark } from "@/components/chain-mark";
 
 describe("Explore request identity", () => {
@@ -29,6 +29,35 @@ describe("Explore request identity", () => {
     expect(activeExploreFilterCount({ sort: "activity", mode: "all" })).toBe(0);
     expect(activeExploreFilterCount({ sort: "newest", mode: "all", chain: 1 })).toBe(1);
     expect(sameRobinhoodExploreRequest({ ...request, chain: 1 }, { ...request, chain: 4663 })).toBe(false);
+  });
+
+  it("accepts a verified Custom AI launch in a chain-filtered catalog", () => {
+    const hex = (value: number, length: number) => `0x${value.toString(16).padStart(length, "0")}`;
+    const tokenAddress = hex(11, 40);
+    const row = {
+      chainId: 4663 as const,
+      sourceKind: "custom-ai-v1" as const,
+      mode: "custom" as const,
+      launchId: hex(12, 64),
+      tokenAddress,
+      hookAddress: hex(13, 40),
+      creator: hex(14, 40),
+      transactionHash: hex(15, 64),
+      blockNumber: "100",
+      launchedAt: "2026-10-26T00:00:00.000Z",
+      name: "Custom AI",
+      symbol: "AI",
+      decimals: 18,
+    };
+    const response = readLaunchListResponse({
+      scope: "all",
+      status: "ready",
+      updatedAt: row.launchedAt,
+      items: [row],
+      presentations: [{ chainId: 4663, tokenAddress, imageUrl: null, description: null, links: [] }],
+      page: { number: 1, size: 10, totalItems: 1, totalPages: 1, hasMore: false },
+    }, "all");
+    expect(response.items).toEqual([row]);
   });
 });
 

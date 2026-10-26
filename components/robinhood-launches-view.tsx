@@ -168,13 +168,17 @@ function isText(value: unknown): value is string | null {
   return value === null || (typeof value === "string" && value.length <= 4_096);
 }
 
+function isKnownCustomSourceKind(value: unknown): value is "custom-ai-v1" {
+  return value === "custom-ai-v1";
+}
+
 function isLaunch(value: unknown, chainId: ViewChainId): value is Launch {
   if (!isObject(value)) return false;
   if (chainId === 4663 && isRobinhoodProjectedLaunch(value)) return true;
   return typeof value.launchId === "string" && (chainId === 4663 ? HASH.test(value.launchId) : value.launchId.length > 0 && value.launchId.length <= 256)
     && (chainId !== 1 || value.category === "classic" || value.category === "custom")
     && (value.mode === undefined || value.mode === "classic" || value.mode === "custom" || value.mode === "module")
-    && (value.sourceKind === undefined || isRobinhoodModuleLaunch(value))
+    && (value.sourceKind === undefined || isKnownCustomSourceKind(value.sourceKind) || isRobinhoodModuleLaunch(value))
     && typeof value.tokenAddress === "string" && ADDRESS.test(value.tokenAddress)
     && ((typeof value.hookAddress === "string" && ADDRESS.test(value.hookAddress)) || (value.sourceKind === "module-engine-v1" && value.hookAddress === null))
     && typeof value.creator === "string" && ADDRESS.test(value.creator)
