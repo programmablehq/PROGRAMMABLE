@@ -32,15 +32,17 @@ describe("Ethereum verified Explore adapter", () => {
       status: "current", entries: [], generatedAt: "2026-10-27T01:00:00Z",
       evidence: {},
     } as unknown as Awaited<ReturnType<typeof readClassicLaunchCatalogV1>>);
-    vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue({
+    const current: Awaited<ReturnType<typeof readFinalizedRouterCustomIdentitySnapshotCoreV1>> = {
+      schemaVersion: "programmable.router-custom-identity-snapshot.v1",
+      source: "canonical-launch-stamp-router", asOfBlock: "25740001", asOfBlockHash: hex(100, 64),
+      identityCommitment: `sha256:${"11".repeat(32)}`, finalityConfirmations: 64,
       status: "current", entries: [customGraphExploreEntry], generatedAt: "2026-10-27T01:00:00Z",
-    } as Awaited<ReturnType<typeof readFinalizedRouterCustomIdentitySnapshotCoreV1>>);
+    };
+    vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue(current);
     const calls = vi.mocked(readWebsiteRouterCustomIdentitySnapshotV1).mock.calls.length;
     await expect(readEthereumIndexHealth()).resolves.toEqual({ status: "ready", updatedAt: "2026-10-27T01:00:00Z" });
     expect(readWebsiteRouterCustomIdentitySnapshotV1).toHaveBeenCalledTimes(calls);
-    vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue({
-      status: "last-known-good", entries: [customGraphExploreEntry], generatedAt: "2026-10-27T01:00:00Z",
-    } as Awaited<ReturnType<typeof readFinalizedRouterCustomIdentitySnapshotCoreV1>>);
+    vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue({ ...current, status: "last-known-good" });
     await expect(readEthereumIndexHealth()).resolves.toMatchObject({ status: "stale" });
   });
 
