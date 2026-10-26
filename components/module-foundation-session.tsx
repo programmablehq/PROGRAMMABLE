@@ -9,6 +9,7 @@ import { foundationBindingChainId, foundationChainProfile, type FoundationChainI
 import { createFoundationClient } from "@/lib/module-foundation/client";
 import { fetchFoundationAvailability, FoundationProviderDisagreementError, type FoundationAvailabilityEnvelope } from "@/lib/module-foundation/availability";
 import { bindFoundationCatalogV1 } from "@/lib/module-foundation/catalog";
+import { FoundationReadTimeoutError } from "@/lib/module-foundation/read-deadline";
 import { readFoundationLaunchDisplay, rememberFoundationLaunchDisplay, subscribeFoundationLaunchDisplay } from "@/lib/module-foundation/launch-display-cache";
 import { bindFoundationWalletStep, FOUNDATION_PENDING_EVENT, readFoundationPending, readFoundationLaunchRetry, reconcileFoundationPending, recoverFoundationPending,
   submitFoundationWalletStep, type FoundationLaunchRetry, type FoundationPreparedSequence } from "@/lib/module-foundation/wallet";
@@ -25,6 +26,9 @@ export interface FoundationExecutionResult {
   sequence: FoundationPreparedSequence;
   stepIndex: number;
 }
+
+/** Keep the launch form responsive when a provider ignores a browser abort. */
+export const FOUNDATION_SESSION_AVAILABILITY_TIMEOUT_MS = 12_000;
 
 /** Newly launched coins can reach the page before both providers observe their registration. */
 export async function loadFoundationSessionAvailability(signal: AbortSignal, token?: Address, chainId: FoundationChainId = 4663): Promise<FoundationAvailabilityEnvelope> {
@@ -56,7 +60,7 @@ export function useFoundationSession(token?: Address, chainId: FoundationChainId
   // Batch independent reads without caching their answers. Wallet checks still use fresh chain state.
   const client = useMemo(() => createFoundationClient({ batchRpc: true, chainId }), [chainId]);
   const targetKey = `${chainId}:${token?.toLowerCase() ?? "launch"}`;
-  const [envelopeState, setEnvelopeState] = useState<{ targetKey: string; refresh: number; value: FoundationAvailabilityEnvelope | null } | null>(null);
+  const [envelopeState, setEnvelopeState] = useState<{ targetKey: string; refresh: number; value: FoundationAvailabilityEnvelope | null; error?: string } | null>(null);
   const [refresh, setRefresh] = useState(0);
   const indexRetries = useRef({ targetKey, count: 0 });
   const displayEnvelope = useSyncExternalStore(subscribeFoundationLaunchDisplay, useCallback(() => readFoundationLaunchDisplay(Date.now(), chainId), [chainId]), () => null);
@@ -139,13 +143,26 @@ export function useFoundationSession(token?: Address, chainId: FoundationChainId
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort(new FoundationReadTimeoutError());
+    }, FOUNDATION_SESSION_AVAILABILITY_TIMEOUT_MS);
     void loadFoundationSessionAvailability(controller.signal, token, chainId).then(value => {
       if (!controller.signal.aborted) {
         if (!token) rememberFoundationLaunchDisplay(value);
         setEnvelopeState({ targetKey, refresh, value });
       }
-    }).catch(() => { if (!controller.signal.aborted) setEnvelopeState({ targetKey, refresh, value: null }); });
-    return () => controller.abort();
+    }).catch(error => {
+      if (active && (!controller.signal.aborted || timedOut)) {
+        const message = error instanceof FoundationReadTimeoutError
+          ? error.message
+          : "Launch availability could not be checked. Retry to keep working with this release.";
+        setEnvelopeState({ targetKey, refresh, value: null, error: message });
+      }
+    }).finally(() => window.clearTimeout(timeout));
+    return () => { active = false; window.clearTimeout(timeout); controller.abort(); };
   }, [refresh, token, targetKey, chainId]);
   useEffect(() => {
     if (indexRetries.current.targetKey !== targetKey) indexRetries.current = { targetKey, count: 0 };
@@ -160,7 +177,7 @@ export function useFoundationSession(token?: Address, chainId: FoundationChainId
     return () => window.clearInterval(timer);
   }, [chainId, token, targetKey, envelope?.indexPending]);
   const availability: FoundationAvailability = { status: availabilityError ? "unavailable" : !envelope ? "checking" : envelope.available ? "ready" : "unavailable",
-    chainId, chainName: profile.name, reason: availabilityError ? "Launch availability could not be checked. Retry to keep working with this release." : envelope?.reason ?? undefined };
+    chainId, chainName: profile.name, reason: availabilityError ? envelopeState?.error ?? "Launch availability could not be checked. Retry to keep working with this release." : envelope?.reason ?? undefined };
   const contextKey = `${account ?? "disconnected"}:${wallet?.chainId ?? "none"}:${authenticated}:${sessionReady}:${targetKey}:${envelope?.binding?.releaseDigest ?? "unavailable"}`;
   const currentContext = useRef(contextKey);
   const authorityRequest = useRef<{ context: string; promise: Promise<FoundationAvailabilityEnvelope> } | null>(null);

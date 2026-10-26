@@ -469,8 +469,8 @@ export function ModuleFoundationBuilder({ platformFeeBps = 30, layout = "form", 
   return <div className={`${styles.page} ${styles.builderPage}`}>
     <div className={styles.topline}>{onBack ? <button type="button" className={styles.backButton} disabled={busy} onClick={onBack}><ArrowLeftIcon size={16} aria-hidden="true" /> Home</button> : <span className={styles.eyebrow}>Module Mode</span>}{networkControl ?? <span className={styles.network}>{availability.chainName}</span>}</div>
     <header className={styles.pageHeading}><h1>Launch a Coin</h1></header>
-    {availability.status === "checking" ? <div className={styles.launchStatus} role="status">Checking launch availability…</div> : null}
-    {availability.status === "unavailable" ? <div className={styles.launchStatus} role="status"><span>Launching is temporarily unavailable.</span>{onRetryAvailability ? <button type="button" className={styles.textButton} onClick={onRetryAvailability}>Retry</button> : null}</div> : null}
+    {availability.status === "checking" ? <div className={styles.launchStatus} role="status" aria-atomic="true">Checking launch availability…</div> : null}
+    {availability.status === "unavailable" ? <div className={styles.launchStatus} role="status" aria-atomic="true"><span>Launching is temporarily unavailable.</span>{availability.reason && availability.reason !== "Launching is temporarily unavailable." ? <span> {availability.reason}</span> : null}{onRetryAvailability ? <button type="button" className={styles.textButton} onClick={onRetryAvailability} aria-label="Retry launch availability check">Retry</button> : null}</div> : null}
     {submissionBlocked && !launchProgress ? <div className={styles.availability} role="status"><strong>A wallet operation needs checking</strong><p>{submissionBlocked}</p></div> : null}
     <div className={styles.layout}>
       <div className={styles.mainColumn}>

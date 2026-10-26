@@ -222,7 +222,7 @@ export function FoundationStudio({ formRef, imageInput, ...props }: FoundationSt
         <div className={styles.inspectorAction}>
           {props.recoveryAction}
           <button type="submit" className={styles.launch} disabled={props.actionDisabled || disabled} aria-busy={props.busy}>{props.actionLabel}<ArrowRight size={19} /></button>
-          {props.error || props.status || props.onRetryAvailability ? <div className={styles.actionStatus} role={props.error ? "alert" : "status"}>{props.error ? <span className={styles.error}>{props.error}</span> : props.status ? <span>{props.status}</span> : null}{props.onRetryAvailability ? <button type="button" onClick={props.onRetryAvailability} disabled={props.busy}>Retry</button> : null}</div> : null}
+          {props.error || props.status || props.onRetryAvailability ? <div className={styles.actionStatus} role={props.error ? "alert" : "status"} aria-atomic="true">{props.error ? <span className={styles.error}>{props.error}</span> : props.status ? <span>{props.status}</span> : null}{props.onRetryAvailability ? <button type="button" onClick={props.onRetryAvailability} disabled={props.busy} aria-label="Retry launch availability check">Retry</button> : null}</div> : null}
         </div>
       </aside>
     </fieldset>
