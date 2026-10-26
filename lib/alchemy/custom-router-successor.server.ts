@@ -8,7 +8,7 @@ import { createLaunchStampReaderV1 } from "./launch-stamp.server";
 import { readAlchemyRouterCustomIdentitySourceV1, type AlchemyRouterCustomIdentitySourceV1 } from "./explore.server";
 
 const binding = CANONICAL_LAUNCH_STAMP_24H_V1;
-const SUCCESSOR_METADATA_READ_TIMEOUT_MS = 1_500;
+const SUCCESSOR_METADATA_READ_TIMEOUT_MS = 500;
 const reader = createLaunchStampReaderV1({
   routerAddress: binding.routerAddress,
   routerRuntimeCodeHash: binding.routerRuntimeCodeHash,
@@ -106,6 +106,13 @@ export function filterUnseenSuccessorDiscoveryCandidatesV1(
   });
 }
 
+/** Optional metadata freshness cannot downgrade a verified onchain cursor. */
+export function statusAfterVerifiedSuccessorReadV1(
+  legacyStatus: AlchemyRouterCustomIdentitySourceV1["status"],
+): AlchemyRouterCustomIdentitySourceV1["status"] {
+  return legacyStatus;
+}
+
 async function readOptionalSuccessorMetadataFeedV1() {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -181,6 +188,8 @@ export async function readAllEthereumCustomIdentitySourcesV1(
     }));
     tokens.push(...batches.flat());
   }
-  return { ...legacy, status: feed.status === "last-known-good" ? "last-known-good" : legacy.status,
+  // The feed only supplies discovery hints. Once every hint has passed the
+  // canonical onchain checks above, freshness is owned by that onchain cursor.
+  return { ...legacy, status: statusAfterVerifiedSuccessorReadV1(legacy.status),
     slice: { ...legacy.slice, tokens: [...legacy.slice.tokens, ...tokens] } };
 }
