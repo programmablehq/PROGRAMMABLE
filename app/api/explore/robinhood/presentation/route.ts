@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     } });
   }
   const token = query.get("token");
-  const listQuery = token === null ? parseRobinhoodExploreQuery(query) : null;
+  const listQuery = token === null ? parseRobinhoodExploreQuery(query, { allowChain: false }) : null;
   if (token === null ? !listQuery : !isAddress(token)
     || [...query.keys()].some((key) => key !== "token" || query.getAll(key).length !== 1)) {
     return Response.json({ error: "invalid_query" }, { status: 400, headers: { "cache-control": "no-store" } });

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   params.delete("account");
   if (!params.has("sort")) params.set("sort", "newest");
   if (!params.has("pageSize")) params.set("pageSize", "10");
-  const query = parseRobinhoodExploreQuery(params);
+  const query = parseRobinhoodExploreQuery(params, { allowChain: false });
   if (!query) return Response.json({ error: "invalid_query" }, { status: 400 });
   const result = await readUnifiedLaunches(query.page, query.q, query.filters, query.pageSize, undefined, account);
   return Response.json({ ...result, account: account.toLowerCase() }, {

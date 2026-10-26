@@ -46,14 +46,15 @@ export function sameRobinhoodExploreRequest(a: RobinhoodExploreRequest | null | 
     && exploreChainFilter(a) === exploreChainFilter(b));
 }
 
-export function parseRobinhoodExploreQuery(query: URLSearchParams) {
+export function parseRobinhoodExploreQuery(query: URLSearchParams, options: { allowChain?: boolean } = {}) {
+  const allowChain = options.allowChain !== false;
   const page = query.get("page") ?? "1";
   const q = query.get("q") ?? "";
   const sort = query.get("sort") ?? DEFAULT_EXPLORE_FILTERS.sort;
   const mode = query.get("mode") ?? "all";
   const chain = query.get("chain") ?? "all";
   const pageSize = query.get("pageSize") ?? "50";
-  if ([...query.keys()].some((key) => !["page", "q", "sort", "mode", "chain", "pageSize"].includes(key) || query.getAll(key).length !== 1)
+  if ([...query.keys()].some((key) => !["page", "q", "sort", "mode", ...(allowChain ? ["chain"] : []), "pageSize"].includes(key) || query.getAll(key).length !== 1)
     || !/^[1-9]\d{0,5}$/.test(page) || q.length > 128
     || !LAUNCH_SORT_OPTIONS.some((option) => option.value === sort)
     || !LAUNCH_MODE_OPTIONS.some((option) => option.value === mode)
