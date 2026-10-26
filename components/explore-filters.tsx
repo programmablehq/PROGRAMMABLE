@@ -1,12 +1,13 @@
 "use client";
 
-import { SlidersHorizontal, X } from "lucide-react";
+import { Globe2, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   DEFAULT_EXPLORE_FILTERS, LAUNCH_MODE_OPTIONS,
   type ExploreChainFilter,
   type RobinhoodExploreFilters,
 } from "@/lib/robinhood-explore-filters";
+import { ChainMark } from "@/components/chain-mark";
 import styles from "./explore-filters.module.css";
 
 export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disabled = false,
@@ -90,8 +91,16 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
         <legend>Chain</legend>
         <div className={`${styles.choices} ${styles.chainChoices}`}>
           {chainOptions.map(chain => <button type="button" key={String(chain.value)}
+            className={styles.chainChoice}
             aria-pressed={(value.chain ?? "all") === chain.value}
-            onClick={() => onApply?.({ ...value, ...(chain.value === "all" ? { chain: undefined } : { chain: chain.value }) })}>{chain.label}</button>)}
+            aria-label={chain.label}
+            title={chain.label}
+            onClick={() => onApply?.({ ...value, ...(chain.value === "all" ? { chain: undefined } : { chain: chain.value }) })}>
+            <span aria-hidden="true">
+              {chain.value === "all" ? <Globe2 size={18} strokeWidth={1.8} /> : <ChainMark chainId={chain.value} className={styles.chainChoiceMark} />}
+            </span>
+            <span className="sr-only">{chain.label}</span>
+          </button>)}
         </div>
       </fieldset> : null}
       <fieldset className={styles.field}>

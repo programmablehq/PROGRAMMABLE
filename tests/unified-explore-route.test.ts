@@ -9,7 +9,7 @@ describe("Unified Explore HTTP contract", () => {
     const response = await GET(new Request("https://website.invalid/api/explore/launches"));
     expect(response.status).toBe(200);
     expect(read).toHaveBeenCalledExactlyOnceWith(1, "", { sort: "highest", mode: "all" }, 10);
-    expect(response.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=900, stale-while-revalidate=1800");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60, stale-while-revalidate=120");
   });
   it.each(["chain=invalid", "page=0", "sort=highest&sort=newest", "pageSize=500", "mode=classic"])
     ("does not accept a chain filter or ambiguous request: %s", async query => {
