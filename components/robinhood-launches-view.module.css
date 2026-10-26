@@ -129,14 +129,14 @@
   display: grid;
   gap: 12px;
   grid-auto-rows: auto;
-  align-items: start;
+  align-items: stretch;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.item { min-width: 0; }
+.item { display: flex; min-width: 0; }
 
 .row {
   background: var(--webde-surface);
@@ -145,6 +145,7 @@
   color: var(--webde-ink);
   display: flex;
   flex-direction: column;
+  height: 100%;
   padding: 6px;
   text-decoration: none;
   transition: background 160ms cubic-bezier(.2,.8,.2,1), border-color 160ms cubic-bezier(.2,.8,.2,1);
@@ -152,7 +153,7 @@
 
 .cardLink .artwork, .skeletonArtwork { aspect-ratio: auto; border-radius: 10px; height: clamp(100px, 14svh, 136px); width: 100%; flex-shrink: 0; }
 .cardLink .artwork img { object-fit: cover; object-position: center; }
-.cardLink { color: inherit; display: flex; flex-direction: column; min-width: 0; text-decoration: none; }
+.cardLink { color: inherit; display: flex; flex: 1; flex-direction: column; min-width: 0; text-decoration: none; }
 .socials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; max-width: 176px; }
 .socials a { width: 100%; }
 .identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 6px; min-width: 0; padding: 8px 4px 0; }
@@ -163,10 +164,11 @@
 .symbol { color: var(--webde-muted); flex: none; font-size: 13px; line-height: 18px; white-space: nowrap; }
 .mode { align-items: center; color: var(--webde-muted); display: flex; gap: 6px; grid-column: 1 / -1; font-size: 11px; line-height: 18px; }
 .chainMark { color: var(--webde-ink); flex: none; object-fit: contain; }
-.cardFooter { align-items: flex-end; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; padding: 0 4px 4px; }
-.marketCap { display: grid; gap: 2px; min-width: 0; }
+.cardFooter { align-items: flex-end; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; min-height: 42px; padding: 0 4px 4px; }
+.marketCap { display: grid; gap: 2px; min-height: 36px; min-width: 0; }
 .marketCap > span { color: var(--webde-muted); font-size: 11px; line-height: 14px; }
 .marketCap strong { font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 22px; }
+.marketUnavailable { color: var(--webde-muted); font-size: 12px !important; font-weight: 450 !important; }
 .launched { color: var(--webde-muted); flex-shrink: 0; font-size: 11px; line-height: 22px; }
 .emptySlot { visibility: hidden; }
 .skeletonArtwork { background: var(--webde-surface-raised); }

@@ -22,7 +22,7 @@ import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { rememberRobinhoodTokenPresentations } from "@/components/robinhood-presentation-cache";
 import { coinAge, coinPairTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
-import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, ROBINHOOD_EXPLORE_PAGE_SIZE, sameRobinhoodExploreRequest, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
+import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, LAUNCH_CHAIN_OPTIONS, ROBINHOOD_EXPLORE_PAGE_SIZE, sameRobinhoodExploreRequest, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
 import { isRobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projection-v1";
 import { isPinnedRobinhoodToken } from "@/lib/robinhood-explore-policy";
@@ -250,11 +250,12 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
       try {
         const query = new URLSearchParams({ page: String(request.page), pageSize: String(ROBINHOOD_EXPLORE_PAGE_SIZE),
           q: request.q, sort: request.sort, mode: request.mode ?? "all" });
+        if (chainId === "all" && request.chain && request.chain !== "all") query.set("chain", String(request.chain));
         if (profileAccount) query.set("account", profileAccount);
         const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 8453 ? "base" : chainId === 4663 ? "robinhood" : "ethereum"}`;
         const response = await fetch(`${endpoint}?${query}`, {
           signal: activeController.signal,
-          cache: "no-store",
+          cache: profileAccount ? "no-store" : "default",
           headers: { accept: "application/json" },
         });
         if (!response.ok) throw new Error("Launch request failed");
@@ -323,8 +324,10 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   }
 
   function applyFilters(filters: RobinhoodExploreFilters) {
-    setRequest((current) => current.sort === filters.sort && (current.mode ?? "all") === (filters.mode ?? "all")
-      ? current : { ...current, ...filters, page: 1 });
+    setRequest((current) => {
+      const next = { ...current, ...filters, page: 1 };
+      return sameRobinhoodExploreRequest(current, next) ? current : next;
+    });
   }
 
   function changePage(page: number) {
@@ -335,8 +338,14 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const sameRequest = sameRobinhoodExploreRequest(snapshot?.request, request);
   const pending = !sameRequest && !failed;
   const data = sameRequest ? snapshot?.data : undefined;
-  const pinned = chainId !== 1 ? snapshot?.data.items.find(launch => isPinnedRobinhoodToken(launch.tokenAddress, launch.chainId ?? 4663)) : null;
-  const items = liveLaunchObservations(data?.items ?? (pending && pinned ? [pinned] : []), now);
+  // Keep the last complete result visible while a new query or chain filter is
+  // resolving. A slow read should update in place, never collapse the grid.
+  const displayedData = data ?? (pending ? snapshot?.data : undefined);
+  const displayChain = request.chain && request.chain !== "all" ? request.chain : null;
+  const displayedItems = displayedData?.items.filter(launch => displayChain === null || (launch.chainId ?? 4663) === displayChain);
+  const pinned = chainId !== 1 && (request.chain === undefined || request.chain === "all" || request.chain === 4663)
+    ? snapshot?.data.items.find(launch => isPinnedRobinhoodToken(launch.tokenAddress, launch.chainId ?? 4663)) : null;
+  const items = liveLaunchObservations(displayedItems ?? (pending && pinned ? [pinned] : []), now);
   const hasRows = items.length > 0;
   const updatingSearch = search.trim() !== request.q;
   const hasFilters = activeExploreFilterCount(request) > 0;
@@ -345,26 +354,26 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const canNext = enabled && !pending && !updatingSearch && Boolean(data?.page.hasMore);
   const Heading = embedded ? "h2" : "h1";
   const StateHeading = embedded ? "h3" : "h2";
-  const count = data?.page.matchingItems ?? data?.page.totalItems ?? 0;
+  const count = displayedData?.page.matchingItems ?? displayedData?.page.totalItems ?? 0;
   const noMatches = Boolean(data && pinned && count === 0 && (request.q || hasFilters));
-  const statusText = pending || (loading && !hasRows) ? "Loading results…" : failed
+  const statusText = pending ? hasRows ? "Updating results…" : "Loading results…" : loading && !hasRows ? "Loading results…" : failed
     ? hasRows ? "Checking for updates automatically." : "Couldn’t load launches. Checking again automatically."
-    : data?.status === "stale" || data?.status === "unavailable"
+    : displayedData?.status === "stale" || displayedData?.status === "unavailable"
       ? hasRows ? "Checking for updates automatically." : "Couldn’t load launches. Checking again automatically."
-      : data?.status === "partial"
+      : displayedData?.status === "partial"
         ? "Some launches couldn’t load. Checking for updates automatically."
-      : data?.status === "syncing"
+      : displayedData?.status === "syncing"
         ? "Checking for new launches."
         : updatingSearch ? "Searching…" : "";
   const emptyTitle = loading
     ? `Loading ${chainName} launches`
-    : failed || data?.status === "unavailable"
+    : failed || displayedData?.status === "unavailable"
       ? "Launches are temporarily unavailable"
-      : (snapshot?.request.q || hasFilters) && (data?.status === "stale" || data?.status === "partial")
+      : (snapshot?.request.q || hasFilters) && (displayedData?.status === "stale" || displayedData?.status === "partial")
         ? "No matching launches in the available index"
-      : data?.status === "stale" || data?.status === "partial"
+      : displayedData?.status === "stale" || displayedData?.status === "partial"
         ? "Launches are temporarily unavailable"
-      : data?.status === "syncing"
+      : displayedData?.status === "syncing"
         ? `Checking ${chainName} launches`
         : snapshot?.request.q || hasFilters ? "No matching launches" : "No launches yet";
 
@@ -406,6 +415,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
             ) : null}
           </form>
           <ExploreFilters value={request} onApply={applyFilters} defaultValue={defaultFilters}
+            chainOptions={chainId === "all" ? LAUNCH_CHAIN_OPTIONS : undefined}
             modeOptions={chainId === 8453 ? ETHEREUM_EXPLORE_MODES.filter(option => option.value !== "classic") : chainId === 1 ? ETHEREUM_EXPLORE_MODES : undefined}
             sortOptions={chainId === 1 || chainId === 8453 ? [{ value: "newest", label: "Newest" }, { value: "oldest", label: "Oldest" }] : undefined} /></> : null}
           <nav className={styles.pagination} aria-label="Launch pages">
@@ -459,11 +469,11 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
                     </span>
                   </div>
                   <div className={styles.cardFooter}>
-                    {hasAsset ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is not available yet"}>
+                    {hasAsset ? <div className={styles.marketCap} title={details?.market ? `Observed ${new Date(details.market.observedAt).toUTCString()}` : "Market data is temporarily unavailable; the launch remains indexed"}>
                       <span title={valuation.title}>{valuation.label}</span>
                       {details?.market && valuation.value !== null
                         ? <AnimatedMarketCap metric={{ kind: "usd", value: valuation.value }} replayKey={`${identity}:${details.market.poolId.toLowerCase()}:${valuation.label}`} />
-                        : <strong>—</strong>}
+                        : <strong className={styles.marketUnavailable}>Unavailable</strong>}
                     </div> : null}
                     {launch.launchedAt ? <time className={styles.launched} dateTime={launch.launchedAt} title={`Launched ${new Date(launch.launchedAt).toUTCString()}`}>{coinAge(launch.launchedAt, now)}</time> : null}
                   </div>
@@ -500,7 +510,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
         ) : (
           <div className={styles.empty} id={listId} aria-busy={loading}>
             <StateHeading>{emptyTitle}</StateHeading>
-            <p>{loading || data?.status === "syncing" ? "Verified launches will appear here." : !failed && (snapshot?.request.q || hasFilters) && data?.status !== "unavailable" ? "Try another search or change the filters." : failed || data?.status === "unavailable" || data?.status === "stale" || data?.status === "partial" ? "Try again shortly." : `New ${chainName} launches appear after verification.`}</p>
+            <p>{loading || displayedData?.status === "syncing" ? "Indexed launches will appear here." : !failed && (snapshot?.request.q || hasFilters) && displayedData?.status !== "unavailable" ? "Try another search or change the filters." : failed || displayedData?.status === "unavailable" || displayedData?.status === "stale" || displayedData?.status === "partial" ? "Try again shortly." : `New ${chainName} launches appear after indexing.`}</p>
             {!loading && snapshot?.request.q ? <button className={styles.textButton} type="button" onClick={clearSearch}>Clear search</button> : null}
             {!loading && hasFilters ? <button className={styles.textButton} type="button" onClick={() => applyFilters(defaultFilters)}>Clear filters</button> : null}
           </div>

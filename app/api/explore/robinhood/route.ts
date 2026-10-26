@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const query = parseRobinhoodExploreQuery(new URL(request.url).searchParams);
+  const query = parseRobinhoodExploreQuery(new URL(request.url).searchParams, { allowChain: false });
   if (!query) {
     return Response.json({ error: "invalid_query" }, { status: 400, headers: { "cache-control": "no-store" } });
   }

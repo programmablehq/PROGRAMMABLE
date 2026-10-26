@@ -384,7 +384,7 @@ export function customLaunchPendingActionLabelV1(
     idle: "Confirm with wallet",
     preparing: "Preparing launch",
     "wallet-proof": "Confirm ownership in wallet",
-    permit: "Verifying launch permit",
+    permit: "Checking launch permit",
     "wallet-transaction": "Submit launch in wallet",
     reconciling: "Checking reserved launch",
     ambiguous: "Resolving submission status",
@@ -513,8 +513,8 @@ export function customApplicationDisplayState(
     received: { title: "Submission received", action: "View on GitHub", tone: "pending" },
     in_review: { title: "Review in progress", action: "View review", tone: "pending" },
     changes_required: { title: "Changes needed", action: "Open requested changes", tone: "warning" },
-    platform_pending: { title: "Verification still running", action: "View on GitHub", tone: "pending" },
-    ready_for_registration: { title: "Ready for final verification", action: "Finish verification", tone: "pending" },
+    platform_pending: { title: "Platform processing", action: "View on GitHub", tone: "pending" },
+    ready_for_registration: { title: "Ready to finish launch setup", action: "Finish launch setup", tone: "pending" },
     approved: { title: "Approved", action: "Set up launch", tone: "ready" },
     stale: { title: "Source changed", action: "View current source", tone: "warning" },
     rejected: { title: "Not approved", action: "View decision", tone: "warning" },
@@ -1786,7 +1786,7 @@ function CustomLaunchRuntime({
     for (let attempt = 0; attempt < 20; attempt += 1) {
       if (!isActive()) throw new LaunchAuthorityRefreshCancelledErrorV1();
       if (currentApplication.state === "ready_for_registration" && !refreshCompleted) {
-        setStatusMessage("Running final source verification");
+        setStatusMessage("Preparing launch approval");
         const idempotencyKey = launchAuthorityRefreshIdempotencyKeyV1({
           application: currentApplication,
           attempt: launchAuthorityRefreshAttemptRef.current.get(
@@ -1802,13 +1802,13 @@ function CustomLaunchRuntime({
             isActive,
             onTransientRetry: () => {
               if (isActive()) {
-                setStatusMessage("Verification service temporarily unavailable. Retrying automatically");
+                setStatusMessage("Launch service temporarily unavailable. Retrying automatically");
               }
             },
           }),
         );
         refreshCompleted = true;
-        setStatusMessage("Final source verification complete");
+        setStatusMessage("Launch approval ready");
       }
 
       const principalApplications = await readAllPrincipalApplicationsV3(input.client, {
@@ -1883,7 +1883,7 @@ function CustomLaunchRuntime({
         forceFreshObservation: input.forceFreshObservation === true,
         refreshCompleted,
       })) {
-        setStatusMessage("Renewing final source verification");
+        setStatusMessage("Refreshing launch approval");
         const currentValidUntil = Date.parse(launchDescriptor.validUntil)
           <= Date.parse(eligibility.validUntil)
           ? launchDescriptor.validUntil
@@ -1904,7 +1904,7 @@ function CustomLaunchRuntime({
             isActive,
             onTransientRetry: () => {
               if (isActive()) {
-                setStatusMessage("Verification service temporarily unavailable. Retrying automatically");
+                setStatusMessage("Launch service temporarily unavailable. Retrying automatically");
               }
             },
           }),
@@ -1920,7 +1920,7 @@ function CustomLaunchRuntime({
         presentation: currentPresentation,
       };
     }
-    throw new Error("Final source verification is still being published. Try again shortly");
+    throw new Error("Launch approval is still being published. Try again shortly");
   }, [githubPrincipalHash]);
 
   const openApplication = useCallback(async (
@@ -1975,7 +1975,7 @@ function CustomLaunchRuntime({
         );
         setSetupLoading(false);
         if (!recovery) {
-          setStatusMessage("Launch verification is still in progress");
+          setStatusMessage("Launch status is still syncing");
           return;
         }
         if (recovery.stage === "broadcast") {
@@ -2596,7 +2596,7 @@ function CustomLaunchRuntime({
         },
         authorizeLaunch: async ({ challenge, preparation, authentication }) => {
           setLaunchProgress("permit");
-          setStatusMessage("Verifying launch permit");
+        setStatusMessage("Checking launch permit");
           const authorizeRequest: AuthorizeLaunchSessionRequestV2 = {
             schemaVersion: "programmable.launch-session-launch-authorize-request.v2",
             audience: "programmable.launch-session.v2",
@@ -3097,7 +3097,7 @@ function CustomLaunchRuntime({
       application={selected}
     >
       {setupLoading || !selected ? (
-        <div className={styles.loadingPanel} role="status"><LoaderCircle aria-hidden="true" className={styles.spin} size={20} /> {selected?.state === "ready_for_registration" ? "Completing final source verification" : "Loading approved launch"}</div>
+        <div className={styles.loadingPanel} role="status"><LoaderCircle aria-hidden="true" className={styles.spin} size={20} /> {selected?.state === "ready_for_registration" ? "Completing launch setup" : "Loading approved launch"}</div>
       ) : !descriptor && launchProgress === "idle" ? (
         <section className={styles.loadingPanel}>
           <CircleAlert aria-hidden="true" size={20} />
@@ -3758,7 +3758,7 @@ function transactionExplorerUrl(chainId: string, transactionHash: string): strin
 
 function applicationGuidance(application: PrincipalCustomLaunchApplicationSummaryV2): string {
   if (application.intakeContract === "registry-v3") return "This legacy registry intake is catalog-only and cannot open a launch session.";
-  if (application.state === "platform_pending") return "Platform verification is still running. Refresh this list shortly.";
+  if (application.state === "platform_pending") return "Platform processing is still running. Refresh this list shortly.";
   if (application.state === "ready_for_registration") return "The review passed and final registry checks are still completing.";
   if (application.state === "expired") return "This launch access is no longer current. Check the GitHub review for the latest status.";
   if (application.state === "revoked") return "This exact version can no longer launch. The GitHub thread contains the recovery path.";

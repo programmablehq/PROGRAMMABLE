@@ -121,6 +121,12 @@ describe("Explore query compatibility", () => {
     expect(parseRobinhoodExploreQuery(new URLSearchParams("pageSize=8"))?.pageSize).toBe(8);
     expect(parseRobinhoodExploreQuery(new URLSearchParams("page=2&pageSize=10&mode=module&sort=newest&q=coin")))
       .toEqual({ page: 2, pageSize: 10, q: "coin", filters: { sort: "newest", mode: "module" } });
+    expect(parseRobinhoodExploreQuery(new URLSearchParams("chain=1"))?.filters)
+      .toEqual({ sort: "newest", mode: "all", chain: 1 });
+  });
+
+  it.each(["chain=0", "chain=1&chain=4663", "chain=unknown"])("rejects invalid chain filter: %s", query => {
+    expect(parseRobinhoodExploreQuery(new URLSearchParams(query))).toBeNull();
   });
 
   it.each(["pageSize=0", "pageSize=9", "pageSize=100", "pageSize=010", "pageSize=10&pageSize=50", "pageSize=10&pageSize=10",

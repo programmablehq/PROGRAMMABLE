@@ -49,6 +49,24 @@ beforeEach(() => {
 });
 
 describe("Unified verified source adapter", () => {
+  it("skips unselected chain catalogs and market reads", async () => {
+    const result = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain: 1 });
+    expect(result.items.every(item => item.chainId === 1)).toBe(true);
+    expect(sources.eth).toHaveBeenCalledTimes(1);
+    expect(sources.ethMarkets).toHaveBeenCalledTimes(1);
+    expect(sources.rh).not.toHaveBeenCalled();
+    expect(sources.base).not.toHaveBeenCalled();
+    expect(sources.rhMarkets).not.toHaveBeenCalled();
+    expect(sources.ai).not.toHaveBeenCalled();
+  });
+
+  it("defensively removes owner-hidden Robinhood identities from the merged feed", async () => {
+    const hidden = OWNER_HIDDEN_EXPLORE_IDENTITIES_V1.find(item => item.chainId === 4663)!;
+    sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [rh, { ...rh, tokenAddress: hidden.identity, name: "Agent Live Test", symbol: "AGTEST" }], sourceEvidence: {} });
+    const result = await readUnifiedLaunches();
+    expect(result.items.some(item => item.chainId === 4663 && item.tokenAddress.toLowerCase() === hidden.identity.toLowerCase())).toBe(false);
+  });
+
   it("keeps existing launches visible and marks a failed Custom AI source as partial", async () => {
     sources.ai.mockRejectedValue(new Error("Custom AI store unavailable"));
     const result = await readUnifiedLaunches();

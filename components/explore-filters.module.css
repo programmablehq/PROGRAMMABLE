@@ -55,6 +55,7 @@
 .field legend { color: var(--webde-muted); font-size: 14px; line-height: 20px; margin-bottom: 8px; padding: 0; }
 .choices { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
 .modeChoices { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.chainChoices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sortChoices { grid-template-columns: 1fr; }
 .modeChoices button { padding-inline: 8px; }
 .choices button { color: var(--webde-muted); }

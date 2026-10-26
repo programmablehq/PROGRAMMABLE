@@ -171,7 +171,7 @@ export async function readApprovedLaunchPresentations(rows: readonly ApprovedPre
     let current = cache.get(key);
     if (!current || current.expires <= Date.now()) {
       const value = load(key).then(result => result.row).catch(() => null);
-      current = { expires: Date.now() + 15_000, value }; cache.set(key,current);
+      current = { expires: Date.now() + 300_000, value }; cache.set(key,current);
       if (cache.size > 256) cache.delete(cache.keys().next().value!);
     }
     const metadata = await current.value;
