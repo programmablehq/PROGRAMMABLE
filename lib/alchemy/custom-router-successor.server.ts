@@ -8,6 +8,7 @@ import { createLaunchStampReaderV1 } from "./launch-stamp.server";
 import { readAlchemyRouterCustomIdentitySourceV1, type AlchemyRouterCustomIdentitySourceV1 } from "./explore.server";
 
 const binding = CANONICAL_LAUNCH_STAMP_24H_V1;
+const SUCCESSOR_METADATA_READ_TIMEOUT_MS = 1_500;
 const reader = createLaunchStampReaderV1({
   routerAddress: binding.routerAddress,
   routerRuntimeCodeHash: binding.routerRuntimeCodeHash,
@@ -59,6 +60,70 @@ export function mergeSuccessorDiscoveryCandidatesV1(
   return [...candidates.values()];
 }
 
+function candidateMatchesKnownTokenV1(candidate: DiscoveryCandidate, token: LauncherToken) {
+  const stamp = token.launchStampProvenance;
+  return stamp?.kind === "custom-graph"
+    && isAddressEqual(stamp.routerAddress, candidate.router)
+    && stamp.launchId.toLowerCase() === candidate.routerLaunchId.toLowerCase()
+    && isAddressEqual(token.tokenAddress, candidate.token)
+    && isAddressEqual(token.hookAddress, candidate.hook)
+    && token.poolId.toLowerCase() === candidate.poolId.toLowerCase()
+    && stamp.blockNumber === candidate.finality.blockNumber
+    && stamp.blockHash.toLowerCase() === candidate.finality.blockHash.toLowerCase()
+    && stamp.transactionHash.toLowerCase() === candidate.finality.transactionHash.toLowerCase()
+    && stamp.launchLogIndex === candidate.finality.logIndex;
+}
+
+/**
+ * The onchain cursor is authoritative. A metadata feed can repeat identities
+ * already present in that cursor, so do not rehydrate those records on every
+ * request. Any disagreement with a known identity remains an error.
+ */
+export function filterUnseenSuccessorDiscoveryCandidatesV1(
+  candidates: readonly DiscoveryCandidate[], knownTokens: readonly LauncherToken[],
+): readonly DiscoveryCandidate[] {
+  const knownByLaunchId = new Map<string, LauncherToken>();
+  const knownTokenAddresses = new Set<string>();
+  for (const token of knownTokens) {
+    knownTokenAddresses.add(token.tokenAddress.toLowerCase());
+    const stamp = token.launchStampProvenance;
+    if (stamp?.kind === "custom-graph" && isAddressEqual(stamp.routerAddress, binding.routerAddress)) {
+      knownByLaunchId.set(stamp.launchId.toLowerCase(), token);
+    }
+  }
+  return candidates.filter(candidate => {
+    const known = knownByLaunchId.get(candidate.routerLaunchId.toLowerCase());
+    if (known) {
+      if (!candidateMatchesKnownTokenV1(candidate, known)) {
+        throw new Error("Conflicting successor launch discovery identities");
+      }
+      return false;
+    }
+    if (knownTokenAddresses.has(candidate.token.toLowerCase())) {
+      throw new Error("Conflicting successor launch discovery identities");
+    }
+    return true;
+  });
+}
+
+async function readOptionalSuccessorMetadataFeedV1() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readProductionFinalizedCustomLaunchMetadataFeedV1(),
+      new Promise<null>(resolve => {
+        timer = setTimeout(() => resolve(null), SUCCESSOR_METADATA_READ_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    // The feed is a discovery hint. The canonical onchain cursor remains usable
+    // when this optional presentation source is unavailable.
+    return null;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /** The API feed discovers candidate blocks; receipts, getters, code hashes and
  * 64 confirmations independently establish the canonical onchain identity. */
 export async function readAllEthereumCustomIdentitySourcesV1(
@@ -66,10 +131,14 @@ export async function readAllEthereumCustomIdentitySourcesV1(
 ): Promise<AlchemyRouterCustomIdentitySourceV1> {
   const [legacy, feed] = await Promise.all([
     readAlchemyRouterCustomIdentitySourceV1(),
-    readProductionFinalizedCustomLaunchMetadataFeedV1(),
+    readOptionalSuccessorMetadataFeedV1(),
   ]);
+  if (!feed) return legacy;
   const boundary = BigInt(legacy.slice.cursor.blockNumber);
-  const candidates = mergeSuccessorDiscoveryCandidatesV1(feed.launches, savedEntries, boundary);
+  const candidates = filterUnseenSuccessorDiscoveryCandidatesV1(
+    mergeSuccessorDiscoveryCandidatesV1(feed.launches, savedEntries, boundary),
+    legacy.slice.tokens,
+  );
   if (candidates.length === 0) return legacy;
   const deployment = getWebsiteReadOnchainDeployment("production");
   if (deployment.status !== "ready") throw new Error("Ethereum launch identity reader unavailable");

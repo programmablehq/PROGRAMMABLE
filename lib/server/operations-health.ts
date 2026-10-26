@@ -66,6 +66,24 @@ async function observe(readers: Readers) {
   };
 }
 
+function retainLastKnownGoodIndexes(
+  value: Awaited<ReturnType<typeof observe>>,
+  previous: Awaited<ReturnType<typeof observe>> | undefined,
+) {
+  if (!previous) return value;
+  const previousByChain = new Map(previous.indexes.map(index => [index.chainId, index]));
+  const indexes = value.indexes.map(index => {
+    const prior = previousByChain.get(index.chainId);
+    return index.status === "unavailable" && prior && prior.status !== "unavailable"
+      ? { ...index, status: "stale" as const, updatedAt: prior.updatedAt }
+      : index;
+  });
+  const status = indexes.every(index => index.status === "ready") ? "ready" as const
+    : indexes.every(index => index.status === "unavailable") ? "unavailable" as const
+      : "degraded" as const;
+  return { ...value, status, indexes };
+}
+
 export function createOperationsHealthReader(readers: Readers = {
   ethereum: readEthereumExploreCatalog, robinhood: readRobinhoodExploreCatalog, base: readBaseExploreCatalog,
 }) {
@@ -75,8 +93,9 @@ export function createOperationsHealthReader(readers: Readers = {
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (!inFlight) {
       inFlight = observe(readers).then(value => {
-        cached = { value, expiresAt: Date.now() + CACHE_TTL_MS };
-        return value;
+        const stable = retainLastKnownGoodIndexes(value, cached?.value);
+        cached = { value: stable, expiresAt: Date.now() + CACHE_TTL_MS };
+        return stable;
       }).finally(() => { inFlight = undefined; });
     }
     return await inFlight;

@@ -119,6 +119,20 @@ describe("observed website indexing health", () => {
     expect(readers.ethereum).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps a previously observed index stale instead of calling a transient probe unavailable", async () => {
+    const read = createOperationsHealthReader(readers);
+    await expect(read()).resolves.toMatchObject({ status: "ready" });
+    await vi.advanceTimersByTimeAsync(15_000);
+    readers.ethereum.mockRejectedValue(new Error("temporary RPC timeout"));
+    const refreshed = await read();
+    expect(refreshed.status).toBe("degraded");
+    expect(refreshed.indexes).toEqual([
+      { chainId: 1, status: "stale", updatedAt: UPDATED, catalogUrl: "https://programmable.market/api/explore/ethereum" },
+      { chainId: 4663, status: "ready", updatedAt: UPDATED, catalogUrl: "https://programmable.market/api/explore/robinhood" },
+      { chainId: 8453, status: "ready", updatedAt: UPDATED, catalogUrl: "https://programmable.market/api/explore/base" },
+    ]);
+  });
+
   it("documents both HTTP outcomes and rejects the reset payload and unmeasured healthy-provider claims", async () => {
     const { body } = await getHealth();
     const operation = programmablePublicOpenApi.paths["/api/ops/health"].get;

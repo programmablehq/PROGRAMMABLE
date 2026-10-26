@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { mergeSuccessorDiscoveryCandidatesV1 } from "../lib/alchemy/custom-router-successor.server";
+import { filterUnseenSuccessorDiscoveryCandidatesV1, mergeSuccessorDiscoveryCandidatesV1 } from "../lib/alchemy/custom-router-successor.server";
 import { CANONICAL_LAUNCH_STAMP_24H_V1 } from "../lib/tokens";
 import { customGraphExploreEntry } from "./launch-stamp-surface-fixture";
 const saved = () => ({ ...customGraphExploreEntry, launchStampProvenance: {
@@ -24,5 +24,20 @@ describe("successor discovery survives optional metadata removal", () => {
     expect(() => mergeSuccessorDiscoveryCandidatesV1([{ ...hints[0], finality: {
       ...hints[0].finality, logIndex: hints[0].finality.logIndex + 1,
     } }], [entry], BigInt(stamp.blockNumber))).toThrow("Conflicting successor");
+  });
+
+  it("does not rehydrate an identity already present in the authoritative cursor", () => {
+    const entry = saved(), stamp = entry.launchStampProvenance;
+    const hints = mergeSuccessorDiscoveryCandidatesV1([], [entry], BigInt(stamp.blockNumber));
+    expect(filterUnseenSuccessorDiscoveryCandidatesV1(hints, [entry])).toHaveLength(0);
+    expect(filterUnseenSuccessorDiscoveryCandidatesV1(hints, [])).toHaveLength(1);
+  });
+
+  it("rejects a metadata candidate that conflicts with a known onchain identity", () => {
+    const entry = saved(), stamp = entry.launchStampProvenance;
+    const hints = mergeSuccessorDiscoveryCandidatesV1([], [entry], BigInt(stamp.blockNumber));
+    expect(() => filterUnseenSuccessorDiscoveryCandidatesV1([
+      { ...hints[0], token: "0x2222222222222222222222222222222222222222" },
+    ], [entry])).toThrow("Conflicting successor");
   });
 });
