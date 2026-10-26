@@ -28,7 +28,7 @@ describe("Robinhood market refresh", () => {
     const result = mergeRobinhoodPresentations([saved], [incomplete], now);
     expect(result.items[0].market).toBe(saved.market);
     expect(result.delayed).toBe(true);
-    expect(mergeRobinhoodPresentations([saved], [incomplete], now + 120_001).items[0].market).toBe(incomplete.market);
+    expect(mergeRobinhoodPresentations([saved], [incomplete], now + 840_001).items[0].market).toBe(incomplete.market);
   });
 
   it("never transfers the same token address's valuation across chains", () => {
@@ -44,10 +44,10 @@ describe("Robinhood market refresh", () => {
     expect(result.items[0].market?.observedAt).toBe(saved.market?.observedAt);
   });
 
-  it("expires saved values after three minutes, including failed requests", () => {
+  it("expires saved values after fifteen minutes, including failed requests", () => {
     for (const incoming of [null, [{ ...saved, market: null }]]) {
-      expect(mergeRobinhoodPresentations([saved], incoming, now + 120_000).items[0].market).toBe(saved.market);
-      const result = mergeRobinhoodPresentations([saved], incoming, now + 120_001);
+      expect(mergeRobinhoodPresentations([saved], incoming, now + 840_000).items[0].market).toBe(saved.market);
+      const result = mergeRobinhoodPresentations([saved], incoming, now + 840_001);
       expect(result.items[0].market).toBeNull();
       expect(result.delayed).toBe(true);
     }
@@ -76,8 +76,8 @@ describe("Robinhood market refresh", () => {
   });
 
   it("clears expired observations instead of falling back to an even older response", () => {
-    const expired = { ...saved, market: { ...saved.market!, observedAt: new Date(now - 181_000).toISOString() } };
-    const older = { ...expired, market: { ...expired.market, observedAt: new Date(now - 200_000).toISOString() } };
+    const expired = { ...saved, market: { ...saved.market!, observedAt: new Date(now - 900_001).toISOString() } };
+    const older = { ...expired, market: { ...expired.market, observedAt: new Date(now - 900_002).toISOString() } };
     for (const incoming of [expired, older]) {
       const result = mergeRobinhoodPresentations([expired], [incoming], now);
       expect(result.items[0].market).toBeNull();
@@ -94,7 +94,7 @@ describe("Robinhood market refresh", () => {
   it("does not substitute a previous pool's market for a new pool", () => {
     const otherPool = { ...saved, market: { ...saved.market!, poolId: `0x${"2".repeat(64)}`, observedAt: new Date(now - 90_000).toISOString() } };
     expect(mergeRobinhoodPresentations([saved], [otherPool], now).items[0].market).toBe(otherPool.market);
-    const expired = { ...otherPool, market: { ...otherPool.market, observedAt: new Date(now - 200_000).toISOString() } };
+    const expired = { ...otherPool, market: { ...otherPool.market, observedAt: new Date(now - 900_001).toISOString() } };
     expect(mergeRobinhoodPresentations([saved], [expired], now).items[0].market).toBeNull();
   });
 });
