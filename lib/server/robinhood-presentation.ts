@@ -96,7 +96,7 @@ async function readJson(url: string, signal: AbortSignal): Promise<unknown> {
   // Different token selections share the same public metadata pages. Cache
   // those pages together so per-token presentation misses cannot flood the API.
   const response = await fetch(url, {
-    signal, redirect: "error", cache: "force-cache", next: { revalidate: 30 },
+    signal, redirect: "error", cache: "force-cache", next: { revalidate: 300 },
     credentials: "omit", headers: { accept: "application/json" },
   });
   if (!response.ok || response.redirected

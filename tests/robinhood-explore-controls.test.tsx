@@ -27,6 +27,8 @@ describe("Explore request identity", () => {
     expect(activeExploreFilterCount({ sort: "highest", mode: "module" })).toBe(1);
     expect(activeExploreFilterCount({ sort: "newest", mode: "custom" })).toBe(1);
     expect(activeExploreFilterCount({ sort: "activity", mode: "all" })).toBe(0);
+    expect(activeExploreFilterCount({ sort: "newest", mode: "all", chain: 1 })).toBe(1);
+    expect(sameRobinhoodExploreRequest({ ...request, chain: 1 }, { ...request, chain: 4663 })).toBe(false);
   });
 });
 

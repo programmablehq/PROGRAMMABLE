@@ -9,6 +9,11 @@ const endpoint = "https://graph.codex.io/graphql";
 // long enough that those refreshes never turn into a provider polling loop.
 const MARKET_OBSERVATION_TTL_MS = 900_000;
 const PROVIDER_FAILURE_BACKOFF_MS = 300_000;
+// A cold catalog can contain thousands of verified identities. Keep one
+// Explore read bounded even when the provider cache is cold; later reads fill
+// the same stable batches without turning a page refresh into an unbounded
+// request fan-out.
+const MAX_MARKET_PROVIDER_BATCHES_PER_READ = 20;
 const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
  filterTokens(tokens:$tokens,limit:100,useAggregatedStats:true) { results { token { address networkId } priceUSD marketCap circulatingMarketCap volume24 change24 } }
  filterPairs(pairs:$pairs,limit:100) { results { liquidity pair { address networkId token0 token1 token0Data { address networkId symbol } token1Data { address networkId symbol } } } }
@@ -142,7 +147,8 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
   const result = new Map<string, RobinhoodCoinMarket>();
   // One HTTP request for token stats and exact-pool liquidity per 100 verified identities.
   const deadline = Date.now() + 8_000;
-  for (let offset = 0; offset < identities.length && Date.now() < deadline; offset += 400) {
+  let providerBatches = 0;
+  for (let offset = 0; offset < identities.length && Date.now() < deadline && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; offset += 400) {
     const wave = identities.slice(offset, offset + 400);
     const reads = new Map<string, MarketRead>();
     const missing: Identity[] = [];
@@ -157,8 +163,9 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
         else missing.push(token);
       }
     }
-    for (let index = 0; index < missing.length; index += 100) {
+    for (let index = 0; index < missing.length && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
       const batch = missing.slice(index, index + 100);
+      providerBatches += 1;
       // A stable cache key lets Next serve the last observation while refreshing.
       // A time bucket here creates a cold blocking request every 30 seconds.
       const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId)).then(entries => new Map(entries));

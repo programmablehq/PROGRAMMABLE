@@ -4,19 +4,22 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   DEFAULT_EXPLORE_FILTERS, LAUNCH_MODE_OPTIONS,
+  type ExploreChainFilter,
   type RobinhoodExploreFilters,
 } from "@/lib/robinhood-explore-filters";
 import styles from "./explore-filters.module.css";
 
 export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disabled = false,
   defaultValue = DEFAULT_EXPLORE_FILTERS, modeOptions = LAUNCH_MODE_OPTIONS,
-  sortOptions = [{ value: "highest", label: "Market cap" }, { value: "activity", label: "24h volume" }, { value: "newest", label: "Newest" }] }: {
+  sortOptions = [{ value: "highest", label: "Market cap" }, { value: "activity", label: "24h volume" }, { value: "newest", label: "Newest" }],
+  chainOptions = [] }: {
   value?: RobinhoodExploreFilters;
   onApply?: (filters: RobinhoodExploreFilters) => void;
   disabled?: boolean;
   defaultValue?: RobinhoodExploreFilters;
   modeOptions?: readonly { value: NonNullable<RobinhoodExploreFilters["mode"]>; label: string }[];
   sortOptions?: readonly { value: RobinhoodExploreFilters["sort"]; label: string }[];
+  chainOptions?: readonly { value: ExploreChainFilter; label: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [panelOffset, setPanelOffset] = useState(0);
@@ -24,7 +27,9 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
   const triggerRef = useRef<HTMLButtonElement>(null);
   const keyboardOpenRef = useRef(false);
   const panelId = useId();
-  const count = Number((value.mode ?? "all") !== (defaultValue.mode ?? "all")) + Number(value.sort !== defaultValue.sort);
+  const count = Number((value.mode ?? "all") !== (defaultValue.mode ?? "all"))
+    + Number(value.sort !== defaultValue.sort)
+    + Number((value.chain ?? "all") !== (defaultValue.chain ?? "all"));
 
   function close(restoreFocus = false) {
     setOpen(false);
@@ -81,6 +86,14 @@ export function ExploreFilters({ value = DEFAULT_EXPLORE_FILTERS, onApply, disab
         </div>
         <button className={styles.close} type="button" aria-label="Close filters" onClick={() => close(true)}><X size={18} aria-hidden="true" /></button>
       </div>
+      {chainOptions.length ? <fieldset className={styles.field}>
+        <legend>Chain</legend>
+        <div className={`${styles.choices} ${styles.chainChoices}`}>
+          {chainOptions.map(chain => <button type="button" key={String(chain.value)}
+            aria-pressed={(value.chain ?? "all") === chain.value}
+            onClick={() => onApply?.({ ...value, ...(chain.value === "all" ? { chain: undefined } : { chain: chain.value }) })}>{chain.label}</button>)}
+        </div>
+      </fieldset> : null}
       <fieldset className={styles.field}>
         <legend>Sort by</legend>
         <div className={`${styles.choices} ${styles.sortChoices}`}>

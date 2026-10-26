@@ -219,6 +219,18 @@ describe("Codex server market adapter", () => {
     expect(result.every(markets => markets.size === 105)).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it("bounds a cold catalog read instead of fanning out without a limit", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const tokens = Array.from({ length: 2_105 }, (_, index) => ({ tokenAddress: `0x${index.toString(16).padStart(40, "0")}`, poolId: `0x${index.toString(16).padStart(64, "0")}` }));
+    const fetcher = vi.fn(async (_url, request) => {
+      const variables = JSON.parse(request.body).variables;
+      return Response.json({ data: { filterTokens: { results: variables.tokens.map((id: string) => ({ token: { address: id.split(":")[0], networkId: 4663 }, priceUSD: "1" })) }, filterPairs: { results: [] } } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await readCodexMarkets(tokens);
+    expect(fetcher).toHaveBeenCalledTimes(20);
+    expect(result.size).toBe(2_000);
+  });
   it.each([
     { body: { data: { filterTokens: { results: [{ ...row(), token: { address, networkId: 1 } }] } } } },
     { body: { data: { filterTokens: { results: [{ ...row(), token: { address: `0x${"cd".repeat(20)}`, networkId: 4663 } }] } } } },

@@ -586,7 +586,7 @@ describe("custom launch interface state line", () => {
       "Confirm ownership in wallet",
     );
     expect(customLaunchPendingActionLabelV1("permit")).toBe(
-      "Verifying launch permit",
+      "Checking launch permit",
     );
     expect(customLaunchPendingActionLabelV1("wallet-transaction")).toBe(
       "Submit launch in wallet",
@@ -1537,7 +1537,7 @@ describe("custom launch browser authority", () => {
       tone: "pending",
     });
     expect(customApplicationDisplayState("platform_pending")).toEqual({
-      title: "Verification still running",
+      title: "Platform processing",
       action: "View on GitHub",
       tone: "pending",
     });
@@ -1547,8 +1547,8 @@ describe("custom launch browser authority", () => {
       tone: "warning",
     });
     expect(customApplicationDisplayState("ready_for_registration")).toEqual({
-      title: "Ready for final verification",
-      action: "Finish verification",
+      title: "Ready to finish launch setup",
+      action: "Finish launch setup",
       tone: "pending",
     });
     expect(states.filter(customApplicationOpensLaunchExperience)).toEqual([

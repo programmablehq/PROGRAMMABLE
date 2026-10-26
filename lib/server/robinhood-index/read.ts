@@ -10,7 +10,7 @@ import { indexStore } from "./store";
 
 // A page reads the saved list only. Failures never fall through to an RPC.
 const readSnapshot = unstable_cache(async () => (await indexStore().read())?.snapshot ?? null,
-  ["robinhood-website-index-v1"], { revalidate: 15 });
+  ["robinhood-website-index-v1"], { revalidate: 60 });
 
 /** Complete verified discovery identities. Presentation and paging never determine membership. */
 export async function readRobinhoodExploreCatalog() {
