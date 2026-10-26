@@ -220,7 +220,7 @@ function exactHealthBody(body, nowMs) {
   if (body.status !== status || !Array.isArray(body.providers) || body.providers.length !== 1) return false;
   const provider = body.providers[0];
   if (!exactObjectKeys(provider, ["name", "roles", "health"]) || provider.name !== "codex" || provider.health !== "not-checked"
-    || JSON.stringify(provider.roles) !== JSON.stringify(["ethereum-classic-launch-discovery", "ethereum-and-robinhood-market-data"])) return false;
+    || JSON.stringify(provider.roles) !== JSON.stringify(["ethereum-and-robinhood-market-data"])) return false;
   const readiness = [
     { chainId: 1, readiness: "/readyz", capabilities: "/v3/capabilities" },
     { chainId: 4663, readiness: "/v4/chains/4663/custom-launch-plans/readiness", capabilities: "/v4/chains/4663/custom-launch-capabilities" },
