@@ -136,7 +136,7 @@ function responseSpec(url, method) {
           { chainId: 4663, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/robinhood" },
           { chainId: 8453, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/base" },
         ],
-        providers: [{ name: "codex", roles: ["ethereum-classic-launch-discovery", "ethereum-and-robinhood-market-data"], health: "not-checked" }],
+        providers: [{ name: "codex", roles: ["ethereum-and-robinhood-market-data"], health: "not-checked" }],
         customLaunchReadiness: [
           { chainId: 1, readinessUrl: "https://api.programmable.market/readyz", capabilitiesUrl: "https://api.programmable.market/v3/capabilities" },
           { chainId: 4663, readinessUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness",
