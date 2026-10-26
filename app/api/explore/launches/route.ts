@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (!query) return Response.json({ error: "invalid_query" }, { status: 400, headers: { "cache-control": "no-store" } });
   const result = await readUnifiedLaunches(query.page, query.q, query.filters, query.pageSize);
   return Response.json(result, { status: result.status === "unavailable" ? 503 : 200, headers: {
-    "cache-control": result.status === "ready" ? "public, max-age=0, s-maxage=300, stale-while-revalidate=600" : "no-store",
+    "cache-control": result.status === "ready" ? "public, max-age=0, s-maxage=900, stale-while-revalidate=1800" : "no-store",
     "x-programmable-indexing-status": result.status,
     "x-content-type-options": "nosniff",
   } });

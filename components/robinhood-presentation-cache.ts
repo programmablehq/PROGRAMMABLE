@@ -4,7 +4,7 @@ import {
 } from "@/lib/robinhood-presentation";
 
 const MAX_ENTRIES = 64;
-const MAX_AGE_MS = 300_000;
+const MAX_AGE_MS = 900_000;
 type Presentation = ReturnType<typeof mergeRobinhoodPresentations>;
 
 function queryKey(query: string, chainId: 1 | 4663 | 8453) {

@@ -56,7 +56,7 @@ describe("Robinhood market navigation", () => {
     vi.setSystemTime(now);
     const freshA = presentation();
     const expiredB = { ...freshA, market: { ...freshA.market!, poolId: poolB,
-      observedAt: new Date(now - 180_001).toISOString() } };
+      observedAt: new Date(now - 900_001).toISOString() } };
     rememberRobinhoodPresentation(query, mergeRobinhoodPresentations([], [freshA], now));
     const next = mergeRobinhoodPresentations([freshA], [expiredB], now);
     expect(next.items[0].market).toBeNull();
@@ -94,11 +94,11 @@ describe("Robinhood market navigation", () => {
   it("expires market values without discarding fresh metadata or renewing timestamps", () => {
     const cache = createRobinhoodPresentationCache();
     cache.write(query, mergeRobinhoodPresentations([], [presentation()], now), now);
-    expect(cache.read(query, now + 120_000)?.items[0].market?.poolId).toBe(poolA);
-    const expired = cache.read(query, now + 120_001);
+    expect(cache.read(query, now + 840_000)?.items[0].market?.poolId).toBe(poolA);
+    const expired = cache.read(query, now + 840_001);
     expect(expired?.items[0].market).toBeNull();
     expect(expired?.items[0].imageUrl).toBe(presentation().imageUrl);
-    expect(cache.read(query, now + 300_000)).toBeNull();
+    expect(cache.read(query, now + 900_000)).toBeNull();
   });
 
   it("bounds retained queries and performs no server-side cache reads", () => {

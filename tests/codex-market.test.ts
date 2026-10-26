@@ -116,7 +116,7 @@ describe("Codex server market adapter", () => {
     expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).get(address))
       .toMatchObject({ priceUsd: .001, observedAt });
     expect(fetcher).toHaveBeenCalledTimes(1);
-    vi.setSystemTime(Date.now() + 280_001);
+    vi.setSystemTime(Date.now() + 880_001);
     await readCodexMarkets([{ tokenAddress: address, poolId }]);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
