@@ -58,4 +58,15 @@ describe("Codex display metadata", () => {
     expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
     expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Recovered");
   });
+  it("rechecks absent metadata before the longer artwork cache expires", async () => {
+    vi.useFakeTimers();
+    try {
+      codex.query.mockResolvedValueOnce({ tokens: [] })
+        .mockResolvedValueOnce({ tokens: [{ address, networkId: 1, name: "Now indexed" }] });
+      expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
+      vi.setSystemTime(Date.now() + 900_001);
+      expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Now indexed");
+      expect(codex.query).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
 });
