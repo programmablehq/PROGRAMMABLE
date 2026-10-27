@@ -22,9 +22,17 @@ describe("Unified Explore HTTP contract", () => {
     expect(read).toHaveBeenCalledExactlyOnceWith(1, "", { sort: "highest", mode: "all", chain }, 10);
   });
   it.each(["stale", "partial", "syncing", "unavailable"])("does not cache %s as a complete catalog", async status => {
-    read.mockResolvedValue({ status });
+    read.mockResolvedValue({ status, items: [] });
     const response = await GET(new Request("https://website.invalid/api/explore/launches"));
     expect(response.status).toBe(status === "unavailable" ? 503 : 200);
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+  it.each(["stale", "partial", "syncing"])("briefly shares useful %s rows without claiming completeness", async status => {
+    read.mockResolvedValue({ status, items: [{ tokenAddress: "0x" + "11".repeat(20) }] });
+    const response = await GET(new Request("https://website.invalid/api/explore/launches?chain=1"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=10, stale-while-revalidate=10");
+    expect(response.headers.get("x-programmable-indexing-status")).toBe(status);
+    expect((await response.json()).status).toBe(status);
   });
 });

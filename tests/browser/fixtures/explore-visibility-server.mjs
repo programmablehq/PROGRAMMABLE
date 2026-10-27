@@ -9,6 +9,11 @@ export async function createExploreVisibilityServer() {
     import './app/globals.css'; import './app/programmable-experience.css'; import './app/interface.css'; import './app/webde-final-ui.css'; import './app/surfaces.css';
     const standalone=new URLSearchParams(location.search).has('standalone');
     const params=new URLSearchParams(location.search);
+    function ExploreRoute() {
+      const [visible,setVisible]=useState(true);
+      return <>{params.has('navigation')?<button onClick={()=>setVisible(value=>!value)}>Toggle explore</button>:null}
+        {visible?<UnifiedLaunchesView embedded={!standalone}/>:<h1>Coin detail</h1>}</>;
+    }
     function Profile() {
       const [account,setAccount]=useState('0x'+'aa'.repeat(20));
       const [rewardsAccount,setRewardsAccount]=useState(null);
@@ -20,7 +25,7 @@ export async function createExploreVisibilityServer() {
     }
     createRoot(document.getElementById('root')).render(params.has('profile')?<Profile/>:<main>
       {!standalone?<section style={{height:1400}}><h1>Introduction</h1></section>:null}
-      <UnifiedLaunchesView embedded={!standalone}/></main>);
+      <ExploreRoute/></main>);
   ` }, bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', outdir: '/fixture-output',
     external: ['/fonts/*', '/brand/*'], define: { 'process.env.NODE_ENV': '"production"', 'process.env': '{}' },
     plugins: [{ name: 'boundaries', setup(p) {

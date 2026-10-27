@@ -9,7 +9,8 @@ import type { FoundationProfileLaunch } from "@/lib/profile/module-launches";
 import type { Hex } from "viem";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { createSharedRequestPool, type SharedRead } from "@/lib/shared-request-pool";
 
 import { ExploreFilters } from "@/components/explore-filters";
 import { ChainMark } from "@/components/chain-mark";
@@ -78,6 +79,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const ROBINHOOD_WEBSITE_FILTERS: RobinhoodExploreFilters = { ...DEFAULT_EXPLORE_FILTERS, sort: "highest" };
 const PAGE_SNAPSHOT_TTL_MS = 300_000;
 const MAX_PAGE_SNAPSHOTS = 24;
+const acquireRequest = createSharedRequestPool<LaunchResponse>(REQUEST_TIMEOUT_MS);
 
 // Public, browser-only navigation state. Nothing is written during server rendering.
 const rememberedSnapshots = new Map<ExploreScope | string, { value: Snapshot; savedAt: number }>();
@@ -217,6 +219,23 @@ export function readLaunchListResponse(value: unknown, chainId: ExploreScope, ac
   return value as LaunchResponse;
 }
 
+function acquireLaunchRead(chainId: ExploreScope, account: string | undefined, request: Request) {
+  const url = exploreRequestUrl(chainId, account, request);
+  return acquireRequest(url, async signal => {
+    const response = await fetch(url, { signal, cache: account ? "no-store" : "default", headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error("Launch request failed");
+    const data = readLaunchListResponse(await response.json(), chainId, account);
+    signal.throwIfAborted();
+    const selectedChain = request.chain ?? "all";
+    if (data.page.size !== ROBINHOOD_EXPLORE_PAGE_SIZE
+      || data.page.number !== Math.min(request.page, Math.max(1, data.page.totalPages))
+      || chainId === "all" && selectedChain !== "all" && data.items.some(item => item.chainId !== selectedChain)) {
+      throw new Error("Launch response differs from the selected page or chain");
+    }
+    return data;
+  });
+}
+
 export function RobinhoodLaunchesView({
   embedded = false,
   chainId,
@@ -271,15 +290,28 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const refreshInterval = profileAccount ? 30_000 : REFRESH_MS;
   const cacheKey = profile ? `profile:${profile.account.toLowerCase()}` : chainId;
   const defaultRequest = { page: 1, q: "", ...defaultFilters };
-  const [initial] = useState(() => readPageSnapshot(cacheKey, defaultRequest) ?? readRememberedSnapshot(cacheKey));
+  const [initial] = useState(() => readRememberedSnapshot(cacheKey) ?? readPageSnapshot(cacheKey, defaultRequest));
   const [search, setSearch] = useState(initial?.request.q ?? "");
   const [request, setRequest] = useState<Request>(initial?.request ?? defaultRequest);
+  const requestRef = useRef(request);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(initial);
   const [loading, setLoading] = useState(!initial);
   const [failedRequest, setFailedRequest] = useState<Request | null>(null);
   const [now, setNow] = useState(Date.now);
-  const prefetchingRequests = useRef(new Set<string>());
+  const prefetchingRequests = useRef(new Map<string, SharedRead<LaunchResponse>>());
   const presentations = new Map((snapshot?.data.presentations ?? []).map((item) => [exploreIdentityKey(item), item]));
+
+  const navigate = useCallback((update: (current: Request) => Request) => {
+    const next = update(requestRef.current);
+    if (sameRobinhoodExploreRequest(requestRef.current, next)) return;
+    requestRef.current = next;
+    const cached = readPageSnapshot(cacheKey, next);
+    if (cached) setSnapshot(cached);
+    setFailedRequest(null);
+    setLoading(!cached);
+    setNow(Date.now());
+    setRequest(next);
+  }, [cacheKey]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 5_000);
@@ -289,15 +321,15 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const q = search.trim();
-      setRequest((current) => current.q === q ? current : { ...current, page: 1, q });
+      navigate(current => current.q === q ? current : { ...current, page: 1, q });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, navigate]);
 
   useEffect(() => {
     if (!readEnabled) return;
     let disposed = false;
-    let controller: AbortController | null = null;
+    let active: SharedRead<LaunchResponse> | null = null;
     let refreshTimer: number | undefined;
     const isVisible = () => document.visibilityState !== "hidden";
     const remembered = readPageSnapshot(cacheKey, request) ?? readRememberedSnapshot(cacheKey);
@@ -309,22 +341,20 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
       if (!disposed && isVisible()) refreshTimer = window.setTimeout(load, Math.max(0, refreshInterval - (Date.now() - lastAttemptAt)));
     }
 
+    function releasePrefetches() {
+      for (const read of prefetchingRequests.current.values()) read.release();
+      prefetchingRequests.current.clear();
+    }
+
     async function load() {
-      if (disposed || controller || !isVisible()) return;
-      const activeController = new AbortController();
-      controller = activeController;
-      const timeout = window.setTimeout(() => activeController.abort(), REQUEST_TIMEOUT_MS);
+      if (disposed || active || !isVisible()) return;
+      const read = acquireLaunchRead(chainId, profileAccount, request);
+      active = read;
       setLoading(true);
 
       try {
-        const response = await fetch(exploreRequestUrl(chainId, profileAccount, request), {
-          signal: activeController.signal,
-          cache: profileAccount ? "no-store" : "default",
-          headers: { accept: "application/json" },
-        });
-        if (!response.ok) throw new Error("Launch request failed");
-        const data = readLaunchListResponse(await response.json(), chainId, profileAccount);
-        if (disposed || activeController.signal.aborted) return;
+        const data = await read.promise;
+        if (disposed || active !== read) return;
         setSnapshot((current) => {
           const sameRequest = sameRobinhoodExploreRequest(current?.request, request);
           if (sameRequest && current && current.data.items.length > 0
@@ -342,16 +372,16 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
         setFailedRequest(null);
         setNow(Date.now());
       } catch {
-        if (!disposed) {
+        if (!disposed && active === read) {
           setFailedRequest(request);
           setSnapshot((current) => current ? rememberSnapshot({ ...current, data: { ...current.data,
             presentations: mergeRobinhoodPresentations(current.data.presentations, null).items,
           } }) : null);
         }
       } finally {
-        window.clearTimeout(timeout);
-        controller = null;
-        if (!disposed) {
+        read.release();
+        if (!disposed && active === read) {
+          active = null;
           lastAttemptAt = Date.now();
           setLoading(false);
           schedule();
@@ -362,6 +392,12 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     function visibilityChanged() {
       window.clearTimeout(refreshTimer);
       if (isVisible()) schedule();
+      else {
+        active?.release();
+        active = null;
+        releasePrefetches();
+        setLoading(false);
+      }
     }
 
     if (lastAttemptAt > 0 && Date.now() - lastAttemptAt < refreshInterval) schedule();
@@ -369,7 +405,9 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     document.addEventListener("visibilitychange", visibilityChanged);
     return () => {
       disposed = true;
-      controller?.abort();
+      active?.release();
+      active = null;
+      releasePrefetches();
       window.clearTimeout(refreshTimer);
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
@@ -378,42 +416,30 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const q = search.trim();
-    setRequest((current) => current.page === 1 && current.q === q ? current : { ...current, page: 1, q });
+    navigate(current => current.page === 1 && current.q === q ? current : { ...current, page: 1, q });
   }
 
   function clearSearch() {
     setSearch("");
-    setRequest((current) => current.page === 1 && current.q === "" ? current : { ...current, page: 1, q: "" });
+    navigate(current => current.page === 1 && current.q === "" ? current : { ...current, page: 1, q: "" });
     searchRef.current?.focus();
   }
 
   function applyFilters(filters: RobinhoodExploreFilters) {
-    setRequest((current) => {
-      const next = { ...current, ...filters, page: 1 };
-      return sameRobinhoodExploreRequest(current, next) ? current : next;
-    });
+    navigate(current => ({ ...current, sort: filters.sort, mode: filters.mode ?? "all", chain: filters.chain ?? "all", page: 1 }));
   }
 
   function changePage(page: number) {
-    if (request.page === page) return;
-    const next = { ...request, page };
-    const cached = readPageSnapshot(cacheKey, next);
-    if (cached) {
-      setSnapshot(cached);
-      setFailedRequest(null);
-      setLoading(false);
-      setNow(Date.now());
-    }
-    setRequest(next);
+    navigate(current => ({ ...current, page }));
   }
 
   const failed = sameRobinhoodExploreRequest(failedRequest, request);
   const sameRequest = sameRobinhoodExploreRequest(snapshot?.request, request);
   const pending = !sameRequest && !failed;
   const data = sameRequest ? snapshot?.data : undefined;
-  // Keep the last complete result visible while a new query or chain filter is
-  // resolving. A slow read should update in place, never collapse the grid.
-  const displayedData = data ?? (pending ? snapshot?.data : undefined);
+  // Keep existing rows during refresh, but never label a different page or
+  // filter's rows as the newly selected result. Cached navigation is immediate.
+  const displayedData = data;
   const displayChain = request.chain && request.chain !== "all" ? request.chain : null;
   const displayedItems = displayedData?.items.filter(launch => displayChain === null || (launch.chainId ?? 4663) === displayChain);
   const pinned = chainId !== 1 && (request.chain === undefined || request.chain === "all" || request.chain === 4663)
@@ -423,30 +449,26 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const updatingSearch = search.trim() !== request.q;
   const hasFilters = activeExploreFilterCount(request) > 0;
   const slots = pending && !profile ? Math.max(0, ROBINHOOD_EXPLORE_PAGE_SIZE - items.length) : 0;
-  const canPrevious = enabled && !pending && !updatingSearch && Boolean(data && data.page.number > 1);
-  const canNext = enabled && !pending && !updatingSearch && Boolean(data?.page.hasMore);
+  const sameCatalog = snapshot && sameRobinhoodExploreRequest({ ...snapshot.request, page: request.page }, request);
+  const pageInfo = data?.page ?? (sameCatalog ? snapshot.data.page : undefined);
+  const pageNumber = data?.page.number ?? request.page;
+  const canPrevious = enabled && !updatingSearch && pageNumber > 1;
+  const canNext = enabled && !updatingSearch && Boolean(pageInfo && pageNumber < pageInfo.totalPages);
 
   function prefetchPage(page: number) {
     if (profileAccount || !data?.page.hasMore || page < 1) return;
     const next = { ...request, page };
     const key = snapshotKey(cacheKey, next);
     if (readPageSnapshot(cacheKey, next) || prefetchingRequests.current.has(key)) return;
-    prefetchingRequests.current.add(key);
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 8_000);
-    void fetch(exploreRequestUrl(chainId, profileAccount, next), {
-      signal: controller.signal,
-      cache: "default",
-      headers: { accept: "application/json" },
-    }).then(async (response) => {
-      if (!response.ok) return;
-      const prefetched = readLaunchListResponse(await response.json(), chainId, profileAccount);
+    const read = acquireLaunchRead(chainId, profileAccount, next);
+    prefetchingRequests.current.set(key, read);
+    void read.promise.then(prefetched => {
       rememberPageSnapshot({ request: next, fetchedAt: Date.now(), data: prefetched });
     }).catch(() => {
       // Prefetch is an optimization. The normal page request remains authoritative.
     }).finally(() => {
-      window.clearTimeout(timeout);
-      prefetchingRequests.current.delete(key);
+      read.release();
+      if (prefetchingRequests.current.get(key) === read) prefetchingRequests.current.delete(key);
     });
   }
   const Heading = embedded ? "h2" : "h1";
@@ -517,13 +539,13 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
             sortOptions={chainId === 1 || chainId === 8453 ? [{ value: "newest", label: "Newest" }, { value: "oldest", label: "Oldest" }] : undefined} /></> : null}
           <nav className={styles.pagination} aria-label="Launch pages">
             <button type="button" aria-disabled={!canPrevious} aria-label="Previous page" title="Previous page" aria-controls={listId}
-              onClick={() => { if (canPrevious && data) changePage(data.page.number - 1); }}>
+              onClick={() => { if (canPrevious) changePage(pageNumber - 1); }}>
               <ChevronLeft aria-hidden="true" size={18} />
             </button>
             <button type="button" aria-disabled={!canNext} aria-label="Next page" title="Next page" aria-controls={listId}
               onPointerEnter={() => { if (canNext && data) prefetchPage(data.page.number + 1); }}
               onFocus={() => { if (canNext && data) prefetchPage(data.page.number + 1); }}
-              onClick={() => { if (canNext && data) changePage(data.page.number + 1); }}>
+              onClick={() => { if (canNext) changePage(pageNumber + 1); }}>
               <ChevronRight aria-hidden="true" size={18} />
             </button>
           </nav>
@@ -549,9 +571,9 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
               return (
               <li key={identity} className={styles.item}>
                 <article className={styles.row}>
-                <Link className={styles.cardLink} href={launch.confirmation === "confirmed"
+                <Link className={styles.cardLink} prefetch={false} href={launch.confirmation === "confirmed"
                   ? `/modules/${launch.tokenAddress}?chainId=${launchChainId}&transaction=${launch.transactionHash}`
-                  : `/token/${launch.tokenAddress}${launchChainId === 1 ? "?chain=1" : ""}`}>
+                  : `/token/${launch.tokenAddress}${launchChainId === 4663 ? "" : `?chain=${launchChainId}`}`}>
                   <RobinhoodCoinArtwork
                     eager={index < 5}
                     imageUrl={details?.imageUrl} loading={loading && !details}
