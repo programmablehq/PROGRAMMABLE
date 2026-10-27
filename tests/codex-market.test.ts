@@ -21,6 +21,14 @@ const pool = (overrides = {}) => ({ address: poolId, networkId: 4663, token0: `0
 const row = () => ({ token: { address, networkId: 4663 }, priceUSD: "0.001", marketCap: "1000000", circulatingMarketCap: "500000", liquidity: "215595", totalLiquidityUsd: "2027259", volume24: "0", change24: "-0.05" });
 
 describe("Codex provider backoff", () => {
+  it("coalesces the same upstream query across independent consumers", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn(async () => Response.json({ data: { value: 1 } }));
+    vi.stubGlobal("fetch", fetcher);
+    const results = await Promise.all(Array.from({ length: 30 }, () => codexQuery("query Shared { value }", {})));
+    expect(results).toHaveLength(30);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it("shares a paused-account backoff across distinct queries and recovers after it", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ errors: [{ message: "private billing response" }] }, { status: 403 }))
@@ -101,6 +109,26 @@ describe("Codex price history", () => {
 });
 
 describe("Codex server market adapter", () => {
+  it("reuses missing market observations across page and coin reads, then refreshes them", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ data: {
+      filterTokens: { results: [] }, filterPairs: { results: [] },
+    } })).mockImplementation(async () => Response.json({ data: {
+      filterTokens: { results: [row()] }, filterPairs: { results: [] },
+    } }));
+    vi.stubGlobal("fetch", fetcher);
+    const tokens = [{ tokenAddress: address, poolId },
+      { tokenAddress: `0x${"cd".repeat(20)}`, poolId: `0x${"12".repeat(32)}` }];
+    expect((await readCodexMarkets(tokens)).size).toBe(0);
+    for (let index = 0; index < 20; index++) {
+      expect((await readCodexMarkets(tokens.slice(0, 1))).size).toBe(0);
+      expect((await readCodexMarkets(tokens)).size).toBe(0);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 900_001);
+    expect((await readCodexMarkets(tokens)).has(address)).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("reuses exact-pool catalog observations on single-coin pages without extending their age", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const other = { tokenAddress: `0x${"cd".repeat(20)}`, poolId: `0x${"12".repeat(32)}` };
@@ -230,6 +258,33 @@ describe("Codex server market adapter", () => {
     const result = await readCodexMarkets(tokens);
     expect(fetcher).toHaveBeenCalledTimes(20);
     expect(result.size).toBe(2_000);
+  });
+  it("retains negative observations for a large catalog instead of rebilling unpriced tokens", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const tokens = Array.from({ length: 2_000 }, (_, index) => ({ tokenAddress: `0x${index.toString(16).padStart(40, "0")}`, poolId: `0x${index.toString(16).padStart(64, "0")}` }));
+    const fetcher = vi.fn(async (_url, request) => {
+      const variables = JSON.parse(request.body).variables;
+      return Response.json({ data: { filterTokens: { results: [{ token: {
+        address: variables.tokens[0].split(":")[0], networkId: 4663,
+      }, priceUSD: "1" }] }, filterPairs: { results: [] } } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const first = await readCodexMarkets(tokens);
+    for (let index = 0; index < 10; index++) expect(await readCodexMarkets(tokens)).toEqual(first);
+    expect(first.size).toBe(20);
+    expect(fetcher).toHaveBeenCalledTimes(20);
+  });
+  it("keeps an empty chart for two minutes before trying the provider again", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn(async () => Response.json({ data: { getTokenBars: bars({ s: "no_data", t: [], c: [] }) } }));
+    vi.stubGlobal("fetch", fetcher);
+    for (let index = 0; index < 12; index++) {
+      expect((await readCodexChart(address, 4663, "1m")).points).toEqual([]);
+      vi.setSystemTime(Date.now() + 10_000);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await readCodexChart(address, 4663, "1m");
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it.each([
     { body: { data: { filterTokens: { results: [{ ...row(), token: { address, networkId: 1 } }] } } } },

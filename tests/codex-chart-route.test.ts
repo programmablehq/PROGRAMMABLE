@@ -58,10 +58,10 @@ describe("verified chart identity", () => {
     expect(failed.status).toBe(503); expect(JSON.stringify(await failed.json())).not.toContain("private provider response");
     expect(failed.headers.get("retry-after")).toBe("15");
   });
-  it("checks empty histories again quickly instead of caching a new coin's empty chart for a minute", async () => {
+  it("shares an empty history for two minutes instead of rebilling every refresh", async () => {
     mocks.robinhood.mockResolvedValue({ token: { tokenAddress: address } });
     mocks.chart.mockResolvedValue({ tokenAddress: address, chainId: 4663, range: "1D", source: "codex", points: [] });
     const response = await GET(new Request(`https://example.com/api/market/chart?token=${address}`));
-    expect(response.headers.get("cache-control")).toContain("max-age=5, s-maxage=5");
+    expect(response.headers.get("cache-control")).toContain("max-age=15, s-maxage=120");
   });
 });

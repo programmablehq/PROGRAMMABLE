@@ -3,10 +3,13 @@ const codex = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }));
 vi.mock("@/lib/server/codex-market", () => ({ codexQuery: codex.query }));
-import { readCodexTokenMetadata } from "@/lib/server/codex-token-metadata";
+let readCodexTokenMetadata: typeof import("@/lib/server/codex-token-metadata").readCodexTokenMetadata;
 import { mergeCoinMetadata } from "@/lib/coin-metadata";
 const address = `0x${"ab".repeat(20)}`;
-beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("CODEX_API_KEY", "test-only"); });
+beforeEach(async () => {
+  vi.resetModules(); vi.clearAllMocks(); vi.stubEnv("CODEX_API_KEY", "test-only");
+  ({ readCodexTokenMetadata } = await import("@/lib/server/codex-token-metadata"));
+});
 afterEach(() => vi.unstubAllEnvs());
 describe("Codex display metadata", () => {
   it("reads artwork and socials for the exact chain and address without inventing metadata", async () => {
@@ -32,5 +35,38 @@ describe("Codex display metadata", () => {
     expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
     codex.query.mockRejectedValue(new Error("temporarily unavailable"));
     expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
+  });
+  it("shares both present and absent metadata between Explore and coin pages", async () => {
+    const missing = `0x${"cd".repeat(20)}`;
+    codex.query.mockResolvedValue({ tokens: [{ address, networkId: 1, name: "Example", symbol: "EXAMPLE" }, null] });
+    const [catalog, coin] = await Promise.all([
+      readCodexTokenMetadata([address, missing], 1), readCodexTokenMetadata([address], 1),
+    ]);
+    expect(catalog.get(address)).toEqual(coin.get(address));
+    Reflect.set(catalog.get(address)!.links, 0, { label: "Wrong", url: "https://example.com/" });
+    for (let index = 0; index < 10; index++) {
+      expect((await readCodexTokenMetadata([address], 1)).get(address)?.links).toEqual([]);
+      expect((await readCodexTokenMetadata([missing], 1)).size).toBe(0);
+    }
+    expect(codex.query).toHaveBeenCalledTimes(1);
+    await readCodexTokenMetadata([address], 4663);
+    expect(codex.query).toHaveBeenCalledTimes(2);
+  });
+  it("does not save failed provider calls as absent metadata", async () => {
+    codex.query.mockRejectedValueOnce(new Error("Unavailable"))
+      .mockResolvedValueOnce({ tokens: [{ address, networkId: 1, name: "Recovered" }] });
+    expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
+    expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Recovered");
+  });
+  it("rechecks absent metadata before the longer artwork cache expires", async () => {
+    vi.useFakeTimers();
+    try {
+      codex.query.mockResolvedValueOnce({ tokens: [] })
+        .mockResolvedValueOnce({ tokens: [{ address, networkId: 1, name: "Now indexed" }] });
+      expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
+      vi.setSystemTime(Date.now() + 900_001);
+      expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Now indexed");
+      expect(codex.query).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
   });
 });

@@ -29,7 +29,12 @@ function pauseProvider(seconds: number) {
   providerRetryAt = Math.max(providerRetryAt, Date.now() + Math.min(900, Math.max(1, Number.isFinite(seconds) ? seconds : 15)) * 1_000);
 }
 
-export async function codexQuery(query: string, variables: Record<string, unknown>) {
+export function codexQuery(query: string, variables: Record<string, unknown>) {
+  // All consumers share a request, including metadata and analytics reads.
+  return sharedRead(`provider:${JSON.stringify([query, variables])}`, () => fetchCodexQuery(query, variables));
+}
+
+async function fetchCodexQuery(query: string, variables: Record<string, unknown>) {
   const key = process.env.CODEX_API_KEY?.trim();
   if (!key || Date.now() < providerRetryAt) throw new Error("Market data unavailable");
   const signal = AbortSignal.timeout(8_000);
@@ -65,7 +70,7 @@ export async function codexQuery(query: string, variables: Record<string, unknow
 type Identity = { tokenAddress: string; poolId: string };
 type MarketRead = Promise<RobinhoodCoinMarket | undefined>;
 const marketReads = new Map<string, MarketRead>();
-const marketObservations = new Map<string, { expiresAt: number; market: RobinhoodCoinMarket }>();
+const marketObservations = new Map<string, { expiresAt: number; market?: RobinhoodCoinMarket }>();
 const marketIdentity = (token: Identity, chainId: number) => `${chainId}:${token.tokenAddress}:${token.poolId}`;
 const copyMarket = (market: RobinhoodCoinMarket): RobinhoodCoinMarket => ({ ...market,
   ...(market.quoteAsset ? { quoteAsset: { ...market.quoteAsset } } : {}),
@@ -139,8 +144,10 @@ const cachedMarkets = unstable_cache(async (identities: readonly Identity[], cha
       volume24hUsd: marketNumber(row.volume24), change24hPercent: change === null ? null : change * 100,
       observedAt, sourceUrl: "https://www.codex.io/" }]);
   }
-  return entries;
-}, ["codex-token-markets-v5"], { revalidate: 900 });
+  // Empty results are observations too. Keep their age so an unpriced token
+  // does not force another paid query on every page or catalog refresh.
+  return { entries, observedAt };
+}, ["codex-token-markets-v6"], { revalidate: 900 });
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
 export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
@@ -169,36 +176,39 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
     if (Date.now() >= deadline || providerBatches >= MAX_MARKET_PROVIDER_BATCHES_PER_READ) break;
     bucket.sort((a, b) => a.tokenAddress.localeCompare(b.tokenAddress));
     const reads = new Map<string, MarketRead>();
-    const missing: Identity[] = [];
     for (const token of bucket) {
       const key = marketIdentity(token, chainId), observation = marketObservations.get(key);
       if (observation && Date.now() < observation.expiresAt) {
-        result.set(token.tokenAddress, copyMarket(observation.market));
+        if (observation.market) result.set(token.tokenAddress, copyMarket(observation.market));
       } else {
         marketObservations.delete(key);
         const active = marketReads.get(key);
         if (active) reads.set(token.tokenAddress, active);
-        else missing.push(token);
       }
     }
-    for (let index = 0; index < missing.length && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
-      const batch = missing.slice(index, index + 100);
+    // Always use complete stable batches. Removing the already priced tokens
+    // from a batch changes the persistent cache key and re-bills the remainder.
+    for (let index = 0; index < bucket.length && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
+      const batch = bucket.slice(index, index + 100);
+      const missing = batch.filter(token => !reads.has(token.tokenAddress)
+        && !((marketObservations.get(marketIdentity(token, chainId))?.expiresAt ?? 0) > Date.now()));
+      if (!missing.length) continue;
       providerBatches += 1;
-      const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId)).then(entries => new Map(entries));
-      for (const token of batch) {
+      const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId))
+        .then(observation => ({ ...observation, entries: new Map(observation.entries) }));
+      for (const token of missing) {
         const key = marketIdentity(token, chainId);
-        const request: MarketRead = batchRead.then(entries => {
-          const value = entries.get(token.tokenAddress);
-          if (!value) return;
-          const observedAt = Date.parse(value.observedAt), age = Date.now() - observedAt;
+        const request: MarketRead = batchRead.then(observation => {
+          const value = observation.entries.get(token.tokenAddress);
+          const observedAt = Date.parse(observation.observedAt), age = Date.now() - observedAt;
           if (!(age >= 0 && age <= MARKET_OBSERVATION_TTL_MS)) return;
-          const market = { ...value, poolId: token.poolId };
+          const market = value ? { ...value, poolId: token.poolId } : undefined;
           // Reuse catalog observations on coin pages without extending their age.
           // Chain and exact pool are part of the key; failures are never saved.
           if (age < MARKET_OBSERVATION_TTL_MS) {
             marketObservations.delete(key);
             marketObservations.set(key, { expiresAt: observedAt + MARKET_OBSERVATION_TTL_MS, market });
-            while (marketObservations.size > 2_048) marketObservations.delete(marketObservations.keys().next().value!);
+            while (marketObservations.size > 8_192) marketObservations.delete(marketObservations.keys().next().value!);
           }
           return market;
         }).finally(() => { if (marketReads.get(key) === request) marketReads.delete(key); });
@@ -225,11 +235,22 @@ async function fetchChart(address: string, chainId: number, range: CodexChartRan
   const points = parseCodexBars(data.getTokenBars, address.toLowerCase(), chainId, earliest, to);
   return { tokenAddress: address.toLowerCase(), chainId, range, points, source: "codex", observedAt: new Date().toISOString() };
 }
-const freshChart = (address: string, chainId: number, range: CodexChartRange) =>
-  sharedRead(`chart-provider:${chainId}:${address}:${range}`, () => fetchChart(address, chainId, range));
+const chartObservations = new Map<string, CodexChart>();
+const freshChart = (address: string, chainId: number, range: CodexChartRange) => {
+  const key = `chart-provider:${chainId}:${address}:${range}`;
+  const previous = chartObservations.get(key);
+  const ttl = previous?.points.length ? CODEX_CHART_RANGES[range].refreshMs : 120_000;
+  if (previous && Date.now() - Date.parse(previous.observedAt) < ttl) return Promise.resolve(previous);
+  return sharedRead(key, async () => {
+    const chart = await fetchChart(address, chainId, range);
+    chartObservations.delete(key); chartObservations.set(key, chart);
+    while (chartObservations.size > 512) chartObservations.delete(chartObservations.keys().next().value!);
+    return chart;
+  });
+};
 // A stable key serves the previous observation while Next refreshes it.
 // Putting the clock in the key forces a blocking cold read every minute.
-const cachedChart = unstable_cache(freshChart, ["codex-token-bars-v4"], { revalidate: 15 });
+const cachedChart = unstable_cache(freshChart, ["codex-token-bars-v5"], { revalidate: 30 });
 
 function currentChart(chart: CodexChart) {
   const age = Date.now() - Date.parse(chart.observedAt);

@@ -55,7 +55,7 @@ export function createCodexChartCache({ fetcher = (input, init) => fetch(input, 
           if (!response.ok) throw new Error("Price history unavailable");
           const value: unknown = await response.json();
           if (!acceptsCodexChart(value, token, chain, range, now())) throw new Error("Price history unavailable");
-          const refreshMs = value.points.length ? CODEX_CHART_RANGES[range].refreshMs : 10_000;
+          const refreshMs = value.points.length ? CODEX_CHART_RANGES[range].refreshMs : 120_000;
           remember(key, { chart: value, failed: false, failures: 0, nextAttemptAt: now() + refreshMs });
           return value;
         } catch {
