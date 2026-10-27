@@ -18,7 +18,6 @@ export async function discoverClassicRpcLaunches(asOfBlock: bigint, readWindow: 
   if (windows.length > 2_000) throw fail();
   const logs: ClassicRawLog[] = [];
   for (let offset = 0; offset < windows.length; offset += 6) {
-    const waveStarted = Date.now();
     const groups = await Promise.all(windows.slice(offset, offset + 6).map(async ({ from, to }) => {
       const result = await readWindow(from, to);
       if (result.length > 20_000 || result.some(log => !/^\d+$/.test(log.blockNumber)
@@ -36,10 +35,8 @@ export async function discoverClassicRpcLaunches(asOfBlock: bigint, readWindow: 
       logs.push(log);
       if (logs.length > 20_000) throw fail();
     }
-    // A cold historical scan shares the RPC quota with current trading reads.
-    if (offset + 6 < windows.length && Date.now() - waveStarted < 400) {
-      await new Promise(resolve => setTimeout(resolve, 400 - (Date.now() - waveStarted)));
-    }
+    // The provider transport budgets actual RPC calls. Cache hits must not
+    // inherit a delay intended for a cold historical scan.
   }
   const candidates = parseClassicLaunchLogs(logs).map(proof => ({ poolId: proof.poolId.toLowerCase(), token: proof.tokenAddress.toLowerCase(),
     hook: proof.hookAddress.toLowerCase(), transaction: proof.launchTransactionHash! as Hex, block: Number(proof.launchBlockNumber) }));

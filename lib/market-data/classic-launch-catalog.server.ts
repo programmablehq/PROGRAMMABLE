@@ -50,7 +50,9 @@ function catalogTransport(rpcUrl: string): Transport {
         // Budget individual JSON-RPC calls, including multicall chunks and background refreshes.
         const now = Date.now();
         const at = Math.max(now, nextRpcReadAt);
-        nextRpcReadAt = at + 35;
+        // Historical cache hits never enter this transport. Throttle actual
+        // log reads here instead of delaying every cached discovery wave.
+        nextRpcReadAt = at + (args.method === "eth_getLogs" ? 70 : 35);
         if (at > now) await new Promise(resolve => setTimeout(resolve, at - now));
         try { return await transport.request(args, requestOptions); }
         catch (error) {
