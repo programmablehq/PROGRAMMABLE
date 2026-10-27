@@ -76,6 +76,14 @@ async function batches<T, R>(values: readonly T[], size: number, read: (values: 
   return result;
 }
 
+export async function readClassicCatalogGroups<T, R>(
+  groups: readonly T[],
+  readCached: (group: T) => Promise<R[]>,
+): Promise<R[]> {
+  // Cache hits can run together; cache misses still use the single hydration slot below.
+  return batches(groups, 8, async batch => (await Promise.all(batch.map(readCached))).flat());
+}
+
 /** Cache immutable launch provenance separately from the current chain boundary. */
 let hydrationQueue = Promise.resolve();
 async function withHydrationSlot<T>(read: () => Promise<T>): Promise<T> {
@@ -186,9 +194,9 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
   const groups = chunks.map(chunk => chunk.flatMap(candidate => byToken.get(candidate.token)!));
   // Complete canonical getLogs groups already prove successful transaction events;
   // hydrate additionally checks each recorded block hash against the node's headers.
-  const entries = await batches(groups, 1, async batch => (await Promise.all(batch.map(group =>
+  const entries = await readClassicCatalogGroups(groups, group =>
     hydrate(JSON.stringify(group))
-  ))).flat());
+  );
   if (!entries.some(entry => entry.tokenAddress.toLowerCase() === CLASSIC_MAIN_TOKEN)) throw fail();
   await withClient(async client => {
     const [head, current] = await Promise.all([client.getBlockNumber({cacheTime:0}), client.getBlock({blockNumber:anchor.number,includeTransactions:false})]);
