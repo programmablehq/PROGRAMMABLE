@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
 import { classicLaunchEvents, classicV2Events, parseClassicLaunchLogs, type ClassicRawLog } from "../lib/market-data/classic-launch-proof";
-import { discoverClassicRpcLaunches } from "../lib/market-data/classic-rpc-discovery";
+import { CLASSIC_RPC_LOG_WINDOW, discoverClassicRpcLaunches } from "../lib/market-data/classic-rpc-discovery";
 import config from "../config/classic-launch-catalog.v1.json";
 
 const source = config.sources[1]!;
@@ -10,6 +10,7 @@ const creator = "0x2222222222222222222222222222222222222222";
 const vault = "0x3333333333333333333333333333333333333333";
 const hash = `0x${"ab".repeat(32)}` as const;
 const pool = `0x${"cd".repeat(32)}` as const;
+afterEach(() => vi.useRealTimers());
 function events(): ClassicRawLog[] {
   const values = [
     {deployer:creator,token,poolId:pool,feeHook:source.hook,rewardVault:vault,positionRecipient:creator,positionTokenId:1n,buySwapFeeBps:100,sellSwapFeeBps:200,rewardConfigurationHash:hash,launchHash:hash},
@@ -54,6 +55,30 @@ describe("canonical Classic launch proofs without Envio", () => {
       events().slice(0, 3).filter(log => BigInt(log.blockNumber) >= from && BigInt(log.blockNumber) <= to))).rejects.toThrow();
     await expect(discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async () => events())).rejects.toThrow();
     await expect(discoverClassicRpcLaunches(BigInt(source.startBlock + 1), async () => { throw Error("RPC unavailable"); })).rejects.toThrow();
+  });
+
+  it("reads cached history without RPC pacing delays while keeping six reads in flight", async () => {
+    vi.useFakeTimers();
+    const started = Date.now();
+    let active = 0;
+    let peak = 0;
+    let reads = 0;
+    const end = BigInt(config.sources[0]!.startBlock) + 90n * CLASSIC_RPC_LOG_WINDOW - 1n;
+    const discovery = discoverClassicRpcLaunches(end, async () => {
+      reads++;
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      active--;
+      return [];
+    });
+    await vi.runAllTimersAsync();
+
+    expect(await discovery).toEqual({ candidates: [], logs: [] });
+    expect(reads).toBe(90);
+    expect(peak).toBe(6);
+    expect(active).toBe(0);
+    expect(Date.now() - started).toBe(150);
   });
 
   it("retains the existing V2 main-token scope while discovering later releases", async () => {
