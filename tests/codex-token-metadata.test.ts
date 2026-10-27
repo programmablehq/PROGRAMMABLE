@@ -43,7 +43,7 @@ describe("Codex display metadata", () => {
       readCodexTokenMetadata([address, missing], 1), readCodexTokenMetadata([address], 1),
     ]);
     expect(catalog.get(address)).toEqual(coin.get(address));
-    catalog.get(address)!.links.push({ label: "Wrong", url: "https://example.com/" });
+    Reflect.set(catalog.get(address)!.links, 0, { label: "Wrong", url: "https://example.com/" });
     for (let index = 0; index < 10; index++) {
       expect((await readCodexTokenMetadata([address], 1)).get(address)?.links).toEqual([]);
       expect((await readCodexTokenMetadata([missing], 1)).size).toBe(0);
