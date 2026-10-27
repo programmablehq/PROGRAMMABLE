@@ -86,6 +86,27 @@ test('reset removes the chain selection and restores the cached all-chain result
   await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible({timeout: 1000});
 });
 
+test('returning to a cached filter preserves a newer matching coin valuation', async ({page}) => {
+  await page.route('**/api/explore/launches?*', route => {
+    const url = new URL(route.request().url());
+    const payload = navigationPayload(url);
+    const fresh = url.searchParams.get('chain') === '1';
+    return route.fulfill({json: {...payload, presentations: payload.items.map(row => ({
+      chainId: row.chainId, tokenAddress: row.tokenAddress, imageUrl: null, description: null, links: [],
+      market: { poolId: '0x' + '44'.repeat(32), priceUsd: 1, marketCapUsd: fresh ? 2000 : 1000,
+        liquidityUsd: 100, volume24hUsd: 10, change24hPercent: 0,
+        observedAt: new Date(Date.now() - (fresh ? 0 : 1000)).toISOString(), sourceUrl: 'https://www.codex.io/' },
+    }))}});
+  });
+  await page.goto(origin + '?standalone');
+  await expect(page.getByRole('link', {name: /^All 2 /})).toContainText('$1K');
+  await page.getByRole('button', {name: 'Filters', exact: true}).click();
+  await page.getByRole('button', {name: 'Ethereum', exact: true}).click();
+  await expect(page.getByRole('link', {name: /^Ethereum 2 /})).toContainText('$2K');
+  await page.getByRole('button', {name: 'All chains', exact: true}).click();
+  await expect(page.getByRole('link', {name: /^All 2 /})).toContainText('$2K', {timeout: 1000});
+});
+
 test('returning from a coin preserves the last chain and cached results', async ({page}) => {
   let requests = 0;
   await page.route('**/api/explore/launches?*', route => {
