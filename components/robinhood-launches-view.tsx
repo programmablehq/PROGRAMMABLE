@@ -306,7 +306,9 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     if (sameRobinhoodExploreRequest(requestRef.current, next)) return;
     requestRef.current = next;
     const cached = readPageSnapshot(cacheKey, next);
-    if (cached) setSnapshot(cached);
+    if (cached) setSnapshot(current => ({ ...cached, data: { ...cached.data,
+      presentations: mergeRobinhoodPresentations(current?.data.presentations ?? [], cached.data.presentations).items,
+    } }));
     setFailedRequest(null);
     setLoading(!cached);
     setNow(Date.now());

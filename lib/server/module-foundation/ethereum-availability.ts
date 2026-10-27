@@ -10,17 +10,33 @@ import { withFoundationOwnerCatalogV1 } from "./owner-catalog";
 import { readEthereumMissingIndexReason } from "./ethereum-stamp-status";
 import release from "@/contracts/deployments/ethereum-module-release-v4.json";
 
-const reads = new Map<string, { expires: number; value: Promise<unknown> }>();
+type CachedRead<T> = { expires: number; pending: boolean; value: Promise<T> };
+const reads = new Map<string, CachedRead<unknown>>();
+const runtimeReads = new Map<string, CachedRead<Awaited<ReturnType<typeof verifyEthereumRuntime>>>>();
+
+function sharedRead<T>(cache: Map<string, CachedRead<T>>, key: string, load: () => Promise<T>): Promise<T> {
+  const cached = cache.get(key);
+  if (cached && (cached.pending || cached.expires > Date.now())) return cached.value;
+  if (cache.size >= 128) cache.delete(cache.keys().next().value!);
+  const entry: CachedRead<T> = { expires: 0, pending: true, value: Promise.resolve(undefined as T) };
+  entry.value = Promise.resolve().then(load).then(value => {
+    entry.pending = false;
+    entry.expires = Date.now() + 15_000;
+    return value;
+  }, error => {
+    if (cache.get(key) === entry) cache.delete(key);
+    throw error;
+  });
+  cache.set(key, entry);
+  return entry.value;
+}
+
 export function readEthereumFoundationAvailability(token?: Address): Promise<unknown> {
   if (process.env.PROGRAMMABLE_ETHEREUM_MODULE_MODE !== "enabled") return Promise.resolve(unavailableFoundation(FOUNDATION_AVAILABILITY_SCHEMA_V5, 1));
-  const key = token?.toLowerCase() ?? "launch", cached = reads.get(key);
-  if (cached && cached.expires > Date.now()) return cached.value;
-  const value = current(token).catch(error => { reads.delete(key); throw error; });
-  if (reads.size >= 128) reads.delete(reads.keys().next().value!);
-  reads.set(key, { expires: Date.now() + 15_000, value });
-  return value;
+  return sharedRead(reads, token?.toLowerCase() ?? "launch", () => current(token));
 }
-async function current(token?: Address) {
+
+async function verifyEthereumRuntime() {
   // Share the existing per-provider budget with quotes instead of sending a
   // burst of archive reads every time a token's authority is checked.
   const rpcs = foundationMainnetRpcs();
@@ -40,6 +56,13 @@ async function current(token?: Address) {
     const code = await client.getCode({ address: pin.address, blockNumber: number });
     if (!code || keccak256(code) !== pin.runtimeCodeHash) throw new Error("The Ethereum module deployment differs from its source.");
   }))));
+  return { clients, number, blockHash: blocks[0].hash };
+}
+
+async function current(token?: Address) {
+  // Every token uses the same installed release. Share its short-lived runtime
+  // proof; each coin still verifies its own finalized stamp and graph below.
+  const { clients, number, blockHash } = await sharedRead(runtimeReads, "installed-release", verifyEthereumRuntime);
   let binding = ETHEREUM_MODULE_BINDING;
   if (token) {
     const snapshot = await readFinalizedRouterCustomIdentitySnapshotCoreV1({ signal: AbortSignal.timeout(12_000) });
@@ -61,6 +84,6 @@ async function current(token?: Address) {
     available: true, reason: null, binding, ...(token ? { token: token.toLowerCase() as Address } : {}),
     catalog: unavailableFoundation().catalog });
   return JSON.parse(JSON.stringify({ ...envelope, evidence: { kind: "owner-source-runtime-v1", providerCount: 2,
-    releaseDigest: binding.releaseDigest, checkedAt: new Date().toISOString(), blockHash: blocks[0].hash, blockNumber: String(number) } },
+    releaseDigest: binding.releaseDigest, checkedAt: new Date().toISOString(), blockHash, blockNumber: String(number) } },
   (_, value) => typeof value === "bigint" ? value.toString() : value));
 }
