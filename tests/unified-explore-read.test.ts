@@ -60,6 +60,22 @@ describe("Unified verified source adapter", () => {
     expect(sources.ai).not.toHaveBeenCalled();
   });
 
+  it("does not mix a recent Robinhood receipt into an Ethereum filter", async () => {
+    recent.mockResolvedValue([{ chainId: 4663, row: { ...rh, tokenAddress: other, symbol: "RECENT" },
+      presentation: { tokenAddress: other, imageUrl: null, description: null, links: [] } }]);
+    const result = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain: 1 });
+    expect(result.items.every(item => item.chainId === 1)).toBe(true);
+    expect(result.items.some(item => item.symbol === "RECENT")).toBe(false);
+    expect(sources.rhMarkets).not.toHaveBeenCalled();
+  });
+
+  it("skips other networks' recent module store for a Base-only view", async () => {
+    await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain: 8453 });
+    expect(recent).not.toHaveBeenCalled();
+    expect(sources.eth).not.toHaveBeenCalled();
+    expect(sources.rh).not.toHaveBeenCalled();
+  });
+
   it("defensively removes owner-hidden Robinhood identities from the merged feed", async () => {
     const hidden = OWNER_HIDDEN_EXPLORE_IDENTITIES_V1.find(item => item.chainId === 4663)!;
     sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [rh, { ...rh, tokenAddress: hidden.identity, name: "Agent Live Test", symbol: "AGTEST" }], sourceEvidence: {} });

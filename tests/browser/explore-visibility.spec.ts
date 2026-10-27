@@ -35,6 +35,126 @@ test('standalone Explore fetches immediately',async({page})=>{
   expect(requests).toBe(1);
 });
 
+function navigationPayload(url: URL) {
+  const chain = Number(url.searchParams.get('chain')) || 0;
+  const label = chain === 8453 ? 'Base' : chain === 1 ? 'Ethereum' : chain === 4663 ? 'Robinhood' : 'All';
+  const total = chain === 8453 ? 1 : 20;
+  const number = Math.min(Number(url.searchParams.get('page') || 1), Math.ceil(total / 10));
+  const rows = Array.from({length: total}, (_, index) => ({
+    chainId: chain || (index % 2 ? 1 : 4663), mode: 'custom', category: 'custom',
+    launchId: '0x' + String(index + 1).padStart(64, '0'), tokenAddress: '0x' + String(index + 1).padStart(40, '0'),
+    hookAddress: '0x' + '11'.repeat(20), creator: '0x' + '22'.repeat(20),
+    transactionHash: '0x' + '33'.repeat(32), blockNumber: '100',
+    launchedAt: '2026-10-13T10:00:00Z', name: `${label} ${index + 1}`, symbol: `T${index + 1}`, decimals: 18,
+  }));
+  return {scope: 'all', status: 'ready', updatedAt: new Date().toISOString(),
+    items: rows.slice((number - 1) * 10, number * 10), presentations: [],
+    page: {number, size: 10, totalItems: total, totalPages: Math.ceil(total / 10), hasMore: number * 10 < total}};
+}
+
+for (const width of [1440, 390]) {
+  test(`cached chain changes restore immediately without another fetch at ${width}px`, async ({page}) => {
+    const requests: string[] = [];
+    await page.setViewportSize({width, height: 900});
+    await page.route('**/api/explore/launches?*', route => {
+      requests.push(route.request().url());
+      return route.fulfill({json: navigationPayload(new URL(route.request().url()))});
+    });
+    await page.goto(origin + '?standalone');
+    await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible();
+    await page.getByRole('button', {name: 'Filters', exact: true}).click();
+    await page.getByRole('button', {name: 'Base', exact: true}).click();
+    await expect(page.getByRole('link', {name: /^Base 1 /})).toBeVisible();
+    await page.getByRole('button', {name: 'All chains', exact: true}).click();
+    await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible({timeout: 1000});
+    expect(requests).toHaveLength(2);
+    await page.getByRole('button', {name: 'Base', exact: true}).click();
+    await expect(page.getByRole('link', {name: /^Base 1 /})).toBeVisible({timeout: 1000});
+    expect(requests).toHaveLength(2);
+  });
+}
+
+test('reset removes the chain selection and restores the cached all-chain result', async ({page}) => {
+  await page.route('**/api/explore/launches?*', route => route.fulfill({json: navigationPayload(new URL(route.request().url()))}));
+  await page.goto(origin + '?standalone');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible();
+  await page.getByRole('button', {name: 'Filters', exact: true}).click();
+  await page.getByRole('button', {name: 'Base', exact: true}).click();
+  await expect(page.getByRole('link', {name: /^Base 1 /})).toBeVisible();
+  await page.getByRole('button', {name: 'Reset', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'All chains', exact: true})).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible({timeout: 1000});
+});
+
+test('returning from a coin preserves the last chain and cached results', async ({page}) => {
+  let requests = 0;
+  await page.route('**/api/explore/launches?*', route => {
+    requests++;
+    return route.fulfill({json: navigationPayload(new URL(route.request().url()))});
+  });
+  await page.goto(origin + '?standalone&navigation');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible();
+  await page.getByRole('button', {name: 'Filters', exact: true}).click();
+  await page.getByRole('button', {name: 'Base', exact: true}).click();
+  await expect(page.getByRole('link', {name: /^Base 1 /})).toBeVisible();
+  await page.getByRole('button', {name: 'Toggle explore', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'Coin detail', exact: true})).toBeVisible();
+  await page.getByRole('button', {name: 'Toggle explore', exact: true}).click();
+  await expect(page.getByRole('link', {name: /^Base 1 /})).toBeVisible({timeout: 1000});
+  await expect(page.getByRole('link', {name: /^All 1 /})).toHaveCount(0);
+  expect(requests).toBe(2);
+});
+
+test('a click joins the pending page prefetch instead of issuing it twice', async ({page}) => {
+  const ready = Promise.withResolvers<void>();
+  let pageTwoRequests = 0;
+  await page.route('**/api/explore/launches?*', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('page') === '2') { pageTwoRequests++; await ready.promise; }
+    await route.fulfill({json: navigationPayload(url)});
+  });
+  await page.goto(origin + '?standalone');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible();
+  const next = page.getByRole('button', {name: 'Next page', exact: true});
+  try {
+    await next.hover();
+    await expect.poll(() => pageTwoRequests).toBe(1);
+    await next.click();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect(pageTwoRequests).toBe(1);
+  } finally { ready.resolve(); }
+  await expect(page.getByRole('link', {name: /^All 11 /})).toBeVisible();
+});
+
+test('Base cards retain the chain in their token link', async ({page}) => {
+  await page.route('**/api/explore/launches?*', route => route.fulfill({json: navigationPayload(new URL(route.request().url()))}));
+  await page.goto(origin + '?standalone');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible();
+  await page.getByRole('button', {name: 'Filters', exact: true}).click();
+  await page.getByRole('button', {name: 'Base', exact: true}).click();
+  await expect(page.getByRole('link', {name: /^Base 1 /})).toHaveAttribute('href', /\?chain=8453$/);
+});
+
+test('back remains responsive while the next page is pending and ignores its late reply', async ({page}) => {
+  const ready = Promise.withResolvers<void>();
+  await page.route('**/api/explore/launches?*', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('page') === '2') await ready.promise;
+    await route.fulfill({json: navigationPayload(url)}).catch(() => {});
+  });
+  await page.goto(origin + '?standalone');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible();
+  await page.getByRole('button', {name: 'Next page', exact: true}).click();
+  await expect(page.getByRole('list', {name: 'Programmable launches'})).toHaveAttribute('aria-busy', 'true');
+  await expect(page.getByRole('link', {name: /^All 1 /})).toHaveCount(0);
+  try {
+    await page.getByRole('button', {name: 'Previous page', exact: true}).click();
+    await expect(page.getByRole('link', {name: /^All 1 /})).toBeVisible({timeout: 1000});
+  } finally { ready.resolve(); }
+  await expect(page.getByRole('list', {name: 'Programmable launches'})).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByRole('link', {name: /^All 11 /})).toHaveCount(0);
+});
+
 test('Ethereum cards retain the unified index mode instead of Robinhood source heuristics', async ({page}) => {
   const address = `0x${'11'.repeat(20)}`, hash = `0x${'22'.repeat(32)}`;
   const modes = ['module', 'custom', 'classic'];

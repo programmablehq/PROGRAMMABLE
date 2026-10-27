@@ -108,7 +108,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     ...[...ethMarkets].map(([address, market]) => [`1:${address}`, market] as const),
   ]);
   const indexed = new Set([...rhRows, ...ethRows, ...baseRows, ...aiRows].map(exploreIdentityKey));
-  const recent = (await readRecentFoundationLaunches(indexed).catch(() => [])).filter(item => owned(item.row.creator));
+  const recent = (wants(1) || wants(4663) ? await readRecentFoundationLaunches(indexed).catch(() => []) : [])
+    .filter(item => wants(item.chainId) && owned(item.row.creator));
   const recentRows = recent.map(item => ({ ...item.row, chainId: item.chainId, mode: "module" as const,
     category: "custom" as const, confirmation: "confirmed" as const }));
   const known = new Set([...indexed, ...recentRows.map(exploreIdentityKey)]);
