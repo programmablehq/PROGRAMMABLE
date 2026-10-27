@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       }
     }
     const chart = await readCodexChart(address, chainId, range as CodexChartRange);
-    const refreshSeconds = chart.points.length ? CODEX_CHART_RANGES[range as CodexChartRange].refreshMs / 1_000 : 5;
+    const refreshSeconds = chart.points.length ? CODEX_CHART_RANGES[range as CodexChartRange].refreshMs / 1_000 : 120;
     return NextResponse.json(chart, { headers: { "Cache-Control": `public, max-age=${Math.min(15, refreshSeconds)}, s-maxage=${refreshSeconds}, stale-while-revalidate=30` } });
   } catch { return NextResponse.json({ error: "Price history is temporarily unavailable" }, { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "15" } }); }
 }
