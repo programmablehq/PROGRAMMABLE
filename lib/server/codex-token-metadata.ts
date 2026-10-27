@@ -15,6 +15,7 @@ const tokenText = (value: unknown, limit: number): string | null => typeof value
   && value.trim().length > 0 && value.length <= limit && !/[\p{Cc}\p{Cf}]/u.test(value) ? value.trim() : null;
 
 const METADATA_TTL_MS = 21_600_000;
+const MISSING_METADATA_TTL_MS = 900_000;
 type MetadataRead = Promise<CodexTokenMetadata | undefined>;
 const observations = new Map<string, { expiresAt: number; metadata?: CodexTokenMetadata }>();
 const pending = new Map<string, MetadataRead>();
@@ -46,7 +47,7 @@ const cachedMetadata = unstable_cache(async (addresses: string[], chainId: 1 | 4
   }
   return { entries: result, observedAt: Date.now() };
 // Artwork and social links do not need to be polled at the price refresh rate.
-}, ["codex-coin-metadata-v3"], { revalidate: METADATA_TTL_MS / 1_000 });
+}, ["codex-coin-metadata-v3"], { revalidate: MISSING_METADATA_TTL_MS / 1_000 });
 
 /** Display-only enrichment of known identities, independent of price refreshes. */
 export async function readCodexTokenMetadata(addresses: readonly string[], chainId: 1 | 4663): Promise<Map<string, CodexTokenMetadata>> {
@@ -80,9 +81,10 @@ export async function readCodexTokenMetadata(addresses: readonly string[], chain
       const key = identity(address, chainId);
       const read: MetadataRead = request.then(value => {
         const metadata = value.entries.get(address);
-        if (value.observedAt + METADATA_TTL_MS > Date.now()) {
+        const expiresAt = value.observedAt + (metadata ? METADATA_TTL_MS : MISSING_METADATA_TTL_MS);
+        if (expiresAt > Date.now()) {
           observations.delete(key);
-          observations.set(key, { metadata, expiresAt: value.observedAt + METADATA_TTL_MS });
+          observations.set(key, { metadata, expiresAt });
           while (observations.size > 8_192) observations.delete(observations.keys().next().value!);
         }
         return metadata;
