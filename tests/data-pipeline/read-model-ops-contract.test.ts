@@ -63,6 +63,13 @@ describe("Explore index-reset operations source contract", () => {
     ]));
   });
 
+  it("requires Ethereum health to observe the canonical identity reader", () => {
+    const path = "lib/server/ethereum-explore.ts";
+    const changed = source(path).replace("custom: readFinalizedRouterCustomIdentitySnapshotCoreV1",
+      "custom: readUnverifiedSnapshot");
+    expect(failureIds(evaluate({ [path]: changed }))).toContain("ops-health-catalog-observations");
+  });
+
   it("rejects any network capability restored to a public Explore route", () => {
     const path = "app/api/explore/route.ts";
     const result = evaluate({

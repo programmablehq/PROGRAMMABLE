@@ -2,7 +2,7 @@ import "server-only";
 import { readConfirmingEthereumLaunches } from "./confirming-launches";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 
-import { readWebsiteRouterCustomIdentitySnapshotV1 } from "@/lib/alchemy/router-custom-public.server";
+import { readFinalizedRouterCustomIdentitySnapshotCoreV1, readWebsiteRouterCustomIdentitySnapshotV1 } from "@/lib/alchemy/router-custom-public.server";
 import { readClassicLaunchCatalogV1 } from "@/lib/market-data/classic-launch-catalog.server";
 import { PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1, publicExploreCatalogEntriesV1, publicExplorePresentationEntryV1 } from "@/lib/public-explore-catalog-v1";
 import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
@@ -120,6 +120,15 @@ export async function readEthereumExploreCatalog(dependencies: Dependencies = re
   const sourceEvidence = { classic: classic.status === "fulfilled" ? classic.value.evidence ?? null : null,
     custom: custom.status === "fulfilled" ? custom.value.evidence ?? null : null };
   return { chainId: 1 as const, status, sources, sourceEvidence, updatedAt, entries };
+}
+
+/** Index health needs verified identities, not optional images or metadata. */
+export async function readEthereumIndexHealth() {
+  const catalog = await readEthereumExploreCatalog({
+    ...readers,
+    custom: readFinalizedRouterCustomIdentitySnapshotCoreV1,
+  });
+  return { status: catalog.status, updatedAt: catalog.updatedAt };
 }
 
 export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 10, dependencies?: Dependencies) {

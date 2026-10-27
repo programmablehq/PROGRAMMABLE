@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readEthereumExploreCatalog } from "./ethereum-explore";
+import { readEthereumIndexHealth } from "./ethereum-explore";
 import { readBaseExploreCatalog } from "./base-explore";
 import { readRobinhoodExploreCatalog } from "./robinhood-index/read";
 
@@ -85,7 +85,7 @@ function retainLastKnownGoodIndexes(
 }
 
 export function createOperationsHealthReader(readers: Readers = {
-  ethereum: readEthereumExploreCatalog, robinhood: readRobinhoodExploreCatalog, base: readBaseExploreCatalog,
+  ethereum: readEthereumIndexHealth, robinhood: readRobinhoodExploreCatalog, base: readBaseExploreCatalog,
 }) {
   let cached: { expiresAt: number; value: Awaited<ReturnType<typeof observe>> } | undefined;
   let inFlight: Promise<Awaited<ReturnType<typeof observe>>> | undefined;

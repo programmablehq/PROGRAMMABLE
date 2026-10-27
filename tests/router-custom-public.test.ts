@@ -658,11 +658,12 @@ describe("finalized Router Custom public projection", () => {
   it("falls back durably when the cold current read never settles", async () => {
     vi.useFakeTimers();
     const durable = routerCustomIdentitySnapshotFromSourceV1(source());
+    const readDurableSnapshot = vi.fn().mockResolvedValue(durable);
     const reader = createRouterCustomIdentitySnapshotReaderV1({
       now: () => Date.parse("2026-08-25T06:01:00.000Z"),
       currentReadTimeoutMs: 10,
       readCurrentSource: vi.fn(() => new Promise<never>(() => undefined)),
-      readDurableSnapshot: vi.fn().mockResolvedValue(durable),
+      readDurableSnapshot,
       persistDurableSnapshot: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -673,7 +674,30 @@ describe("finalized Router Custom public projection", () => {
         status: "last-known-good",
         entries: [customGraphExploreEntry],
       });
+      expect(readDurableSnapshot).toHaveBeenCalledOnce();
       await vi.advanceTimersByTimeAsync(30_000);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("retains a freshly verified status while a slow durable write finishes", async () => {
+    vi.useFakeTimers();
+    let finishWrite!: () => void;
+    const kept: Promise<unknown>[] = [];
+    const readDurableSnapshot = vi.fn().mockRejectedValue(new Error("no saved snapshot"));
+    const reader = createRouterCustomIdentitySnapshotReaderV1({
+      now: Date.now, currentReadTimeoutMs: 10,
+      readCurrentSource: async () => source(), readDurableSnapshot,
+      persistDurableSnapshot: () => new Promise<void>(resolve => { finishWrite = resolve; }),
+      keepRefreshAlive: task => { kept.push(task); },
+    });
+    try {
+      const pending = reader();
+      await vi.advanceTimersByTimeAsync(10);
+      await expect(pending).resolves.toMatchObject({ status: "current" });
+      expect(readDurableSnapshot).toHaveBeenCalledOnce();
+      finishWrite();
+      await Promise.all(kept);
+      await expect(reader()).resolves.toMatchObject({ status: "current" });
     } finally { vi.useRealTimers(); }
   });
 

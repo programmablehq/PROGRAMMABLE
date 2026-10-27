@@ -584,7 +584,8 @@ export function evaluateReadModelOperationsSourceContracts(
       typeof healthReader === "string" &&
       importedSpecifiers(healthReader).every(specifier => ["server-only", "./ethereum-explore", "./robinhood-index/read", "./base-explore"].includes(specifier)) &&
       !/(?:\bfetch\s*\(|\bprocess\.env\b|\bcreate(?:Public|Wallet)Client\b|\bimport\s*\()/u.test(healthReader) &&
-      healthReader.includes("ethereum: readEthereumExploreCatalog, robinhood: readRobinhoodExploreCatalog") &&
+      healthReader.includes("ethereum: readEthereumIndexHealth, robinhood: readRobinhoodExploreCatalog") &&
+      source("lib/server/ethereum-explore.ts")?.includes("custom: readFinalizedRouterCustomIdentitySnapshotCoreV1") &&
       healthReader.includes("base: readBaseExploreCatalog") &&
       healthReader.includes("const CACHE_TTL_MS = 15_000;") &&
       healthReader.includes("const READ_TIMEOUT_MS = 5_000;") &&

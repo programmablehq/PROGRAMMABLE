@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const readers = vi.hoisted(() => ({ ethereum: vi.fn(), robinhood: vi.fn(), base: vi.fn() }));
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumExploreCatalog: readers.ethereum }));
+vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumIndexHealth: readers.ethereum }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalog: readers.robinhood }));
 
 vi.mock("@/lib/server/base-explore", () => ({ readBaseExploreCatalog: readers.base }));
