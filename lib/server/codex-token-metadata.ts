@@ -22,7 +22,7 @@ const pending = new Map<string, MetadataRead>();
 const identity = (address: string, chainId: number) => `${chainId}:${address}`;
 const copy = (value: CodexTokenMetadata): CodexTokenMetadata => ({ ...value, links: value.links.map(link => ({ ...link })) });
 
-const cachedMetadata = unstable_cache(async (addresses: string[], chainId: 1 | 4663) => {
+async function fetchMetadata(addresses: string[], chainId: 1 | 4663) {
   const data = await codexQuery(query, { ids: addresses.map(address => ({ address, networkId: chainId })) });
   if (!Array.isArray(data.tokens) || data.tokens.length > addresses.length) throw new Error("Token metadata unavailable");
   const result: [string, CodexTokenMetadata][] = [];
@@ -46,8 +46,35 @@ const cachedMetadata = unstable_cache(async (addresses: string[], chainId: 1 | 4
     result.push([address, { name: tokenText(token.name, 128), symbol: tokenText(token.symbol, 32), imageUrl, description, links }]);
   }
   return { entries: result, observedAt: Date.now() };
-// Artwork and social links do not need to be polled at the price refresh rate.
-}, ["codex-coin-metadata-v3"], { revalidate: MISSING_METADATA_TTL_MS / 1_000 });
+}
+
+const cachedMetadata = unstable_cache(fetchMetadata,
+  ["codex-coin-metadata-v3"], { revalidate: MISSING_METADATA_TTL_MS / 1_000 });
+
+class IncompleteMetadata extends Error {
+  constructor(readonly observation: Awaited<ReturnType<typeof fetchMetadata>>) {
+    super("Token metadata is not complete yet");
+  }
+}
+
+// Persist complete artwork/social batches across server instances, not just
+// inside the process-local map. Missing tokens still get the short retry window.
+const cachedCompleteMetadata = unstable_cache(async (addresses: string[], chainId: 1 | 4663) => {
+  let observation = await cachedMetadata(addresses, chainId);
+  // A stale-while-revalidate hit from the short cache must not be pinned for
+  // another six hours by the outer cache.
+  if (Date.now() - observation.observedAt >= MISSING_METADATA_TTL_MS) observation = await fetchMetadata(addresses, chainId);
+  if (observation.entries.length !== addresses.length) throw new IncompleteMetadata(observation);
+  return observation;
+}, ["codex-complete-coin-metadata-v1"], { revalidate: METADATA_TTL_MS / 1_000 });
+
+async function readMetadata(addresses: string[], chainId: 1 | 4663) {
+  try { return await cachedCompleteMetadata(addresses, chainId); }
+  catch (error) {
+    if (error instanceof IncompleteMetadata) return error.observation;
+    throw error;
+  }
+}
 
 /** Display-only enrichment of known identities, independent of price refreshes. */
 export async function readCodexTokenMetadata(addresses: readonly string[], chainId: 1 | 4663): Promise<Map<string, CodexTokenMetadata>> {
@@ -74,7 +101,7 @@ export async function readCodexTokenMetadata(addresses: readonly string[], chain
     const missing = batch.filter(address => !result.has(address) && !reads.has(address)
       && !((observations.get(identity(address, chainId))?.expiresAt ?? 0) > Date.now()));
     if (!missing.length) continue;
-    const request = previous.then(() => cachedMetadata(batch, chainId))
+    const request = previous.then(() => readMetadata(batch, chainId))
       .then(value => ({ ...value, entries: new Map(value.entries) }));
     previous = request.catch(() => undefined);
     for (const address of missing) {

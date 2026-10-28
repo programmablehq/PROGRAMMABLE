@@ -32,6 +32,10 @@ cap overage but can stop market data when the quota is exhausted. Check usage
 trends before that happens. Keep dRPC balance warnings enabled and top-ups manual.
 Do not raise a spending cap or purchase a plan automatically to clear an alarm.
 
+Complete token artwork and social metadata share a six-hour cache across server
+instances. Missing metadata retains a 15-minute retry window. These display
+metadata caches do not extend the price or chart freshness limits.
+
 On an incident, inspect the current deployment and saved evidence, then repair
 the cause through the existing release route. Do not repeatedly restart workers,
 run full rescans, rotate keys, relax verification, or repeat a wallet transaction.
