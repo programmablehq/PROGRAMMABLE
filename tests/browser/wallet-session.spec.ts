@@ -927,6 +927,12 @@ test("another user's late link success cannot settle the current user's link", a
   await expect(page.getByLabel("SDK user", { exact: true })).toHaveText("fixture-user-beta");
   await expect(page.getByRole("dialog", { name: "SDK wallet dialog", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reject linking foreign account", exact: true }).click();
+  // The real rejection starts a fresh login for the foreign wallet. Its busy
+  // state is valid; checking the brief settled link state races that login.
+  await expectMethods(page, ["linkWallet", "logout", "disconnect-provider", "disconnect-provider", "login"]);
+  await expect(page.getByLabel("Selected account", { exact: true })).toHaveText("none");
+  await expect(page.getByRole("dialog", { name: "SDK wallet dialog", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel SDK login", exact: true }).click();
   await expect(page.getByLabel("Wallet busy", { exact: true })).toHaveText("false");
 });
 
