@@ -79,6 +79,20 @@ function expectIndependent(
 }
 
 describe("action RPC provider identity", () => {
+  it("keeps trading and claim providers independent of the public index primary", () => {
+    const current = productionPairEnvironment();
+    const readsMoved = { ...current,
+      PROGRAMMABLE_WEBSITE_MAINNET_READ_RPC_PRIMARY_PROVIDER: "alchemy",
+      PROGRAMMABLE_WEBSITE_MAINNET_READ_RPC_PRIMARY_URL: ALCHEMY_MAINNET_A,
+      PROGRAMMABLE_WEBSITE_MAINNET_READ_RPC_PRIMARY_ENDPOINT_COMMITMENT:
+        rpcProviderCommitment("endpoint", ALCHEMY_MAINNET_A),
+    };
+    expect(tradeActionRpcProvider(1, readsMoved)).toEqual(tradeActionRpcProvider(1, current));
+    expect(tradeActionRpcProviders(1, readsMoved)).toEqual(tradeActionRpcProviders(1, current));
+    expect(creatorClaimRpcProvider({ chainId: 1 }, readsMoved)).toEqual(creatorClaimRpcProvider({ chainId: 1 }, current));
+    expect(protocolRevenueRpcProviders(readsMoved)).toEqual(protocolRevenueRpcProviders(current));
+  });
+
   it("keeps transport credentials non-enumerable and error output redacted", () => {
     const providers = createActionRpcQuorum({
       chainId: 1,
