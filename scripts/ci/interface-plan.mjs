@@ -48,6 +48,7 @@ export function interfacePlan(paths) {
     browser,
     wallet: browser.length > 0 || customAI,
     customAI,
+    customAICompiler: any(/^(?:lib\/custom-ai\/(?:compiler|lifecycle|rule-|core-sources|feed-v2-code|composable-code)|scripts\/custom-ai\/|tests\/custom-ai-(?:compiler|lifecycle|events|rule-compiler|artifact)\.test\.ts)/u),
     migration: any(/(?:migration|wallet-provider|wallet-operation|chain-switch|app\/layout|app-shell)/u),
     moduleTools: any(/^(?:packages\/classic-modules\/|scripts\/(?:build-module-cli|module-cli|test\/module-cli)|contracts\/.*(?:module|Module))/u),
     activation: any(/^(?:contracts\/|config\/.*(?:custom|launch|registry)|lib\/custom-launch\/.*(?:discovery|manifest|release)|scripts\/.*(?:activation|release|clean-room)|docs\/operations\/releases\/)/u),

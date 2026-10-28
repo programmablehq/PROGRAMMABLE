@@ -49,6 +49,7 @@ test("build, release, and analysis retain all existing contract checks without a
   ]);
   assert.deepEqual(CONTRACT_CI_ANALYSIS, [
     ["npm", "run", "contracts:bootstrap"], ["npm", "run", "contracts:slither"],
+    ["slither-ai", ".", "--filter-paths", "lib|test|script", "--exclude-dependencies", "--fail-none"],
   ]);
   const commands = CONTRACT_CI_RELEASE.map((command) => command.join(" "));
   assert.ok(commands.includes("npm run modules:starter:test"));

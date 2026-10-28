@@ -150,7 +150,9 @@ contract CustomAILiquidityProgramV1 is ReentrancyGuardTransient, IUnlockCallback
             c.quote < r.token ? minimumTokens : amount - half
         );
         floor = uint128(Math.mulDiv(floor, 10_000 - c.maximumDeviationBps, 10_000));
-        if (floor == 0 || added < floor || added < minimumLiquidity || added > uint128(type(int128).max)) revert InvalidSettlement();
+        if (floor == 0 || added < floor || added < minimumLiquidity || added > uint128(type(int128).max)) {
+            revert InvalidSettlement();
+        }
         executed[executionId] = true;
         nextExecution = block.timestamp + c.interval;
         bytes memory data = abi.encode(key, added);

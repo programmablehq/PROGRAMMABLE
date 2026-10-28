@@ -918,8 +918,7 @@ contract CustomAILifecycleV1Test is Test {
         address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
         CustomAIProgramRouterV1.Destination[] memory destinations = new CustomAIProgramRouterV1.Destination[](1);
         destinations[0] = CustomAIProgramRouterV1.Destination(keccak256("compound"), predicted, 10_000);
-        CustomAIProgramRouterV1 allocator =
-            new CustomAIProgramRouterV1(
+        CustomAIProgramRouterV1 allocator = new CustomAIProgramRouterV1(
             factory, address(this), params.launchSalt, address(quote), destinations, address(0)
         );
         CustomAILiquidityProgramV1 program = new CustomAILiquidityProgramV1(

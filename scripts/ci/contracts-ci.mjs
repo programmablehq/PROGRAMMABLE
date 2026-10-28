@@ -68,6 +68,7 @@ export const CONTRACT_CI_RELEASE = Object.freeze([
 export const CONTRACT_CI_ANALYSIS = Object.freeze([
   ["npm", "run", "contracts:bootstrap"],
   ["npm", "run", "contracts:slither"],
+  ["slither-ai", ".", "--filter-paths", "lib|test|script", "--exclude-dependencies", "--fail-none"],
 ]);
 
 export function deterministicExclusion(scripts) {
@@ -120,9 +121,10 @@ export function validateBuildReceipt(receipt, expected) {
 
 function execute([command, ...args], { capture = false } = {}) {
   const isForge = ["forge", "forge-late", "forge-ai"].includes(command);
-  return execFileSync(isForge ? "forge" : command, args, {
-    cwd: isForge ? contracts : root,
-    env: { ...process.env, ...(isForge ? { FOUNDRY_PROFILE: command === "forge-late" ? "late-migration" : command === "forge-ai" ? "custom-ai" : "default" } : {}) },
+  const customAIAnalysis = command === "slither-ai";
+  return execFileSync(isForge ? "forge" : customAIAnalysis ? "slither" : command, args, {
+    cwd: isForge || customAIAnalysis ? contracts : root,
+    env: { ...process.env, ...(isForge || customAIAnalysis ? { FOUNDRY_PROFILE: command === "forge-late" ? "late-migration" : command === "forge-ai" || customAIAnalysis ? "custom-ai" : "default" } : {}) },
     encoding: capture ? "utf8" : undefined,
     maxBuffer: 32 * 1024 * 1024,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",

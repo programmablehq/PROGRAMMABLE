@@ -44,9 +44,8 @@ contract CustomAIProgramRouterDeployerV1 {
     ) external returns (address instance) {
         instance = predict(salt, f, creator, launchSalt, quote, targets, registry);
         if (instance.code.length == 0) {
-            instance = address(
-                new CustomAIProgramRouterV1{ salt: salt }(f, creator, launchSalt, quote, targets, registry)
-            );
+            instance =
+                address(new CustomAIProgramRouterV1{ salt: salt }(f, creator, launchSalt, quote, targets, registry));
         }
     }
 }
