@@ -39,12 +39,12 @@ on:
         default: ""
         type: string
       custom_v2_registry_live:
-        description: Expect Registry V2 to be live in the staged candidate; this does not change configuration
+        description: Require live Registry V2; otherwise follow reviewed configuration. This does not change configuration
         required: true
         default: false
         type: boolean
       custom_v2_generic_public_read_enabled:
-        description: Expect Generic V2 public reads to be ready in the staged candidate; this does not activate them
+        description: Require ready Generic V2 reads; otherwise follow production bindings. This does not activate them
         required: true
         default: false
         type: boolean
@@ -306,6 +306,21 @@ jobs:
             node scripts/bind-vercel-sensitive-production-metadata.mjs \
               --metadata-file "$metadata_file" \
               --vercel-project-id "$VERCEL_PROJECT_ID"
+
+      - name: Resolve Custom V2 expectations before deployment
+        id: custom-v2-policy
+        if: needs.release-gate.outputs.verified_custom_v2 == 'true'
+        env:
+          REQUESTED_REGISTRY_LIVE: ${{ inputs.custom_v2_registry_live }}
+          REQUESTED_GENERIC_READY: ${{ inputs.custom_v2_generic_public_read_enabled }}
+        run: >-
+          node scripts/resolve-custom-v2-staging-policy.mjs
+          --deployment-file config/custom-registry-v2.deployment.prelaunch.json
+          --metadata-file "$RUNNER_TEMP/vercel-production-env-metadata.json"
+          --project-id "$VERCEL_PROJECT_ID"
+          --registry-live "$REQUESTED_REGISTRY_LIVE"
+          --generic-ready "$REQUESTED_GENERIC_READY"
+          --github-output "$GITHUB_OUTPUT"
 
       - name: Validate staged legacy Explore API reset policy
         id: read-model-policy
@@ -1000,23 +1015,19 @@ jobs:
           STAGED_DEPLOYMENT_ID: ${{ steps.staged-deployment.outputs.deployment_id }}
           STAGED_TARGET_URL: ${{ steps.staged-deployment.outputs.target_url }}
           EXPECTED_GIT_HEAD: ${{ github.sha }}
-          REGISTRY_LIVE: ${{ inputs.custom_v2_registry_live }}
-          GENERIC_PUBLIC_READ_ENABLED: ${{ inputs.custom_v2_generic_public_read_enabled }}
+          REGISTRY_MODE: ${{ steps.custom-v2-policy.outputs.registry_mode }}
+          GENERIC_MODE: ${{ steps.custom-v2-policy.outputs.generic_mode }}
           DETAIL_RECORD_HASH: ${{ inputs.custom_v2_detail_record_hash }}
           AUTHENTICATED_INGRESS_EVIDENCE_SHA256: ${{ inputs.custom_v2_authenticated_ingress_evidence_sha256 }}
         run: |
           set -euo pipefail
-          registry_mode=prelaunch
-          generic_mode=disabled
-          if [ "$REGISTRY_LIVE" = true ]; then registry_mode=live; fi
-          if [ "$GENERIC_PUBLIC_READ_ENABLED" = true ]; then generic_mode=ready; fi
           evidence_path="$RUNNER_TEMP/custom-v2-stage-evidence.json"
           args=(
             --target-url "$STAGED_TARGET_URL"
             --deployment-id "$STAGED_DEPLOYMENT_ID"
             --git-head "$EXPECTED_GIT_HEAD"
-            --registry-mode "$registry_mode"
-            --generic-mode "$generic_mode"
+            --registry-mode "$REGISTRY_MODE"
+            --generic-mode "$GENERIC_MODE"
             --evidence-output "$evidence_path"
           )
           if [ -n "$DETAIL_RECORD_HASH" ]; then

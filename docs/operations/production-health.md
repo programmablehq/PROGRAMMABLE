@@ -36,6 +36,18 @@ Complete token artwork and social metadata share a six-hour cache across server
 instances. Missing metadata retains a 15-minute retry window. These display
 metadata caches do not extend the price or chart freshness limits.
 
+Market reads join an expired cache's in-flight refresh before responding. The
+same batch is fetched once, including when Next.js revalidates in the background.
+Failed reads retain the existing backoff; they do not turn old prices into fresh
+values. Empty provider results keep their bounded retry window.
+
+Website staging derives Registry V2 expectations from the reviewed deployment
+file and Generic V2 expectations from the bound production metadata. The
+dispatch booleans require an enabled state when selected; their default follows
+the existing configuration. A conflicting or ambiguous configuration fails
+before building a candidate. This does not enable a registry or a public feed;
+the candidate must still pass the existing runtime and signed evidence gates.
+
 On an incident, inspect the current deployment and saved evidence, then repair
 the cause through the existing release route. Do not repeatedly restart workers,
 run full rescans, rotate keys, relax verification, or repeat a wallet transaction.
