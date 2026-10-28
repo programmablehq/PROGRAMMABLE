@@ -48,7 +48,7 @@ async function fetchCodexQuery(query: string, variables: Record<string, unknown>
   if (!response.ok) {
     // A paused billing account affects every endpoint. Do not retry it per token or page.
     const retry = Number(response.headers.get("Retry-After"));
-    pauseProvider(response.status === 401 || response.status === 403 || response.status === 429
+    pauseProvider(response.status === 401 || response.status === 402 || response.status === 403 || response.status === 429
       ? 600 : retry > 0 ? retry : response.status >= 500 ? 2 : 15);
     void response.body?.cancel();
     throw new Error("Market data unavailable");
