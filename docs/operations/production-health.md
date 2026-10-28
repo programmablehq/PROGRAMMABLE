@@ -6,12 +6,14 @@ Run the read-only check with Node.js 24:
 node scripts/ops/production-health.mjs --state-dir /absolute/private/state-directory
 ```
 
-Each run makes seven public GET requests, at most two at once. It does not call
-provider APIs directly, trigger an index scan, create a submission, use a wallet
-or consume a paid launch. Requests and response sizes are bounded.
+Each run makes six public GET requests, at most two at once. Market probes read
+only the individual Ethereum and Robinhood reference tokens; they do not fetch
+an entire Explore catalog and trigger its market enrichment. The checker does
+not call provider APIs directly, trigger an index scan, create a submission,
+use a wallet or consume a paid launch. Requests and response sizes are bounded.
 
 The check validates the three chain indexes, current market observations,
-chain identities and the active Custom API. An empty Base catalog is valid.
+reference-token identities and the active Custom API. Base may have no public launches.
 Fresh cached values are valid; an old `ready` response is not. Index observations
 older than 20 minutes and market observations older than 35 minutes are reported.
 

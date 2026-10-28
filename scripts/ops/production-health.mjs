@@ -8,9 +8,8 @@ import { pathToFileURL } from "node:url";
 // Public, read-only samples. Never call a cron, full scan, wallet or write API.
 export const TARGETS = Object.freeze([
   { id: "indexes", url: "https://programmable.market/api/ops/health" },
-  { id: "ethereum", chainId: 1, url: "https://programmable.market/api/explore/launches?chain=1&sort=highest&page=1&pageSize=6" },
-  { id: "robinhood", chainId: 4663, url: "https://programmable.market/api/explore/launches?chain=4663&sort=highest&page=1&pageSize=6" },
-  { id: "base", chainId: 8453, url: "https://programmable.market/api/explore/launches?chain=8453&sort=highest&page=1&pageSize=6" },
+  { id: "ethereum", chainId: 1, tokenAddress: "0x1b54e762aa34cf6e28e9c082f2848e28e45da6b8", url: "https://programmable.market/api/explore/ethereum/presentation?token=0x1b54e762aa34cf6e28e9c082f2848e28e45da6b8" },
+  { id: "robinhood", chainId: 4663, tokenAddress: "0xc60ba256b44334a0cd2c7242e98b88f031abb006", url: "https://programmable.market/api/explore/robinhood/presentation?token=0xc60ba256b44334a0cd2c7242e98b88f031abb006" },
   { id: "api", url: "https://api.programmable.market/readyz" },
   { id: "robinhood-api", url: "https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness" },
   { id: "base-api", url: "https://api.programmable.market/v4/chains/8453/readiness" },
@@ -93,19 +92,14 @@ export function assessHealth(observations, now = Date.now()) {
         else if (index.status === "partial") add(`index-${chainId}:incomplete`, "warning");
       }
     } else if (target.chainId) {
-      if (!Array.isArray(body.items) || body.items.length > 6 || body.items.some(value => !object(value)) || !object(body.page)
-        || !Number.isSafeInteger(body.page.totalItems) || body.page.totalItems < 0
-        || !Array.isArray(body.presentations) || body.presentations.some(value => !object(value))
-        || !["ready", "partial", "syncing", "stale"].includes(body.status)) {
-        add(`${target.id}:invalid_catalog`); continue;
+      if (!Array.isArray(body.items) || body.items.length !== 1 || body.items.some(value => !object(value))) {
+        add(`${target.id}:market_data_missing`); continue;
       }
       const identities = body.items.map(identity);
-      if (new Set(identities).size !== identities.length || body.items.some(item => item.chainId !== target.chainId || !address.test(item.tokenAddress ?? ""))) add(`${target.id}:wrong_identity`);
-      summary[target.id].totalItems = body.page.totalItems;
-      // Base may legitimately have no public launches after internal checks are hidden.
-      if (!body.items.length) { if (target.chainId !== 8453) add(`${target.id}:empty_catalog`); continue; }
-      const markets = body.presentations.filter(value => identities.includes(identity(value))
-        && object(value.market) && Number.isFinite(value.market.priceUsd) && value.market.priceUsd > 0
+      if (new Set(identities).size !== identities.length || body.items.some(item => item.chainId !== undefined && item.chainId !== target.chainId
+        || !address.test(item.tokenAddress ?? "") || item.tokenAddress.toLowerCase() !== target.tokenAddress)) add(`${target.id}:wrong_identity`);
+      const markets = body.items.filter(value =>
+        object(value.market) && Number.isFinite(value.market.priceUsd) && value.market.priceUsd > 0
         && [value.market.marketCapUsd, value.market.fdvUsd].some(amount => Number.isFinite(amount) && amount > 0));
       if (!markets.length) add(`${target.id}:market_data_missing`);
       else if (markets.every(value => age(value.market.observedAt, now) > MARKET_MAX_AGE_MS || age(value.market.observedAt, now) < -2 * 60_000)) add(`${target.id}:market_data_stale`, "warning");

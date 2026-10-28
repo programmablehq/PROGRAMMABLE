@@ -4,7 +4,6 @@ import { advanceIncidentState, assessHealth, collectObservations, TARGETS } from
 
 const NOW = Date.parse("2026-10-28T13:00:00Z");
 const sourceCommit = "a".repeat(40);
-const tokenAddress = `0x${"ab".repeat(20)}`;
 const updatedAt = new Date(NOW - 60_000).toISOString();
 function healthy() {
   return TARGETS.map(target => {
@@ -14,9 +13,7 @@ function healthy() {
       indexes: [1, 4663, 8453].map(chainId => ({ chainId, status: "ready", updatedAt })),
     };
     else if (target.chainId) body = {
-      status: "ready", page: { totalItems: target.chainId === 8453 ? 0 : 100 },
-      items: target.chainId === 8453 ? [] : [{ chainId: target.chainId, tokenAddress }],
-      presentations: target.chainId === 8453 ? [] : [{ chainId: target.chainId, tokenAddress,
+      status: "ready", items: [{ chainId: target.chainId, tokenAddress: target.tokenAddress,
         market: { priceUsd: 1, marketCapUsd: 100, observedAt: updatedAt } }],
     };
     else if (target.id === "api") body = { status: "ready", sourceCommit };
@@ -25,7 +22,7 @@ function healthy() {
   });
 }
 
-test("accepts empty Base and fresh cached observations without false alarms", () => {
+test("accepts fresh cached observations without false alarms", () => {
   const observations = healthy();
   observations[0].body.status = "degraded";
   observations[0].body.indexes[0].status = "stale";
@@ -43,7 +40,7 @@ test("does not mistake a successful HTTP response for a usable service", () => {
 test("detects stale index and market data even when health says ready", () => {
   const observations = healthy();
   observations[0].body.indexes[0].updatedAt = new Date(NOW - 21 * 60_000).toISOString();
-  observations[1].body.presentations[0].market.observedAt = new Date(NOW - 36 * 60_000).toISOString();
+  observations[1].body.items[0].market.observedAt = new Date(NOW - 36 * 60_000).toISOString();
   assert.deepEqual(assessHealth(observations, NOW).issues.map(value => value.code), ["ethereum:market_data_stale", "index-1:stale"]);
 });
 
@@ -55,12 +52,12 @@ test("rejects wrong-chain, duplicate and malformed response identities", () => {
   const codes = assessHealth(observations, NOW).issues.map(value => value.code);
   assert.ok(codes.includes("indexes:invalid_response"));
   assert.ok(codes.includes("ethereum:wrong_identity"));
-  assert.ok(codes.includes("robinhood:wrong_identity"));
+  assert.ok(codes.includes("robinhood:market_data_missing"));
 });
 
 test("detects missing valuations rather than accepting empty price fields", () => {
   const observations = healthy();
-  observations[1].body.presentations[0].market.priceUsd = 0;
+  observations[1].body.items[0].market.priceUsd = 0;
   assert.ok(assessHealth(observations, NOW).issues.some(value => value.code === "ethereum:market_data_missing"));
 });
 
@@ -87,7 +84,7 @@ test("a single transient failure is cleared without creating an incident", () =>
   assert.deepEqual(advanceIncidentState(healthy.state, issues, NOW + 2).opened, []);
 });
 
-test("runs only seven public GETs, at most two concurrently, without retries or secrets", async () => {
+test("runs only six public GETs, at most two concurrently, without retries or secrets", async () => {
   let active = 0, maximum = 0;
   const calls = [];
   const results = await collectObservations(async (url, options) => {
@@ -104,6 +101,7 @@ test("runs only seven public GETs, at most two concurrently, without retries or 
   assert.ok(maximum <= 2);
   assert.ok(calls.every(call => call.options.method === "GET" && call.options.redirect === "error" && !call.options.headers));
   assert.ok(calls.every(call => !call.url.includes("/ops/robinhood-index") && !call.url.includes("/graphql")));
+  assert.ok(calls.every(call => !call.url.includes("/api/explore/launches")));
   assert.equal(results[0].error, "request_failed");
   assert.ok(!JSON.stringify(results).includes("private provider"));
 });
