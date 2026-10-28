@@ -1,8 +1,11 @@
 import "server-only";
 import { CustomAIError, type ChatMessage } from "./types";
+import { classifyProviderFailure, providerError } from "./provider-errors";
+import { providerHealth } from "./provider-health.server";
+import { AI_CONFIG } from "./ai-config";
 import { readServerEvents } from "./events";
 
-export const MODELS = { chat: "claude-haiku-5-5", build: "claude-sonnet-5-5", escalation: "claude-opus-5-5" } as const;
+export const MODELS = AI_CONFIG.models;
 export type Model = typeof MODELS[keyof typeof MODELS];
 export type ClaudeInput = { model: Model; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; signal?: AbortSignal; onText?: (text: string) => void };
 export type ClaudeResult = { text: string; inputTokens: number; outputTokens: number };
@@ -10,6 +13,8 @@ export type ClaudeResult = { text: string; inputTokens: number; outputTokens: nu
 export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new CustomAIError("configuration", "The builder is not connected yet.", 503);
+  const health = providerHealth();
+  await health.assertAvailable();
   const timeout = AbortSignal.timeout(60_000);
   const signal = input.signal ? AbortSignal.any([timeout, input.signal]) : timeout;
   let response: Response;
@@ -24,17 +29,27 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
     throw new CustomAIError("connection", "The reply did not arrive. Your draft is still here; try again shortly.", 503);
   }
   if (!response.ok) {
-    await response.body?.cancel();
-    throw new CustomAIError(`provider_${response.status}`, response.status === 429
-      ? "The builder is busy. Give it a moment, then try again."
-      : "The builder could not answer just now. Your draft is still here.", 503);
+    const reader = response.body?.getReader(); let body = "";
+    try {
+      while (reader && body.length < 8192) {
+        const { value, done } = await reader.read(); if (done) break;
+        body += new TextDecoder().decode(value).slice(0, 8192 - body.length);
+      }
+    } finally { await reader?.cancel().catch(() => undefined); }
+    const failure = classifyProviderFailure(response.status, body, response.headers.get("retry-after"));
+    await health.fail(failure);
+    throw providerError(failure);
   }
   if (input.onText && response.headers.get("content-type")?.includes("text/event-stream")) {
     let text = "", inputTokens = 0, outputTokens = 0, stopReason: unknown, stopped = false;
     try {
       for await (const event of readServerEvents(response)) {
         signal.throwIfAborted();
-        if (event.type === "error") throw new CustomAIError("provider_stream", "The reply was interrupted. Your draft is still saved; try again.", 503);
+        if (event.type === "error") {
+          // A streamed request may already have consumed provider tokens. Keep its cost reservation.
+          await health.fail({ kind: "stream", retryable: true, cooldownMs: 30_000, refundAccount: false });
+          throw new CustomAIError("provider_stream", "The reply was interrupted. Your draft is still saved; try again.", 503);
+        }
         if (event.type === "message_start") {
           const message = event.message as { usage?: { input_tokens?: number } } | undefined;
           inputTokens = message?.usage?.input_tokens ?? 0;

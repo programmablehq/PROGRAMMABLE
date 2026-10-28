@@ -36,6 +36,7 @@ export function interfacePlan(paths) {
   const full = !paths || paths.some(path => !interfaceVerificationPaths.has(path) && (globalInput.test(path)
     || (!sourceInput.test(path) && !/^(?:docs\/|scripts\/|packages\/|contracts\/|config\/|ops\/|supabase\/|indexer\/|AGENTS\.md|README\.md)/u.test(path))));
   const any = (pattern) => full || paths.some(path => pattern.test(path));
+  const customAI = any(/^(?:components\/custom-ai\/|app\/launch\/custom-ai\/|lib\/custom-ai\/(?:client|readiness|studio|conversation|coin-setup|events)|tests\/custom-ai-browser\/|playwright\.custom-ai\.config)/u);
   const browser = [...new Set(browserGroups.filter(([pattern]) => any(pattern)).flatMap(([, specs]) => specs))];
   for (const path of paths ?? []) {
     const match = path.match(/^tests\/browser\/([^/]+)\.spec\.ts$/u);
@@ -45,7 +46,8 @@ export function interfacePlan(paths) {
     full,
     verificationTools: Boolean(paths?.some(path => interfaceVerificationPaths.has(path))),
     browser,
-    wallet: browser.length > 0,
+    wallet: browser.length > 0 || customAI,
+    customAI,
     migration: any(/(?:migration|wallet-provider|wallet-operation|chain-switch|app\/layout|app-shell)/u),
     moduleTools: any(/^(?:packages\/classic-modules\/|scripts\/(?:build-module-cli|module-cli|test\/module-cli)|contracts\/.*(?:module|Module))/u),
     activation: any(/^(?:contracts\/|config\/.*(?:custom|launch|registry)|lib\/custom-launch\/.*(?:discovery|manifest|release)|scripts\/.*(?:activation|release|clean-room)|docs\/operations\/releases\/)/u),

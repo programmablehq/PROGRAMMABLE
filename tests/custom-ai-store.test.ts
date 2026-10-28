@@ -41,6 +41,14 @@ describe("shared Custom AI storage", () => {
     await store.finish("alice", input.id, reserved.lease!, { reply: "Couldn't build", chargedAs: "build", change: "blocked" });
     expect((await store.usage("alice")).hourly.used).toBe(5);
   });
+  it("refunds a rejected provider attempt once without erasing its cost reservation", async () => {
+    const attempt = await store.reserve("alice", request());
+    await store.finish("alice", attempt.job.id, attempt.lease!, undefined, "provider_billing");
+    await store.finish("alice", attempt.job.id, attempt.lease!, undefined, "provider_billing");
+    expect((await store.usage("alice")).hourly.used).toBe(0);
+    const global = await database.query<{ used: number }>("SELECT used FROM programmable_custom_ai_v1.budgets WHERE subject='global-day'");
+    expect(global.rows[0].used).toBe(5);
+  });
   it("holds a wallet across launch and trade dispatches until a definite outcome", async () => {
     const make=(id:string):WalletSession=>({id,account:"0x1000000000000000000000000000000000000001",chainId:1,state:"waiting",steps:[{
       id:`step-${id}`,kind:"approve",state:"dispatching",preparedBlock:"100",expiresAt:1800000000,

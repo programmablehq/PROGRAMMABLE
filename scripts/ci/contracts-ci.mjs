@@ -55,6 +55,8 @@ export const CONTRACT_CI_RELEASE = Object.freeze([
   ["npm", "run", "contracts:robinhood:owner-envelope:test"],
   // All default-profile artifact consumers have finished before the via-IR
   // profile writes its own compiler outputs. This avoids switching back.
+  ["forge-ai", "test"],
+  ["node", "scripts/custom-ai/export-composable.mjs", "--check"],
   ["forge-late", "lint", "src/late-migration"],
   ["forge-late", "build"],
   ["npm", "run", "contracts:late-migration:test"],
@@ -117,10 +119,10 @@ export function validateBuildReceipt(receipt, expected) {
 }
 
 function execute([command, ...args], { capture = false } = {}) {
-  const isForge = command === "forge" || command === "forge-late";
-  return execFileSync(command === "forge-late" ? "forge" : command, args, {
+  const isForge = ["forge", "forge-late", "forge-ai"].includes(command);
+  return execFileSync(isForge ? "forge" : command, args, {
     cwd: isForge ? contracts : root,
-    env: { ...process.env, ...(isForge ? { FOUNDRY_PROFILE: command === "forge-late" ? "late-migration" : "default" } : {}) },
+    env: { ...process.env, ...(isForge ? { FOUNDRY_PROFILE: command === "forge-late" ? "late-migration" : command === "forge-ai" ? "custom-ai" : "default" } : {}) },
     encoding: capture ? "utf8" : undefined,
     maxBuffer: 32 * 1024 * 1024,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",

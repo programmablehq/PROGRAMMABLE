@@ -26,6 +26,8 @@ export type LaunchSession = {
   steps: LaunchStep[]; module?: ModuleBinding; order?: LaunchOrder; token?: Address;
   rewardModule?: ModuleBinding;
   program?: import("./types").Draft["program"];
+  composable?: import("./rule-compiler.server").BoundRuleSpec;
+  programPlan?: import("./composable-program.server").ComposableProgramPlan;
   quoteNotice?: string;
   priceEvidence?: unknown;
 };

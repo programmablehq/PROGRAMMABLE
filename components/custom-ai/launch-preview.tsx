@@ -14,6 +14,9 @@ import { useCustomAILaunch } from "./use-launch";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 import styles from "./workspace.module.css";
+import { useWallet } from "@/components/wallet-provider";
+import { aiRequest } from "@/lib/custom-ai/client";
+import { designReadiness, type LaunchPreparation } from "@/lib/custom-ai/readiness";
 import { RuleReview } from "./rule-review";
 
 export function CustomAILaunchPreview({ draft, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother }: {
@@ -24,12 +27,16 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
   imageReceipt?: ImageReceipt; onImageReceipt: (receipt: ImageReceipt | undefined) => void;
   pendingChange?: string; onKeepRules: () => void; onStartAnother: () => void;
 }) {
+  const account = useWallet().wallet?.account;
+  const [preparation, setPreparation] = useState<LaunchPreparation>();
+  const headersRef = useRef(headers);
+  useEffect(() => { headersRef.current = headers; }, [headers]);
+  const preparationKey = JSON.stringify([editingSettings, account, imageReceipt?.id, draft?.sourceHash]);
   const fileInput = useRef<HTMLInputElement>(null);
   const imageRequest = useRef(0);
   const [image, setImage] = useState<{ blob: Blob; url: string }>();
-  const [reviewed, setReviewed] = useState<string>();
-  const reviewedSourceHash = !pendingChange && draft?.verification?.status === "passed" && reviewed === draft.sourceHash ? reviewed : undefined;
-  const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview });
+  const reviewedSourceHash = !pendingChange && draft?.verification?.status === "passed" && draft.verification.sourceHash === draft.sourceHash ? draft.sourceHash : undefined;
+  const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview, readyTicket: preparation?.inputKey === preparationKey && preparation?.revision === draft?.sourceHash ? preparation?.ticket : undefined });
   const bound = launch.saved?.session;
   const settings: CoinSetup = useMemo(() => bound ? { ...editingSettings, name: bound.settings.name, symbol: bound.settings.symbol,
     chainId: bound.chainId, initialBuy: bound.settings.initialBuy,
@@ -101,6 +108,26 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
       else if (parseEther(settings.initialBuy) < 10n ** 16n) buyError = "Minimum 0.01 ETH";
     }
   }
+  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), pendingChange,
+    name: settings.name, symbol: settings.symbol, image: Boolean(imageURL), connected: Boolean(account) });
+  useEffect(() => {
+    if (localPreview || !account || !draftId || !reviewedSourceHash || !imageReceipt || disabled || launch.locked || !editingSettings.name.trim() || !editingSettings.symbol.trim()) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setPreparation({ state: "working", message: "Preparing your launch…", revision: reviewedSourceHash, inputKey: preparationKey, expiresAt: 0 });
+      void aiRequest<LaunchPreparation>("/readiness", () => headersRef.current(), { draftId, account, imageId: imageReceipt.id,
+        settings: { name: editingSettings.name, symbol: editingSettings.symbol, chainId: editingSettings.chainId,
+          quote: setupQuoteAddress(editingSettings), initialBuy: editingSettings.initialBuy, imageURI: imageReceipt.url } }, controller.signal)
+        .then(result => setPreparation({ ...result, inputKey: preparationKey })).catch(error => { if (!controller.signal.aborted) setPreparation({ state: "blocked", message: error instanceof Error ? error.message : "The launch preparation could not finish.", revision: reviewedSourceHash, inputKey: preparationKey, expiresAt: 0 }); });
+    }, 750);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [localPreview, account, draftId, reviewedSourceHash, imageReceipt, disabled, launch.locked, editingSettings, preparationKey]);
+  useEffect(() => {
+    if (preparation?.state !== "ready") return;
+    const timer = setTimeout(() => setPreparation(current => current === preparation ? undefined : current), Math.max(0, preparation.expiresAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [preparation]);
+  const currentPreparation = preparation?.inputKey === preparationKey && preparation?.revision === reviewedSourceHash ? preparation : undefined;
   const summary = draft?.validation?.status === "passed" ? draft.hookSummary : undefined;
 
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
@@ -167,7 +194,8 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (isEth ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent")}</p>
       </fieldset>
       {!bound && <RuleReview draft={draft} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
-        onReview={checked => setReviewed(checked ? draft?.sourceHash : undefined)} onKeepRules={onKeepRules} />}
+        onReview={() => undefined} onKeepRules={onKeepRules} />}
+      {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
       <button type="button" className={styles.createButton} disabled={localPreview || disabled || imageBusy || launch.busy}
         onClick={() => { if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>

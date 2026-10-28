@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only", () => ({}));
+vi.mock("next/server", async original => ({ ...await original<object>(), after: (task: () => Promise<unknown>) => { void task(); } }));
 const runtime = vi.hoisted(() => ({ store: null as unknown, owner: "alice", run: vi.fn() }));
 vi.mock("../lib/custom-ai/auth.server", () => ({ authorizeCustomAI: async () => ({ kind: "account", owner: runtime.owner }) }));
 vi.mock("../lib/custom-ai/service.server", () => ({ runCustomAI: runtime.run }));

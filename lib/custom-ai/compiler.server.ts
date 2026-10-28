@@ -7,7 +7,7 @@ import { join } from "node:path";
 import core from "./core-sources.json";
 import { CustomAIError, type Draft, type FeeExpectation } from "./types";
 
-export async function compileDraft(source: string, signal?: AbortSignal, expectations: FeeExpectation[] = [], feed?: import("./feed").FeedBinding): Promise<Draft> {
+export async function compileDraft(source: string, signal?: AbortSignal, expectations: FeeExpectation[] = [], feed?: import("./feed").FeedBinding, composable?: import("./rule-compiler.server").BoundRuleSpec): Promise<Draft> {
   if (!source || source.length > 32_000) throw new CustomAIError("source", "The generated module is too large.", 502);
   // The sandbox toolchain is included explicitly in next.config.ts.
   const compiler = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
@@ -25,9 +25,9 @@ export async function compileDraft(source: string, signal?: AbortSignal, expecta
         { cwd: directory, env: { NODE_ENV: "production" }, encoding: "utf8", timeout: 35_000, maxBuffer: 2_000_000, signal },
         (error, stdout) => error ? reject(new CustomAIError("compiler", "The isolated module check did not finish.", 503)) : resolve(stdout));
       child.stdin?.on("error", () => undefined);
-      child.stdin?.end(JSON.stringify({ compilerInput: JSON.parse(input), expectations, feed }));
+      child.stdin?.end(JSON.stringify({ compilerInput: JSON.parse(input), expectations, feed, composable }));
     });
     const result = JSON.parse(output) as Omit<Draft, "source" | "sourceHash">;
-    return { ...result, ...(feed ? { feed } : {}), source, sourceHash: createHash("sha256").update(source).digest("hex") };
+    return { ...result, ...(feed ? { feed } : {}), ...(composable ? { composable } : {}), source, sourceHash: createHash("sha256").update(source).digest("hex") };
   } finally { await rm(directory, { recursive: true, force: true }); }
 }

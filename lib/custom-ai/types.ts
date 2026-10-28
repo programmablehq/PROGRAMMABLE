@@ -2,7 +2,7 @@ import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSe
 
 export type ChatMessage = { role: "user" | "assistant"; content: string; sources?: import("./knowledge").KnowledgeSource[] };
 export type ChatRequest = { id: string; intent: "chat" | "build"; messages: ChatMessage[]; coin?: CoinSetup; draftId?: string; contextId?: string };
-export type FeeExpectation = { afterSeconds: number; buy: boolean; totalFeeBps: number; feedValue?: string | null; feedFresh?: boolean | null };
+export type FeeExpectation = { afterSeconds: number; buy: boolean; totalFeeBps: number; feedValue?: string | null; feedFresh?: boolean | null; feeds?: import("./rule-evaluator").FeedSnapshot[] };
 export type RuleVerification = {
   status: "passed" | "blocked";
   sourceHash: string;
@@ -32,6 +32,7 @@ export type LifecycleCheck = {
     fixedRecipientsPaid: boolean; replayWithoutPayment: boolean }[];
 };
 export type Draft = {
+  composable?: import("./rule-compiler.server").BoundRuleSpec;
   feed?: import("./feed").FeedBinding;
   program?: { spec: import("./program").ProgramSpec; bundleHash: string; chainId: 1 | 4663; quote: `0x${string}`; available: boolean };
   verification?: RuleVerification;
@@ -61,7 +62,7 @@ export type Draft = {
     immutableReferences: Record<string, { start: number; length: number }[]>;
   };
 };
-export type ChatResult = { reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
   memory?: string; change?: "applied" | "unchanged" | "blocked"; unresolved?: string[]; chargedAs?: "build" | "research";
   sources?: import("./knowledge").KnowledgeSource[] };
 

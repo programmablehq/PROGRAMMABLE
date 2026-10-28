@@ -38,6 +38,18 @@ import { CustomAIDataFeedV1 } from "../../src/custom-ai/CustomAIDataFeedV1.sol";
 import { CustomAIThresholdFeeModuleV1 } from "../../src/custom-ai/CustomAIThresholdFeeModuleV1.sol";
 import { RewardProposalFixture } from "./CustomAIRewardsAndDataV1.t.sol";
 
+import { CustomAIProgramRouterV1 } from "../../src/custom-ai/CustomAIProgramRouterV1.sol";
+import { CustomAILiquidityProgramV1 } from "../../src/custom-ai/CustomAILiquidityProgramV1.sol";
+import { CustomAIExecutionPriceFeedV1 } from "../../src/custom-ai/CustomAIExecutionPriceFeedV1.sol";
+
+import { CustomAIProgramFactoryV1 } from "../../src/custom-ai/CustomAIProgramFactoryV1.sol";
+import { CustomAIProgramTypesV1 as PT } from "../../src/custom-ai/CustomAIProgramTypesV1.sol";
+import {
+    CustomAIProgramRouterDeployerV1,
+    CustomAILiquidityProgramDeployerV1,
+    CustomAIFundedProgramDeployerV1
+} from "../../src/custom-ai/CustomAIProgramDeployersV1.sol";
+
 contract LifecycleQuote is ERC20 {
     uint8 private immutable _decimals;
     bool public taxed;
@@ -107,6 +119,14 @@ contract LifecycleFeeModule is ICustomAIFeeModuleV1 {
             revert();
         }
         return (this.quoteFee.selector, fee, mode == 4 ? 0 : type(uint64).max, CONFIG);
+    }
+}
+
+contract ComposableFeeFixture is LifecycleFeeModule {
+    constructor(IPoolManager m) LifecycleFeeModule(m) { }
+
+    function actionState(bytes32, uint64) external view returns (bool, bytes32, uint64) {
+        return (true, keccak256("rain-event"), uint64(block.timestamp));
     }
 }
 
@@ -889,5 +909,112 @@ contract CustomAILifecycleV1Test is Test {
         program.withdraw(amount);
         assertEq(IERC20(launched.token).balanceOf(address(this)), amount);
         assertEq(program.totalStaked(), 0);
+    }
+
+    function test_composableFeesBecomeRealPermanentlyHeldLiquidity() public {
+        module = new ComposableFeeFixture(manager);
+        params.feeModule = T.ModuleBinding(address(module), address(module).codehash, module.CONFIG());
+        CustomAIExecutionPriceFeedV1 prices = new CustomAIExecutionPriceFeedV1(vm.addr(SIGNER_KEY));
+        address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
+        CustomAIProgramRouterV1.Destination[] memory destinations = new CustomAIProgramRouterV1.Destination[](1);
+        destinations[0] = CustomAIProgramRouterV1.Destination(keccak256("compound"), predicted, 10_000);
+        CustomAIProgramRouterV1 allocator =
+            new CustomAIProgramRouterV1(
+            factory, address(this), params.launchSalt, address(quote), destinations, address(0)
+        );
+        CustomAILiquidityProgramV1 program = new CustomAILiquidityProgramV1(
+            CustomAILiquidityProgramV1.Configuration({
+                factory: factory,
+                creator: address(this),
+                launchSalt: params.launchSalt,
+                allocator: allocator,
+                actionId: keccak256("compound"),
+                quote: address(quote),
+                maximumBatch: 0.01 ether,
+                maximumDeviationBps: 100,
+                interval: 600,
+                maxPriceAge: 120,
+                minimumObservations: 3,
+                minimumHistory: 60,
+                priceFeed: prices
+            })
+        );
+        assertEq(address(program), predicted);
+        params.rewards = T.Rewards(
+            CREATOR_FEE,
+            0,
+            T.ModuleBinding(address(allocator), address(allocator).codehash, allocator.configurationHash())
+        );
+        _prepare();
+        _launch();
+        vm.roll(200);
+        vm.setBlockhash(199, keccak256("checked-block"));
+        (uint160 sqrtPrice,,,) = StateLibrary.getSlot0(manager, PoolId.wrap(launched.poolId));
+        bytes32 executionId = keccak256(abi.encode(program.configurationHash(), keccak256("rain-event")));
+        CustomAIExecutionPriceFeedV1.Quote memory observation = CustomAIExecutionPriceFeedV1.Quote({
+            program: address(program),
+            poolId: launched.poolId,
+            executionId: executionId,
+            amount: 0.01 ether,
+            sqrtPriceX96: sqrtPrice,
+            observedAt: uint64(block.timestamp),
+            validUntil: uint64(block.timestamp + 120),
+            blockNumber: 199,
+            blockHash: keccak256("checked-block"),
+            observations: 3,
+            historySeconds: 60
+        });
+        (uint8 v, bytes32 r, bytes32 ss) = vm.sign(SIGNER_KEY, prices.digest(observation));
+        bytes memory proof = abi.encode(observation, abi.encodePacked(r, ss, v));
+        vm.expectRevert();
+        program.execute(executionId, 0.02 ether, 0, uint64(block.timestamp), proof);
+        vm.expectRevert();
+        program.execute(executionId, 0.01 ether, type(uint128).max, uint64(block.timestamp), proof);
+        assertEq(program.liquidity(), 0);
+        program.execute(executionId, 0.01 ether, 0, uint64(block.timestamp), proof);
+        assertGt(program.liquidity(), 0);
+        (uint128 held,,) = StateLibrary.getPositionInfo(
+            manager,
+            PoolId.wrap(launched.poolId),
+            address(program),
+            TickMath.minUsableTick(key.tickSpacing),
+            TickMath.maxUsableTick(key.tickSpacing),
+            keccak256("compound")
+        );
+        assertEq(held, program.liquidity());
+        assertTrue(program.executed(executionId));
+        vm.expectRevert();
+        program.execute(executionId, 0.01 ether, 0, uint64(block.timestamp), proof);
+        // Existing user selling and fixed platform fees still work independently.
+        _trade(false, true, IERC20(launched.token).balanceOf(address(this)) / 100, 1, 1500);
+        assertGt(CustomAIFeeLedgerV1(launched.ledger).platformReceived(), 0);
+        (bool removed,) = address(program).call(abi.encodeWithSignature("withdraw(uint256)", 1));
+        assertFalse(removed);
+    }
+
+    function test_programFactoryPredictsOneImmutableBundle() public {
+        CustomAIExecutionPriceFeedV1 prices = new CustomAIExecutionPriceFeedV1(vm.addr(SIGNER_KEY));
+        CustomAIProgramFactoryV1 programs = new CustomAIProgramFactoryV1(
+            factory,
+            new CustomAIProgramRouterDeployerV1(),
+            new CustomAILiquidityProgramDeployerV1(),
+            new CustomAIFundedProgramDeployerV1(),
+            prices
+        );
+        PT.Action[] memory actions = new PT.Action[](1);
+        actions[0] = PT.Action(keccak256("compound"), 0, 10_000, address(0), 0.01 ether, 0, 100, 600, 120, 3, 60);
+        PT.Launch memory configuration =
+            PT.Launch(factory, address(this), params.launchSalt, address(quote), 18, keccak256("rule-spec"), actions);
+        (address expected, address[] memory expectedPrograms,) = programs.predictPrograms(configuration);
+        (address deployed, address[] memory instances) = programs.deployPrograms(configuration);
+        assertEq(deployed, expected);
+        assertEq(instances[0], expectedPrograms[0]);
+        assertGt(instances[0].code.length, 0);
+        assertEq(programs.recipientOf(deployed, keccak256("compound")), instances[0]);
+        (address repeated,) = programs.deployPrograms(configuration);
+        assertEq(repeated, deployed);
+        configuration.actions[0].maximumBatch = 0.02 ether;
+        vm.expectRevert();
+        programs.deployPrograms(configuration);
     }
 }

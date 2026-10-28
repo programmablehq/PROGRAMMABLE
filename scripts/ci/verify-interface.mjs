@@ -24,9 +24,10 @@ if (maintenance) {
   process.exit(0);
 }
 if (mode === "browser-build") {
-  if (plan.wallet) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.wallet-lock.config.ts",
+  if (plan.browser.length) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.wallet-lock.config.ts",
     ...plan.browser.map(name => `${name}.spec.ts`)]);
   if (plan.migration) npm("test:browser:late-migration");
+  if (plan.customAI) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.custom-ai.config.ts"]);
   npm("build");
 } else {
   if (plan.full || plan.verificationTools) npm("test:ci-scope");

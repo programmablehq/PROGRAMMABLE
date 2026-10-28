@@ -252,6 +252,8 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       const request: ChatRequest = previousRequest && JSON.stringify({ ...previousRequest, id: undefined }) === JSON.stringify(payload)
         ? previousRequest : { ...payload, id: crypto.randomUUID() };
       retry.current = request;
+      await writeDraftCache(storageKey, JSON.stringify({ version: 1, messages: next, settings, draft, draftId, contextId,
+        pendingChange: content, image: imageReceipt, retry: request, syncBase: cachedBase.current }));
       const data = await sendAIChat(request, headers, controller.signal, event => {
         if (event.type === "reply") setRevealing(event.text);
         else setPhase(event);
@@ -354,6 +356,8 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         {busy ? <button type="button" className={styles.send}
           aria-label="Stop response" onClick={event => {
             event.preventDefault();
+            const id = retry.current?.id;
+            if (!localPreview && id) void aiRequest("/cancel", headers, { id }).catch(() => undefined);
             pending.current?.abort();
           }}>
           <Square size={15} strokeWidth={1.75} aria-hidden="true" />

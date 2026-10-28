@@ -1,3 +1,4 @@
+import { seedComposableFeeds } from "./composable-module.mjs";
 import { seedEventFeed } from "./event-module.mjs";
 // Runs only inside the compiler's permission-restricted child process.
 // This gate supports self-contained fee rules. External data adapters must be
@@ -84,7 +85,7 @@ export function inspectModule(ast) {
   return [...diagnostics];
 }
 
-export async function simulateModule(requireTool, contract, ast, expectations = [], feed) {
+export async function simulateModule(requireTool, contract, ast, expectations = [], feed, composable) {
   const { createVM } = requireTool("@ethereumjs/vm");
   const { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block");
@@ -118,6 +119,7 @@ export async function simulateModule(requireTool, contract, ast, expectations = 
     const vm = await createVM({ common });
     const block = timestamp => createBlock({ header: { number: 1n, timestamp, gasLimit: 30_000_000n } }, { common });
     if (feed) await seedEventFeed(requireTool, vm, feed, startedAt);
+    if (composable) await seedComposableFeeds(requireTool, vm, composable, startedAt);
     const deployed = await vm.evm.runCall({ caller, data: hexToBytes(`0x${contract.evm.bytecode.object}`), gasLimit: 5_000_000n, block: block(startedAt - 172800n) });
     if (deployed.execResult.exceptionError || !deployed.createdAddress) return { diagnostics: [`The module constructor failed on chain ${chainId}.`], cases, samples: [] };
     const to = deployed.createdAddress;
@@ -143,6 +145,7 @@ export async function simulateModule(requireTool, contract, ast, expectations = 
       const timestamp = startedAt + BigInt(expected.afterSeconds);
       try {
         if (feed) await seedEventFeed(requireTool, vm, feed, timestamp, expected.feedValue, expected.feedFresh);
+        if (composable) await seedComposableFeeds(requireTool, vm, composable, timestamp, expected.feeds);
         const data = await call("quoteFee", [{ poolId: `0x${"00".repeat(32)}`, router: caller.toString(),
           buy: expected.buy, exactInput, launchTimestamp: startedAt, specifiedAmount: 10n ** 18n }], timestamp);
         const [magic, bps, until, hash] = decodeFunctionResult({ abi: contract.abi, functionName: "quoteFee", data });
@@ -162,6 +165,7 @@ export async function simulateModule(requireTool, contract, ast, expectations = 
           const timestamp = startedAt + offset;
           try {
             if (feed) await seedEventFeed(requireTool, vm, feed, timestamp);
+            if (composable) await seedComposableFeeds(requireTool, vm, composable, timestamp);
             const data = await call("quoteFee", [{ poolId: `0x${(index % 2 ? "ab" : "00").repeat(32)}`,
               router: index % 2 ? "0x2000000000000000000000000000000000000002" : caller.toString(), buy, exactInput, launchTimestamp: startedAt, specifiedAmount: amount }], timestamp);
             if (data.length !== 258) throw new Error("returned an invalid response length");

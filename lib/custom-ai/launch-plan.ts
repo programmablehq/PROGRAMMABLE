@@ -1,3 +1,4 @@
+import composableCode from "./composable-manifest.json";
 import { concatHex, encodeAbiParameters, encodeFunctionData, formatUnits, getAddress, getCreate2Address, hashTypedData, keccak256, parseAbi,
   parseAbiParameters, stringToHex, verifyTypedData, zeroAddress, zeroHash, type Address, type Hex } from "viem";
 import { foundationSqrtPriceAtTick } from "@/lib/module-foundation/price";
@@ -31,7 +32,7 @@ export type LaunchPrice = { quoteUsdE18: bigint; ethUsdE18: bigint; observedAt: 
 export type LaunchOrder = {
   version: 1; chainId: 1 | 4663; factory: Address; account: Address; planHash: Hex;
   sourceHash: string; artifactHash: string; coreBundleHash: string;
-  rewardProgram?: { bundleHash: string; binding: ModuleBinding; creatorShareBps: number };
+  rewardProgram?: { version?: "composable-v2"; specHash?: string; bundleHash: string; binding: ModuleBinding; creatorShareBps: number };
   predictedToken: Address;
   parameters: LaunchParameters; price: LaunchPrice; signature: Hex; priceSigner: Address;
   transaction: { from: Address; to: Address; data: Hex; value: 0n; chainId: 1 | 4663 };
@@ -121,7 +122,7 @@ export async function bindCustomAILaunch(input: Omit<LaunchOrder, "version" | "p
   if (p.feeModule.runtimeHash === zeroHash || p.feeModule.configurationHash === zeroHash) throw Error("Invalid fee module binding.");
   const program = input.rewardProgram;
   if (program) {
-    if (program.bundleHash !== programManifest.bundleHash || !Number.isInteger(program.creatorShareBps)
+    if ((program.version === "composable-v2" ? program.bundleHash !== composableCode.bundleHash || !/^[a-f0-9]{64}$/.test(program.specHash ?? "") : program.bundleHash !== programManifest.bundleHash) || !Number.isInteger(program.creatorShareBps)
       || program.creatorShareBps < 0 || program.creatorShareBps >= 10000
       || program.creatorShareBps !== p.rewards.creatorShareBps
       || program.binding.instance === zeroAddress || program.binding.runtimeHash === zeroHash || program.binding.configurationHash === zeroHash
