@@ -23,4 +23,14 @@ describe("complete combined rules", () => {
     const later = evaluateRuleSpec(eventSpec, {elapsedSeconds:1300,now:1700,buy:true,feeds:[observation]});
     expect(first.actions[0].eventId).toBe(later.actions[0].eventId);
   });
+  it("holds a weather action until its countdown ends", () => {
+    const timed = normalizeRuleSpec({ ...fixture, actions: [{ ...fixture.actions[0], startsAtSeconds: 600,
+      when: {kind:"feed",feedId:"london-rain-v1",operator:"changed",value:"0"} }] });
+    const feeds = [rain("1")];
+    expect(evaluateRuleSpec(timed, {elapsedSeconds:599,now:1000,buy:true,feeds}).actions).toEqual([]);
+    expect(evaluateRuleSpec(timed, {elapsedSeconds:600,now:1000,buy:true,feeds}).actions).toHaveLength(1);
+  });
+  it("rejects a price window shorter than its required liquidity history", () => {
+    expect(() => normalizeRuleSpec({...fixture,actions:[{...fixture.actions[0],priceMaxAgeSeconds:30}]})).toThrow("60-second history");
+  });
 });

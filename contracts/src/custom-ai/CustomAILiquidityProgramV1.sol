@@ -120,8 +120,7 @@ contract CustomAILiquidityProgramV1 is ReentrancyGuardTransient, IUnlockCallback
         uint256 minimumTokens = _minimumTokens(half, q.sqrtPriceX96, c.quote < r.token, c.maximumDeviationBps);
         if (minimumTokens == 0) revert NotReady();
         IERC20(c.quote).forceApprove(address(c.factory.router()), half);
-        c.factory
-            .router()
+        c.factory.router()
             .swap(
                 key,
                 SwapParams(

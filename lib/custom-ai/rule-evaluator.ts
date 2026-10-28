@@ -32,7 +32,8 @@ export function evaluateRuleSpec(spec: RuleSpecV2, context: RuleContext) {
   }
   const totalFeeBps = fee(phase.fee);
   const usesChange = (c: RuleCondition): boolean => c.kind === "feed" ? c.operator === "changed" : c.conditions.some(usesChange);
-  const actions = spec.actions.flatMap(a => { const state = a.when ? condition(a.when) : { known: true, matches: true, events: [] };
+  const actions = spec.actions.flatMap(a => { if (context.elapsedSeconds < (a.startsAtSeconds ?? 0)) return [];
+    const state = a.when ? condition(a.when) : { known: true, matches: true, events: [] };
     return state.known && state.matches ? [{ id: a.id, eventId: `${state.events.sort().join("|")}${a.when && usesChange(a.when) ? "" : `:window:${Math.floor(context.now / a.intervalSeconds)}`}` }] : []; });
   return { totalFeeBps, phaseId: phase.id, requiredFeeds: [...used].sort(), actions };
 }

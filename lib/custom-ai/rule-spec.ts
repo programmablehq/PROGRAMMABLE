@@ -5,6 +5,7 @@ export type FeeExpression = { kind: "fixed"; buyBps: number; sellBps: number }
   | { kind: "conditional"; when: RuleCondition; then: FeeExpression; otherwise: FeeExpression };
 export type RuleAction = {
   id: string; kind: "liquidity" | "distribution" | "staking" | "buyback"; shareBps: number;
+  startsAtSeconds?: number;
   intervalSeconds: number; maximumQuote: string; maximumPriceDeviationBps: number; priceMaxAgeSeconds: number;
   minimumObservations: number; minimumTokensPerQuote?: string; when: RuleCondition | null; recipient: string; requirementIds: string[];
 };
@@ -55,8 +56,13 @@ export function normalizeRuleSpec(input: unknown): RuleSpecV2 {
     const recipient = text(x.recipient, /^(?:creator|0x[0-9a-fA-F]{40}|)$/); if (["liquidity", "staking"].includes(String(x.kind)) && recipient !== "" || ["distribution", "buyback"].includes(String(x.kind)) && recipient === "") fail();
     const minimumTokensPerQuote = x.minimumTokensPerQuote === undefined ? "0" : text(x.minimumTokensPerQuote, /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/);
     if (x.kind === "buyback" && Number(minimumTokensPerQuote) <= 0) fail();
-    return { minimumTokensPerQuote, id: id(x.id), kind: x.kind as RuleAction["kind"], shareBps: integer(x.shareBps, 1, 10000), intervalSeconds: integer(x.intervalSeconds, 60, 31536000), maximumQuote,
-      maximumPriceDeviationBps: integer(x.maximumPriceDeviationBps, 1, 1000), priceMaxAgeSeconds: integer(x.priceMaxAgeSeconds, 15, 3600),
+    const priceMaxAgeSeconds = integer(x.priceMaxAgeSeconds, 15, 3600);
+    const startsAtSeconds = x.startsAtSeconds === undefined ? 0 : integer(x.startsAtSeconds, 0, 315360000);
+    if (x.kind === "liquidity" && priceMaxAgeSeconds < 60) throw Error("Liquidity price data must cover the required 60-second history.");
+    if (x.kind !== "liquidity" && startsAtSeconds !== 0) throw Error("Delayed actions currently require the locked liquidity program.");
+    return { minimumTokensPerQuote, id: id(x.id), kind: x.kind as RuleAction["kind"], shareBps: integer(x.shareBps, 1, 10000),
+      startsAtSeconds, intervalSeconds: integer(x.intervalSeconds, 60, 31536000), maximumQuote,
+      maximumPriceDeviationBps: integer(x.maximumPriceDeviationBps, 1, 1000), priceMaxAgeSeconds,
       minimumObservations: integer(x.minimumObservations, 3, 100), when: x.when === null ? null : condition(x.when), recipient, requirementIds: refs(x.requirementIds) }; });
   const creatorShareBps = integer(v.creatorShareBps, 0, 10000);
   if (creatorShareBps + actions.reduce((n, a) => n + a.shareBps, 0) !== 10000 || new Set(actions.map(a => a.id)).size !== actions.length
@@ -75,7 +81,8 @@ Phases start at zero, are contiguous and ordered, and the final endsAtSeconds is
 fee is {kind:"fixed",buyBps,sellBps}, {kind:"ramp",fromBuyBps,toBuyBps,fromSellBps,toSellBps,durationSeconds}, or {kind:"conditional",when,then,otherwise}.
 when is {kind:"feed",feedId,operator:"lt"|"gte"|"eq"|"changed",value:integer-string}, or {kind:"all"|"any",conditions:[when,...]}.
 Missing/stale data in a required condition falls back to 50 total bps. An unused future feed does not affect an earlier time phase.
-Each action is {id,kind:"liquidity"|"distribution"|"staking"|"buyback",shareBps,intervalSeconds,maximumQuote:decimal-string,maximumPriceDeviationBps,priceMaxAgeSeconds,minimumObservations,minimumTokensPerQuote:decimal-string,when:null|condition,recipient,requirementIds}.
+Each action is {id,kind:"liquidity"|"distribution"|"staking"|"buyback",shareBps,startsAtSeconds,intervalSeconds,maximumQuote:decimal-string,maximumPriceDeviationBps,priceMaxAgeSeconds,minimumObservations,minimumTokensPerQuote:decimal-string,when:null|condition,recipient,requirementIds}.
+startsAtSeconds is elapsed time after launch; use it to keep an event-gated liquidity action inactive until the requested countdown ends. Liquidity priceMaxAgeSeconds must be at least 60 to cover its required history.
 Liquidity/staking recipient is empty; distribution/buyback recipient is creator or an explicitly supplied address. Creator share plus action shares is 10000. No actions means creatorShareBps=10000. maximumQuote is positive for liquidity/buyback and zero for distribution/staking. Event conditions on actions currently apply only to liquidity.
 Preserve the saved requirement ids and unchanged rules on edits. Every requirement must be covered by phase/action requirementIds.
 Do not invent financial allocations, price limits or data feeds. Ask one focused question for missing material choices. A desired feed can be described as unconnected; that design is not launch ready.

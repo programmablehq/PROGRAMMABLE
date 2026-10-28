@@ -54,7 +54,7 @@ export function composableModuleSource(spec, feeds) {
   const actions=(spec.actions??[]).map(action=>{
     if(!/^[a-z][a-z0-9-]{0,63}$/.test(action.id))throw Error("Invalid action id");
     const fn=action.when?condition(action.when):null;
-    return `if(actionId==keccak256(bytes("${action.id}"))){${fn?`(bool known,bool matched,bytes32 e)=${fn}(launched);return(known&&matched,keccak256(abi.encode(configurationHash,actionId,e${usesChange(action.when)?"":`,block.timestamp/${integer(action.intervalSeconds,60,31536000)}`})),uint64(block.timestamp));`:`return(true,keccak256(abi.encode(configurationHash,actionId,block.timestamp/${integer(action.intervalSeconds,60,31536000)})),uint64(block.timestamp));`}}`;
+    return `if(actionId==keccak256(bytes("${action.id}"))){if(block.timestamp<uint256(launched)+${integer(action.startsAtSeconds??0)})return(false,bytes32(0),0);${fn?`(bool known,bool matched,bytes32 e)=${fn}(launched);return(known&&matched,keccak256(abi.encode(configurationHash,actionId,e${usesChange(action.when)?"":`,block.timestamp/${integer(action.intervalSeconds,60,31536000)}`})),uint64(block.timestamp));`:`return(true,keccak256(abi.encode(configurationHash,actionId,block.timestamp/${integer(action.intervalSeconds,60,31536000)})),uint64(block.timestamp));`}}`;
   });
   const hash=ruleSpecHash(spec);
   return `// SPDX-License-Identifier: MIT

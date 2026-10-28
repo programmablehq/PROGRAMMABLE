@@ -14,6 +14,9 @@ export function ruleExpectations(spec: RuleSpecV2, feeds: RuleFeedBinding[]): Fe
     if (phase.startsAtSeconds) { times.add(phase.startsAtSeconds - 1); times.add(phase.startsAtSeconds); times.add(phase.startsAtSeconds + 1); }
     if (phase.fee.kind === "ramp") times.add(phase.startsAtSeconds + Math.floor(phase.fee.durationSeconds / 2));
   }
+  for (const action of spec.actions) if (action.startsAtSeconds) {
+    times.add(action.startsAtSeconds - 1); times.add(action.startsAtSeconds); times.add(action.startsAtSeconds + 1);
+  }
   const rows: FeeExpectation[] = [];
   for (const time of times) for (const buy of [true, false]) for (const variant of [0, 1, 2]) {
     const now = 1_800_000_000 + time;

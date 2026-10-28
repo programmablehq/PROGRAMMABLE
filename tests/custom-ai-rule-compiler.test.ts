@@ -1,14 +1,14 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { encodeDeployData, keccak256, type Abi, type Hex } from "viem";
+import { decodeFunctionResult, encodeDeployData, encodeFunctionData, keccak256, stringToHex, type Abi, type Hex } from "viem";
 vi.mock("server-only", () => ({}));
 import template from "../lib/custom-ai/feed-v2-code.json";
 import fixture from "./fixtures/custom-ai/london-liquidity-v2.json";
 import { normalizeRuleSpec } from "../lib/custom-ai/rule-spec";
 import { compileRuleSpec, type RuleFeedBinding } from "../lib/custom-ai/rule-compiler.server";
 import { compileDraft } from "../lib/custom-ai/compiler.server";
-import { composableModuleSource } from "../scripts/custom-ai/composable-module.mjs";
+import { composableModuleSource, seedComposableFeeds } from "../scripts/custom-ai/composable-module.mjs";
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("composed rule EVM evidence", () => {
   let feed: RuleFeedBinding;
   beforeAll(async () => {
@@ -49,4 +49,33 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("composed rule EVM evidence
     expect(result.validation?.status).toBe("blocked");
     expect(result.artifact).toBeUndefined();
   }, 30000);
+  it("enforces the delayed weather action in actual EVM calls", async () => {
+    const spec = normalizeRuleSpec({...fixture,actions:[{...fixture.actions[0],startsAtSeconds:600,
+      when:{kind:"feed",feedId:feed.id,operator:"changed",value:"0"}}]});
+    const result = await compileRuleSpec(spec,1,[feed]);
+    expect(result.validation?.status).toBe("passed");
+    const tool = createRequire(join(process.env.CUSTOM_AI_COMPILER_DIR!, "package.json"));
+    const {createVM}=tool("@ethereumjs/vm"), {createBlock}=tool("@ethereumjs/block");
+    const {createCustomCommon,Mainnet,Hardfork}=tool("@ethereumjs/common");
+    const {createAddressFromString,hexToBytes,bytesToHex}=tool("@ethereumjs/util");
+    const common=createCustomCommon({chainId:1},Mainnet,{hardfork:Hardfork.Cancun});
+    const vm=await createVM({common});
+    const caller=createAddressFromString("0x8000000000000000000000000000000000000008");
+    const deployed=await vm.evm.runCall({caller,gasLimit:5000000n,data:hexToBytes(result.artifact!.initCode)});
+    expect(deployed.execResult.exceptionError).toBeUndefined();
+    const action = keccak256(stringToHex("compound"));
+    const events: Hex[]=[];
+    for (const now of [1599,1600,2200]) {
+      await seedComposableFeeds(tool,vm,result.composable!,BigInt(now),[{feedId:feed.id,sequence:"2",transitionSequence:"1",
+        value:"1",previousValue:"0",changedAt:1300,observedAt:now,validUntil:now+1800,fresh:true}]);
+      const call=await vm.evm.runCall({caller,to:deployed.createdAddress,gasLimit:1000000n,
+        block:createBlock({header:{timestamp:BigInt(now)}},{common}),
+        data:hexToBytes(encodeFunctionData({abi:result.artifact!.abi,functionName:"actionState",args:[action,1000n]}))});
+      expect(call.execResult.exceptionError).toBeUndefined();
+      const state=decodeFunctionResult({abi:result.artifact!.abi,functionName:"actionState",data:bytesToHex(call.execResult.returnValue)}) as [boolean,Hex,bigint];
+      expect(state[0]).toBe(now>=1600);
+      if(state[0])events.push(state[1]);
+    }
+    expect(events[0]).toBe(events[1]);
+  },90000);
 });

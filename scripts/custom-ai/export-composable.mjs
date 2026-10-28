@@ -10,15 +10,20 @@ for (const name of contracts) {
   const raw = JSON.parse(await readFile(resolve(root, `contracts/out/custom-ai/${name.endsWith("DeployerV1") ? "CustomAIProgramDeployersV1" : name}.sol/${name}.json`), "utf8"));
   const metadata = typeof raw.metadata === "string" ? JSON.parse(raw.metadata) : raw.metadata;
   const sourceHashes = [];
-  for (const [path, source] of Object.entries(metadata.sources)) {
+  for (const [path, source] of Object.entries(metadata.sources).sort(([a], [b]) => a.localeCompare(b, "en"))) {
     const absolute = resolve(root, "contracts", path);
     if (!absolute.startsWith(resolve(root, "contracts") + "/")) throw Error("Invalid artifact source path");
     const content = await readFile(absolute);
     if (keccak256(content) !== source.keccak256) throw Error(`Stale contract artifact: ${path}`);
     sourceHashes.push({ path, sha256: sha(content) });
   }
+  // AST ids depend on which other sources solc compiled in the same batch.
+  // Bind the actual immutable offsets so clean and incremental builds agree.
+  const immutableReferences = Object.fromEntries(Object.values(raw.deployedBytecode.immutableReferences ?? {})
+    .map(offsets => [...offsets].sort((a, b) => a.start - b.start))
+    .sort((a, b) => a[0].start - b[0].start).map((offsets, index) => [String(index + 1), offsets]));
   entries[name] = { abi: raw.abi, initCode: raw.bytecode.object, runtimeTemplate: raw.deployedBytecode.object,
-    immutableReferences: raw.deployedBytecode.immutableReferences ?? {}, sourceHashes };
+    immutableReferences, sourceHashes };
 }
 const output = { version: "custom-ai-composable-v2", contracts: entries };
 const bundle = { ...output, bundleHash: sha(JSON.stringify(output)) };

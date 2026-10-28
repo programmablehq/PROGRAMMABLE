@@ -6,6 +6,8 @@ The new code supports consecutive fee phases, linear ramps, fixed fees and bound
 
 A weather-change action uses a transition id; repeated readings of the same observation and later execution windows do not create another transition. Normal recurring actions use their configured interval. All financial values and recipients remain explicit in the visible design.
 
+Liquidity actions can also have a start delay after launch. The generated module enforces that delay before allowing an event to trigger execution. Their price validity must cover at least the required 60 seconds of historical observations.
+
 ## Network activation
 
 The operator must provide a matching `CUSTOM_AI_COMPOSABLE_RELEASES` record for each network with the checked bundle hash, acceptance evidence hash, program factory, supported feed ids and action kinds. This configuration is absent by default. Runtime reads verify the factory, helper contracts, core binding and live operational dependencies. Existing launch transactions cannot be converted to a different core or program version.
