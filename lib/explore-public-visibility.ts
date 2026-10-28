@@ -88,6 +88,7 @@ export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
   Object.freeze({ chainId: 4663, identity: "0xee5d9574c8d5e07599d6012b34e5a189714c9021" }), // PMCHECK reliability release canary
   Object.freeze({ chainId: 4663, identity: "0x1928ba9532fe73d331f309faffa56a0f76238828" }), // Owned MODLIVE release check; launch 4922312d-21de-4311-b1ee-2684944aee65
   Object.freeze({ chainId: 4663, identity: "0xb2b92ec4f4fb8ac02edd65ae8f677974f31f5f17" }), // Owner-approved PMRC28 reliability release check
+  Object.freeze({ chainId: 8453, identity: "0xbc87674d279f701253dae23233222744d1232b5a" }), // Owned PMBASE21 integration canary; launch 25e327fa-3eb5-438d-af49-5017e13766ae
   Object.freeze({ chainId: 1, identity: "0x1a6a3948b0c54670b634dd2a54598793ee192895" }),
   Object.freeze({ chainId: 1, identity: "0xe2f175af5edf2ba4793ecdad94888fcdc5e1ab5f" }),
   Object.freeze({ chainId: 1, identity: "0xface73b63787960282f2d4682d3752beb25271ad" }),
