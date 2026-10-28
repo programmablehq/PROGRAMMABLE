@@ -97,7 +97,7 @@ async function sharedRead<T>(key: string, read: () => Promise<T>): Promise<T> {
   } finally { pending.delete(key); }
 }
 
-const cachedMarkets = unstable_cache(async (identities: readonly Identity[], chainId: number) => {
+async function fetchMarkets(identities: readonly Identity[], chainId: number) {
   const addresses = identities.map(token => token.tokenAddress);
   const pools = [...new Set(identities.map(token => token.poolId))];
   const data = await codexQuery(marketQuery, { tokens: addresses.map(address => `${address}:${chainId}`), pairs: pools.map(pool => `${pool}:${chainId}`) });
@@ -147,7 +147,35 @@ const cachedMarkets = unstable_cache(async (identities: readonly Identity[], cha
   // Empty results are observations too. Keep their age so an unpriced token
   // does not force another paid query on every page or catalog refresh.
   return { entries, observedAt };
-}, ["codex-token-markets-v6"], { revalidate: 900 });
+}
+
+type MarketBatch = Awaited<ReturnType<typeof fetchMarkets>>;
+const marketBatches = new Map<string, MarketBatch>();
+function currentMarkets(value: MarketBatch) {
+  const age = Date.now() - Date.parse(value.observedAt);
+  return Number.isFinite(age) && age >= 0 && age < MARKET_OBSERVATION_TTL_MS;
+}
+function freshMarkets(identities: readonly Identity[], chainId: number) {
+  const key = `market-source:${chainId}:${JSON.stringify(identities)}`;
+  const saved = marketBatches.get(key);
+  if (saved && currentMarkets(saved)) return Promise.resolve(saved);
+  return sharedRead(key, async () => {
+    const value = await fetchMarkets(identities, chainId);
+    marketBatches.delete(key); marketBatches.set(key, value);
+    while (marketBatches.size > 128) marketBatches.delete(marketBatches.keys().next().value!);
+    return value;
+  });
+}
+const cachedMarkets = unstable_cache(freshMarkets, ["codex-token-markets-v6"], { revalidate: 900 });
+
+async function readMarketBatch(identities: readonly Identity[], chainId: number) {
+  const cached = await cachedMarkets(identities, chainId);
+  // Next serves an expired observation while its background refresh runs.
+  // Join that same source read instead of turning a refresh into missing prices.
+  const value = currentMarkets(cached) ? cached : await freshMarkets(identities, chainId);
+  if (!currentMarkets(value)) throw new Error("Market data unavailable");
+  return value;
+}
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
 export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
@@ -194,7 +222,7 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
         && !((marketObservations.get(marketIdentity(token, chainId))?.expiresAt ?? 0) > Date.now()));
       if (!missing.length) continue;
       providerBatches += 1;
-      const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => cachedMarkets(batch, chainId))
+      const batchRead = sharedRead(`markets:${chainId}:${JSON.stringify(batch)}`, () => readMarketBatch(batch, chainId))
         .then(observation => ({ ...observation, entries: new Map(observation.entries) }));
       for (const token of missing) {
         const key = marketIdentity(token, chainId);

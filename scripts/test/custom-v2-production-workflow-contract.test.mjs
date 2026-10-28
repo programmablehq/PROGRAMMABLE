@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { resolveCustomV2StagingPolicy } from "../resolve-custom-v2-staging-policy.mjs";
 
 const deploy = readFileSync(".github/workflows/deploy-production.yml", "utf8");
 const standaloneReconcile = readFileSync(
@@ -99,7 +100,7 @@ test("trusted-base classification bootstraps Custom V2 without narrowing legacy 
   assert.match(block, /changing or narrowing any trusted-base legacy result/u);
 });
 
-test("Custom V2 stage expectations are explicit, observational, and default disabled", () => {
+test("Custom V2 stage expectations inherit reviewed configuration before any deployment", () => {
   for (const input of [
     "custom_v2_registry_live",
     "custom_v2_generic_public_read_enabled",
@@ -112,8 +113,14 @@ test("Custom V2 stage expectations are explicit, observational, and default disa
       ),
     );
   }
-  assert.match(deploy, /this does not change configuration/u);
-  assert.match(deploy, /this does not activate them/u);
+  assert.match(deploy, /[Tt]his does not change configuration/u);
+  assert.match(deploy, /[Tt]his does not activate them/u);
+  const policy = stepBlock(deploy, "Resolve Custom V2 expectations before deployment");
+  assert.match(policy, /resolve-custom-v2-staging-policy\.mjs/u);
+  assert.match(policy, /config\/custom-registry-v2\.deployment\.prelaunch\.json/u);
+  assert.match(policy, /vercel-production-env-metadata\.json/u);
+  assert.ok(deploy.indexOf("Resolve Custom V2 expectations before deployment") <
+    deploy.indexOf("Stage production source build without assigning domains"));
   assert.match(
     deploy,
     /verified_custom_v2: \$\{\{ steps\.verify-proof\.outputs\.verified_custom_v2 \}\}/u,
@@ -135,6 +142,9 @@ test("Custom V2 stage expectations are explicit, observational, and default disa
     /STAGED_TARGET_URL: \$\{\{ steps\.staged-deployment\.outputs\.target_url \}\}/u,
   );
   assert.match(gate, /EXPECTED_GIT_HEAD: \$\{\{ github\.sha \}\}/u);
+  assert.match(gate, /REGISTRY_MODE: \$\{\{ steps\.custom-v2-policy\.outputs\.registry_mode \}\}/u);
+  assert.match(gate, /GENERIC_MODE: \$\{\{ steps\.custom-v2-policy\.outputs\.generic_mode \}\}/u);
+  assert.doesNotMatch(gate, /registry_mode=prelaunch|generic_mode=disabled/u);
   assert.match(
     gate,
     /vercel env run -e production --token="\$VERCEL_TOKEN" --/u,
@@ -576,4 +586,44 @@ test("the staged reset smoke is separate, bounded, and provider-free", () => {
     source,
     /\/api\/explore\/profile\/claim|\/api\/trade\/prepare/u,
   );
+});
+
+const projectId = "prj_1234567890abcdef";
+const binding = { key: "PROGRAMMABLE_GENERIC_LAUNCH_READ_BINDING_V2_JSON", type: "sensitive", target: ["production"] };
+function stagePolicyInput(status = "live", envs = []) {
+  return { deploymentSource: { schemaVersion: "programmable.custom-registry-v2-deployment.v1", status,
+    generation: "2", chainId: "1", caip2: "eip155:1", publicReadEnabled: status === "live", indexingEnabled: status === "live" },
+  metadataSource: JSON.stringify({ schemaVersion: "programmable.vercel-sensitive-production-metadata.v1",
+    vercelProjectId: projectId, target: "production", envs }), projectId };
+}
+
+test("default dispatch follows a reviewed live Registry without enabling Generic reads", () => {
+  assert.deepEqual(resolveCustomV2StagingPolicy(stagePolicyInput()), { registryMode: "live", genericMode: "disabled" });
+  assert.deepEqual(resolveCustomV2StagingPolicy(stagePolicyInput("prelaunch")), { registryMode: "prelaunch", genericMode: "disabled" });
+});
+test("existing sensitive production binding is verified as ready without reading its value", () => {
+  assert.deepEqual(resolveCustomV2StagingPolicy(stagePolicyInput("live", [binding])), { registryMode: "live", genericMode: "ready" });
+  assert.deepEqual(resolveCustomV2StagingPolicy(stagePolicyInput("live", [{ ...binding, target: ["preview"] }])), { registryMode: "live", genericMode: "disabled" });
+});
+test("explicit positive expectations cannot silently enable absent configuration", () => {
+  assert.throws(() => resolveCustomV2StagingPolicy({ ...stagePolicyInput("prelaunch"), requestedRegistryLive: true }), /differs/);
+  assert.throws(() => resolveCustomV2StagingPolicy({ ...stagePolicyInput(), requestedGenericReady: "true" }), /differs/);
+  assert.throws(() => resolveCustomV2StagingPolicy(stagePolicyInput("prelaunch", [binding])), /requires/);
+  assert.deepEqual(resolveCustomV2StagingPolicy({ ...stagePolicyInput("live", [binding]), requestedRegistryLive: true, requestedGenericReady: true }),
+    { registryMode: "live", genericMode: "ready" });
+});
+test("rejects ambiguous bindings, metadata values, or another project", () => {
+  for (const envs of [[binding, binding], [{ ...binding, gitBranch: "other" }], [{ ...binding, customEnvironmentIds: ["other"] }], [{ ...binding, value: "forbidden" }]]) {
+    assert.throws(() => resolveCustomV2StagingPolicy(stagePolicyInput("live", envs)));
+  }
+  assert.throws(() => resolveCustomV2StagingPolicy({ ...stagePolicyInput(), projectId: "prj_different12345" }));
+});
+test("rejects invalid deployment state and malformed expectations", () => {
+  for (const change of [{ status: "unknown" }, { chainId: "8453" }, { indexingEnabled: false }, { publicReadEnabled: false }]) {
+    const value = stagePolicyInput(); Object.assign(value.deploymentSource, change);
+    assert.throws(() => resolveCustomV2StagingPolicy(value), /invalid/);
+  }
+  for (const value of ["yes", "", null, 1]) {
+    assert.throws(() => resolveCustomV2StagingPolicy({ ...stagePolicyInput(), requestedRegistryLive: value }), /boolean/);
+  }
 });

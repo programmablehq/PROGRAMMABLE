@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseCodexBars } from "@/lib/market/codex";
-const cacheMock = vi.hoisted(() => ({ calls: [] as unknown[][], value: undefined as unknown }));
+const cacheMock = vi.hoisted(() => ({ calls: [] as unknown[][], value: undefined as unknown, background: false, refreshes: [] as Promise<unknown>[] }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => {
+  if (cacheMock.background && cacheMock.value !== undefined) {
+    cacheMock.refreshes.push(Promise.resolve(fn(...args)).catch(() => undefined));
+  }
   cacheMock.calls.push(args); return cacheMock.value ?? fn(...args);
 } }));
 let readCodexChart: typeof import("@/lib/server/codex-market").readCodexChart;
@@ -13,6 +16,8 @@ beforeEach(async () => {
   vi.resetModules(); vi.useFakeTimers({ now: new Date("2026-10-03T09:30:00Z") });
   cacheMock.calls.length = 0;
   cacheMock.value = undefined;
+  cacheMock.background = false;
+  cacheMock.refreshes.length = 0;
   ({ readCodexChart, readCodexMarkets, codexQuery } = await import("@/lib/server/codex-market"));
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
@@ -109,6 +114,61 @@ describe("Codex price history", () => {
 });
 
 describe("Codex server market adapter", () => {
+  it.each([1, 4663, 8453])("joins an expired shared cache refresh on chain %s without dropping market values", async chainId => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    cacheMock.value = { entries: [[address, { priceUsd: .0001 }]],
+      observedAt: new Date(Date.now() - 900_001).toISOString() };
+    cacheMock.background = true;
+    const fetcher = vi.fn(async () => Response.json({ data: {
+      filterTokens: { results: [{ ...row(), token: { address, networkId: chainId } }] }, filterPairs: { results: [] },
+    } }));
+    vi.stubGlobal("fetch", fetcher);
+    const results = await Promise.all(Array.from({ length: 30 }, () => readCodexMarkets([{ tokenAddress: address, poolId }], chainId)));
+    await Promise.all(cacheMock.refreshes);
+    expect(results.every(result => result.get(address)?.priceUsd === .001)).toBe(true);
+    expect(results[0].get(address)?.observedAt).toBe(new Date(Date.now()).toISOString());
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await readCodexMarkets([{ tokenAddress: address, poolId }], chainId);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not relabel expired market values after failure and backs off repeated recovery reads", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    cacheMock.value = { entries: [[address, { priceUsd: 1 }]],
+      observedAt: new Date(Date.now() - 900_001).toISOString() };
+    cacheMock.background = true;
+    const fetcher = vi.fn().mockRejectedValue(new Error("private provider failure"));
+    vi.stubGlobal("fetch", fetcher);
+    for (let count = 0; count < 5; count++) expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).size).toBe(0);
+    await Promise.all(cacheMock.refreshes);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 300_001);
+    fetcher.mockResolvedValue(Response.json({ data: { filterTokens: { results: [row()] }, filterPairs: { results: [] } } }));
+    expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).get(address)?.priceUsd).toBe(.001);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes an expired empty observation once and retains the new negative observation", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    cacheMock.value = { entries: [], observedAt: new Date(Date.now() - 900_001).toISOString() };
+    cacheMock.background = true;
+    const fetcher = vi.fn(async () => Response.json({ data: { filterTokens: { results: [] }, filterPairs: { results: [] } } }));
+    vi.stubGlobal("fetch", fetcher);
+    for (let count = 0; count < 10; count++) expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).size).toBe(0);
+    await Promise.all(cacheMock.refreshes);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces a future-dated market cache with a correctly timed observation", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    cacheMock.value = { entries: [[address, { priceUsd: 1 }]], observedAt: new Date(Date.now() + 60_000).toISOString() };
+    const fetcher = vi.fn(async () => Response.json({ data: { filterTokens: { results: [row()] }, filterPairs: { results: [] } } }));
+    vi.stubGlobal("fetch", fetcher);
+    expect((await readCodexMarkets([{ tokenAddress: address, poolId }])).get(address))
+      .toMatchObject({ priceUsd: .001, observedAt: new Date(Date.now()).toISOString() });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("reuses missing market observations across page and coin reads, then refreshes them", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ data: {
