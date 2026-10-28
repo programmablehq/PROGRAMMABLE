@@ -27,6 +27,13 @@ export const WEBSITE_MAINNET_RPC_ENV = Object.freeze({
     "PROGRAMMABLE_WEBSITE_MAINNET_RPC_SECONDARY_ENDPOINT_COMMITMENT",
 } as const);
 
+export const WEBSITE_MAINNET_READ_RPC_ENV = Object.freeze({
+  primaryProvider: "PROGRAMMABLE_WEBSITE_MAINNET_READ_RPC_PRIMARY_PROVIDER",
+  primaryUrl: "PROGRAMMABLE_WEBSITE_MAINNET_READ_RPC_PRIMARY_URL",
+  primaryCommitment:
+    "PROGRAMMABLE_WEBSITE_MAINNET_READ_RPC_PRIMARY_ENDPOINT_COMMITMENT",
+} as const);
+
 export type WebsiteRpcBinding = Readonly<{
   provider: MainnetRpcProviderId;
   url: string;
@@ -270,17 +277,16 @@ export function websiteMainnetRpcPair(
 }
 
 /**
- * Resolves the exact private provider pair used by public production reads and
- * action surfaces. The primary may use dRPC or Alchemy, with QuickNode as the
- * independent secondary. Every endpoint still requires its explicit role and
- * matching commitment; legacy aliases cannot select the production pair.
+ * Resolves the exact private provider pair used by production action surfaces
+ * and the market projector. Every endpoint requires its fixed role and matching
+ * commitment; public-read settings cannot select this pair.
  */
 export function productionMainnetRpcPair(
   environment: RuntimeEnvironment = process.env,
 ): WebsiteMainnetRpcPair {
   const resolved = roleBoundPair(environment);
   if (
-    !["drpc", "alchemy"].includes(resolved.primary.provider) ||
+    resolved.primary.provider !== "drpc" ||
     resolved.secondary.provider !== "quicknode"
   ) {
     throw new Error("Production RPC provider roles are invalid");
@@ -321,24 +327,35 @@ export function productionRecoveryMainnetRpcPair(
 }
 
 /**
- * Resolves only the commitment-bound production primary. Public read
- * paths that intentionally use one provider must not require, inspect or
- * retain a secondary binding.
+ * Resolves the commitment-bound public-read primary, optionally selected by
+ * dedicated read settings. Single-provider reads do not inspect a secondary.
  */
 export function productionMainnetRpcPrimary(
   environment: RuntimeEnvironment = process.env,
 ): WebsiteRpcBinding {
+  const dedicatedRead = Object.values(WEBSITE_MAINNET_READ_RPC_ENV)
+    .some((name) => environment[name] !== undefined && environment[name] !== "");
+  const names = dedicatedRead ? WEBSITE_MAINNET_READ_RPC_ENV : WEBSITE_MAINNET_RPC_ENV;
   const primary = binding(
     providerId(
-      environment[WEBSITE_MAINNET_RPC_ENV.primaryProvider],
+      environment[names.primaryProvider],
       "primary",
     ),
-    environment[WEBSITE_MAINNET_RPC_ENV.primaryUrl],
-    environment[WEBSITE_MAINNET_RPC_ENV.primaryCommitment],
+    environment[names.primaryUrl],
+    environment[names.primaryCommitment],
     "primary",
   );
-  if (!["drpc", "alchemy"].includes(primary.provider)) {
+  if (primary.provider !== "drpc" && !(dedicatedRead && primary.provider === "alchemy")) {
     throw new Error("Production primary RPC provider role is invalid");
   }
   return primary;
+}
+
+/** Public index reads have their own committed primary. Actions and the market
+ * projector continue to resolve their original production pair. */
+export function productionMainnetReadRpcPair(
+  environment: RuntimeEnvironment = process.env,
+): WebsiteMainnetRpcPair {
+  const canonical = productionMainnetRpcPair(environment);
+  return Object.freeze({ ...canonical, primary: productionMainnetRpcPrimary(environment) });
 }

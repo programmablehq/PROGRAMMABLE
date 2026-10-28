@@ -4,8 +4,10 @@ import { rpcProviderCommitment } from
   "../lib/data-pipeline/rpc-provider-commitments";
 import {
   WEBSITE_MAINNET_RPC_ENV,
+  WEBSITE_MAINNET_READ_RPC_ENV,
   productionMainnetRpcPrimary,
   productionMainnetRpcPair,
+  productionMainnetReadRpcPair,
   productionRecoveryMainnetRpcPair,
   websiteMainnetRpcPair,
 } from "../lib/onchain/website-rpc-providers.server";
@@ -77,22 +79,33 @@ describe("Website Mainnet RPC provider bindings", () => {
     }))).toThrow("Production RPC provider roles are invalid");
   });
 
-  it("allows an explicitly committed Alchemy primary with independent QuickNode", () => {
-    const committed = environment({ primaryProvider: "alchemy", primaryUrl: ALCHEMY_URL });
-    expect(productionMainnetRpcPair(committed)).toMatchObject({
+  it("isolates the committed Alchemy index primary from production action providers", () => {
+    const committed = { ...environment(),
+      [WEBSITE_MAINNET_READ_RPC_ENV.primaryProvider]: "alchemy",
+      [WEBSITE_MAINNET_READ_RPC_ENV.primaryUrl]: ALCHEMY_URL,
+      [WEBSITE_MAINNET_READ_RPC_ENV.primaryCommitment]: rpcProviderCommitment("endpoint", ALCHEMY_URL),
+    };
+    expect(productionMainnetReadRpcPair(committed)).toMatchObject({
       primary: { provider: "alchemy", url: ALCHEMY_URL },
       secondary: { provider: "quicknode", url: QUICKNODE_URL },
     });
+    expect(productionMainnetRpcPair(committed)).toEqual(productionMainnetRpcPair(environment()));
     expect(productionMainnetRpcPrimary(committed)).toEqual({
       provider: "alchemy", url: ALCHEMY_URL,
       endpointCommitment: rpcProviderCommitment("endpoint", ALCHEMY_URL),
     });
-    expect(() => productionMainnetRpcPair({ ...committed,
-      [WEBSITE_MAINNET_RPC_ENV.primaryCommitment]: rpcProviderCommitment("endpoint", DRPC_URL),
+    expect(() => productionMainnetReadRpcPair({ ...committed,
+      [WEBSITE_MAINNET_READ_RPC_ENV.primaryCommitment]: rpcProviderCommitment("endpoint", DRPC_URL),
     })).toThrow("Website primary RPC endpoint commitment mismatch");
-    expect(() => productionMainnetRpcPair(environment({ primaryProvider: "alchemy", primaryUrl: ALCHEMY_URL,
-      secondaryProvider: "alchemy", secondaryUrl: ALCHEMY_URL,
-    }))).toThrow("Website RPC providers are not independent");
+    expect(() => productionMainnetRpcPair(environment({ primaryProvider: "alchemy", primaryUrl: ALCHEMY_URL })))
+      .toThrow("Production RPC provider roles are invalid");
+  });
+
+  it("rejects partial dedicated read configuration instead of silently falling back", () => {
+    expect(() => productionMainnetRpcPrimary({ ...environment(),
+      [WEBSITE_MAINNET_READ_RPC_ENV.primaryProvider]: "alchemy",
+    })).toThrow();
+    expect(productionMainnetReadRpcPair(environment())).toEqual(productionMainnetRpcPair(environment()));
   });
 
   it("binds recovery reads to the fixed Tenderly and committed QuickNode pair", () => {
