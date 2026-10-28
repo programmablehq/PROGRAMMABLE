@@ -33,12 +33,24 @@ describe("durable bounded operations", () => {
     expect((await journal.due())[0].rawTransaction).toBeUndefined();
   });
   it("serializes one signer across distinct events until the first outcome is known", async () => {
-    const first = (await journal.enqueue(input))!;
-    const second = (await journal.enqueue({ ...input, eventId: "weather:2" }))!;
+    const first = (await journal.claim((await journal.enqueue(input))!.id))!;
+    const second = (await journal.claim((await journal.enqueue({ ...input, eventId: "weather:2" }))!.id))!;
     expect(await journal.acquireSigner(first, "operator")).toBe(true);
     expect(await journal.acquireSigner(second, "operator")).toBe(false);
     await journal.releaseSigner(first, "operator");
     expect(await journal.acquireSigner(second, "operator")).toBe(true);
+  });
+  it("does not let an expired worker release the replacement worker's signer", async () => {
+    const queued = (await journal.enqueue(input))!;
+    const old = (await journal.claim(queued.id))!;
+    await journal.acquireSigner(old, "operator");
+    now += 60001;
+    const replacement = (await journal.claim(queued.id))!;
+    await journal.acquireSigner(replacement, "operator");
+    await expect(journal.acquireSigner(old, "operator")).rejects.toThrow("lease");
+    await journal.releaseSigner(old, "operator");
+    const other = (await journal.claim((await journal.enqueue({ ...input, eventId: "weather:other", dueAt: now }))!.id))!;
+    expect(await journal.acquireSigner(other, "operator")).toBe(false);
   });
   it("checks the saved receipt after restart and never signs the same action twice", async () => {
     await journal.enqueue(input);

@@ -28,17 +28,19 @@ export function createOperationJournal(pool: AIPool, now = Date.now) {
       if (!op || ["confirmed", "failed", "attention"].includes(op.state) || op.dueAt > now() || (op.leaseUntil ?? 0) > now()) return null;
       const value: Operation = { ...op, state: op.rawTransaction ? op.state : "leased", lease: randomUUID(), leaseUntil: now() + 60000, attempts: op.attempts + 1 };
       await write(db, value); return value; }); },
-    async acquireSigner(op: Operation, address: string) { return transaction(async db => {
+    async acquireSigner(op: Operation, address: string) { if (!op.lease) throw Error("Claim the operation before reserving its signer"); return transaction(async db => {
+      const current = await read(db, op.id);
+      if (!current || current.lease !== op.lease || (current.leaseUntil ?? 0) <= now()) throw Error("Operation lease expired");
       const id = key(op.chainId, address, "signer");
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [id]);
       const prior = (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='worker-signer' AND id=$1 FOR UPDATE", [id])).rows[0]?.value as { operation?: string } | undefined;
       if (prior?.operation && prior.operation !== op.id) return false;
-      await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES('system','worker-signer',$1,$2) ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()", [id, JSON.stringify({ operation: op.id })]);
+      await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES('system','worker-signer',$1,$2) ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()", [id, JSON.stringify({ operation: op.id, lease: op.lease })]);
       return true;
     }); },
     async releaseSigner(op: Operation, address: string) { return transaction(async db => {
       const id = key(op.chainId, address, "signer");
-      await db.query("UPDATE programmable_custom_ai_v1.objects SET value='{}'::jsonb,revision=revision+1 WHERE owner='system' AND kind='worker-signer' AND id=$1 AND value->>'operation'=$2", [id, op.id]);
+      await db.query("UPDATE programmable_custom_ai_v1.objects SET value='{}'::jsonb,revision=revision+1 WHERE owner='system' AND kind='worker-signer' AND id=$1 AND value->>'operation'=$2 AND value->>'lease'=$3", [id, op.id, op.lease]);
     }); },
     async signed(op: Operation, raw: string, transactionHash: string, costCeilingWei: bigint, dailyLimitWei: bigint) { return transaction(async db => {
       const current = await read(db, op.id); if (!current || current.lease !== op.lease || current.rawTransaction || current.state !== "leased" || (current.leaseUntil ?? 0) <= now()) throw Error("Operation lease expired");
