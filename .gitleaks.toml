@@ -2,6 +2,17 @@
 useDefault = true
 
 [[allowlists]]
+description = "Health monitoring requests only the two exact public coin identities"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^scripts/ops/production-health\.mjs$''']
+regexes = [
+  '''^\s*\{ id: "ethereum", chainId: 1, tokenAddress: "0x1b54e762aa34cf6e28e9c082f2848e28e45da6b8", url: "https://programmable\.market/api/explore/ethereum/presentation\?token=0x1b54e762aa34cf6e28e9c082f2848e28e45da6b8" \},$''',
+  '''^\s*\{ id: "robinhood", chainId: 4663, tokenAddress: "0xc60ba256b44334a0cd2c7242e98b88f031abb006", url: "https://programmable\.market/api/explore/robinhood/presentation\?token=0xc60ba256b44334a0cd2c7242e98b88f031abb006" \},$''',
+]
+
+[[allowlists]]
 description = "Custom AI finalized acceptance identifies only its two public canary token addresses"
 targetRules = ["generic-api-key"]
 condition = "AND"

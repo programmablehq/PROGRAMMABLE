@@ -1,16 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const codex = vi.hoisted(() => ({ query: vi.fn() }));
+const persistent = vi.hoisted(() => ({ enabled: false, staleShortRead: false,
+  entries: new Map<string, { expiresAt: number; value: unknown }>() }));
 vi.mock("server-only", () => ({}));
-vi.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }));
+vi.mock("next/cache", () => ({ unstable_cache: (fn: (...args: unknown[]) => unknown, keys: string[] = [], options?: { revalidate?: number }) => async (...args: unknown[]) => {
+  if (!persistent.enabled) return fn(...args);
+  const key = JSON.stringify([keys, args]), saved = persistent.entries.get(key);
+  if (saved && saved.expiresAt > Date.now()) return saved.value;
+  if (saved && persistent.staleShortRead && keys.includes("codex-coin-metadata-v3")) {
+    persistent.staleShortRead = false;
+    return saved.value;
+  }
+  const value = await fn(...args);
+  persistent.entries.set(key, { value, expiresAt: Date.now() + (options?.revalidate ?? 0) * 1_000 });
+  return value;
+} }));
 vi.mock("@/lib/server/codex-market", () => ({ codexQuery: codex.query }));
 let readCodexTokenMetadata: typeof import("@/lib/server/codex-token-metadata").readCodexTokenMetadata;
 import { mergeCoinMetadata } from "@/lib/coin-metadata";
 const address = `0x${"ab".repeat(20)}`;
 beforeEach(async () => {
   vi.resetModules(); vi.clearAllMocks(); vi.stubEnv("CODEX_API_KEY", "test-only");
+  persistent.enabled = false; persistent.staleShortRead = false; persistent.entries.clear();
   ({ readCodexTokenMetadata } = await import("@/lib/server/codex-token-metadata"));
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 describe("Codex display metadata", () => {
   it("reads artwork and socials for the exact chain and address without inventing metadata", async () => {
     codex.query.mockResolvedValue({ tokens: [{ address, networkId: 1, name: "Example", symbol: "EXAMPLE",
@@ -68,5 +82,41 @@ describe("Codex display metadata", () => {
       expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Now indexed");
       expect(codex.query).toHaveBeenCalledTimes(2);
     } finally { vi.useRealTimers(); }
+  });
+  it("shares complete artwork for six hours across fresh server instances", async () => {
+    persistent.enabled = true; vi.useFakeTimers();
+    codex.query.mockResolvedValue({ tokens: [{ address, networkId: 1, name: "Original" }] });
+    await readCodexTokenMetadata([address], 1);
+    vi.setSystemTime(Date.now() + 30 * 60_000);
+    vi.resetModules();
+    ({ readCodexTokenMetadata } = await import("@/lib/server/codex-token-metadata"));
+    expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Original");
+    expect(codex.query).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 6 * 60 * 60_000);
+    codex.query.mockResolvedValue({ tokens: [{ address, networkId: 1, name: "Updated" }] });
+    expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Updated");
+    expect(codex.query).toHaveBeenCalledTimes(2);
+  });
+  it("does not keep missing metadata for six hours in the shared cache", async () => {
+    persistent.enabled = true; vi.useFakeTimers();
+    codex.query.mockResolvedValueOnce({ tokens: [] });
+    expect((await readCodexTokenMetadata([address], 1)).size).toBe(0);
+    vi.setSystemTime(Date.now() + 900_001);
+    vi.resetModules();
+    ({ readCodexTokenMetadata } = await import("@/lib/server/codex-token-metadata"));
+    codex.query.mockResolvedValueOnce({ tokens: [{ address, networkId: 1, name: "Indexed" }] });
+    expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Indexed");
+    expect(codex.query).toHaveBeenCalledTimes(2);
+  });
+  it("does not pin a stale short-cache response for another six hours", async () => {
+    persistent.enabled = true; vi.useFakeTimers();
+    codex.query.mockResolvedValue({ tokens: [{ address, networkId: 1, name: "Original" }] });
+    await readCodexTokenMetadata([address], 1);
+    vi.setSystemTime(Date.now() + 6 * 60 * 60_000 + 1);
+    vi.resetModules(); persistent.staleShortRead = true;
+    ({ readCodexTokenMetadata } = await import("@/lib/server/codex-token-metadata"));
+    codex.query.mockResolvedValue({ tokens: [{ address, networkId: 1, name: "Updated" }] });
+    expect((await readCodexTokenMetadata([address], 1)).get(address)?.name).toBe("Updated");
+    expect(codex.query).toHaveBeenCalledTimes(2);
   });
 });

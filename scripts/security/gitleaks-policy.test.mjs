@@ -101,6 +101,25 @@ function assertFiles(findings, paths, count = paths.length) {
   assert.deepEqual([...new Set(findings.map(({ File }) => File))].sort(), [...paths].sort());
 }
 
+test("health monitoring allows only its exact public coin requests", t => {
+  const path = "scripts/ops/production-health.mjs";
+  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  const lines = source.split("\n").filter(line => line.includes("tokenAddress:") && line.includes("presentation?token="));
+  assert.equal(lines.length, 2);
+  assert.deepEqual(scan(t, { [path]: source }, { raw: true }), []);
+  for (const line of lines) {
+    const value = line.match(/tokenAddress: "([^"]+)"/)[1];
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    for (const rejected of [
+      line.replaceAll(value, `0x${material.slice(0, 40)}`),
+      `${line} const apiKey = "${material}";`,
+      `const apiKey = "${value}";`,
+      line.replace("programmable.market", "example.com"),
+    ]) assert.ok(scan(t, { [path]: rejected }, { raw: true }).length > 0);
+    assert.ok(scan(t, { [`${path}.backup`]: line }, { raw: true }).length > 0);
+  }
+});
+
 test("Base discovery allows only its exact public WETH runtime commitment", t => {
   const paths = [
     "packages/launch/src/base-profile-v1.json",

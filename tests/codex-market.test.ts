@@ -29,9 +29,9 @@ describe("Codex provider backoff", () => {
     expect(results).toHaveLength(30);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it("shares a paused-account backoff across distinct queries and recovers after it", async () => {
+  it.each([401, 402, 403, 429])("shares HTTP %i account backoff across distinct queries and recovers after it", async status => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ errors: [{ message: "private billing response" }] }, { status: 403 }))
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ errors: [{ message: "private billing response" }] }, { status }))
       .mockImplementation(async () => Response.json({ data: { recovered: true }, errors: [] }));
     vi.stubGlobal("fetch", fetcher);
     await expect(codexQuery("query First { value }", {})).rejects.toThrow("Market data unavailable");
