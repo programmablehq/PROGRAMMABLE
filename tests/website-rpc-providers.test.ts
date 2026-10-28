@@ -77,6 +77,24 @@ describe("Website Mainnet RPC provider bindings", () => {
     }))).toThrow("Production RPC provider roles are invalid");
   });
 
+  it("allows an explicitly committed Alchemy primary with independent QuickNode", () => {
+    const committed = environment({ primaryProvider: "alchemy", primaryUrl: ALCHEMY_URL });
+    expect(productionMainnetRpcPair(committed)).toMatchObject({
+      primary: { provider: "alchemy", url: ALCHEMY_URL },
+      secondary: { provider: "quicknode", url: QUICKNODE_URL },
+    });
+    expect(productionMainnetRpcPrimary(committed)).toEqual({
+      provider: "alchemy", url: ALCHEMY_URL,
+      endpointCommitment: rpcProviderCommitment("endpoint", ALCHEMY_URL),
+    });
+    expect(() => productionMainnetRpcPair({ ...committed,
+      [WEBSITE_MAINNET_RPC_ENV.primaryCommitment]: rpcProviderCommitment("endpoint", DRPC_URL),
+    })).toThrow("Website primary RPC endpoint commitment mismatch");
+    expect(() => productionMainnetRpcPair(environment({ primaryProvider: "alchemy", primaryUrl: ALCHEMY_URL,
+      secondaryProvider: "alchemy", secondaryUrl: ALCHEMY_URL,
+    }))).toThrow("Website RPC providers are not independent");
+  });
+
   it("binds recovery reads to the fixed Tenderly and committed QuickNode pair", () => {
     const recovery = productionRecoveryMainnetRpcPair({
       ...environment({ primaryUrl: "https://eth.drpc.org" }),
@@ -156,7 +174,7 @@ describe("Website Mainnet RPC provider bindings", () => {
     );
   });
 
-  it("rejects a non-dRPC or drifted production primary", () => {
+  it("rejects an unsupported or drifted production primary", () => {
     expect(() => productionMainnetRpcPrimary({
       [WEBSITE_MAINNET_RPC_ENV.primaryProvider]: "quicknode",
       [WEBSITE_MAINNET_RPC_ENV.primaryUrl]: QUICKNODE_URL,

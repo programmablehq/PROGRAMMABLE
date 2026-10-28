@@ -271,16 +271,16 @@ export function websiteMainnetRpcPair(
 
 /**
  * Resolves the exact private provider pair used by public production reads and
- * action surfaces. The legacy Alchemy compatibility path is intentionally
- * excluded: a release may use only the complete role-bound dRPC + QuickNode
- * binding.
+ * action surfaces. The primary may use dRPC or Alchemy, with QuickNode as the
+ * independent secondary. Every endpoint still requires its explicit role and
+ * matching commitment; legacy aliases cannot select the production pair.
  */
 export function productionMainnetRpcPair(
   environment: RuntimeEnvironment = process.env,
 ): WebsiteMainnetRpcPair {
   const resolved = roleBoundPair(environment);
   if (
-    resolved.primary.provider !== "drpc" ||
+    !["drpc", "alchemy"].includes(resolved.primary.provider) ||
     resolved.secondary.provider !== "quicknode"
   ) {
     throw new Error("Production RPC provider roles are invalid");
@@ -321,7 +321,7 @@ export function productionRecoveryMainnetRpcPair(
 }
 
 /**
- * Resolves only the commitment-bound production dRPC primary. Public read
+ * Resolves only the commitment-bound production primary. Public read
  * paths that intentionally use one provider must not require, inspect or
  * retain a secondary binding.
  */
@@ -337,7 +337,7 @@ export function productionMainnetRpcPrimary(
     environment[WEBSITE_MAINNET_RPC_ENV.primaryCommitment],
     "primary",
   );
-  if (primary.provider !== "drpc") {
+  if (!["drpc", "alchemy"].includes(primary.provider)) {
     throw new Error("Production primary RPC provider role is invalid");
   }
   return primary;
