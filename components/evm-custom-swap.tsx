@@ -9,13 +9,19 @@ export function EvmCustomSwap({ token, symbol }: {
   token: `0x${string}`;
   symbol: string;
 }) {
+  return <EvmCustomSwapForm key={token.toLowerCase()} token={token} symbol={symbol} />;
+}
+function EvmCustomSwapForm({ token, symbol }: {
+  token: `0x${string}`;
+  symbol: string;
+}) {
   const wallet = useWallet(), id = useId(), busyRef = useRef(false);
   const [descriptor, setDescriptor] = useState<EvmCustomSwapDescriptor | null>(null), [buy, setBuy] = useState(true), [amount, setAmount] = useState("");
   const [slippage, setSlippage] = useState(100), [savedQuote, setQuote] = useState<EvmCustomSwapPreparation | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [hash, setHash] = useState<`0x${string}` | null>(null);
   useEffect(() => {
     const abort = new AbortController();
-    fetch(`/api/swap/evm/prepare?token=${token}`, { signal: abort.signal }).then(async (response) => { const body = await response.json(); if (!response.ok)
+    fetch(`/api/swap/evm/prepare?token=${token}`, { signal: abort.signal }).then(async (response) => { const body = await response.json(); if (abort.signal.aborted) return; if (!response.ok)
       throw new Error(body.error); validateEvmCustomSwapDescriptor(body); if (body.chainId !== 999 || body.token.toLowerCase() !== token.toLowerCase())
       throw new Error("Trading route changed"); setDescriptor(body); }).catch(e => { if (!abort.signal.aborted)
       setError(e instanceof Error ? e.message : "Trading information is unavailable."); });
