@@ -13,6 +13,7 @@ let readCodexMarkets: typeof import("@/lib/server/codex-market").readCodexMarket
 let codexQuery: typeof import("@/lib/server/codex-market").codexQuery;
 const address = `0x${"ab".repeat(20)}`, poolId = `0x${"ef".repeat(32)}`;
 beforeEach(async () => {
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
   vi.resetModules(); vi.useFakeTimers({ now: new Date("2026-10-03T09:30:00Z") });
   cacheMock.calls.length = 0;
   cacheMock.value = undefined;
@@ -20,7 +21,7 @@ beforeEach(async () => {
   cacheMock.refreshes.length = 0;
   ({ readCodexChart, readCodexMarkets, codexQuery } = await import("@/lib/server/codex-market"));
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); vi.restoreAllMocks(); });
 const bars = (overrides = {}) => ({ token: { address, networkId: 4663 }, s: "ok", t: [100, 160, 220], c: [.001, null, .002], ...overrides });
 const pool = (overrides = {}) => ({ address: poolId, networkId: 4663, token0: `0x${"00".repeat(20)}`, token1: address, ...overrides });
 const row = () => ({ token: { address, networkId: 4663 }, priceUSD: "0.001", marketCap: "1000000", circulatingMarketCap: "500000", liquidity: "215595", totalLiquidityUsd: "2027259", volume24: "0", change24: "-0.05" });
@@ -33,6 +34,10 @@ describe("Codex provider backoff", () => {
     const results = await Promise.all(Array.from({ length: 30 }, () => codexQuery("query Shared { value }", {})));
     expect(results).toHaveLength(30);
     expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(console.info).toHaveBeenCalledTimes(1);
+    expect(console.info).toHaveBeenCalledWith("codex-provider-request",
+      JSON.stringify({ operation: "Other", httpStatus: 200, durationMs: 0 }));
+    expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("test-private-key");
   });
   it.each([401, 402, 403, 429])("shares HTTP %i account backoff across distinct queries and recovers after it", async status => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
@@ -306,6 +311,28 @@ describe("Codex server market adapter", () => {
     const result = await Promise.all([readCodexMarkets(tokens), readCodexMarkets(tokens)]);
     expect(result.every(markets => markets.size === 105)).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("fills four stable Robinhood batches for a 384-token catalog and reuses them", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const tokens = Array.from({ length: 384 }, (_, index) => ({
+      tokenAddress: `0x${index.toString(16).padStart(8, "0")}${"0".repeat(32)}`,
+      poolId: `0x${index.toString(16).padStart(64, "0")}`,
+    }));
+    const fetcher = vi.fn(async (_url, request) => {
+      const variables = JSON.parse(request.body).variables;
+      expect(variables.tokens.length).toBeLessThanOrEqual(100);
+      return Response.json({ data: { filterTokens: { results: variables.tokens.map((id: string) => ({
+        token: { address: id.split(":")[0], networkId: 4663 }, priceUSD: "1",
+      })) }, filterPairs: { results: [] } } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect((await readCodexMarkets(tokens)).size).toBe(384);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect((await readCodexMarkets([...tokens].reverse())).size).toBe(384);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    const added = { tokenAddress: `0x00000180${"0".repeat(32)}`, poolId: `0x${"f".repeat(64)}` };
+    expect((await readCodexMarkets([...tokens, added])).size).toBe(385);
+    expect(fetcher).toHaveBeenCalledTimes(5);
   });
   it("bounds a cold catalog read instead of fanning out without a limit", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");

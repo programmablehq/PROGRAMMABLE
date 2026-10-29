@@ -20,7 +20,7 @@ export type ModuleModeIndexSource = Omit<IndexSource, "routerAddress" | "binding
   releaseDigest: string;
   launches(from: bigint, to: bigint, known: readonly RobinhoodLaunch[]): Promise<RobinhoodModuleLaunch[]>;
 };
-type SyncOptions = { rangeSize?: bigint; maxRanges?: number; budgetMs?: number; now?: () => number };
+type SyncOptions = { rangeSize?: bigint; maxRanges?: number; budgetMs?: number; now?: () => number; reuseVerifiedCheckpoint?: boolean };
 type RangeSnapshot = Pick<RobinhoodSnapshot, "cursor" | "checkpoints" | "pending" | "finalizedBlock" | "updatedAt" | "items">;
 type RangeStore = {
   read(): Promise<{ snapshot: RangeSnapshot; etag: string } | null>;
@@ -150,6 +150,19 @@ async function syncRange(source: Pick<IndexSource, "startBlock" | "finalized" | 
   }
   let rangeSize = options.rangeSize ?? 10_000n;
   if (rangeSize < 1n) throw new Error("Invalid range size");
+  // A completed range at this exact finalized hash already has its launch proof.
+  // The canonical cursor was checked above; a new boundary, reorg, pending block
+  // or incomplete Engine market must still take the normal verification path.
+  if (options.reuseVerifiedCheckpoint && !rewound && !snapshot.pending
+    && snapshot.cursor?.number === source.finalized.number
+    && snapshot.finalizedBlock === source.finalized.number
+    && snapshot.cursor.hash.toLowerCase() === source.finalized.hash.toLowerCase()
+    && !snapshot.items.some(row => isRobinhoodEngineLaunch(row) && !row.primaryMarket)) {
+    snapshot = parse({ ...snapshot, updatedAt: new Date(now()).toISOString() });
+    await store.write(snapshot, saved?.etag ?? null);
+    return { status: "ready" as const, ranges: 0, launches: snapshot.items.length,
+      indexedThrough: snapshot.cursor!.number, finalizedBlock: source.finalized.number, rewound };
+  }
   // Re-read up to 64 blocks, without moving a cursor backwards when an operator
   // uses smaller RPC ranges.
   const overlap = rangeSize - 1n < 63n ? rangeSize - 1n : 63n;

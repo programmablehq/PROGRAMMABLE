@@ -5,10 +5,12 @@ import type { ModuleModeUnavailableSource } from "@/lib/server/robinhood-index/m
 import type { RobinhoodSnapshot } from "@/lib/server/robinhood-index/model";
 
 const mocks = vi.hoisted(() => ({
+  acquireLease: vi.fn(), releaseLease: vi.fn(),
   foundationSources: vi.fn(), projectionSync: vi.fn(), projectionSource: vi.fn(), read: vi.fn(), source: vi.fn(), sync: vi.fn(), moduleSync: vi.fn(),
   moduleSources: vi.fn<typeof import("@/lib/server/robinhood-index/module-source").configuredModuleModeSources>(),
   store: vi.fn<() => IndexStore>(), storeRead: vi.fn<IndexStore["read"]>(), storeWrite: vi.fn<IndexStore["write"]>(),
 }));
+vi.mock("@/lib/server/robinhood-index/source-lease", () => ({ acquireIndexSourceLease: mocks.acquireLease }));
 vi.mock("@/lib/server/robinhood-index/foundation-source", () => ({ configuredFoundationSources: mocks.foundationSources }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodLaunches: mocks.read }));
 vi.mock("@/lib/server/robinhood-index/launch-projection-source", () => ({ launchProjectionSourceV1: mocks.projectionSource, syncLaunchProjectionIndex: mocks.projectionSync }));
@@ -21,6 +23,8 @@ import { GET as update } from "@/app/api/ops/robinhood-index/route";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.releaseLease.mockResolvedValue(undefined);
+  mocks.acquireLease.mockResolvedValue(mocks.releaseLease);
   mocks.projectionSync.mockRejectedValue(new Error("Projection unavailable"));
   mocks.moduleSources.mockResolvedValue({ lanes: [], unavailableSources: [] });
   mocks.foundationSources.mockResolvedValue({ lanes: [], unavailableSources: [] });
@@ -153,6 +157,58 @@ describe("Robinhood website HTTP boundaries", () => {
     expect(await response.json()).toMatchObject({ moduleMode: { status: "ready" }, foundation: "unavailable",
       foundationUnavailableSources: ["FOUNDATION_RELEASE_INVENTORY_UNAVAILABLE"] });
     expect(mocks.moduleSync).toHaveBeenCalledWith(source, expect.anything(), expect.not.objectContaining({ rangeSize: 5_000n }));
+  });
+
+  it("defers a leased source without starting duplicate provider work", async () => {
+    const source = vi.fn();
+    mocks.source.mockResolvedValue({});
+    mocks.sync.mockResolvedValue({ status: "ready" });
+    mocks.projectionSync.mockResolvedValue({ status: "ready", nextCursor: null });
+    mocks.foundationSources.mockResolvedValue({ lanes: [{ releaseDigest: "foundation", source }], unavailableSources: [] });
+    mocks.acquireLease.mockResolvedValue(null);
+    const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", {
+      headers: { authorization: `Bearer ${"a".repeat(48)}` },
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ foundationSources: { foundation: { status: "deferred" } } });
+    expect(source).not.toHaveBeenCalled();
+    expect(mocks.moduleSync).not.toHaveBeenCalled();
+    expect(mocks.releaseLease).not.toHaveBeenCalled();
+  });
+
+  it("releases the source lease after a bounded failed attempt", async () => {
+    mocks.source.mockResolvedValue({});
+    mocks.sync.mockResolvedValue({ status: "ready" });
+    mocks.projectionSync.mockResolvedValue({ status: "ready", nextCursor: null });
+    mocks.foundationSources.mockResolvedValue({ lanes: [{ releaseDigest: "foundation", source: vi.fn(async () => ({})) }], unavailableSources: [] });
+    mocks.moduleSync.mockRejectedValue(new Error("Provider unavailable"));
+    const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", {
+      headers: { authorization: `Bearer ${"a".repeat(48)}` },
+    }));
+    expect(response.status).toBe(503);
+    expect(mocks.moduleSync).toHaveBeenCalledTimes(2);
+    expect(mocks.releaseLease).toHaveBeenCalledOnce();
+  });
+
+  it("keeps independent sources progressing after one lease read fails", async () => {
+    const first = vi.fn(async () => ({})), second = vi.fn(async () => ({}));
+    mocks.source.mockResolvedValue({});
+    mocks.sync.mockResolvedValue({ status: "ready" });
+    mocks.projectionSync.mockResolvedValue({ status: "ready", nextCursor: null });
+    mocks.foundationSources.mockResolvedValue({ lanes: [
+      { releaseDigest: "first", source: first }, { releaseDigest: "second", source: second },
+    ], unavailableSources: [] });
+    mocks.acquireLease.mockRejectedValueOnce(new Error("Storage unavailable")).mockResolvedValue(mocks.releaseLease);
+    mocks.moduleSync.mockResolvedValue({ status: "ready" });
+    const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", {
+      headers: { authorization: `Bearer ${"a".repeat(48)}` },
+    }));
+    expect(response.status).toBe(503);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
+    expect(await response.json()).toMatchObject({ foundationSources: {
+      first: { status: "unavailable" }, second: { status: "ready" },
+    } });
   });
 
   it("reserves a useful oldest-source budget and rotates the other slot without losing checkpoints", async () => {
