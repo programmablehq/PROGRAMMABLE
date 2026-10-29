@@ -17,7 +17,9 @@ contract GeneratedFeeModule is ICustomAIFeeModuleV1 {
 }`;
 const validQuote = "return(this.quoteFee.selector,150,type(uint64).max,configurationHash);";
 
-describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("isolated Custom AI compiler", () => {
+// One compiler child is bounded at 35 seconds; two-compilation cases need
+// room for both under CI load. Keep the timeout local to this real-EVM suite.
+describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("isolated Custom AI compiler", { timeout: 80_000 }, () => {
   it("blocks a technically valid module that charges a different fee than requested", async () => {
     const result = await compileDraft(feeModule(validQuote), undefined, [
       { afterSeconds: 0, buy: true, totalFeeBps: 200 }, { afterSeconds: 0, buy: false, totalFeeBps: 300 },
