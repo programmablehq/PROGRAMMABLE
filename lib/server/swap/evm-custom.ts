@@ -12,6 +12,14 @@ const hex = (v: unknown): Hex => { if (typeof v !== "string" || !/^0x(?:[0-9a-f]
   throw Error("Malformed RPC result"); return v as Hex; };
 const quantity = (v: unknown) => { if (typeof v !== "string" || !/^0x[0-9a-f]+$/i.test(v))
   throw Error("Malformed RPC quantity"); return BigInt(v); };
+export async function estimateHyperEvmGas(rpcs: readonly [Rpc, Rpc], transaction: {
+  from: Address; to: Address; data: Hex; value: string;
+}) {
+  // dRPC rejects HyperEVM estimates with the optional block parameter. The
+  // execution and quote reads remain pinned to their verified block above.
+  const estimates = await Promise.all(rpcs.map(r => r("eth_estimateGas", [transaction]).then(quantity)));
+  return (estimates[0] > estimates[1] ? estimates[0] : estimates[1]) * 120n / 100n;
+}
 const STAMP = parseAbi(["function launchIdByToken(address) view returns(bytes32)", "function componentRuntimeCodeHash(address) view returns(bytes32)", "function launchStamp(bytes32) view returns((uint8 kind,address launchWallet,address token,address hook,address poolManager,bytes32 poolId,bytes32 poolKeyHash,bytes32 componentSetHash,bytes32 routePayloadHash,address routeLauncher,bytes32 routeLauncherRuntimeCodeHash,bytes32 expectedResultHash,bytes32 permitDigest,bytes32 stampHash))"]);
 const QUOTE = parseAbi(["function quote(address,address,address,address,uint160,uint48,bytes) returns(uint256)"]);
 const clients = new Map<string, ReturnType<typeof createPublicClient>>();
@@ -187,8 +195,7 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
       else if (permitted < BigInt(request.amountIn) || BigInt(expiration) < BigInt(request.deadline))
         transaction = buildEvmCustomApproval(request, descriptor, "permit2-approval");
     }
-    const estimates = await Promise.all(rpcs.map(r => r("eth_estimateGas", [{ from: transaction.from, to: transaction.to, data: transaction.data, value: toHex(BigInt(transaction.value)) }, toHex(block.number)]).then(quantity)));
-    const gas = (estimates[0] > estimates[1] ? estimates[0] : estimates[1]) * 120n / 100n;
+    const gas = await estimateHyperEvmGas(rpcs, { from: transaction.from, to: transaction.to, data: transaction.data, value: toHex(BigInt(transaction.value)) });
     if (gas < 21000n || gas > 3000000n)
       throw new EvmSwapError("Trade gas limit is not supported.");
     transaction = { ...transaction, gasLimit: gas.toString() };
@@ -221,8 +228,7 @@ export async function prepareHyperEvmFeeClaim(input: unknown) {
   if (amountRaw === 0n)
     throw new EvmSwapError("No fees are available to claim.", 409);
   const data = encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: q.recipientKind === "creator" ? "claimCreator" : "claimPlatform" });
-  const estimates = await Promise.all(rpcs.map(r => r("eth_estimateGas", [{ from: q.owner, to: vault, data, value: "0x0" }, toHex(block.number)]).then(quantity)));
-  const gas = (estimates[0] > estimates[1] ? estimates[0] : estimates[1]) * 120n / 100n;
+  const gas = await estimateHyperEvmGas(rpcs, { from: q.owner, to: vault, data, value: "0x0" });
   if (gas > 1000000n)
     throw new EvmSwapError("Fee claim gas limit is too high.");
   const body = { schemaVersion: EVM_FEE_CLAIM_SCHEMA, request: q, descriptor, vault, recipient: recipientRaw as Address, amount: amountRaw.toString(), validUntil: Math.floor(Date.now() / 1000) + 30, transaction: { from: q.owner, to: vault, data, value: "0" as const, gasLimit: gas.toString() } };
