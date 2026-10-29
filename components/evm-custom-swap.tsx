@@ -37,10 +37,10 @@ export function EvmCustomSwap({token,symbol}:{token:`0x${string}`;symbol:string}
    <button type="button" aria-pressed={buy} disabled={busy} onClick={()=>{setBuy(true);setQuote(null);}}>Buy</button>
    <button type="button" aria-pressed={!buy} disabled={busy} onClick={()=>{setBuy(false);setQuote(null);}}>Sell</button>
   </div>
-  <label htmlFor={`${id}-amount`}>Amount ({inputSymbol})</label>
-  <input id={`${id}-amount`} className={styles.amountInput} inputMode="decimal" autoComplete="off" value={amount} disabled={busy} onChange={e=>{setAmount(e.target.value);setQuote(null);}} style={{width:"100%",padding:12,margin:"8px 0 16px"}} />
-  <label htmlFor={`${id}-slippage`}>Max. slippage</label>
-  <select id={`${id}-slippage`} value={slippage} disabled={busy} onChange={e=>{setSlippage(Number(e.target.value));setQuote(null);}} style={{marginLeft:12}}><option value={50}>0.5%</option><option value={100}>1%</option><option value={300}>3%</option><option value={500}>5%</option></select>
+  <div className={styles.amountBox}><label htmlFor={`${id}-amount`}>Amount ({inputSymbol})</label>
+  <input id={`${id}-amount`} className={styles.amountInput} inputMode="decimal" placeholder="0.0" autoComplete="off" value={amount} disabled={busy} onChange={e=>{setAmount(e.target.value);setQuote(null);}} style={{width:"100%",padding:12,margin:"8px 0 16px"}} />
+  </div><div className={styles.network} style={{marginTop:16}}><label htmlFor={`${id}-slippage`}>Max. slippage</label>
+  <select id={`${id}-slippage`} value={slippage} disabled={busy} onChange={e=>{setSlippage(Number(e.target.value));setQuote(null);}} style={{marginLeft:12}}><option value={50}>0.5%</option><option value={100}>1%</option><option value={300}>3%</option><option value={500}>5%</option></select></div>
   {quote&&descriptor?<p aria-live="polite">Estimated output: {formatUnits(BigInt(quote.quote.amountOut),buy?descriptor.tokenDecimals:descriptor.quoteDecimals)} {buy?symbol:descriptor.quoteSymbol}<br/>Minimum received: {formatUnits(BigInt(quote.quote.minimumOut),buy?descriptor.tokenDecimals:descriptor.quoteDecimals)}<br/>{quote.status==="approval-required"?"Approve the exact amount, then refresh the quote.":"Network fees are shown in your wallet."}</p>:null}
   <div style={{marginTop:20}}>{quote?<button className={styles.primary} type="button" disabled={busy} onClick={submit}>{busy?"Waiting for wallet…":quote.status==="approval-required"?"Approve amount":"Confirm swap"}</button>:<button className={styles.primary} type="button" disabled={busy||(!descriptor&&!!wallet.wallet)} onClick={prepare}>{!wallet.wallet?"Connect wallet":busy?"Checking trade…":"Get quote"}</button>}</div>
   {hash?<p role="status">Transaction submitted. <a href={`https://hyperevmscan.io/tx/${hash}`} target="_blank" rel="noreferrer">View transaction</a>. Refresh the quote after confirmation.</p>:null}

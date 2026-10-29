@@ -11,7 +11,7 @@ export function launchOverviewItem(resource: Record<string, unknown>, source: La
   const metadata = object(resource.projectMetadata), token = object(metadata.token), presentation = object(metadata.presentation);
   const publication = source === "legacy" ? { ...token, imageUrl: object(presentation.image).uri } : Object.keys(plan).length ? object(plan.publication) : summary;
   const version = source === "legacy" ? String(resource.routeId).split(":").at(-1) as LaunchOverviewItem["version"] : undefined;
-  const chainId = source === "hyperevm" ? "999" : source === "base" ? "8453" : source !== "legacy" || version === "v4" ? "4663" : object(resource.manualReview).chainId === "999" ? "999" : object(resource.manualReview).chainId === "8453" ? "8453" : "1";
+  const chainId = source !== "legacy" || version === "v4" ? "4663" : object(resource.manualReview).chainId === "999" ? "999" : object(resource.manualReview).chainId === "8453" ? "8453" : "1";
   const raw = String(resource.status), steps = Array.isArray(resource.steps) ? resource.steps : [];
   const final = ["finalized", "publicly_visible", "final"].includes(raw);
   let status = final ? "Completed" : ["submitted", "sequencer_soft_confirmed", "ethereum_posted"].includes(raw) ? "Confirming" : "Preparing";
