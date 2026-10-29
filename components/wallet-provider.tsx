@@ -3228,7 +3228,7 @@ function PrivyWalletBridge({
       assertCurrentSession();validate();
       return parseSubmittedTransactionHash(await provider.request({method:"eth_sendTransaction",params:[{from:account,to:tx.to,data:tx.data,value:`0x${BigInt(tx.value).toString(16)}`,gas:`0x${BigInt(tx.gasLimit).toString(16)}`}]}));
     }});
-  },[connectedWallet,sendPrivyTransaction,user?.id,wallet]);
+  },[connectedWallet,sendPrivyTransaction,user,wallet]);
 
   const sendCustomLaunchWalletAction = useCallback(async (
     input: CustomLaunchWalletActionV1,
