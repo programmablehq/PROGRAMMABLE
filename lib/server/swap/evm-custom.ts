@@ -147,7 +147,10 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
   ];
   readLaunch?: typeof readHyperEvmLaunchEvidence;
 } = {}) {
-  const request = parseEvmCustomSwapRequest(input), now = Math.floor(Date.now() / 1000);
+  let request: ReturnType<typeof parseEvmCustomSwapRequest>;
+  try { request = parseEvmCustomSwapRequest(input); }
+  catch { throw new EvmSwapError("Invalid trade request.", 400); }
+  const now = Math.floor(Date.now() / 1000);
   if (request.chainId !== 999)
     throw new EvmSwapError("Unsupported trade chain.", 400);
   if (BigInt(request.deadline) < BigInt(now + 30) || BigInt(request.deadline) > BigInt(now + 1200))

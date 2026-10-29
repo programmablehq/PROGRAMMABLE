@@ -83,6 +83,7 @@ const CLIENT_FILES = Object.freeze([
   "packages/launch/contracts/launch-protection-v1/ProtectedNativeInitializerV1.artifact.json",
   "packages/launch/contracts/launch-protection-v1/EthereumNativeFeeVaultV3.artifact.json",
 ]);
+export const V430_CLIENT_SOURCE_FILES = CLIENT_FILES;
 const COVERAGE_CONTRACTS = Object.freeze([
   ["openapi", "public/openapi/launch-coverage-v1.json", "https://programmable.market/openapi/launch-coverage-v1.json"],
   ["response", "public/schemas/custom-launch/coverage/v1.json", "https://programmable.market/schemas/custom-launch/coverage/v1.json"],

@@ -147,8 +147,8 @@
     },
     "clientFiles": {
       "type": "array",
-      "minItems": 54,
-      "maxItems": 54,
+      "minItems": 66,
+      "maxItems": 66,
       "prefixItems": [
         {
           "type": "object",
@@ -227,7 +227,211 @@
           ],
           "properties": {
             "path": {
-              "const": "docs/operations/releases/custom-launch-v4.3.0/base-live-acceptance.json"
+              "const": "docs/operations/releases/custom-launch-v4.2.0/base-live-acceptance.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "docs/operations/releases/custom-launch-v4.3.0/hyperevm-live-acceptance.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "scripts/verify-hyperevm-custom-live.mjs"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/src/hyperevm-profile-v1.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/src/hyperevm-network-v1.mjs"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "public/openapi/hyperevm-custom-launch-v1.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "public/developers/hyperevm-custom-launch-api-v1.md"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/contracts/hyperevm-launch-protection-v1/standard-json.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/contracts/hyperevm-launch-protection-v1/HyperEvmLaunchProtectionModuleV1.artifact.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/contracts/hyperevm-launch-protection-v1/HyperEvmProtectedNative30HookV1.artifact.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/contracts/hyperevm-launch-protection-v1/HyperEvmProtectedNativeInitializerV1.artifact.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/contracts/hyperevm-launch-protection-v1/EthereumNativeFeeVaultV3.artifact.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "packages/launch/contracts/hyperevm-launch-protection-v1/ProtectedLaunchTokenV1.artifact.json"
             },
             "sha256": {
               "type": "string",
@@ -1213,7 +1417,7 @@
       ],
       "properties": {
         "chainId": {
-          "const": "999"
+          "const": "8453"
         },
         "moduleMode": {
           "const": false
@@ -1231,15 +1435,27 @@
         "readiness",
         "moduleMode"
       ],
+      "additionalProperties": false,
       "properties": {
         "chainId": {
           "const": "999"
         },
+        "requestSchemaVersion": {
+          "const": "programmable.custom-launch-create-request.v3"
+        },
+        "profile": {
+          "type": "object"
+        },
+        "capabilities": {
+          "const": "https://api.programmable.market/v4/chains/999/capabilities"
+        },
+        "readiness": {
+          "const": "https://api.programmable.market/v4/chains/999/readiness"
+        },
         "moduleMode": {
           "const": false
         }
-      },
-      "additionalProperties": true
+      }
     }
   }
 }

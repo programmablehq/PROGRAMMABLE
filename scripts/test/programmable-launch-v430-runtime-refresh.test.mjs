@@ -109,8 +109,10 @@ test("missing, ambiguous, future and out-of-window log times cannot reconstruct 
 test("recorded inclusion time satisfies the real capture validator without extending its ten-minute window", () => {
   // Structural regression only. Production still authenticates these exact
   // bytes with pinned Cosign before accepting an imported receipt.
-  const inputBytes = readFileSync(new URL(`../../${RUNTIME_CAPTURE_PATH}`, import.meta.url));
-  const attestationBundleBytes = readFileSync(new URL(`../../${RUNTIME_ATTESTATION_PATH}`, import.meta.url));
+  // Reuse the already published signed historical sample to test the common
+  // validator. The 4.3.0 runtime still requires its own fresh capture paths.
+  const inputBytes = readFileSync(new URL("../../release/robinhood-chain-4663/v4.2.0/backend-promotion-input.public.json", import.meta.url));
+  const attestationBundleBytes = readFileSync(new URL("../../release/robinhood-chain-4663/v4.2.0/backend-promotion-input.attestation.json", import.meta.url));
   const input = JSON.parse(inputBytes), bundle = JSON.parse(attestationBundleBytes);
   const original = JSON.parse(readFileSync(new URL(
     "../../release/robinhood-chain-4663/v4.1/programmable-promotion-bundle.json", import.meta.url)));
