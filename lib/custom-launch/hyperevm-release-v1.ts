@@ -1,6 +1,5 @@
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "./browser-authority-v2";
 import { ETHEREUM_ROUTING_FEE_POLICY_V2 } from "./ethereum-routing-fee-policy-v1";
-
 /** Deployed HyperEvm roots; never resolve these from an applicant's transaction. */
 export const HYPEREVM_CUSTOM_ROOTS_V1 = Object.freeze({
   chainId: 999,
@@ -14,7 +13,6 @@ export const HYPEREVM_CUSTOM_ROOTS_V1 = Object.freeze({
   deploymentBlockHash: "0x07ea8b3308abf3e60a7b21f0a18db13e17d576df15dec5d71ac4b0edf37112cd",
   platformTreasury: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
 } as const);
-
 export const HYPEREVM_TRADE_FEE_POLICY_V1 = Object.freeze({
   ...ETHEREUM_ROUTING_FEE_POLICY_V2,
   schemaVersion: "programmable.hyperevm-programmable-trade-fee-policy.v1",
@@ -27,20 +25,30 @@ export const HYPEREVM_TRADE_FEE_POLICY_V1 = Object.freeze({
   },
   native30Waiver: null,
 } as const);
-
 export interface HyperEvmRoutingFeePolicyBindingV1 {
   schemaVersion: "programmable.hyperevm-launch-routing-fee-policy-binding.v1";
   launchProfileVersion: "3.6.0";
   launchProfileHash: `sha256:${string}`;
   policyHash: `sha256:${string}`;
   policy: typeof HYPEREVM_TRADE_FEE_POLICY_V1;
-  enforcementBoundary: { chainId: "999"; blockNumber: string; blockHash: `0x${string}`; releaseId: `sha256:${string}` };
-  stampBinding: { launchId: `0x${string}`; stampHash: `0x${string}`; permitDigest: `0x${string}`; routePayloadHash: `0x${string}` };
+  enforcementBoundary: {
+    chainId: "999";
+    blockNumber: string;
+    blockHash: `0x${string}`;
+    releaseId: `sha256:${string}`;
+  };
+  stampBinding: {
+    launchId: `0x${string}`;
+    stampHash: `0x${string}`;
+    permitDigest: `0x${string}`;
+    routePayloadHash: `0x${string}`;
+  };
   bindingHash: `sha256:${string}`;
 }
 export function parseHyperEvmRoutingFeePolicyV1(value: unknown): HyperEvmRoutingFeePolicyBindingV1 {
   const fail = (): never => { throw new Error("Invalid HyperEvm fee policy binding"); };
-  if (!value || typeof value !== "object" || Array.isArray(value)) return fail();
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return fail();
   const v = value as HyperEvmRoutingFeePolicyBindingV1;
   const hash = (s: unknown) => typeof s === "string" && /^sha256:[0-9a-f]{64}$/.test(s);
   if (Object.keys(v).sort().join() !== "bindingHash,enforcementBoundary,launchProfileHash,launchProfileVersion,policy,policyHash,schemaVersion,stampBinding"
@@ -52,8 +60,10 @@ export function parseHyperEvmRoutingFeePolicyV1(value: unknown): HyperEvmRouting
     || v.enforcementBoundary.chainId !== "999" || v.enforcementBoundary.blockNumber !== HYPEREVM_CUSTOM_ROOTS_V1.deploymentBlock
     || v.enforcementBoundary.blockHash !== HYPEREVM_CUSTOM_ROOTS_V1.deploymentBlockHash || !hash(v.enforcementBoundary.releaseId)
     || !v.stampBinding || Object.keys(v.stampBinding).sort().join() !== "launchId,permitDigest,routePayloadHash,stampHash"
-    || !Object.values(v.stampBinding).every(s => /^0x[0-9a-f]{64}$/.test(s))) return fail();
+    || !Object.values(v.stampBinding).every(s => /^0x[0-9a-f]{64}$/.test(s)))
+    return fail();
   const { bindingHash, ...body } = v;
-  if (bindingHash !== canonicalBrowserSha256V2(v.schemaVersion, body)) return fail();
+  if (bindingHash !== canonicalBrowserSha256V2(v.schemaVersion, body))
+    return fail();
   return v;
 }

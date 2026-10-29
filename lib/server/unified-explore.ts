@@ -1,3 +1,4 @@
+import { enrichHyperEvmMarkets } from "./hyperevm-market";
 import { readHyperEvmExploreCatalog } from "./hyperevm-explore";
 import { ethereumModuleSourceForStamp, isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
 import { ethereumPairPresentation, launchPresentationDetails } from "@/lib/launch-presentation-details";
@@ -29,7 +30,10 @@ const readers = {
   robinhood: readRobinhoodExploreCatalog,
   ethereum: readEthereumUnifiedExploreCatalog,
   robinhoodMarkets: readRobinhoodMarkets,
-  ethereumMarkets: readCodexMarkets,
+  ethereumMarkets: async (tokens: Parameters<typeof readCodexMarkets>[0], chainId = 1) => {
+    const markets=await readCodexMarkets(tokens,chainId).catch(error=>{if(chainId!==999)throw error;return new Map<string,RobinhoodCoinMarket>();});
+    return chainId===999?enrichHyperEvmMarkets(tokens,markets):markets;
+  },
   robinhoodPresentations: readRobinhoodPresentations,
 };
 
