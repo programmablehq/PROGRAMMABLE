@@ -8,6 +8,7 @@ import { isWebsiteAdminWallet } from "@/lib/admin-access";
 import { customLaunchOwnerException, customLaunchReviewLabel, customLaunchReviewOverdue, parseCustomLaunchReview, type CustomLaunchReview } from "@/lib/custom-launch-review";
 import { buildOperationsRows, reviewListView, reviewProject, type OperationsReview, type ReviewListView } from "@/lib/launch-operations";
 import styles from "./custom-launch-review-console.module.css";
+import { ReviewHttpError, saveReviewDecision, type ReviewDecision } from "@/lib/custom-launch-review-decision";
 type ReviewRow = CustomLaunchReview & { launchId: string; requestSummary: Record<string, unknown> };
 type ReviewDetail = CustomLaunchReview & { launchId: string; request: Record<string, unknown>; technicalStatus: Record<string, unknown>; assessment?: unknown; operations?: unknown };
 export function CustomLaunchReviewConsole({ initialReviewId }: { initialReviewId?: string } = {}) {
@@ -32,7 +33,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
   const [tradeReport, setTradeReport] = useState("");
   const selectedReview = useRef(initialReviewId);
   const [busy, setBusy] = useState(true), [error, setError] = useState(""), [reason, setReason] = useState("");
-  const request = useCallback(async (reviewId?: string, decision?: { review: ReviewDetail; choice: "approve" | "reject" | "request_information" | "replace" | "record_checks"; reason: string; replacementReviewId?: string; report?: unknown }) => {
+  const request = useCallback(async (reviewId?: string, decision?: ReviewDecision) => {
     if (!account) throw new Error("Connect an admin wallet.");
     const [token, identityToken] = await Promise.all([getAccessToken(), getIdentityToken()]);
     if (!token || !active.current) throw new Error("Reconnect your admin wallet.");
@@ -47,7 +48,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
       signal: AbortSignal.timeout(70_000),
     });
     const value = await response.json();
-    if (!response.ok) throw new Error(value?.error?.code === "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED" ? "Record passing buy and sell checks for the 0.3% platform fee collected by this pool before approving." : value?.error?.code === "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT" ? "The embedded deadline does not cover the 24-hour launch window. Ask the team to repack it." : response.status === 409 ? "This review changed. Refresh before deciding." : response.status === 403 ? "This wallet is not authorized to review launches." : "Could not load launch reviews. Try again.");
+    if (!response.ok) throw new ReviewHttpError(value?.error?.code === "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED" ? "Record passing buy and sell checks for the 0.3% platform fee collected by this pool before approving." : value?.error?.code === "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT" ? "The embedded deadline does not cover the 24-hour launch window. Ask the team to repack it." : response.status === 409 ? "This review changed. Refresh before deciding." : response.status === 403 ? "This wallet is not authorized to review launches." : "Could not load launch reviews. Try again.", response.status);
     if (!active.current) throw new Error("Wallet changed. Refresh to continue.");
     return value;
   }, [account, getAccessToken, getIdentityToken]);
@@ -94,7 +95,9 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
     if (!detail) return;
     setBusy(true); setError("");
     try {
-      const value = await request(detail.reviewId, { review: detail, choice: decision, reason, ...(decision === "replace" ? { replacementReviewId: replacementId } : decision === "record_checks" ? { report: JSON.parse(tradeReport) } : {}) }); const updated = parseCustomLaunchReview(value.review);
+      const intent: ReviewDecision = { review: detail, choice: decision, reason, ...(decision === "replace" ? { replacementReviewId: replacementId } : decision === "record_checks" ? { report: JSON.parse(tradeReport) } : {}) };
+      const value = await saveReviewDecision(intent, () => request(detail.reviewId, intent), () => request(detail.reviewId));
+      const updated = parseCustomLaunchReview(value.review);
       setDetail(current => current ? { ...current, ...updated } : null);
       setReviews(current => current.map(item => item.reviewId === updated.reviewId ? { ...item, ...updated } : item));
     } catch (e) { setError(e instanceof Error ? e.message : "Decision could not be saved."); } finally { setBusy(false); }
