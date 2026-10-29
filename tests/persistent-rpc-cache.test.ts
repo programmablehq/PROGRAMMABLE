@@ -208,7 +208,7 @@ function weakEtagBlobClient() {
     return `"${generation.toString(16).padStart(32, "0")}"`;
   };
   const client = {
-    async get(path: string) {
+    async get(path: string, options?: { headers?: Readonly<Record<string, string>> }) {
       const current = values.get(path);
       if (!current) return null;
       readCounts.set(path, (readCounts.get(path) ?? 0) + 1);
@@ -220,6 +220,7 @@ function weakEtagBlobClient() {
       const bytes = remainingTruncations > 0
         ? encoded.slice(0, Math.max(0, encoded.byteLength - 1))
         : encoded;
+      const identity = options?.headers?.["accept-encoding"] === "identity";
       return {
         statusCode: 200 as const,
         stream: new ReadableStream<Uint8Array>({
@@ -228,12 +229,12 @@ function weakEtagBlobClient() {
             controller.close();
           },
         }),
-        headers: new Headers({
+        headers: new Headers(identity ? {} : {
           "content-encoding": "gzip",
           "content-length": "0",
         }),
         blob: {
-          etag: `W/${current.etag}`,
+          etag: identity ? current.etag : `W/${current.etag}`,
           size: 0,
         },
       };
@@ -457,7 +458,7 @@ describe("persistent RPC log cursor", () => {
               "content-encoding": "gzip",
               "content-length": String(body.length),
             }),
-            blob: { etag: 'W/"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"', size: body.length },
+            blob: { etag: '"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"', size: body.length },
           };
         },
         async head() {
@@ -1910,10 +1911,10 @@ describe("persistent RPC log cursor", () => {
     ).rejects.toThrow(/does not match/u);
   });
 
-  it("binds a compressed private Blob response to its authenticated HEAD metadata", () => {
+  it("binds a strong private Blob version to its authenticated HEAD metadata", () => {
     expect(
       bindPrivateBlobReadMetadata({
-        responseEtag: 'W/"a51ca021c9c058ed68999c1ef7728007"',
+        responseEtag: '"a51ca021c9c058ed68999c1ef7728007"',
         headEtag: '"a51ca021c9c058ed68999c1ef7728007"',
         headSize: 23_849,
       }),
@@ -1926,11 +1927,16 @@ describe("persistent RPC log cursor", () => {
   it("rejects a private Blob that changes between GET and HEAD", () => {
     expect(() =>
       bindPrivateBlobReadMetadata({
-        responseEtag: 'W/"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"',
+        responseEtag: '"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"',
         headEtag: '"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"',
         headSize: 23_849,
       }),
     ).toThrow(/changed while it was being read/u);
+  });
+
+  it("does not promote weak representation validators to object versions", () => {
+    expect(() => bindPrivateBlobReadMetadata({ responseEtag: 'W/"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"',
+      headEtag: '"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"', headSize: 100 })).toThrow(/ETag is invalid/u);
   });
 
   it("reduces total steady-state RPC requests and conservative Alchemy CU by at least 80 percent", async () => {

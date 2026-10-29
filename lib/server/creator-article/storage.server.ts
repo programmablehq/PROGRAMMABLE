@@ -193,6 +193,7 @@ export function createProductionCreatorArticleStoreV1(): CreatorArticleStoreV1 {
           access: "public",
           token,
           useCache: false,
+          headers: { "accept-encoding": "identity" },
         });
         if (result === null) return null;
         if (result.statusCode !== 200 || result.stream === null) {

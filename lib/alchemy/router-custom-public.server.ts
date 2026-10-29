@@ -369,7 +369,7 @@ function parseDurableRouterCustomIdentitySnapshotV1(
 }
 
 export function normalizeRouterCustomSnapshotBlobEtagV1(value: string) {
-  const normalized = value.trim().replace(/^W\//u, "");
+  const normalized = value.trim();
   if (!VERCEL_BLOB_STRONG_ETAG.test(normalized)) {
     throw new Error("Router Custom durable snapshot ETag is invalid");
   }
@@ -403,6 +403,7 @@ async function readDurableRouterCustomIdentitySnapshotRecordV1() {
     access: "private",
     token,
     useCache: false,
+    headers: { "accept-encoding": "identity" },
   });
   if (!result || result.statusCode !== 200 || !result.stream) {
     throw new Error("Router Custom durable snapshot is unavailable");

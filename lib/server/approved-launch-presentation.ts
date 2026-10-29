@@ -116,7 +116,7 @@ const cache = new Map<string, { expires: number; value: Promise<ApprovedLaunchPr
 async function load(key: string): Promise<{ row: ApprovedLaunchPresentation | null; etag?: string }> {
   const credential = token();
   if (!credential) return { row: null };
-  const result = await get(path(key), { token: credential, access: "private", useCache: false, abortSignal: AbortSignal.timeout(1500) });
+  const result = await get(path(key), { token: credential, access: "private", useCache: false, headers: { "accept-encoding": "identity" }, abortSignal: AbortSignal.timeout(1500) });
   if (!result) return { row: null };
   if (result.statusCode !== 200 || !result.stream) throw new Error("Presentation unavailable");
   const reader = result.stream.getReader(), chunks: Uint8Array[] = []; let length = 0;
@@ -131,7 +131,7 @@ async function load(key: string): Promise<{ row: ApprovedLaunchPresentation | nu
     || (row.imageUrl !== null && imageUrl(row.imageUrl) !== row.imageUrl)
     || (row.description !== null && displayText(row.description,4096) !== row.description)
     || (row.routerLaunchId !== null && !HASH.test(row.routerLaunchId))) throw new Error("Invalid presentation");
-  const etag = result.blob.etag.trim().replace(/^W\//, "");
+  const etag = result.blob.etag.trim();
   if (!/^"[\da-f]{32}"$/i.test(etag)) throw new Error("Invalid presentation version");
   return { row, etag };
 }

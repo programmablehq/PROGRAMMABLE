@@ -17,7 +17,7 @@ const blocks = new Map<string, { expires: number; value: Promise<boolean> }>();
 async function load(): Promise<Snapshot> {
   const credential = token();
   if (!credential) return empty();
-  const response = await get(path, { token: credential, access: "private", useCache: false });
+  const response = await get(path, { token: credential, access: "private", useCache: false, headers: { "accept-encoding": "identity" } });
   if (!response) return empty();
   if (response.statusCode !== 200 || !response.stream) throw new Error("Recent launches could not be read.");
   const reader = response.stream.getReader(), chunks: Uint8Array[] = [];
@@ -36,9 +36,9 @@ async function load(): Promise<Snapshot> {
       && item.presentation?.tokenAddress === item.row.tokenAddress
       && item.presentation?.chainId === item.chainId && item.presentation?.market === null
       && Array.isArray(item.presentation?.links))) throw new Error("Recent launch data is invalid.");
-  // Blob GET adds a weak validator prefix; conditional writes use the quoted
-  // object ETag without it. Keep the version check so concurrent launches merge.
-  const etag = response.blob.etag.trim().replace(/^W\//, "");
+  // Conditional writes require the strong object version returned by the
+  // identity response; a weak representation validator must not be rewritten.
+  const etag = response.blob.etag.trim();
   if (!/^"[\da-f]{32}"$/i.test(etag)) throw new Error("Recent launch version is invalid.");
   return { items: data.items, etag };
 }

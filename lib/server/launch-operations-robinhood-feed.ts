@@ -40,7 +40,7 @@ function feedStore(): OperationsFeedStore {
   if (!token) throw new Error("Operations feed storage unavailable");
   return {
     async read() {
-      const result = await get(path, { token, access: "private", useCache: false });
+      const result = await get(path, { token, access: "private", useCache: false, headers: { "accept-encoding": "identity" } });
       if (!result) return null;
       if (result.statusCode !== 200 || !result.stream) throw new Error("Operations feed read failed");
       const reader = result.stream.getReader(), chunks: Uint8Array[] = []; let size = 0;
@@ -48,7 +48,7 @@ function feedStore(): OperationsFeedStore {
         for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength;
           if (size > maxBytes) throw new Error("Operations feed size exceeded"); chunks.push(part.value); }
       } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
-      const etag = result.blob.etag.trim().replace(/^W\//u, "");
+      const etag = result.blob.etag.trim();
       if (!/^"[\da-f]{32}"$/iu.test(etag)) throw new Error("Invalid operations feed version");
       return { state: parseState(JSON.parse(Buffer.concat(chunks).toString("utf8"))), etag };
     },
