@@ -8,18 +8,21 @@ const snapshot = { version: 1, chainId: 4663, routerAddress: `0x${"1".repeat(40)
   startBlock: "100", cursor: null, checkpoints: [], finalizedBlock: "100", updatedAt: "2026-10-10T00:00:00.000Z", items: [] };
 const body = JSON.stringify(snapshot);
 function response(text = body, headers: HeadersInit = {}) {
-  return { statusCode: 200, stream: new Response(text).body, headers: new Headers(headers), blob: { etag: `W/${etag}` } };
+  return { statusCode: 200, stream: new Response(text).body, headers: new Headers(headers), blob: { etag } };
 }
 beforeEach(() => { vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN", "test-storage-token"); });
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
 
 describe("Robinhood index atomic reads", () => {
-  it("uses one compressed response and preserves its ETag for a conflicting conditional write", async () => {
-    blob.get.mockResolvedValue(response(body, { "content-encoding": "br", "content-length": "80" }));
+  it("gets body and strong ETag together and preserves conditional-write protection", async () => {
+    blob.get.mockResolvedValue(response(body, { "content-length": String(Buffer.byteLength(body)) }));
     blob.head.mockResolvedValue({ etag: `"${"b".repeat(32)}"`, size: body.length + 42 });
     const store = indexStore();
     const saved = await store.read();
     expect(saved).toMatchObject({ etag, snapshot });
+    expect(blob.get).toHaveBeenCalledWith("website-index/robinhood/launches-v1.json", expect.objectContaining({
+      access: "private", useCache: false, headers: { "accept-encoding": "identity" },
+    }));
     expect(blob.head).not.toHaveBeenCalled();
     blob.put.mockRejectedValue(new Error("Precondition failed"));
     await expect(store.write(saved!.snapshot, saved!.etag)).rejects.toThrow("Precondition failed");
@@ -31,8 +34,16 @@ describe("Robinhood index atomic reads", () => {
     blob.get.mockResolvedValueOnce(response(JSON.stringify({ ...snapshot, chainId: 1 })));
     await expect(indexStore().read()).rejects.toThrow("Invalid Robinhood index");
   });
-  it("limits decoded bytes even when the compressed transfer declares a small size", async () => {
-    blob.get.mockResolvedValue(response(" ".repeat(16 * 1024 * 1024 + 1), { "content-encoding": "br", "content-length": "80" }));
+  it("rejects compressed or weak response ETags instead of converting them to object versions", async () => {
+    blob.get.mockResolvedValueOnce(response(body, { "content-encoding": "br" }));
+    await expect(indexStore().read()).rejects.toThrow("metadata invalid");
+    const weak = response(); weak.blob.etag = `W/${etag}`;
+    blob.get.mockResolvedValueOnce(weak);
+    await expect(indexStore().read()).rejects.toThrow("metadata invalid");
+    expect(blob.put).not.toHaveBeenCalled();
+  });
+  it("keeps the body byte limit even without a declared size", async () => {
+    blob.get.mockResolvedValue(response(" ".repeat(16 * 1024 * 1024 + 1)));
     await expect(indexStore().read()).rejects.toThrow("size exceeded");
   });
 });

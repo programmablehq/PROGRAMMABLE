@@ -14,16 +14,19 @@ export function indexStore(): IndexStore {
   return {
     async read() {
       const { get } = await import("@vercel/blob");
-      const result = await get(PATH, { access: "private", token, useCache: false });
+      // A compressed response has a weak representation ETag, which cannot
+      // authorize an object overwrite. Get body and strong ETag atomically.
+      const result = await get(PATH, { access: "private", token, useCache: false,
+        headers: { "accept-encoding": "identity" } });
       if (!result) return null;
       if (result.statusCode !== 200 || !result.stream) throw new Error("Robinhood index read failed");
-      const etag = result.blob.etag.trim().replace(/^W\//, "");
+      const etag = result.blob.etag.trim();
       // Bind the body and the conditional-write ETag to one response. A second
       // metadata read can observe a different upload while the cron is writing.
       const encoded = result.headers.get("content-encoding");
       const length = result.headers.get("content-length");
-      const expectedSize = !encoded || encoded === "identity" ? (length === null ? null : Number(length)) : null;
-      if (!/^"[\da-f]{32}"$/i.test(etag) || (expectedSize !== null
+      const expectedSize = length === null ? null : Number(length);
+      if ((encoded && encoded !== "identity") || !/^"[\da-f]{32}"$/i.test(etag) || (expectedSize !== null
         && (!Number.isSafeInteger(expectedSize) || expectedSize < 0 || expectedSize > MAX_BYTES))) {
         await result.stream.cancel();
         throw new Error("Robinhood index response metadata invalid");
