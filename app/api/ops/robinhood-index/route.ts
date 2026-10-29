@@ -7,6 +7,7 @@ import { moduleModeSnapshots } from "@/lib/server/robinhood-index/model";
 import { syncRobinhoodIndex, syncModuleModeIndex } from "@/lib/server/robinhood-index/sync";
 import { launchProjectionSourceV1, syncLaunchProjectionIndex } from "@/lib/server/robinhood-index/launch-projection-source";
 import { indexFailureDetails, selectIndexLanes } from "@/lib/server/robinhood-index/job-policy";
+import { acquireIndexSourceLease } from "@/lib/server/robinhood-index/source-lease";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,32 +88,50 @@ export async function GET(request: Request) {
         const results = lane.foundation ? foundationSources : moduleSources;
         const budget = 165_000 - (Date.now() - startedAt);
         if (budget <= 0) continue;
-        results[lane.releaseDigest] = { status: "unavailable" };
-        const laneBudget = Math.max(1, Math.floor(budget / (scheduled.length - index)));
-        const laneDeadline = Date.now() + laneBudget;
-        // A Foundation provider can fail one read without changing canonical history.
-        // Repeat that lane once within its original budget; each attempt still verifies
-        // both providers and writes only a fully checked checkpoint.
-        const maxAttempts = lane.foundation ? 2 : 1;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          const remainingLane = laneDeadline - Date.now();
-          if (remainingLane <= 0) break;
-          try {
-            const source = await lane.source(AbortSignal.timeout(remainingLane));
-            results[lane.releaseDigest] = await syncModuleModeIndex(source, store, {
-              ...(lane.foundation ? { rangeSize: 5_000n } : {}),
-              // Leave time for the final canonical checkpoint read and the shared CAS write.
-              budgetMs: Math.max(0, Math.min(90_000, laneDeadline - Date.now() - 8_000)),
-            });
-            break;
-          } catch (error) {
-            if (attempt + 1 === maxAttempts || Date.now() >= laneDeadline) {
-              console.warn("robinhood-index-source-unavailable", JSON.stringify({
-                sourceKind: lane.foundation ? "foundation" : "module", releaseDigest: lane.releaseDigest,
-                ...indexFailureDetails(error),
-              }));
+        let release: (() => Promise<void>) | null;
+        try { release = await acquireIndexSourceLease(lane.releaseDigest); }
+        catch (error) {
+          results[lane.releaseDigest] = { status: "unavailable" };
+          console.warn("robinhood-index-lease-unavailable", JSON.stringify({
+            releaseDigest: lane.releaseDigest, ...indexFailureDetails(error),
+          }));
+          continue;
+        }
+        if (!release) continue;
+        try {
+          const available = 165_000 - (Date.now() - startedAt);
+          if (available <= 8_000) continue;
+          results[lane.releaseDigest] = { status: "unavailable" };
+          const laneBudget = Math.max(1, Math.floor(available / (scheduled.length - index)));
+          const laneDeadline = Date.now() + laneBudget;
+          // A Foundation provider can fail one read without changing canonical history.
+          // Repeat that lane once within its original budget; each attempt still verifies
+          // both providers and writes only a fully checked checkpoint.
+          const maxAttempts = lane.foundation ? 2 : 1;
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const remainingLane = laneDeadline - Date.now();
+            if (remainingLane <= 0) break;
+            try {
+              const source = await lane.source(AbortSignal.timeout(remainingLane));
+              results[lane.releaseDigest] = await syncModuleModeIndex(source, store, {
+                ...(lane.foundation ? { rangeSize: 5_000n } : {}),
+                reuseVerifiedCheckpoint: true,
+                // Leave time for the final canonical checkpoint read and the shared CAS write.
+                budgetMs: Math.max(0, Math.min(90_000, laneDeadline - Date.now() - 8_000)),
+              });
+              break;
+            } catch (error) {
+              if (attempt + 1 === maxAttempts || Date.now() >= laneDeadline) {
+                console.warn("robinhood-index-source-unavailable", JSON.stringify({
+                  sourceKind: lane.foundation ? "foundation" : "module", releaseDigest: lane.releaseDigest,
+                  ...indexFailureDetails(error),
+                }));
+              }
             }
           }
+        } finally {
+          // A failed cleanup retains a bounded lease; it never admits overlapping work.
+          await release().catch(() => undefined);
         }
       }
       moduleMode = primary ? moduleSources[primary] : { status: modules.status === "fulfilled" ? "disabled" : "unavailable" };

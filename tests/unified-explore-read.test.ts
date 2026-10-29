@@ -49,6 +49,35 @@ beforeEach(() => {
 });
 
 describe("Unified verified source adapter", () => {
+  it.each(["newest", "oldest"] as const)("prices only the selected page for %s order", async sort => {
+    const rows = Array.from({ length: 120 }, (_, index) => ({ ...rh,
+      tokenAddress: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+      launchedAt: new Date(Date.UTC(2026, 9, 1, 0, index)).toISOString(),
+    }));
+    sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: rows, sourceEvidence: {} });
+    const result = await readUnifiedLaunches(2, "", { sort, mode: "all", chain: 4663 }, 6);
+    expect(result.items).toHaveLength(6);
+    expect(result.page.totalItems).toBe(120);
+    expect(sources.rhMarkets).toHaveBeenCalledTimes(1);
+    expect(new Set(sources.rhMarkets.mock.calls[0][0].map((row: RobinhoodLaunch) => row.tokenAddress)))
+      .toEqual(new Set(result.items.map(row => row.tokenAddress)));
+    expect(sources.ethMarkets).not.toHaveBeenCalled();
+  });
+
+  it("does not price another chain when its coins miss the newest page", async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => ({ ...eth,
+      tokenAddress: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+      launchedAt: new Date(Date.UTC(2026, 9, 10, 0, index)).toISOString(),
+    }));
+    sources.eth.mockResolvedValue({ status: "ready", updatedAt: null, entries: rows, sourceEvidence: {} });
+    const result = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all" }, 6);
+    expect(result.items.every(row => row.chainId === 1)).toBe(true);
+    expect(result.page.totalItems).toBe(21);
+    expect(sources.rhMarkets).not.toHaveBeenCalled();
+    expect(sources.ethMarkets).toHaveBeenCalledTimes(1);
+    expect(sources.ethMarkets.mock.calls[0][0]).toHaveLength(6);
+  });
+
   it("skips unselected chain catalogs and market reads", async () => {
     const result = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain: 1 });
     expect(result.items.every(item => item.chainId === 1)).toBe(true);

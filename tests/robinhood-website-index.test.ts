@@ -109,6 +109,50 @@ function indexSource(rows: RobinhoodLaunch[], finalized = 299n) {
   } satisfies IndexSource;
 }
 
+describe("verified checkpoint request reuse", () => {
+  it("refreshes a canonical unchanged checkpoint without replaying its logs", async () => {
+    const rows = [launch(1, 150)];
+    const memory = memoryStore(snapshot(rows, { updatedAt: new Date(NOW - 60_000).toISOString() }));
+    const source = indexSource(rows);
+    expect(await syncRobinhoodIndex(source, memory.store, { ...OPTIONS, reuseVerifiedCheckpoint: true }))
+      .toMatchObject({ status: "ready", ranges: 0, launches: 1, indexedThrough: "299" });
+    expect(source.block).toHaveBeenCalledExactlyOnceWith(299n);
+    expect(source.launches).not.toHaveBeenCalled();
+    expect(memory.saved()).toMatchObject({ cursor: point(299), items: rows, updatedAt: new Date(NOW).toISOString() });
+  });
+
+  it("reads new finalized ranges instead of reusing a preceding checkpoint", async () => {
+    const memory = memoryStore(snapshot([launch(1, 150)]));
+    const source = indexSource([launch(1, 150), launch(2, 350)], 399n);
+    expect(await syncRobinhoodIndex(source, memory.store, { ...OPTIONS, reuseVerifiedCheckpoint: true }))
+      .toMatchObject({ status: "ready", launches: 2, indexedThrough: "399" });
+    expect(source.launches).toHaveBeenCalled();
+    expect(memory.saved()?.items).toHaveLength(2);
+  });
+
+  it("does not reuse a checkpoint whose canonical hash changed", async () => {
+    const memory = memoryStore(snapshot([launch(1, 150)]));
+    const source = indexSource([]);
+    source.finalized = point(299, 1);
+    source.block.mockImplementation(async number => point(number, 1));
+    expect(await syncRobinhoodIndex(source, memory.store, { ...OPTIONS, reuseVerifiedCheckpoint: true }))
+      .toMatchObject({ status: "ready", rewound: true, launches: 0 });
+    expect(source.launches).toHaveBeenCalled();
+    expect(memory.saved()?.cursor).toEqual(point(299, 1));
+  });
+
+  it("does not mark a mismatched finality hash as a refreshed observation", async () => {
+    const before = snapshot([launch(1, 150)]);
+    const memory = memoryStore(before);
+    const source = indexSource([]);
+    source.finalized = point(299, 1);
+    await expect(syncRobinhoodIndex(source, memory.store, { ...OPTIONS, reuseVerifiedCheckpoint: true }))
+      .rejects.toThrow("Finalized boundary changed");
+    expect(memory.writes).toHaveLength(0);
+    expect(memory.saved()).toEqual(before);
+  });
+});
+
 describe("Robinhood website index synchronization", () => {
   it("persists the completed prefix and retries the entire range that failed verification", async () => {
     const rows = [launch(1, 120), launch(2, 220), launch(3, 320)];

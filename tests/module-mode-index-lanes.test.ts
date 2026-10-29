@@ -5,6 +5,9 @@ import type { IndexSource, ModuleModeIndexSource } from "../lib/server/robinhood
 import { a, h } from "./fixtures/module-mode-evidence";
 
 const mocks = vi.hoisted(() => ({ store: vi.fn(), custom: vi.fn(), module: vi.fn(), foundation: vi.fn(), projection: vi.fn() }));
+vi.mock("../lib/server/robinhood-index/source-lease", () => ({
+  acquireIndexSourceLease: async () => async () => undefined,
+}));
 vi.mock("../lib/server/robinhood-index/store", () => ({ indexStore: mocks.store }));
 vi.mock("../lib/server/robinhood-index/source", () => ({ robinhoodSource: mocks.custom }));
 vi.mock("../lib/server/robinhood-index/module-source", () => ({ configuredModuleModeSources: mocks.module }));

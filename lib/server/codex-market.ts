@@ -17,7 +17,9 @@ const MAX_MARKET_PROVIDER_BATCHES_PER_READ = 20;
 // Address-sorted slices shift every time a new token is inserted. Stable
 // buckets keep a new launch from invalidating the provider cache for the
 // entire catalog and make a cold refresh spend at most one new batch.
-const MARKET_BATCH_BUCKETS = 20;
+// Keep network-specific partitions stable while filling the provider's 100-row
+// batches. Twenty sparse buckets multiplied small-chain refresh costs.
+const MARKET_BATCH_BUCKETS: Readonly<Record<number, number>> = { 1: 20, 4663: 4, 8453: 1 };
 const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
  filterTokens(tokens:$tokens,limit:100,useAggregatedStats:true) { results { token { address networkId } priceUSD marketCap circulatingMarketCap volume24 change24 } }
  filterPairs(pairs:$pairs,limit:100) { results { liquidity pair { address networkId token0 token1 token0Data { address networkId symbol } token1Data { address networkId symbol } } } }
@@ -38,12 +40,21 @@ async function fetchCodexQuery(query: string, variables: Record<string, unknown>
   const key = process.env.CODEX_API_KEY?.trim();
   if (!key || Date.now() < providerRetryAt) throw new Error("Market data unavailable");
   const signal = AbortSignal.timeout(8_000);
+  const startedAt = Date.now();
+  const operation = /query\s+(Markets|Chart|TokenMetadata|LaunchDiscovery)\b/u.exec(query)?.[1] ?? "Other";
+  let httpStatus = 0;
   let response: Response;
   try {
     response = await fetch(endpoint, { method: "POST", headers: { Authorization: key, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }), cache: "no-store", redirect: "error", signal });
+    httpStatus = response.status;
   } catch {
     pauseProvider(5);
     throw new Error("Market data unavailable");
+  } finally {
+    // Count actual provider requests, not cache hits. Never log query text,
+    // variables, addresses, headers or provider response bodies.
+    try { console.info("codex-provider-request", JSON.stringify({ operation, httpStatus,
+      durationMs: Date.now() - startedAt })); } catch { /* Observability cannot fail a market read. */ }
   }
   if (!response.ok) {
     // A paused billing account affects every endpoint. Do not retry it per token or page.
@@ -78,8 +89,8 @@ const copyMarket = (market: RobinhoodCoinMarket): RobinhoodCoinMarket => ({ ...m
 const pending = new Map<string, Promise<unknown>>();
 const failedUntil = new Map<string, number>();
 
-function marketBucket(address: string) {
-  return Number.parseInt(address.slice(2, 10), 16) % MARKET_BATCH_BUCKETS;
+function marketBucket(address: string, chainId: number) {
+  return Number.parseInt(address.slice(2, 10), 16) % MARKET_BATCH_BUCKETS[chainId];
 }
 
 // Coalesce cold reads and briefly back off failures, without automatic provider retries.
@@ -196,9 +207,9 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
   let providerBatches = 0;
   const buckets = identities.length <= 100
     ? [identities]
-    : Array.from({ length: MARKET_BATCH_BUCKETS }, () => [] as Identity[]);
+    : Array.from({ length: MARKET_BATCH_BUCKETS[chainId] }, () => [] as Identity[]);
   if (identities.length > 100) {
-    for (const token of identities) buckets[marketBucket(token.tokenAddress)]!.push(token);
+    for (const token of identities) buckets[marketBucket(token.tokenAddress, chainId)]!.push(token);
   }
   for (const bucket of buckets) {
     if (Date.now() >= deadline || providerBatches >= MAX_MARKET_PROVIDER_BATCHES_PER_READ) break;
