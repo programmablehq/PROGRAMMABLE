@@ -39,7 +39,7 @@ export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subj
       <p role="status">{evidence.status === "passed" ? "Passed on fork: buy, sell and the recorded platform fee collection." : evidence.status === "failed" ? "Fork check failed. Review the results before approval." : "Buy, sell and platform fee checks are pending for this version."}</p>
       {evidence.report ? <>
         <p>Platform fee checked: {Number(evidence.report.platformFeeBps ?? 30) / 100}%. {evidence.currentPlatformFee ? "Current 0.3% pool fee requirement met." : "Historical evidence does not meet the 0.3% requirement for a new approval."}</p>
-        <p>Checked for this exact launch on {chainId === "8453" ? "Base" : chainId === "1" ? "Ethereum" : "Robinhood"}, block {String(evidence.report.forkBlockNumber)}. This records the tested scenario; live execution is checked separately.</p>
+        <p>Checked for this exact launch on {chainId === "999" ? "HyperEVM" : chainId === "8453" ? "Base" : chainId === "1" ? "Ethereum" : "Robinhood"}, block {String(evidence.report.forkBlockNumber)}. This records the tested scenario; live execution is checked separately.</p>
         <details><summary>Fork check results</summary><pre>{JSON.stringify(evidence.report, null, 2)}</pre></details>
       </> : <p>A launch simulation or approval alone does not verify trading.</p>}
       {trading.evidence ? <details><summary>Recorded behavior evidence</summary><pre>{JSON.stringify(trading.evidence, null, 2)}</pre></details> : null}

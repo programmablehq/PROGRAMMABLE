@@ -10,6 +10,9 @@ export const PROTECTED_LAUNCH_POLICY_V1 = Object.freeze({ minimumFdvUsd: '15000'
   buyerLimitBps: 200, protectionSeconds: 300, openingTotalFeePpm: 990000, openingFeeSeconds: 30,
   maximumAdditionalTaxExemptWallets: 6, treasury: '0xD88539d3c4C460136a733A3Fd60cf6BF269079da' });
 export const PROTECTED_LAUNCH_CHAIN_PINS_V1 = Object.freeze({
+  999: Object.freeze({manager:'0x12D4Fd9C5DeDd00ab8a0bCe2CF0167bbf94b6B1F',
+    router:'0xeD270A1Bcdc63cf1356D695e7f40961d4819d6bF',routerCodeHash:'0x0710561487244e5d288bd93fe4c055a4a33fd486a07e8b4c982124c57c6d3224',
+    feed:'0x2b25BC41D55de29F3A2e163F8Eebf63966B25b57',feedCodeHash:'0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2',maxAge:86520n}),
   8453: Object.freeze({manager:'0x498581fF718922c3f8e6A244956aF099B2652b2b',
     router:'0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40',routerCodeHash:'0x816c75fe7f6ccf8fe8b14825091e8dff301fe7ffd4b962f89b2981a747facc08',
     feed:'0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',feedCodeHash:'0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2',maxAge:3600n,
@@ -72,8 +75,9 @@ export function protectedOpeningPriceV1({ supply, answer, feedDecimals = 8, targ
 }
 async function kit(chainId) {
   const baseKit = Number(chainId) === 8453;
-  const root = baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
-  const contractNames = baseKit ? { ...names, initializer: 'BaseProtectedNativeInitializerV1', hook:'BaseProtectedNative30HookV1', module:'BaseLaunchProtectionModuleV1' } : names;
+  const hyperKit = Number(chainId) === 999;
+  const root = hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
+  const contractNames = hyperKit ? { ...names, initializer: 'HyperEvmProtectedNativeInitializerV1', hook:'HyperEvmProtectedNative30HookV1', module:'HyperEvmLaunchProtectionModuleV1' } : baseKit ? { ...names, initializer: 'BaseProtectedNativeInitializerV1', hook:'BaseProtectedNative30HookV1', module:'BaseLaunchProtectionModuleV1' } : names;
   const standardJsonBytes = await readFile(new URL('standard-json.json', root));
   const artifacts = Object.fromEntries(await Promise.all(Object.entries(contractNames).map(async ([role, name]) =>
     [role, JSON.parse(await readFile(new URL(name + '.artifact.json', root), 'utf8'))])));

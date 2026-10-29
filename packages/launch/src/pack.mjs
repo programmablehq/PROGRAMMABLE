@@ -95,7 +95,7 @@ export async function buildLaunch({ configPath, directNativeProfileVersion, dire
     return buildV4Launch({ config, configPath: absoluteConfig });
   }
   const configuredDirectNativeProfileVersion = apiVersion === "v3"
-    ? config.profileVersion ?? (config.chainId === "8453" ? DIRECT_NATIVE_PROFILE_VERSION_V36 : DIRECT_NATIVE_PROFILE_VERSION)
+    ? config.profileVersion ?? (["8453","999"].includes(config.chainId) ? DIRECT_NATIVE_PROFILE_VERSION_V36 : DIRECT_NATIVE_PROFILE_VERSION)
     : undefined;
   if (directNativeProfileVersion !== undefined
     && config.profileVersion !== undefined
@@ -652,7 +652,7 @@ function assertPackConfig(config) {
       `pack config schemaVersion must be ${PACK_CONFIG_SCHEMA_V1}, ${PACK_CONFIG_SCHEMA_V2}, ${PACK_CONFIG_SCHEMA_V3}, or ${PACK_CONFIG_SCHEMA_V4}`,
     );
   }
-  if (config.chainId !== MAINNET_CHAIN_ID && !(apiVersion === "v3" && config.chainId === "8453"
+  if (config.chainId !== MAINNET_CHAIN_ID && !(apiVersion === "v3" && ["8453","999"].includes(config.chainId)
     && (config.profileVersion === undefined || config.profileVersion === "3.6.0"))) throw new TypeError("Unsupported pack config chain/profile");
   if (!Array.isArray(config.targets) || config.targets.length < 2 || config.targets.length > 16) {
     throw new TypeError("pack config targets must contain between 2 and 16 entries");

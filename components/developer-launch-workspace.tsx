@@ -13,8 +13,8 @@ type Props = DeveloperLaunchHistoryProps & {
   openWallet(): void;
   sendUniversalLaunchWalletAction?: ComponentProps<typeof DeveloperUniversalLaunchHistory>["sendWallet"];
 };
-type HistorySource = LaunchOverviewSource | "base";
-const sources = ["legacy", "base", "custom_launch_plan_v1", "multi_role_v2"] as const;
+type HistorySource = LaunchOverviewSource | "base" | "hyperevm";
+const sources = ["legacy", "base", "hyperevm", "custom_launch_plan_v1", "multi_role_v2"] as const;
 export function DeveloperLaunchWorkspace(props: Props) {
   const [items, setItems] = useState<LaunchOverviewItem[]>([]), [selected, setSelected] = useState<LaunchOverviewItem | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
@@ -25,12 +25,13 @@ export function DeveloperLaunchWorkspace(props: Props) {
   useEffect(() => { tokens.current = { access: props.getAccessToken, identity: props.getIdentityToken }; }, [props.getAccessToken, props.getIdentityToken]);
   const cooldown = useRef(0), inFlight = useRef<AbortSignal | null>(null), deepLinkDone = useRef(false);
   const read = useCallback(async (source: HistorySource, headers: Headers, signal: AbortSignal, cursor?: string | null, id?: string | null) => {
-    const legacy = source === "legacy" || source === "base";
+    const legacy = source === "legacy" || source === "base" || source === "hyperevm";
     const query = new URLSearchParams({ walletAddress: props.account });
     if (!legacy) query.set("source", source);
     if (source === "base") query.set("chainId", "8453");
+    if (source === "hyperevm") query.set("chainId", "999");
     if (cursor) query.set("cursor", cursor);
-    if (legacy) query.set(id ? "version" : "limit", id ? source !== "base" && props.initialLaunchChainId === "4663" ? "v4" : "v3" : "5");
+    if (legacy) query.set(id ? "version" : "limit", id ? source === "legacy" && props.initialLaunchChainId === "4663" ? "v4" : "v3" : "5");
     const response = await fetch(`/api/developer/${legacy ? "custom-launches" : "custom-launch-plans"}${id ? `/${encodeURIComponent(id)}` : ""}?${query}`, {
       cache: "no-store", redirect: "error", headers, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
     const body = await response.json().catch(() => null);
@@ -61,8 +62,8 @@ export function DeveloperLaunchWorkspace(props: Props) {
       const headers = new Headers({ Accept: "application/json", Authorization: `Bearer ${access}` });
       if (identity) headers.set("X-Privy-Identity-Token", identity);
       const id = !deepLinkDone.current ? props.initialLaunchId : null;
-      const requestedSources = sources.filter(source => (!more || more[source]) && (!id || (props.initialLaunchChainId === "8453"
-        ? source === "base" : source !== "base" && (props.initialLaunchChainId !== null || source === "legacy"))));
+      const requestedSources = sources.filter(source => (!more || more[source]) && (!id || (props.initialLaunchChainId === "999" ? source === "hyperevm" : props.initialLaunchChainId === "8453"
+        ? source === "base" : source !== "base" && source !== "hyperevm" && (props.initialLaunchChainId !== null || source === "legacy"))));
       const results = await settleSequentially(requestedSources, source => read(source, headers, signal, more?.[source], id));
       if (signal.aborted) return;
       const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
@@ -98,13 +99,13 @@ export function DeveloperLaunchWorkspace(props: Props) {
   </div>;
   const visible = items.filter(item => chain === "all" || item.chainId === chain);
   return <section className={styles.workspace} id="launch-workspace" tabIndex={-1} aria-label="Your launches">
-    <div className={styles.toolbar}><label>Chain <select value={chain} onChange={event => setChain(event.target.value)}><option value="all">All chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option><option value="8453">Base</option></select></label>
+    <div className={styles.toolbar}><label>Chain <select value={chain} onChange={event => setChain(event.target.value)}><option value="all">All chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option><option value="8453">Base</option><option value="999">HyperEVM</option></select></label>
       <button type="button" className={shared.secondaryButton} onClick={retry} disabled={loading}>Refresh launches</button></div>
     {error ? <DeveloperIssue message={error} retry={retry} connect={props.openWallet} /> : null}
     <p role="status">{loading ? "Loading your launches…" : visible.length ? `${visible.length} ${visible.length === 1 ? "launch" : "launches"}` : error ? "Some launches could not be loaded. Your saved requests are kept." : "No launch requests yet."}</p>
     <ul className={styles.list}>{visible.map(item => <li key={`${item.source}:${item.id}`}><button type="button" className={styles.card} onClick={() => open(item)}>
       <span className={styles.image}>{item.image && !failedImages.includes(item.image) ? <NextImage src={item.image} alt="" width={48} height={48} unoptimized referrerPolicy="no-referrer" onError={() => setFailedImages(current => [...current, item.image!])} /> : (item.symbol || item.name).slice(0, 2)}</span>
-      <span className={styles.identity}><strong>{item.name}</strong><span>{item.symbol}{item.symbol ? " · " : ""}{item.chainId === "8453" ? "Base" : item.chainId === "1" ? "Ethereum" : "Robinhood"}</span><small>{item.next}</small></span>
+      <span className={styles.identity}><strong>{item.name}</strong><span>{item.symbol}{item.symbol ? " · " : ""}{item.chainId === "999" ? "HyperEVM" : item.chainId === "8453" ? "Base" : item.chainId === "1" ? "Ethereum" : "Robinhood"}</span><small>{item.next}</small></span>
       <span className={styles.status}>{item.status}<span aria-hidden="true"> →</span></span>
     </button></li>)}</ul>
     {Object.values(cursors).some(Boolean) ? <button className={shared.secondaryButton} type="button" disabled={loading} onClick={() => { const controller = new AbortController(); setLoading(true); void load(controller.signal, cursors).finally(() => setLoading(false)); }}>Load more launches</button> : null}

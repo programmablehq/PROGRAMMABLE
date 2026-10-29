@@ -7,13 +7,14 @@ import {
 export const DEFAULT_EXPLORE_CHAIN_ID = DEFAULT_VIEW_CHAIN_ID;
 
 export function exploreChainPath(chainId: ViewChainId): string {
-  return chainId === 8453 ? "/explore/base" : chainId === 4663 ? "/explore/robinhood" : "/explore/ethereum";
+  return chainId === 999 ? "/explore/hyperevm" : chainId === 8453 ? "/explore/base" : chainId === 4663 ? "/explore/robinhood" : "/explore/ethereum";
 }
 
 export function exploreChainIdFromSlug(slug: string): ViewChainId | null {
   if (slug === "robinhood") return 4663;
   if (slug === "ethereum") return 1;
   if (slug === "base") return 8453;
+  if (slug === "hyperevm") return 999;
   return null;
 }
 

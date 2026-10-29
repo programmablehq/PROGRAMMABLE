@@ -6,12 +6,14 @@ vi.mock("server-only", () => ({}));
 
 import {
   PROGRAMMABLE_AGENT_INTAKE_TEXT_V1,
+  PROGRAMMABLE_CURRENT_AGENT_INTAKE_TEXT_V1,
   PROGRAMMABLE_AGENT_INTAKE_V1,
   PROGRAMMABLE_AGENT_SETUP_TEXT_V1,
   PROGRAMMABLE_ROBINHOOD_FUNDING_INTAKE_V1,
   PROGRAMMABLE_ROBINHOOD_FUNDING_INTAKE_TEXT_V1,
   buildProgrammableAgentSetupTextV1,
   programmableAgentIntakeV1,
+  programmableCurrentAgentIntakeV1,
   programmableRobinhoodFundingIntakeTextV1,
 } from "../lib/custom-launch/agent-setup-v1";
 import { PRELAUNCH_CUSTOM_REGISTRY_PUBLIC_MANIFEST_V1 } from "../lib/custom-launch/registry-public-manifest-v1";
@@ -60,16 +62,16 @@ describe("chain-first Custom Launch intake", () => {
   });
 
   it("publishes the same preparation guidance before technical setup on every entry point", () => {
-    expect(document.customLaunchApi.intake).toEqual(programmableAgentIntakeV1(V4_API_PROFILE_VERSION));
+    expect(document.customLaunchApi.intake).toEqual(programmableCurrentAgentIntakeV1(V4_API_PROFILE_VERSION));
     expect(programmableAgentIntakeV1()).toBe(PROGRAMMABLE_AGENT_INTAKE_V1);
     expect(document.customLaunchApi.intake.scope).toBe("agent-preparation-not-server-authorization");
-    expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.indexOf(PROGRAMMABLE_AGENT_INTAKE_TEXT_V1))
+    expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.indexOf(PROGRAMMABLE_CURRENT_AGENT_INTAKE_TEXT_V1))
       .toBeGreaterThan(0);
-    expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.indexOf(PROGRAMMABLE_AGENT_INTAKE_TEXT_V1))
+    expect(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.indexOf(PROGRAMMABLE_CURRENT_AGENT_INTAKE_TEXT_V1))
       .toBeLessThan(PROGRAMMABLE_AGENT_SETUP_TEXT_V1.indexOf("Use the preconfigured"));
     const guideIntake = rawGuide.slice(0, rawGuide.indexOf("## API versions and release gates"));
     for (const instruction of document.customLaunchApi.intake.instructions) {
-      expect(PROGRAMMABLE_AGENT_INTAKE_TEXT_V1).toContain(instruction);
+      expect(PROGRAMMABLE_CURRENT_AGENT_INTAKE_TEXT_V1).toContain(instruction);
       expect(guideIntake).toContain(instruction);
     }
     expect(guideIntake).toContain("customLaunchApi.intake");
@@ -86,6 +88,8 @@ describe("chain-first Custom Launch intake", () => {
     expect(selection.choices).toEqual([
       { chainId: 1, caip2: "eip155:1", name: "Ethereum Mainnet", apiVersion: "3" },
       { chainId: 4663, caip2: "eip155:4663", name: "Robinhood Chain Mainnet", apiVersion: "4" },
+      { chainId: 8453, caip2: "eip155:8453", name: "Base", apiVersion: "4" },
+      { chainId: 999, caip2: "eip155:999", name: "HyperEVM", apiVersion: "4" },
     ]);
     for (const choice of selection.choices) {
       expect(document.chains).toContainEqual(expect.objectContaining({

@@ -1,5 +1,9 @@
 "use client";
 
+import { EVM_SWAP_SCHEMA, validateEvmFeeClaimPreparation, type EvmFeeClaimPreparation, validateEvmCustomSwapPreparation, type EvmCustomSwapPreparation } from "@/lib/swap/evm-custom";
+import { enableHyperEvmLargeTransactionsV1 } from "@/packages/launch/src/hyperevm-network-v1.mjs";
+import { readHyperEvmWalletFees } from "@/lib/hyperevm-wallet-gas";
+
 import type { LaunchPlanTradeWalletInputV1, LaunchPlanTradeWalletReviewV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import type { LaunchStep } from "@/lib/custom-ai/launch-session";
@@ -31,7 +35,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { base, mainnet, sepolia } from "viem/chains";
+import { base, hyperEvm, mainnet, sepolia } from "viem/chains";
 import { bytesToHex, hexToBytes, type Address, type Hex } from "viem";
 
 import {
@@ -222,6 +226,7 @@ type WalletContextValue = {
     input: CustomLaunchWalletActionV1,
   ) => Promise<Hex>;
   sendLaunchPlanTradeWalletAction: (input: LaunchPlanTradeWalletInputV1) => Promise<LaunchPlanTradeWalletReviewV1 | Hex>;
+  sendEvmCustomSwapWalletAction: (input: EvmCustomSwapPreparation | EvmFeeClaimPreparation) => Promise<Hex>;
   sendCustomV4SwapWalletAction: (input: CustomV4SwapWalletInput) => Promise<CustomV4SwapWalletReview | Hex>;
   sendLaunchClaimWalletAction: (input: LaunchClaimWalletInputV1) => Promise<LaunchClaimWalletReviewV1 | Hex>;
   sendUniversalLaunchWalletAction: (input: UniversalLaunchWalletInputV1) => Promise<UniversalLaunchWalletReviewV1 | Hex | null>;
@@ -786,7 +791,7 @@ const privyConfig = {
       createOnLogin: "users-without-wallets",
     },
   },
-  supportedChains: [robinhoodChain, mainnet, base],
+  supportedChains: [robinhoodChain, mainnet, base, hyperEvm],
   defaultChain: robinhoodChain,
 } satisfies PrivyClientConfig;
 
@@ -1109,6 +1114,7 @@ function DeferredWalletProvider({
         throw new Error("Wallet sign-in is still loading");
       },
       sendLaunchPlanTradeWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
+      sendEvmCustomSwapWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
       sendCustomV4SwapWalletAction: async () => { throw Object.assign(new Error("Connect your trading wallet before continuing"), { walletRequestAttempted: false }); },
       sendLaunchClaimWalletAction: async () => { throw new Error("Connect your controller wallet before continuing"); },
       sendUniversalLaunchWalletAction: async () => { throw new Error("Connect your controller wallet before continuing"); },
@@ -3103,7 +3109,7 @@ function PrivyWalletBridge({
     if (!connectedWallet || !wallet) {
       throw new Error("Connect your wallet before continuing");
     }
-    const targetChain = input.chainId === "8453" ? base : appChain;
+    const targetChain = input.chainId === "999" ? hyperEvm : input.chainId === "8453" ? base : appChain;
     const targetChainHex = `0x${targetChain.id.toString(16)}`;
     const targetNetworkName = targetChain.name;
     if (
@@ -3138,23 +3144,33 @@ function PrivyWalletBridge({
         await connectedWallet.switchChain(targetChain.id);
         assertCurrentSession();
       }
-      const sendLocked = (execute: () => Promise<Hex>) =>
+      const sendLocked = (execute: (fees?: Awaited<ReturnType<typeof readHyperEvmWalletFees>>) => Promise<Hex>) =>
         runWithBrowserWalletRequestLock({
           sessionSubject,
           account: wallet.account,
           chainId: input.chainId,
           requestSubject: JSON.stringify(["browser-wallet-action-v1", input]),
           assertCurrentSession,
-          execute,
+          execute: async () => {
+            let fees: Awaited<ReturnType<typeof readHyperEvmWalletFees>> | undefined;
+            if (input.chainId === "999") {
+              const provider=await getWalletProviderOnChain({ wallet:connectedWallet,chainId:999,assertCurrentSession,networkName:"HyperEVM" });
+              await enableHyperEvmLargeTransactionsV1({account:wallet.account,request:payload=>provider.request(payload)});
+              fees = await readHyperEvmWalletFees({account:wallet.account,request:payload=>provider.request(payload)});
+              assertCurrentSession();
+            }
+            return execute(fees);
+          },
         });
       if (isEmbeddedWallet) {
-        return await sendLocked(async () => {
+        return await sendLocked(async (fees) => {
           const result = await sendPrivyTransaction(
             {
               to: input.to,
               data: input.data,
               value: BigInt(input.value),
               chainId: targetChain.id,
+              ...(fees ? { maxFeePerGas: BigInt(fees.maxFeePerGas), maxPriorityFeePerGas: 0n } : {}),
             },
             {
               address: wallet.account,
@@ -3176,7 +3192,7 @@ function PrivyWalletBridge({
         request: (method) => provider.request({ method }),
       });
       assertCurrentSession();
-      return await sendLocked(async () => {
+      return await sendLocked(async (fees) => {
         const hash = await provider.request({
           method: "eth_sendTransaction",
           params: [
@@ -3185,6 +3201,7 @@ function PrivyWalletBridge({
               to: input.to,
               data: input.data,
               value: input.value,
+              ...fees,
             },
           ],
         });
@@ -3194,6 +3211,31 @@ function PrivyWalletBridge({
       throw new Error(getWalletTransactionErrorMessage(caught));
     }
   }, [connectedWallet, sendPrivyTransaction, user?.id, wallet]);
+
+  const sendEvmCustomSwapWalletAction = useCallback(async (input: EvmCustomSwapPreparation | EvmFeeClaimPreparation):Promise<Hex> => {
+    if(!connectedWallet || !wallet || !user?.id)throw new Error("Connect your trading wallet before continuing");
+    const account=wallet.account,sessionSubject=user.id;
+    const expected={chainId:input.request.chainId,owner:account,token:input.request.token};
+    const assertCurrentSession=()=>{const current=walletRequestSessionRef.current;
+      if(!current.authenticated||current.privyUserId!==sessionSubject||current.account?.toLowerCase()!==account.toLowerCase())throw new Error("The wallet session changed");};
+    const validate=()=>input.schemaVersion===EVM_SWAP_SCHEMA?validateEvmCustomSwapPreparation(input,expected):validateEvmFeeClaimPreparation(input,expected);
+    validate();
+    if(input.request.chainId!==999)throw new Error("Unsupported trade chain");
+    const provider=await getWalletProviderOnChain({wallet:connectedWallet,chainId:999,networkName:"HyperEVM",assertCurrentSession});
+    return runWithBrowserWalletRequestLock({sessionSubject,account,chainId:"999",requestSubject:input.preparationDigest,assertCurrentSession,execute:async()=>{
+      const checked=validate();assertCurrentSession();
+      const tx=checked.transaction;
+      const fees = await readHyperEvmWalletFees({account,request:payload=>provider.request(payload)});
+      assertCurrentSession();validate();
+      if(connectedWallet.walletClientType==="privy"||connectedWallet.walletClientType==="privy-v2"){
+        const result=await sendPrivyTransaction({to:tx.to,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gasLimit),chainId:999,maxFeePerGas:BigInt(fees.maxFeePerGas),maxPriorityFeePerGas:0n},{address:account,uiOptions:{description:!("kind" in tx)?"Claim accrued creator fees":tx.kind==="swap"?"Swap on HyperEVM":"Approve the exact trade amount",buttonText:!("kind" in tx)?"Claim fees":tx.kind==="swap"?"Swap":"Approve",successHeader:"Transaction submitted"}});
+        return parseSubmittedTransactionHash(result.hash);
+      }
+      await assertExternalWalletAuthorityCurrent({expectedAccount:account,expectedChainId:"0x3e7",networkName:"HyperEVM",request:method=>provider.request({method})});
+      assertCurrentSession();validate();
+      return parseSubmittedTransactionHash(await provider.request({method:"eth_sendTransaction",params:[{from:account,to:tx.to,data:tx.data,value:`0x${BigInt(tx.value).toString(16)}`,gas:`0x${BigInt(tx.gasLimit).toString(16)}`,...fees}]}));
+    }});
+  },[connectedWallet,sendPrivyTransaction,user,wallet]);
 
   const sendCustomLaunchWalletAction = useCallback(async (
     input: CustomLaunchWalletActionV1,
@@ -3686,6 +3728,7 @@ function PrivyWalletBridge({
       sendCustomLaunchWalletActionV4,
       sendUniversalLaunchWalletAction,
       sendLaunchPlanTradeWalletAction,
+      sendEvmCustomSwapWalletAction,
       sendCustomV4SwapWalletAction,
       sendLaunchClaimWalletAction,
       signCustomLaunchFundingAuthorization,
@@ -3727,6 +3770,7 @@ function PrivyWalletBridge({
       sendCustomLaunchWalletActionV4,
       sendUniversalLaunchWalletAction,
       sendLaunchPlanTradeWalletAction,
+      sendEvmCustomSwapWalletAction,
       sendCustomV4SwapWalletAction,
       sendLaunchClaimWalletAction,
       signCustomLaunchFundingAuthorization,
@@ -3850,6 +3894,7 @@ function UnconfiguredWalletProvider({ children }: { children: ReactNode }) {
         throw new Error("Wallet sign-in is unavailable");
       },
       sendLaunchPlanTradeWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
+      sendEvmCustomSwapWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
       sendCustomV4SwapWalletAction: async () => { throw Object.assign(new Error("Connect your trading wallet before continuing"), { walletRequestAttempted: false }); },
       sendLaunchClaimWalletAction: async () => { throw new Error("Connect your controller wallet before continuing"); },
       sendUniversalLaunchWalletAction: async () => { throw new Error("Connect your controller wallet before continuing"); },

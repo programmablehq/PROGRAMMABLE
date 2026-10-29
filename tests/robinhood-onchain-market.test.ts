@@ -114,4 +114,8 @@ describe("valuation display selection", () => {
     expect(coinValuation(market({ marketCapUsd: Infinity, fdvUsd: -1 }))).toEqual({ label: "Market Cap", value: null });
     expect(coinValuation(null)).toEqual({ label: "Market Cap", value: null });
   });
+  it("labels an explicitly verified total-supply valuation as FDV", () => {
+    expect(coinValuation(market({ valuationKind: "fdv", marketCapUsd: null, fdvUsd: 16_000 })))
+      .toEqual({ label: "FDV", value: 16_000, title: "Based on total token supply" });
+  });
 });

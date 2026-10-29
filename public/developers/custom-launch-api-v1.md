@@ -46,7 +46,7 @@ New Custom Launches use a versioned policy: Programmable-routed trades on Ethere
 
 The shared intake is published at `customLaunchApi.intake` in [live discovery](https://programmable.market/.well-known/programmable.json). Complete it before following either chain-specific guide.
 
-1. Confirm the project's intended chain: Ethereum Mainnet (1) or Robinhood Chain Mainnet (4663). Reuse an explicit earlier answer; ask if the choice is missing, ambiguous or contradictory. Uniswap V4 identifies a protocol, not a chain. Never infer the chain from the API key, connected wallet or project defaults, and never fall back to another chain when a gate fails.
+1. Confirm the project's intended chain: Ethereum Mainnet (1), Robinhood Chain Mainnet (4663), Base (8453) or HyperEVM (999). Reuse an explicit earlier answer; ask if the choice is missing, ambiguous or contradictory. Uniswap V4 identifies a protocol, not a chain. Never infer the chain from the API key, connected wallet or project defaults, and never fall back to another chain when a gate fails.
 
 2. Before building or packing, collect the token name, ticker/symbol, useful public bio/description, actual image file and its public URI, website and X profile. Reuse answers and assets already supplied by the user; ask only for missing or conflicting values. Ask whether Telegram, Discord, documentation, GitHub or other links are available; these additional links are optional. Never invent metadata, image bytes or public URLs. Use the selected chain's image rules.
 
@@ -131,7 +131,7 @@ capabilities and readiness. The authenticated API server selects `robinhood-laun
 `robinhood-production-launch` from the chain binding; callers cannot select a policy profile.
 
 Create one platform API key at <https://programmable.market/developers/api-keys> and provide it through
-`PROGRAMMABLE_API_KEY`. Follow the user's explicit Ethereum or Robinhood choice, then verify that chain's discovery
+`PROGRAMMABLE_API_KEY`. Follow the user's explicit Ethereum, Robinhood, Base or HyperEVM choice, then verify that chain's discovery
 contract and the grants reported for the key. A grant does not select the chain. The key authorizes API requests; the user separately reviews and signs their onchain launch
 transaction and pays gas.
 

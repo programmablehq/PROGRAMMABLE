@@ -1,13 +1,13 @@
 import { isAddress } from "viem";
 
-export type LaunchShareIdentity = { address: string; chainId: 1 | 4663 | 8453 };
+export type LaunchShareIdentity = { address: string; chainId: 1 | 4663 | 8453 | 999 };
 export type LaunchShareData = LaunchShareIdentity & {
   name: string; symbol: string; href: string; imageDataUrl: string | null;
 };
 
 export function launchShareIdentity(address: string, chain: string | null): LaunchShareIdentity | null {
-  return isAddress(address) && !/^0x0{40}$/i.test(address) && (chain === "1" || chain === "4663" || chain === "8453")
-    ? { address: address.toLowerCase(), chainId: chain === "8453" ? 8453 : chain === "1" ? 1 : 4663 } : null;
+  return isAddress(address) && !/^0x0{40}$/i.test(address) && (chain === "1" || chain === "4663" || chain === "8453" || chain === "999")
+    ? { address: address.toLowerCase(), chainId: chain === "999" ? 999 : chain === "8453" ? 8453 : chain === "1" ? 1 : 4663 } : null;
 }
 
 /** Accept only known internal coin routes. Wallet preferences never select the chain. */

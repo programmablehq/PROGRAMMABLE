@@ -2307,7 +2307,7 @@
             }
           }
         ],
-        "description": "Fresh Ethereum profile 3.6 request. Exact source, graph, complete project metadata, profile and intent hashes are required. Use the existing funding-mode-specific authorization rules. Profile 3.6 does not accept the 3.4/3.5 behaviorScenarioInputs fields.",
+        "description": "Fresh Base Custom Launch request. Exact source, graph, complete project metadata, profile and intent hashes are required. Use the existing funding-mode-specific authorization rules. Profile 3.6 does not accept the 3.4/3.5 behaviorScenarioInputs fields.",
         "additionalProperties": false
       },
       "CustomLaunchFailureV3": {

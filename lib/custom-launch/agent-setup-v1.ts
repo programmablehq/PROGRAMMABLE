@@ -123,6 +123,31 @@ export function programmableAgentIntakeV1(profileVersion = "4.0.0") {
   });
 }
 
+/** Current chain discovery is additive; the historical intake remains reproducible. */
+export function programmableCurrentAgentIntakeV1(profileVersion = "4.0.0") {
+  const legacy = programmableAgentIntakeV1(profileVersion);
+  return Object.freeze({
+    ...legacy,
+    chainSelection: Object.freeze({
+      ...legacy.chainSelection,
+      choices: Object.freeze([
+        ...legacy.chainSelection.choices,
+        Object.freeze({ chainId: 8453, caip2: "eip155:8453", name: "Base", apiVersion: "4" }),
+        Object.freeze({ chainId: 999, caip2: "eip155:999", name: "HyperEVM", apiVersion: "4" }),
+      ]),
+    }),
+    instructions: Object.freeze([
+      "1. Confirm the project's intended chain: Ethereum Mainnet (1), Robinhood Chain Mainnet (4663), Base (8453) or HyperEVM (999). Reuse an explicit earlier answer; ask if the choice is missing, ambiguous or contradictory. Uniswap V4 identifies a protocol, not a chain. Never infer the chain from the API key, connected wallet or project defaults, and never fall back to another chain when a gate fails.",
+      ...legacy.instructions.slice(1),
+    ]),
+  });
+}
+
+export const PROGRAMMABLE_CURRENT_AGENT_INTAKE_TEXT_V1 = [
+  "Start with the launch details",
+  ...programmableCurrentAgentIntakeV1().instructions,
+].join("\n");
+
 export function programmableRobinhoodFundingIntakeTextV1(profileVersion = "4.0.0") {
   return [
     "Robinhood: choose the funding plan before building",
@@ -177,7 +202,7 @@ export function buildProgrammableAgentSetupTextV1(profileVersion = "4.0.0") {
   return [
     "Programmable Custom Launch agent setup",
     "",
-    PROGRAMMABLE_AGENT_INTAKE_TEXT_V1,
+    PROGRAMMABLE_CURRENT_AGENT_INTAKE_TEXT_V1,
     "",
     "Use the preconfigured $PROGRAMMABLE_API_KEY from encrypted secrets or the environment. Never paste the key into chat, a prompt, source code, or command history.",
     "The API key grants API access only. It does not contain policy or integration instructions.",
@@ -185,8 +210,9 @@ export function buildProgrammableAgentSetupTextV1(profileVersion = "4.0.0") {
     "For protected Robinhood launches, use prepareProtectedNativeContractsV1 and protectedRobinhoodPlanV1 with the current atomic executor from GET /v4/chains/4663/custom-launch-capabilities. Encode with protectedRobinhoodPlanBytesV1, preflight at /v4/chains/4663/custom-launch-plans:preflight, then submit to /v4/chains/4663/custom-launch-plans using Programmable-Launch-Response-Version: 1.2. For protected Ethereum launches use buildProtectedEthereumLaunchV1 with current /v3/capabilities and complete project metadata. Follow the package README for inputs, positive initial-buy minimum output and source verification. Exact source review and authenticated protection evidence are required before approval/signing. A historical or unprotected builder cannot satisfy required mode; keep those new launches paused.",
     "",
     `Start here: ${links.discovery}`,
-    "Read customLaunchApi.intake in discovery and complete the launch details above before chain-specific implementation. Follow the user's explicit choice: Ethereum Mainnet (1, eip155:1) uses V3; Robinhood Chain Mainnet (4663, eip155:4663) uses V4.",
-    "The same API-key entry point serves both chains. A key needs custom-launch:create and custom-launch:read plus server authorization for the selected chain; its presence does not prove a chain grant. A wallet key's launchWallet must equal its wallet binding. Keep credentials on https://api.programmable.market and follow only the selected chain's instructions below.",
+    "Read customLaunchApi.intake in discovery and complete the launch details above before chain-specific implementation. Ethereum Mainnet (1) uses V3; Robinhood (4663), Base (8453) and HyperEVM (999) use their chain-qualified V4 routes. Follow the user's explicit choice and the matching live capabilities.",
+    "The same API-key entry point serves all four chains. A key needs custom-launch:create and custom-launch:read plus server authorization for the selected chain; its presence does not prove a chain grant. A wallet key's launchWallet must equal its wallet binding. Keep credentials on https://api.programmable.market and follow only the selected chain's instructions below.",
+    "For Base use https://programmable.market/developers/base-custom-launch-api-v1.md; for HyperEVM use https://programmable.market/developers/hyperevm-custom-launch-api-v1.md. Require mode active, ready true and publicLaunchAuthorized true from that chain's /v4/chains/{chainId}/readiness. These guides define the chain-specific native currency, roots, protected builder and wallet setup. Module Mode is not available on Base or HyperEVM.",
     "",
     "Robinhood Chain Mainnet only (V4, chain 4663)",
     ...(successor ? [

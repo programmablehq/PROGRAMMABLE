@@ -48,7 +48,7 @@ export const programmablePublicOpenApi = {
     title: "Programmable developer APIs",
     version: "1.19.0",
     summary:
-      "Ethereum, Robinhood and Base Explore feeds, Custom launch contracts and release discovery.",
+      "Ethereum, Robinhood, Base and HyperEVM Explore feeds, Custom launch contracts and release discovery.",
     description:
       robinhoodV4PublicPolicyDescription(V4_API_PROFILE_VERSION, "The unauthenticated GET /api/explore/ethereum, GET /api/explore/robinhood and GET /api/explore/base endpoints serve chain-specific verified launch pages. Their response status distinguishes current, incomplete, saved and unavailable reads; module catalog filters do not restrict source submission ideas. Base Custom Launch requests use the chain-qualified /v4/chains/8453 API and require active readiness with publicLaunchAuthorized. Its finalized feed and Explore catalog are documented in /openapi/base-custom-launch-v1.json. Base Module Mode is unavailable. The legacy /api/explore and /api/explore/token routes, including analytics and chart, retain their indexing-reset responses. At the separately hosted Custom Launch API, fresh writes use the public Ethereum V3.3 contract. Robinhood Chain V4 exposes a public self-serve launch path when live publicWrites, publicAuthorization and releaseReady discovery fields are all true. Clients must verify these gates before creating. The required default policy for new Robinhood V4 API Custom launches is 20 bps to the published recipient. It is policy configuration, not proof of canonical onchain fee enforcement, a charged fee or platform revenue, and missing onchain fee enforcement is not itself a write blocker. V2 and V1 history remain readable, while both legacy creation routes are write-fenced with non-retryable 409 CUSTOM_LAUNCH_V2_READ_ONLY and CUSTOM_LAUNCH_V1_READ_ONLY responses. CLI and model checks prepare a request; only the API server decides whether verified evidence permits a wallet handoff. Legacy Registry and GitHub submission intake is closed. An API key and the CLI never sign or broadcast a controller-wallet transaction."),
     contact: {
@@ -1669,7 +1669,7 @@ export const programmablePublicOpenApi = {
       OperationsHealth: {
         type: "object",
         description:
-          "Observed website catalog availability, separate from direct provider health and Custom Launch API readiness. Ready requires all three indexes to be ready; unavailable requires all three to be unavailable; all other combinations are degraded. An empty current catalog is valid. checkedAt is the cached observation time and updatedAt is each catalog's source time.",
+          "Observed website catalog availability, separate from direct provider health and Custom Launch API readiness. Ready requires all four indexes to be ready; unavailable requires all four to be unavailable; all other combinations are degraded. An empty current catalog is valid. checkedAt is the cached observation time and updatedAt is each catalog's source time.",
         required: ["schemaVersion", "scope", "status", "checkedAt", "indexes", "providers", "customLaunchReadiness"],
         properties: {
           schemaVersion: { const: "programmable.operations-health.v2" },
@@ -1677,11 +1677,12 @@ export const programmablePublicOpenApi = {
           status: { enum: ["ready", "degraded", "unavailable"] },
           checkedAt: { type: "string", format: "date-time" },
           indexes: {
-            type: "array", minItems: 3, maxItems: 3, items: false,
+            type: "array", minItems: 3, maxItems: 4, items: false,
             prefixItems: [
               { chainId: 1, catalogUrl: `${SITE_ORIGIN}/api/explore/ethereum`, statuses: ["ready", "partial", "stale", "unavailable"] },
               { chainId: 4663, catalogUrl: `${SITE_ORIGIN}/api/explore/robinhood`, statuses: ["ready", "syncing", "stale", "unavailable"] },
               { chainId: 8453, catalogUrl: `${SITE_ORIGIN}/api/explore/base`, statuses: ["ready", "stale", "unavailable"] },
+              { chainId: 999, catalogUrl: `${SITE_ORIGIN}/api/explore/hyperevm`, statuses: ["ready", "stale", "unavailable"] },
             ].map(index => ({
               type: "object", required: ["chainId", "status", "updatedAt", "catalogUrl"], additionalProperties: false,
               properties: {
@@ -1702,11 +1703,12 @@ export const programmablePublicOpenApi = {
             },
           },
           customLaunchReadiness: {
-            type: "array", minItems: 3, maxItems: 3, items: false,
+            type: "array", minItems: 3, maxItems: 4, items: false,
             prefixItems: [
               { chainId: 1, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/readyz`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v3/capabilities` },
               { chainId: 4663, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-plans/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-capabilities` },
               { chainId: 8453, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/8453/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/8453/capabilities` },
+              { chainId: 999, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/999/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/999/capabilities` },
             ].map(chain => ({
               type: "object", required: ["chainId", "readinessUrl", "capabilitiesUrl"], additionalProperties: false,
               properties: { chainId: { const: chain.chainId }, readinessUrl: { const: chain.readinessUrl }, capabilitiesUrl: { const: chain.capabilitiesUrl } },
@@ -1843,6 +1845,9 @@ export const programmablePublicOpenApi = {
       authenticationRequired: false,
       ethereum: { path: "/api/explore/ethereum", chainId: 1, statuses: ["ready", "partial", "stale", "unavailable"] },
       robinhood: { path: "/api/explore/robinhood", chainId: 4663, statuses: ["ready", "syncing", "stale", "unavailable"] },
+      hyperevm: { path: "/api/explore/hyperevm", chainId: 999, statuses: ["ready", "stale", "unavailable"], moduleMode: false,
+        openApiUrl: `${SITE_ORIGIN}/openapi/hyperevm-custom-launch-v1.json`,
+        finalizedFeedUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/999/finalized-custom-launches` },
       base: { path: "/api/explore/base", chainId: 8453, statuses: ["ready", "stale", "unavailable"], moduleMode: false,
         openApiUrl: `${SITE_ORIGIN}/openapi/base-custom-launch-v1.json`,
         finalizedFeedUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/8453/finalized-custom-launches` },

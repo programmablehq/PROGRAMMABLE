@@ -21,7 +21,7 @@ export type RobinhoodCoinMarket = Readonly<{
 
 export type RobinhoodCoinPresentation = Readonly<{
   /** Explicit for merged catalogs; legacy Robinhood reads omit this field. */
-  chainId?: 1 | 4663 | 8453;
+  chainId?: 1 | 4663 | 8453 | 999;
   tokenAddress: string;
   /** Optional current public token getters; never used to select a trading route. */
   name?: string;
@@ -73,10 +73,10 @@ const priceDollars = new Intl.NumberFormat("en-US", {
 });
 
 /** Keep the valuation basis available under one consistent product label. */
-export function coinValuation(market: RobinhoodCoinMarket | null | undefined): { label: "Market Cap"; value: number | null; title?: string } {
+export function coinValuation(market: RobinhoodCoinMarket | null | undefined): { label: "Market Cap" | "FDV"; value: number | null; title?: string } {
   const valid = (value: number | null | undefined): value is number => value != null && Number.isFinite(value) && value >= 0;
   if (valid(market?.marketCapUsd)) return { label: "Market Cap", value: market.marketCapUsd };
-  if (valid(market?.fdvUsd)) return { label: "Market Cap", value: market.fdvUsd, title: "Based on total token supply" };
+  if (valid(market?.fdvUsd)) return { label: market.valuationKind === "fdv" ? "FDV" : "Market Cap", value: market.fdvUsd, title: "Based on total token supply" };
   return { label: "Market Cap", value: null };
 }
 

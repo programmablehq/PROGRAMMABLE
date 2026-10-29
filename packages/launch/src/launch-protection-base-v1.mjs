@@ -9,8 +9,7 @@ import { resolveDirectNativeProfile } from './profile-direct-native-v1.mjs';
 import { GRAPH_TARGET_SALT_TYPE, LAUNCH_SEEDED_CONCENTRATED_LIQUIDITY_VECTORS } from './constants.mjs';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
-const kitUrl = new URL('../contracts/base-launch-protection-v1/', import.meta.url);
-const contracts = { initializer: 'BaseProtectedNativeInitializerV1', token: 'ProtectedLaunchTokenV1', hook: 'BaseProtectedNative30HookV1' };
+
 async function exactFile(file, content) {
   await mkdir(path.dirname(file), { recursive: true });
   try { const previous = await readFile(file); if (!previous.equals(Buffer.from(content))) throw new Error('Refusing to overwrite a different project source: ' + file); }
@@ -18,7 +17,11 @@ async function exactFile(file, content) {
 }
 /** Builds the Base API request. It never submits, signs or sends a transaction. */
 export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabilities, input, permitWindow }) {
-  if (capabilities.chain?.id !== '8453' || capabilities.profile?.profileVersion !== '3.6.0') throw new TypeError('Current Base capabilities are required');
+  const chainId=capabilities.chain?.id;
+  if (!['8453','999'].includes(chainId) || capabilities.profile?.profileVersion !== '3.6.0') throw new TypeError('Current EVM capabilities are required');
+  const hyper=chainId==='999';
+  const kitUrl=new URL(hyper?'../contracts/hyperevm-launch-protection-v1/':'../contracts/base-launch-protection-v1/',import.meta.url);
+  const contracts={initializer:hyper?'HyperEvmProtectedNativeInitializerV1':'BaseProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:hyper?'HyperEvmProtectedNative30HookV1':'BaseProtectedNative30HookV1'};
   const root = path.resolve(projectRoot), metadata = input.projectMetadata;
   const selection = { schemaVersion: 'programmable.direct-native-hook-graph-profile-selection.v3',
     profileId: 'programmable.direct-native-hook-graph.v1', profileRevision: 3,
@@ -33,7 +36,7 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
         schemaVersion: 'programmable.direct-native-liquidity-model-assessment.v1', status: 'required', requestClaimsExecution: false,
         requiredVectorIds: [...LAUNCH_SEEDED_CONCENTRATED_LIQUIDITY_VECTORS] } },
   };
-  const profile = resolveDirectNativeProfile(selection, { chainId:'8453', profileVersion: '3.6.0', programmableTradeFeePolicy: capabilities.profile?.programmableTradeFeePolicy });
+  const profile = resolveDirectNativeProfile(selection, { chainId, profileVersion: '3.6.0', programmableTradeFeePolicy: capabilities.profile?.programmableTradeFeePolicy });
   const standardBytes = await readFile(new URL('standard-json.json', kitUrl));
   const standard = JSON.parse(standardBytes);
   for (const [source, value] of Object.entries(standard.sources)) await exactFile(path.join(root, source), value.content);
@@ -47,14 +50,14 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
   const source = await buildSourceBundle(root, bundlePaths);
   const namespace = deriveRouteNamespace(source.bundleContentSha256, input.launchWallet, profile);
   const saltType = keccak256(stringToHex(GRAPH_TARGET_SALT_TYPE));
-  const prepared = await prepareProtectedNativeContractsV1({ ...input, client, chainId: 8453, developer: input.launchWallet,
+  const prepared = await prepareProtectedNativeContractsV1({ ...input, client, chainId: Number(chainId), developer: input.launchWallet,
     name: metadata.token.name, symbol: metadata.token.symbol, deploymentFactory: profile.graphFactory,
     initializerAuthority: profile.graphFactory,
     deriveRootAddress({ role, initCodeHash, applicantSalt }) {
       const field = Buffer.from(role), length = Buffer.alloc(4); length.writeUInt32BE(field.length);
       const targetIdHash = keccak256('0x' + Buffer.concat([Buffer.from('programmable.create2-graph-target-id.v1'), Buffer.from([0]), length, field]).toString('hex'));
       const salt = keccak256(encodeAbiParameters(parseAbiParameters('bytes32,uint256,address,bytes32,bytes32,bytes32,bytes32,address'),
-        [saltType, 8453n, profile.graphFactory, namespace, input.nonce, targetIdHash, applicantSalt, profile.router]));
+        [saltType, BigInt(chainId), profile.graphFactory, namespace, input.nonce, targetIdHash, applicantSalt, profile.router]));
       return { salt, address: getCreate2Address({ from: profile.graphFactory, salt, bytecodeHash: initCodeHash }) };
     } });
   const base = role => ({ targetId: role, compilationUnitId: 'launch-protection-v1', artifact: `protection/artifacts/${role}.json`,
@@ -68,11 +71,11 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
     { ...base('token'), constructorArguments: [metadata.token.name, metadata.token.symbol, String(prepared.supply), { target: 'initializer' }, pins.manager] },
     { ...base('hook'), constructorArguments: [pins.manager, [{ target: 'token' }, 0, 60, String(prepared.price.sqrtPriceX96), { target: 'initializer' }, input.launchWallet,
       input.creatorBuyFeeBps ?? 0, input.creatorSellFeeBps ?? 0, ZERO, 0], input.launchWallet,
-      PROTECTED_LAUNCH_CHAIN_PINS_V1[8453].router,
-      PROTECTED_LAUNCH_CHAIN_PINS_V1[8453].routerCodeHash, prepared.exemptions],
+      PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId].router,
+      PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId].routerCodeHash, prepared.exemptions],
       declaredHookPermissions: ['beforeInitialize', 'beforeSwap', 'afterSwap', 'beforeSwapReturnDelta', 'afterSwapReturnDelta'] },
   ];
-  const config = { schemaVersion: 'programmable.launch-pack-config.v3', profileVersion: '3.6.0', chainId: '8453', launchWallet: input.launchWallet,
+  const config = { schemaVersion: 'programmable.launch-pack-config.v3', profileVersion: '3.6.0', chainId, launchWallet: input.launchWallet,
     nonce: input.nonce, source: { root: '.', paths: sourcePaths, sourceLineageNonce: input.sourceLineageNonce ?? '1', publicOrigin: input.publicOrigin },
     compilationUnits: [{ compilationUnitId: 'launch-protection-v1', standardJson: 'protection/standard-json.json' }], targets,
     pool: { tokenTargetId: 'token', hookTargetId: 'hook', fee: 0, tickSpacing: 60, quoteCurrency: ZERO }, projectMetadata: metadata,
@@ -86,4 +89,11 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
     throw new TypeError('Protected graph prediction differs for ' + role);
   }
   return { configPath, config, built, prepared };
+}
+
+export const buildProtectedEvmLaunchV1=buildProtectedBaseLaunchV1;
+
+export async function buildProtectedHyperEvmLaunchV1(options) {
+  if (options.capabilities?.chain?.id !== '999') throw new TypeError('HyperEVM capabilities required');
+  return buildProtectedEvmLaunchV1(options);
 }

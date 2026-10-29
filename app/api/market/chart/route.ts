@@ -1,3 +1,4 @@
+import { readHyperEvmToken } from "@/lib/server/hyperevm-explore";
 import { readBaseToken } from "@/lib/server/base-explore";
 import { NextResponse } from "next/server";
 import { CODEX_CHART_RANGES, marketAddress, type CodexChartRange } from "@/lib/market/codex";
@@ -11,9 +12,10 @@ export async function GET(request: Request) {
   const address = query.get("token")?.toLowerCase() ?? "";
   const chainId = Number(query.get("chain") ?? "4663");
   const range = query.get("range") ?? "1D";
-  if (!marketAddress.test(address) || ![1, 4663, 8453].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)
+  if (!marketAddress.test(address) || ![1, 4663, 8453, 999].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)
     || [...query.keys()].some(key => !["token", "chain", "range"].includes(key) || query.getAll(key).length !== 1)) return NextResponse.json({ error: "Invalid chart request" }, { status: 400 });
   try {
+    if (chainId === 999 && !(await readHyperEvmToken(address)).token) return NextResponse.json({error:"Launch not found"}, {status:404});
     if (chainId === 8453 && !(await readBaseToken(address)).token) return NextResponse.json({error:"Launch not found"}, {status:404});
     if (chainId === 4663) {
       const record = await readRobinhoodToken(address);

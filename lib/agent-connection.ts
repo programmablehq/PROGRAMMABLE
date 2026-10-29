@@ -52,6 +52,7 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
       scopes: ["custom-launch:create", "custom-launch:read"],
       guide: "https://programmable.market/developer-reference/custom-launch",
       base: { chainId: 8453, capabilities: "https://api.programmable.market/v4/chains/8453/capabilities", readiness: "https://api.programmable.market/v4/chains/8453/readiness", create: "https://api.programmable.market/v4/chains/8453/custom-launches", preflight: "https://api.programmable.market/v4/chains/8453/custom-launches/preflight", status: "https://api.programmable.market/v4/chains/8453/custom-launches/{launchId}", finalizedMetadata: "https://api.programmable.market/v4/chains/8453/finalized-custom-launches", guide: "https://programmable.market/developers/base-custom-launch-api-v1.md", openApi: "https://programmable.market/openapi/base-custom-launch-v1.json", moduleMode: false, availability: "Require live mode active, ready true and publicLaunchAuthorized true" },
+      hyperevm: { chainId: 999, capabilities: "https://api.programmable.market/v4/chains/999/capabilities", readiness: "https://api.programmable.market/v4/chains/999/readiness", create: "https://api.programmable.market/v4/chains/999/custom-launches", preflight: "https://api.programmable.market/v4/chains/999/custom-launches/preflight", status: "https://api.programmable.market/v4/chains/999/custom-launches/{launchId}", finalizedMetadata: "https://api.programmable.market/v4/chains/999/finalized-custom-launches", guide: "https://programmable.market/developers/hyperevm-custom-launch-api-v1.md", openApi: "https://programmable.market/openapi/hyperevm-custom-launch-v1.json", moduleMode: false, availability: "Require live mode active, ready true and publicLaunchAuthorized true" },
       ethereum: {
         chainId: 1,
         recommendedForNewProjects: true,
@@ -112,17 +113,17 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
   },
 });
 
-export function buildAgentInstructions(input?: { scopes?: readonly string[]; wallet?: string; intent?: string; chainId?: "1" | "4663" | "8453" }) {
+export function buildAgentInstructions(input?: { scopes?: readonly string[]; wallet?: string; intent?: string; chainId?: "1" | "4663" | "8453" | "999" }) {
   const chain = input?.chainId;
   const readOnly = input?.scopes?.length === 1 && input.scopes[0] === "custom-launch:read";
-  const capabilityUrl = chain === "8453"
+  const capabilityUrl = chain === "999" ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.hyperevm.capabilities : chain === "8453"
     ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.base.capabilities
     : chain === "1"
       ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunch.ethereum.capabilities
       : chain === "4663"
         ? PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.capabilities
         : null;
-  const workflowInstruction = chain === "8453"
+  const workflowInstruction = chain === "999" ? `Use workflows.customLaunch.hyperevm and ${capabilityUrl}.` : chain === "8453"
     ? `Use workflows.customLaunch.base and ${capabilityUrl}.`
     : chain === "1"
       ? `Use workflows.customLaunch.ethereum and ${capabilityUrl}.`
@@ -130,7 +131,7 @@ export function buildAgentInstructions(input?: { scopes?: readonly string[]; wal
         ? `Use workflows.customLaunchPlan and ${capabilityUrl}.`
         : "Follow the selected chain's workflow.";
   return [
-    chain ? `Selected chain: ${chain === "8453" ? "Base" : chain === "1" ? "Ethereum Mainnet" : "Robinhood Chain"} (${chain}). Use only this chain for this setup.` : "Select Ethereum Mainnet (1), Base (8453) or Robinhood Chain (4663) with the user before building.",
+    chain ? `Selected chain: ${chain === "999" ? "HyperEVM" : chain === "8453" ? "Base" : chain === "1" ? "Ethereum Mainnet" : "Robinhood Chain"} (${chain}). Use only this chain for this setup.` : "Select Ethereum Mainnet (1), Base (8453), Robinhood Chain (4663) or HyperEVM (999) with the user before building.",
     readOnly ? "Use this Programmable API key to read launch status on the selected chain." : "Use this Programmable API key to build custom hooks and read launch status on the selected chain.",
     `Read ${PROGRAMMABLE_AGENT_GUIDE_URL} and ${PROGRAMMABLE_AGENT_DISCOVERY_URL}. ${workflowInstruction} Read its current profile, packer and fee policy before preparing a request.`,
     "Read the API key from PROGRAMMABLE_API_KEY in the environment or your secret store. Send it only in the Authorization header to https://api.programmable.market. Never print the key or put it in a URL, logs or committed files.",
@@ -147,7 +148,7 @@ export function buildAgentInstructions(input?: { scopes?: readonly string[]; wal
 }
 
 /** Created only in the browser's one-time reveal; never logged, persisted or sent to a server. */
-export function buildAgentConnection(secret: string, input: { scopes: readonly string[]; wallet?: string; chainId?: "1" | "4663" | "8453"; launchContract?: { manifestDigest: string; text: string } }) {
+export function buildAgentConnection(secret: string, input: { scopes: readonly string[]; wallet?: string; chainId?: "1" | "4663" | "8453" | "999"; launchContract?: { manifestDigest: string; text: string } }) {
   if (!/^pm_live_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{43}$/.test(secret)) throw new Error("The API key is invalid.");
   return JSON.stringify({
     schemaVersion: "programmable.agent-connection.v1",
