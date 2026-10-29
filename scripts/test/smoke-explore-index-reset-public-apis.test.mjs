@@ -135,6 +135,7 @@ function responseSpec(url, method) {
           { chainId: 1, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/ethereum" },
           { chainId: 4663, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/robinhood" },
           { chainId: 8453, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/base" },
+          { chainId: 999, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/hyperevm" },
         ],
         providers: [{ name: "codex", roles: ["ethereum-and-robinhood-market-data"], health: "not-checked" }],
         customLaunchReadiness: [
@@ -143,6 +144,8 @@ function responseSpec(url, method) {
             capabilitiesUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-capabilities" },
           { chainId: 8453, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness",
             capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities" },
+          { chainId: 999, readinessUrl: "https://api.programmable.market/v4/chains/999/readiness",
+            capabilitiesUrl: "https://api.programmable.market/v4/chains/999/capabilities" },
         ],
       },
       headers: { ...RUNTIME_HEADERS, "x-programmable-indexing-status": "ready" },
@@ -447,16 +450,22 @@ test("smoke rejects retired operation, paused trigger, and health drift", async 
   }
 });
 
-test("smoke requires Base catalog and readiness evidence with exact endpoints", async () => {
+test("smoke requires Base and HyperEVM catalog and readiness evidence with exact endpoints", async () => {
   const mutations = [
     body => ({ ...body, indexes: body.indexes.slice(0, 2) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.slice(0, 2) }),
+    body => ({ ...body, indexes: body.indexes.slice(0, 3) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.slice(0, 3) }),
     body => ({ ...body, indexes: body.indexes.map(index => index.chainId === 8453
       ? { ...index, catalogUrl: "https://programmable.market/api/explore/ethereum" } : index) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 8453
       ? { ...entry, readinessUrl: "https://api.programmable.market/readyz" } : entry) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 8453
       ? { ...entry, capabilitiesUrl: "https://api.programmable.market/v3/capabilities" } : entry) }),
+    body => ({ ...body, indexes: body.indexes.map(index => index.chainId === 999
+      ? { ...index, catalogUrl: "https://programmable.market/api/explore/base" } : index) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 999
+      ? { ...entry, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness" } : entry) }),
   ];
   for (const mutate of mutations) {
     const fixture = resetFetch(({ spec, url }) => url.pathname === "/api/ops/health"
