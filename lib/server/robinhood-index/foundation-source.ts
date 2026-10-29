@@ -8,6 +8,7 @@ import { foundationFactoryVersion } from "@/lib/module-foundation/protocol";
 import { hasUnsafeDisplayCharacters } from "@/lib/metadata-policy";
 import { isRobinhoodFoundationLaunch, type RobinhoodFoundationLaunch } from "@/lib/robinhood-launches";
 import { IndexRangeTooWide, type ModuleModeIndexSource } from "./sync";
+import { budgetIndexProvider } from "./provider-budget";
 
 const INVENTORY_PATH = "/v1/modules/foundation/releases";
 const RELEASE_PATH = "/v1/modules/foundation/availability/release/";
@@ -84,9 +85,10 @@ function foundationIndexClients(signal: AbortSignal): readonly [PublicClient, Pu
   if (urls.some(url => url.protocol !== "https:" || url.username || url.password) || urls[0].hostname === urls[1].hostname) {
     throw new Error("Independent Foundation index providers are required");
   }
-  return urls.map(url => createPublicClient({ transport: http(url.href, {
-    timeout: 8_000, retryCount: 0, fetchOptions: { signal },
-  }) })) as unknown as readonly [PublicClient, PublicClient];
+  return urls.map(url => createPublicClient({ transport: input => {
+    const transport = http(url.href, { timeout: 8_000, retryCount: 0, fetchOptions: { signal } })(input);
+    return { ...transport, request: budgetIndexProvider(transport.request, signal) as typeof transport.request };
+  } })) as unknown as readonly [PublicClient, PublicClient];
 }
 
 /** Reuse the canonical Foundation reader inside the existing finalized, checkpointed background job. */
