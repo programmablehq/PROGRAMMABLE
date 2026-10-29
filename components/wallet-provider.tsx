@@ -2,6 +2,7 @@
 
 import { EVM_SWAP_SCHEMA, validateEvmFeeClaimPreparation, type EvmFeeClaimPreparation, validateEvmCustomSwapPreparation, type EvmCustomSwapPreparation } from "@/lib/swap/evm-custom";
 import { enableHyperEvmLargeTransactionsV1 } from "@/packages/launch/src/hyperevm-network-v1.mjs";
+import { readHyperEvmWalletFees } from "@/lib/hyperevm-wallet-gas";
 
 import type { LaunchPlanTradeWalletInputV1, LaunchPlanTradeWalletReviewV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
@@ -3143,7 +3144,7 @@ function PrivyWalletBridge({
         await connectedWallet.switchChain(targetChain.id);
         assertCurrentSession();
       }
-      const sendLocked = (execute: () => Promise<Hex>) =>
+      const sendLocked = (execute: (fees?: Awaited<ReturnType<typeof readHyperEvmWalletFees>>) => Promise<Hex>) =>
         runWithBrowserWalletRequestLock({
           sessionSubject,
           account: wallet.account,
@@ -3151,22 +3152,25 @@ function PrivyWalletBridge({
           requestSubject: JSON.stringify(["browser-wallet-action-v1", input]),
           assertCurrentSession,
           execute: async () => {
+            let fees: Awaited<ReturnType<typeof readHyperEvmWalletFees>> | undefined;
             if (input.chainId === "999") {
               const provider=await getWalletProviderOnChain({ wallet:connectedWallet,chainId:999,assertCurrentSession,networkName:"HyperEVM" });
               await enableHyperEvmLargeTransactionsV1({account:wallet.account,request:payload=>provider.request(payload)});
+              fees = await readHyperEvmWalletFees({account:wallet.account,request:payload=>provider.request(payload)});
               assertCurrentSession();
             }
-            return execute();
+            return execute(fees);
           },
         });
       if (isEmbeddedWallet) {
-        return await sendLocked(async () => {
+        return await sendLocked(async (fees) => {
           const result = await sendPrivyTransaction(
             {
               to: input.to,
               data: input.data,
               value: BigInt(input.value),
               chainId: targetChain.id,
+              ...(fees ? { maxFeePerGas: BigInt(fees.maxFeePerGas), maxPriorityFeePerGas: 0n } : {}),
             },
             {
               address: wallet.account,
@@ -3188,7 +3192,7 @@ function PrivyWalletBridge({
         request: (method) => provider.request({ method }),
       });
       assertCurrentSession();
-      return await sendLocked(async () => {
+      return await sendLocked(async (fees) => {
         const hash = await provider.request({
           method: "eth_sendTransaction",
           params: [
@@ -3197,6 +3201,7 @@ function PrivyWalletBridge({
               to: input.to,
               data: input.data,
               value: input.value,
+              ...fees,
             },
           ],
         });
@@ -3220,13 +3225,15 @@ function PrivyWalletBridge({
     return runWithBrowserWalletRequestLock({sessionSubject,account,chainId:"999",requestSubject:input.preparationDigest,assertCurrentSession,execute:async()=>{
       const checked=validate();assertCurrentSession();
       const tx=checked.transaction;
+      const fees = await readHyperEvmWalletFees({account,request:payload=>provider.request(payload)});
+      assertCurrentSession();validate();
       if(connectedWallet.walletClientType==="privy"||connectedWallet.walletClientType==="privy-v2"){
-        const result=await sendPrivyTransaction({to:tx.to,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gasLimit),chainId:999},{address:account,uiOptions:{description:!("kind" in tx)?"Claim accrued creator fees":tx.kind==="swap"?"Swap on HyperEVM":"Approve the exact trade amount",buttonText:!("kind" in tx)?"Claim fees":tx.kind==="swap"?"Swap":"Approve",successHeader:"Transaction submitted"}});
+        const result=await sendPrivyTransaction({to:tx.to,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gasLimit),chainId:999,maxFeePerGas:BigInt(fees.maxFeePerGas),maxPriorityFeePerGas:0n},{address:account,uiOptions:{description:!("kind" in tx)?"Claim accrued creator fees":tx.kind==="swap"?"Swap on HyperEVM":"Approve the exact trade amount",buttonText:!("kind" in tx)?"Claim fees":tx.kind==="swap"?"Swap":"Approve",successHeader:"Transaction submitted"}});
         return parseSubmittedTransactionHash(result.hash);
       }
       await assertExternalWalletAuthorityCurrent({expectedAccount:account,expectedChainId:"0x3e7",networkName:"HyperEVM",request:method=>provider.request({method})});
       assertCurrentSession();validate();
-      return parseSubmittedTransactionHash(await provider.request({method:"eth_sendTransaction",params:[{from:account,to:tx.to,data:tx.data,value:`0x${BigInt(tx.value).toString(16)}`,gas:`0x${BigInt(tx.gasLimit).toString(16)}`}]}));
+      return parseSubmittedTransactionHash(await provider.request({method:"eth_sendTransaction",params:[{from:account,to:tx.to,data:tx.data,value:`0x${BigInt(tx.value).toString(16)}`,gas:`0x${BigInt(tx.gasLimit).toString(16)}`,...fees}]}));
     }});
   },[connectedWallet,sendPrivyTransaction,user,wallet]);
 

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { programmableAgentIntakeV1 } from "../lib/custom-launch/agent-setup-v1";
 
 vi.mock("server-only", () => ({}));
 
@@ -63,6 +64,7 @@ describe("profile-selected Robinhood well-known discovery", () => {
       readiness: "https://api.programmable.market/v4/chains/999/readiness",
     });
     const historical = JSON.parse(JSON.stringify(original));
+    historical.customLaunchApi.intake = programmableAgentIntakeV1("4.0.0");
     delete historical.customLaunchApi.hyperevm;
     historical.chains = historical.chains.filter((chain: { chainId: number }) => chain.chainId !== 999);
     historical.customLaunchApi.launchProtection.supportedChainIds = ["1", "4663", "8453"];
