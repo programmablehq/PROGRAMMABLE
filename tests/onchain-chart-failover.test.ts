@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("../lib/onchain/operational-rpc-failover.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/onchain/operational-rpc-failover.server")>();
+  return { ...actual, withOperationalRpcFailover: vi.fn(actual.withOperationalRpcFailover) };
+});
 
 const mocks = vi.hoisted(() => ({
   clients: new Map<string, {
@@ -23,7 +27,9 @@ vi.mock("viem", async (importOriginal) => {
 import { HttpRequestError } from "viem";
 import { readTokenChartSeries } from "../lib/onchain/chart";
 import {
+  createOperationalRpcFailover,
   OperationalRpcUnavailableError,
+  withOperationalRpcFailover,
 } from "../lib/onchain/operational-rpc-failover.server";
 import type { ReadyOnchainDeployment } from "../lib/onchain/types";
 import type { LauncherToken } from "../lib/tokens";
@@ -72,6 +78,7 @@ function client(getLogs: ReturnType<typeof vi.fn>) {
 describe("token chart operational RPC failover", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(withOperationalRpcFailover).mockImplementation(createOperationalRpcFailover());
     mocks.clients.clear();
     mocks.createPublicClient.mockImplementation(
       ({ transport }: { transport: { url: string } }) => {

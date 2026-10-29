@@ -5,6 +5,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({
   unstable_cache: (reader: () => unknown) => reader,
 }));
+vi.mock("../lib/onchain/operational-rpc-failover.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/onchain/operational-rpc-failover.server")>();
+  return { ...actual, withOperationalRpcFailover: vi.fn(actual.withOperationalRpcFailover) };
+});
 
 const mocks = vi.hoisted(() => ({
   getOperationalOnchainDeployment: vi.fn(),
@@ -39,6 +43,7 @@ vi.mock("../lib/alchemy/launch-registry.server", () => ({
 
 import { readAlchemyRouterCustomIdentitySourceV1, refreshAlchemyExploreRegistry } from "../lib/alchemy/explore.server";
 import { canonicalTokenExploreEntryV1 } from "../lib/explore-entry-v1";
+import { createOperationalRpcFailover, withOperationalRpcFailover } from "../lib/onchain/operational-rpc-failover.server";
 import type { LauncherToken } from "../lib/tokens";
 import {
   customGraphToken,
@@ -112,6 +117,7 @@ const baseModel = {
 
 describe("Alchemy launch overlay refresh", () => {
   beforeEach(() => {
+    vi.mocked(withOperationalRpcFailover).mockImplementation(createOperationalRpcFailover());
     process.env.PROGRAMMABLE_ALCHEMY_MAINNET_RPC_URL = deployment.rpcUrl;
     process.env.VERCEL_GIT_COMMIT_SHA = "a".repeat(40);
     Object.values(mocks).forEach((mock) => mock.mockReset());
