@@ -35,6 +35,16 @@ beforeEach(() => {
 });
 
 describe("Robinhood Explore read model", () => {
+  it.each(["newest", "oldest"] as const)("fetches only visible market rows for %s pages", async sort => {
+    const rows = Array.from({ length: 60 }, (_, index) => token(index + 1));
+    mocks.read.mockResolvedValue({ snapshot: saved(rows) });
+    mocks.markets.mockResolvedValue(new Map(rows.map(row => [row.tokenAddress, market(row, 1)])));
+    const page = await readRobinhoodLaunches(2, "", { sort }, 10);
+    expect(page.items).toHaveLength(10);
+    expect(page.page.totalItems).toBe(60);
+    expect(mocks.markets).toHaveBeenCalledExactlyOnceWith(page.items);
+  });
+
   it("applies shared chain exclusions to finalized projections before market reads and preserves direct lookup", async () => {
     const hidden = OWNER_HIDDEN_EXPLORE_IDENTITIES_V1.find(row => row.chainId === 4663)!;
     const projected = { ...token(1), tokenAddress: hidden.identity, sourceKind: "custom-launch-plan-v1" as const };

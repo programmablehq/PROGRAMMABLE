@@ -38,7 +38,9 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
   try {
     const snapshot = await readSnapshot();
     const visible = exploreCatalog(snapshot).filter(row => isDiscoverableRobinhoodToken(row.tokenAddress));
-    const markets = await readRobinhoodMarkets(visible).catch(() => new Map<string, RobinhoodCoinMarket>());
+    const marketRanked = ["highest", "lowest", "activity"].includes(filters.sort);
+    const markets = marketRanked ? await readRobinhoodMarkets(visible).catch(() => new Map<string, RobinhoodCoinMarket>())
+      : new Map<string, RobinhoodCoinMarket>();
     const caps = new Map(Array.from(markets).flatMap(([address, market]) => {
       const value = market.marketCapUsd;
       // A pool's calculated FDV is not a reported market capitalization.
@@ -50,6 +52,10 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
     }));
     const eligibleTokens = new Set(visible.map(token => token.tokenAddress.toLowerCase()).filter(isDiscoverableRobinhoodToken));
     const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize, volumes, eligibleTokens);
+    if (!marketRanked && list.items.length) {
+      const selected = await readRobinhoodMarkets(list.items).catch(() => new Map<string, RobinhoodCoinMarket>());
+      for (const [address, market] of selected) markets.set(address, market);
+    }
     // Ranking and card values use the same full-catalog market observation.
     return { ...list, sourceEvidence: snapshot ? {
       router: { source: "canonical-launch-stamp-router", sourceAddress: snapshot.routerAddress, binding: snapshot.binding,

@@ -41,13 +41,18 @@ export async function readBaseExploreCatalog() {
 
 export async function readBaseLaunches(page: number, query: string, filters: RobinhoodExploreFilters, size: 6 | 8 | 10 | 50) {
   const catalog = await readBaseExploreCatalog();
-  const markets = await readCodexMarkets(catalog.items, 8453).catch(() => new Map());
+  const marketRanked = ["highest", "lowest", "activity"].includes(filters.sort);
+  const markets = marketRanked ? await readCodexMarkets(catalog.items, 8453).catch(() => new Map()) : new Map();
   const values = new Map(catalog.items.flatMap(row => {
     const market = markets.get(row.tokenAddress.toLowerCase());
     const value = market ? filters.sort === "activity" ? market.volume24hUsd : coinValuation(market).value : null;
     return value === null || value === undefined ? [] : [[exploreIdentityKey(row), value] as const];
   }));
   const selected = selectUnifiedExplorePage(catalog.items, page, query, filters, values, size);
+  if (!marketRanked && selected.items.length) {
+    const pageMarkets = await readCodexMarkets(selected.items, 8453).catch(() => new Map());
+    for (const [address, market] of pageMarkets) markets.set(address, market);
+  }
   const addresses = new Set(selected.items.map(row => row.tokenAddress.toLowerCase()));
   return { chainId: 8453, ...catalog, ...selected, presentations: catalog.presentations
     .filter(row => addresses.has(row.tokenAddress.toLowerCase()))
