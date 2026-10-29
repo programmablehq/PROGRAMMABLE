@@ -6,6 +6,7 @@ import { configuredModuleModeSources, type ModuleModeUnavailableSource } from "@
 import { moduleModeSnapshots } from "@/lib/server/robinhood-index/model";
 import { syncRobinhoodIndex, syncModuleModeIndex } from "@/lib/server/robinhood-index/sync";
 import { launchProjectionSourceV1, syncLaunchProjectionIndex } from "@/lib/server/robinhood-index/launch-projection-source";
+import { indexFailureDetails, selectIndexLanes } from "@/lib/server/robinhood-index/job-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,9 +78,10 @@ export async function GET(request: Request) {
       const ordered = lanes.sort((a, b) => (ages.get(a.releaseDigest.toLowerCase()) ?? 0) - (ages.get(b.releaseDigest.toLowerCase()) ?? 0));
       // Splitting the remaining time across every historical generation can leave
       // each lane less time than its finality reads require, so none advances.
-      // Give a bounded oldest-first subset a useful budget; saved ages rotate it.
+      // Keep the oldest checkpoint first and rotate the other slots even when
+      // that source fails, so it cannot indefinitely starve newer generations.
       const slots = Math.max(1, Math.min(3, Math.floor((165_000 - (Date.now() - startedAt)) / 30_000)));
-      const scheduled = ordered.slice(0, slots);
+      const scheduled = selectIndexLanes(ordered, slots, startedAt);
       for (const lane of ordered) (lane.foundation ? foundationSources : moduleSources)[lane.releaseDigest] = { status: "deferred" };
       for (const [index, lane] of scheduled.entries()) {
         const results = lane.foundation ? foundationSources : moduleSources;
@@ -107,7 +109,7 @@ export async function GET(request: Request) {
             if (attempt + 1 === maxAttempts || Date.now() >= laneDeadline) {
               console.warn("robinhood-index-source-unavailable", JSON.stringify({
                 sourceKind: lane.foundation ? "foundation" : "module", releaseDigest: lane.releaseDigest,
-                errorName: error instanceof Error ? error.name : "unknown",
+                ...indexFailureDetails(error),
               }));
             }
           }
