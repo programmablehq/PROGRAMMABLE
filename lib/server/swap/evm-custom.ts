@@ -1,4 +1,5 @@
 import "server-only";
+import { boundedEvmFetch } from "@/lib/server/evm-bounded-fetch";
 import { createPublicClient, http, decodeFunctionResult, encodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbi, toHex, type Address, type Hex } from "viem";
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { readHyperEvmLaunchEvidence } from "@/lib/server/hyperevm-explore";
@@ -37,7 +38,7 @@ export function hyperEvmSwapRpcs(): readonly [
   return endpoints.map(endpoint => {
     let client = clients.get(endpoint!);
     if (!client) {
-      client = createPublicClient({ transport: http(endpoint, { retryCount: 0, timeout: 10000, batch: { batchSize: 16, wait: 2 } }) });
+      client = createPublicClient({ transport: http(endpoint, { retryCount: 0, timeout: 10000, fetchFn: boundedEvmFetch, batch: { batchSize: 16, wait: 2 } }) });
       clients.set(endpoint!, client);
     }
     let reads = 0;

@@ -25,6 +25,7 @@ const replace = value => {
   }
   return typeof value === "string" ? value.replaceAll("/v3/", prefix + "/")
     .replaceAll("Ethereum Mainnet", network.name).replaceAll("Ethereum mainnet", network.name)
+    .replaceAll("Fresh Ethereum profile 3.6 request.", `Fresh ${network.name} Custom Launch request.`)
     .replaceAll("programmable.ethereum-finalized-checkpoint-quorum.v1", `programmable.${network.slug}-launch-finalized-checkpoint-quorum.v1`) : value;
 };
 const schemas = replace(source.components.schemas);
@@ -80,7 +81,7 @@ paths[prefix + "/readiness"] = { get: { operationId: `${network.slug}CustomReadi
           publicLaunchAuthorized: { type: "boolean" }, releaseId: { type: "string" }, reasonCodes: { type: "array", items: { type: "string" } } } } } } },
     "503": { description: "Release prerequisites are unavailable; retry with backoff." },
   } } };
-// Keep only schemas actually referenced by the supported Base routes.
+// Keep only schemas actually referenced by the selected chain's routes.
 const names = new Set();
 const scan = value => {
   if (!value || typeof value !== "object") return;
@@ -100,7 +101,7 @@ const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} 
 const file = path.join(root, `public/openapi/${network.slug}-custom-launch-v1.json`);
 const bytes = JSON.stringify(output, null, 2) + "\n";
 if (process.argv.includes("--check")) {
-  if (fs.readFileSync(file, "utf8") !== bytes) throw Error("Base OpenAPI is not current");
+  if (fs.readFileSync(file, "utf8") !== bytes) throw Error(`${network.name} OpenAPI is not current`);
 } else fs.writeFileSync(file, bytes);
 
 }

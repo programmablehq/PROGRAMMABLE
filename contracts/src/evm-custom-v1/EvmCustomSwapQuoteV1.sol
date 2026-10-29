@@ -31,7 +31,7 @@ contract EvmCustomSwapQuoteV1 {
             require(approved && (result.length == 0 || abi.decode(result, (bool))), "QUOTE_APPROVAL_FAILED");
             IQuotePermit2V1(permit2).approve(inputToken, router, amount, deadline);
         }
-        (bool ok, bytes memory reason) = router.call{value: inputToken == address(0) ? amount : 0}(callData);
+        (bool ok, bytes memory reason) = router.call{ value: inputToken == address(0) ? amount : 0 }(callData);
         if (!ok) {
             assembly ("memory-safe") { revert(add(reason, 32), mload(reason)) }
         }

@@ -1,4 +1,5 @@
 import "server-only";
+import { boundedEvmFetch } from "@/lib/server/evm-bounded-fetch";
 import { unstable_cache } from "next/cache";
 import { createPublicClient, http, encodeAbiParameters, keccak256, parseAbi, type Address, type Hex } from "viem";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
@@ -19,7 +20,7 @@ export type HyperEvmMarketIdentity = {
   };
 };
 let client: ReturnType<typeof createPublicClient> | undefined;
-const rpc = () => client ??= createPublicClient({ transport: http(process.env.HYPEREVM_RPC_PRIMARY_URL ?? "https://rpc.hyperliquid.xyz/evm", { timeout: 5000, retryCount: 0, batch: { batchSize: 48, wait: 5 } }) });
+const rpc = () => client ??= createPublicClient({ transport: http(process.env.HYPEREVM_RPC_PRIMARY_URL ?? "https://rpc.hyperliquid.xyz/evm", { timeout: 5000, retryCount: 0, fetchFn: boundedEvmFetch, batch: { batchSize: 48, wait: 5 } }) });
 let point: Promise<{
   number: bigint;
   hash: Hex;
