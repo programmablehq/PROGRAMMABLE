@@ -150,6 +150,7 @@ describe("agent-readable public surface", () => {
       "/api/explore",
       "/api/explore/base",
       "/api/explore/ethereum",
+      "/api/explore/hyperevm",
       "/api/explore/robinhood",
       "/api/explore/token",
       "/api/explore/token/analytics",

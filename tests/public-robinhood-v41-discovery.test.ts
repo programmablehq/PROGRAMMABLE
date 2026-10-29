@@ -42,6 +42,15 @@ describe("profile selected public Robinhood API contract", () => {
       finalizedFeedUrl: "https://api.programmable.market/v4/chains/8453/finalized-custom-launches",
     });
     const previous = JSON.parse(JSON.stringify(actual));
+    expect(previous["x-programmable-availability"].chainExplore.hyperevm).toEqual({
+      path: "/api/explore/hyperevm", chainId: 999, statuses: ["ready", "stale", "unavailable"], moduleMode: false,
+      openApiUrl: "https://programmable.market/openapi/hyperevm-custom-launch-v1.json",
+      finalizedFeedUrl: "https://api.programmable.market/v4/chains/999/finalized-custom-launches",
+    });
+    delete previous.paths["/api/explore/hyperevm"];
+    delete previous.components.schemas.HyperEvmExplorePage;
+    delete previous["x-programmable-availability"].chainExplore.hyperevm;
+    previous.info.summary = previous.info.summary.replace("Ethereum, Robinhood, Base and HyperEVM", "Ethereum, Robinhood and Base");
     previous.info.version = "1.15.0";
     // Remove only the verified additive Base surface before comparing the historical contract.
     delete previous.paths["/api/explore/base"];

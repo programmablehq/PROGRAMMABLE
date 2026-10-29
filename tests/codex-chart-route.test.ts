@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ chart: vi.fn(), robinhood: vi.fn(), ethereum: vi.fn(), base: vi.fn() }));
+const mocks = vi.hoisted(() => ({ chart: vi.fn(), robinhood: vi.fn(), ethereum: vi.fn(), base: vi.fn(), hyperevm: vi.fn() }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexChart: mocks.chart }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodToken: mocks.robinhood }));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumExploreCatalog: mocks.ethereum }));
 vi.mock("@/lib/server/base-explore", () => ({ readBaseToken: mocks.base }));
+vi.mock("@/lib/server/hyperevm-explore", () => ({ readHyperEvmToken: mocks.hyperevm }));
 import { GET } from "@/app/api/market/chart/route";
 const address = `0x${"ab".repeat(20)}`;
 afterEach(() => vi.resetAllMocks());
