@@ -13,6 +13,9 @@ export function createOperationJournal(pool: AIPool, now = Date.now) {
   const read = async (db: AIConnection, id: string) => (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND id=$1 FOR UPDATE", [id])).rows[0]?.value as Operation | undefined;
   const write = async (db: AIConnection, value: Operation) => { await db.query("UPDATE programmable_custom_ai_v1.objects SET value=$2,revision=revision+1,updated_at=now() WHERE owner='system' AND kind='operation' AND id=$1", [value.id, JSON.stringify(value)]); };
   return {
+    async needsAttention(chainId:1|4663) {
+      return transaction(async db => (await db.query("SELECT 1 FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND value->>'chainId'=$1 AND value->>'state' IN ('failed','attention') LIMIT 1",[String(chainId)])).rows.length>0);
+    },
     async enqueue(input: Omit<Operation, "id" | "state" | "attempts">) {
       if (![1,4663].includes(input.chainId) || !/^0x[0-9a-f]{40}$/i.test(input.target) || !input.eventId || input.eventId.length > 256 || !Number.isSafeInteger(input.dueAt)) throw Error("Invalid worker operation");
       const id = key(input.chainId, input.target, input.eventId);

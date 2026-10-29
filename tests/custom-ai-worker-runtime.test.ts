@@ -5,6 +5,7 @@ import { CUSTOM_AI_SCHEMA, type AIPool } from "../lib/custom-ai/store.server";
 import { createScheduler } from "../ops/custom-ai-worker/scheduler";
 import { pendingProgramFunds } from "../ops/custom-ai-worker/preparations.server";
 import { discoverProgramTargets, listProgramTargets } from "../ops/custom-ai-worker/discovery";
+import { createOperationJournal } from "../lib/custom-ai/operation-journal.server";
 import manifest from "../lib/custom-ai/composable-manifest.json";
 let db:PGlite,pool:AIPool,now:number;
 beforeEach(async()=>{
@@ -34,12 +35,19 @@ describe("worker scheduling and funded preparation",()=>{
   });
   it("bounds parallel provider calls and does not exceed the iteration allowance",async()=>{
     let active=0,maximum=0,calls=0;
+    let release!:()=>void;const firstWave=new Promise<void>(resolve=>{release=resolve;});
     const sources=Array.from({length:10},(_,i)=>({id:`pool:${i}`,intervalMs:30000,run:async()=>{
-      active++;calls++;maximum=Math.max(maximum,active);await new Promise(resolve=>setTimeout(resolve,5));active--;
+      active++;calls++;maximum=Math.max(maximum,active);if(active===3)release();await firstWave;active--;
     }}));
     await createScheduler(pool,()=>now).run(sources,5,3);
     expect(calls).toBe(5);expect(maximum).toBeLessThanOrEqual(3);expect(maximum).toBeGreaterThan(1);
     await createScheduler(pool,()=>now).run(sources,5,3);expect(calls).toBe(10);
+  });
+  it("keeps a failed operation visible to readiness on only its own network",async()=>{
+    const journal=createOperationJournal(pool,()=>now),op=(await journal.enqueue({chainId:1,kind:"execute",target:`0x${"1".repeat(40)}`,eventId:"event-1",dueAt:now}))!;
+    expect(await journal.needsAttention(1)).toBe(false);
+    const claimed=(await journal.claim(op.id))!;await journal.complete(claimed,"failed");
+    expect(await journal.needsAttention(1)).toBe(true);expect(await journal.needsAttention(4663)).toBe(false);
   });
   it("returns to the first page immediately at an exact capacity boundary",async()=>{
     for(let i=0;i<8;i++)await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES('system','program-target',$1,$2)",[String(i).padStart(64,"0"),JSON.stringify({token:`coin-${i}`})]);

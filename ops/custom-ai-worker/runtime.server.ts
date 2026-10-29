@@ -30,7 +30,9 @@ export function createWorkerRuntime(pool:AIPool,store:AIStore,networks:WorkerNet
   const save=async(kind:string,id:string,value:unknown)=>{const prior=await store.readObject("system",kind,id);await store.saveObject("system",kind,id,value,prior?.revision??0);};
   async function queue(kind:Operation["kind"],chainId:1|4663,eventId:string,prepared:Omit<Prepared,"chainId"|"bundleHash">){
     const op=await journal.enqueue({kind,chainId,eventId,target:prepared.call.to,dueAt:Date.now()});
+    if(op&&['failed','attention'].includes(op.state))throw Error("The saved operation requires operator review");
     if(op&&!op.rawTransaction&&!['confirmed','skipped','failed','attention'].includes(op.state))await save("worker-prepared",op.id,{...prepared,chainId,bundleHash:code.bundleHash});
+    return Boolean(op&&!['confirmed','skipped'].includes(op.state));
   }
   async function validate(network:WorkerNetwork){
     const chain=await customAIChain(network.chainId);
@@ -50,7 +52,7 @@ export function createWorkerRuntime(pool:AIPool,store:AIStore,networks:WorkerNet
       feedsReady&&=snapshot[7]===true;
     }
     await chain.finish();
-    return {funded,feedsReady,blockHash:chain.block.hash};
+    return {funded,feedsReady,attention:await journal.needsAttention(network.chainId),blockHash:chain.block.hash};
   }
   const feedKey=(version:string,id:string)=>hash(`${version}:${id}`);
   async function pollSources(){
@@ -97,11 +99,11 @@ export function createWorkerRuntime(pool:AIPool,store:AIStore,networks:WorkerNet
         if(!matchesRuntime(await chain.code(program),artifacts.CustomAILiquidityProgramV1))throw Error("Program runtime differs");
         status.liquidityRaw=(BigInt(status.liquidityRaw??"0")+BigInt(String(await chain.call(program,"function liquidity() view returns(uint128)")))).toString();
         status.nextExecutionAt=Number(await chain.call(program,"function nextExecution() view returns(uint256)"))*1000;
+        if(status.nextExecutionAt>Number(chain.block.timestamp)*1000){if(status.state!=="queued")status.state="ready";continue;}
         if(history.length<target.binding.spec.actions[i].minimumObservations)continue;
         try{
           const prepared=await prepareLiquidityOperation({chainId:network.chainId,program,history:{chainId:network.chainId,poolId,observations:history},priceSigningKey:key(network.priceKeyEnv)});
-          await queue("execute",network.chainId,`liquidity:${prepared.executionId}`,{call:prepared,expiresAt:Date.now()+20000});
-          status.state="queued";
+          status.state=await queue("execute",network.chainId,`liquidity:${prepared.executionId}`,{call:prepared,expiresAt:Date.now()+20000})?"queued":"ready";
         }catch(error){
           const message=error instanceof Error?error.message:"";
           if(/price observation|price history/.test(message)){if(status.state!=="queued")status.state="warming";}
@@ -143,7 +145,7 @@ export function createWorkerRuntime(pool:AIPool,store:AIStore,networks:WorkerNet
           if(p&&p.expiresAt<=Date.now()&&op.kind==="feed")return null;
           if(!p||p.expiresAt<=Date.now())throw Error("The operation needs a fresh prepared call");return p.call;},
         readOnly:async()=>{throw Error("The runtime only dispatches prepared financial calls");},
-        health:async()=>{const check=checks.get(n.chainId)!;const capacityReady=page.total<=8;const observation=(ready:boolean)=>({status:ready?"ready" as const:"blocked" as const,checkedAt:Date.now(),validUntil:Date.now()+120000,evidenceHash:hash(`${code.bundleHash}:${n.chainId}:${check.blockHash}:${ready}:${page.total}`)});return {feeds:observation(check.funded&&check.feedsReady),prices:observation(check.funded&&capacityReady),programs:observation(check.funded&&capacityReady)};},
+        health:async()=>{const check=checks.get(n.chainId)!;const operational=check.funded&&!check.attention,capacityReady=page.total<=8;const observation=(ready:boolean)=>({status:ready?"ready" as const:"blocked" as const,checkedAt:Date.now(),validUntil:Date.now()+120000,evidenceHash:hash(`${code.bundleHash}:${n.chainId}:${check.blockHash}:${ready}:${page.total}`)});return {feeds:observation(operational&&check.feedsReady),prices:observation(operational&&capacityReady),programs:observation(operational&&capacityReady)};},
       });
     });
     return {...await runWorkerOnce(pool,adapters),watchedPrograms:page.total,programCapacity:8};
