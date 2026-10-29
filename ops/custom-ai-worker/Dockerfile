@@ -5,6 +5,8 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY tsconfig.json ./
 COPY lib ./lib
 COPY config ./config
+COPY contracts/spec/module-foundation/chain-1.v1.json ./contracts/spec/module-foundation/chain-1.v1.json
+COPY contracts/spec/robinhood-custom-launch/chain-4663.v1.json ./contracts/spec/robinhood-custom-launch/chain-4663.v1.json
 COPY ops/custom-ai-worker ./ops/custom-ai-worker
 COPY scripts/build-custom-ai-worker.mjs ./scripts/build-custom-ai-worker.mjs
 COPY scripts/custom-ai/core-bundle.json ./scripts/custom-ai/core-bundle.json
