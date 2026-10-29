@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpRequestError } from "viem";
 
 vi.mock("server-only", () => ({}));
+vi.mock("../lib/onchain/operational-rpc-failover.server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/onchain/operational-rpc-failover.server")>();
+  return { ...actual, withOperationalRpcFailover: vi.fn(actual.withOperationalRpcFailover) };
+});
+import { createOperationalRpcFailover, withOperationalRpcFailover } from "../lib/onchain/operational-rpc-failover.server";
 
 import {
   OPERATIONAL_RPC_MAX_HEAD_AGE_SECONDS,
@@ -94,6 +99,9 @@ function dependencies(
 }
 
 describe("operational RPC health", () => {
+  beforeEach(() => {
+    vi.mocked(withOperationalRpcFailover).mockImplementation(createOperationalRpcFailover());
+  });
   it("propagates caller aborts into the active health transport without failover", async () => {
     const controller = new AbortController();
     let observedSignal: AbortSignal | undefined;

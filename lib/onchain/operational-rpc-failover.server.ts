@@ -51,6 +51,16 @@ function rpcCapacityMessage(error: RpcRequestError) {
   return details.some((value) => CAPACITY_MESSAGE.test(value));
 }
 
+function isCapacityRejection(error: unknown) {
+  return errorChain(error).some((candidate) =>
+    candidate instanceof HttpRequestError && candidate.status === 429 ||
+    candidate instanceof RpcRequestError && (
+      candidate.code === 429 || candidate.code === -32_005 ||
+      rpcCapacityMessage(candidate)
+    ),
+  );
+}
+
 function rpcArchiveLimitationMessage(error: RpcRequestError) {
   const details = [
     error.details,
@@ -171,48 +181,91 @@ function redactRpcEndpointError(
     : error;
 }
 
-/**
- * Runs one complete read against the configured primary. The fixed secondary
- * receives exactly one attempt only after an eligible transport/capacity
- * failure. Reads never rotate providers mid-operation.
- */
-export async function withOperationalRpcFailover<
-  Deployment extends OnchainDeployment,
-  Output,
->(
-  deployment: Deployment,
-  read: (deployment: Deployment) => Promise<Output>,
-) {
-  const primary = singleRpcDeployment(deployment, deployment.rpcUrl);
-  const primaryProvider = deployment.rpcProviderIds?.primary;
-  const secondaryProvider = deployment.rpcProviderIds?.secondary;
-  try {
-    return await read(primary);
-  } catch (primaryError) {
-    const secondaryUrl = deployment.rpcUrlSecondary;
-    if (
-      !secondaryUrl ||
-      secondaryUrl === deployment.rpcUrl ||
-      !isOperationalRpcFailoverEligible(primaryError, primaryProvider)
-    ) {
-      throw redactRpcEndpointError(primaryError, "primary");
-    }
+export function createOperationalRpcFailover(now = Date.now) {
+  type Cooldown = { failures: number; retryAt: number; probing: boolean };
+  // Shared by readers in this runtime. Store no responses, request bodies or
+  // errors, and never export endpoint keys in logs or status responses.
+  const cooldowns = new Map<string, Cooldown>();
 
+  async function attempt<Deployment extends OnchainDeployment, Output>(
+    deployment: Deployment,
+    read: (deployment: Deployment) => Promise<Output>,
+  ) {
+    const endpoint = deployment.rpcUrl;
+    const previous = cooldowns.get(endpoint);
+    if (previous && (previous.retryAt > now() || previous.probing)) {
+      throw new OperationalRpcUnavailableError();
+    }
+    if (previous) previous.probing = true;
     try {
-      return await read(singleRpcDeployment(deployment, secondaryUrl));
-    } catch (secondaryError) {
-      if (isOperationalRpcFailoverEligible(
-        secondaryError,
-        secondaryProvider,
-      )) {
-        // Do not retain transport errors: framework cache logging serializes
-        // nested causes and can otherwise expose authenticated RPC URLs.
-        throw new OperationalRpcUnavailableError();
+      const result = await read(deployment);
+      // A request started before a capacity rejection cannot clear a newer
+      // cooldown. Only its single recovery probe may reopen that endpoint.
+      if (previous && cooldowns.get(endpoint) === previous) cooldowns.delete(endpoint);
+      return result;
+    } catch (error) {
+      if (isCapacityRejection(error)) {
+        const current = cooldowns.get(endpoint);
+        // Concurrent first failures belong to one outage, not multiple failed
+        // recovery attempts. They must not extend the backoff independently.
+        if (!current || current === previous) {
+          const failures = Math.min((previous?.failures ?? 0) + 1, 5);
+          cooldowns.delete(endpoint);
+          cooldowns.set(endpoint, { failures, probing: false,
+            retryAt: now() + Math.min(300_000, 30_000 * 2 ** (failures - 1)) });
+          if (cooldowns.size > 64) cooldowns.delete(cooldowns.keys().next().value!);
+        }
+      } else if (previous && cooldowns.get(endpoint) === previous) {
+        // Transport and integrity errors retain their existing behavior. Only
+        // an explicit capacity rejection starts or extends this cooldown.
+        cooldowns.delete(endpoint);
       }
-      throw redactRpcEndpointError(secondaryError, "secondary");
+      throw error;
     }
   }
+
+  return async function withOperationalRpcFailover<
+    Deployment extends OnchainDeployment,
+    Output,
+  >(
+    deployment: Deployment,
+    read: (deployment: Deployment) => Promise<Output>,
+  ) {
+    const primary = singleRpcDeployment(deployment, deployment.rpcUrl);
+    const primaryProvider = deployment.rpcProviderIds?.primary;
+    const secondaryProvider = deployment.rpcProviderIds?.secondary;
+    try {
+      return await attempt(primary, read);
+    } catch (primaryError) {
+      const secondaryUrl = deployment.rpcUrlSecondary;
+      if (
+        !secondaryUrl ||
+        secondaryUrl === deployment.rpcUrl ||
+        !isOperationalRpcFailoverEligible(primaryError, primaryProvider)
+      ) {
+        throw redactRpcEndpointError(primaryError, "primary");
+      }
+
+      try {
+        return await attempt(singleRpcDeployment(deployment, secondaryUrl), read);
+      } catch (secondaryError) {
+        if (isOperationalRpcFailoverEligible(secondaryError, secondaryProvider)) {
+          // Do not retain transport errors: framework cache logging serializes
+          // nested causes and can otherwise expose authenticated RPC URLs.
+          throw new OperationalRpcUnavailableError();
+        }
+        throw redactRpcEndpointError(secondaryError, "secondary");
+      }
+    }
+  };
 }
+
+/**
+ * Runs one complete read per eligible endpoint, retaining the configured
+ * secondary and integrity checks. Capacity failures pause the endpoint for
+ * 30 seconds to five minutes, then permit one recovery probe in this runtime.
+ */
+export const withOperationalRpcFailover = createOperationalRpcFailover();
 
 /** Provider-neutral telemetry fields; endpoint URLs and request bodies stay out. */
 export function safeOperationalRpcError(error: unknown) {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   HttpRequestError,
   RpcRequestError,
@@ -9,10 +9,10 @@ vi.mock("server-only", () => ({}));
 
 import {
   isOperationalRpcFailoverEligible,
+  createOperationalRpcFailover,
   OperationalRpcReadError,
   OperationalRpcUnavailableError,
   safeOperationalRpcError,
-  withOperationalRpcFailover,
 } from "../lib/onchain/operational-rpc-failover.server";
 import type { ReadyOnchainDeployment } from "../lib/onchain/types";
 
@@ -56,6 +56,13 @@ function rpcFailure(
 }
 
 describe("operational RPC failover", () => {
+  let now = 0;
+  let withOperationalRpcFailover = createOperationalRpcFailover(() => now);
+  beforeEach(() => {
+    now = 0;
+    withOperationalRpcFailover = createOperationalRpcFailover(() => now);
+  });
+
   it("keeps a healthy primary read byte-for-byte and never calls secondary", async () => {
     const read = vi.fn(async (candidate: ReadyOnchainDeployment) => ({
       blockNumber: "25725412",
@@ -324,5 +331,106 @@ describe("operational RPC failover", () => {
     );
     expect(summary).not.toContain("primary.example");
     expect(summary).not.toContain("eth_blockNumber");
+  });
+
+  it("skips a rate-limited primary while serving fresh secondary reads", async () => {
+    const calls: string[] = [];
+    let observation = 0;
+    const read = async (candidate: ReadyOnchainDeployment) => {
+      calls.push(candidate.rpcUrl);
+      if (candidate.rpcUrl === deployment.rpcUrl) throw httpFailure(429);
+      return ++observation;
+    };
+    await expect(withOperationalRpcFailover(deployment, read)).resolves.toBe(1);
+    now = 29_999;
+    await expect(withOperationalRpcFailover(deployment, read)).resolves.toBe(2);
+    expect(calls).toEqual([deployment.rpcUrl, deployment.rpcUrlSecondary, deployment.rpcUrlSecondary]);
+  });
+
+  it("permits one recovery probe and increases the delay after another rejection", async () => {
+    const firstRead = async (candidate: ReadyOnchainDeployment) => {
+      if (candidate.rpcUrl === deployment.rpcUrl) throw httpFailure(429);
+      return "secondary";
+    };
+    await withOperationalRpcFailover(deployment, firstRead);
+    now = 30_000;
+    let rejectProbe!: (error: Error) => void;
+    const probe = new Promise<string>((_resolve, reject) => { rejectProbe = reject; });
+    const read = vi.fn((candidate: ReadyOnchainDeployment) =>
+      candidate.rpcUrl === deployment.rpcUrl ? probe : Promise.resolve("secondary"));
+    const recovering = withOperationalRpcFailover(deployment, read);
+    await expect(withOperationalRpcFailover(deployment, read)).resolves.toBe("secondary");
+    expect(read.mock.calls.filter(([candidate]) => candidate.rpcUrl === deployment.rpcUrl)).toHaveLength(1);
+    rejectProbe(httpFailure(429));
+    await expect(recovering).resolves.toBe("secondary");
+    now = 89_999;
+    await withOperationalRpcFailover(deployment, read);
+    expect(read.mock.calls.filter(([candidate]) => candidate.rpcUrl === deployment.rpcUrl)).toHaveLength(1);
+    now = 90_000;
+    const healthy = vi.fn(async () => "recovered");
+    await expect(withOperationalRpcFailover(deployment, healthy)).resolves.toBe("recovered");
+    await withOperationalRpcFailover(deployment, healthy);
+    expect(healthy).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps repeated capacity failures at five minutes without polling in between", async () => {
+    const read = vi.fn(async () => { throw rpcFailure("monthly_capacity_exceeded"); });
+    const primaryOnly = { ...deployment, rpcUrlSecondary: null };
+    for (const delay of [30_000, 60_000, 120_000, 240_000, 300_000, 300_000]) {
+      const before = read.mock.calls.length;
+      await expect(withOperationalRpcFailover(primaryOnly, read)).rejects.toBeInstanceOf(OperationalRpcReadError);
+      expect(read).toHaveBeenCalledTimes(before + 1);
+      now += delay - 1;
+      await expect(withOperationalRpcFailover(primaryOnly, read)).rejects.toBeInstanceOf(OperationalRpcUnavailableError);
+      expect(read).toHaveBeenCalledTimes(before + 1);
+      now++;
+    }
+  });
+
+  it("pauses both rejected endpoints and leaves unrelated credentials usable", async () => {
+    const read = vi.fn(async (candidate: ReadyOnchainDeployment) => { throw httpFailure(429, candidate.rpcUrl); });
+    await expect(withOperationalRpcFailover(deployment, read)).rejects.toBeInstanceOf(OperationalRpcUnavailableError);
+    await expect(withOperationalRpcFailover(deployment, read)).rejects.toBeInstanceOf(OperationalRpcUnavailableError);
+    expect(read).toHaveBeenCalledTimes(2);
+    const other = { ...deployment, rpcUrl: "https://primary.example/another-key" };
+    const healthy = vi.fn(async () => "fresh");
+    await expect(withOperationalRpcFailover(other, healthy)).resolves.toBe("fresh");
+    expect(healthy).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([503, 400])("does not pause an endpoint for HTTP %i", async (status) => {
+    const read = vi.fn(async (candidate: ReadyOnchainDeployment) => {
+      if (candidate.rpcUrl === deployment.rpcUrl) throw httpFailure(status);
+      return "secondary";
+    });
+    for (let i = 0; i < 2; i++) await withOperationalRpcFailover(deployment, read).catch(() => undefined);
+    expect(read.mock.calls.filter(([candidate]) => candidate.rpcUrl === deployment.rpcUrl)).toHaveLength(2);
+  });
+
+  it("does not let an older successful request clear a newer capacity rejection", async () => {
+    let finish!: (value: string) => void;
+    const startedBeforeRejection = withOperationalRpcFailover(deployment, () =>
+      new Promise<string>(resolve => { finish = resolve; }));
+    const read = vi.fn(async (candidate: ReadyOnchainDeployment) => {
+      if (candidate.rpcUrl === deployment.rpcUrl) throw httpFailure(429);
+      return "secondary";
+    });
+    await withOperationalRpcFailover(deployment, read);
+    finish("previous request");
+    await startedBeforeRejection;
+    await withOperationalRpcFailover(deployment, read);
+    expect(read.mock.calls.filter(([candidate]) => candidate.rpcUrl === deployment.rpcUrl)).toHaveLength(1);
+  });
+
+  it("treats simultaneous first rejections as a single 30-second cooldown", async () => {
+    const read = async (candidate: ReadyOnchainDeployment) => {
+      if (candidate.rpcUrl === deployment.rpcUrl) throw httpFailure(429);
+      return "secondary";
+    };
+    await Promise.all([withOperationalRpcFailover(deployment, read), withOperationalRpcFailover(deployment, read)]);
+    now = 30_000;
+    const recovered = vi.fn(async () => "primary");
+    await expect(withOperationalRpcFailover(deployment, recovered)).resolves.toBe("primary");
+    expect(recovered).toHaveBeenCalledTimes(1);
   });
 });
