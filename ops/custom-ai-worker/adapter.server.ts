@@ -8,7 +8,7 @@ export type PreparedOperation = { to: Address; data: Hex };
 export function createSignedWorkerAdapter(input: {
   chainId: 1 | 4663; rpcUrls: [string, string]; signingKey: Hex;
   targets: ReadonlyMap<string, ReadonlySet<string>>; dailyLimitWei: bigint; transactionLimitWei: bigint;
-  prepare: (operation: Operation) => Promise<PreparedOperation>;
+  prepare: (operation: Operation) => Promise<PreparedOperation | null>;
   readOnly: WorkerAdapter["readOnly"]; health: NonNullable<WorkerAdapter["health"]>;
 }): WorkerAdapter {
   const account = privateKeyToAccount(input.signingKey);
@@ -25,6 +25,7 @@ export function createSignedWorkerAdapter(input: {
     async prepare(operation) {
       if (await agree(c => c.getChainId()) !== input.chainId) throw Error("Worker network changed");
       const prepared = await input.prepare(operation);
+      if (!prepared) return { skip:true as const };
       if (prepared.to.toLowerCase() !== operation.target.toLowerCase() || !input.targets.get(prepared.to.toLowerCase())?.has(prepared.data.slice(0,10).toLowerCase())) throw Error("Worker call is outside the reviewed target policy");
       const latest = await agree(c => c.getTransactionCount({ address: account.address, blockTag: "latest" }));
       const pending = await agree(c => c.getTransactionCount({ address: account.address, blockTag: "pending" }));

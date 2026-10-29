@@ -7,6 +7,7 @@ import { CustomAIError, parseChatRequest, type ChatProgress, type ChatResult } f
 import { authorizeCustomAI } from "@/lib/custom-ai/auth.server";
 import { productionAIStore } from "@/lib/custom-ai/store.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
+import { requestMetrics, type ModelCallMetric } from "@/lib/custom-ai/request-metrics";
 
 export const runtime = "nodejs";
 export const maxDuration = 480;
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
     }
     let requestState: "failed" | undefined;
     const execute = async (initialSignal: AbortSignal, onProgress?: (event: ChatProgress) => void) => {
+      const startedAt=Date.now(),calls:ModelCallMetric[]=[];let completed=false;
       const cancellation = new AbortController();
       const signal = AbortSignal.any([initialSignal, cancellation.signal]);
       let checking = false;
@@ -53,23 +55,26 @@ export async function POST(request: Request) {
         }).catch(() => undefined).finally(() => { checking = false; });
       }, 10000) : undefined;
       try {
-        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress });
+        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress,onModelCall:call=>calls.push(call) });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();
         if (store && authority.kind === "account" && reserved?.lease) await store.finish(authority.owner, input.id, reserved.lease, result);
         if (authority.kind === "preview") {
           previewResults.set(input.id, result);
           if (previewResults.size > 128) previewResults.delete(previewResults.keys().next().value!);
         }
-        return result;
+        completed=true;return result;
       } catch (error) {
         if (store && authority.kind === "account" && reserved?.lease) {
           const saved = await store.read(authority.owner, input.id).catch(() => null);
-          if (saved?.state === "completed" && saved.result) return saved.result;
+          if (saved?.state === "completed" && saved.result) { completed=true;return saved.result; }
           await store.finish(authority.owner, input.id, reserved.lease, undefined, error instanceof CustomAIError ? error.code : "unavailable");
           requestState = "failed";
         } else if (authority.kind === "preview") requestState = "failed";
         throw error;
-      } finally { if (cancelCheck) clearInterval(cancelCheck); }
+      } finally {
+        if (cancelCheck) clearInterval(cancelCheck);
+        if(store&&authority.kind==="account")await store.saveObject(authority.owner,"request-metrics",input.id,requestMetrics(startedAt,calls,completed),0).catch(()=>undefined);
+      }
     };
     const workSignal = authority.kind === "account" ? AbortSignal.timeout(420_000) : request.signal;
     if (!request.headers.get("accept")?.includes("text/event-stream")) {

@@ -24,6 +24,17 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("shared Custom AI storage", () => {
+  it("archives a checked draft once and keeps versions isolated by account", async () => {
+    const input=request();const reserved=await store.reserve("alice",input);
+    await store.finish("alice",input.id,reserved.lease!,{reply:"Ready",draft:{source:"contract",sourceHash:"a".repeat(64),compiled:true,diagnostics:[],hookSummary:"3% fee"}});
+    const studioId="b".repeat(64),state={draftId:input.id,settings:{name:"Rain"},messages:[]};
+    await store.saveObject("alice","studio",studioId,state,0);
+    await store.saveObject("alice","studio",studioId,{...state,messages:[{role:"user",content:"hello"}]},1);
+    expect(await store.draftVersions("alice",studioId)).toHaveLength(1);
+    expect(await store.draftVersions("bob",studioId)).toHaveLength(0);
+    await expect(store.saveObject("alice","studio",studioId,state,1)).rejects.toMatchObject({status:409});
+    expect(await store.draftVersions("alice",studioId)).toHaveLength(1);
+  });
   it("reports account allowance, exact resets and no other account's usage", async () => {
     const before = await store.usage("alice");
     expect(before.hourly).toEqual({ used: 0, limit: 10, remaining: 10, resetsAt: clock + 3_600_000 });

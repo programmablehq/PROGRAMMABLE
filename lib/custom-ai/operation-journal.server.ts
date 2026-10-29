@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import type { AIPool, AIConnection } from "./store.server";
 export type Operation = { id: string; chainId: 1 | 4663; kind: "feed" | "price" | "collect" | "execute" | "index";
-  target: string; eventId: string; dueAt: number; state: "pending" | "leased" | "signed" | "broadcast" | "confirmed" | "failed" | "attention";
+  target: string; eventId: string; dueAt: number; state: "pending" | "leased" | "signed" | "broadcast" | "confirmed" | "skipped" | "failed" | "attention";
   lease?: string; leaseUntil?: number; rawTransaction?: string; transactionHash?: string; costCeilingWei?: string;
   confirmedBlockHash?: string; attempts: number; error?: string };
 const key = (chainId: number, target: string, eventId: string) => createHash("sha256").update(`${chainId}:${target.toLowerCase()}:${eventId}`).digest("hex");
@@ -22,10 +22,10 @@ export function createOperationJournal(pool: AIPool, now = Date.now) {
     },
     async due(limit = 8) {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) throw Error("Invalid worker batch");
-      return transaction(async db => (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND value->>'state' NOT IN ('confirmed','failed','attention') AND (value->>'dueAt')::bigint <= $1 ORDER BY (value->>'dueAt')::bigint,id LIMIT $2", [now(), limit])).rows.map(r => r.value as Operation));
+      return transaction(async db => (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND value->>'state' NOT IN ('confirmed','skipped','failed','attention') AND (value->>'dueAt')::bigint <= $1 ORDER BY (value->>'dueAt')::bigint,id LIMIT $2", [now(), limit])).rows.map(r => r.value as Operation));
     },
     async claim(id: string) { return transaction(async db => { const op = await read(db, id);
-      if (!op || ["confirmed", "failed", "attention"].includes(op.state) || op.dueAt > now() || (op.leaseUntil ?? 0) > now()) return null;
+      if (!op || ["confirmed", "skipped", "failed", "attention"].includes(op.state) || op.dueAt > now() || (op.leaseUntil ?? 0) > now()) return null;
       const value: Operation = { ...op, state: op.rawTransaction ? op.state : "leased", lease: randomUUID(), leaseUntil: now() + 60000, attempts: op.attempts + 1 };
       await write(db, value); return value; }); },
     async acquireSigner(op: Operation, address: string) { if (!op.lease) throw Error("Claim the operation before reserving its signer"); return transaction(async db => {

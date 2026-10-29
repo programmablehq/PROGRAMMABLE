@@ -4,6 +4,7 @@ export type CapabilityRef = { id: string; version: string; implementationHash: s
 export type CapabilityContext = {
   owner: string; chainId: 1 | 4663; signal?: AbortSignal;
   budget: { remaining: number }; allowWeb: boolean;
+  onProviderUsage?:(value:import("../request-metrics").ModelCallMetric)=>void;
 };
 export type ToolCapability = {
   ref: CapabilityRef; kind: "tool"; description: string; inputSchema: object;

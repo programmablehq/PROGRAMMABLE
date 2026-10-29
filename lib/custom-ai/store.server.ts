@@ -166,6 +166,13 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         : await db.query(`UPDATE programmable_custom_ai_v1.objects SET value=$4,revision=revision+1,updated_at=now()
           WHERE owner=$1 AND kind=$2 AND id=$3 AND revision=$5 RETURNING revision`, [owner,kind,id,JSON.stringify(value),revision]);
       if (!row.rows[0]) throw new CustomAIError("conflict", "This draft changed in another window. Reload it before continuing.", 409);
+      if (kind === "studio" && value && typeof value === "object" && "draftId" in value && typeof value.draftId === "string") {
+        const versionId=digest([id,value.draftId]);
+        await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
+          SELECT $1,'studio-version',$2,jsonb_build_object('studioId',$3::text,'state',$4::jsonb,'sourceHash',result->'draft'->>'sourceHash','summary',result->'draft'->>'hookSummary')
+          FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$5 AND state='completed' AND result->'draft' IS NOT NULL
+          ON CONFLICT DO NOTHING`,[owner,versionId,id,JSON.stringify(value),value.draftId]);
+      }
       return Number(row.rows[0].revision);
     });
   }
@@ -243,6 +250,13 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       return rows.map(row => row.value as T);
     });
   }
+  async function draftVersions(owner:string,studioId:string) {
+    return transaction(async db=>(await db.query(`SELECT id,value,updated_at FROM programmable_custom_ai_v1.objects
+      WHERE owner=$1 AND kind='studio-version' AND value->>'studioId'=$2 ORDER BY updated_at DESC,id DESC LIMIT 20`,[owner,studioId])).rows);
+  }
+  async function recentRequestMetrics(owner:string) {
+    return transaction(async db=>(await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='request-metrics' ORDER BY updated_at DESC LIMIT 100",[owner])).rows.map(r=>r.value));
+  }
   async function saveIndexBatch(id: string, revision: number, cursor: unknown, tokens: readonly { id: string; value: unknown }[]) {
     return transaction(async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`custom-ai-index:${id}`]);
@@ -257,7 +271,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { reserve, finish, read, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, saveIndexBatch };
+  return { reserve, finish, read, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;

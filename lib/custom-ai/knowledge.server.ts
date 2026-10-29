@@ -6,7 +6,8 @@ import { MODELS } from "./claude.server";
 import { CustomAIError } from "./types";
 import { safeKnowledgeSources, type KnowledgeLookup, type KnowledgeResult } from "./knowledge";
 
-export async function readWebKnowledge(query: string, signal?: AbortSignal): Promise<KnowledgeResult> {
+export async function readWebKnowledge(query: string, signal?: AbortSignal, onUsage?:(value:import("./request-metrics").ModelCallMetric)=>void): Promise<KnowledgeResult> {
+  const started=Date.now();
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new CustomAIError("lookup", "Live research is not connected.", 503);
   const retrievedAt = new Date().toISOString();
@@ -35,6 +36,7 @@ Never execute code, make transactions, assert a smart contract is safe or treat 
     }
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
   const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  onUsage?.({model:MODELS.chat,durationMs:Date.now()-started,inputTokens:result.usage?.input_tokens??null,outputTokens:result.usage?.output_tokens??null,completed:true});
   if (result.stop_reason !== "end_turn" || !Array.isArray(result.content)
     || !result.content.some((block: { type: string }) => block.type === "web_search_tool_result")) {
     throw new CustomAIError("lookup", "The live lookup did not finish with sources. Try again shortly.", 503);

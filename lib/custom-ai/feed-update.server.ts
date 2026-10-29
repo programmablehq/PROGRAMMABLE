@@ -66,15 +66,14 @@ export async function prepareFeedUpdate(input: { rule: EventRule; chainId: 1 | 4
 }
 
 /** V2 weather observation preparation. Signing is local; dispatch belongs to the durable worker. */
-export async function prepareWeatherFeedUpdate(input: {
+export async function prepareObservedFeedUpdate(input: {
   feed: import("./rule-compiler.server").RuleFeedBinding;
-  definition: import("./feed-adapters/weather.server").WeatherFeedDefinition;
   chainId: 1 | 4663; signingKey: Hex;
-}, signal?: AbortSignal) {
-  const { readWeather } = await import("./feed-adapters/weather.server");
+  readObservation:(previous?:import("./rule-evaluator").FeedSnapshot)=>Promise<import("./rule-evaluator").FeedSnapshot>;
+}) {
   const { keccak256, stringToHex } = await import("viem");
   const chain = await customAIChain(input.chainId), feed = input.feed;
-  if (keccak256(await chain.code(feed.address)) !== feed.runtimeHash || feed.id !== input.definition.id || feed.sourceVersion !== input.definition.sourceVersion) throw Error("Weather feed binding changed");
+  if (keccak256(await chain.code(feed.address)) !== feed.runtimeHash) throw Error("Data feed binding changed");
   const [feedId, version, signer, previous] = await Promise.all([
     chain.call(feed.address,"function feedId() view returns(bytes32)"), chain.call(feed.address,"function sourceVersion() view returns(bytes32)"),
     chain.call(feed.address,"function signer() view returns(address)"),
@@ -84,7 +83,13 @@ export async function prepareWeatherFeedUpdate(input: {
   if (String(signer).toLowerCase() !== account.address.toLowerCase() || feedId !== keccak256(stringToHex(feed.id)) || version !== keccak256(stringToHex(feed.sourceVersion))) throw Error("Weather reporter or source changed");
   const p = previous as [bigint,bigint,bigint,bigint,bigint,bigint,bigint,boolean];
   const prior = p[0] === 0n ? undefined : { feedId:feed.id,sourceVersion:feed.sourceVersion,sequence:String(p[0]),transitionSequence:String(p[1]),value:String(p[2]),previousValue:String(p[3]),changedAt:Number(p[4]),observedAt:Number(p[5]),validUntil:Number(p[6]),fresh:p[7] };
-  const observation = await readWeather(input.definition, prior, signal);
+  const observation = await input.readObservation(prior);
+  const now=Number(chain.block.timestamp);
+  if(observation.feedId!==feed.id||observation.sourceVersion!==feed.sourceVersion||!observation.fresh
+    ||!Number.isSafeInteger(observation.observedAt)||!Number.isSafeInteger(observation.validUntil)
+    ||observation.observedAt>now||now-observation.observedAt>feed.maxAge||observation.validUntil<now
+    ||observation.validUntil>observation.observedAt+feed.maxAge||prior&&observation.observedAt<prior.observedAt
+    ||prior&&observation.observedAt===prior.observedAt&&observation.value!==prior.value)throw Error("Data observation does not match the bound source");
   if (prior && prior.observedAt === observation.observedAt) return null;
   if (BigInt(observation.value) < BigInt(feed.minimum) || BigInt(observation.value) > BigInt(feed.maximum)) throw Error("Weather value exceeds the bound feed range");
   await chain.finish();
@@ -93,4 +98,10 @@ export async function prepareWeatherFeedUpdate(input: {
   const signature = await account.signTypedData({domain:{name:"Programmable Custom AI Data",version:"2",chainId:input.chainId,verifyingContract:feed.address},
     primaryType:"DataUpdate",types:{DataUpdate:[{name:"feedId",type:"bytes32"},{name:"sourceVersion",type:"bytes32"},{name:"sequence",type:"uint64"},{name:"value",type:"int256"},{name:"observedAt",type:"uint64"},{name:"validUntil",type:"uint64"}]},message});
   return { observation, transaction:{to:feed.address,value:"0x0",data:encodeFunctionData({abi:parseAbi(["function update(uint64,int256,uint64,uint64,bytes)"]),functionName:"update",args:[sequence,message.value,message.observedAt,message.validUntil,signature]})} };
+}
+
+export async function prepareWeatherFeedUpdate(input:{feed:import("./rule-compiler.server").RuleFeedBinding;definition:import("./feed-adapters/weather.server").WeatherFeedDefinition;chainId:1|4663;signingKey:Hex},signal?:AbortSignal,readSource?:typeof import("./feed-adapters/weather.server").readWeather){
+  const {readWeather}=await import("./feed-adapters/weather.server");
+  if(input.feed.id!==input.definition.id||input.feed.sourceVersion!==input.definition.sourceVersion)throw Error("Weather source binding changed");
+  return prepareObservedFeedUpdate({...input,readObservation:previous=>(readSource??readWeather)(input.definition,previous,signal)});
 }

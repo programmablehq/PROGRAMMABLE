@@ -10,6 +10,19 @@ const artifacts=code.contracts as unknown as Record<string,{abi:Abi;runtimeTempl
 type Configuration={factory:Address;creator:Address;launchSalt:Hex;allocator:Address;actionId:Hex;quote:Address;maximumBatch:bigint;
   maximumDeviationBps:number;interval:bigint;maxPriceAge:bigint;minimumObservations:number;minimumHistory:bigint;priceFeed:Address};
 
+export function pendingProgramFunds(value:{programBalance:bigint;allocated:bigint;claimed:bigint;totalCollected:bigint;weight:bigint;totalWeight:bigint;
+  ledgerPending:bigint;vaultBalance:bigint;vaultAccounted:bigint;vaultTotalReceived:bigint;creatorReceived:bigint;creatorShareBps:bigint;availableRewards:bigint;routerClaimable:bigint}) {
+  if(Object.values(value).some(n=>n<0n)||value.totalWeight===0n||value.weight>value.totalWeight||value.creatorShareBps>10000n
+    ||value.vaultBalance<value.vaultAccounted||value.claimed>value.allocated)throw Error("Invalid allocation accounting");
+  const incoming=value.vaultBalance-value.vaultAccounted+value.ledgerPending;
+  const creatorTotal=(value.vaultTotalReceived+incoming)*value.creatorShareBps/10000n;
+  if(creatorTotal<value.creatorReceived)throw Error("Invalid creator accounting");
+  const received=value.routerClaimable+value.availableRewards+incoming-(creatorTotal-value.creatorReceived);
+  const allocated=(value.totalCollected+received)*value.weight/value.totalWeight;
+  if(allocated<value.allocated)throw Error("Invalid router accounting");
+  return value.programBalance+allocated-value.claimed;
+}
+
 /** Canonical PoolManager storage observation, tied to the agreed block. */
 export async function readPoolObservation(chainId:1|4663,poolId:Hex):Promise<PriceObservation> {
   const chain=await customAIChain(chainId);
@@ -45,10 +58,25 @@ export async function prepareLiquidityOperation(input:{chainId:1|4663;program:Ad
     chain.call(p.priceFeed,"function signer() view returns(address)"),
   ]);
   if(done||BigInt(String(nextExecution))>BigInt(chain.block.timestamp))throw Error("This action is already settled or not due");
-  const available=BigInt(String(balance))+BigInt(String(allocated))-BigInt(String(claimed));
+  const readUint=(target:Address,name:string)=>chain.call(target,`function ${name}() view returns(uint256)`) as Promise<bigint>;
+  const [ledgerReceived,ledgerClaimed,vaultBalance,vaultAccounted,vaultTotalReceived,creatorReceived,creatorShareBps,availableRewards,routerClaimable,totalCollected,totalWeight]=await Promise.all([
+    readUint(launch.ledger,"additionalReceived"),readUint(launch.ledger,"additionalClaimed"),
+    chain.call(p.quote,"function balanceOf(address) view returns(uint256)",[launch.rewardVault]) as Promise<bigint>,readUint(launch.rewardVault,"accountedBalance"),readUint(launch.rewardVault,"totalReceived"),
+    readUint(launch.rewardVault,"creatorReceived"),chain.call(launch.rewardVault,"function creatorShareBps() view returns(uint16)") as Promise<number>,readUint(launch.rewardVault,"availableRewards"),
+    chain.call(launch.rewardVault,"function claimable(address) view returns(uint256)",[p.allocator]) as Promise<bigint>,readUint(p.allocator,"totalCollected"),readUint(p.allocator,"totalWeight"),
+  ]);
+  let weight=0n;
+  for(let i=0;i<4;i++){
+    try{const [id,,w]=await chain.call(p.allocator,"function destinations(uint256) view returns(bytes32,address,uint16)",[BigInt(i)]) as [Hex,Address,number];if(id===p.actionId){weight=BigInt(w);break;}}
+    catch{break;}
+  }
+  if(!weight)throw Error("The action is not a registered allocation destination");
+  const available=pendingProgramFunds({programBalance:BigInt(String(balance)),allocated:BigInt(String(allocated)),claimed:BigInt(String(claimed)),totalCollected,weight,totalWeight,
+    ledgerPending:ledgerReceived-ledgerClaimed,vaultBalance,vaultAccounted,vaultTotalReceived,creatorReceived,creatorShareBps:BigInt(creatorShareBps),availableRewards,routerClaimable});
   const amount=available<BigInt(p.maximumBatch)?available:BigInt(p.maximumBatch);
   if(amount<2n)throw Error("Collect the earned fee allocation before compounding");
-  const reference=checkedExecutionPrice(input.history.observations,{minimumObservations:Number(p.minimumObservations),minimumHistorySeconds:Number(p.minimumHistory),maxAgeSeconds:Number(p.maxPriceAge),deviationBps:Number(p.maximumDeviationBps)},Number(chain.block.timestamp));
+  const confirmedHistory=input.history.observations.filter(item=>BigInt(item.blockNumber)<BigInt(chain.block.number));
+  const reference=checkedExecutionPrice(confirmedHistory,{minimumObservations:Number(p.minimumObservations),minimumHistorySeconds:Number(p.minimumHistory),maxAgeSeconds:Number(p.maxPriceAge),deviationBps:Number(p.maximumDeviationBps)},Number(chain.block.timestamp));
   if(BigInt(reference.blockNumber)>=BigInt(chain.block.number))throw Error("Wait for the price observation block to finalize");
   const account=privateKeyToAccount(input.priceSigningKey);
   if(account.address.toLowerCase()!==String(signer).toLowerCase())throw Error("Incorrect execution price reporter");
