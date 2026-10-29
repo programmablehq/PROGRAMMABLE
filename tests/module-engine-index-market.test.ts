@@ -49,8 +49,10 @@ describe("Engine market proof retention during canonical replay", () => {
     const f = setup([]);
     await syncModuleModeIndex(f.source, f.store, options);
     expect(f.saved().moduleMode?.items).toEqual([withoutMarket()]);
-    f.source.launches = async () => [marketRow];
-    await syncModuleModeIndex(f.source, f.store, options);
+    const hydrate = vi.fn(async () => [marketRow]);
+    f.source.launches = hydrate;
+    await syncModuleModeIndex(f.source, f.store, { ...options, reuseVerifiedCheckpoint: true });
+    expect(hydrate).toHaveBeenCalledOnce();
     expect(f.saved().moduleMode?.items).toEqual([marketRow]);
   });
   it.each([
