@@ -3,13 +3,13 @@ import type { Operation, OperationJournal } from "../../lib/custom-ai/operation-
 export type WorkerAdapter = {
   health?: () => Promise<Partial<import("./health").WorkerHealth>>;
   signer: string; allowedTargets: ReadonlySet<string>; chainId: 1 | 4663; dailyLimitWei: bigint; transactionLimitWei: bigint;
-  prepare: (operation: Operation) => Promise<{ rawTransaction: Hex }>;
+  prepare: (operation: Operation) => Promise<{ rawTransaction: Hex } | { skip: true }>;
   receipt: (hash: Hex) => Promise<{ state: "pending" | "confirmed" | "reverted"; blockHash?: Hex }>;
   broadcast: (raw: Hex) => Promise<Hex>;
   readOnly: (operation: Operation) => Promise<void>;
 };
 export async function runDueJobs(journal: OperationJournal, adapters: WorkerAdapter[], limit = 8) {
-  const result = { checked: 0, confirmed: 0, deferred: 0 };
+  const result = { checked: 0, confirmed: 0, skipped: 0, deferred: 0 };
   for (const candidate of await journal.due(limit)) {
     const adapter = adapters.find(a => a.chainId === candidate.chainId && a.allowedTargets.has(candidate.target.toLowerCase()));
     if (!adapter) continue;
@@ -22,9 +22,14 @@ export async function runDueJobs(journal: OperationJournal, adapters: WorkerAdap
         const receipt = await adapter.receipt(op.transactionHash as Hex);
         if (receipt.state === "confirmed" && receipt.blockHash) { await journal.complete(op, "confirmed", receipt.blockHash); await journal.releaseSigner(op, adapter.signer); result.confirmed++; continue; }
         if (receipt.state === "reverted") { await journal.complete(op, "failed", receipt.blockHash); await journal.releaseSigner(op, adapter.signer); continue; }
+        if (op.state === "broadcast") { await journal.defer(op);result.deferred++;continue; }
         // Re-broadcasting is always the exact saved bytes and nonce. Never re-sign an unknown outcome.
       } else {
-        const { rawTransaction } = await adapter.prepare(op);
+        const prepared = await adapter.prepare(op);
+        if ("skip" in prepared) {
+          await journal.complete(op,"skipped");await journal.releaseSigner(op,adapter.signer);result.skipped++;continue;
+        }
+        const { rawTransaction } = prepared;
         const tx = parseTransaction(rawTransaction);
         if (tx.chainId !== adapter.chainId || tx.to?.toLowerCase() !== op.target.toLowerCase() || (tx.value ?? 0n) !== 0n || !tx.gas || (!tx.maxFeePerGas && !tx.gasPrice)) throw Error("Worker transaction is outside its bound operation");
         const cost = tx.gas * (tx.maxFeePerGas ?? tx.gasPrice!);

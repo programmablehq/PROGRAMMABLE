@@ -128,3 +128,20 @@
 
 .coinForm > .preparationStatus { margin: 16px 0 0; }
 .ruleReview .note { margin: 12px 0 0; }
+.ruleReview .ruleTimeline { list-style: none; padding: 0; margin: 16px 0; }
+.ruleTimeline li { padding: 0 0 18px 16px; border-inline-start: 1px solid #686057; }
+.ruleTimeline li:last-child { padding-bottom: 0; }
+.ruleTimeline strong, .ruleAllocations strong { color: #f4f1eb; font-weight: 500; }
+.ruleTimeline p, .ruleAllocations p { margin: 5px 0; }
+.ruleTimeline small { color: #aaa69f; }
+.ruleReview h4 { color: #f4f1eb; font-size: inherit; font-weight: 500; margin: 18px 0 8px; }
+.ruleReview .ruleAllocations { list-style: none; padding: 0; }
+.ruleAllocations li { padding: 10px 0; border-top: 1px solid #343431; }
+.usage > .versionList { max-height: 400px; overflow-y: auto; overscroll-behavior: contain; }
+.versionList article { padding: 10px 0; border-top: 1px solid #44413b; }
+.versionList strong { color: #f4f1eb; font-weight: 500; }
+.versionList small { display: block; margin-bottom: 4px; }
+.operationStatus { border: 1px solid #44413b; border-radius: 12px; padding: 16px; margin-bottom: 12px; color: #c7c2ba; font-size: 13px; }
+.operationStatus h3 { margin: 0 0 8px; color: #f4f1eb; font-size: 15px; }
+.operationStatus p { line-height: 1.6; }
+.operationStatus small { display: block; margin-top: 10px; }

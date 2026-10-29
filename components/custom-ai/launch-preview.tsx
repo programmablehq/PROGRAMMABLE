@@ -194,6 +194,7 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (isEth ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent")}</p>
       </fieldset>
       {!bound && <RuleReview draft={draft} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
+        quoteLabel={isEth ? "ETH" : "pair tokens"}
         onReview={() => undefined} onKeepRules={onKeepRules} />}
       {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}

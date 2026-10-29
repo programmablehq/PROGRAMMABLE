@@ -13,6 +13,8 @@ import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { conversationWindow } from "@/lib/custom-ai/conversation";
 import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
 import styles from "./workspace.module.css";
+import { DraftVersions } from "./draft-versions";
+import { RequestInsights } from "./request-insights";
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
@@ -219,6 +221,14 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     setImageReceipt(previousCoin.image); retry.current = null; setInput(""); setError("");
     setNotice("Previous coin restored."); setPreviewRevision(value => value + 1);
   }
+  async function restoreVersion(version:Pick<StoredStudio,"state"|"draft">){
+    if(busy||launchLocked||!version.draft)return;
+    await writeDraftCache(`${storageKey}:image`,null);
+    const state=version.state;
+    setMessages(state.messages);setSettings(state.settings);setDraft(version.draft);setDraftId(state.draftId);
+    setContextId(state.contextId);setPendingChange(state.pendingChange);setImageReceipt(state.image);
+    retry.current=null;setInput("");setError("");setNotice("Saved rules restored.");setPreviewRevision(v=>v+1);
+  }
   useLayoutEffect(() => {
     const resize = () => {
       if (!textarea.current) return;
@@ -300,6 +310,8 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
             void restorePrevious().catch(() => setError("The previous coin could not be restored."));
           }}>Restore previous coin</button>}
         </div></details>
+        {!localPreview&&owner!=="signed-out"&&<DraftVersions account={owner} headers={headers} disabled={busy||launchLocked||!restored||saveFailed||Boolean(conflict)} currentDraftId={draftId} onRestore={restoreVersion}/>}
+        {!localPreview&&owner!=="signed-out"&&<RequestInsights headers={headers}/>}
         {usage && <details className={styles.usage}><summary>Usage</summary><div>
           <p>{usage.hourly.remaining} of {usage.hourly.limit} credits this hour · {usage.daily.remaining} of {usage.daily.limit} today</p>
           <p>Replies use 1 credit. Builds and live research use 5. An interrupted attempt may use up to 5.</p>

@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import type { AIPool, AIConnection } from "./store.server";
 export type Operation = { id: string; chainId: 1 | 4663; kind: "feed" | "price" | "collect" | "execute" | "index";
-  target: string; eventId: string; dueAt: number; state: "pending" | "leased" | "signed" | "broadcast" | "confirmed" | "failed" | "attention";
+  target: string; eventId: string; dueAt: number; state: "pending" | "leased" | "signed" | "broadcast" | "confirmed" | "skipped" | "failed" | "attention";
   lease?: string; leaseUntil?: number; rawTransaction?: string; transactionHash?: string; costCeilingWei?: string;
   confirmedBlockHash?: string; attempts: number; error?: string };
 const key = (chainId: number, target: string, eventId: string) => createHash("sha256").update(`${chainId}:${target.toLowerCase()}:${eventId}`).digest("hex");
@@ -13,6 +13,9 @@ export function createOperationJournal(pool: AIPool, now = Date.now) {
   const read = async (db: AIConnection, id: string) => (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND id=$1 FOR UPDATE", [id])).rows[0]?.value as Operation | undefined;
   const write = async (db: AIConnection, value: Operation) => { await db.query("UPDATE programmable_custom_ai_v1.objects SET value=$2,revision=revision+1,updated_at=now() WHERE owner='system' AND kind='operation' AND id=$1", [value.id, JSON.stringify(value)]); };
   return {
+    async needsAttention(chainId:1|4663) {
+      return transaction(async db => (await db.query("SELECT 1 FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND value->>'chainId'=$1 AND value->>'state' IN ('failed','attention') LIMIT 1",[String(chainId)])).rows.length>0);
+    },
     async enqueue(input: Omit<Operation, "id" | "state" | "attempts">) {
       if (![1,4663].includes(input.chainId) || !/^0x[0-9a-f]{40}$/i.test(input.target) || !input.eventId || input.eventId.length > 256 || !Number.isSafeInteger(input.dueAt)) throw Error("Invalid worker operation");
       const id = key(input.chainId, input.target, input.eventId);
@@ -22,10 +25,10 @@ export function createOperationJournal(pool: AIPool, now = Date.now) {
     },
     async due(limit = 8) {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) throw Error("Invalid worker batch");
-      return transaction(async db => (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND value->>'state' NOT IN ('confirmed','failed','attention') AND (value->>'dueAt')::bigint <= $1 ORDER BY (value->>'dueAt')::bigint,id LIMIT $2", [now(), limit])).rows.map(r => r.value as Operation));
+      return transaction(async db => (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='operation' AND value->>'state' NOT IN ('confirmed','skipped','failed','attention') AND (value->>'dueAt')::bigint <= $1 ORDER BY (value->>'dueAt')::bigint,id LIMIT $2", [now(), limit])).rows.map(r => r.value as Operation));
     },
     async claim(id: string) { return transaction(async db => { const op = await read(db, id);
-      if (!op || ["confirmed", "failed", "attention"].includes(op.state) || op.dueAt > now() || (op.leaseUntil ?? 0) > now()) return null;
+      if (!op || ["confirmed", "skipped", "failed", "attention"].includes(op.state) || op.dueAt > now() || (op.leaseUntil ?? 0) > now()) return null;
       const value: Operation = { ...op, state: op.rawTransaction ? op.state : "leased", lease: randomUUID(), leaseUntil: now() + 60000, attempts: op.attempts + 1 };
       await write(db, value); return value; }); },
     async acquireSigner(op: Operation, address: string) { if (!op.lease) throw Error("Claim the operation before reserving its signer"); return transaction(async db => {
