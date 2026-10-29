@@ -1669,7 +1669,7 @@ export const programmablePublicOpenApi = {
       OperationsHealth: {
         type: "object",
         description:
-          "Observed website catalog availability, separate from direct provider health and Custom Launch API readiness. Ready requires all three indexes to be ready; unavailable requires all three to be unavailable; all other combinations are degraded. An empty current catalog is valid. checkedAt is the cached observation time and updatedAt is each catalog's source time.",
+          "Observed website catalog availability, separate from direct provider health and Custom Launch API readiness. Ready requires all four indexes to be ready; unavailable requires all four to be unavailable; all other combinations are degraded. An empty current catalog is valid. checkedAt is the cached observation time and updatedAt is each catalog's source time.",
         required: ["schemaVersion", "scope", "status", "checkedAt", "indexes", "providers", "customLaunchReadiness"],
         properties: {
           schemaVersion: { const: "programmable.operations-health.v2" },
@@ -1677,7 +1677,7 @@ export const programmablePublicOpenApi = {
           status: { enum: ["ready", "degraded", "unavailable"] },
           checkedAt: { type: "string", format: "date-time" },
           indexes: {
-            type: "array", minItems: 3, maxItems: 3, items: false,
+            type: "array", minItems: 3, maxItems: 4, items: false,
             prefixItems: [
               { chainId: 1, catalogUrl: `${SITE_ORIGIN}/api/explore/ethereum`, statuses: ["ready", "partial", "stale", "unavailable"] },
               { chainId: 4663, catalogUrl: `${SITE_ORIGIN}/api/explore/robinhood`, statuses: ["ready", "syncing", "stale", "unavailable"] },
@@ -1703,7 +1703,7 @@ export const programmablePublicOpenApi = {
             },
           },
           customLaunchReadiness: {
-            type: "array", minItems: 3, maxItems: 3, items: false,
+            type: "array", minItems: 3, maxItems: 4, items: false,
             prefixItems: [
               { chainId: 1, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/readyz`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v3/capabilities` },
               { chainId: 4663, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-plans/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-capabilities` },

@@ -1,12 +1,12 @@
 # HyperEVM Custom Launch API
 
-Launch a coin with your own Solidity contracts on HyperEVM, chain ID `999` (`eip155:8453`). This interface uses the same exact-source graph review and controller-wallet signing flow as Ethereum. HyperEVM currently supports Custom Launch through the API. Module Mode is not offered on HyperEVM.
+Launch a coin with your own Solidity contracts on HyperEVM, chain ID `999` (`eip155:999`). This interface uses the same exact-source graph review and controller-wallet signing flow as Ethereum. HyperEVM currently supports Custom Launch through the API. Module Mode is not offered on HyperEVM.
 
 ## Before building
 
 Read [live capabilities](https://api.programmable.market/v4/chains/999/capabilities) and [readiness](https://api.programmable.market/v4/chains/999/readiness). Require `mode: "active"`, `ready: true` and `publicLaunchAuthorized: true` before telling a user that public launching is available. `canary` admits only the release operator. Documentation and deployed contracts alone do not activate public requests.
 
-Use the [HyperEVM API reference](https://programmable.market/openapi/hyperevm-custom-launch-v1.json). The endpoint is chain-qualified V4; its exact request schema is `programmable.custom-launch-create-request.v3`, with `chainId: "8453"` and the complete HyperEVM profile returned by capabilities. Do not send the Robinhood V4 request layout or substitute Ethereum contract addresses.
+Use the [HyperEVM API reference](https://programmable.market/openapi/hyperevm-custom-launch-v1.json). The endpoint is chain-qualified V4; its exact request schema is `programmable.custom-launch-create-request.v3`, with `chainId: "999"` and the complete HyperEVM profile returned by capabilities. Do not send the Robinhood V4 request layout or substitute Ethereum contract addresses.
 
 Create a wallet API key in the [HyperEVM setup](https://programmable.market/developers/api-keys?guide=custom-hook&chainId=999), with `custom-launch:create` and `custom-launch:read` and a HyperEVM grant. The request's `launchWallet` must match that key's wallet. Partner keys are not accepted on this route. Fund that wallet with HYPE on HyperEVM for deployment, initial liquidity and gas. An Ethereum balance cannot pay HyperEVM gas.
 
@@ -19,7 +19,7 @@ HyperEVM uses separate small and large blocks. Custom deployments require large 
 ## Prepare, review and launch
 
 1. Compile with the exact compiler and settings. Include the complete source closure, creation bytecode, constructor bindings and materialized runtime for every target and relevant externally created contract. Include complete token metadata, image and project links.
-2. Build the exact HyperEVM profile `3.6.0` graph. The graph has 3–16 targets and supports native HYPE or an ERC-20 quote, with funding through the controller transaction's value. EIP-3009 funding is not enabled on HyperEVM. `buildProtectedHyperEVMLaunchV1` in the current launch client builds the protected native-HYPE reference package; arbitrary contracts still require their own full review.
+2. Build the exact HyperEVM profile `3.6.0` graph. The graph has 3–16 targets and supports native HYPE or an ERC-20 quote, with funding through the controller transaction's value. EIP-3009 funding is not enabled on HyperEVM. `buildProtectedHyperEvmLaunchV1` in the current launch client builds the protected native-HYPE reference package; arbitrary contracts still require their own full review.
 3. Preflight the exact request, then submit it once with a stable idempotency key. Keep the returned request ID. Reuse exactly the same request bytes and key after an uncertain network response.
 4. Follow the request's review status and feedback. Approval applies only to the exact submitted version. A changes request needs a corrected source package; do not create duplicate submissions for an unchanged package.
 5. Once authorized, follow its wallet handoff to Programmable. Verify HyperEVM, the controller, router, value and calldata. The controller wallet signs and sends the transaction.
@@ -77,3 +77,9 @@ The canonical coin page is `/token/{token}?chain=999`. Finalized HyperEVM launch
 | Platform treasury | `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` |
 
 Use the current release's runtime hashes and policy from capabilities, not addresses copied from another network. Uniswap's [deployment registry](https://developers.uniswap.org/docs/protocols/v4/deployments) describes its HyperEVM contracts. For the wider integration model, read [Index launches](https://programmable.market/docs/developers/indexing).
+
+## Trading and fee claims
+
+After finality, open `https://programmable.market/token/TOKEN_ADDRESS?chain=999` to buy or sell through the canonical Uniswap Universal Router. The website simulates the exact transaction through independent providers, applies the selected slippage limit, and requests only the allowance required for that trade. Wait for a submitted transaction before requesting another quote.
+
+Creator fees accrue in the hook’s `feeVault`. Its `claimCreator()` method always pays the immutable creator recipient. The coin page’s Creator fees control prepares the same claim. Platform fees and opening taxes are separate balances paid to the fixed treasury; claiming them never withdraws pool liquidity.

@@ -659,3 +659,11 @@ Base uses `chainId: "8453"`, the exact graph V3 request schema and `/v4/chains/8
 The package exports `buildProtectedBaseLaunchV1`. Its Base profile, graph factory, permit authority, router, oracle and protected contract artifacts are distinct from Ethereum and Robinhood. Base uses wallet transaction value, not EIP-3009. Use `programmable-launch status REQUEST_UUID --chain-id 8453 --watch --until finalized`.
 
 After finality, consume `/v4/chains/8453/finalized-custom-launches`, exhaust pagination and key records by chain, router and launch ID. The same finalized records feed Explore. Module Mode is not offered on Base. Package installation does not authorize a launch or activate a release.
+
+## HyperEVM Custom Launch API (4.3.0)
+
+HyperEVM uses `chainId: "999"` (`eip155:999`) and native HYPE. Use the [HyperEVM guide](https://programmable.market/developers/hyperevm-custom-launch-api-v1.md), `/v4/chains/999/capabilities` and `/v4/chains/999/readiness` to select its current profile and confirm public availability.
+
+`buildProtectedHyperEvmLaunchV1` builds the protected native-HYPE reference package. General custom contracts use the same exact-source graph layout and review flow as Base. The wallet needs an activated HyperCore account and large-block mode for contract deployment; `enableHyperEvmLargeTransactionsV1` prepares that mode for the connected wallet. A key does not sign transactions. Module Mode is not offered on this chain.
+
+`programmable-launch status REQUEST_UUID --chain-id 999 --watch --until finalized` follows the launch. The finalized metadata cursor at `/v4/chains/999/finalized-custom-launches` is the source for indexing; do not repeatedly scan the chain or a market-data provider for new launches.

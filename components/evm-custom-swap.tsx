@@ -20,6 +20,7 @@ export function EvmCustomSwap({token,symbol}:{token:`0x${string}`;symbol:string}
   busyRef.current=true;setBusy(true);setError("");setHash(null);
   try{
    if(!/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(amount))throw new Error("Enter a valid amount.");
+   if((amount.split(".")[1]?.length??0)>(buy?descriptor.quoteDecimals:descriptor.tokenDecimals))throw new Error("This amount has too many decimal places.");
    const request={chainId:999 as const,token,owner:wallet.wallet.account,buy,amountIn:parseUnits(amount,buy?descriptor.quoteDecimals:descriptor.tokenDecimals).toString(),slippageBps:slippage,deadline:String(Math.floor(Date.now()/1000)+1200)};
    const response=await fetch("/api/swap/evm/prepare",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(request)});const body=await response.json();if(!response.ok)throw new Error(body.error);
    const checked=validateEvmCustomSwapPreparation(body,request);setQuote(checked);

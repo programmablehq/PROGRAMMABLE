@@ -136,6 +136,22 @@ test("Base discovery allows only its exact public WETH runtime commitment", t =>
   }
 });
 
+test("HyperEVM discovery allows only its exact public WHYPE runtime commitment", t => {
+  const paths = [
+    "packages/launch/src/hyperevm-profile-v1.json",
+    "docs/operations/releases/custom-launch-v4.3.0/cli-release-binding.json",
+    "public/openapi/hyperevm-custom-launch-v1.json",
+  ];
+  const digest = JSON.parse(readFileSync(new URL("../../packages/launch/src/hyperevm-profile-v1.json", import.meta.url))).fundingTokenRuntimeCodeHash;
+  const line = `  "fundingTokenRuntimeCodeHash": "${digest}",`;
+  assert.deepEqual(scan(t, Object.fromEntries(paths.map(path => [path, line])), { raw: true }), []);
+  for (const path of paths) {
+    assertFiles(scan(t, { [path]: line.replace(digest, `0x${material}`) }, { raw: true }), [path]);
+    assertFiles(scan(t, { [path]: `${line} "apiKey": "${material}",` }, { raw: true }), [path], 2);
+    assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+  }
+});
+
 test("Eulerian public identity comparisons do not hide changed or adjacent credentials", t => {
   const path = "lib/server/robinhood-presentation.ts";
   const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");

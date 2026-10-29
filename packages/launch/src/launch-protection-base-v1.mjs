@@ -92,3 +92,8 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
 }
 
 export const buildProtectedEvmLaunchV1=buildProtectedBaseLaunchV1;
+
+export async function buildProtectedHyperEvmLaunchV1(options) {
+  if (options.capabilities?.chain?.id !== '999') throw new TypeError('HyperEVM capabilities required');
+  return buildProtectedEvmLaunchV1(options);
+}

@@ -2,12 +2,14 @@ import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const readers = vi.hoisted(() => ({ ethereum: vi.fn(), robinhood: vi.fn(), base: vi.fn() }));
+const readers = vi.hoisted(() => ({ ethereum: vi.fn(), robinhood: vi.fn(), base: vi.fn(), hyperevm: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumIndexHealth: readers.ethereum }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalog: readers.robinhood }));
 
 vi.mock("@/lib/server/base-explore", () => ({ readBaseExploreCatalog: readers.base }));
+
+vi.mock("@/lib/server/hyperevm-explore", () => ({ readHyperEvmExploreCatalog: readers.hyperevm }));
 
 import { createOperationsHealthReader } from "../lib/server/operations-health";
 import { programmablePublicOpenApi } from "../lib/public-openapi";
@@ -23,6 +25,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(NOW));
   readers.ethereum.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, entries: [] });
+  readers.hyperevm.mockReset().mockResolvedValue({ status:"ready",updatedAt:UPDATED,items:[] });
   readers.base.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, items: [] });
   readers.robinhood.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, items: [] });
 });
@@ -44,7 +47,7 @@ describe("observed website indexing health", () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ schemaVersion: "programmable.operations-health.v2",
       scope: "website-launch-indexes", status: "ready", checkedAt: NOW,
-      indexes: [{ chainId: 1, status: "ready", updatedAt: UPDATED }, { chainId: 4663, status: "ready", updatedAt: UPDATED }, { chainId: 8453, status: "ready", updatedAt: UPDATED }],
+      indexes: [{ chainId: 1, status: "ready", updatedAt: UPDATED }, { chainId: 4663, status: "ready", updatedAt: UPDATED }, { chainId: 8453, status: "ready", updatedAt: UPDATED }, {chainId:999,status:"ready",updatedAt:UPDATED}],
       providers: [{ name: "codex", health: "not-checked" }],
     });
     expect(body.customLaunchReadiness).toEqual([
@@ -53,6 +56,7 @@ describe("observed website indexing health", () => {
         capabilitiesUrl: "https://api.programmable.market/v4/chains/4663/custom-launch-capabilities" },
       { chainId: 8453, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness",
         capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities" },
+      {chainId:999,readinessUrl:"https://api.programmable.market/v4/chains/999/readiness",capabilitiesUrl:"https://api.programmable.market/v4/chains/999/capabilities"},
     ]);
     expect(readers.ethereum).toHaveBeenCalledTimes(1);
     expect(readers.robinhood).toHaveBeenCalledTimes(1);
@@ -67,7 +71,7 @@ describe("observed website indexing health", () => {
     const { response, body } = await getHealth();
     expect(response.status).toBe(200);
     expect(body.status).toBe("degraded");
-    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual([ethereum, robinhood, "ready"]);
+    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual([ethereum, robinhood, "ready", "ready"]);
   });
 
   it.each(["stale", "unavailable"])("reports Base %s even when the other chains are ready", async status => {
@@ -75,10 +79,11 @@ describe("observed website indexing health", () => {
     const { response, body } = await getHealth();
     expect(response.status).toBe(200);
     expect(body.status).toBe("degraded");
-    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual(["ready", "ready", status]);
+    expect(body.indexes.map((index: { status: string }) => index.status)).toEqual(["ready", "ready", status, "ready"]);
   });
 
   it("returns 503 for all failed readers without exposing private errors", async () => {
+    readers.hyperevm.mockRejectedValue(new Error("private HyperEVM credential"));
     readers.base.mockRejectedValue(new Error("private Base credential"));
     readers.ethereum.mockRejectedValue(new Error("private provider credential"));
     readers.robinhood.mockRejectedValue(new Error("private database endpoint"));
@@ -130,6 +135,7 @@ describe("observed website indexing health", () => {
       { chainId: 1, status: "stale", updatedAt: UPDATED, catalogUrl: "https://programmable.market/api/explore/ethereum" },
       { chainId: 4663, status: "ready", updatedAt: UPDATED, catalogUrl: "https://programmable.market/api/explore/robinhood" },
       { chainId: 8453, status: "ready", updatedAt: UPDATED, catalogUrl: "https://programmable.market/api/explore/base" },
+      {chainId:999,status:"ready",updatedAt:UPDATED,catalogUrl:"https://programmable.market/api/explore/hyperevm"},
     ]);
   });
 

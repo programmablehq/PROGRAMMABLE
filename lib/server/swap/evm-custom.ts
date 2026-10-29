@@ -63,7 +63,7 @@ async function origin(launch:FinalizedCustomLaunchMetadataV1,rpcs:readonly [Rpc,
  const stamp=decodeFunctionResult({abi:STAMP,functionName:"launchStamp",data:stampRaw});
  const binding=launch.routingFeePolicy.stampBinding;
  const key=launch.poolKey;
- const poolKeyHash=keccak256(encodeAbiParameters([{type:"tuple",components:[{type:"address",name:"currency0"},{type:"address",name:"currency1"},{type:"uint24",name:"fee"},{type:"int24",name:"tickSpacing"},{type:"address",name:"hooks"}]}],[key]));
+ const poolKeyHash=keccak256(encodeAbiParameters([{type:"bytes32"},{type:"address"},{type:"address"},{type:"uint24"},{type:"int24"},{type:"address"}],[keccak256(toHex("ProgrammablePoolKeyV1(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)")),key.currency0,key.currency1,key.fee,key.tickSpacing,key.hooks]));
  if(!same(decodeFunctionResult({abi:STAMP,functionName:"launchIdByToken",data:launchIdRaw}),launch.routerLaunchId)||!same(stamp.token,launch.token)||!same(stamp.hook,launch.hook)||!same(stamp.launchWallet,launch.creator)||!same(stamp.poolManager,p.poolManager)||!same(stamp.poolId,launch.poolId)||!same(stamp.poolKeyHash,poolKeyHash)||!same(stamp.stampHash,binding.stampHash)||!same(stamp.permitDigest,binding.permitDigest)||!same(stamp.routePayloadHash,binding.routePayloadHash))throw new EvmSwapError("Launch trading evidence changed.");
  const quote=same(key.currency0,launch.token)?key.currency1:key.currency0;
  const decimals=async(token:Address)=>same(token,NATIVE)?18:Number(decodeFunctionResult({abi:EVM_TOKEN_ABI,functionName:"decimals",data:await call(rpcs,token,encodeFunctionData({abi:EVM_TOKEN_ABI,functionName:"decimals"}),reference)}));

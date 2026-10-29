@@ -640,6 +640,7 @@ regexTarget = "line"
 paths = [
   '''^packages/launch/src/base-profile-v1\.json$''',
   '''^docs/operations/releases/custom-launch-v4\.2\.0/cli-release-binding\.json$''',
+  '''^docs/operations/releases/custom-launch-v4\.3\.0/cli-release-binding\.json$''',
   '''^public/openapi/base-custom-launch-v1\.json$''',
 ]
 regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",\s*$''']
@@ -669,3 +670,15 @@ regexes = [
   '''^PoolKey\.sol":\s*"99e1afe285b5c614ebc9586ab5196db9d24a63fd924a449f5d99f490a6a6d6a9"$''',
   '''^CustomAITokenV1\.sol":\s*"1b7f5673ca7d31449f04eb23732930a969e6ea895e07d80f4b60b8b792841575"$''',
 ]
+
+[[allowlists]]
+description = "Exact public HyperEVM WHYPE runtime code commitment in client and discovery documents"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^packages/launch/src/hyperevm-profile-v1\.json$''',
+  '''^docs/operations/releases/custom-launch-v4\.3\.0/cli-release-binding\.json$''',
+  '''^public/openapi/hyperevm-custom-launch-v1\.json$''',
+]
+regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04",\s*$''']
