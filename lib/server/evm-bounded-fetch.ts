@@ -1,25 +1,19 @@
 import "server-only";
+import { BoundedBodyErrorV1, readBoundedUtf8BodyV1 } from "@/lib/server/custom-launch/bounded-utf8-body-v1";
 
 /** Bound even a malformed provider response before the RPC client parses JSON. */
 export async function boundedEvmFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init);
   if (!response.body) return response;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
   try {
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      size += part.value.byteLength;
-      if (size > 2_097_152) {
-        await reader.cancel();
-        throw new Error("RPC response exceeded its read limit");
-      }
-      chunks.push(part.value);
+    const body = await readBoundedUtf8BodyV1(response, 2_097_152, {
+      signal: init?.signal ?? undefined, timeoutMs: 10_000,
+    });
+    return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+  } catch (error) {
+    if (error instanceof BoundedBodyErrorV1 && error.code === "too-large") {
+      throw new Error("RPC response exceeded its read limit");
     }
-  } finally {
-    reader.releaseLock();
+    throw error;
   }
-  return new Response(Buffer.concat(chunks), { status: response.status, headers: response.headers });
 }

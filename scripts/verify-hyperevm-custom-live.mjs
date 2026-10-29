@@ -11,6 +11,8 @@ export async function verifyHyperEvmCustomLive(evidence, request = fetch) {
   assert.match(evidence.releaseId, /^sha256:[0-9a-f]{64}$/);
   assert.match(evidence.requestId, /^[0-9a-f-]{36}$/);
   assert.match(evidence.launchTransactionHash, /^0x[0-9a-f]{64}$/);
+  assert.ok(evidence.platformFeesVerified === true && evidence.openingTaxVerified === true
+    && evidence.sourcesVerified === true, "Funded trade, fee and source acceptance is required");
   const read = async url => {
     const response = await request(url, { cache: "no-store", signal: AbortSignal.timeout(20000), redirect: "error" });
     assert.equal(response.ok, true, "Public HyperEvm endpoint unavailable");
@@ -27,9 +29,10 @@ export async function verifyHyperEvmCustomLive(evidence, request = fetch) {
   assertEvmCapabilitiesResponse(capabilities, "999");
   assert.equal(capabilities.mode, "active");
   assert.equal(capabilities.releaseId, evidence.releaseId);
-  let cursor = null, found = null;
+  let cursor = null, found = null, pages = 0;
   const seen = new Set();
   do {
+    assert.ok(++pages <= 5, "HyperEVM acceptance launch was not found in the bounded feed read");
     const feed = await read(prefix + "/finalized-custom-launches" + (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""));
     assert.equal(feed.schemaVersion, "programmable.finalized-custom-launch-metadata-list.v1");
     assert.ok(Array.isArray(feed.launches));
@@ -38,16 +41,15 @@ export async function verifyHyperEvmCustomLive(evidence, request = fetch) {
     cursor = feed.nextCursor ?? null;
     assert.ok(cursor === null || !seen.has(cursor), "Repeated HyperEvm pagination cursor");
     if (cursor) seen.add(cursor);
-    assert.ok(seen.size < 10000, "HyperEvm feed exceeded verification bound");
   } while (cursor && !found);
   assert.ok(found, "Accepted HyperEvm launch missing from the finalized feed");
   assert.equal(found.router.toLowerCase(), profile.router.toLowerCase());
   assert.equal(found.finality.transactionHash, evidence.launchTransactionHash);
   assert.equal(found.token.toLowerCase(), evidence.token.toLowerCase());
-  const explore = await read("https://programmable.market/api/explore/base?q=" + encodeURIComponent(evidence.token));
+  const explore = await read("https://programmable.market/api/explore/hyperevm?q=" + encodeURIComponent(evidence.token));
   assert.ok(explore.items?.some(item => item.chainId === 999 && item.tokenAddress?.toLowerCase() === evidence.token.toLowerCase()),
     "HyperEvm launch missing from public Explore");
-  const unified = await read("https://programmable.market/api/explore/launches?q=" + encodeURIComponent(evidence.token));
+  const unified = await read("https://programmable.market/api/explore/launches?chain=999&q=" + encodeURIComponent(evidence.token));
   assert.ok(unified.items?.some(item => item.chainId === 999 && item.tokenAddress?.toLowerCase() === evidence.token.toLowerCase()
     && item.transactionHash === evidence.launchTransactionHash), "HyperEvm launch missing from the shared Explore catalog");
   return { status: "passed", releaseId: readiness.releaseId, requestId: evidence.requestId };
