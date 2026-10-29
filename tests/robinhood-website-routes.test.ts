@@ -155,7 +155,7 @@ describe("Robinhood website HTTP boundaries", () => {
     expect(mocks.moduleSync).toHaveBeenCalledWith(source, expect.anything(), expect.not.objectContaining({ rangeSize: 5_000n }));
   });
 
-  it("gives the oldest sources a usable budget and defers the rest without losing their checkpoints", async () => {
+  it("reserves a useful oldest-source budget and rotates the other slot without losing checkpoints", async () => {
     const started = Date.parse("2026-10-20T12:00:00Z");
     let clock = started;
     const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
@@ -188,10 +188,10 @@ describe("Robinhood website HTTP boundaries", () => {
       const response = await update(new Request("https://website.invalid/api/ops/robinhood-index", { headers: { authorization: `Bearer ${"a".repeat(48)}` } }));
       expect(response.status).toBe(200);
       expect(mocks.moduleSync).toHaveBeenCalledTimes(2);
-      expect(mocks.moduleSync.mock.calls.map(([item]) => item.releaseDigest)).toEqual([hash(5), hash(6)]);
+      expect(mocks.moduleSync.mock.calls.map(([item]) => item.releaseDigest)).toEqual([hash(5), hash(1)]);
       for (const [, , options] of mocks.moduleSync.mock.calls) expect(options.budgetMs).toBeGreaterThanOrEqual(20_000);
-      expect(await response.json()).toMatchObject({ foundation: "syncing", moduleMode: { status: "deferred" },
-        foundationSources: { [hash(5)]: { status: "ready" }, [hash(6)]: { status: "ready" }, [hash(7)]: { status: "deferred" } } });
+      expect(await response.json()).toMatchObject({ foundation: "syncing", moduleMode: { status: "ready" },
+        foundationSources: { [hash(5)]: { status: "ready" }, [hash(6)]: { status: "deferred" }, [hash(7)]: { status: "deferred" } } });
       expect(snapshot.moduleModeSources).toEqual(history.slice(1));
     } finally { now.mockRestore(); }
   });
