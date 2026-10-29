@@ -2331,7 +2331,7 @@ function contentLength(headers: Readonly<{ get(name: string): string | null }>) 
 const VERCEL_BLOB_STRONG_ETAG = /^"[0-9a-f]{32}"$/iu;
 
 export function normalizePersistentRpcBlobEtag(value: string) {
-  const normalized = value.trim().replace(/^W\//u, "");
+  const normalized = value.trim();
   if (!VERCEL_BLOB_STRONG_ETAG.test(normalized)) {
     fail("Persistent RPC Blob ETag is invalid");
   }
@@ -2461,6 +2461,7 @@ type PersistentRpcBlobClient = Readonly<{
       access: "private";
       token: string;
       useCache: false;
+      headers: Readonly<{ "accept-encoding": "identity" }>;
     }>,
   ): Promise<PersistentRpcBlobGetResult>;
   head(
@@ -2504,6 +2505,7 @@ export function createVercelBlobPersistentRpcCacheStore(
           access: "private",
           token,
           useCache: false,
+          headers: { "accept-encoding": "identity" },
         });
         if (!result || result.statusCode !== 200 || !result.stream) return null;
         let metadata;
@@ -2569,6 +2571,7 @@ export function createVercelBlobPersistentRpcCacheStore(
           access: "private",
           token,
           useCache: false,
+          headers: { "accept-encoding": "identity" },
         });
         if (existing?.statusCode === 200) return "exists";
         throw error;
@@ -2592,6 +2595,7 @@ export function createVercelBlobPersistentRpcCacheStore(
           access: "private",
           token,
           useCache: false,
+          headers: { "accept-encoding": "identity" },
         });
         if (
           current?.statusCode === 200 &&

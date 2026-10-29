@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({ body: "", etag: 0, block: vi.fn(), chain: vi.fn() }));
 vi.mock("@vercel/blob", () => ({
   get: async () => state.body ? { statusCode: 200, stream: new Response(state.body).body,
-    blob: { etag: `W/"${state.etag.toString(16).padStart(32, "0")}"` } } : null,
+    blob: { etag: `"${state.etag.toString(16).padStart(32, "0")}"` } } : null,
   put: async (_path: string, body: string, options: { ifMatch?: string; allowOverwrite: boolean }) => {
     if ((!options.allowOverwrite && state.body)
       || (options.ifMatch && options.ifMatch !== `"${state.etag.toString(16).padStart(32, "0")}"`)) throw new Error("Conflict");

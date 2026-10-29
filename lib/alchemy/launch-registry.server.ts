@@ -109,7 +109,7 @@ function registryPath(repositoryCommit: string, options: RegistryOptions = {}) {
 }
 
 function normalizeVercelBlobEtag(value: string) {
-  const normalized = value.trim().replace(/^W\//u, "");
+  const normalized = value.trim();
   if (!VERCEL_BLOB_STRONG_ETAG.test(normalized)) {
     throw new Error("Alchemy launch registry ETag is invalid");
   }
@@ -545,6 +545,7 @@ export async function readAlchemyLaunchRegistry(
     access: "private",
     token,
     useCache: false,
+    headers: { "accept-encoding": "identity" },
   });
   if (!result || result.statusCode !== 200 || !result.stream) {
     return {
@@ -615,6 +616,7 @@ export async function writeAlchemyLaunchRegistry(
         access: "private",
         token,
         useCache: false,
+        headers: { "accept-encoding": "identity" },
       });
       if (existing?.statusCode === 200) {
         const conflict = new Error("Alchemy launch registry was created concurrently");

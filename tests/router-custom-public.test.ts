@@ -250,8 +250,11 @@ describe("finalized Router Custom public projection", () => {
 
   it("preserves the Blob API strong ETag contract for conditional writes", () => {
     expect(normalizeRouterCustomSnapshotBlobEtagV1(
-      'W/"8e8ed5b7c65cfe481ae32dc684e98710"',
+      '"8e8ed5b7c65cfe481ae32dc684e98710"',
     )).toBe('"8e8ed5b7c65cfe481ae32dc684e98710"');
+    expect(() => normalizeRouterCustomSnapshotBlobEtagV1(
+      'W/"8e8ed5b7c65cfe481ae32dc684e98710"',
+    )).toThrow("ETag is invalid");
     expect(() => normalizeRouterCustomSnapshotBlobEtagV1(
       "8e8ed5b7c65cfe481ae32dc684e98710",
     )).toThrow("ETag is invalid");
@@ -457,7 +460,7 @@ describe("finalized Router Custom public projection", () => {
       stream: new Response(body).body,
       blob: {
         size: Buffer.byteLength(body, "utf8"),
-        etag: `W/"${"ab".repeat(16)}"`,
+        etag: `"${"ab".repeat(16)}"`,
       },
     });
     vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_test");

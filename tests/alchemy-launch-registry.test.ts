@@ -444,11 +444,11 @@ describe("Alchemy incremental launch registry", () => {
       .toThrow("Router registry is malformed");
   });
 
-  it("normalizes the private Blob weak ETag before a conditional update", async () => {
+  it("requests the object representation for a conditional update", async () => {
     blobMocks.get.mockResolvedValueOnce({
       statusCode: 200,
       stream: new Response(JSON.stringify(envelope())).body,
-      blob: { etag: 'W/"8e8ed5b7c65cfe481ae32dc684e98710"' },
+      blob: { etag: '"8e8ed5b7c65cfe481ae32dc684e98710"' },
     });
 
     await expect(
@@ -457,6 +457,14 @@ describe("Alchemy incremental launch registry", () => {
       etag: '"8e8ed5b7c65cfe481ae32dc684e98710"',
       registry: { launchStampRouter: { tokens: [{ name: "Stamped" }] } },
     });
+    expect(blobMocks.get.mock.calls.at(-1)?.[1]).toMatchObject({ headers: { "accept-encoding": "identity" } });
+  });
+
+  it("rejects a weak representation ETag as an object version", async () => {
+    blobMocks.get.mockResolvedValueOnce({ statusCode: 200,
+      stream: new Response(JSON.stringify(envelope())).body,
+      blob: { etag: 'W/"8e8ed5b7c65cfe481ae32dc684e98710"' } });
+    await expect(readAlchemyLaunchRegistry(deployment, LAUNCH_STAMP_ROUTER_INITIAL_CURSOR)).rejects.toThrow("ETag");
   });
 
   it("reports a retryable conflict when another writer wins initial creation", async () => {
