@@ -14,7 +14,7 @@ function timeLabel(seconds: number) {
   return `After ${label.join(" ")}`;
 }
 
-export function RuleReview({ draft, pendingChange, reviewed, disabled, onReview, onKeepRules }: {
+export function RuleReview({ draft, pendingChange, disabled, onKeepRules }: {
   draft?: Draft; pendingChange?: string; reviewed: boolean; disabled: boolean;
   onReview: (checked: boolean) => void; onKeepRules: () => void;
 }) {
@@ -45,8 +45,7 @@ export function RuleReview({ draft, pendingChange, reviewed, disabled, onReview,
           })}</tr>)}</tbody>
         </table>
       </details>
-      <label className={styles.ruleConsent}><input type="checkbox" checked={reviewed} disabled={disabled || Boolean(pendingChange)}
-        onChange={event => onReview(event.target.checked)} />Use these rules for this coin</label>
+      <p className={styles.note}>Your launch confirms these exact rules.</p>
     </> : draft && <p>Ask the chat to check this saved draft against your intended rules before creating the coin.</p>}
   </section>;
 }

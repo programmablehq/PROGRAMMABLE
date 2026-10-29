@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { artifactHash } from "./artifact-hash.mjs";
+import { composableModuleSource } from "./composable-module.mjs";
 import { eventModuleSource } from "./event-module.mjs";
 import { inspectModule, simulateModule } from "./validate-module.mjs";
 
@@ -31,8 +32,9 @@ process.stdin.on("end", async () => {
     const ast = result.sources["GeneratedFeeModule.sol"].ast;
     const source = envelope.compilerInput?.sources?.["GeneratedFeeModule.sol"]?.content ?? "";
     const cleanSource = source.replace(/\n?\/\/ @programmable-program-v1 [^\n]*/g, "").trim();
-    const structural = envelope.feed && cleanSource === eventModuleSource(envelope.feed).trim() ? [] : inspectModule(ast);
-    const simulation = structural.length ? { cases: 0, samples: [], diagnostics: structural } : await simulateModule(requireCompiler, contract, ast, expectations, envelope.feed);
+    const trusted = envelope.composable && cleanSource === composableModuleSource(envelope.composable.spec, envelope.composable.feeds).trim();
+    const structural = trusted || envelope.feed && cleanSource === eventModuleSource(envelope.feed).trim() ? [] : inspectModule(ast);
+    const simulation = structural.length ? { cases: 0, samples: [], diagnostics: structural } : await simulateModule(requireCompiler, contract, ast, expectations, envelope.feed, envelope.composable);
     const artifact = { compiler: solc.version(), optimizerRuns: 200, evmVersion: "cancun", abi: contract.abi,
       initCode: `0x${contract.evm.bytecode.object}`, runtimeTemplate: `0x${contract.evm.deployedBytecode.object}`,
       immutableReferences: contract.evm.deployedBytecode.immutableReferences };

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { changedPaths, interfacePlan, relatedInputs } from "./interface-plan.mjs";
 
 const mode = process.argv[2];
@@ -24,11 +25,16 @@ if (maintenance) {
   process.exit(0);
 }
 if (mode === "browser-build") {
-  if (plan.wallet) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.wallet-lock.config.ts",
+  if (plan.browser.length) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.wallet-lock.config.ts",
     ...plan.browser.map(name => `${name}.spec.ts`)]);
   if (plan.migration) npm("test:browser:late-migration");
+  if (plan.customAI) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.custom-ai.config.ts"]);
   npm("build");
 } else {
+  if (plan.customAICompiler) {
+    run("node", ["scripts/custom-ai/install-toolchain.mjs"]);
+    process.env.CUSTOM_AI_COMPILER_DIR = resolve("scripts/custom-ai/toolchain");
+  }
   if (plan.full || plan.verificationTools) npm("test:ci-scope");
   const lint = paths?.filter(file => /\.[cm]?[jt]sx?$/u.test(file) && existsSync(file)) ?? [];
   if (plan.full) npm("lint");

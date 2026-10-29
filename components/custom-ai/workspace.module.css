@@ -125,3 +125,6 @@
 .sources { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; }
 .sources a { color: #c7c2ba; text-decoration: underline; text-underline-offset: 3px; }
 .sources a:focus-visible { outline: 2px solid #ede7dc; outline-offset: 3px; }
+
+.coinForm > .preparationStatus { margin: 16px 0 0; }
+.ruleReview .note { margin: 12px 0 0; }

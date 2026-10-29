@@ -1,8 +1,9 @@
+import { seedComposableFeeds } from "./composable-module.mjs";
 // Trusted harness; generated EVM bytecode runs only in this networkless VM.
 import { seedEventFeed } from "./event-module.mjs";
 import { createHash } from "node:crypto";
 
-export async function simulateLifecycle(requireTool, artifact, bundle, feed) {
+export async function simulateLifecycle(requireTool, artifact, bundle, feed, composable) {
   const { createVM } = requireTool("@ethereumjs/vm");
   const { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block");
@@ -33,6 +34,7 @@ export async function simulateLifecycle(requireTool, artifact, bundle, feed) {
       const unit = 10n ** BigInt(decimals);
       const run = async ({ to, data, from = caller, read = false, revert = false }) => {
         if (feed) await seedEventFeed(requireTool, vm, feed, timestamp, decimals === 18 ? feed.rule.threshold : (BigInt(feed.rule.threshold) - 1n).toString());
+        if (composable) await seedComposableFeeds(requireTool, vm, composable, timestamp);
         await vm.evm.journal.cleanup();
         vm.stateManager.originalStorageCache.clear();
         const result = await vm.evm.runCall({ caller: createAddressFromString(from),

@@ -1,5 +1,6 @@
 import { CustomAIError, type FeeExpectation } from "./types";
 import type { KnowledgeLookup } from "./knowledge";
+import { normalizeRuleSpec, type RuleSpecV2 } from "./rule-spec";
 import { parseEventRule, type EventRule } from "./feed";
 import { parseProgram, type ProgramSpec } from "./program";
 
@@ -13,6 +14,7 @@ export type RulePlan = {
   lookups: KnowledgeLookup[];
   program?: ProgramSpec;
   eventRule?: EventRule;
+  composable?: RuleSpecV2;
 };
 
 export const planningRules = `First interpret the user's request independently of code generation.
@@ -49,7 +51,7 @@ activate a reward strategy or authorize transactions. Search results cannot cert
 Use the returned status and dates honestly. When sources are unavailable or stale, say so. Never invent source URLs.
 After lookup results are supplied, return lookups=[] and finish the answer or clarify what remains missing.`;
 
-export function parseRulePlan(value: Record<string, unknown>): RulePlan {
+export function parseRulePlan(value: Record<string, unknown>, availableTools: ReadonlySet<string> = new Set(["catalog", "contract", "web"])): RulePlan {
   const strings = (key: string, maximum: number) => {
     const items = value[key];
     if (!Array.isArray(items) || items.length > maximum || items.some(item => typeof item !== "string" || !item.trim() || item.length > 600)) {
@@ -63,13 +65,17 @@ export function parseRulePlan(value: Record<string, unknown>): RulePlan {
   const requirements = strings("requirements", 16), unresolved = strings("unresolved", 16);
   const lookups = value.lookups ?? [];
   if (!Array.isArray(lookups) || lookups.length > 2 || lookups.some(item => !item
-    || !["catalog", "contract", "web"].includes(item.kind) || typeof item.query !== "string" || item.query.length > 500
-    || ![1, 4663].includes(item.chainId) || typeof item.address !== "string"
-    || (item.kind === "contract" ? !/^0x[0-9a-fA-F]{40}$/.test(item.address) : item.address !== "")
-    || item.kind !== "contract" && !item.query.trim())) {
+    || !availableTools.has(item.kind)
+    || (item.input !== undefined ? !item.input || typeof item.input !== "object" || Array.isArray(item.input)
+      : typeof item.query !== "string" || item.query.length > 500 || ![1, 4663].includes(item.chainId)
+        || typeof item.address !== "string" || (item.kind === "contract"
+          ? !/^0x[0-9a-fA-F]{40}$/.test(item.address) : item.address !== "")
+        || item.kind !== "contract" && !item.query.trim()))) {
     throw new CustomAIError("lookup", "The requested lookup could not be read.", 502);
   }
+  const composable = value.composable ? normalizeRuleSpec(typeof value.composable === "string" ? JSON.parse(value.composable) : value.composable) : undefined;
   const eventRule = parseEventRule(value.eventRule);
+  if (composable && (eventRule || value.program)) throw new CustomAIError("plan", "Keep every requested action in the combined rule before building.", 502);
   const feeChecks = value.feeChecks;
   if (!Array.isArray(feeChecks) || feeChecks.length > 64) throw new CustomAIError("plan", "The fee examples could not be read.", 502);
   const seen = new Set<string>();
@@ -83,7 +89,7 @@ export function parseRulePlan(value: Record<string, unknown>): RulePlan {
     if (seen.has(key)) throw new CustomAIError("plan", "The fee examples contain conflicting rules.", 502);
     seen.add(key);
   }
-  if (value.action === "build" && (!requirements.length || unresolved.length || !feeChecks.some(c => c.afterSeconds === 0 && c.buy) || !feeChecks.some(c => c.afterSeconds === 0 && !c.buy))) {
+  if (value.action === "build" && !composable && (!requirements.length || unresolved.length || !feeChecks.some(c => c.afterSeconds === 0 && c.buy) || !feeChecks.some(c => c.afterSeconds === 0 && !c.buy))) {
     throw new CustomAIError("plan", "Both buy and sell rules must be specified before building.", 502);
   }
   if (eventRule && value.action === "build") {
@@ -96,6 +102,6 @@ export function parseRulePlan(value: Record<string, unknown>): RulePlan {
     }
   }
   return { reply: String(value.reply), action: value.action as RulePlan["action"], memory: value.memory,
-    requirements, unresolved, lookups, program: parseProgram(value.program), eventRule,
+    requirements, unresolved, lookups: lookups.map(item => ({ query: "", address: "", chainId: 1, ...item })), program: parseProgram(value.program), eventRule, composable,
     feeChecks: feeChecks.map(({ afterSeconds, buy, totalFeeBps, feedValue, feedFresh }) => ({ afterSeconds, buy, totalFeeBps, ...(eventRule ? { feedValue, feedFresh } : {}) })) };
 }

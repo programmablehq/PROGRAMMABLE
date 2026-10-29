@@ -49,6 +49,7 @@ test("build, release, and analysis retain all existing contract checks without a
   ]);
   assert.deepEqual(CONTRACT_CI_ANALYSIS, [
     ["npm", "run", "contracts:bootstrap"], ["npm", "run", "contracts:slither"],
+    ["slither-ai", ".", "--filter-paths", "lib|test|script", "--exclude-dependencies", "--fail-none"],
   ]);
   const commands = CONTRACT_CI_RELEASE.map((command) => command.join(" "));
   assert.ok(commands.includes("npm run modules:starter:test"));
@@ -153,4 +154,10 @@ test("build receipt rejects another source, run, attempt, workflow, profile, too
     assert.throws(() => validateBuildReceipt(missing, expected));
   }
   assert.throws(() => validateBuildReceipt({ ...expected, extra: true }, expected));
+});
+
+test("Custom AI has a complete isolated contract acceptance and exact artifact export check", () => {
+  const commands=CONTRACT_CI_RELEASE.map(command=>command.join(" "));
+  assert.equal(commands.filter(command=>command==="forge-ai test").length,1);
+  assert.equal(commands.filter(command=>command==="node scripts/custom-ai/export-composable.mjs --check").length,1);
 });

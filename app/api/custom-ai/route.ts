@@ -1,3 +1,6 @@
+import { after } from "next/server";
+import { providerHealth } from "@/lib/custom-ai/provider-health.server";
+import { executionProfile, getCapabilities } from "@/lib/custom-ai/capabilities/registry.server";
 import { createPreviewBudget, readPreviewBody } from "@/lib/custom-ai/access.server";
 import { runCustomAI, type AIContext } from "@/lib/custom-ai/service.server";
 import { CustomAIError, parseChatRequest, type ChatProgress, type ChatResult } from "@/lib/custom-ai/types";
@@ -26,16 +29,29 @@ export async function POST(request: Request) {
       return result;
     };
     const [previous, current] = await Promise.all([readResult(input.contextId), readResult(input.draftId)]);
-    const context: AIContext = { memory: previous?.memory, draft: current?.draft };
+    const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, ruleSpec: previous?.ruleSpec, draft: current?.draft };
     if (input.draftId && !context.draft) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
-    const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input) : null;
+    // Known billing/rate-limit outages do not reserve a new user attempt.
+    if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) await providerHealth().assertAvailable();
+    const profile = executionProfile(getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
+      allowWeb: Boolean(process.env.ANTHROPIC_API_KEY), budget: { remaining: 2 } }));
+    const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile) : null;
     if (reserved && !reserved.lease) {
       if (reserved.job.state === "completed") return Response.json(reserved.job.result, { headers: aiHeaders });
       if (reserved.job.state === "failed") return aiError(new CustomAIError("interrupted", "The previous attempt ended. Send your message again to retry.", 409), "failed");
       return Response.json(reserved.job, { status: 202, headers: { ...aiHeaders, "Retry-After": "2" } });
     }
     let requestState: "failed" | undefined;
-    const execute = async (signal: AbortSignal, onProgress?: (event: ChatProgress) => void) => {
+    const execute = async (initialSignal: AbortSignal, onProgress?: (event: ChatProgress) => void) => {
+      const cancellation = new AbortController();
+      const signal = AbortSignal.any([initialSignal, cancellation.signal]);
+      let checking = false;
+      const cancelCheck = store && authority.kind === "account" ? setInterval(() => {
+        if (checking) return; checking = true;
+        void store.read(authority.owner, input.id).then(job => {
+          if (job?.errorCode === "cancelled") cancellation.abort();
+        }).catch(() => undefined).finally(() => { checking = false; });
+      }, 10000) : undefined;
       try {
         const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();
@@ -47,30 +63,37 @@ export async function POST(request: Request) {
         return result;
       } catch (error) {
         if (store && authority.kind === "account" && reserved?.lease) {
+          const saved = await store.read(authority.owner, input.id).catch(() => null);
+          if (saved?.state === "completed" && saved.result) return saved.result;
           await store.finish(authority.owner, input.id, reserved.lease, undefined, error instanceof CustomAIError ? error.code : "unavailable");
           requestState = "failed";
         } else if (authority.kind === "preview") requestState = "failed";
         throw error;
-      }
+      } finally { if (cancelCheck) clearInterval(cancelCheck); }
     };
+    const workSignal = authority.kind === "account" ? AbortSignal.timeout(420_000) : request.signal;
     if (!request.headers.get("accept")?.includes("text/event-stream")) {
-      try { return Response.json(await execute(request.signal), { headers: aiHeaders }); }
+      const task = execute(workSignal);
+      after(() => task.then(() => undefined, () => undefined));
+      try { return Response.json(await task, { headers: aiHeaders }); }
       catch (error) { return aiError(error, requestState); }
     }
     const abort = new AbortController();
-    const signal = AbortSignal.any([request.signal, abort.signal]);
+    const signal = authority.kind === "account" ? workSignal : AbortSignal.any([request.signal, abort.signal]);
     let connected = true;
     const stream = new ReadableStream({
       start(controller) {
         const encoder = new TextEncoder();
-        const send = (event: unknown) => { if (connected) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)); };
-        const heartbeat = setInterval(() => { if (connected) controller.enqueue(encoder.encode(": keep-alive\n\n")); }, 15_000);
-        void execute(signal, send).then(result => send({ type: "result", result })).catch(error => {
+        const send = (event: unknown) => { if (connected) { try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)); } catch { connected = false; } } };
+        const heartbeat = setInterval(() => { if (connected) { try { controller.enqueue(encoder.encode(": keep-alive\n\n")); } catch { connected = false; } } }, 15_000);
+        const task = execute(signal, send).then(result => send({ type: "result", result })).catch(error => {
           const known = error instanceof CustomAIError ? error : new CustomAIError("unavailable", "The reply could not finish. Your draft is still saved.", 503);
           send({ type: "error", error: known.message, code: known.code, status: known.status, requestState });
         }).finally(() => { clearInterval(heartbeat); if (connected) { connected = false; controller.close(); } });
+        // Keep the server invocation alive after a tab/stream disconnect. Completion is durable before delivery.
+        after(() => task);
       },
-      cancel() { connected = false; abort.abort(); },
+      cancel() { connected = false; if (authority.kind === "preview") abort.abort(); },
     });
     return new Response(stream, { headers: { ...aiHeaders, "Content-Type": "text/event-stream", "X-Accel-Buffering": "no" } });
   } catch (error) { return aiError(error); }

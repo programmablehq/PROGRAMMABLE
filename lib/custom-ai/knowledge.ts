@@ -1,5 +1,5 @@
 export type KnowledgeSource = { title: string; url: string; retrievedAt: string };
-export type KnowledgeLookup = { kind: "catalog" | "contract" | "web"; query: string; chainId: 1 | 4663; address: string };
+export type KnowledgeLookup = { kind: string; input?: Record<string, unknown>; query: string; chainId: 1 | 4663; address: string };
 export type KnowledgeResult = { status: string; facts: unknown; sources: KnowledgeSource[] };
 
 export function safeKnowledgeSources(value: unknown): KnowledgeSource[] {

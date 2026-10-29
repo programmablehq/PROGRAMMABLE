@@ -5,16 +5,17 @@ import type { AISessionHeaders } from "@/lib/custom-ai/client";
 import { aiRequest } from "@/lib/custom-ai/client";
 import { decodeLaunchValue } from "@/lib/custom-ai/wallet";
 import { dismissFinishedLaunch, isFinishedLaunchDismissed, launchRequestId, readLocalLaunch, requestLaunch, saveLocalLaunch } from "@/lib/custom-ai/launch-client";
-import { launchStepLabel, type StoredLaunchSession } from "@/lib/custom-ai/launch-session";
+import { type StoredLaunchSession } from "@/lib/custom-ai/launch-session";
 import { setupQuoteAddress, type CoinSetup } from "@/lib/custom-ai/coin-setup";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 
-export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string; reviewedSourceHash?: string; image?: Blob; imageReceipt?: ImageReceipt; headers: AISessionHeaders; localPreview: boolean }) {
+export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinSetup; draftId?: string; reviewedSourceHash?: string; image?: Blob; imageReceipt?: ImageReceipt; headers: AISessionHeaders; localPreview: boolean }) {
   const wallet = useWallet();
   const [saved, setSaved] = useState<StoredLaunchSession | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const current = useRef(saved);
   const operation = useRef(false);
+  const continueFlow = useRef(false);
   const identity = useRef(wallet.wallet?.account);
   const receipt = useRef<{ blob: Blob; id: string; url: string } | undefined>(undefined);
   const { headers } = input;
@@ -22,7 +23,7 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
   const account = wallet.wallet?.account;
   useLayoutEffect(() => {
     if (identity.current !== account) {
-      current.current = null; setSaved(null); receipt.current = undefined; setError("");
+      continueFlow.current = false; current.current = null; setSaved(null); receipt.current = undefined; setError("");
     } else current.current = saved;
     identity.current = account; headersRef.current = headers;
   }, [saved, account, headers]);
@@ -71,6 +72,7 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
   }, [saved?.session.state, input.localPreview, refresh]);
 
   async function proceed() {
+    continueFlow.current = true;
     if (operation.current || input.localPreview) return;
     if (!account) { wallet.openWallet(); return; }
     operation.current = true; setBusy(true); setError("");
@@ -85,7 +87,7 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
       else if (value && value.session.state !== "confirmed") value = await refresh(value);
       else {
         if (!input.draftId) throw Error("Describe your hook in the chat first.");
-        if (!input.reviewedSourceHash) throw Error("Review and select the rules for this coin before continuing.");
+        if (!input.reviewedSourceHash) throw Error("Finish your latest rule change in the chat before launching.");
         if (!input.image && !input.imageReceipt) throw Error("Choose your coin image first.");
         if (!input.settings.name.trim() || !input.settings.symbol.trim()) throw Error("Add a name and ticker first.");
         if (!input.imageReceipt && input.image && receipt.current?.blob !== input.image) {
@@ -96,7 +98,7 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
         }
         const image = input.imageReceipt ?? receipt.current!;
         const payload = { action: "create", account,
-          draftId: input.draftId, reviewedSourceHash: input.reviewedSourceHash, imageId: image.id,
+          draftId: input.draftId, reviewedSourceHash: input.reviewedSourceHash, readyTicket: input.readyTicket, imageId: image.id,
           settings: { name: input.settings.name, symbol: input.settings.symbol, chainId: input.settings.chainId,
             quote: setupQuoteAddress(input.settings), initialBuy: input.settings.initialBuy, imageURI: image.url } };
         value = await requestLaunch(headersRef.current, { ...payload, id: launchRequestId(account, payload) });
@@ -106,20 +108,28 @@ export function useCustomAILaunch(input: { settings: CoinSetup; draftId?: string
       const step = value.session.steps.at(-1);
       // An expired request may have a new price/minimum. Show it before asking
       // the wallet to authorize that replacement.
-      if (previousStep && step?.id !== previousStep.id) return;
-      if (value.session.state === "ready" && step?.state === "prepared" && !(justCreated && value.session.quoteNotice)) {
+      if (previousStep && step?.id !== previousStep.id && value.session.quoteNotice) { continueFlow.current = false; return; }
+      if (justCreated && value.session.quoteNotice) { continueFlow.current = false; return; }
+      if (value.session.state === "ready" && step?.state === "prepared") {
         await wallet.sendCustomAIWalletStep(value.session.id, step);
         const local = readLocalLaunch(account);
         if (local) remember(local);
         await refresh(value);
       }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "The launch could not continue. Your progress is saved."); }
+    } catch (cause) { continueFlow.current = false; setError(cause instanceof Error ? cause.message : "The launch could not continue. Your progress is saved."); }
     finally { operation.current = false; setBusy(false); }
   }
+  useEffect(() => {
+    if (!continueFlow.current || operation.current || busy || saved?.session.state !== "ready") return;
+    const step = saved.session.steps.at(-1);
+    if (step?.state !== "prepared" || step.walletRejected) return;
+    const timer = setTimeout(() => { if (!operation.current && continueFlow.current) void proceed(); }, 0);
+    return () => clearTimeout(timer);
+  });
   const pending = saved && saved.session.state !== "confirmed";
   const step = saved?.session.steps.at(-1);
   const label = busy ? "Preparing…" : saved?.session.state === "failed" ? "Try transaction again" : saved?.session.state === "waiting" ? "Check transaction"
-    : saved?.session.state === "ready" && step ? launchStepLabel(step.kind) : "Create coin";
+    : saved?.session.state === "ready" && step ? "Continue in wallet" : "Launch coin";
   function startAnother() {
     if (!saved || saved.session.state!=="confirmed") return false;
     try { dismissFinishedLaunch(saved);current.current=null;setSaved(null);receipt.current=undefined;setError("");return true; }

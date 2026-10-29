@@ -2,6 +2,8 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { CustomAIError, isBriefChat, type AIUsage, type ChatRequest, type ChatResult } from "./types";
+import type { ExecutionProfile } from "./ai-config";
+import { refundsProviderFailure } from "./provider-errors";
 import type { WalletAction, WalletSession } from "./launch-session";
 
 export interface AIConnection {
@@ -31,7 +33,7 @@ CREATE TABLE IF NOT EXISTS programmable_custom_ai_v1.objects (
   value jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (owner,kind,id)
 );`;
 
-export type AIJob = { id: string; state: "running" | "completed" | "failed"; result?: ChatResult; errorCode?: string };
+export type AIJob = { id: string; executionProfile?: ExecutionProfile; state: "running" | "completed" | "failed"; result?: ChatResult; errorCode?: string };
 export type AIBudget = { hourlyUnits: number; dailyUnits: number; globalDailyUnits: number; concurrent: number };
 const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a],[b]) => a.localeCompare(b)).map(([key,item]) => [key,canonical(item)])) : value;
@@ -52,7 +54,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
     finally { connection.release(); }
   }
   function job(row: Record<string, unknown>): AIJob {
-    return { id: String(row.id), state: row.state as AIJob["state"],
+    return { id: String(row.id), ...((row.request as { executionProfile?: ExecutionProfile } | undefined)?.executionProfile ? { executionProfile: (row.request as { executionProfile: ExecutionProfile }).executionProfile } : {}), state: row.state as AIJob["state"],
       ...(row.result ? { result: row.result as ChatResult } : {}),
       ...(row.error_code ? { errorCode: String(row.error_code) } : {}) };
   }
@@ -63,7 +65,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       return rows[0] ? job(rows[0]) : null;
     });
   }
-  async function reserve(owner: string, request: ChatRequest) {
+  async function reserve(owner: string, request: ChatRequest, profile?: ExecutionProfile) {
     if (!owner || owner.length > 512 || !identifier(request.id)) throw new CustomAIError("input", "Invalid request.");
     return transaction(async db => {
       // All reservations take these locks in the same order. Two website
@@ -97,7 +99,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       }
       const lease = randomUUID();
       await db.query(`INSERT INTO programmable_custom_ai_v1.jobs(owner,id,payload_hash,request,state,lease,reserved,hour,day)
-        VALUES($1,$2,$3,$4,'running',$5,$6,$7,$8)`, [owner, request.id, hash, JSON.stringify(request), lease, units, hour, day]);
+        VALUES($1,$2,$3,$4,'running',$5,$6,$7,$8)`, [owner, request.id, hash, JSON.stringify({ ...request, ...(profile ? { executionProfile: profile } : {}) }), lease, units, hour, day]);
       return { job: { id: request.id, state: "running" } as AIJob, lease };
     });
   }
@@ -107,12 +109,24 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       const row = (await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2 AND lease=$3 FOR UPDATE", [owner, id, lease])).rows[0];
       if (!row || row.state !== "running") return;
       const request = row.request as ChatRequest;
-      const refund = result && request.intent === "chat" && !result.draft && !result.chargedAs ? Number(row.reserved) - 1 : 0;
-      if (refund > 0) for (const [subject, period] of [[`account-hour:${owner}`,row.hour],[`account-day:${owner}`,row.day],["global-day",row.day]]) {
-        await db.query("UPDATE programmable_custom_ai_v1.budgets SET used=used-$3 WHERE subject=$1 AND period=$2", [subject,period,refund]);
+      const normalRefund = result && request.intent === "chat" && !result.draft && !result.chargedAs ? Number(row.reserved) - 1 : 0;
+      // Return user allowance only for confirmed infrastructure rejection. The
+      // global provider-cost ledger keeps every dispatched reservation.
+      const accountRefund = refundsProviderFailure(errorCode) ? Number(row.reserved) : normalRefund;
+      for (const [subject, period, refund] of [[`account-hour:${owner}`, row.hour, accountRefund],
+        [`account-day:${owner}`, row.day, accountRefund], ["global-day", row.day, normalRefund]] as const) {
+        if (refund > 0) await db.query("UPDATE programmable_custom_ai_v1.budgets SET used=used-$3 WHERE subject=$1 AND period=$2", [subject, period, refund]);
       }
       await db.query("UPDATE programmable_custom_ai_v1.jobs SET state=$4,result=$5,error_code=$6,updated_at=now() WHERE owner=$1 AND id=$2 AND lease=$3",
         [owner,id,lease,result ? "completed" : "failed", result ? JSON.stringify(result) : null, errorCode ?? null]);
+    });
+  }
+  async function cancel(owner: string, id: string) {
+    if (!identifier(id)) throw new CustomAIError("input", "Invalid saved request.");
+    return transaction(async db => {
+      await db.query("UPDATE programmable_custom_ai_v1.jobs SET state='failed',error_code='cancelled',updated_at=now() WHERE owner=$1 AND id=$2 AND state='running'", [owner, id]);
+      const row = (await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2", [owner, id])).rows[0];
+      return row ? job(row) : null;
     });
   }
   async function list(owner: string) {
@@ -243,7 +257,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { reserve, finish, read, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, saveIndexBatch };
+  return { reserve, finish, read, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;

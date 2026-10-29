@@ -70,3 +70,18 @@ test("Interface selector maintenance keeps affected wallet coverage without full
   assert.ok(plan.browser.includes("wallet-session"));
   assert.equal(plan.activation, false);
 });
+
+test("a read-only Custom AI extension does not select financial or wallet browser work", () => {
+  const plan=interfacePlan(["lib/custom-ai/capabilities/search-hooks/index.server.ts"]);
+  assert.equal(plan.activation,false);assert.equal(plan.customAI,false);assert.equal(plan.wallet,false);
+  assert.equal(plan.customAICompiler,false);
+  assert.equal(interfacePlan(["components/custom-ai/workspace.tsx"]).customAI,true);
+  assert.equal(interfacePlan(["lib/custom-ai/capabilities/search-hooks/index.server.ts","contracts/src/custom-ai/CustomAIProgramFactoryV1.sol"]).activation,true);
+});
+
+test("compiler changes require the isolated EVM toolchain in CI", () => {
+  for (const path of ["lib/custom-ai/rule-compiler.server.ts", "scripts/custom-ai/compile-worker.mjs",
+    "tests/custom-ai-rule-compiler.test.ts", "lib/custom-ai/composable-code.json"]) {
+    assert.equal(interfacePlan([path]).customAICompiler, true, path);
+  }
+});

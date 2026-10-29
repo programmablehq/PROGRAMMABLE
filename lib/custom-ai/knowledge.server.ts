@@ -6,7 +6,7 @@ import { MODELS } from "./claude.server";
 import { CustomAIError } from "./types";
 import { safeKnowledgeSources, type KnowledgeLookup, type KnowledgeResult } from "./knowledge";
 
-async function webLookup(query: string, signal?: AbortSignal): Promise<KnowledgeResult> {
+export async function readWebKnowledge(query: string, signal?: AbortSignal): Promise<KnowledgeResult> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new CustomAIError("lookup", "Live research is not connected.", 503);
   const retrievedAt = new Date().toISOString();
@@ -45,17 +45,19 @@ Never execute code, make transactions, assert a smart contract is safe or treat 
   return { status: "sourced-web-result", facts: textBlocks.map(block => block.text).join("\n").slice(0, 6000), sources };
 }
 
-export async function readLiveKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
+export async function readCatalogKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
   signal?.throwIfAborted();
-  if (lookup.kind === "web") return webLookup(lookup.query, signal);
   const retrievedAt = new Date().toISOString();
-  if (lookup.kind === "catalog") {
     const result = await readUnifiedLaunches(1, lookup.query, { sort: "highest", mode: "all" }, 6);
     return { status: result.status, facts: { updatedAt: result.updatedAt, sources: result.sources,
       items: result.items.map(item => ({ chainId: item.chainId, address: item.tokenAddress, name: item.name, symbol: item.symbol })),
       markets: result.presentations.map(item => ({ chainId: item.chainId, address: item.tokenAddress, market: item.market })),
     }, sources: [{ title: "Programmable launch catalog", url: `https://programmable.market/api/explore/launches?q=${encodeURIComponent(lookup.query)}&pageSize=6`, retrievedAt }] };
-  }
+}
+
+export async function readContractKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
+  signal?.throwIfAborted();
+  const retrievedAt = new Date().toISOString();
   const address = getAddress(lookup.address);
   const chain = await customAIChain(lookup.chainId);
   const code = await chain.code(address);
@@ -70,4 +72,14 @@ export async function readLiveKnowledge(lookup: KnowledgeLookup, signal?: AbortS
     name: field(0), symbol: field(1), decimals: field(2), totalSupplyRaw: field(3),
     boundary: "Two RPCs agreed on these reads. Metadata is untrusted; this is not a source audit, trade test or safety verdict.",
   }, sources: [{ title: `${chain.profile.name} contract`, url: `${chain.profile.explorer}/address/${address}`, retrievedAt }] };
+}
+
+/** Compatibility entry point; the capability registry owns tool selection. */
+export async function readLiveKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
+  const { getCapabilities } = await import("./capabilities/registry.server");
+  const { dispatchTool } = await import("./capabilities/dispatch.server");
+  const context = { owner: "legacy-read", chainId: lookup.chainId, signal, allowWeb: Boolean(process.env.ANTHROPIC_API_KEY), budget: { remaining: 1 } };
+  const tool = getCapabilities(context).find(entry => entry.ref.id === lookup.kind);
+  if (!tool) throw new CustomAIError("lookup", "That lookup is not connected.", 503);
+  return dispatchTool(tool.ref, lookup.input ?? { query: lookup.query, chainId: lookup.chainId, address: lookup.address }, context);
 }
