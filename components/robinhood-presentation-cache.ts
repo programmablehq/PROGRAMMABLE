@@ -7,7 +7,7 @@ const MAX_ENTRIES = 64;
 const MAX_AGE_MS = 900_000;
 type Presentation = ReturnType<typeof mergeRobinhoodPresentations>;
 
-function queryKey(query: string, chainId: 1 | 4663 | 8453) {
+function queryKey(query: string, chainId: 1 | 4663 | 8453 | 999) {
   const params = new URLSearchParams(query);
   for (const name of ["token", "account"]) {
     const value = params.get(name);
@@ -20,7 +20,7 @@ function queryKey(query: string, chainId: 1 | 4663 | 8453) {
 export function createRobinhoodPresentationCache() {
   const entries = new Map<string, { value: Presentation; savedAt: number }>();
 
-  function read(query: string, now = Date.now(), chainId: 1 | 4663 | 8453 = 4663): Presentation | null {
+  function read(query: string, now = Date.now(), chainId: 1 | 4663 | 8453 | 999 = 4663): Presentation | null {
     const key = queryKey(query, chainId);
     const saved = entries.get(key);
     if (!saved) return null;
@@ -37,7 +37,7 @@ export function createRobinhoodPresentationCache() {
     query: string,
     value: Presentation,
     now = Date.now(),
-    chainId: 1 | 4663 | 8453 = 4663,
+    chainId: 1 | 4663 | 8453 | 999 = 4663,
   ): Presentation {
     const key = queryKey(query, chainId);
     // The caller already merged the raw response. Merging again could treat a
@@ -54,14 +54,14 @@ export function createRobinhoodPresentationCache() {
 // Public presentation data only. Server rendering neither reads nor writes it.
 const browserCache = createRobinhoodPresentationCache();
 
-export function readRememberedRobinhoodPresentation(query: string, chainId: 1 | 4663 | 8453 = 4663) {
+export function readRememberedRobinhoodPresentation(query: string, chainId: 1 | 4663 | 8453 | 999 = 4663) {
   return typeof window === "undefined" ? null : browserCache.read(query, Date.now(), chainId);
 }
 
 export function rememberRobinhoodPresentation(
   query: string,
   value: Presentation,
-  chainId: 1 | 4663 | 8453 = 4663,
+  chainId: 1 | 4663 | 8453 | 999 = 4663,
 ) {
   if (typeof window !== "undefined") browserCache.write(query, value, Date.now(), chainId);
   return value;

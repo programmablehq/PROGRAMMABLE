@@ -54,7 +54,7 @@ export function launchModuleDetailsBinding(launch: LaunchPresentationSource): Mo
 export function launchPresentationDetails(launch: LaunchPresentationSource, chainId: number,
   market?: LaunchPairObservation | null, moduleDetails?: PublicModuleDetails | null) {
   let quote: string | null = null;
-  if (chainId === 4663 || chainId === 1 || chainId === 8453) {
+  if (chainId === 4663 || chainId === 1 || chainId === 8453 || chainId === 999) {
     if (launch.poolId && launch.quoteAsset && ADDRESS.test(launch.quoteAsset)) quote = launch.quoteAsset;
     else if (chainId === 4663 && ["module-native-v1", "module-native-v2"].includes(launch.sourceKind ?? "") && launch.poolId) quote = NATIVE;
     else if (launch.launchProjection) {
@@ -71,7 +71,9 @@ export function launchPresentationDetails(launch: LaunchPresentationSource, chai
   const observed = market?.quoteAsset && same(market.poolId, launch.poolId) && ADDRESS.test(market.quoteAsset.address)
     && !same(market.quoteAsset.address, launch.tokenAddress) ? market.quoteAsset : null;
   if (!quote && observed) quote = observed.address;
-  const knownSymbol = quote === NATIVE ? "ETH" : (chainId === 4663 || chainId === 1) && same(quote, foundationChainProfile(chainId).wrappedEth.address) ? "WETH"
+  const knownSymbol = quote === NATIVE ? (chainId === 999 ? "HYPE" : "ETH")
+    : chainId === 999 && same(quote, "0x5555555555555555555555555555555555555555") ? "WHYPE"
+    : (chainId === 4663 || chainId === 1) && same(quote, foundationChainProfile(chainId).wrappedEth.address) ? "WETH"
     : chainId === 4663 && same(quote, ROBINHOOD_USDG) ? "USDG" : null;
   const label = knownSymbol ?? (same(launch.quoteAsset, quote) ? cleanSymbol(launch.quoteSymbol) : null)
     ?? (same(observed?.address, quote) ? cleanSymbol(observed?.symbol) : null)

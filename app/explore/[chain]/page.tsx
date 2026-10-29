@@ -3,7 +3,7 @@ import { exploreChainIdFromSlug } from "@/lib/explore-chain";
 
 export const dynamicParams = false;
 export function generateStaticParams() {
-  return [{ chain: "robinhood" }, { chain: "ethereum" }, { chain: "base" }];
+  return [{ chain: "robinhood" }, { chain: "ethereum" }, { chain: "base" }, { chain: "hyperevm" }];
 }
 
 /** Existing bookmarks open the same combined catalog. */

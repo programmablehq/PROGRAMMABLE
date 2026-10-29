@@ -99,6 +99,9 @@ const baseItem = object({
 const basePresentation = presentation(market);
 
 export const chainExploreSchemas = {
+  HyperEvmExplorePage: object({chainId:{const:999},status:{enum:["ready","stale"]},updatedAt:timestamp,items:{...array(object({...baseItem.properties,chainId:{const:999},quoteSymbol:{enum:["HYPE",null]}})),maxItems:50},page,
+    sourceEvidence:object({source:{const:"hyperevm-finalized-custom-launch-feed-v1"},generatedAt:timestamp,chainId:{const:"999"},records:integer}),
+    presentations:{...array(object({...basePresentation.properties,chainId:{const:999}})),maxItems:50}}),
   BaseExplorePage: object({ chainId: { const: 8453 }, status: { enum: ["ready", "stale"] },
     updatedAt: timestamp, items: { ...array(baseItem), maxItems: 50 }, page,
     sourceEvidence: object({ source: { const: "base-finalized-custom-launch-feed-v1" },
@@ -133,6 +136,16 @@ const headers = (statuses: readonly string[], cache: readonly string[]) => ({
   "Cache-Control": { schema: { enum: cache } },
 });
 export const chainExplorePaths = {
+  "/api/explore/hyperevm": { get: {
+    operationId: "listHyperEvmExploreLaunches", summary: "Read HyperEVM Custom Launch pages",
+    description: "Reads the complete finalized HyperEVM Custom Launch feed before filtering and paging. ready means the feed is current; stale means a previously verified feed is retained. Records include chain-qualified identities, pool keys and transaction hashes. Optional market values are separate observations. HyperEVM Module Mode is unavailable. Follow /v4/chains/999/finalized-custom-launches cursors on api.programmable.market for machine indexing; this presentation page is not a complete archive or proof of tradability. Unknown or repeated query parameters and chain overrides are rejected.",
+    tags: ["Discovery"], security: [], parameters: parameters("ethereum"), responses: {
+      "200": { ...response(ref("HyperEvmExplorePage"), "Current or saved verified HyperEVM launch identities."),
+        headers: headers(["ready", "stale"], ["public, max-age=0, s-maxage=15"]) },
+      "400": response(ref("ChainExploreInvalidQuery"), "Unsupported, duplicated or out-of-range query."),
+      "503": response(ref("EthereumExploreUnavailable"), "No usable finalized HyperEVM feed or a read failure. The response is not cached."),
+    },
+  } },
   "/api/explore/base": { get: {
     operationId: "listBaseExploreLaunches", summary: "Read Base Custom Launch pages",
     description: "Reads the complete finalized Base Custom Launch feed before filtering and paging. ready means the feed is current; stale means a previously verified feed is retained. Records include chain-qualified identities, pool keys and transaction hashes. Optional market values are separate observations. Base Module Mode is unavailable. Follow /v4/chains/8453/finalized-custom-launches cursors on api.programmable.market for machine indexing; this presentation page is not a complete archive or proof of tradability. Unknown or repeated query parameters and chain overrides are rejected.",

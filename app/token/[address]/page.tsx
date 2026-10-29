@@ -49,7 +49,7 @@ export async function generateMetadata({
     const ai=await customAITokenPage(address,resolvedSearchParams.chain).catch(()=>null);
     if (ai) return {...launchShareMetadata({address:ai.tokenAddress,chainId:ai.chainId},ai.name,ai.symbol)};
     const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
-    if (resolved?.chainId === 8453 && resolved.token) return { ...launchShareMetadata({address: resolved.token.tokenAddress, chainId: 8453}, resolved.token.name, resolved.token.symbol) };
+    if ((resolved?.chainId === 8453 || resolved?.chainId === 999) && resolved.token) return { ...launchShareMetadata({address: resolved.token.tokenAddress, chainId: resolved.chainId}, resolved.token.name, resolved.token.symbol) };
     if (resolved?.chainId === 1 && resolved.token) return {
       ...launchShareMetadata({ address: resolved.token.tokenAddress, chainId: 1 }, resolved.token.name, resolved.token.symbol),
     };
@@ -92,7 +92,7 @@ export default async function TokenPage({
   const resolved = await resolveTokenPage(address, resolvedSearchParams.chain);
   if (aiUnavailable && (!resolved || !("token" in resolved) || !resolved.token)) return <TokenIndexResetView unresolved/>;
   if (resolved === null) notFound();
-  if (resolved.chainId === 8453) return <TokenRouteChainSync chainId={8453}><BaseTokenView address={address} token={resolved.token} presentation={resolved.presentation} status={resolved.status} /></TokenRouteChainSync>;
+  if (resolved.chainId === 8453 || resolved.chainId === 999) return <TokenRouteChainSync chainId={resolved.chainId}><BaseTokenView chainId={resolved.chainId} address={address} token={resolved.token} presentation={resolved.presentation} status={resolved.status} /></TokenRouteChainSync>;
   // Explore can display a receipt-confirmed launch before the finalized index
   // catches up. Use the same verified observation for direct links, without
   // changing the finalized resolver used by transaction and claim readers.

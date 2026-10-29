@@ -1,4 +1,4 @@
-export type LaunchDestinationIdentity = { chainId:"1"|"4663"|"8453"; launchId:string; controller:string; transactionHash:string };
+export type LaunchDestinationIdentity = { chainId:"1"|"4663"|"8453"|"999"; launchId:string; controller:string; transactionHash:string };
 export type IndexedDestination = LaunchDestinationIdentity & { schemaVersion:"programmable.website-launch-destination.v1"; status:"indexed"; tokenAddress:string; href:string };
 export type DestinationEntry = LaunchDestinationIdentity & { tokenAddress:string };
 const address = /^0x[0-9a-f]{40}$/i;
@@ -7,7 +7,7 @@ export function launchDestinationIdentity(query: URLSearchParams): LaunchDestina
   const fields = ["chainId","launchId","controller","transactionHash"];
   if ([...query.keys()].some(key=>!fields.includes(key)) || fields.some(key=>query.getAll(key).length!==1)) return null;
   const chainId=query.get("chainId"), launchId=query.get("launchId")!, controller=query.get("controller")!, transactionHash=query.get("transactionHash")!;
-  if ((chainId!=="1"&&chainId!=="4663"&&chainId!=="8453") || !hash.test(launchId) || !address.test(controller) || !hash.test(transactionHash)) return null;
+  if ((chainId!=="1"&&chainId!=="4663"&&chainId!=="8453"&&chainId!=="999") || !hash.test(launchId) || !address.test(controller) || !hash.test(transactionHash)) return null;
   return {chainId,launchId:launchId.toLowerCase(),controller:controller.toLowerCase(),transactionHash:transactionHash.toLowerCase()};
 }
 export function indexedLaunchDestination(entries: readonly DestinationEntry[], identity:LaunchDestinationIdentity): IndexedDestination | null {

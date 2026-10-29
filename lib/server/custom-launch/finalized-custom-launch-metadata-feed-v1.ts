@@ -1,3 +1,4 @@
+import { HYPEREVM_CUSTOM_ROOTS_V1, parseHyperEvmRoutingFeePolicyV1, type HyperEvmRoutingFeePolicyBindingV1 } from "@/lib/custom-launch/hyperevm-release-v1";
 import "server-only";
 import { BASE_CUSTOM_ROOTS_V1, parseBaseRoutingFeePolicyV1, type BaseRoutingFeePolicyBindingV1 } from "@/lib/custom-launch/base-release-v1";
 import { parseEthereumRoutingFeePolicyV1, type EthereumRoutingFeePolicyBindingV1 } from "@/lib/custom-launch/ethereum-routing-fee-policy-v1";
@@ -154,7 +155,7 @@ type ProjectTokenMetadataFieldBindingV1 = Readonly<{
 }>;
 
 type FinalizedCheckpointV1 = Readonly<{
-  schemaVersion: typeof FINALIZED_CHECKPOINT_SCHEMA_V1 | "programmable.base-launch-finalized-checkpoint-quorum.v1";
+  schemaVersion: typeof FINALIZED_CHECKPOINT_SCHEMA_V1 | "programmable.base-launch-finalized-checkpoint-quorum.v1" | "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1";
   blockNumber: string;
   blockHash: Hex32;
   quorumSize: 2;
@@ -176,8 +177,8 @@ export type FinalizedCustomLaunchMetadataV1 = Readonly<{
   resourceId: string;
   routerLaunchId: Hex32;
   launchProfileVersion: LaunchProfileVersionV1;
-  routingFeePolicy?: EthereumRoutingFeePolicyBindingV1 | BaseRoutingFeePolicyBindingV1;
-  chainId: "1" | "8453";
+  routingFeePolicy?: EthereumRoutingFeePolicyBindingV1 | BaseRoutingFeePolicyBindingV1 | HyperEvmRoutingFeePolicyBindingV1;
+  chainId: "1" | "8453" | "999";
   creator?: Address;
   poolKey?: Readonly<{ currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address }>;
   router: Address;
@@ -271,7 +272,7 @@ export type RouterCustomMetadataEnrichedSnapshotV1<
 > = Snapshot & Readonly<{ metadataOverlay: RouterCustomMetadataOverlayV1 }>;
 
 type ReaderDependenciesV1 = Readonly<{
-  chainId?: "1" | "8453";
+  chainId?: "1" | "8453" | "999";
   fetchFeed?: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
@@ -351,7 +352,7 @@ export function createFinalizedCustomLaunchMetadataFeedReaderV1(
 }
 
 export async function readFinalizedCustomLaunchMetadataPagesV1(input: Readonly<{
-  chainId?: "1" | "8453";
+  chainId?: "1" | "8453" | "999";
   fetchFeed: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
@@ -380,7 +381,7 @@ export async function readFinalizedCustomLaunchMetadataPagesV1(input: Readonly<{
   let previous: FinalizedCustomLaunchMetadataV1 | null = null;
 
   for (let pageNumber = 0; pageNumber < maximumPages; pageNumber += 1) {
-    const url = new URL(input.chainId === "8453" ? "https://api.programmable.market/v4/chains/8453/finalized-custom-launches" : FINALIZED_CUSTOM_LAUNCH_METADATA_FEED_URL);
+    const url = new URL(input.chainId && input.chainId !== "1" ? `https://api.programmable.market/v4/chains/${input.chainId}/finalized-custom-launches` : FINALIZED_CUSTOM_LAUNCH_METADATA_FEED_URL);
     url.searchParams.set("limit", String(FINALIZED_CUSTOM_LAUNCH_METADATA_PAGE_LIMIT));
     if (cursor !== null) url.searchParams.set("cursor", cursor);
     const response = await abortable(
@@ -672,7 +673,7 @@ export function metadataMatchesRouterEntryV1(
     && metadata.finality.logIndex === stamp.launchLogIndex;
 }
 
-function parseFeedPageV1(value: JsonValue, now: number, chainId: "1" | "8453" = "1"): FeedPageV1 {
+function parseFeedPageV1(value: JsonValue, now: number, chainId: "1" | "8453" | "999" = "1"): FeedPageV1 {
   const hasQuality = value !== null
     && typeof value === "object"
     && !Array.isArray(value)
@@ -758,7 +759,8 @@ function parseFeedQualityV1(
   }
 }
 
-function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" = "1"): FinalizedCustomLaunchMetadataV1 {
+function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" | "999" = "1"): FinalizedCustomLaunchMetadataV1 {
+  const evmRoots=chainId === "999" ? HYPEREVM_CUSTOM_ROOTS_V1 : BASE_CUSTOM_ROOTS_V1;
   const hasRoutingFeePolicy = value !== null && typeof value === "object"
     && !Array.isArray(value) && Object.hasOwn(value, "routingFeePolicy");
   const hasPartnerAttribution = value !== null
@@ -775,7 +777,7 @@ function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" = "1"): Finalized
     "projectMetadata",
     "projectMetadataHash", "bindings", "tokenMetadataReadback", "finality",
     "createdAt", "finalizedAt",
-    ...(chainId === "8453" ? ["creator", "poolKey"] : []),
+    ...(chainId !== "1" ? ["creator", "poolKey"] : []),
     ...(hasPartnerAttribution ? ["partnerAttribution"] : []),
     ...(hasTradeAdapterDescriptor ? ["tradeAdapterDescriptor"] : []),
     ...(hasRoutingFeePolicy ? ["routingFeePolicy"] : []),
@@ -799,11 +801,11 @@ function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" = "1"): Finalized
   if (hasRoutingFeePolicy !== (record.launchProfileVersion === "3.6.0")) {
     throw new Error("Finalized Custom routing fee policy is missing or unexpected");
   }
-  const routingFeePolicy = hasRoutingFeePolicy ? (chainId === "8453"
+  const routingFeePolicy = hasRoutingFeePolicy ? (chainId === "999" ? parseHyperEvmRoutingFeePolicyV1(record.routingFeePolicy) : chainId === "8453"
     ? parseBaseRoutingFeePolicyV1(record.routingFeePolicy) : parseEthereumRoutingFeePolicyV1(record.routingFeePolicy)) : null;
-  if (chainId === "8453" && (record.launchProfileVersion !== "3.6.0"
-    || typeof record.router !== "string" || record.router.toLowerCase() !== BASE_CUSTOM_ROOTS_V1.router.toLowerCase()
-    || typeof record.poolManager !== "string" || record.poolManager.toLowerCase() !== BASE_CUSTOM_ROOTS_V1.poolManager.toLowerCase()
+  if (chainId !== "1" && (record.launchProfileVersion !== "3.6.0"
+    || typeof record.router !== "string" || record.router.toLowerCase() !== evmRoots.router.toLowerCase()
+    || typeof record.poolManager !== "string" || record.poolManager.toLowerCase() !== evmRoots.poolManager.toLowerCase()
     || hasTradeAdapterDescriptor)) throw new Error("Base launch root binding differs");
   const metadataRequired = launchProfileUsesProjectMetadataV1(
     record.launchProfileVersion,
@@ -899,7 +901,7 @@ function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" = "1"): Finalized
       )
     : null;
   let baseDetails: Pick<FinalizedCustomLaunchMetadataV1, "creator" | "poolKey"> = {};
-  if (chainId === "8453") {
+  if (chainId !== "1") {
     const key = exactRecord(record.poolKey, ["currency0", "currency1", "fee", "tickSpacing", "hooks"], "Base pool key");
     const currency0 = canonicalAddress(key.currency0, "currency0"), currency1 = canonicalAddress(key.currency1, "currency1"), hooks = canonicalAddress(key.hooks, "hooks");
     if (BigInt(currency0) >= BigInt(currency1) || !sameHex(hooks, hook)
@@ -907,7 +909,7 @@ function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" = "1"): Finalized
       || typeof key.fee !== "number" || !Number.isSafeInteger(key.fee) || key.fee < 0 || (key.fee > 1000000 && key.fee !== 8388608)
       || typeof key.tickSpacing !== "number" || !Number.isSafeInteger(key.tickSpacing) || key.tickSpacing < 1 || key.tickSpacing > 32767
       || keccak256(encodeAbiParameters(parseAbiParameters("address,address,uint24,int24,address"), [currency0, currency1, key.fee, key.tickSpacing, hooks])) !== poolId
-      || BigInt(finality.blockNumber) <= BigInt(BASE_CUSTOM_ROOTS_V1.deploymentBlock)) throw new Error("Base finalized pool binding differs");
+      || BigInt(finality.blockNumber) <= BigInt(evmRoots.deploymentBlock)) throw new Error("Base finalized pool binding differs");
     baseDetails = { creator: canonicalAddress(record.creator, "creator"), poolKey: { currency0, currency1, fee: key.fee, tickSpacing: key.tickSpacing, hooks } };
   }
   const readback = parseTokenMetadataReadbackV1(
@@ -1026,7 +1028,7 @@ function parseTokenMetadataReadbackV1(
   });
 }
 
-function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" = "1") {
+function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" | "999" = "1") {
   const record = exactRecord(value, [
     "state", "transactionHash", "blockNumber", "blockHash", "logIndex",
     "confirmationDepth", "requiredConfirmationDepth", "finalizedCheckpoint",
@@ -1059,8 +1061,8 @@ function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" = "
   });
 }
 
-function parseFinalizedCheckpointV1(value: JsonValue | undefined, chainId: "1" | "8453" = "1"): FinalizedCheckpointV1 {
-  const expectedSchema = chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : FINALIZED_CHECKPOINT_SCHEMA_V1;
+function parseFinalizedCheckpointV1(value: JsonValue | undefined, chainId: "1" | "8453" | "999" = "1"): FinalizedCheckpointV1 {
+  const expectedSchema = chainId === "999" ? "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" : chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : FINALIZED_CHECKPOINT_SCHEMA_V1;
   const record = exactRecord(value, [
     "schemaVersion", "blockNumber", "blockHash", "quorumSize", "observations",
   ], "finalized checkpoint");

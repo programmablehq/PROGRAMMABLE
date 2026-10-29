@@ -380,7 +380,7 @@ function validateV3LaunchRequest(request) {
     throw new TypeError("projectMetadataHash does not match canonical projectMetadata");
   }
   const common = validateCommonRequest(request, {
-    expectedChainId: request.launchProfile?.chainId === "8453" ? "8453" : MAINNET_CHAIN_ID,
+    expectedChainId: ["8453","999"].includes(request.launchProfile?.chainId) ? request.launchProfile.chainId : MAINNET_CHAIN_ID,
     chainContext: request.launchProfile,
     ...(projectMetadataHash === null ? {} : { projectMetadataHash }),
   });

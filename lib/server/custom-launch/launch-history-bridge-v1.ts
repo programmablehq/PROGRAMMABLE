@@ -159,7 +159,7 @@ export type DeveloperCustomLaunchV2 = Readonly<{
 }>;
 
 export type DeveloperCustomLaunchV3 = Readonly<{
-  chainId?: "1" | "8453";
+  chainId?: "1" | "8453" | "999";
   manualReview?: CustomLaunchReview;
   schemaVersion: "programmable.custom-launch.v3";
   launchId: string;
@@ -438,7 +438,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         const expectedWallet = walletAddress.toLowerCase();
         const readVersion = async (version: BackendHistoryVersion) => {
           const cursorState = query.cursor?.[version];
-          if (cursorState?.done || (query.chainId === "8453" && version !== "v3")) {
+          if (cursorState?.done || ((query.chainId === "8453" || query.chainId === "999") && version !== "v3")) {
             return Object.freeze({
               version,
               launches: Object.freeze([] as DeveloperCustomLaunch[]),
@@ -447,8 +447,8 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             });
           }
           const backendUrl = new URL(
-            query.chainId === "8453" && version === "v3"
-              ? "/v4/chains/8453/wallet-admin/custom-launches"
+            (query.chainId === "8453" || query.chainId === "999") && version === "v3"
+              ? `/v4/chains/${query.chainId}/wallet-admin/custom-launches`
               : version === "v4"
               ? "/v4/chains/4663/wallet-admin/custom-launches"
               : `/${version}/wallet-admin/custom-launches`,
@@ -588,8 +588,8 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         );
         const readVersion = async (version: BackendHistoryVersion) => {
           const backendUrl = new URL(
-            walletInput.chainId === "8453" && version === "v3"
-              ? `/v4/chains/8453/wallet-admin/custom-launches/${encodeURIComponent(launchId.toLowerCase())}`
+            (walletInput.chainId === "8453" || walletInput.chainId === "999") && version === "v3"
+              ? `/v4/chains/${walletInput.chainId}/wallet-admin/custom-launches/${encodeURIComponent(launchId.toLowerCase())}`
               : version === "v4"
               ? `/v4/chains/4663/wallet-admin/custom-launches/${
                   encodeURIComponent(launchId.toLowerCase())
@@ -862,7 +862,7 @@ function exactHistoryQuery(request: Request) {
     throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   }
   const chainId = search.get("chainId") ?? "1";
-  if (chainId !== "1" && chainId !== "8453") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
+  if (chainId !== "1" && chainId !== "8453" && chainId !== "999") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   const limitValue = search.get("limit");
   const limit = limitValue === null
     ? DEFAULT_PAGE_SIZE
@@ -890,7 +890,7 @@ function exactWalletQuery(request: Request) {
   const walletAddress = search.get("walletAddress");
   const versionValue = search.get("version");
   const chainId = search.get("chainId") ?? "1";
-  if (chainId !== "1" && chainId !== "8453" || chainId === "8453" && versionValue !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
+  if (chainId !== "1" && chainId !== "8453" && chainId !== "999" || chainId !== "1" && versionValue !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   if (
     !walletAddress ||
     (versionValue !== null
@@ -1717,7 +1717,7 @@ function parseLaunch(
   value: JsonValue,
   expectedWallet: string,
   version: BackendHistoryVersion,
-  options: Readonly<{ requireAuthorizedArtifactBinding: boolean; chainId?: "1" | "8453" }>,
+  options: Readonly<{ requireAuthorizedArtifactBinding: boolean; chainId?: "1" | "8453" | "999" }>,
 ): DeveloperCustomLaunch {
   const record = jsonRecord(value);
   if (record.chainId !== undefined && record.chainId !== (options.chainId ?? "1")) throw new BackendContractErrorV1();
@@ -1844,7 +1844,7 @@ function parseLaunch(
       })
     : Object.freeze({
         ...profileBase,
-        ...(options.chainId === "8453" ? { chainId: "8453" as const } : {}),
+        ...(options.chainId && options.chainId !== "1" ? { chainId: options.chainId } : {}),
         schemaVersion: "programmable.custom-launch.v3" as const,
         routeId: "custom-launch:create:v3" as const,
         launchProfileVersion: launchProfileVersion!,

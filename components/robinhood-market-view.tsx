@@ -20,7 +20,7 @@ const EXPLORER = "https://robinhoodchain.blockscout.com";
 /** Shared market presentation; each launch family supplies its own verified trade adapter. */
 export function RobinhoodMarketView({ address, name, symbol, launch, presentation, loading = false,
   chainId = 4663, delayed = false, hasAsset = true, manageHref, fallbackImageUrl, trade, children }: {
-  chainId?: 1 | 4663 | 8453;
+  chainId?: 1 | 4663 | 8453 | 999;
   address: string;
   name: string;
   symbol?: string | null;
@@ -41,7 +41,7 @@ export function RobinhoodMarketView({ address, name, symbol, launch, presentatio
   const valuation = coinValuation(market);
   const change = market?.change24hPercent;
   const description = presentation?.description?.trim();
-  const explorerHref = `${chainId === 8453 ? "https://basescan.org" : chainId === 1 ? "https://etherscan.io" : EXPLORER}/${launch?.launchProjection ? "address" : "token"}/${address}`;
+  const explorerHref = `${chainId === 999 ? "https://hyperevmscan.io" : chainId === 8453 ? "https://basescan.org" : chainId === 1 ? "https://etherscan.io" : EXPLORER}/${launch?.launchProjection ? "address" : "token"}/${address}`;
   const { copied, copyUnavailable, copyAddress } = useWalletAddressCopy(address);
 
   return <div className={`${styles.page} page-width`}>

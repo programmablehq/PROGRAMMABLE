@@ -217,7 +217,7 @@ export type DeveloperLaunchHistoryProps = Readonly<{
   detailOnly?: boolean;
   initialLaunchVersion?: "v1" | "v2" | "v3" | "v4";
   initialLaunchId: string | null;
-  initialLaunchChainId: "4663" | "8453" | null;
+  initialLaunchChainId: "4663" | "8453" | "999" | null;
   getAccessToken: () => Promise<string | null>;
   getIdentityToken: () => Promise<string | null>;
   sendCustomLaunchWalletAction: (
@@ -2504,7 +2504,7 @@ export function DeveloperLaunchHistory({
         walletAddress: account,
         limit: String(pageSize),
       });
-      if (initialLaunchChainId === "8453") query.set("chainId", "8453");
+      if (initialLaunchChainId === "8453" || initialLaunchChainId === "999") query.set("chainId", initialLaunchChainId);
       if (cursor !== null) query.set("cursor", cursor);
       const response = await fetch(
         `/api/developer/custom-launches?${query.toString()}`,
@@ -2572,7 +2572,7 @@ export function DeveloperLaunchHistory({
         : "v1";
     const resourceIdentity = launchResourceIdentity(launch);
     const response = await fetch(
-      `/api/developer/custom-launches/${encodeURIComponent(resourceIdentity)}?walletAddress=${encodeURIComponent(account)}&version=${version}${initialLaunchChainId === "8453" ? "&chainId=8453" : ""}`,
+      `/api/developer/custom-launches/${encodeURIComponent(resourceIdentity)}?walletAddress=${encodeURIComponent(account)}&version=${version}${initialLaunchChainId === "8453" || initialLaunchChainId === "999" ? `&chainId=${initialLaunchChainId}` : ""}`,
       {
         cache: "no-store",
         headers: await getAuthHeaders(),
@@ -2675,7 +2675,7 @@ export function DeveloperLaunchHistory({
     signal?: AbortSignal,
   ) => {
     const response = await fetch(
-      `/api/developer/custom-launches/${encodeURIComponent(launchId)}?walletAddress=${encodeURIComponent(account)}&version=${version}${initialLaunchChainId === "8453" ? "&chainId=8453" : ""}`,
+      `/api/developer/custom-launches/${encodeURIComponent(launchId)}?walletAddress=${encodeURIComponent(account)}&version=${version}${initialLaunchChainId === "8453" || initialLaunchChainId === "999" ? `&chainId=${initialLaunchChainId}` : ""}`,
       {
         cache: "no-store",
         headers: await getAuthHeaders(),
@@ -3745,12 +3745,12 @@ export function DeveloperLaunchHistory({
                   && launch.manualReview && customLaunchReviewAllowsSigning(launch.manualReview)
                   ? <button className={styles.walletButton} type="button" disabled aria-busy="true">Preparing your launch…</button> : null}
                 {launchErrors[key] ? <p className={styles.inlineError} role="alert">{launchFeedback(launchErrors[key])}</p> : null}
-                {launch.status === "finalized" ? <CustomLaunchCompletion chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "8453" ? "8453" : "1"}
+                {launch.status === "finalized" ? <CustomLaunchCompletion chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1"}
                   launchId={launch.onchainLaunchId} controller={launch.ownerWallet} transactionHash={transactionHash} /> : null}
                 <details className={styles.launchReview}>
                   <summary>Details and review</summary>
-                <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "8453" ? "8453" : "1"} />
-                {launchErrors[key] ? <pre>{safeDeveloperDetails(launchErrors[key],launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "8453" ? "8453" : "1")}</pre> : null}
+                <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1"} />
+                {launchErrors[key] ? <pre>{safeDeveloperDetails(launchErrors[key],launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1")}</pre> : null}
                 <CustomLaunchAssessment value={launch.output?.reviewReadiness} review={launch.manualReview} subjectHash={launch.manualReview?.subjectHash} chainId={launch.manualReview?.chainId} tradeChecks={launch.manualReview?.tradeChecks} />
                 {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
 

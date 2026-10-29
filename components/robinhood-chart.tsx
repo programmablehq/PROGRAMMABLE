@@ -7,7 +7,7 @@ import styles from "./robinhood-token-view.module.css";
 import liveStyles from "./robinhood-live-chart.module.css";
 
 type ChartMarket = RobinhoodCoinMarket & Readonly<{ source?: "dexscreener" | "uniswap-v4" | "codex" }>;
-type ChartProps = Readonly<{ poolId: string; tokenAddress?: string; name: string; market?: ChartMarket | null; chainId?: 1 | 4663 | 8453 }>;
+type ChartProps = Readonly<{ poolId: string; tokenAddress?: string; name: string; market?: ChartMarket | null; chainId?: 1 | 4663 | 8453 | 999 }>;
 export type RobinhoodLivePrice = Readonly<{ time: number; price: number }>;
 
 const MAX_POINTS = 120;
@@ -108,7 +108,7 @@ function PoolChart({ poolId, name, market, chainId = 4663 }: ChartProps) {
   if (nextPoints !== points) setPoints(nextPoints);
   // The Robinhood presentation endpoint supplies observed prices; avoid the cross-origin chart while it loads.
   const showLive = chainId === 4663;
-  const chartUrl = `https://dexscreener.com/${chainId === 8453 ? "base" : chainId === 1 ? "ethereum" : "robinhood"}/${poolId}`;
+  const chartUrl = `https://dexscreener.com/${chainId === 999 ? "hyperevm" : chainId === 8453 ? "base" : chainId === 1 ? "ethereum" : "robinhood"}/${poolId}`;
 
   useEffect(() => {
     if (showLive || loadedPool === poolId || failedPool === poolId) return;

@@ -176,3 +176,5 @@ export * from "./launch-protection-v1.mjs";
 export { buildProtectedEthereumLaunchV1 } from "./launch-protection-ethereum-v1.mjs";
 
 export { buildProtectedBaseLaunchV1 } from './launch-protection-base-v1.mjs';
+
+export { hyperEvmBlockModeActionV1, enableHyperEvmLargeTransactionsV1 } from "./hyperevm-network-v1.mjs";

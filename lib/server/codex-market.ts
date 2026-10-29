@@ -19,7 +19,7 @@ const MAX_MARKET_PROVIDER_BATCHES_PER_READ = 20;
 // entire catalog and make a cold refresh spend at most one new batch.
 // Keep network-specific partitions stable while filling the provider's 100-row
 // batches. Twenty sparse buckets multiplied small-chain refresh costs.
-const MARKET_BATCH_BUCKETS: Readonly<Record<number, number>> = { 1: 20, 4663: 4, 8453: 1 };
+const MARKET_BATCH_BUCKETS: Readonly<Record<number, number>> = { 1: 20, 4663: 4, 8453: 1, 999: 1 };
 const marketQuery = `query Markets($tokens:[String],$pairs:[String]) {
  filterTokens(tokens:$tokens,limit:100,useAggregatedStats:true) { results { token { address networkId } priceUSD marketCap circulatingMarketCap volume24 change24 } }
  filterPairs(pairs:$pairs,limit:100) { results { liquidity pair { address networkId token0 token1 token0Data { address networkId symbol } token1Data { address networkId symbol } } } }
@@ -190,7 +190,7 @@ async function readMarketBatch(identities: readonly Identity[], chainId: number)
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
 export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
-  if (![1, 4663, 8453].includes(chainId) || tokens.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market request");
+  if (![1, 4663, 8453, 999].includes(chainId) || tokens.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market request");
   if (!process.env.CODEX_API_KEY?.trim()) return new Map();
   const poolsByToken = new Map<string, string>();
   for (const token of tokens) {
@@ -297,7 +297,7 @@ function currentChart(chart: CodexChart) {
 }
 
 export async function readCodexChart(address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> {
-  if (!marketAddress.test(address) || ![1, 4663, 8453].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)) throw new Error("Invalid chart request");
+  if (!marketAddress.test(address) || ![1, 4663, 8453, 999].includes(chainId) || !Object.hasOwn(CODEX_CHART_RANGES, range)) throw new Error("Invalid chart request");
   const normalized = address.toLowerCase();
   return sharedRead(`chart:${chainId}:${normalized}:${range}`, async () => {
     const cached = await cachedChart(normalized, chainId, range);

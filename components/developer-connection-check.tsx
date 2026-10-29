@@ -4,7 +4,7 @@ import type { ApiKeySummary } from "./developer-api-keys";
 import { DeveloperIssue } from "./developer-issue";
 import styles from "./developer-api-keys.module.css";
 export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
-  apiKey: ApiKeySummary; chainId: "1" | "4663" | "8453" | ""; verify(): Promise<ApiKeySummary>; connect(): void;
+  apiKey: ApiKeySummary; chainId: "1" | "4663" | "8453" | "999" | ""; verify(): Promise<ApiKeySummary>; connect(): void;
 }) {
   const [busy, setBusy] = useState(false), [result, setResult] = useState<string[]>([]), [error, setError] = useState("");
   const generation = useRef(0);

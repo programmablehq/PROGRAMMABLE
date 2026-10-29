@@ -3,7 +3,7 @@ export type CustomLaunchReview = Readonly<ReviewWorkflowV4 & {
   schemaVersion: "programmable.custom-launch-manual-review.v1";
   reviewId: string;
   subjectHash: string;
-  chainId: "1" | "4663" | "8453";
+  chainId: "1" | "4663" | "8453" | "999";
   controller: string;
   state: "pending" | "approved" | "rejected" | "expired";
   revision: number;
@@ -37,7 +37,7 @@ export function parseCustomLaunchReview(value: unknown): CustomLaunchReview {
   const v = value as CustomLaunchReview | undefined;
   if (!v || v.schemaVersion !== "programmable.custom-launch-manual-review.v1"
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(v.reviewId)
-    || !/^sha256:[0-9a-f]{64}$/u.test(v.subjectHash) || !["1", "4663", "8453"].includes(v.chainId)
+    || !/^sha256:[0-9a-f]{64}$/u.test(v.subjectHash) || !["1", "4663", "8453", "999"].includes(v.chainId)
     || !/^0x[0-9a-fA-F]{40}$/u.test(v.controller) || !["pending", "approved", "rejected", "expired"].includes(v.state)
     || !Number.isSafeInteger(v.revision) || v.revision < 1 || !Number.isFinite(Date.parse(v.submittedAt))
     || (v.approvedAt !== null && !Number.isFinite(Date.parse(v.approvedAt)))

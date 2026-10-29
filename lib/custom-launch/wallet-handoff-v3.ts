@@ -1,3 +1,4 @@
+import { HYPEREVM_CUSTOM_ROOTS_V1 } from "./hyperevm-release-v1";
 import { BASE_CUSTOM_ROOTS_V1 } from "./base-release-v1";
 import {
   concatHex,
@@ -727,7 +728,7 @@ function assertExactCustomGraphRouterCalldataV3(
   expectedInitializerCalldataHash: Hex,
 ) {
   const chainId = BigInt(action.chainId);
-  const graphFactory = action.chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.graphFactory : CUSTOM_GRAPH_FACTORY_V1;
+  const graphFactory = action.chainId === "999" ? HYPEREVM_CUSTOM_ROOTS_V1.graphFactory : action.chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.graphFactory : CUSTOM_GRAPH_FACTORY_V1;
   const calldata = exactLowerHexData(action.data);
   if (calldata.slice(0, 10) !== CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1) {
     return invalid();
@@ -1265,7 +1266,7 @@ function assertAuthorizedEvidenceV3(
 
 function assertCurrentRouterHandoffV3(
   action: Readonly<Record<string, unknown>>,
-  chainId: "1" | "8453" | undefined,
+  chainId: "1" | "8453" | "999" | undefined,
 ) {
   if (typeof action.walletHandoffUrl !== "string"
     || typeof action.expiresAt !== "string") return invalid();
@@ -1281,8 +1282,8 @@ function assertCurrentRouterHandoffV3(
     || url.hash !== ""
     || launchIds.length !== 1
     || !UUID.test(launchIds[0] ?? "")
-    || (chainId === "8453" ? url.searchParams.getAll("chainId").join() !== "8453" : url.searchParams.has("chainId"))
-    || [...url.searchParams.keys()].some((key) => key !== "launchId" && !(chainId === "8453" && key === "chainId"))
+    || (chainId && chainId !== "1" ? url.searchParams.getAll("chainId").join() !== chainId : url.searchParams.has("chainId"))
+    || [...url.searchParams.keys()].some((key) => key !== "launchId" && !(chainId && chainId !== "1" && key === "chainId"))
     || url.toString() !== action.walletHandoffUrl) return invalid();
   const expiresAtMs = Date.parse(action.expiresAt);
   if (!Number.isFinite(expiresAtMs)
@@ -1374,7 +1375,8 @@ function assertSignedPermitV3(
     router: unknown;
   }>,
 ) {
-  const isBase = customLaunchChainForRouterV1(expected.router) === "8453";
+  const isBase = ["8453","999"].includes(customLaunchChainForRouterV1(expected.router) ?? "");
+  const evmRoots=customLaunchChainForRouterV1(expected.router) === "999" ? HYPEREVM_CUSTOM_ROOTS_V1 : BASE_CUSTOM_ROOTS_V1;
   const permit = exactRecord(value, isBase
     ? [...SIGNED_PERMIT_KEYS, "releaseId"] : SIGNED_PERMIT_KEYS);
   if (isBase) exactSha256(permit.releaseId);
@@ -1382,7 +1384,7 @@ function assertSignedPermitV3(
   const deadline = canonicalUint256(permit.deadline).parsed;
   if (permit.schemaVersion !== "programmable.signed-prepared-launch-permit.v1"
     || !customLaunchChainForRouterV1(expected.router) || permit.chainId !== customLaunchChainForRouterV1(expected.router)
-    || (permit.chainId === "8453" && (!sameAddress(permit.authoritySafe, BASE_CUSTOM_ROOTS_V1.permitAuthority) || !sameAddress(permit.signerAddress, BASE_CUSTOM_ROOTS_V1.permitSigner)))
+    || (["8453","999"].includes(String(permit.chainId)) && (!sameAddress(permit.authoritySafe, evmRoots.permitAuthority) || !sameAddress(permit.signerAddress, evmRoots.permitSigner)))
     || (expected.artifactHash !== undefined
       && exactSha256(permit.artifactHash) !== expected.artifactHash)
     || (expected.permitDigest !== undefined
@@ -1451,7 +1453,7 @@ function assertOnchainEvidenceV3(value: unknown, router: unknown) {
 function assertFinalizedCheckpointV3(
   value: unknown,
   context: Readonly<{
-    chainId: "1" | "8453";
+    chainId: "1" | "8453" | "999";
     launchBlockNumber: bigint;
     observedAtBlockNumber: bigint;
     launchFinalityState: unknown;
@@ -1461,7 +1463,7 @@ function assertFinalizedCheckpointV3(
   const blockNumber = canonicalUint256(checkpoint.blockNumber).parsed;
   const blockHash = exactLowerBytes32(checkpoint.blockHash);
   if (checkpoint.schemaVersion
-      !== (context.chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
+      !== (context.chainId === "999" ? "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" : context.chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
     || checkpoint.quorumSize !== 2
     || blockNumber > context.observedAtBlockNumber
     || (context.launchFinalityState === "finalized"

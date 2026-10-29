@@ -11,13 +11,13 @@ export async function packFreshLaunch(options) {
   if (config.schemaVersion === PACK_CONFIG_SCHEMA_V3 && !Object.hasOwn(config, "profileVersion")) {
     const capabilities = await getLaunchCapabilities({
       apiVersion: 3,
-      ...(config.chainId === "8453" ? { chainId: "8453" } : {}),
+      ...(["8453","999"].includes(config.chainId) ? { chainId: config.chainId } : {}),
       fetchImpl: options.fetchImpl,
       maxAttempts: options.maxAttempts,
       timeoutMs: options.timeoutMs,
     });
     directNativeProfileVersion = capabilities.resource.profile.profileVersion;
-    directNativeTradeFeePolicy = config.chainId === "8453"
+    directNativeTradeFeePolicy = ["8453","999"].includes(config.chainId)
       ? capabilities.resource.profile.programmableTradeFeePolicy
       : capabilities.resource.programmableTradeFeePolicy?.policy;
   }

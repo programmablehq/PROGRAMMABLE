@@ -898,7 +898,7 @@ export function DeveloperApiKeysView({
     account ? "loading" : "idle",
   );
   const [listError, setListError] = useState("");
-  const [setupChainId, setSetupChainId] = useState<"1" | "4663" | "8453" | "">(() => { const id = new URLSearchParams(navigationQuery).get("chainId"); return id === "1" || id === "4663" || id === "8453" ? id : ""; });
+  const [setupChainId, setSetupChainId] = useState<"1" | "4663" | "8453" | "999" | "">(() => { const id = new URLSearchParams(navigationQuery).get("chainId"); return id === "1" || id === "4663" || id === "8453" || id === "999" ? id : ""; });
   const chainSelectRef = useRef<HTMLSelectElement>(null);
   const [label, setLabel] = useState("");
   const [access, setAccess] = useState<ApiKeyAccess>("prepare-and-read");
@@ -936,7 +936,7 @@ export function DeveloperApiKeysView({
     initialSection,
   );
   const [initialLaunchId, setInitialLaunchId] = useState<string | null>(null);
-  const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | "8453" | null>("4663");
+  const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | "8453" | "999" | null>("4663");
   const [refreshingKeys, setRefreshingKeys] = useState(false);
   const [keyPage, setKeyPage] = useState(1);
   const [walletSessionTimedOut, setWalletSessionTimedOut] = useState(false);
@@ -1141,7 +1141,7 @@ export function DeveloperApiKeysView({
     const update = window.setTimeout(() => {
       setActiveSection(section);
       setInitialLaunchId(launchId);
-      setInitialLaunchChainId(chainId === "8453" ? "8453" : chainId === "1" ? null : "4663");
+      setInitialLaunchChainId(chainId === "999" ? "999" : chainId === "8453" ? "8453" : chainId === "1" ? null : "4663");
       if (section === "keys" && searchParams.get("guide") === "custom-hook") {
         window.requestAnimationFrame(() => {
           const guide = guideRef.current;
@@ -1574,8 +1574,8 @@ export function DeveloperApiKeysView({
       <p className={styles.reviewIntro}>We review your submission within a target of 24 hours. After approval, you have 24 hours to prepare and sign your launch.</p>
       {activeSection === "keys" ? <div className={styles.setupBar}>
         <label className={styles.field} htmlFor="builder-chain"><span>Build on</span><select id="builder-chain" ref={chainSelectRef} value={setupChainId}
-          onChange={event => { setSetupChainId(event.target.value as "1" | "4663" | "8453" | ""); setSetupCopyState("idle"); setConnectionCopyState("idle"); setSetupFallbackText(""); }}>
-          <option value="">Choose a chain</option><option value="1">Ethereum Mainnet</option><option value="4663">Robinhood Chain</option><option value="8453">Base</option>
+          onChange={event => { setSetupChainId(event.target.value as "1" | "4663" | "8453" | "999" | ""); setSetupCopyState("idle"); setConnectionCopyState("idle"); setSetupFallbackText(""); }}>
+          <option value="">Choose a chain</option><option value="1">Ethereum Mainnet</option><option value="4663">Robinhood Chain</option><option value="8453">Base</option><option value="999">HyperEVM</option>
         </select></label>
         {account ? <div className={styles.walletAssignment}><span>Connected wallet</span><code>{account}</code><button type="button" className={styles.textLink} onClick={openWallet}>Change wallet</button></div> : null}
       </div> : null}
@@ -1979,7 +1979,7 @@ export function DeveloperApiKeysView({
                             </div>
                             <span className={styles.keyPurpose}>{hasReadOnlyScopes(apiKey.scopes) ? "Read only" : hasStandardScopes(apiKey.scopes) ? "Create and read launches" : apiKeyPurposeLabel(apiKey.scopes)}</span>
                             <p className={styles.securityNote}>Wallet: <code>{apiKey.controllerWallet ?? account}</code></p>
-                            <p className={styles.securityNote}>Chains: {apiKey.chainRestriction?.allowedChainIds?.map(id => id === "1" ? "Ethereum" : id === "4663" ? "Robinhood" : id).join(", ") ?? "Checked per request (legacy key)"}</p>
+                            <p className={styles.securityNote}>Chains: {apiKey.chainRestriction?.allowedChainIds?.map(id => id === "1" ? "Ethereum" : id === "4663" ? "Robinhood" : id === "8453" ? "Base" : id === "999" ? "HyperEVM" : id).join(", ") ?? "Checked per request (legacy key)"}</p>
                             {status === "Active" && !rotationSupported ? (
                               <p className={styles.securityNote}>{apiKeyPurpose(apiKey.scopes) === "module-contributions" || apiKeyPurpose(apiKey.scopes) === "all" ? "Module submissions are closed." : "Rotation is unavailable until this key’s restrictions can be preserved."}</p>
                             ) : null}
@@ -2162,6 +2162,7 @@ export function DeveloperApiKeysView({
         {!setupChainId || setupChainId === "4663" ? <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
         {!setupChainId || setupChainId === "1" ? <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></Link> : null}
         {!setupChainId || setupChainId === "8453" ? <a href="/developers/base-custom-launch-api-v1.md">Base launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {!setupChainId || setupChainId === "999" ? <a href="/developers/hyperevm-custom-launch-api-v1.md">HyperEVM launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
       </nav>
       </div>
     </div>

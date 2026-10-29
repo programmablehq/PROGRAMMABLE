@@ -1,3 +1,4 @@
+import { EVM_CUSTOM_CHAINS } from "@/lib/evm-custom-chains";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
@@ -20,6 +21,9 @@ export default async function LaunchPage() {
   const initialViewChainId = parseViewChainId(
     requestCookies.get(VIEW_CHAIN_COOKIE_NAME)?.value,
   );
-  if (initialViewChainId === 8453) return <main><h1>Launch on Base</h1><p>Base supports Custom Launches through the API.</p><a href="/developers/api-keys?chainId=8453">Create a Custom Launch</a></main>;
+  if (initialViewChainId === 8453 || initialViewChainId === 999) {
+    const network = EVM_CUSTOM_CHAINS[initialViewChainId];
+    return <main className="page-width"><h1>Launch on {network.name}</h1><p>Create a Custom Launch with your API key.</p><a href={`/developers/api-keys?chainId=${network.id}`}>Create a Custom Launch</a></main>;
+  }
   return <ModuleFoundationLaunchHost key={initialViewChainId} layout="studio" chainId={initialViewChainId} />;
 }
