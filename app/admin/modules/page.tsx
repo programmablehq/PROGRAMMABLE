@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ModuleReviewAdminConsole } from "@/components/module-review-admin-console";
 import publishers from "@/config/module-foundation/owner-publishers.json";
 
 export const metadata: Metadata = {
-  title: "Module publishing · Programmable",
-  description: "Publish Programmable modules with the automation wallet.",
+  title: "Module reviews · Programmable",
+  description: "Review submitted modules and publish Programmable-owned modules.",
   robots: { index: false, follow: false },
 };
 
 export default function ModuleReviewPage() {
-  return <main style={{ maxWidth: 760, margin: "64px auto", padding: "0 24px" }}>
-    <h1>Module publishing</h1>
-    <p>Build a compatible module, test its behavior, and publish it directly.</p>
-    <p>Our automation wallet deploys contracts and publishes modules. You do not need a module application,
-      a separate reviewer, or a connected admin wallet on this page.</p>
+  return <>
+    <ModuleReviewAdminConsole />
+    <section aria-labelledby="owned-module-publishing" style={{ maxWidth: 760, margin: "32px auto 64px", padding: "0 24px" }}>
+    <h2 id="owned-module-publishing">Publish Programmable-owned modules</h2>
+    <p>Build a compatible module, test its behavior, and publish it directly with the automation wallet.
+      Programmable-owned modules do not require a contributor application or a separate reviewer.</p>
     <p>Automation wallet · Robinhood Chain</p>
     <code style={{ overflowWrap: "anywhere" }}>{publishers.wallets[0]}</code>
     <ol>
@@ -22,5 +24,6 @@ export default function ModuleReviewPage() {
       <li>Publish. The module appears in Add module without a separate website deployment.</li>
     </ol>
     <Link href="/launch/modules/foundation">Open Module Mode</Link>
-  </main>;
+    </section>
+  </>;
 }
