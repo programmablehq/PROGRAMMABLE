@@ -6,14 +6,14 @@ import { AI_CONFIG } from "./ai-config";
 import { readServerEvents } from "./events";
 
 export const MODELS = AI_CONFIG.models;
-export type Model = typeof MODELS[keyof typeof MODELS];
+export type Model = string;
 export type ClaudeInput = { model: Model; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; signal?: AbortSignal; onText?: (text: string) => void };
 export type ClaudeResult = { text: string; inputTokens: number; outputTokens: number };
 
 export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new CustomAIError("configuration", "The builder is not connected yet.", 503);
-  const health = providerHealth();
+  const health = providerHealth("anthropic");
   await health.assertAvailable();
   const timeout = AbortSignal.timeout(60_000);
   const signal = input.signal ? AbortSignal.any([timeout, input.signal]) : timeout;

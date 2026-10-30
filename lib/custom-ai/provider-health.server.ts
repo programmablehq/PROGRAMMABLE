@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 import { CustomAIError } from "./types";
 import { productionAIStore, type AIStore } from "./store.server";
 import type { ProviderFailure } from "./provider-errors";
+import { configuredProvider } from "./provider-config.server";
 type Health = { until: number; kind: ProviderFailure["kind"] };
 const local = new Map<string, Health>();
-export function createProviderHealth(store?: Pick<AIStore, "readObject" | "saveObject">, now = Date.now) {
-  const id = createHash("sha256").update(`anthropic:${process.env.ANTHROPIC_API_KEY ?? "unconfigured"}`).digest("hex");
+export function createProviderHealth(store?: Pick<AIStore, "readObject" | "saveObject">, now = Date.now, provider = configuredProvider().id) {
+  const key = provider === "surplus" ? process.env.SURPLUS_API_KEY : process.env.ANTHROPIC_API_KEY;
+  const id = createHash("sha256").update(`${provider}:${key ?? "unconfigured"}`).digest("hex");
   return {
     async assertAvailable() {
       const health = store ? (await store.readObject<Health>("system", "provider-health", id))?.value : local.get(id);
@@ -26,6 +28,6 @@ export function createProviderHealth(store?: Pick<AIStore, "readObject" | "saveO
     },
   };
 }
-export function providerHealth() {
-  return createProviderHealth(process.env.CUSTOM_AI_DATABASE_URL ? productionAIStore() : undefined);
+export function providerHealth(provider = configuredProvider().id) {
+  return createProviderHealth(process.env.CUSTOM_AI_DATABASE_URL ? productionAIStore() : undefined, Date.now, provider);
 }

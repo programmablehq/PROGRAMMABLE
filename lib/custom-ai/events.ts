@@ -1,5 +1,5 @@
 /** Bounded SSE reader shared by the browser and provider adapter. */
-export async function* readServerEvents(response: Response): AsyncGenerator<Record<string, unknown>> {
+export async function* readServerEvents(response: Response, options: { allowDoneMarker?: boolean } = {}): AsyncGenerator<Record<string, unknown>> {
   const reader = response.body?.getReader();
   if (!reader) throw Error("The response stream is missing.");
   const decoder = new TextDecoder();
@@ -16,6 +16,7 @@ export async function* readServerEvents(response: Response): AsyncGenerator<Reco
         if (block.length > 1_000_000) throw Error("The response event is too large.");
         const data = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trimStart()).join("\n");
         if (!data) continue; // keep-alive comment
+        if (options.allowDoneMarker && data === "[DONE]") { yield { type: "done" }; return; }
         const event = JSON.parse(data);
         if (!event || typeof event !== "object" || Array.isArray(event)) throw Error("Invalid response event.");
         yield event;

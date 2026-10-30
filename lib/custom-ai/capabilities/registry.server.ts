@@ -6,6 +6,7 @@ import searchHooks from "./search-hooks/index.server";
 import type { CapabilityContext, CapabilityRef, ToolCapability } from "./types";
 import { AI_CONFIG, type ExecutionProfile } from "../ai-config";
 import { CustomAIError } from "../types";
+import { configuredProvider } from "../provider-config.server";
 
 const registry: readonly ToolCapability[] = [catalog, web, contract, searchHooks];
 export function getCapabilities(context: CapabilityContext, entries = registry) {
@@ -20,10 +21,12 @@ export function capabilityMetadata(entries: readonly ToolCapability[]) {
   return entries.map(({ ref, kind, description, inputSchema }) => ({ ref, kind, description, inputSchema }));
 }
 export function executionProfile(entries: readonly ToolCapability[]): ExecutionProfile {
-  return { aiConfigId: AI_CONFIG.id, aiConfigVersion: AI_CONFIG.version, capabilities: entries.map(entry => entry.ref) };
+  const provider = configuredProvider();
+  return { aiConfigId: AI_CONFIG.id, aiConfigVersion: AI_CONFIG.version, capabilities: entries.map(entry => entry.ref), providerId: provider.id, models: provider.models };
 }
 export function assertExecutionProfile(profile: ExecutionProfile, entries: readonly ToolCapability[]) {
   if (profile.aiConfigId !== AI_CONFIG.id || profile.aiConfigVersion !== AI_CONFIG.version
+    || profile.providerId !== undefined && (profile.providerId !== configuredProvider().id || JSON.stringify(profile.models) !== JSON.stringify(configuredProvider().models))
     || profile.capabilities.some(ref => !entries.some(entry => sameCapability(entry.ref, ref)))) {
     throw new CustomAIError("configuration_changed", "This saved request uses an earlier builder version. Your design is saved; start a new request to update it.", 409);
   }

@@ -399,7 +399,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
           <ArrowUp size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>}
       </form>
-      <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. Messages are sent to Claude.</p>
+      <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. Messages are processed by the configured AI provider.</p>
     </section>
 
     <CustomAILaunchPreview key={previewRevision} draft={draft} disabled={busy || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}

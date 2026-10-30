@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { providerHealth } from "@/lib/custom-ai/provider-health.server";
+import { assertModelConnection, researchAvailable } from "@/lib/custom-ai/provider-config.server";
 import { executionProfile, getCapabilities } from "@/lib/custom-ai/capabilities/registry.server";
 import { createPreviewBudget, readPreviewBody } from "@/lib/custom-ai/access.server";
 import { runCustomAI, type AIContext } from "@/lib/custom-ai/service.server";
@@ -33,9 +34,12 @@ export async function POST(request: Request) {
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, ruleSpec: previous?.ruleSpec, draft: current?.draft };
     if (input.draftId && !context.draft) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
     // Known billing/rate-limit outages do not reserve a new user attempt.
-    if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) await providerHealth().assertAvailable();
+    if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) {
+      assertModelConnection();
+      await providerHealth().assertAvailable();
+    }
     const profile = executionProfile(getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
-      allowWeb: Boolean(process.env.ANTHROPIC_API_KEY), budget: { remaining: 2 } }));
+      allowWeb: researchAvailable(), budget: { remaining: 2 } }));
     const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile) : null;
     if (reserved && !reserved.lease) {
       if (reserved.job.state === "completed") return Response.json(reserved.job.result, { headers: aiHeaders });

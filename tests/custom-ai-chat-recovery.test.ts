@@ -14,6 +14,7 @@ import { CustomAIError, type ChatProgress, type ChatRequest } from "../lib/custo
 let database: PGlite;
 const request: ChatRequest = { id: "recovery-request-00001", intent: "chat", messages: [{ role: "user", content: "Make the buy fee 2%." }] };
 beforeEach(async () => {
+  vi.stubEnv("CUSTOM_AI_PROVIDER", "anthropic");vi.stubEnv("ANTHROPIC_API_KEY", "test-only-configuration");
   runtime.run.mockReset(); runtime.owner = "alice";
   database = new PGlite(); await database.exec(CUSTOM_AI_SCHEMA);
   runtime.store = createAIStore({ connect: async () => ({ query: (sql, values) => database.query(sql, values), release() {} }) },
@@ -23,9 +24,16 @@ beforeEach(async () => {
     return init?.method === "POST" ? POST(call) : GET(call);
   }));
 });
-afterEach(async () => { vi.unstubAllGlobals(); await database.close(); });
+afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await database.close(); });
 
 describe("durable chat retry and streaming", () => {
+  it("does not reserve an attempt or call a model when the selected provider is unconfigured", async () => {
+    vi.stubEnv("CUSTOM_AI_PROVIDER", "surplus");vi.stubEnv("SURPLUS_API_KEY", "");
+    const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request)}));
+    expect(response.status).toBe(503);expect((await response.json()).code).toBe("configuration");
+    expect(runtime.run).not.toHaveBeenCalled();
+    expect((await database.query("SELECT count(*)::int AS n FROM programmable_custom_ai_v1.jobs")).rows).toEqual([{n:0}]);
+  });
   it("reports a terminal failure so a deliberate retry can use a new attempt", async () => {
     runtime.run.mockRejectedValueOnce(new CustomAIError("provider_503", "Temporary provider error", 503)).mockResolvedValue({ reply: "Recovered." });
     const send = (id: string) => sendAIChat({ ...request, id }, async () => ({}), new AbortController().signal);
