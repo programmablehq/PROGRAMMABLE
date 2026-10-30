@@ -267,7 +267,7 @@ async function readCachedModuleMetadata(tokens: readonly RobinhoodLaunch[]): Pro
   return metadata;
 }
 
-export async function readRobinhoodMarkets(tokens: readonly MarketToken[]): Promise<Map<string, RobinhoodCoinMarket>> {
+export async function readRobinhoodMarkets(tokens: readonly MarketToken[], universe?: readonly MarketToken[]): Promise<Map<string, RobinhoodCoinMarket>> {
   if (tokens.length === 0) return new Map();
   if (tokens.length > MAX_MARKET_TOKENS || tokens.some((token) => !ADDRESS.test(token.tokenAddress) || (token.poolId !== null && !HASH.test(token.poolId)))) {
     throw new Error("Invalid market request");
@@ -277,7 +277,9 @@ export async function readRobinhoodMarkets(tokens: readonly MarketToken[]): Prom
     blockNumber: token.blockNumber, blockHash: token.blockHash }])
     .toSorted((a, b) => a.tokenAddress.localeCompare(b.tokenAddress));
   if (identities.length === 0) return new Map();
-  const codex = await readCodexMarkets(identities);
+  const codex = universe
+    ? await readCodexMarkets(identities, 4663, { universe: universe.flatMap(token => token.poolId === null ? [] : [{ tokenAddress: token.tokenAddress, poolId: token.poolId }]) })
+    : await readCodexMarkets(identities);
   const now = Date.now();
   return new Map([...codex].filter(([, market]) => {
     const age = now - Date.parse(market.observedAt);

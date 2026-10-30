@@ -53,7 +53,7 @@ export async function readRobinhoodLaunches(page = 1, query = "", filters: Robin
     const eligibleTokens = new Set(visible.map(token => token.tokenAddress.toLowerCase()).filter(isDiscoverableRobinhoodToken));
     const list = launchList(snapshot, page, query, Date.now(), filters, caps, pageSize, volumes, eligibleTokens);
     if (!marketRanked && list.items.length) {
-      const selected = await readRobinhoodMarkets(list.items).catch(() => new Map<string, RobinhoodCoinMarket>());
+      const selected = await readRobinhoodMarkets(list.items, visible).catch(() => new Map<string, RobinhoodCoinMarket>());
       for (const [address, market] of selected) markets.set(address, market);
     }
     // Ranking and card values use the same full-catalog market observation.

@@ -119,6 +119,45 @@ describe("Codex price history", () => {
 });
 
 describe("Codex server market adapter", () => {
+  it("still prices a newly discovered token missing from the saved batch universe", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn(async () => Response.json({ data: { filterTokens: { results: [row()] }, filterPairs: { results: [] } } }));
+    vi.stubGlobal("fetch", fetcher);
+    expect((await readCodexMarkets([{ tokenAddress: address, poolId }], 4663, { universe: [] })).get(address)?.marketCapUsd).toBe(500000);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a conflicting pool in a shared batch universe before calling the provider", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await expect(readCodexMarkets([{ tokenAddress: address, poolId }], 4663, {
+      universe: [{ tokenAddress: address, poolId: `0x${"12".repeat(32)}` }],
+    })).rejects.toThrow("Ambiguous market identity");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("shares canonical market batches across different Explore pages", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const universe = Array.from({ length: 320 }, (_, i) => ({
+      tokenAddress: `0x${i.toString(16).padStart(8, "0")}${"00".repeat(16)}`,
+      poolId: `0x${i.toString(16).padStart(64, "0")}`,
+    }));
+    const fetcher = vi.fn(async (_url: unknown, init: RequestInit) => {
+      const { variables } = JSON.parse(String(init.body));
+      return Response.json({ data: { filterTokens: { results: variables.tokens.map((key: string) => ({
+        ...row(), token: { address: key.split(":")[0], networkId: 4663 },
+      })) }, filterPairs: { results: [] } } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    for (let i = 0; i < universe.length; i += 10) {
+      const selected = universe.slice(i, i + 10);
+      const markets = await readCodexMarkets(selected, 4663, { universe });
+      expect([...markets.keys()].sort()).toEqual(selected.map(x => x.tokenAddress).sort());
+    }
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls.every(([, init]) => JSON.parse(String(init.body)).variables.tokens.length === 80)).toBe(true);
+  });
+
   it.each([1, 4663, 8453])("joins an expired shared cache refresh on chain %s without dropping market values", async chainId => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     cacheMock.value = { entries: [[address, { priceUsd: .0001 }]],

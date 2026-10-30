@@ -190,16 +190,19 @@ async function readMarketBatch(identities: readonly Identity[], chainId: number)
 }
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
-export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
+export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663, options: { universe?: readonly Identity[] } = {}): Promise<Map<string, RobinhoodCoinMarket>> {
   if (![1, 4663, 8453, 999].includes(chainId) || tokens.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market request");
-  if (!process.env.CODEX_API_KEY?.trim()) return new Map();
+  if (!process.env.CODEX_API_KEY?.trim() || tokens.length === 0) return new Map();
+  const universe = options.universe ?? tokens;
+  if (universe.length > 10_000 || universe.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market universe");
+  const requested = new Set(tokens.map(token => token.tokenAddress.toLowerCase()));
   const poolsByToken = new Map<string, string>();
-  for (const token of tokens) {
+  for (const token of [...universe, ...tokens]) {
     const address = token.tokenAddress.toLowerCase(), pool = token.poolId.toLowerCase();
     if (poolsByToken.has(address) && poolsByToken.get(address) !== pool) throw new Error("Ambiguous market identity");
     poolsByToken.set(address, pool);
   }
-  const identities = [...new Map(tokens.map(token => [token.tokenAddress.toLowerCase(), { tokenAddress: token.tokenAddress.toLowerCase(), poolId: token.poolId.toLowerCase() }])).values()];
+  const identities = [...poolsByToken].map(([tokenAddress, poolId]) => ({ tokenAddress, poolId }));
   const result = new Map<string, RobinhoodCoinMarket>();
   // One HTTP request for token stats and exact-pool liquidity per 100 verified
   // identities. Bucket membership is stable across catalog growth, so adding
@@ -275,10 +278,11 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
   // intact, so this does not turn navigation into extra paid refreshes.
   await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_MARKET_BUCKETS, buckets.length) }, async () => {
     while (nextBucket < buckets.length && Date.now() < deadline && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ) {
-      await readBucket(buckets[nextBucket++]!);
+      const bucket = buckets[nextBucket++]!;
+      if (bucket.some(token => requested.has(token.tokenAddress))) await readBucket(bucket);
     }
   }));
-  return result;
+  return new Map([...result].filter(([address]) => requested.has(address)));
 }
 
 async function fetchChart(address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> {

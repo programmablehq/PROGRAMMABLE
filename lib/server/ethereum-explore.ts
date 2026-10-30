@@ -161,7 +161,7 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   const selectedCanonical = visible.filter(entry => keys.has(entry.tokenAddress.toLowerCase()));
   const selectedIdentities = [...selectedCanonical, ...confirming.filter(entry => keys.has(entry.tokenAddress.toLowerCase()))];
   const [markets, metadata, approved] = await Promise.all([
-    readCodexMarkets(selectedIdentities, 1).catch(() => new Map<string, RobinhoodCoinMarket>()),
+    readCodexMarkets(selectedIdentities, 1, { universe: [...visible, ...confirming] }).catch(() => new Map<string, RobinhoodCoinMarket>()),
     readCodexTokenMetadata(selectedIdentities.map(entry => entry.tokenAddress), 1),
     readApprovedLaunchPresentations(selectedIdentities,1),
   ]);
