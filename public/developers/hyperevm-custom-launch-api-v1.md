@@ -62,6 +62,8 @@ Only admit records for chain `999` and the exact HyperEVM router below. Verify t
 
 HyperEVM uses HyperBFT finality. Require the common finalized checkpoint from two independent providers to cover the launch block. Do not apply an Ethereum L1 derivation rule or an arbitrary confirmation count.
 
+HyperCore system transactions can change the absolute transaction and log indices reported by different node implementations. For cross-provider checks, match the transaction hash, canonical block and ordered event contents, while verifying each provider's log coordinates against its own receipt. Retain the raw indices with the provider identity; an index offset alone is not a reorganization.
+
 The canonical coin page is `/token/{token}?chain=999`. Finalized HyperEVM launches appear in the shared [Explore catalog](https://programmable.market/explore) alongside Ethereum and Robinhood launches. Verify quote assets from `poolKey`: the zero address is native HYPE, and wrapped HYPE is a separate asset. Match market data by chain, token, PoolManager and pool ID. An external terminal must consume this source and support the contract's actual trading route; Programmable cannot guarantee a third-party listing or swap route.
 
 ## HyperEVM deployment bindings

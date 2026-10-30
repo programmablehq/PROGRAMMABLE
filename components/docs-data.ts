@@ -26,6 +26,7 @@ const tokenModelPaths = [
 ] as const;
 
 const developerReferencePaths = [
+  "/developer-reference/hyperevm-custom-launch",
   "/developer-reference/module-mode-indexing",
   "/docs/developers/custom-launch",
   "/developer-reference/robinhood-terminal-indexer",
@@ -134,6 +135,11 @@ export const docsNavigation: readonly DocsNavigationGroup[] = [
         depth: 1,
         href: "/docs/developers/custom-launch",
         label: "Custom Launch API",
+      },
+      {
+        depth: 1,
+        href: "/developer-reference/hyperevm-custom-launch",
+        label: "Custom Launch on HyperEVM",
       },
       {
         depth: 1,
@@ -274,13 +280,13 @@ export const docsSearchItems: DocsSearchItem[] = [
   {
     title: "Developer overview",
     description:
-      "Use live Ethereum V3, inspect the deployed Robinhood V4 release candidate, or choose a verification and indexing path.",
+      "Build Custom Launches on Ethereum, Robinhood Chain, Base and HyperEVM, or choose a verification and indexing path.",
     href: "/docs/developers",
   },
   {
     title: "Custom Launch API",
     description:
-      "Submit live Ethereum V3.3 requests, inspect Robinhood V4 pending public discovery promotion, or read V2 and V1 compatibility history.",
+      "Use a wallet API key to submit, review and launch custom contracts on Ethereum, Robinhood Chain, Base and HyperEVM.",
     href: "/docs/developers/custom-launch",
     keywords: [
       "custom API",
@@ -294,6 +300,12 @@ export const docsSearchItems: DocsSearchItem[] = [
       "sequencer soft confirmed",
       "ethereum posted",
     ],
+  },
+  {
+    title: "Custom Launch on HyperEVM",
+    description: "HYPE wallet setup, API keys, contract review, launch, trading and finalized indexing on chain 999.",
+    href: "/developer-reference/hyperevm-custom-launch",
+    keywords: ["HyperEVM", "HYPE", "999", "API", "custom contracts", "fees"],
   },
   {
     title: "Robinhood terminal and indexer integration",

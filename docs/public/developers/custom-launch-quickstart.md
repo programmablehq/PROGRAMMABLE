@@ -1,8 +1,21 @@
 ---
-description: Prepare an open Robinhood Custom Launch through the API and sign with your wallet
+description: Choose your network, prepare a Custom Launch through the API and sign with your wallet
 ---
 
 # Launch through the API
+
+Choose the guide for your network. Each uses an API key for preparation and status, review of the submitted contracts, and a controller wallet for signing.
+
+| Network | Launch guide |
+| --- | --- |
+| Ethereum Mainnet · `1` | [Ethereum Custom Launch](https://programmable.market/developers/custom-launch-api-v1.md) |
+| Robinhood Chain · `4663` | [Custom Launch Plans](#robinhood-custom-launch-plans) |
+| Base · `8453` | [Base Custom Launch](base-custom-launch.md) |
+| HyperEVM · `999` | [HyperEVM Custom Launch](hyperevm-custom-launch.md) |
+
+Check the chosen network's live capabilities before preparing a request. Request schemas, deployment bindings, gas currency and finality rules are specific to that network.
+
+## Robinhood Custom Launch Plans
 
 New Robinhood Custom Launches use the [Custom Launch Plan guide](https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md). Your agent prepares the plan through the API. Your controller wallet reviews and signs the prepared transaction.
 

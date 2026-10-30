@@ -32,6 +32,8 @@ import {
 export function createRobinhoodBackendPromotionTools(release = null) {
 const configured = (name, fallback) => release !== null && Object.hasOwn(release, name)
   ? release[name] : fallback;
+const FLY_RELEASE_PAGE_SIZE = configured("flyReleasePageSize", 256);
+if (![32, 256].includes(FLY_RELEASE_PAGE_SIZE)) throw new TypeError("Unsupported Fly release page size");
 const ROBINHOOD_BACKEND_PROMOTION_INPUT_SCHEMA =
   "programmable.robinhood-custom-launch.backend-promotion-input.v1";
 const ROBINHOOD_BACKEND_PROMOTION_PUBLIC_INPUT_SCHEMA =
@@ -56,6 +58,7 @@ const ROBINHOOD_BACKEND_CAPTURE_CERTIFICATE_OIDC_ISSUER =
   "https://token.actions.githubusercontent.com";
 const ROBINHOOD_BACKEND_CAPTURE_SOURCE_REF = "refs/heads/main";
 const ROBINHOOD_BACKEND_CAPTURE_TRIGGER = "workflow_dispatch";
+const CAPTURE_OBSERVER_SOURCE = configured("captureObserverSource", null);
 const ROBINHOOD_BACKEND_COSIGN_VERSION = "v3.1.3";
 const ROBINHOOD_BACKEND_COSIGN_LINUX_AMD64_SHA256 =
   "sha256:4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
@@ -93,6 +96,16 @@ const FLY_MACHINE_RELEASE_ID = /^rel_[a-z0-9]{6,128}$/u;
 const FLY_V1_SCHEME = "FlyV1 ";
 const FLY_V1_SEGMENT = /^fm2_([A-Za-z0-9/+_-]+={0,2})$/u;
 const FLY_V1_MAXIMUM_SEGMENTS = 16;
+
+function resolveCaptureWorkflowCommit(sourceCommit) {
+  if (CAPTURE_OBSERVER_SOURCE === null) return sourceCommit;
+  const { runtime, observer } = CAPTURE_OBSERVER_SOURCE;
+  if (![runtime?.sourceCommit, runtime?.sourceTree, observer?.sourceCommit, observer?.sourceTree]
+    .every(value => HEX40.test(value ?? "")) || sourceCommit !== runtime.sourceCommit) {
+    throw new TypeError("runtime capture differs from the reviewed observer binding");
+  }
+  return observer.sourceCommit;
+}
 const FLY_V1_MINIMUM_SEGMENT_BYTES = 32;
 const FLY_V1_MAXIMUM_SEGMENT_BYTES = 12_288;
 const BACKEND_REPOSITORY = "programmablehq/programmable-open-hook-v2-internal";
@@ -306,7 +319,7 @@ function buildRobinhoodBackendCosignVerifyBlobArgs({
     "--certificate-github-workflow-name", ROBINHOOD_BACKEND_CAPTURE_WORKFLOW_NAME,
     "--certificate-github-workflow-repository", BACKEND_REPOSITORY,
     "--certificate-github-workflow-ref", ROBINHOOD_BACKEND_CAPTURE_SOURCE_REF,
-    "--certificate-github-workflow-sha", sourceCommit,
+    "--certificate-github-workflow-sha", resolveCaptureWorkflowCommit(sourceCommit),
     "--certificate-github-workflow-trigger", ROBINHOOD_BACKEND_CAPTURE_TRIGGER,
     subjectPath,
   ]);
@@ -557,7 +570,7 @@ function exactReadinessIdentity(value, stageBundle, backendSource) {
 }
 
 function validateFlyGraphqlRequest(value, expected = {
-  query: FLY_RELEASES_QUERY, variables: { appName: ROBINHOOD_FLY_APP, first: 256 },
+  query: FLY_RELEASES_QUERY, variables: { appName: ROBINHOOD_FLY_APP, first: FLY_RELEASE_PAGE_SIZE },
 }) {
   assertExactKeys(value, ["query", "variables"], "Fly releases GraphQL request");
   assertExactKeys(value.variables, Object.keys(expected.variables), "Fly releases GraphQL variables");
@@ -818,7 +831,7 @@ function validateRobinhoodBackendPromotionInput({
   }
   let releaseReadbackCount = 0;
   const inventory = validateCompleteFlyReleasesV1({
-    firstRequest: { query: FLY_RELEASES_QUERY, variables: { appName: ROBINHOOD_FLY_APP, first: 256 } },
+    firstRequest: { query: FLY_RELEASES_QUERY, variables: { appName: ROBINHOOD_FLY_APP, first: FLY_RELEASE_PAGE_SIZE } },
     read: (request, kind) => {
       const readback = input.flyReadbacks[releaseReadbackCount++];
       const normalized = normalizeReadback(readback, {
@@ -1183,6 +1196,12 @@ function validateRobinhoodBackendPromotionPublicInput({
     || !HEX40.test(input.backendSource.sourceTree)) {
     throw new TypeError("backend promotion public source identity is invalid");
   }
+  if (CAPTURE_OBSERVER_SOURCE !== null) {
+    resolveCaptureWorkflowCommit(input.backendSource.sourceCommit);
+    if (input.backendSource.sourceTree !== CAPTURE_OBSERVER_SOURCE.runtime.sourceTree) {
+      throw new TypeError("runtime capture tree differs from the reviewed observer binding");
+    }
+  }
   if (!SHA256.test(input.backendPromotionInputDigest)
     || input.captureId !== input.backendPromotionInputDigest.slice("sha256:".length)) {
     throw new TypeError("backend promotion semantic identity is invalid");
@@ -1468,7 +1487,7 @@ function validateRobinhoodBackendCaptureAuthorization({
     || authorization.certificateGithubWorkflowRepository !== BACKEND_REPOSITORY
     || authorization.certificateGithubWorkflowRef
       !== ROBINHOOD_BACKEND_CAPTURE_SOURCE_REF
-    || authorization.certificateGithubWorkflowSha !== input.backendSource.sourceCommit
+    || authorization.certificateGithubWorkflowSha !== resolveCaptureWorkflowCommit(input.backendSource.sourceCommit)
     || authorization.certificateGithubWorkflowTrigger
       !== ROBINHOOD_BACKEND_CAPTURE_TRIGGER
     || authorization.repository !== BACKEND_REPOSITORY
@@ -1711,7 +1730,7 @@ function buildRobinhoodBackendPromotionFixture(stageBundle) {
           } } },
         }, 1, { method: "POST", requestBody: {
           query: FLY_RELEASES_QUERY,
-          variables: { appName: ROBINHOOD_FLY_APP, first: 256 },
+          variables: { appName: ROBINHOOD_FLY_APP, first: FLY_RELEASE_PAGE_SIZE },
         } }),
       readback("app", ROBINHOOD_FLY_MACHINES_HOSTNAME,
         `/v1/apps/${ROBINHOOD_FLY_APP}`, "fly-api-token-redacted",
@@ -1843,7 +1862,7 @@ async function freshVerifyRobinhoodBackendPromotionInput({
     responseBudget,
   });
   const releaseInventory = await readCompleteFlyReleasesV1({
-    firstRequest: { query: FLY_RELEASES_QUERY, variables: { appName: ROBINHOOD_FLY_APP, first: 256 } },
+    firstRequest: { query: FLY_RELEASES_QUERY, variables: { appName: ROBINHOOD_FLY_APP, first: FLY_RELEASE_PAGE_SIZE } },
     read: async (requestBody, kind) => {
       const readback = await fetchRawReadback({
         kind,
@@ -2047,6 +2066,7 @@ return Object.freeze({
   ROBINHOOD_BACKEND_PRIVATE_ARTIFACT_BYTES,
   validateSigstoreMessageBundleV03,
   buildRobinhoodBackendCosignVerifyBlobArgs,
+  resolveCaptureWorkflowCommit,
   computeRobinhoodBackendPromotionInputDigest,
   buildRobinhoodBackendPromotionInput,
   validateRobinhoodBackendPromotionInput,
@@ -2099,6 +2119,7 @@ export const {
   ROBINHOOD_BACKEND_PRIVATE_ARTIFACT_BYTES,
   validateSigstoreMessageBundleV03,
   buildRobinhoodBackendCosignVerifyBlobArgs,
+  resolveCaptureWorkflowCommit,
   computeRobinhoodBackendPromotionInputDigest,
   buildRobinhoodBackendPromotionInput,
   validateRobinhoodBackendPromotionInput,

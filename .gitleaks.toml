@@ -2,6 +2,22 @@
 useDefault = true
 
 [[allowlists]]
+description = "HyperEVM acceptance names its exact public onchain canary token"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/operations/releases/custom-launch-v4\.3\.0/hyperevm-live-acceptance\.json$''']
+regexes = ['''^\s*"token": "0xBf4c2886705a3a88B63bF633512703c346E980CB",\s*$''']
+
+[[allowlists]]
+description = "Explore visibility regression names the same exact public HyperEVM canary"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/explore-public-visibility\.test\.ts$''']
+regexes = ['''^\s*const tokenAddress = "0xbf4c2886705a3a88b63bf633512703c346e980cb";\s*$''']
+
+[[allowlists]]
 description = "Health monitoring requests only the two exact public coin identities"
 targetRules = ["generic-api-key"]
 condition = "AND"

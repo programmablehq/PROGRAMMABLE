@@ -1,10 +1,11 @@
 # Developers
 
-Use the guide for the task you want to complete on Ethereum Mainnet (`1`) or Robinhood Chain (`4663`).
+Use the guide for your task and network: Ethereum Mainnet (`1`), Robinhood Chain (`4663`), Base (`8453`) or HyperEVM (`999`). Base and HyperEVM support Custom Launch; Module Mode remains on Ethereum and Robinhood.
 
 | Task | Guide |
 | --- | --- |
 | Launch your own contracts | [Custom Launch quickstart](custom-launch-quickstart.md) |
+| Launch on Base or HyperEVM | [Base](base-custom-launch.md) · [HyperEVM](hyperevm-custom-launch.md) |
 | Check request fields and errors | [Custom Launch API](custom-launch.md) |
 | Add coins to a terminal, wallet or explorer | [Index launches](indexing.md) |
 | Find schemas, ABIs and client releases | [API reference](machine-readable.md) |

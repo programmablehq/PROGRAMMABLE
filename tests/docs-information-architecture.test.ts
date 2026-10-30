@@ -123,6 +123,11 @@ describe("Docs information architecture", () => {
           },
           {
             depth: 1,
+            href: "/developer-reference/hyperevm-custom-launch",
+            label: "Custom Launch on HyperEVM",
+          },
+          {
+            depth: 1,
             href: "/developer-reference/module-mode-indexing",
             label: "Index Module Mode launches",
           },
@@ -170,6 +175,7 @@ describe("Docs information architecture", () => {
           "/docs/developers",
           "/docs/developers/custom-launch",
           "/docs/developers/custom-launch-quickstart",
+          "/developer-reference/hyperevm-custom-launch",
           "/docs/developers/verify",
           "/docs/developers/indexing",
           "/docs/developers/machine-readable",

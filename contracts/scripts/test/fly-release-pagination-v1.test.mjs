@@ -42,3 +42,14 @@ test("rejects oversized history and an empty next page", async () => {
   await assert.rejects(readCompleteFlyReleasesV1({ firstRequest, read: readPages([page([node(1)], 4097, true)]) }), /incomplete/u);
   await assert.rejects(readCompleteFlyReleasesV1({ firstRequest, read: readPages([page([node(2)], 2, true), page([], 2)]) }), /incomplete/u);
 });
+test("small pages retain the full bounded history past 32 pages",async()=>{
+  const total=1100,calls=[],pages=[];
+  for(let offset=0;offset<total;offset+=32){
+    pages.push(page(Array.from({length:Math.min(32,total-offset)},(_,index)=>node(total-offset-index)),total,
+      offset+32<total,'start-'+offset,'end-'+offset));
+  }
+  const result=await readCompleteFlyReleasesV1({firstRequest:{...firstRequest,variables:{first:32}},
+    read:readPages([...pages,pages[0]],calls)});
+  assert.equal(result.value.data.app.releasesUnprocessed.nodes.length,total);
+  assert.equal(calls.length,pages.length+1);
+});

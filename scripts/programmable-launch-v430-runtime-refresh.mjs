@@ -7,10 +7,9 @@ import { pathToFileURL } from "node:url";
 
 import { parseStrictJson } from "../packages/launch/src/canonical-json.mjs";
 import { decodeExactUtf8, sha256Digest } from "../packages/launch/src/io.mjs";
-import { runRobinhoodV41PostdeploymentCli } from "../contracts/scripts/finalize-robinhood-custom-launch-v41-deployment.mjs";
-import { robinhoodV41BackendPromotionTools } from "../contracts/scripts/robinhood-backend-promotion-v41.mjs";
+import {createV430CaptureVerifier,RUNTIME_CAPTURE_AUTHORITY_PATH} from './programmable-launch-v430-capture-observer.mjs';
 
-// Authenticate the runtime capture from the completed Base backend promotion.
+// Authenticate the runtime capture from the completed HyperEVM backend promotion.
 // This signed capture is never treated as a current observation.
 // Fresh verification remains mandatory and does not itself activate the backend.
 export const RUNTIME_CAPTURE_PATH = "release/robinhood-chain-4663/v4.3.0/backend-promotion-input.public.json";
@@ -40,8 +39,8 @@ function boundBytes(root, relative) {
 
 /** Reauthenticate a new runtime capture, then retain every historical apply gate. */
 export async function verifyRuntimePromotionReadiness(argv, {
-  runFinalizer = runRobinhoodV41PostdeploymentCli,
-  freshVerifyBackend = robinhoodV41BackendPromotionTools.freshVerifyRobinhoodBackendPromotionInput,
+  runFinalizer,
+  freshVerifyBackend,
 } = {}) {
   const [command, ...rest] = argv;
   assert.ok(command === "apply" && rest.length % 2 === 0, "only the 4.3.0 read-only apply route is supported");
@@ -56,6 +55,13 @@ export async function verifyRuntimePromotionReadiness(argv, {
   const packageJson = JSON.parse(readFileSync(path.join(root, "packages/launch/package.json"), "utf8"));
   assert.ok(packageJson.name === "@programmable/launch" && packageJson.version === "4.3.0",
     "runtime revalidation is restricted to @programmable/launch 4.3.0");
+  if (!runFinalizer || !freshVerifyBackend) {
+    const authority=parseStrictJson(decodeExactUtf8(boundBytes(root,RUNTIME_CAPTURE_AUTHORITY_PATH),'runtime observer binding'),
+      {maximumBytes:32768,maximumDepth:8});
+    const verifier=createV430CaptureVerifier(authority);
+    runFinalizer ??= verifier.runFinalizer;
+    freshVerifyBackend ??= verifier.freshVerifyBackend;
+  }
   const inputBytes = boundBytes(root, RUNTIME_CAPTURE_PATH);
   const attestationBytes = boundBytes(root, RUNTIME_ATTESTATION_PATH);
   const input = parseStrictJson(decodeExactUtf8(inputBytes, "runtime backend capture"), {

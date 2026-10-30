@@ -14,6 +14,8 @@ Start with the chain and token address. Then select the launch source and its ve
 | Robinhood Custom with shared token and hook | [MultiRole V2](robinhood-terminal-indexer.md#multirole-v2) |
 | Ethereum Custom | [Ethereum Custom indexing](ethereum-custom-indexing.md) |
 | Robinhood Custom Launch Plans | [Finalized projections](robinhood-terminal-indexer.md#custom-launch-plans) |
+| Base Custom | [Base finalized feed and bindings](base-custom-launch.md#index-base-launches) |
+| HyperEVM Custom | [HyperEVM finalized feed and bindings](hyperevm-custom-launch.md#index-hyperevm-launches) |
 
 ## Verify Robinhood launches
 
@@ -32,6 +34,12 @@ Scan events from the published start block and apply the manifest's finality pol
 A shared infrastructure component must not be used to identify a single launch. The token lookup identifies the launch, while the pool lookup identifies the market used for trading.
 
 Ethereum Module Mode also has a `custom-graph` Router stamp. After verifying that stamp, follow [Ethereum module verification](foundation-indexing.md#ethereum-module-launches) to bind the module implementation and graph initializer. Do not require a Robinhood factory event or exclude a launch because the Router category is `custom`.
+
+## Verify Base and HyperEVM launches
+
+Resolve the network's current capabilities and deployment bindings, then read its chain-qualified finalized feed. Match the token, hook, Router launch ID, PoolManager and pool ID against the receipt, launch stamp and pool initialization. Keep the API resource ID separate from the onchain launch ID.
+
+Use two independent providers and require their common finalized checkpoint to cover the launch block. Base finality follows its Ethereum derivation. HyperEVM uses HyperBFT finality; do not apply an Ethereum L1 posting rule to it. Retain source and block evidence with the verified record.
 
 ## Record the outcome
 

@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 
 export const MAX_FLY_RELEASES_V1 = 4096;
-export const MAX_FLY_RELEASE_READBACKS_V1 = 33;
+export const MAX_FLY_RELEASE_READBACKS_V1 = 129;
 const fail = () => { throw new TypeError("Fly release inventory is paginated or incomplete"); };
 const exact = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
@@ -22,6 +22,7 @@ function connection(value) {
 // The same request sequence validates stored raw readbacks and drives fresh
 // network reads. The assembled inventory is never represented as a raw response.
 function* releaseInventory(firstRequest) {
+  const maximumPages=firstRequest.variables?.first===32?128:32;
   const first = yield { request: firstRequest, kind: "releases" };
   const start = connection(first.value);
   if (start.pageInfo.hasPreviousPage) fail();
@@ -29,7 +30,7 @@ function* releaseInventory(firstRequest) {
   const observations = [first], nodes = [], ids = new Set(), versions = new Set(), cursors = new Set();
   let page = start;
   for (let index = 0; ; index++) {
-    if (index >= 32 || page.totalCount !== start.totalCount || cursors.has(page.pageInfo.endCursor)) fail();
+    if (index >= maximumPages || page.totalCount !== start.totalCount || cursors.has(page.pageInfo.endCursor)) fail();
     cursors.add(page.pageInfo.endCursor);
     for (const node of page.nodes) {
       if (typeof node?.id !== "string" || !node.id || !Number.isSafeInteger(node.version) || node.version < 1
@@ -41,7 +42,7 @@ function* releaseInventory(firstRequest) {
       if (nodes.length !== start.totalCount) fail();
       break;
     }
-    if (nodes.length >= start.totalCount || index === 31) fail();
+    if (nodes.length >= start.totalCount || index === maximumPages - 1) fail();
     const query = firstRequest.query.replace("$first: Int!", "$first: Int!, $after: String!")
       .replace("releasesUnprocessed(first: $first)", "releasesUnprocessed(first: $first, after: $after)");
     if (query === firstRequest.query || !query.includes("after: $after")) fail();
