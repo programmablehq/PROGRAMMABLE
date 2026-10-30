@@ -6,6 +6,8 @@ description: Find the schema, client and ABI for your integration
 
 Use discovery to select the interface and version for your task. Deployment addresses and client versions belong to that release; do not copy them from an unrelated example.
 
+Automated clients can start with the [agent guide](https://programmable.market/agents.md) and [workflow discovery](https://programmable.market/api/agent). The [documentation index](https://programmable.market/docs/llms.txt) and [complete documentation](https://programmable.market/docs/llms-full.txt) come from this GitBook publication, so humans and agents read the same guides.
+
 ## Custom Launch
 
 Start with [product discovery](https://programmable.market/.well-known/programmable.json). It identifies supported networks, API profiles, immutable client releases and schema URLs.
@@ -14,8 +16,8 @@ Start with [product discovery](https://programmable.market/.well-known/programma
 | --- | --- |
 | New Custom Launch Plans on Robinhood | [Plan capabilities](https://api.programmable.market/v4/chains/4663/custom-launch-capabilities) and [generated contract](https://api.programmable.market/v4/chains/4663/custom-launch-contract/manifest.json) |
 | Historical separate token and hook on Robinhood | V4 profile selected by discovery; retain its read and recovery interfaces |
-| Shared token and hook on Robinhood | [MultiRole V2 capabilities](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/capabilities) |
-| Existing Ethereum integration | V3 profile selected by discovery |
+| Historical shared token and hook on Robinhood | [MultiRole V2 capabilities](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/capabilities); new projects use Custom Launch Plans |
+| Custom Launch on Ethereum | [Ethereum capabilities](https://api.programmable.market/v3/capabilities) and the V3 profile selected by discovery |
 | Custom Launch on Base | [Base capabilities](https://api.programmable.market/v4/chains/8453/capabilities), [readiness](https://api.programmable.market/v4/chains/8453/readiness) and [OpenAPI](https://programmable.market/openapi/base-custom-launch-v1.json) |
 | Custom Launch on HyperEVM | [HyperEVM capabilities](https://api.programmable.market/v4/chains/999/capabilities), [readiness](https://api.programmable.market/v4/chains/999/readiness) and [OpenAPI](https://programmable.market/openapi/hyperevm-custom-launch-v1.json) |
 

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import styles from "@/components/site-footer.module.css";
+import { DOCUMENTATION } from "@/lib/documentation";
 
 const productLinks = [
   { href: "/explore", label: "Explore" },
@@ -9,7 +10,7 @@ const productLinks = [
   { href: "/launch/modules/foundation", label: "Modules" },
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/profile", label: "Profile" },
-  { href: "/docs", label: "Docs" },
+  { href: DOCUMENTATION.home, label: "Docs" },
 ];
 
 const resourceLinks = [
@@ -72,9 +73,11 @@ export function SiteFooter() {
           <ul>
             {productLinks.map((link) => (
               <li key={link.href}>
-                <Link href={link.href} prefetch={false}>
-                  {link.label}
-                </Link>
+                {link.href === DOCUMENTATION.home ? (
+                  <a href={link.href}>{link.label}</a>
+                ) : (
+                  <Link href={link.href} prefetch={false}>{link.label}</Link>
+                )}
               </li>
             ))}
           </ul>

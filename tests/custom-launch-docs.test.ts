@@ -59,7 +59,7 @@ describe("Custom Launch API documentation", () => {
       ),
     ).toBe(true);
     expect(sitemap().map(({ url }) => url)).toContain(
-      "https://programmable.market/docs/developers/custom-launch",
+      "https://programmable.market/docs/developers/custom-launch-quickstart/custom-launch",
     );
     expect(
       docsSearchItems.find(({ title }) => title === "Creator overview")

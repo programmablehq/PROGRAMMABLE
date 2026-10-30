@@ -17,56 +17,6 @@
   ],
   "redirects": [
     {
-      "source": "/docs/developers/hyperevm-custom-launch",
-      "destination": "/developer-reference/hyperevm-custom-launch",
-      "permanent": false
-    },
-    {
-      "source": "/docs/developers/custom-launch-quickstart/hyperevm-custom-launch",
-      "destination": "/developer-reference/hyperevm-custom-launch",
-      "permanent": false
-    },
-    {
-      "source": "/docs/models/custom-ai",
-      "destination": "/developer-reference/custom-ai",
-      "permanent": false
-    },
-    {
-      "source": "/docs/ethereum-direct-custom-hook",
-      "destination": "/developer-reference/ethereum-custom-hook",
-      "permanent": false
-    },
-    {
-      "source": "/docs/tokens",
-      "destination": "/docs",
-      "permanent": true
-    },
-    {
-      "source": "/docs/creators",
-      "destination": "/docs/launch/launch",
-      "permanent": true
-    },
-    {
-      "source": "/docs/creators/templates",
-      "destination": "/docs/models/module-mode",
-      "permanent": true
-    },
-    {
-      "source": "/docs/developers/module-mode",
-      "destination": "/docs/models/module-mode",
-      "permanent": true
-    },
-    {
-      "source": "/docs/creators/programs",
-      "destination": "/docs/developers/developers",
-      "permanent": true
-    },
-    {
-      "source": "/docs/infrastructure",
-      "destination": "/docs/reference/launch-stamps",
-      "permanent": true
-    },
-    {
       "source": "/markets",
       "destination": "/explore",
       "permanent": false
@@ -75,16 +25,6 @@
       "source": "/markets/:match*",
       "destination": "/explore",
       "permanent": false
-    },
-    {
-      "source": "/docs/models/prediction-markets",
-      "destination": "/docs/tokens",
-      "permanent": true
-    },
-    {
-      "source": "/docs/tokens/prediction-markets",
-      "destination": "/docs/tokens",
-      "permanent": true
     },
     {
       "source": "/sites/site_V93gQ",

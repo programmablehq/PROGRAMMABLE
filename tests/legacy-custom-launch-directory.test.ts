@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { DOCUMENTATION } from "../lib/documentation";
 
 const root = process.cwd();
 const component = readFileSync(
@@ -22,7 +23,8 @@ describe("legacy Custom Registry directory", () => {
     expect(component).toContain("Legacy Custom records");
     expect(component).toContain("retired Registry approval flow");
     expect(component).toContain('href="/developers/api-keys"');
-    expect(component).toContain('href="/docs/developers/custom-launch"');
+    expect(component).toContain("href={DOCUMENTATION.customLaunch}");
+    expect(DOCUMENTATION.customLaunch).toBe("/docs/developers/custom-launch-quickstart/custom-launch");
     expect(component).not.toContain("Launched from an approved revision.");
   });
 

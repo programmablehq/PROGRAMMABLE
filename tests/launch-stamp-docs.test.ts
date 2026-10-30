@@ -13,6 +13,7 @@ import {
   STAMP_RECORD_V1_FIELDS,
 } from "../components/launch-stamp-docs-contract";
 import { developerDocsMarkdown } from "../lib/developer-docs-content";
+import sitemap from "../app/sitemap";
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
@@ -22,7 +23,6 @@ const indexingPage = read("app/docs/developers/indexing/page.tsx");
 const styles = read("components/launch-stamp-docs.module.css");
 const docsData = read("components/docs-data.ts");
 const docsShell = read("components/docs-shell.tsx");
-const sitemap = read("app/sitemap.ts");
 
 describe("Launch Stamp developer documentation", () => {
   it("publishes the exact live Router activation and finalized evidence", () => {
@@ -493,7 +493,9 @@ describe("Launch Stamp developer documentation", () => {
     expect(developerOverview).toContain('href="/docs/launch-stamps"');
     expect(docsShell).toContain('aria-label="Breadcrumb"');
     expect(page).toContain('alternates: { canonical: "/docs/launch-stamps" }');
-    expect(sitemap).toContain('"/docs/launch-stamps"');
+    expect(sitemap().map(({ url }) => url)).toContain(
+      "https://programmable.market/docs/developers/machine-readable/launch-stamps",
+    );
     expect(developerDocsMarkdown).toContain(
       "[GitHub Router reference](https://github.com/programmablehq/Developers/blob/main/docs/reference/launch-stamp.md)",
     );

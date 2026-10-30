@@ -2,8 +2,8 @@
 
 import { Disclosure } from "@/components/disclosure";
 import { StudioAtmosphere } from "@/components/module-studio/studio-atmosphere";
+import { DOCUMENTATION } from "@/lib/documentation";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   useCallback,
@@ -2159,10 +2159,10 @@ export function DeveloperApiKeysView({
       )}
 
       <nav className={styles.resourceLinks} aria-label="Developer resources">
-        {!setupChainId || setupChainId === "4663" ? <a href="https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md">Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
-        {!setupChainId || setupChainId === "1" ? <Link href="/developer-reference/ethereum-custom-hook">Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></Link> : null}
-        {!setupChainId || setupChainId === "8453" ? <a href="/developers/base-custom-launch-api-v1.md">Base launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
-        {!setupChainId || setupChainId === "999" ? <a href="/developers/hyperevm-custom-launch-api-v1.md">HyperEVM launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {!setupChainId || setupChainId === "4663" ? <a href={`${DOCUMENTATION.quickstart}#robinhood-custom-launch-plans`}>Robinhood launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {!setupChainId || setupChainId === "1" ? <a href={DOCUMENTATION.customLaunch}>Ethereum launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {!setupChainId || setupChainId === "8453" ? <a href={DOCUMENTATION.base}>Base launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        {!setupChainId || setupChainId === "999" ? <a href={DOCUMENTATION.hyperevm}>HyperEVM launch guide <ArrowRight size={16} aria-hidden="true" /></a> : null}
       </nav>
       </div>
     </div>

@@ -8,7 +8,7 @@ Choose the guide for your network. Each uses an API key for preparation and stat
 
 | Network | Launch guide |
 | --- | --- |
-| Ethereum Mainnet · `1` | [Ethereum Custom Launch](https://programmable.market/developers/custom-launch-api-v1.md) |
+| Ethereum Mainnet · `1` | [Ethereum Custom Launch](custom-launch.md#ethereum-custom) |
 | Robinhood Chain · `4663` | [Custom Launch Plans](#robinhood-custom-launch-plans) |
 | Base · `8453` | [Base Custom Launch](base-custom-launch.md) |
 | HyperEVM · `999` | [HyperEVM Custom Launch](hyperevm-custom-launch.md) |
@@ -25,7 +25,7 @@ New Robinhood Custom Launches use the [Custom Launch Plan guide](https://api.pro
 4. Preflight the exact request through `POST /v4/chains/4663/custom-launch-plans:preflight`. Resolve any binding or execution findings, then create through `POST /v4/chains/4663/custom-launch-plans` using the same packed bytes and an `Idempotency-Key`. If the result is uncertain, recover or retry with those exact bytes and key.
 5. Open the returned launch in [Your launches](https://programmable.market/developers/api-keys?view=history) with its controller wallet. Keep that link through review, signing and confirmation. After approval, the open page prepares the launch automatically; choose **Sign and launch** when ready. Check the network, destination and value in your wallet before confirming. The page tracks the transaction and opens the coin after finality and public indexing.
 
-The earlier `/v4/chains/4663/custom-launches` profile is retained for existing launch history and recovery. It does not accept new requests. Ethereum Mainnet has a [separate V3 guide](https://programmable.market/developers/custom-launch-api-v1.md).
+The earlier `/v4/chains/4663/custom-launches` profile is retained for existing launch history and recovery. It does not accept new requests. Ethereum Mainnet has a [separate V3 guide](custom-launch.md#ethereum-custom).
 
 Preflight also provides preparation hints for review. On Ethereum, read `reviewReadiness.preparation`; on Robinhood, read the `programmable.review_preparation` entry in `assurance.claims`. These point to old router or platform-fee constants, zero initial-buy amounts, missing buy evidence and declared liquidity gaps. Confirm the relevant code path, fix the mismatch and repack, or provide evidence for your custom implementation. A hint is not an automatic rejection, and declared funding is not proof that a purchase ran.
 

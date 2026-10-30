@@ -156,36 +156,19 @@ describe("Docs information architecture", () => {
     ]);
   });
 
-  it("publishes every human documentation route in the sitemap", () => {
-    expect(sitemap().map((entry) => entry.url)).toEqual(
-      expect.arrayContaining(
-        [
-          "/docs",
-          "/docs/economics",
-          "/docs/v4-token",
-          "/docs/trust",
-          "/docs/status",
-          "/docs/tokens",
-          "/docs/infrastructure",
-          "/docs/creators",
-          "/docs/creators/launch",
-          "/docs/creators/templates",
-          "/docs/creators/earnings",
-          "/docs/creators/programs",
-          "/docs/developers",
-          "/docs/developers/custom-launch",
-          "/docs/developers/custom-launch-quickstart",
-          "/developer-reference/hyperevm-custom-launch",
-          "/docs/developers/verify",
-          "/docs/developers/indexing",
-          "/docs/developers/machine-readable",
-          "/docs/launch-stamps",
-          "/docs/models/classic",
-          "/docs/models/custom",
-          "/developer-reference/stock-paired",
-        ].map((route) => `https://programmable.market${route}`),
-      ),
-    );
+  it("publishes the canonical GitBook pages without native docs duplicates", () => {
+    const urls = sitemap().map((entry) => entry.url);
+    expect(urls).toEqual(expect.arrayContaining([
+      "https://programmable.market/docs",
+      "https://programmable.market/docs/developers/custom-launch-quickstart/custom-launch",
+      "https://programmable.market/docs/developers/custom-launch-quickstart/base-custom-launch",
+      "https://programmable.market/docs/developers/custom-launch-quickstart/hyperevm-custom-launch",
+      "https://programmable.market/docs/launch/custom-ai",
+      "https://programmable.market/docs/developers/indexing/foundation-indexing",
+      "https://programmable.market/docs/developers/indexing/robinhood-terminal-indexer",
+    ]));
+    expect(urls.some(url => url.includes("/developer-reference/") || url.includes("/docs/models/"))).toBe(false);
+    expect(new Set(urls).size).toBe(urls.length);
   });
 
   it("keeps the developer tasks in the same shell and breadcrumb hierarchy", () => {

@@ -421,6 +421,10 @@ export function MobileNavigation({
       {mobileNavItems.map((item) => {
         const current = isCurrent(pathname, item) &&
           !(item.href === "/launch" && pathname.startsWith("/launch/modules"));
+        if (item.href === "/docs") {
+          return <a key={item.href} href={item.href} tabIndex={open ? undefined : -1}
+            onClick={onNavigate}><span>{item.label}</span></a>;
+        }
         return (
           <Link
             key={item.href}

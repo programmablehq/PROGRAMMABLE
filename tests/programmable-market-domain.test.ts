@@ -51,14 +51,15 @@ describe("programmable.market website origin", () => {
     ]);
   });
 
-  it("keeps historical Stock-Paired documentation reachable outside the GitBook proxy", async () => {
+  it("redirects historical Stock-Paired documentation to its GitBook reference", async () => {
     expect(await nextConfig.redirects?.()).toContainEqual({
       source: "/docs/models/stock-paired",
-      destination: "/developer-reference/stock-paired",
-      permanent: true,
+      destination: "/docs/developers/machine-readable/fee-versions#stock-paired",
+      permanent: false,
     });
     const routes = sitemap().map(({ url }) => url);
-    expect(routes).toContain("https://programmable.market/developer-reference/stock-paired");
+    expect(routes).toContain("https://programmable.market/docs/developers/machine-readable/fee-versions");
+    expect(routes).not.toContain("https://programmable.market/developer-reference/stock-paired");
     expect(routes).not.toContain("https://programmable.market/docs/models/stock-paired");
   });
 
