@@ -49,7 +49,7 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
     provenance.launchId.toLowerCase() === "0x63fc6e67d017e6d9d3b5c01fcf905dc39f86757db671bc49445df9e80bd4a8dc") {
     return Object.freeze({
       ...entry,
-      imageUrl: "https://genomedna.xyz/token.png",
+      imageUrl: "/token-images/dna-verified-20261030.webp",
     }) as T;
   }
   if (provenance?.chainId === 1 &&
@@ -57,7 +57,7 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
     provenance.launchId.toLowerCase() === "0xc6eb69cdb5bf4b18947651a8288e9fdc4de694c4f0d4705403222fc2d88600b0") {
     return Object.freeze({
       ...entry,
-      imageUrl: "https://genomedna.xyz/token.png",
+      imageUrl: "/token-images/dna-verified-20261030.webp",
     }) as T;
   }
   if (provenance?.chainId === 1 &&
@@ -65,7 +65,7 @@ export function publicExplorePresentationEntryV1<T extends ExploreEntry>(
     provenance.launchId.toLowerCase() === "0xc052d82ef023a8d15097d879edd91dd1b9b2ea8131aa8ac08c5a65d558ae6a8e") {
     return Object.freeze({
       ...entry,
-      imageUrl: "https://www.someonev4.xyz/launch/ring-protected-6/token.png",
+      imageUrl: "/token-images/ring-verified-20261030.webp",
     }) as T;
   }
   // Owner-supplied artwork and social link for this verified, finalized launch.

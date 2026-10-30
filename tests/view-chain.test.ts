@@ -20,7 +20,7 @@ const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 describe("view chain", () => {
-  it("supports Base preferences while preserving the Robinhood default", () => {
+  it("preserves explicit chain preferences and uses Robinhood only as the default", () => {
     expect(DEFAULT_VIEW_CHAIN_ID).toBe(4663);
     expect(isViewChainId(1)).toBe(true);
     expect(isViewChainId(4663)).toBe(true);
@@ -30,11 +30,17 @@ describe("view chain", () => {
     expect(tryParseViewChainId("8453")).toBe(8453);
     expect(parseViewChainId("8453")).toBe(8453);
     expect(tryParseViewChainId("11155111")).toBeNull();
-    expect(parseViewChainId("1")).toBe(4663);
-    expect(parseViewChainId(1)).toBe(4663);
+    expect(parseViewChainId("1")).toBe(1);
+    expect(parseViewChainId(1)).toBe(1);
     expect(parseViewChainId("4663")).toBe(4663);
     expect(parseViewChainId(null)).toBe(4663);
     expect(parseViewChainId("invalid")).toBe(4663);
+  });
+
+  it.each([1, 4663, 8453, 999] as const)("keeps saved chain %s when navigation reads its preference", chainId => {
+    const cookie = serializeViewChainCookie(chainId);
+    const saved = cookie.split(";", 1)[0]!.split("=")[1];
+    expect(parseViewChainId(saved)).toBe(chainId);
   });
 
   it("serializes a long-lived, site-wide preference cookie", () => {

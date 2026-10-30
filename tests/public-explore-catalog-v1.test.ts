@@ -82,10 +82,10 @@ describe("public Explore catalog exclusions", () => {
       "0xc052d82ef023a8d15097d879edd91dd1b9b2ea8131aa8ac08c5a65d558ae6a8e",
     );
     expect(publicExplorePresentationEntryV1(dna).imageUrl).toBe(
-      "https://genomedna.xyz/token.png",
+      "/token-images/dna-verified-20261030.webp",
     );
     expect(publicExplorePresentationEntryV1(ring).imageUrl).toBe(
-      "https://www.someonev4.xyz/launch/ring-protected-6/token.png",
+      "/token-images/ring-verified-20261030.webp",
     );
     expect(publicExplorePresentationEntryV1({
       ...dna,

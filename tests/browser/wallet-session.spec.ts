@@ -200,38 +200,40 @@ test("a late login failure cannot replace a restored authenticated session with 
   await expectMethods(page, ["login", "linkWallet"]);
 });
 
-test("old Ethereum preferences and setter calls stay on Robinhood without wallet requests", async ({ page }) => {
+test("saved Ethereum preferences and explicit chain choices survive without wallet requests", async ({ page }) => {
   await open(page);
   await page.evaluate(() => {
     localStorage.setItem("programmable:view-chain:v2", "1");
     document.cookie = "programmable-view-chain-v2=1; Path=/";
   });
   await page.reload();
+  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
+  await page.getByRole("button", { name: "Browse Robinhood", exact: true }).click();
   await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
   await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
-  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-  expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=4663");
-  expect(await page.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBe("4663");
+  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
+  expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=1");
+  expect(await page.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBe("1");
   await expectMethods(page, []);
 });
 
-test("Robinhood stays selected when preference storage is blocked", async ({ page }) => {
+test("an explicit Ethereum choice survives when preference storage is blocked", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.__viewChainScheduling.blockPreferenceWrites());
   await page.getByRole("button", { name: "Browse Ethereum", exact: true }).click();
-  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
-  expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=4663");
+  await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("1");
+  expect(await page.evaluate(() => document.cookie)).toContain("programmable-view-chain-v2=1");
   expect(await page.evaluate(() => localStorage.getItem("programmable:view-chain:v2"))).toBeNull();
   await expectMethods(page, []);
 });
 
-for (const path of ["/launch/modules", "/token/ethereum", "/explore/robinhood"] as const) {
-  test(`${path}: legacy route entry keeps public browsing on Robinhood`, async ({ page }) => {
+for (const [path, chainId] of [["/launch/modules", 4663], ["/token/ethereum", 1], ["/explore/robinhood", 4663]] as const) {
+  test(`${path}: route entry selects its browsing chain without changing the wallet network`, async ({ page }) => {
     await open(page);
     await page.goto(origin + path + "?holdRouteEntry=1");
     await expect.poll(() => page.evaluate(() => window.__viewChainScheduling.pendingEntries())).toBe(1);
     await page.evaluate(() => window.__viewChainScheduling.releaseEntries());
-    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText("4663");
+    await expect(page.getByLabel("Selected browsing chain", { exact: true })).toHaveText(String(chainId));
     await expectMethods(page, []);
     await expect(page.getByLabel("Selected wallet network", { exact: true })).toHaveText("0x1237");
   });
