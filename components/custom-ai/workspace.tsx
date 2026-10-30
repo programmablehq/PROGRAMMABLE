@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, Square } from "lucide-react";
+import { ArrowUp, Square, X } from "lucide-react";
 import type { AIUsage, ChatMessage, ChatProgress, ChatRequest, Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
@@ -15,6 +15,8 @@ import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
 import styles from "./workspace.module.css";
 import { DraftVersions } from "./draft-versions";
 import { RequestInsights } from "./request-insights";
+import { starterIdeas } from "@/lib/custom-ai/builder-capabilities";
+import type { EditTarget } from "@/lib/custom-ai/design-edits";
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
@@ -42,6 +44,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const [draftId, setDraftId] = useState<string>();
   const [contextId, setContextId] = useState<string>();
   const [pendingChange, setPendingChange] = useState<string>();
+  const [editTarget, setEditTarget] = useState<EditTarget>();
   const [usage, setUsage] = useState<AIUsage>();
   const [previousCoin, setPreviousCoin] = useState<PreviousCoin>();
   const [phase, setPhase] = useState<ChatProgress & { type: "phase" }>({ type: "phase", phase: "thinking" });
@@ -88,10 +91,12 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
           if (Number.isSafeInteger(saved.syncBase?.revision) && saved.syncBase.revision >= 0 && typeof saved.syncBase.snapshot === "string") previousBase = saved.syncBase;
           cachedBase.current = previousBase;
           setMessages(saved.messages); setSettings(settings); setImageReceipt(saved.image);
+          if (typeof saved.input === "string" && saved.input.length <= 8000) setInput(saved.input);
           setContextId(saved.contextId); setPendingChange(saved.pendingChange);
           if (saved.draft && typeof saved.draft.source === "string") setDraft(saved.draft);
           if (typeof saved.draftId === "string") setDraftId(saved.draftId);
           retry.current = saved.retry ?? null;
+          setEditTarget(saved.editTarget ?? saved.retry?.editTarget);
           if (saved.retry?.messages?.at(-1)?.role === "user") {
             setMessages(saved.retry.messages.slice(0, -1));
             setInput(saved.retry.messages.at(-1).content);
@@ -111,6 +116,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
               setMessages(server.state.messages); setSettings(server.state.settings);
               setDraftId(server.state.draftId); setDraft(server.draft); setImageReceipt(server.state.image);
               setContextId(server.state.contextId); setPendingChange(server.state.pendingChange);
+              setEditTarget(current => current?.sourceHash === server.draft?.sourceHash ? current : undefined);
             }
             remote.current = { ready: true, revision: restored.base.revision, blocked: restored.conflict, saved: restored.base.snapshot };
             if (!restored.conflict) cachedBase.current = restored.base;
@@ -126,11 +132,11 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   }, [storageKey, localPreview, owner, restoreRevision]);
   useEffect(() => {
     if (!restored || owner === "signed-out") return;
-    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, settings, draft, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,
+    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, input, editTarget, settings, draft, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,
       // Keep the last shared version so a failed save survives a reload.
       syncBase: cachedBase.current }))
       .catch(() => setNotice("This browser could not save your draft. Keep this tab open."));
-  }, [storageKey, owner, restored, messages, settings, draft, draftId, contextId, pendingChange, imageReceipt, saveRevision]);
+  }, [storageKey, owner, restored, messages, input, editTarget, settings, draft, draftId, contextId, pendingChange, imageReceipt, saveRevision]);
 
   useEffect(() => {
     if (!restored || localPreview || busy || !remote.current.ready || remote.current.blocked) return;
@@ -176,6 +182,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       setMessages(server?.state.messages ?? []); setSettings(server?.state.settings ?? EMPTY_COIN_SETUP);
       setDraftId(server?.state.draftId); setDraft(server?.draft); setImageReceipt(server?.state.image); retry.current = null;
       setContextId(server?.state.contextId); setPendingChange(server?.state.pendingChange);
+      setEditTarget(undefined);
       setPreviewRevision(value => value + 1);
     }
     const base = studioBase(server);
@@ -211,6 +218,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     await writeDraftCache(`${storageKey}:image`, null);
     setMessages([]); setSettings(EMPTY_COIN_SETUP); setDraft(undefined); setDraftId(undefined);
     setContextId(undefined); setPendingChange(undefined); setImageReceipt(undefined); retry.current = null;
+    setEditTarget(undefined);
     setInput(""); setError(""); setNotice(""); setPreviewRevision(value => value + 1);
   }
   async function restorePrevious() {
@@ -219,6 +227,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     setMessages(previousCoin.messages); setSettings(previousCoin.settings); setDraft(previousCoin.draft);
     setDraftId(previousCoin.draftId); setContextId(previousCoin.contextId); setPendingChange(previousCoin.pendingChange);
     setImageReceipt(previousCoin.image); retry.current = null; setInput(""); setError("");
+    setEditTarget(undefined);
     setNotice("Previous coin restored."); setPreviewRevision(value => value + 1);
   }
   async function restoreVersion(version:Pick<StoredStudio,"state"|"draft">){
@@ -228,6 +237,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     setMessages(state.messages);setSettings(state.settings);setDraft(version.draft);setDraftId(state.draftId);
     setContextId(state.contextId);setPendingChange(state.pendingChange);setImageReceipt(state.image);
     retry.current=null;setInput("");setError("");setNotice("Saved rules restored.");setPreviewRevision(v=>v+1);
+    setEditTarget(undefined);
   }
   useLayoutEffect(() => {
     const resize = () => {
@@ -257,12 +267,12 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     followReply.current = true;
     setBusy(true); setError(""); setNotice(""); setMessages(next); setInput(""); setPendingChange(content); setPhase({ type: "phase", phase: "thinking" });
     try {
-      const payload = { intent: "chat" as const, messages: conversationWindow(next), coin: settings, ...(draftId ? { draftId } : {}), ...(contextId ? { contextId } : {}) };
+      const payload = { intent: "chat" as const, messages: conversationWindow(next), coin: settings, ...(draftId ? { draftId } : {}), ...(contextId ? { contextId } : {}), ...(editTarget ? { editTarget } : {}) };
       const previousRequest = retry.current;
       const request: ChatRequest = previousRequest && JSON.stringify({ ...previousRequest, id: undefined }) === JSON.stringify(payload)
         ? previousRequest : { ...payload, id: crypto.randomUUID() };
       retry.current = request;
-      await writeDraftCache(storageKey, JSON.stringify({ version: 1, messages: next, settings, draft, draftId, contextId,
+      await writeDraftCache(storageKey, JSON.stringify({ version: 1, messages: next, input: "", editTarget, settings, draft, draftId, contextId,
         pendingChange: content, image: imageReceipt, retry: request, syncBase: cachedBase.current }));
       const data = await sendAIChat(request, headers, controller.signal, event => {
         if (event.type === "reply") setRevealing(event.text);
@@ -271,6 +281,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       if (typeof data.reply !== "string") throw new Error("The reply did not arrive. Try again.");
       retry.current = null;
       if (data.draft) { setDraft(data.draft); setDraftId(request.id); }
+      if (data.change === "applied") setEditTarget(undefined);
       if (data.setupPatch) { changeSettings(data.setupPatch); setChatRevision(value => value + 1); }
       setContextId(request.id);
       setPendingChange(data.change === "applied" ? undefined : data.change === "blocked" ? content : previousPending);
@@ -299,7 +310,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     <section className={styles.conversation} aria-label="Build your coin">
       <div className={styles.chatToolbar}>
         <button type="button" disabled={busy || !restored || launchLocked || !messages.length} onClick={() => {
-          setMessages([]); setInput(""); retry.current = null; setError("");
+          setMessages([]); setInput(""); setEditTarget(undefined); retry.current = null; setError("");
           setNotice("New conversation. Your saved rules and coin details are kept."); textarea.current?.focus();
         }}>New conversation</button>
         <details className={styles.usage}><summary>Coin</summary><div>
@@ -324,7 +335,14 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
           const element = event.currentTarget;
           followReply.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72;
         }}>
-        {!messages.length && !busy && <div className={styles.empty}><h2>What are we building?</h2></div>}
+        {!messages.length && !busy && <div className={styles.empty}>
+          <h2>What are we building?</h2>
+          <p>Describe your idea. Shape the rules here, then launch from your wallet.</p>
+          <div className={styles.starterIdeas} aria-label="Ideas to get started">
+            {starterIdeas.map(idea => <button type="button" key={idea.title} disabled={!restored || launchLocked}
+              onClick={() => { setInput(idea.prompt); textarea.current?.focus(); }}>{idea.title}<ArrowUp size={15} aria-hidden="true" /></button>)}
+          </div>
+        </div>}
         {messages.map((message, index) => <article className={styles.message} key={index} data-role={message.role}>
           <span className={styles.srOnly}>{message.role === "user" ? "You" : "Custom AI"}</span>
           <div className={styles.messageText}>{message.content}</div>
@@ -355,6 +373,10 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       </div>}
       {error && <p className={styles.error} role="alert" id="custom-ai-error">{error}</p>}
 
+      {editTarget && <div className={styles.editScope} role="status">
+        <span>Editing: {draft?.composable?.spec.requirements.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
+        <button type="button" aria-label="Edit the whole design instead" disabled={busy || launchLocked} onClick={() => setEditTarget(undefined)}><X size={16} aria-hidden="true" /></button>
+      </div>}
       <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send(); }}>
         <label htmlFor="custom-ai-message" className={styles.srOnly}>Describe your coin or ask a question</label>
         <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={8000} readOnly={busy || !restored || launchLocked}
@@ -383,7 +405,15 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     <CustomAILaunchPreview key={previewRevision} draft={draft} disabled={busy || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}
       imageReceipt={imageReceipt} onImageReceipt={setImageReceipt} pendingChange={busy ? undefined : pendingChange}
-      onKeepRules={() => { setPendingChange(undefined); setNotice("Keeping the previous rules."); }}
+      onKeepRules={() => {
+        setPendingChange(undefined); setContextId(draftId); setEditTarget(undefined);
+        retry.current = null; setNotice("Keeping the previous rules.");
+      }}
+      onEditRule={requirementId => {
+        if (!draft || busy || launchLocked) return;
+        setEditTarget({ sourceHash: draft.sourceHash, requirementId });
+        textarea.current?.focus();
+      }}
       onStartAnother={() => { void startAnother().catch(() => setError("The previous coin could not be saved on this device. Try again.")); }} />
     </div>
   </div>;

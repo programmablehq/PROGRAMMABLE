@@ -1,8 +1,29 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
+import { GET } from "../app/api/custom-ai/capabilities/route";
 import { defineTool } from "../lib/custom-ai/capabilities/definition.server";
 import { dispatchTool } from "../lib/custom-ai/capabilities/dispatch.server";
 import { capabilityMetadata, executionProfile, assertExecutionProfile } from "../lib/custom-ai/capabilities/registry.server";
+
+afterEach(() => vi.unstubAllEnvs());
+describe("Custom AI capability discovery", () => {
+  it("does not expose a disabled product as available", () => {
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED", "false");
+    expect(GET().status).toBe(404);
+  });
+  it("separates design support from active execution and costs no model request", async () => {
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_EVENTS_ENABLED", "false");vi.stubEnv("CUSTOM_AI_PROGRAMS_ENABLED", "true");
+    const fetcher=vi.spyOn(globalThis,"fetch");
+    const response=GET(), body=await response.json();
+    expect(body.chains).toEqual([1,4663]);
+    expect(body.capabilities.find((value:{id:string})=>value.id==="external-events").state).toBe("design-only");
+    expect(body.capabilities.find((value:{id:string})=>value.id==="fee-programs").state).toBe("requires-live-check");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(fetcher).not.toHaveBeenCalled();fetcher.mockRestore();
+  });
+});
+
 const context = () => ({ owner: "test", chainId: 1 as const, allowWeb: false, budget: { remaining: 2 } });
 const hooks = defineTool("search_hooks", "Find hooks in a verified catalog", async () => ({ status: "current", facts: ["example"], sources: [] }),
   () => true, { type: "object", properties: { q: { type: "string", minLength: 1 } }, required: ["q"], additionalProperties: false });

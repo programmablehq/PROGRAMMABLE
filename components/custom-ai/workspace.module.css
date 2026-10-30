@@ -4,6 +4,19 @@
 .transcript { flex: 1; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; padding: 12px 8px 24px; }
 .empty { min-height: 100%; display: grid; align-content: center; text-align: center; padding: 24px; }
 .empty h2 { margin: 0; font-size: clamp(25px, 3vw, 30px); line-height: 1.25; font-weight: 400; letter-spacing: -.035em; text-wrap: balance; }
+.empty > p { margin: 16px auto 24px; max-width: 32ch; color: #b8b4ad; font-size: 15px; line-height: 1.6; }
+.starterIdeas { display: grid; gap: 8px; width: min(100%, 360px); margin-inline: auto; }
+.starterIdeas button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 12px 16px; border: 1px solid #343431; border-radius: 12px; background: #171716; color: #e2ddd4; font: inherit; font-size: 14px; text-align: start; cursor: pointer; }
+.starterIdeas button:hover { background: #242320; border-color: #77736b; }
+.starterIdeas svg { flex-shrink: 0; transform: rotate(45deg); }
+.editScope { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; padding: 4px 4px 4px 12px; border-inline-start: 2px solid #aaa69f; color: #c7c2ba; font-size: 13px; line-height: 1.5; }
+.editScope span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.editScope button { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: #c7c2ba; cursor: pointer; }
+.editScope button:hover { background: #242320; }
+.ruleReview .ruleEditList { padding: 0; list-style: none; }
+.ruleEditList li { display: flex; align-items: center; gap: 12px; padding-block: 8px; border-bottom: 1px solid #343431; }
+.ruleEditList span { flex: 1; }
+.ruleEditList button { min-width: 44px; min-height: 44px; padding: 4px; background: transparent; color: #ede7dc; border: 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .message { width: fit-content; max-width: 100%; margin-block: 0 28px; }
 .message:last-child { margin-bottom: 0; }
 .message[data-role="user"] { max-width: min(85%, 580px); margin-inline-start: auto; padding: 11px 16px; border-radius: 18px 18px 5px 18px; background: #20201e; }
@@ -104,7 +117,7 @@
   .transcript { padding-inline: 4px; }
   .message[data-role="user"] { max-width: 91%; }
 }
-.chatToolbar { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 0 8px 8px; border-bottom: 1px solid #343431; }
+.chatToolbar { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0 16px; padding: 0 8px 8px; border-bottom: 1px solid #343431; }
 .chatToolbar button, .textButton { min-height: 40px; padding: 4px 0; border: 0; background: transparent; color: #c7c2ba; font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
 .usage { position: relative; font-size: 13px; color: #c7c2ba; }
 .usage summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; }
