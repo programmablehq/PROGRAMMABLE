@@ -49,7 +49,7 @@ export default function HyperEvmCustomLaunchGuide() {
       <p>Use the public <a href="https://api.programmable.market/v4/chains/999/finalized-custom-launches">finalized launch feed</a>. Follow <code>nextCursor</code> until null, persist records before advancing the cursor, and resume with overlap and deduplication. Identify launches by chain, router and router launch ID; identify coins by chain and token address.</p>
       <p>Verify receipts, launch stamps and pool initialization against the HyperEVM bindings and two independent providers. Their common finalized checkpoint must cover the launch block. HyperEVM uses HyperBFT finality. Keep source and finality evidence, and enrich prices and artwork separately.</p>
       <p>Providers can count HyperCore system transactions differently. Compare the transaction hash, canonical block and ordered event contents across providers, and retain each provider&apos;s original transaction and log indices.</p>
-      <p>The <a href="/api/explore/hyperevm?page=1&pageSize=50&sort=newest">Explore discovery feed</a> contains the website listing. The <a href="/developers/hyperevm-custom-launch-api-v1.md#index-hyperevm-launches">integration reference</a> describes the complete finalized source and exact contract bindings.</p>
+      <p>The <a href="https://programmable.market/api/explore/hyperevm?page=1&pageSize=50&sort=newest">Explore discovery feed</a> contains the website listing. The <a href="/developers/hyperevm-custom-launch-api-v1.md#index-hyperevm-launches">integration reference</a> describes the complete finalized source and exact contract bindings.</p>
     </section>
   </DocsShell>;
 }

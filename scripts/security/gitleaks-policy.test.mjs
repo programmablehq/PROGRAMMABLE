@@ -479,6 +479,20 @@ for (const path of [
   assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
 });
 
+for (const [path, prefix, credentialPrefix] of [
+  ["docs/operations/releases/custom-launch-v4.3.0/hyperevm-live-acceptance.json", '"token":', '"apiKey":'],
+  ["tests/explore-public-visibility.test.ts", "const tokenAddress =", "const apiKey ="],
+]) test(`HyperEVM public token exception is limited to its exact field and path in ${path}`, t => {
+  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  const line = source.split("\n").find(value => value.trimStart().startsWith(prefix));
+  assert.ok(line);
+  assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+  assertFiles(scan(t, { [path]: line.replace(/0x[0-9a-fA-F]{40}/, material) }, { raw: true }), [path]);
+  assertFiles(scan(t, { [path]: line.replace(prefix, credentialPrefix) }, { raw: true }), [path]);
+  assertFiles(scan(t, { [path]: `${line} const apiKey = "${material}";` }, { raw: true }), [path], 2);
+  assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+});
+
 test("Custom AI source hash exceptions retain credential and path boundaries", t => {
   const paths = [
     "contracts/spec/custom-ai/verification-bundle/manifest.json",
