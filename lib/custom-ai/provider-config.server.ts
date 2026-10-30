@@ -14,3 +14,8 @@ export function researchAvailable() {
   const provider = configuredProvider();
   return Boolean(provider.key && (provider.id === "anthropic" || /^[a-zA-Z0-9._:/-]{1,100}$/.test(process.env.CUSTOM_AI_SURPLUS_WEB_SEARCH_MODEL ?? "")));
 }
+
+export function assertModelConnection() {
+  const provider = configuredProvider();
+  if (!provider.key?.trim()) throw new CustomAIError("configuration", "The AI connection is not configured yet. Your draft is saved.", 503);
+}
