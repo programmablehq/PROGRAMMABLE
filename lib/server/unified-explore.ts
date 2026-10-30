@@ -18,7 +18,7 @@ import { exploreIdentityKey, selectUnifiedExplorePage } from "@/lib/unified-expl
 import { exploreChainFilter, type RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
 import { readConfirmingEthereumLaunches } from "./confirming-launches";
 import { PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1 } from "@/lib/public-explore-catalog-v1";
-import { isPublicExploreIdentityV1 } from "@/lib/explore-public-visibility";
+import { isVisibleExploreQueryIdentityV1 } from "@/lib/explore-public-visibility";
 import { liveLaunchObservations } from "@/lib/confirming-launches";
 import { readRecentFoundationLaunches } from "./module-foundation/recent-launch-store";
 import { readApprovedLaunchPresentations } from "./approved-launch-presentation";
@@ -57,29 +57,29 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const [[rh, rhMarkets], [eth, ethMarkets], [base, baseMarkets], [hyperevm, hyperMarkets]] = await Promise.all([
     (wants(4663) ? dependencies.robinhood() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, items: [], sourceEvidence: null })).catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], sourceEvidence: null })).then(catalog => {
       for (const row of catalog.items) catalogSymbols.set(exploreIdentityKey({ chainId: 4663, tokenAddress: row.tokenAddress }), row.symbol);
-      return { ...catalog, items: catalog.items.filter(row => owned(row.creator)) };
+      return { ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 4663, query)) };
     }).then(async catalog => [catalog,
       marketRanked && catalog.items.length ? await dependencies.robinhoodMarkets(catalog.items).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>(),
     ] as const),
     (wants(1) ? dependencies.ethereum() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, entries: [], sourceEvidence: null })).catch(() => ({ status: "unavailable" as const, updatedAt: null, entries: [], sourceEvidence: null })).then(catalog => {
       for (const entry of catalog.entries) catalogSymbols.set(exploreIdentityKey({ chainId: 1, tokenAddress: entry.tokenAddress }), entry.symbol);
-      return { ...catalog, entries: catalog.entries.filter(entry => owned(entry.creatorAddress)) };
+      return { ...catalog, entries: catalog.entries.filter(entry => owned(entry.creatorAddress) && isVisibleExploreQueryIdentityV1(entry, 1, query)) };
     }).then(async catalog => [catalog,
       marketRanked && catalog.entries.length ? await dependencies.ethereumMarkets(catalog.entries, 1).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>(),
     ] as const),
     (wants(8453) && dependencies.base ? dependencies.base() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
       .catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
-      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator)) }))
+      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 8453, query)) }))
       .then(async catalog => [catalog, marketRanked && catalog.items.length ? await dependencies.ethereumMarkets(catalog.items, 8453)
         .catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
     (wants(999) && dependencies.hyperevm ? dependencies.hyperevm() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
       .catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
-      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator)) }))
+      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 999, query)) }))
       .then(async catalog => [catalog, marketRanked && catalog.items.length ? await dependencies.ethereumMarkets(catalog.items, 999)
         .catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
   ]);
   const ai = await aiRead;
-  const aiRows = ai.items.filter(row => owned(row.creator) && isPublicExploreIdentityV1(row,row.chainId));
+  const aiRows = ai.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row,row.chainId,query));
   const aiMetadata = new Map(aiRows.map(row=>[exploreIdentityKey(row),row]));
   const sources = { robinhood: rh.status, ethereum: eth.status, base: base.status, hyperevm: hyperevm.status, customAI: ai.status };
   const activeSources = [wants(4663) ? rh : null, wants(1) ? eth : null,
@@ -92,9 +92,9 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
       : available.some(source => source.status === "syncing") ? "syncing" as const : "ready" as const;
   const updatedAt = available.flatMap(source => source.updatedAt ? [source.updatedAt] : [])
     .sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
-  const rhRows = rh.items.filter(row => isPublicExploreIdentityV1(row, 4663)).map(row => ({ ...row, chainId: 4663 as const,
+  const rhRows = rh.items.filter(row => isVisibleExploreQueryIdentityV1(row, 4663, query)).map(row => ({ ...row, chainId: 4663 as const,
     mode: isRobinhoodModuleSourceKind(row.sourceKind) ? "module" as const : "custom" as const }));
-  const ethRows = eth.entries.filter(entry => isPublicExploreIdentityV1(entry, 1)).map(entry => {
+  const ethRows = eth.entries.filter(entry => isVisibleExploreQueryIdentityV1(entry, 1, query)).map(entry => {
     const stamp = entry.launchStampProvenance;
     const source = owner ? ethereumModuleSourceForStamp(entry) : null;
     return {
@@ -113,8 +113,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     } } : {}),
     ...ethereumPairPresentation(entry),
   }; });
-  const baseRows = base.items.filter(row => isPublicExploreIdentityV1(row, 8453));
-  const hyperRows = hyperevm.items.filter(row => isPublicExploreIdentityV1(row, 999));
+  const baseRows = base.items.filter(row => isVisibleExploreQueryIdentityV1(row, 8453, query));
+  const hyperRows = hyperevm.items.filter(row => isVisibleExploreQueryIdentityV1(row, 999, query));
   for (const row of [...baseRows, ...hyperRows]) catalogSymbols.set(exploreIdentityKey(row), row.symbol);
   const markets = new Map<string, RobinhoodCoinMarket>([
     ...[...rhMarkets].map(([address, market]) => [`4663:${address}`, market] as const),
@@ -128,7 +128,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const recentRows = recent.map(item => ({ ...item.row, chainId: item.chainId, mode: "module" as const,
     category: "custom" as const, confirmation: "confirmed" as const }));
   const known = new Set([...indexed, ...recentRows.map(exploreIdentityKey)]);
-  const confirming = liveLaunchObservations(await observations).filter(row => wants(1) && owned(row.creator) && !known.has(exploreIdentityKey(row)) && isPublicExploreIdentityV1(row, 1)
+  const confirming = liveLaunchObservations(await observations).filter(row => wants(1) && owned(row.creator) && !known.has(exploreIdentityKey(row)) && isVisibleExploreQueryIdentityV1(row, 1, query)
     && !PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1.some(hidden => hidden.tokenAddress.toLowerCase() === row.tokenAddress.toLowerCase() && hidden.launchId.toLowerCase() === row.launchId.toLowerCase()));
   // Receipt-backed launches need Codex data immediately too, not only after
   // the historical catalog catches up. Membership still comes from receipts.

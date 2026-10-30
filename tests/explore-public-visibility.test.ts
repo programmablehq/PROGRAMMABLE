@@ -17,6 +17,7 @@ import { PROGRAMMABLE_LAUNCH_STAMP_MANIFEST } from
   "../components/launch-stamp-docs-contract";
 import {
   isPublicExploreIdentityV1,
+  isVisibleExploreQueryIdentityV1,
   NON_PUBLIC_EXPLORE_IDENTITIES_V1,
   OWNER_HIDDEN_EXPLORE_IDENTITIES_V1,
 } from "../lib/explore-public-visibility";
@@ -26,6 +27,15 @@ function sorted(values: readonly string[]) {
 }
 
 describe("public Explore visibility", () => {
+  it("keeps release canaries out of discovery while preserving exact-address evidence lookup", () => {
+    const tokenAddress = "0xbf4c2886705a3a88b63bf633512703c346e980cb";
+    for (const query of ["", "PMHYPE31", tokenAddress.slice(0, -1)]) {
+      expect(isVisibleExploreQueryIdentityV1({ tokenAddress }, 999, query)).toBe(false);
+    }
+    expect(isVisibleExploreQueryIdentityV1({ tokenAddress }, 999, tokenAddress.toUpperCase())).toBe(true);
+    expect(isVisibleExploreQueryIdentityV1({ tokenAddress }, 999, "0x1111111111111111111111111111111111111111")).toBe(false);
+    expect(isPublicExploreIdentityV1({ tokenAddress }, 8453)).toBe(true);
+  });
   it("binds every excluded token to canonical repository canary evidence", () => {
     const evidencedCanaryTokens = [
       classicV3Release.lifecycleEvidence.canaryToken,

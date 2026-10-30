@@ -15,7 +15,7 @@ Available launch paths depend on the current API capabilities and the contracts 
 
 ## Fees and liquidity
 
-New Custom Launches on Ethereum Mainnet and Robinhood use a 0.3% Programmable platform fee. Project and LP fees are separate, and earlier contracts retain their recorded rates. Your contracts define the project's fees, recipients and liquidity model. An ordinary Uniswap pool needs a funded liquidity position. Projects with their own reserve or settlement logic must provide the assets and mechanisms that design needs.
+New Custom Launches on Ethereum Mainnet, Robinhood, Base and HyperEVM use a 0.3% Programmable platform fee. Project and LP fees are separate, and earlier contracts retain their recorded rates. Your contracts define the project's fees, recipients and liquidity model. An ordinary Uniswap pool needs a funded liquidity position. Projects with their own reserve or settlement logic must provide the assets and mechanisms that design needs.
 
 [Fees and revenue](../economics.md#custom-launches) explains how Programmable's platform fees relate to project and pool fees.
 

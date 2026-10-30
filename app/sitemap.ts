@@ -29,6 +29,7 @@ const PUBLIC_ROUTES = [
   "/docs/developers",
   "/docs/developers/custom-launch",
   "/docs/developers/custom-launch-quickstart",
+  "/developer-reference/hyperevm-custom-launch",
   "/docs/developers/verify",
   "/docs/developers/indexing",
   "/docs/developers/machine-readable",

@@ -108,6 +108,16 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/docs/developers/hyperevm-custom-launch",
+        destination: "/developer-reference/hyperevm-custom-launch",
+        permanent: false,
+      },
+      {
+        source: "/docs/developers/custom-launch-quickstart/hyperevm-custom-launch",
+        destination: "/developer-reference/hyperevm-custom-launch",
+        permanent: false,
+      },
+      {
         source: "/docs/models/custom-ai",
         destination: "/developer-reference/custom-ai",
         permanent: false,

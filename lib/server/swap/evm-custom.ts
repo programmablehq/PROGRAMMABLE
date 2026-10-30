@@ -73,21 +73,62 @@ const agree = async (rpcs: readonly [
   Rpc
 ], method: string, params: readonly unknown[]) => {
   const values = await Promise.all(rpcs.map(r => r(method, params)));
-  if (canonicalBrowserJsonV2(values[0]) !== canonicalBrowserJsonV2(values[1]))
+  const comparable = values.map(value => {
+    if (method === "eth_getTransactionReceipt" && value !== null) return receiptForConsensus(value);
+    if (method !== "eth_getBlockByNumber" || value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    // HyperEVM providers serialize the same block differently. `size` is
+    // transport metadata; the block hash and all remaining fields must agree.
+    const block = { ...value as Record<string, unknown> };
+    delete block.size;
+    return block;
+  });
+  if (canonicalBrowserJsonV2(comparable[0]) !== canonicalBrowserJsonV2(comparable[1]))
     throw new EvmSwapError("Chain data is updating. Try again shortly.");
   return values[0];
 };
-async function checkpoint(rpcs: readonly [
+export { agree as readHyperEvmRpcAgreement };
+
+function receiptForConsensus(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new EvmSwapError("Invalid HyperEVM receipt.");
+  const receipt = { ...value as Record<string, unknown> };
+  if (![receipt.transactionHash, receipt.blockHash].every(hash => typeof hash === "string" && /^0x[0-9a-fA-F]{64}$/.test(hash))) {
+    throw new EvmSwapError("Invalid HyperEVM receipt identity.");
+  }
+  if (!Array.isArray(receipt.logs)) throw new EvmSwapError("Invalid HyperEVM receipt logs.");
+  let previousIndex = -1n;
+  const logs = receipt.logs.map(value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new EvmSwapError("Invalid HyperEVM receipt logs.");
+    const log = { ...value as Record<string, unknown> }, index = quantity(log.logIndex);
+    if (log.transactionHash !== receipt.transactionHash || log.blockHash !== receipt.blockHash
+      || quantity(log.blockNumber) !== quantity(receipt.blockNumber)
+      || quantity(log.transactionIndex) !== quantity(receipt.transactionIndex)
+      || index <= previousIndex || log.removed !== false
+      || typeof log.address !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(log.address)
+      || typeof log.data !== "string" || !/^0x(?:[0-9a-fA-F]{2})*$/.test(log.data)
+      || !Array.isArray(log.topics) || log.topics.length > 4
+      || log.topics.some(topic => typeof topic !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(topic))) {
+      throw new EvmSwapError("Invalid HyperEVM receipt logs.");
+    }
+    previousIndex = index;
+    delete log.transactionIndex;
+    delete log.logIndex;
+    return log;
+  });
+  delete receipt.transactionIndex;
+  return { ...receipt, logs };
+}
+export async function readHyperEvmSwapCheckpoint(rpcs: readonly [
   Rpc,
   Rpc
 ]) {
   const heads = await Promise.all(rpcs.map(r => r("eth_blockNumber", []).then(quantity)));
   const number = heads[0] < heads[1] ? heads[0] : heads[1];
   const raw = await agree(rpcs, "eth_getBlockByNumber", [toHex(number), false]) as {
+    number: Hex;
     hash: Hex;
     timestamp: Hex;
   };
-  if (!raw?.hash || Date.now() / 1000 - Number(quantity(raw.timestamp)) > 120)
+  if (!raw?.hash || quantity(raw.number) !== number || Date.now() / 1000 - Number(quantity(raw.timestamp)) > 120)
     throw new EvmSwapError("HyperEVM data is temporarily stale.");
   return { number, hash: hex(raw.hash) };
 }
@@ -173,7 +214,7 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
   const work = (async () => {
     const rpcs = dependencies.rpcs ?? hyperEvmSwapRpcs();
     const descriptor = await readHyperEvmSwapDescriptor(request.token, rpcs, dependencies.readLaunch);
-    const block = await checkpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true }, p = EVM_SWAP_PROTOCOLS[999];
+    const block = await readHyperEvmSwapCheckpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true }, p = EVM_SWAP_PROTOCOLS[999];
     const inputToken = request.buy ? descriptor.quoteAsset : descriptor.token, output = request.buy ? descriptor.token : descriptor.quoteAsset;
     // The same caller and balances are used; only quote helper code and transient approvals are overridden.
     const tx = buildEvmCustomSwap(descriptor, request, "0");
@@ -216,7 +257,7 @@ export async function prepareHyperEvmFeeClaim(input: unknown) {
   };
   if (!q || Object.keys(q).sort().join() !== "chainId,owner,recipientKind,token,vaultKind" || q.chainId !== 999 || ![q.owner, q.token].every(v => typeof v === "string" && /^0x[0-9a-f]{40}$/i.test(v)) || !["fees", "opening"].includes(q.vaultKind) || !["creator", "platform"].includes(q.recipientKind))
     throw new EvmSwapError("Invalid fee claim.", 400);
-  const rpcs = hyperEvmSwapRpcs(), descriptor = await readHyperEvmSwapDescriptor(q.token, rpcs), block = await checkpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true };
+  const rpcs = hyperEvmSwapRpcs(), descriptor = await readHyperEvmSwapDescriptor(q.token, rpcs), block = await readHyperEvmSwapCheckpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true };
   const fn = q.vaultKind === "fees" ? "feeVault" : "openingTaxVault";
   const vault = decodeFunctionResult({ abi: HOOK_FEES, functionName: fn, data: await call(rpcs, descriptor.poolKey.hooks, encodeFunctionData({ abi: HOOK_FEES, functionName: fn }), reference) });
   const read = async (fn: "kernel" | "poolManager" | "creatorRecipient" | "PLATFORM_RECIPIENT" | "creatorAccrued" | "platformAccrued") => decodeFunctionResult({ abi: EVM_FEE_VAULT_ABI, functionName: fn, data: await call(rpcs, vault, encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: fn }), reference) });

@@ -65,6 +65,11 @@ const NON_PUBLIC_TOKEN_ADDRESSES = new Set(
 // Owner-requested discovery exclusions are separate from release canaries.
 // A matching address on another chain and future verified launches stay visible.
 export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
+  Object.freeze({ chainId: 4663, identity: "0x8bf49ba3e70d4744535f5f490cdae21edc78dc17" }), // PMHRC30 HyperEVM receipt-coordinate verification
+  Object.freeze({ chainId: 4663, identity: "0x50ee2570499403299480ed4e99bc8a18e752cfff" }), // PMHFR30 finalized-head read verification
+  Object.freeze({ chainId: 4663, identity: "0x3719928ae0a720c0a233ca02d3527663f4239925" }), // PMHAPI29 runtime release verification
+  Object.freeze({ chainId: 4663, identity: "0xd10bc56cf60a3739d219114b1532d9f8d77dbb8a" }), // PMHAP30 runtime release verification
+  Object.freeze({ chainId: 999, identity: "0xbf4c2886705a3a88b63bf633512703c346e980cb" }), // PMHYPE31 HyperEVM release verification
   Object.freeze({ chainId: 4663, identity: "0x9396d34417f19acd4c6de6c260b48201a6e4f8cf" }), // Owned public-metadata release check; review 03f8757a-7ec0-4a5b-bfcb-bc72b869f28a
   Object.freeze({ chainId: 4663, identity: "0x5ed37df5710e20baf324519266390f7653665759" }), // Owned review-read performance release check; review 7ffe05e7-6cf2-4985-ba33-cd684c02158d
   Object.freeze({ chainId: 4663, identity: "0xb9338137dcc772944c4e357441d55a4bce49b49b" }), // Owned reconciliation release check; review addee5f6-aea1-4ced-8b41-3d01233ec4b7
@@ -198,4 +203,16 @@ export function isPublicExploreIdentityV1(
   if (OWNER_HIDDEN_EXPLORE_IDENTITIES_V1.some(hidden => hidden.chainId === chainId
     && hidden.identity === identity.tokenAddress?.toLowerCase())) return false;
   return true;
+}
+
+/** An explicit full-address lookup preserves access to public release evidence. */
+export function isVisibleExploreQueryIdentityV1(
+  identity: Readonly<{ tokenAddress?: string }>,
+  chainId: number,
+  query = "",
+): boolean {
+  const address = query.trim();
+  return isPublicExploreIdentityV1(identity, chainId)
+    || (/^0x[0-9a-f]{40}$/i.test(address)
+      && identity.tokenAddress?.toLowerCase() === address.toLowerCase());
 }

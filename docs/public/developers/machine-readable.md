@@ -16,6 +16,8 @@ Start with [product discovery](https://programmable.market/.well-known/programma
 | Historical separate token and hook on Robinhood | V4 profile selected by discovery; retain its read and recovery interfaces |
 | Shared token and hook on Robinhood | [MultiRole V2 capabilities](https://api.programmable.market/v4/chains/4663/multi-role-custom-launches/capabilities) |
 | Existing Ethereum integration | V3 profile selected by discovery |
+| Custom Launch on Base | [Base capabilities](https://api.programmable.market/v4/chains/8453/capabilities), [readiness](https://api.programmable.market/v4/chains/8453/readiness) and [OpenAPI](https://programmable.market/openapi/base-custom-launch-v1.json) |
+| Custom Launch on HyperEVM | [HyperEVM capabilities](https://api.programmable.market/v4/chains/999/capabilities), [readiness](https://api.programmable.market/v4/chains/999/readiness) and [OpenAPI](https://programmable.market/openapi/hyperevm-custom-launch-v1.json) |
 
 The [Custom Launch guide](custom-launch.md) explains authentication, preparation, wallet confirmation and errors. The [versioned agent reference](https://programmable.market/developers/custom-launch-api-v1.md) retains exact commands and compatibility details.
 
@@ -43,6 +45,6 @@ The [OpenAPI specification](../.gitbook/assets/programmable-v2.yaml) defines the
 
 ## Source coverage
 
-For all four launch variants, start with [Index launches](indexing.md). The normalized Developer API is not a complete substitute for the chain-specific Module Mode and Custom Launch sources. Inspect its status, coverage and manifest extensions before relying on a result.
+For every network and launch variant, start with [Index launches](indexing.md). The normalized Developer API is not a complete substitute for the chain-specific Module Mode and Custom Launch sources. Inspect its status, coverage and manifest extensions before relying on a result.
 
 Ethereum Router indexing must include `launchStampRouter` and `extensions["programmable/launch-stamp-router-generations-v1"].routers[]`. The `programmable/module-discovery-v1` extension links to module sources and states whether the normalized feed covers them. Robinhood Custom Plans use the [finalized projection feed](https://api.programmable.market/v4/chains/4663/finalized-launch-projections) plus the historical adapters in the [Robinhood guide](robinhood-terminal-indexer.md).

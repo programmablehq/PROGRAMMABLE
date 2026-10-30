@@ -19,6 +19,8 @@ For Robinhood V4, `publicWrites`, `publicAuthorization` and `releaseReady` must 
 
 The [Custom Launch quickstart](developers/custom-launch-quickstart.md) covers the workflow. The [API reference](developers/custom-launch.md) explains states and error responses.
 
+For Base (`8453`) and HyperEVM (`999`), read `/v4/chains/{chainId}/readiness` and `/v4/chains/{chainId}/capabilities` on `https://api.programmable.market`. Public launching requires `mode: "active"`, `ready: true` and `publicLaunchAuthorized: true`. A `canary` release is restricted to the release operator. Use the [Base](developers/base-custom-launch.md) or [HyperEVM](developers/hyperevm-custom-launch.md) guide for the correct wallet currency, source binding and finality rules.
+
 General Custom Launch Plans have a separate operation status at `/v4/chains/4663/custom-launch-capabilities`. Check `availability.operations.create.state`; preflight and reads may be active while creation reports `disabled`. `PLAN_OPERATION_DISABLED` requires a platform release change, not a different API key.
 
 ## Delays and missing data

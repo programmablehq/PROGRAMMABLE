@@ -8,6 +8,8 @@ Custom Launch deploys your token, hook and supporting contracts through the Prog
 
 Start with [Launch through the API](custom-launch-quickstart.md) for new Robinhood projects. The [Custom Launch Plan guide](https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md) contains the live schema and agent instructions. The [versioned reference](https://programmable.market/developers/custom-launch-api-v1.md) and profile-based V4 details below remain for existing launch history and recovery.
 
+For a new project on another network, use its own guide: [Ethereum](https://programmable.market/developers/custom-launch-api-v1.md), [Base](base-custom-launch.md) or [HyperEVM](hyperevm-custom-launch.md). Their current schemas and deployment bindings are separate from the Robinhood history below.
+
 ## Choose the request interface
 
 New Robinhood launches use the open Custom Launch Plan. Read `GET /v4/chains/4663/custom-launch-capabilities` and require `availability.operations.create.state: "active"` before creating one. Its schema and agent instructions are published under `/v4/chains/4663/custom-launch-contract/`.

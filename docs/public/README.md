@@ -5,7 +5,7 @@ coverY: 0
 
 # Programmable
 
-Programmable is a platform for launching tokens and custom projects on Uniswap v4. It provides a coin builder, launch APIs and public launch records that other apps can index. Module Mode and Custom Launch support Ethereum Mainnet and Robinhood Chain. Check the selected network's live availability before preparing a launch.
+Programmable is a platform for launching tokens and custom projects on Uniswap v4. It provides a coin builder, launch APIs and public launch records that other apps can index. Module Mode supports Ethereum Mainnet and Robinhood Chain. Custom Launch also supports Base and HyperEVM. Check the selected network's live availability before preparing a launch.
 
 ## Two ways to launch
 

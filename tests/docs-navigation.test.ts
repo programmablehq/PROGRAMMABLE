@@ -291,6 +291,11 @@ describe("Docs navigation state", () => {
     expect(getDocsSearchResults("stock paired")[0]?.title).toBe("Stock-Paired");
     expect(classicResults[0]?.title).toBe("Classic");
     expect(customResults[0]?.title).toBe("Custom hooks");
+    for (const query of ["HyperEVM", "HYPE", "999"]) {
+      expect(getDocsSearchResults(query)[0]?.href).toBe(
+        "/developer-reference/hyperevm-custom-launch",
+      );
+    }
     expect(getDocsSearchResults("prediction")).toEqual([]);
     expect(
       customResults.some(

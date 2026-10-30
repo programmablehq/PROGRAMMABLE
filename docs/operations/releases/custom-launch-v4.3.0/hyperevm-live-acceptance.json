@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "programmable.hyperevm-live-acceptance.v1",
+  "status": "passed",
+  "chainId": "999",
+  "releaseId": "sha256:9bc42027b45d8af9cb145946dc1b3c31260bde61dbf9799702071f036866b250",
+  "requestId": "7c731b34-579a-4fe9-8d0e-a2c296a4a799",
+  "launchId": "7c731b34-579a-4fe9-8d0e-a2c296a4a799",
+  "token": "0xBf4c2886705a3a88B63bF633512703c346E980CB",
+  "artifactHash": "sha256:1a156f8785bb253e406f7a9e54d03cdb18be3257af1e8c6043a08f28d5b0f49e",
+  "launchTransactionHash": "0xb4fa869c921209cf816908fc7bb63974c32ce4af467f7adf4343dfe76e2cc690",
+  "buyTransactionHash": "0x188b4fd57d98525a50bece0cc34191caef090afe40089cc39faa89e3372b5d4a",
+  "sellTransactionHash": "0x0fecfa5db08f3504fe653d1d511059ac76ee30bdde4876610d01160c275f4b0b",
+  "openingBuyTransactionHash": "0xc74b6d8d6f5bdfbbb0e10991c000ddf2e4b1ecfa8fa8f78976814e55ccb86937",
+  "platformFeesVerified": true,
+  "openingTaxVerified": true,
+  "sourcesVerified": true,
+  "treasury": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+  "claims": [
+    {
+      "label": "hyperevm-live-opening-tax-claim",
+      "vault": "0x714b2cE9EA259d230A297D14102fe1eE1C1FdbA9",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "amount": "78400000000000",
+      "transactionHash": "0x7098137db2fdcd5a40acc0bafa0f33f8c7d2f3ee67b45e4e9c4490c9ffbe4d4d",
+      "blockNumber": "49883686",
+      "blockHash": "0x56d6ca3d65be6262225a432c2c5f68f6fae0702c6fbe2e282e5a0b5b2b3034b0"
+    },
+    {
+      "label": "hyperevm-live-platform-fee-claim",
+      "vault": "0x1A768235C9D0f6C7385770efA2340aEC84832f7D",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "amount": "3958800000000",
+      "transactionHash": "0xb2b60a41838816351e558f9f98cf71f094beceaa2fb092c11af7787eb55a0f04",
+      "blockNumber": "49883696",
+      "blockHash": "0x5a849b37dd82bdebaa47af62a0e4bd810506298f29705d5bbbb527f9c2e71fd5"
+    }
+  ],
+  "openingFdvUsd": "20535",
+  "sourceVerification": {
+    "schemaVersion": "programmable.source-verification-status.v1",
+    "status": "exact_match",
+    "components": [
+      {
+        "targetId": "hook",
+        "address": "0x90193c37b227363b59c3567a3cb9fc00af7420cc",
+        "status": "exact_match",
+        "provider": "sourcify"
+      },
+      {
+        "targetId": "initializer",
+        "address": "0x8143f55c02d6837bf7e2e39a4c12df23df0db92c",
+        "status": "exact_match",
+        "provider": "sourcify"
+      },
+      {
+        "targetId": "token",
+        "address": "0xbf4c2886705a3a88b63bf633512703c346e980cb",
+        "status": "exact_match",
+        "provider": "sourcify"
+      }
+    ],
+    "updatedAt": "2026-10-30T01:12:50.038Z"
+  },
+  "finalizedCheckpoint": {
+    "schemaVersion": "programmable.hyperevm-finalized-checkpoint-quorum.v1",
+    "chainId": "999",
+    "blockNumber": "49883707",
+    "blockHash": "0xd0d687a2645073f3b9b410f719abf4e3f10eb67bc32369e047fe15ea7a017d5c",
+    "blockTimestamp": "1793322668",
+    "providers": [
+      {
+        "providerId": "drpc",
+        "trustDomain": "drpc.org",
+        "finalizedBlockNumber": "49883707",
+        "finalizedBlockHash": "0xd0d687a2645073f3b9b410f719abf4e3f10eb67bc32369e047fe15ea7a017d5c"
+      },
+      {
+        "providerId": "hyperliquid",
+        "trustDomain": "hyperliquid.xyz",
+        "finalizedBlockNumber": "49883707",
+        "finalizedBlockHash": "0xd0d687a2645073f3b9b410f719abf4e3f10eb67bc32369e047fe15ea7a017d5c"
+      }
+    ]
+  },
+  "evidence": {
+    "fundedLifecycle": "sha256:3ba23bc7ec498397df9a4f303c63345ea118643affd285902ac8eec726190c34",
+    "finalizedResource": "sha256:7c467a95ec126ff6a9c9f636419bdb846910435c3e0f73da6af69ce1c51610c9",
+    "finalizedTransactions": "sha256:f2bbad21899073a9fbfb67766a38975110bb95b079388e7c80b69011f0a21241",
+    "exactFork": "sha256:217762d9cb8908404e24c6c6d4dc3ad05ed614ba0f07a388d65559d1a298e438"
+  },
+  "checkedAt": "2026-10-30T01:13:17.740Z"
+}

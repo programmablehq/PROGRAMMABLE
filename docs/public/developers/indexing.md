@@ -1,5 +1,5 @@
 ---
-description: Index Programmable launches on Ethereum, Robinhood Chain and Base
+description: Index Programmable launches on Ethereum, Robinhood Chain, Base and HyperEVM
 ---
 
 # Index launches
@@ -8,7 +8,7 @@ Use this guide to add Programmable coins to a wallet, explorer or trading termin
 
 A coin is identified by **chain ID + token address**. A verified launch record proves its Programmable origin. Prices, images and trading routes are added separately.
 
-Base Custom Launches use the chain-qualified [Base finalized feed](base-custom-launch.md#index-base-launches). Module Mode remains on its existing chains.
+Base and HyperEVM Custom Launches use their chain-qualified finalized feeds. Module Mode remains on Ethereum and Robinhood Chain.
 
 ## Choose your integration
 
@@ -19,6 +19,7 @@ Base Custom Launches use the chain-qualified [Base finalized feed](base-custom-l
 | Custom Launch | Ethereum Mainnet · `1` | [Ethereum Custom indexing](ethereum-custom-indexing.md). Include every published Router generation. |
 | Custom Launch | Robinhood Chain · `4663` | [Robinhood Custom indexing](robinhood-terminal-indexer.md). Read finalized projections and retain the historical source adapters. |
 | Custom Launch | Base · `8453` | [Base Custom indexing](base-custom-launch.md#index-base-launches). Follow the finalized feed with its Base Router binding and independent finality evidence. |
+| Custom Launch | HyperEVM · `999` | [HyperEVM Custom indexing](hyperevm-custom-launch.md#index-hyperevm-launches). Follow the finalized feed with its HyperEVM Router binding and independent HyperBFT finality evidence. |
 
 For older Robinhood Module Mode launches, retain the [Native and Engine adapter](module-mode-indexing.md). A new module within the same interface does not need a name-based allowlist. A new source interface needs its own adapter.
 
@@ -32,6 +33,7 @@ The website feeds are the shortest path to discovering currently listed coins:
 https://programmable.market/api/explore/ethereum?page=1&pageSize=50&sort=newest
 https://programmable.market/api/explore/robinhood?page=1&pageSize=50&sort=newest
 https://programmable.market/api/explore/base?page=1&pageSize=50&sort=newest
+https://programmable.market/api/explore/hyperevm?page=1&pageSize=50&sort=newest
 ```
 
 Read every page through `page.totalPages`, deduplicate by chain and token address, and retain each record's `sourceEvidence`. These are website discovery feeds. For a complete onchain history, backfill the original sources in the selected guide, including historical releases and launches excluded from the website's display.

@@ -6,6 +6,7 @@ import { selectUnifiedExplorePage, exploreIdentityKey } from "@/lib/unified-expl
 import { readCodexMarkets } from "./codex-market";
 import { coinValuation } from "@/lib/robinhood-presentation";
 import type { RobinhoodExploreFilters } from "@/lib/robinhood-explore-filters";
+import { isVisibleExploreQueryIdentityV1 } from "@/lib/explore-public-visibility";
 export function createEvmCustomExploreReaders<T extends EvmCustomChainId>(chainId: T) {
   const network = EVM_CUSTOM_CHAINS[chainId];
   const readFeed = createFinalizedCustomLaunchMetadataFeedReaderV1({ chainId: network.apiId, timeoutMs: 5000 });
@@ -42,14 +43,15 @@ export function createEvmCustomExploreReaders<T extends EvmCustomChainId>(chainI
   }
   async function readLaunches(page: number, query: string, filters: RobinhoodExploreFilters, size: 6 | 8 | 10 | 50) {
     const catalog = await readCatalog();
+    const visible = catalog.items.filter(row => isVisibleExploreQueryIdentityV1(row, chainId, query));
     const marketRanked = ["highest", "lowest", "activity"].includes(filters.sort);
-    const markets = marketRanked ? await readCodexMarkets(catalog.items, chainId).catch(() => new Map()) : new Map();
-    const values = new Map(catalog.items.flatMap(row => {
+    const markets = marketRanked ? await readCodexMarkets(visible, chainId).catch(() => new Map()) : new Map();
+    const values = new Map(visible.flatMap(row => {
       const market = markets.get(row.tokenAddress.toLowerCase());
       const value = market ? filters.sort === "activity" ? market.volume24hUsd : coinValuation(market).value : null;
       return value === null || value === undefined ? [] : [[exploreIdentityKey(row), value] as const];
     }));
-    const selected = selectUnifiedExplorePage(catalog.items, page, query, filters, values, size);
+    const selected = selectUnifiedExplorePage(visible, page, query, filters, values, size);
     if (!marketRanked && selected.items.length) {
       const pageMarkets = await readCodexMarkets(selected.items, chainId).catch(() => new Map());
       for (const [address, market] of pageMarkets)
