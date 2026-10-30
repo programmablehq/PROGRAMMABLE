@@ -13,8 +13,8 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
   guideUrl: PROGRAMMABLE_AGENT_GUIDE_URL,
   discoveryUrl: PROGRAMMABLE_AGENT_DISCOVERY_URL,
   releaseDiscoveryUrl: "https://programmable.market/.well-known/programmable.json",
-  docsIndexUrl: "https://programmable.market/llms.txt",
-  docsFullUrl: "https://programmable.market/llms-full.txt",
+  docsIndexUrl: "https://programmable.market/docs/llms.txt",
+  docsFullUrl: "https://programmable.market/docs/llms-full.txt",
   primaryRobinhoodCreateWorkflow: "customLaunchPlan",
   primaryEthereumCreateWorkflow: "customLaunch",
   website: {

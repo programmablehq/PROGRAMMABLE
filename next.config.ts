@@ -115,6 +115,8 @@ const nextConfig: NextConfig = {
         destination: "/explore",
         permanent: true,
       },
+      { source: "/llms.txt", destination: "/docs/llms.txt", permanent: false },
+      { source: "/llms-full.txt", destination: "/docs/llms-full.txt", permanent: false },
       {
         source: "/docs/developers/module-mode-indexing.md",
         destination: "/developers/module-mode-indexing-v1.md",

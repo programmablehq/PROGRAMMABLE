@@ -25,7 +25,9 @@ Creator and pool fees are additional. Author rewards are divided equally between
 
 ## Custom launches
 
-New Ethereum and Robinhood approvals require a 30 bps (0.3%) platform share collected by the pool on each buy and sell. The Ethereum Native30 V3 reference uses the gross native ETH leg, rounds up per trade and accrues fully backed PoolManager native claims. `claimPlatform()` always pays `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`, regardless of its caller. Exact runtime and trade-accrual proof lets the website recognize that fee and avoid adding a second routing fee. Source, bytecode and trade evidence must agree.
+New Custom Launch approvals on Ethereum, Robinhood Chain, Base and HyperEVM require a 30 bps (0.3%) platform share collected by the pool on each buy and sell. Project and LP fees are separate. Use the selected network's live capabilities and exact deployed contracts to identify the fee asset, assessment base, rounding and claim path.
+
+The Ethereum Native30 V3 reference uses the gross native ETH leg, rounds up per trade and accrues fully backed PoolManager native claims. `claimPlatform()` always pays `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`, regardless of its caller. Exact runtime and trade-accrual proof lets the website recognize that fee and avoid adding a second routing fee. Source, bytecode and trade evidence must agree.
 
 Existing Native100 contracts retain 100 bps (1%). Neither changing documentation nor upgrading the website changes those immutable contracts.
 
@@ -33,9 +35,9 @@ Earlier Robinhood Native20 charges 20 bps (0.20%) on the gross native ETH amount
 
 Native20's rate is not a universal rule for custom contracts. Use the fee configuration and verified fee path of the exact launch and pool. A configured policy or a launch stamp alone does not establish that a fee is enforced. A creator fee of 0% produces no creator earnings from that trade.
 
-## Ethereum launches
+## Earlier Ethereum releases
 
-New Custom Launches on Ethereum Mainnet and Robinhood use a **0.3% (30 bps)** Programmable platform fee. In parts per million, the rate is **3,000 / 1,000,000**. Project and LP fees are separate. Confirm the deployed contract's assessment base, fee asset, accounting mode, recipient, accrual and claim path before presenting the fee as enforced or collected. A launch stamp alone does not certify fee behavior.
+The current **0.3% (30 bps)** platform share is **3,000 / 1,000,000** in parts per million. A launch stamp alone does not certify fee behavior; confirm the exact runtime and collected fee before presenting it as enforced.
 
 Earlier Classic contracts retain their 0.10% included share. A 1% Classic fee leaves 0.90% for creator rewards. Retained fee-certified Custom API profiles specify an exact 0.10% share; their versioned formats and deployed contracts remain unchanged. These older rates are not the current Ethereum Custom Hook launch policy.
 
