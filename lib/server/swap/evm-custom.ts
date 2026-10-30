@@ -4,7 +4,7 @@ import { createPublicClient, http, decodeFunctionResult, encodeFunctionData, enc
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { readHyperEvmLaunchEvidence } from "@/lib/server/hyperevm-explore";
 import type { FinalizedCustomLaunchMetadataV1 } from "@/lib/server/custom-launch/finalized-custom-launch-metadata-feed-v1";
-import { EVM_FEE_CLAIM_SCHEMA, EVM_FEE_VAULT_ABI, EVM_SWAP_SCHEMA, EVM_SWAP_PROTOCOLS, EVM_TOKEN_ABI, EVM_PERMIT2_ABI, NATIVE, buildEvmCustomSwap, buildEvmCustomApproval, evmCustomPreparationDigest, parseEvmCustomSwapRequest, type EvmCustomSwapDescriptor, type EvmCustomSwapPreparation, type EvmCustomSwapTransaction } from "@/lib/swap/evm-custom";
+import { EVM_FEE_CLAIM_SCHEMA, EVM_FEE_VAULT_ABI, EVM_SWAP_SCHEMA, EVM_SWAP_PROTOCOLS, EVM_TOKEN_ABI, EVM_PERMIT2_ABI, NATIVE, buildEvmCustomSwap, buildEvmCustomApproval, evmCustomPreparationDigest, parseEvmCustomSwapRequest, type EvmCustomSwapDescriptor, type EvmCustomSwapPreparation, type EvmCustomSwapTransaction, type EvmFeeClaimPreparation } from "@/lib/swap/evm-custom";
 import quoteArtifact from "@/lib/swap/evm-quote-artifact.json";
 type Rpc = (method: string, params: readonly unknown[]) => Promise<unknown>;
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -26,6 +26,7 @@ const clients = new Map<string, ReturnType<typeof createPublicClient>>();
 const paused = new Map<string, number>();
 let activePreparations = 0;
 const inflight = new Map<string, Promise<EvmCustomSwapPreparation>>();
+const inflightFeeClaims = new Map<string, Promise<EvmFeeClaimPreparation>>();
 const origins = new Map<string, {
   expires: number;
   value: Promise<EvmCustomSwapDescriptor>;
@@ -247,7 +248,10 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
   return work;
 }
 const HOOK_FEES = parseAbi(["function feeVault() view returns(address)", "function openingTaxVault() view returns(address)"]);
-export async function prepareHyperEvmFeeClaim(input: unknown) {
+export async function prepareHyperEvmFeeClaim(input: unknown, dependencies: {
+  rpcs?: readonly [Rpc, Rpc];
+  readLaunch?: typeof readHyperEvmLaunchEvidence;
+} = {}) {
   const q = input as {
     chainId: 999;
     token: Address;
@@ -257,21 +261,30 @@ export async function prepareHyperEvmFeeClaim(input: unknown) {
   };
   if (!q || Object.keys(q).sort().join() !== "chainId,owner,recipientKind,token,vaultKind" || q.chainId !== 999 || ![q.owner, q.token].every(v => typeof v === "string" && /^0x[0-9a-f]{40}$/i.test(v)) || !["fees", "opening"].includes(q.vaultKind) || !["creator", "platform"].includes(q.recipientKind))
     throw new EvmSwapError("Invalid fee claim.", 400);
-  const rpcs = hyperEvmSwapRpcs(), descriptor = await readHyperEvmSwapDescriptor(q.token, rpcs), block = await readHyperEvmSwapCheckpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true };
-  const fn = q.vaultKind === "fees" ? "feeVault" : "openingTaxVault";
-  const vault = decodeFunctionResult({ abi: HOOK_FEES, functionName: fn, data: await call(rpcs, descriptor.poolKey.hooks, encodeFunctionData({ abi: HOOK_FEES, functionName: fn }), reference) });
-  const read = async (fn: "kernel" | "poolManager" | "creatorRecipient" | "PLATFORM_RECIPIENT" | "creatorAccrued" | "platformAccrued") => decodeFunctionResult({ abi: EVM_FEE_VAULT_ABI, functionName: fn, data: await call(rpcs, vault, encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: fn }), reference) });
-  const [kernel, manager, recipientRaw, amountRaw] = await Promise.all([read("kernel"), read("poolManager"), read(q.recipientKind === "creator" ? "creatorRecipient" : "PLATFORM_RECIPIENT"), read(q.recipientKind === "creator" ? "creatorAccrued" : "platformAccrued")]);
-  if (typeof kernel !== "string" || !same(kernel, descriptor.poolKey.hooks) || typeof manager !== "string" || !same(manager, EVM_SWAP_PROTOCOLS[999].poolManager) || typeof recipientRaw !== "string" || typeof amountRaw !== "bigint")
-    throw new EvmSwapError("Fee vault binding changed.");
-  if (q.recipientKind === "platform" && !same(recipientRaw, EVM_SWAP_PROTOCOLS[999].platformTreasury))
-    throw new EvmSwapError("Fee recipient changed.");
-  if (amountRaw === 0n)
-    throw new EvmSwapError("No fees are available to claim.", 409);
-  const data = encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: q.recipientKind === "creator" ? "claimCreator" : "claimPlatform" });
-  const gas = await estimateHyperEvmGas(rpcs, { from: q.owner, to: vault, data, value: "0x0" });
-  if (gas > 1000000n)
-    throw new EvmSwapError("Fee claim gas limit is too high.");
-  const body = { schemaVersion: EVM_FEE_CLAIM_SCHEMA, request: q, descriptor, vault, recipient: recipientRaw as Address, amount: amountRaw.toString(), validUntil: Math.floor(Date.now() / 1000) + 30, transaction: { from: q.owner, to: vault, data, value: "0" as const, gasLimit: gas.toString() } };
-  return { ...body, preparationDigest: canonicalBrowserSha256V2(EVM_FEE_CLAIM_SCHEMA, body) };
+  const key = canonicalBrowserJsonV2(q), prior = inflightFeeClaims.get(key);
+  if (prior) return prior;
+  if (activePreparations >= 8)
+    throw new EvmSwapError("Transaction checks are busy. Try again shortly.", 429);
+  activePreparations++;
+  const work = (async () => {
+    const rpcs = dependencies.rpcs ?? hyperEvmSwapRpcs(), descriptor = await readHyperEvmSwapDescriptor(q.token, rpcs, dependencies.readLaunch), block = await readHyperEvmSwapCheckpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true };
+    const fn = q.vaultKind === "fees" ? "feeVault" : "openingTaxVault";
+    const vault = decodeFunctionResult({ abi: HOOK_FEES, functionName: fn, data: await call(rpcs, descriptor.poolKey.hooks, encodeFunctionData({ abi: HOOK_FEES, functionName: fn }), reference) });
+    const read = async (fn: "kernel" | "poolManager" | "creatorRecipient" | "PLATFORM_RECIPIENT" | "creatorAccrued" | "platformAccrued") => decodeFunctionResult({ abi: EVM_FEE_VAULT_ABI, functionName: fn, data: await call(rpcs, vault, encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: fn }), reference) });
+    const [kernel, manager, recipientRaw, amountRaw] = await Promise.all([read("kernel"), read("poolManager"), read(q.recipientKind === "creator" ? "creatorRecipient" : "PLATFORM_RECIPIENT"), read(q.recipientKind === "creator" ? "creatorAccrued" : "platformAccrued")]);
+    if (typeof kernel !== "string" || !same(kernel, descriptor.poolKey.hooks) || typeof manager !== "string" || !same(manager, EVM_SWAP_PROTOCOLS[999].poolManager) || typeof recipientRaw !== "string" || typeof amountRaw !== "bigint")
+      throw new EvmSwapError("Fee vault binding changed.");
+    if (q.recipientKind === "platform" && !same(recipientRaw, EVM_SWAP_PROTOCOLS[999].platformTreasury))
+      throw new EvmSwapError("Fee recipient changed.");
+    if (amountRaw === 0n)
+      throw new EvmSwapError("No fees are available to claim.", 409);
+    const data = encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: q.recipientKind === "creator" ? "claimCreator" : "claimPlatform" });
+    const gas = await estimateHyperEvmGas(rpcs, { from: q.owner, to: vault, data, value: "0x0" });
+    if (gas > 1000000n)
+      throw new EvmSwapError("Fee claim gas limit is too high.");
+    const body: Omit<EvmFeeClaimPreparation, "preparationDigest"> = { schemaVersion: EVM_FEE_CLAIM_SCHEMA, request: q, descriptor, vault, recipient: recipientRaw as Address, amount: amountRaw.toString(), validUntil: Math.floor(Date.now() / 1000) + 30, transaction: { from: q.owner, to: vault, data, value: "0" as const, gasLimit: gas.toString() } };
+    return { ...body, preparationDigest: canonicalBrowserSha256V2(EVM_FEE_CLAIM_SCHEMA, body) };
+  })().finally(() => { activePreparations--; inflightFeeClaims.delete(key); });
+  inflightFeeClaims.set(key, work);
+  return work;
 }
