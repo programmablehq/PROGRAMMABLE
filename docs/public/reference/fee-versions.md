@@ -41,6 +41,12 @@ Earlier Classic contracts retain their 0.10% included share. A 1% Classic fee le
 
 [Classic on Ethereum](../models/classic.md) describes its deployed contracts, liquidity and recipient rules.
 
+## Stock-Paired
+
+Stock-Paired is a historical Ethereum launch model. Its pools pair a fixed-supply Programmable token with the Ondo Global Markets quote asset selected by that release. The Programmable token itself is not a company share and is not redeemable for the selected stock.
+
+Existing coins keep the release and quote asset used at launch. Trading, quote-to-ETH conversion and direct quote-asset claims depend on that record's contracts, liquidity and currently available route. Check the exact launch source and the live coin page; a historical launch record does not establish that a conversion route is available now.
+
 ## Accounting
 
 Fees accrue before they are claimed. A claim withdraws an existing balance and must not be counted again as revenue. Keep creator fees, module rewards, LP-position proceeds and platform fees separate. Gas, liquidity deposits, escrow and refunds do not count as platform trading revenue.

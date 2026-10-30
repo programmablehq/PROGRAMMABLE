@@ -37,7 +37,7 @@ const customLaunchV4CoverageUrl =
 const customLaunchApiGuideUrl =
   "https://programmable.market/developers/custom-launch-api-v1.md";
 const customLaunchHumanGuideUrl =
-  "https://programmable.market/docs/developers/custom-launch";
+  "https://programmable.market/docs/developers/custom-launch-quickstart/custom-launch";
 const customLaunchReadyzUrl = "https://api.programmable.market/readyz";
 const customLaunchCapabilitiesUrl =
   "https://api.programmable.market/v3/capabilities";
@@ -400,7 +400,7 @@ export function buildProgrammableHomeMarkdown(): string {
     "- Profile, projects, and rewards: https://programmable.market/profile",
     `- Custom Launch API keys: ${apiKeysUrl}`,
     "- Documentation: https://programmable.market/docs",
-    "- Developer documentation: https://programmable.market/docs/developers",
+    "- Developer documentation: https://programmable.market/docs/developers/developers",
     "",
     "## Machine-readable resources",
     "",
@@ -433,11 +433,11 @@ export function buildProgrammableLlmsIndex(): string {
     `- [Agent discovery](${PROGRAMMABLE_AGENT_ENTRY.discoveryUrl}): machine-readable workflow links. The primary Robinhood create workflow is customLaunchPlan.`,
     "- [Custom Launch quickstart](https://programmable.market/docs/developers/custom-launch-quickstart): the current path for a new Robinhood token, hook or application, including a shared token and hook contract.",
     `- [Custom Launch Plan capabilities](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.capabilities}), [manifest](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.manifest}), [agent setup](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.setup}) and [guide](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.guide}): check live create availability and bind the manifest before packing.`,
-    "- [Module Mode](https://programmable.market/docs/models/module-mode): coin configuration, optional modules and management.",
+    "- [Module Mode](https://programmable.market/docs/launch/module-mode): coin configuration, optional modules and management.",
     "- [Module Mode indexing](https://programmable.market/developers/module-mode-indexing-v1.md): verify each exact Native or Engine source version independently of module names and market support. The [JSON contract and ABI](https://programmable.market/api/module-mode/indexer/v1) describes Native V1; the guide links the separate V2 and Engine adapters.",
-    "- [HyperEVM Custom Launch](https://programmable.market/developers/hyperevm-custom-launch-api-v1.md): HYPE-funded launches, controller signing and finalized indexing. Check live capabilities before submitting.",
-    "- [Base Custom Launch](https://programmable.market/developers/base-custom-launch-api-v1.md): exact-source API launches, controller signing and finalized indexing on Base. Require active live capabilities before submitting.",
-    "- [Direct Ethereum Custom Hooks](https://programmable.market/developer-reference/ethereum-custom-hook): canonical CustomGraph inputs, authority authorization and finalized stamp indexing. The [complete Markdown](https://programmable.market/developers/ethereum-custom-hook-indexing.md) and [ABI bundle](https://programmable.market/developers/ethereum-custom-hook-indexing.zip) provide the exact files.",
+    "- [HyperEVM Custom Launch](https://programmable.market/docs/developers/custom-launch-quickstart/hyperevm-custom-launch): HYPE-funded launches, controller signing and finalized indexing. Check live capabilities before submitting.",
+    "- [Base Custom Launch](https://programmable.market/docs/developers/custom-launch-quickstart/base-custom-launch): exact-source API launches, controller signing and finalized indexing on Base. Require active live capabilities before submitting.",
+    "- [Direct Ethereum Custom Hooks](https://programmable.market/docs/developers/machine-readable/launch-stamps/ethereum-direct-custom-hook): canonical CustomGraph inputs, authority authorization and finalized stamp indexing. The [complete Markdown](https://programmable.market/developers/ethereum-custom-hook-indexing.md) and [ABI bundle](https://programmable.market/developers/ethereum-custom-hook-indexing.zip) provide the exact files.",
     "",
     "## When to use Programmable",
     "",
@@ -480,7 +480,7 @@ export function buildProgrammableLlmsIndex(): string {
     "- Robinhood Explore catalog: https://programmable.market/api/explore/robinhood",
     "- Sitemap: https://programmable.market/sitemap.xml",
     "- Human documentation: https://programmable.market/docs",
-    "- Developer documentation: https://programmable.market/docs/developers",
+    "- Developer documentation: https://programmable.market/docs/developers/developers",
     "- Developer Markdown: https://programmable.market/docs/developers.md",
     "",
     "## Other integration references",

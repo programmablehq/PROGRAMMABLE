@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { DOCUMENTATION } from "@/lib/documentation";
 
 const SITE_ORIGIN = "https://programmable.market";
 
@@ -14,33 +15,7 @@ const PUBLIC_ROUTES = [
   "/llms.txt",
   "/llms-full.txt",
   "/privacy",
-  "/docs",
-  "/docs/economics",
-  "/docs/v4-token",
-  "/docs/trust",
-  "/docs/status",
-  "/docs/tokens",
-  "/docs/infrastructure",
-  "/docs/creators",
-  "/docs/creators/launch",
-  "/docs/creators/templates",
-  "/docs/creators/earnings",
-  "/docs/creators/programs",
-  "/docs/developers",
-  "/docs/developers/custom-launch",
-  "/docs/developers/custom-launch-quickstart",
-  "/developer-reference/hyperevm-custom-launch",
-  "/docs/developers/verify",
-  "/docs/developers/indexing",
-  "/docs/developers/machine-readable",
-  "/developer-reference/robinhood-terminal-indexer",
-  "/developer-reference/module-mode-indexing",
-  "/docs/models/module-mode",
-  "/docs/models/custom-ai",
-  "/docs/launch-stamps",
-  "/docs/models/classic",
-  "/docs/models/custom",
-  "/developer-reference/stock-paired",
+  ...Object.values(DOCUMENTATION),
   "/profile",
 ] as const;
 

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { GITBOOK_PROXY_ORIGIN, LEGACY_DOCUMENTATION } from "./lib/documentation";
 
 export function createContentSecurityPolicy(isDevelopment: boolean) {
   return [
@@ -100,7 +101,9 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // GitBook serves its own application and security policy under /docs.
+        // Website-only script restrictions must not block its scripts or search.
+        source: "/:path((?!docs(?:/|$)).*)",
         headers: securityHeaders,
       },
     ];
@@ -108,38 +111,8 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        source: "/docs/developers/hyperevm-custom-launch",
-        destination: "/developer-reference/hyperevm-custom-launch",
-        permanent: false,
-      },
-      {
-        source: "/docs/developers/custom-launch-quickstart/hyperevm-custom-launch",
-        destination: "/developer-reference/hyperevm-custom-launch",
-        permanent: false,
-      },
-      {
-        source: "/docs/models/custom-ai",
-        destination: "/developer-reference/custom-ai",
-        permanent: false,
-      },
-      {
-        source: "/docs/ethereum-direct-custom-hook",
-        destination: "/developer-reference/ethereum-custom-hook",
-        permanent: false,
-      },
-      {
         source: "/swap",
         destination: "/explore",
-        permanent: true,
-      },
-      {
-        source: "/docs/models/stock-paired",
-        destination: "/developer-reference/stock-paired",
-        permanent: true,
-      },
-      {
-        source: "/docs/developers/module-mode",
-        destination: "/docs/models/module-mode",
         permanent: true,
       },
       {
@@ -153,6 +126,21 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       {
+        source: "/docs/developers.md",
+        destination: "/docs/developers/developers.md",
+        permanent: false,
+      },
+      ...Object.entries(LEGACY_DOCUMENTATION).flatMap(([source, destination]) => {
+        const [page, hash] = destination.split("#");
+        return [
+          { source, destination, permanent: false },
+          ...source.startsWith("/docs/")
+            && !["/docs/developers/custom-launch", "/docs/developers/module-mode-indexing"].includes(source)
+            ? [{ source: `${source}.md`, destination: `${page}.md${hash ? `#${hash}` : ""}`, permanent: false }]
+            : [],
+        ];
+      }),
+      {
         source: "/:path*",
         has: [{ type: "host", value: "www.programmable.market" }],
         destination: "https://programmable.market/:path*",
@@ -165,13 +153,11 @@ const nextConfig: NextConfig = {
       beforeFiles: [
         {
           source: "/docs",
-          destination: "https://proxy.gitbook.site/sites/site_V93gQ",
+          destination: GITBOOK_PROXY_ORIGIN,
         },
         {
-          // Vercel can evaluate external beforeFiles rewrites at its edge.
-          // Preserve the native Ethereum alias and Custom AI guide.
-          source: "/docs/:match((?!ethereum-direct-custom-hook$|models/custom-ai$).*)",
-          destination: "https://proxy.gitbook.site/sites/site_V93gQ/:match*",
+          source: "/docs/:path*",
+          destination: `${GITBOOK_PROXY_ORIGIN}/:path*`,
         },
       ],
     };

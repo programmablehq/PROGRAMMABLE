@@ -34,11 +34,11 @@ function findButton(node: ReactNode, label: string): ButtonElement | null {
 }
 
 describe("website security headers", () => {
-  it("applies the browser security policy to every route", async () => {
+  it("keeps the website security policy separate from the GitBook application", async () => {
     const routes = await nextConfig.headers?.();
 
     expect(routes).toHaveLength(1);
-    expect(routes?.[0]?.source).toBe("/:path*");
+    expect(routes?.[0]?.source).toBe("/:path((?!docs(?:/|$)).*)");
 
     const headers = new Map(
       routes?.[0]?.headers.map(({ key, value }) => [key, value]),

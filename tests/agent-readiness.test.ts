@@ -27,21 +27,20 @@ import {
   serializeStructuredData,
 } from "../lib/site-structured-data";
 import { config as proxyConfig, proxy } from "../proxy";
+import nextConfig from "../next.config";
 
 const ORIGIN = "https://programmable.market";
 const CUSTOM_LAUNCH_API_ORIGIN = "https://api.programmable.market";
 
 describe("agent-readable public surface", () => {
-  it.each(["text/html", "text/markdown", "application/json"])("redirects the old Ethereum guide before GitBook and content negotiation for %s", accept => {
-    expect(proxyConfig.matcher).toContain("/docs/ethereum-direct-custom-hook");
-    for (const method of ["GET", "HEAD"]) {
-      const response = proxy(new NextRequest(`${ORIGIN}/docs/ethereum-direct-custom-hook?source=agent`, {
-        method, headers: { Accept: accept },
-      }));
-      expect(response.status).toBe(307);
-      expect(response.headers.get("location")).toBe(`${ORIGIN}/developer-reference/ethereum-custom-hook?source=agent`);
-      expect(response.headers.get("x-middleware-rewrite")).toBeNull();
-    }
+  it("routes the old Ethereum guide to GitBook without a native docs detour", async () => {
+    expect(proxyConfig.matcher).not.toContain("/docs/ethereum-direct-custom-hook");
+    const routes = await nextConfig.redirects?.();
+    expect(routes?.find(route => route.source === "/docs/ethereum-direct-custom-hook")).toMatchObject({
+      destination: "/docs/developers/machine-readable/launch-stamps/ethereum-direct-custom-hook",
+      permanent: false,
+    });
+    expect(routes?.some(route => route.destination.startsWith("/developer-reference/"))).toBe(false);
   });
   it("redirects the conventional uppercase agent guide without looping or negotiating away Markdown", () => {
     const alias = proxy(new NextRequest(`${ORIGIN}/AGENTS.md`, {
