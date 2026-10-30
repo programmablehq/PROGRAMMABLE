@@ -34,10 +34,10 @@ function publicPreflightRequest() {
 }
 
 describe("Stock-Paired launch closure", () => {
-  it("opens Module Mode directly on the supported view chain instead of a legacy launch picker", async () => {
+  it("opens Module Mode directly on the saved Ethereum chain instead of a legacy launch picker", async () => {
     const page = await LaunchPage();
     expect(page.type).toBe(ModuleFoundationLaunchHost);
-    expect(page.props).toEqual({ layout: "studio", chainId: 4663 });
+    expect(page.props).toEqual({ layout: "studio", chainId: 1 });
   });
 
   it("rejects a valid direct launch request with a stable response", async () => {
