@@ -10,7 +10,7 @@ function healthy() {
     let body;
     if (target.id === "indexes") body = {
       schemaVersion: "programmable.operations-health.v2", status: "ready", checkedAt: updatedAt,
-      indexes: [1, 4663, 8453].map(chainId => ({ chainId, status: "ready", updatedAt })),
+      indexes: [1, 4663, 8453, 999].map(chainId => ({ chainId, status: "ready", updatedAt })),
     };
     else if (target.chainId) body = {
       status: "ready", items: [{ chainId: target.chainId, tokenAddress: target.tokenAddress,
@@ -61,6 +61,22 @@ test("detects missing valuations rather than accepting empty price fields", () =
   assert.ok(assessHealth(observations, NOW).issues.some(value => value.code === "ethereum:market_data_missing"));
 });
 
+test("checks HyperEVM without rejecting additional chain observations", () => {
+  const observations = healthy();
+  observations[0].body.indexes.push({ chainId: 10, status: "ready", updatedAt });
+  assert.deepEqual(assessHealth(observations, NOW).issues, []);
+  observations[0].body.indexes.find(index => index.chainId === 999).status = "unavailable";
+  assert.deepEqual(assessHealth(observations, NOW).issues.map(value => value.code), ["index-999:unavailable"]);
+  observations[0].body.indexes = observations[0].body.indexes.filter(index => index.chainId !== 999);
+  assert.deepEqual(assessHealth(observations, NOW).issues.map(value => value.code), ["index-999:invalid_response"]);
+});
+
+test("rejects duplicate chain identities including the fourth chain", () => {
+  const observations = healthy();
+  observations[0].body.indexes.push({ chainId: 999, status: "ready", updatedAt });
+  assert.deepEqual(assessHealth(observations, NOW).issues.map(value => value.code), ["indexes:invalid_response"]);
+});
+
 test("notifies once after two bad checks and once after two healthy checks", () => {
   const issues = [{ code: "api:not_ready", severity: "error" }];
   const first = advanceIncidentState(undefined, issues, NOW);
@@ -97,6 +113,7 @@ test("runs only six public GETs, at most two concurrently, without retries or se
     return Response.json({ status: "ready" });
   });
   assert.equal(calls.length, TARGETS.length);
+  assert.equal(calls.length, 6);
   assert.equal(results.length, TARGETS.length);
   assert.ok(maximum <= 2);
   assert.ok(calls.every(call => call.options.method === "GET" && call.options.redirect === "error" && !call.options.headers));

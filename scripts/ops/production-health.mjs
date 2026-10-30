@@ -18,6 +18,7 @@ export const TARGETS = Object.freeze([
 const MAX_BYTES = 512_000;
 const INDEX_MAX_AGE_MS = 20 * 60_000;
 const MARKET_MAX_AGE_MS = 35 * 60_000;
+const INDEX_CHAIN_IDS = [1, 4663, 8453, 999];
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const address = /^0x[0-9a-f]{40}$/i;
 const commit = /^[0-9a-f]{40}$/;
@@ -79,12 +80,12 @@ export function assessHealth(observations, now = Date.now()) {
     if (observation.elapsedMs > 6_000) add(`${target.id}:slow`, "warning");
     if (target.id === "indexes") {
       if (body.schemaVersion !== "programmable.operations-health.v2" || !Array.isArray(body.indexes)
-        || body.indexes.length !== 3 || body.indexes.some(value => !object(value))
-        || new Set(body.indexes.map(value => value.chainId)).size !== 3) {
+        || body.indexes.some(value => !object(value) || !Number.isSafeInteger(value.chainId) || value.chainId <= 0)
+        || new Set(body.indexes.map(value => value.chainId)).size !== body.indexes.length) {
         add("indexes:invalid_response"); continue;
       }
       if (age(body.checkedAt, now) > 3 * 60_000 || age(body.checkedAt, now) < -2 * 60_000) add("indexes:stale_health");
-      for (const chainId of [1, 4663, 8453]) {
+      for (const chainId of INDEX_CHAIN_IDS) {
         const index = body.indexes.find(value => value.chainId === chainId);
         if (!index || !["ready", "partial", "syncing", "stale", "unavailable"].includes(index.status)) add(`index-${chainId}:invalid_response`);
         else if (index.status === "unavailable") add(`index-${chainId}:unavailable`);

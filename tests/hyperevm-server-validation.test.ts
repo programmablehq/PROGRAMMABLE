@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const readLaunch = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/server/hyperevm-explore", () => ({ readHyperEvmLaunchEvidence: readLaunch }));
-import { estimateHyperEvmGas, prepareHyperEvmSwap, readHyperEvmSwapCheckpoint, readHyperEvmRpcAgreement } from "@/lib/server/swap/evm-custom";
+import { estimateHyperEvmGas, prepareHyperEvmFeeClaim, prepareHyperEvmSwap, readHyperEvmSwapCheckpoint, readHyperEvmRpcAgreement } from "@/lib/server/swap/evm-custom";
 
 describe("HyperEVM receipt coordinates", () => {
   const transactionHash = `0x${"ab".repeat(32)}`, blockHash = `0x${"cd".repeat(32)}`;
@@ -79,5 +79,43 @@ describe("HyperEVM invalid trade requests", () => {
     await expect(prepareHyperEvmSwap(input, { rpcs: [rpc, rpc] })).rejects.toMatchObject({ status: 400 });
     expect(rpc).not.toHaveBeenCalled();
     expect(readLaunch).not.toHaveBeenCalled();
+  });
+});
+
+describe("HyperEVM fee preparation budgets", () => {
+  const request = (owner = "0x1111111111111111111111111111111111111111") => ({
+    chainId: 999, token: "0x2222222222222222222222222222222222222222", owner,
+    vaultKind: "fees", recipientKind: "creator",
+  });
+
+  it("shares concurrent identical claims and releases failed work for a retry", async () => {
+    let release!: () => void;
+    const blocked = new Promise<null>(resolve => { release = () => resolve(null); });
+    const read = vi.fn(() => blocked), rpc = vi.fn();
+    const dependencies = { readLaunch: read, rpcs: [rpc, rpc] as const };
+    const first = prepareHyperEvmFeeClaim(request(), dependencies);
+    const duplicate = prepareHyperEvmFeeClaim(request(), dependencies);
+    expect(read).toHaveBeenCalledOnce();
+    release();
+    const results = await Promise.allSettled([first, duplicate]);
+    expect(results.map(result => result.status)).toEqual(["rejected", "rejected"]);
+    await expect(prepareHyperEvmFeeClaim(request(), dependencies)).rejects.toMatchObject({ status: 404 });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("limits distinct claims before issuing more provider work and frees every slot", async () => {
+    let release!: () => void;
+    const blocked = new Promise<null>(resolve => { release = () => resolve(null); });
+    const read = vi.fn(() => blocked), rpc = vi.fn();
+    const dependencies = { readLaunch: read, rpcs: [rpc, rpc] as const };
+    const pending = Array.from({ length: 8 }, (_, index) => prepareHyperEvmFeeClaim(request(`0x${(index + 1).toString(16).padStart(40, "0")}`), dependencies));
+    await expect(prepareHyperEvmFeeClaim(request(), dependencies)).rejects.toMatchObject({ status: 429 });
+    expect(read).toHaveBeenCalledTimes(8);
+    release();
+    await Promise.allSettled(pending);
+    await expect(prepareHyperEvmFeeClaim(request(), dependencies)).rejects.toMatchObject({ status: 404 });
+    expect(read).toHaveBeenCalledTimes(9);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
