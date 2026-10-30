@@ -154,6 +154,10 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         {
+          source: "/docs.md",
+          destination: `${GITBOOK_PROXY_ORIGIN}/.md`,
+        },
+        {
           source: "/docs",
           destination: GITBOOK_PROXY_ORIGIN,
         },

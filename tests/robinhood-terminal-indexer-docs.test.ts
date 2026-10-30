@@ -214,6 +214,11 @@ describe("Robinhood terminal and indexer documentation", () => {
   it("keeps public docs in GitBook and preserves the technical compatibility guide", async () => {
     const rewrites = await nextConfig.rewrites?.();
 
+    expect(vercelConfig.redirects).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringMatching(/^\/docs(?:\/|\.|$)/) }),
+      ]),
+    );
     expect(vercelConfig.rewrites).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ source: expect.stringMatching(/^\/docs/) }),
@@ -221,6 +226,10 @@ describe("Robinhood terminal and indexer documentation", () => {
     );
     expect(rewrites).toEqual({
       beforeFiles: [
+        {
+          source: "/docs.md",
+          destination: "https://proxy.gitbook.site/sites/site_V93gQ/.md",
+        },
         {
           source: "/docs",
           destination: "https://proxy.gitbook.site/sites/site_V93gQ",
@@ -231,6 +240,10 @@ describe("Robinhood terminal and indexer documentation", () => {
         },
       ],
     });
+    const rootMarkdown = await unstable_getResponseFromNextConfig({
+      url: "https://programmable.market/docs.md", nextConfig,
+    });
+    expect(getRewrittenUrl(rootMarkdown)).toBe("https://proxy.gitbook.site/sites/site_V93gQ/.md");
     expect(vercelConfig.redirects).not.toContainEqual({
       source: "/docs/developers/robinhood-terminal-indexer",
       destination: "/developer-reference/robinhood-terminal-indexer",

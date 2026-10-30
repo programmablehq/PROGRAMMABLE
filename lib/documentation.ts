@@ -55,6 +55,8 @@ export const LEGACY_DOCUMENTATION: Readonly<Record<string, string>> = {
   "/docs/models/custom": DOCUMENTATION.custom,
   "/docs/models/classic": DOCUMENTATION.classic,
   "/docs/models/stock-paired": `${DOCUMENTATION.feeVersions}#stock-paired`,
+  "/docs/models/prediction-markets": DOCUMENTATION.home,
+  "/docs/tokens/prediction-markets": DOCUMENTATION.home,
   "/docs/tokens": DOCUMENTATION.home,
   "/docs/creators": DOCUMENTATION.creatorLaunch,
   "/docs/creators/launch": DOCUMENTATION.creatorLaunch,

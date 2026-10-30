@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { docsNavigation, docsSearchItems } from "../components/docs-data";
 import sitemap from "../app/sitemap";
+import nextConfig from "../next.config";
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
@@ -30,25 +31,17 @@ describe("retired prediction product documentation", () => {
     expect(sitemapUrls).not.toContain("https://programmable.market/markets");
   });
 
-  it("redirects stale documentation links to the launch model overview", () => {
-    const vercelConfig = JSON.parse(read("vercel.json")) as {
-      redirects?: Array<{
-        destination: string;
-        permanent: boolean;
-        source: string;
-      }>;
-    };
-
-    expect(vercelConfig.redirects).toEqual(
+  it("redirects stale documentation links to the launch model overview", async () => {
+    expect(await nextConfig.redirects?.()).toEqual(
       expect.arrayContaining([
         {
-          destination: "/docs/tokens",
-          permanent: true,
+          destination: "/docs",
+          permanent: false,
           source: "/docs/models/prediction-markets",
         },
         {
-          destination: "/docs/tokens",
-          permanent: true,
+          destination: "/docs",
+          permanent: false,
           source: "/docs/tokens/prediction-markets",
         },
       ]),
