@@ -19,13 +19,14 @@ import { aiRequest } from "@/lib/custom-ai/client";
 import { designReadiness, type LaunchPreparation } from "@/lib/custom-ai/readiness";
 import { RuleReview } from "./rule-review";
 
-export function CustomAILaunchPreview({ draft, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother }: {
+export function CustomAILaunchPreview({ draft, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule }: {
   draft?: Draft; disabled: boolean; settings: CoinSetup; chatRevision: number; onChange: (patch: CoinSetupPatch) => void;
   draftId?: string; headers: AISessionHeaders; localPreview: boolean;
   cacheKey: string;
   onLaunchLocked: (locked: boolean) => void;
   imageReceipt?: ImageReceipt; onImageReceipt: (receipt: ImageReceipt | undefined) => void;
   pendingChange?: string; onKeepRules: () => void; onStartAnother: () => void;
+  onEditRule: (requirementId: string) => void;
 }) {
   const account = useWallet().wallet?.account;
   const [preparation, setPreparation] = useState<LaunchPreparation>();
@@ -195,10 +196,11 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
       </fieldset>
       {!bound && <RuleReview draft={draft} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
         quoteLabel={isEth ? "ETH" : "pair tokens"}
-        onReview={() => undefined} onKeepRules={onKeepRules} />}
+        onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
       {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
-      <button type="button" className={styles.createButton} disabled={localPreview || disabled || imageBusy || launch.busy}
+      <button type="button" className={styles.createButton} disabled={localPreview || disabled || imageBusy || launch.busy
+        || !bound && readiness.state !== "design-ready"}
         onClick={() => { if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>
         {bound?.state === "confirmed" ? "Create another coin" : launch.label}<ArrowRight size={16} aria-hidden="true" /></button>
       {launch.message && <p className={styles.note} role="status">{launch.message}</p>}

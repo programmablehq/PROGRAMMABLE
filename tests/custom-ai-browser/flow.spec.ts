@@ -35,6 +35,43 @@ test("mobile layout reflows and the editor remains keyboard accessible", async (
   await page.getByLabel("Name",{exact:true}).fill("Rain");
   await expect(page.getByLabel("Name",{exact:true})).toHaveValue("Rain");
 });
+test("starter ideas fill the composer without spending a request", async ({page}) => {
+  let calls=0;
+  await page.route("**/api/custom-ai",route=>{calls++;return route.fulfill({json:{reply:"Unexpected request"}});});
+  await page.goto("/launch/custom-ai");
+  await page.getByRole("button",{name:"A falling launch fee"}).click();
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await expect(box).toHaveValue(/5%.*1%.*10 minutes/);
+  await expect(box).toBeFocused();
+  await expect(page.getByRole("button",{name:"Launch coin"})).toBeDisabled();
+  expect(calls).toBe(0);
+});
+test("a selected rule is sent with the exact saved source and survives a failed reply",async({page})=>{
+  const requests:Record<string,unknown>[]=[];
+  await page.route("**/api/custom-ai",async route=>{
+    requests.push(route.request().postDataJSON());
+    if(requests.length===1)await route.fulfill({json:{reply:"Your complete rules are saved.",change:"applied",draft:{...draft,composable:{spec:rules,feeds:[]}}}});
+    else await route.fulfill({status:503,json:{error:"Please retry later.",requestState:"failed"}});
+  });
+  await page.goto("/launch/custom-ai");
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await box.fill("Build these rules");await box.press("Enter");
+  await page.getByText("Edit a rule",{exact:true}).click();
+  await page.getByRole("button",{name:"Edit rule: 10% declines to 1% over ten minutes",exact:true}).click();
+  await expect(box).toBeFocused();
+  await expect(page.getByText("Editing: 10% declines to 1% over ten minutes",{exact:true})).toBeVisible();
+  await box.fill("Start at 8% instead.");await box.press("Enter");
+  await expect(page.getByRole("alert").filter({hasText:"Please retry later."})).toHaveText("Please retry later.");
+  expect(requests[1].editTarget).toEqual({sourceHash:hash,requirementId:"decay"});
+  await page.reload();
+  await expect(box).toHaveValue("Start at 8% instead.");
+  await expect(page.getByText("Editing: 10% declines to 1% over ten minutes",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Keep previous rules",exact:true}).click();
+  await expect(page.getByText("Editing: 10% declines to 1% over ten minutes",{exact:true})).toHaveCount(0);
+  await box.fill("Explain the saved rules.");await box.press("Enter");
+  await expect(page.getByRole("alert").filter({hasText:"Please retry later."})).toHaveText("Please retry later.");
+  expect(requests[2].contextId).toBe(requests[0].id);
+});
 test("shows the full timed and weather rule together with its liquidity allocation",async({page},testInfo)=>{
   await page.route("**/api/custom-ai",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({reply:"The combined rules are ready for review.",change:"applied",setupPatch:{name:"Weather",symbol:"WTHR"},draft:{...draft,hookSummary:"starts at 10%, falls to 1% over ten minutes, then follows London rain and reinvests additional fees",composable:{spec:rules,feeds:[]}}})}));
   await page.goto("/launch/custom-ai");

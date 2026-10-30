@@ -15,10 +15,11 @@ function timeLabel(seconds: number) {
   return `After ${label.join(" ")}`;
 }
 
-export function RuleReview({ draft, pendingChange, disabled, onKeepRules, quoteLabel }: {
+export function RuleReview({ draft, pendingChange, disabled, onKeepRules, quoteLabel, onEditRule }: {
   draft?: Draft; pendingChange?: string; reviewed: boolean; disabled: boolean;
   quoteLabel?: string;
   onReview: (checked: boolean) => void; onKeepRules: () => void;
+  onEditRule?: (requirementId: string) => void;
 }) {
   const verified = draft?.verification;
   if (!draft && !pendingChange) return null;
@@ -47,6 +48,12 @@ export function RuleReview({ draft, pendingChange, disabled, onKeepRules, quoteL
         {" "}Execution is permissionless; its timing is not guaranteed.
         {!draft.program.available && " This program is prepared for testing; public launch is not enabled yet."}</p>}
       {!summary && <ul>{verified.requirements.map((rule, index) => <li key={index}>{rule}</li>)}</ul>}
+      {draft?.composable && onEditRule && <details>
+        <summary>Edit a rule</summary>
+        <ul className={styles.ruleEditList}>{draft.composable.spec.requirements.map(rule => <li key={rule.id}>
+          <span>{rule.text}</span><button type="button" disabled={disabled} onClick={() => onEditRule(rule.id)} aria-label={`Edit rule: ${rule.text}`}>Edit</button>
+        </li>)}</ul>
+      </details>}
       <details><summary>Checked fee examples</summary>
         <p>Total fees include the 0.5% platform fee. These examples were checked for buys and sells on both supported networks.</p>
         <table><caption className={styles.srOnly}>Fees by time after launch</caption>
