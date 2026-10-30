@@ -75,6 +75,22 @@ describe("editing a complete hook design", () => {
     expect(result).toMatchObject({ change: "blocked", ruleSpec: previous });
     expect(call).toHaveBeenCalledTimes(1); expect(compile).not.toHaveBeenCalled();
   });
+  it("does not let an incomplete proposal replace the design used by the next turn", async () => {
+    const partial = { ...previous, requirements: previous.requirements.slice(0, 2), actions: [], creatorShareBps: 10000 };
+    const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "What limit should I use?", action: "build", memory: "Keep liquidity too.",
+      requirements: partial.requirements.map(rule => rule.text), feeChecks: [], unresolved: ["Limit"], setupPatch: {}, composable: JSON.stringify(partial) }), inputTokens: 1, outputTokens: 1 }));
+    const result = await runCustomAI(request, undefined, { call, compile: vi.fn() }, { ruleSpec: previous });
+    expect(result.ruleSpec).toEqual(previous);
+  });
+  it("does not treat an uncompiled proposed recipient as an approved recipient", async () => {
+    const proposed = structuredClone(previous);
+    proposed.actions[0] = { ...proposed.actions[0], kind: "distribution", when: null, maximumQuote: "0", recipient: `0x${"1".repeat(40)}` };
+    const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "Use that recipient.", action: "build", memory: "Proposed recipient.",
+      requirements: proposed.requirements.map(rule => rule.text), feeChecks: [], unresolved: [], setupPatch: {}, composable: JSON.stringify(proposed) }), inputTokens: 1, outputTokens: 1 }));
+    const result = await runCustomAI(request, undefined, { call, compile: vi.fn() }, { ruleSpec: proposed });
+    expect(result).toMatchObject({ change: "blocked", unresolved: ["Recipient address"] });
+    expect(result.draft).toBeUndefined();
+  });
   it("carries an unfinished design through ordinary follow-up questions", async () => {
     const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "The timer controls the first phase.", action: "answer", memory: "Keep all rules.",
       requirements: [], feeChecks: [], unresolved: [], setupPatch: {} }), inputTokens: 1, outputTokens: 1 }));

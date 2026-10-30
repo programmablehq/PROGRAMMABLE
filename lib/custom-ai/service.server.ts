@@ -138,7 +138,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     if (plan.lookups.length) throw new CustomAIError("lookup", "That question needs a narrower lookup. Your draft is still saved.", 502);
   }
   const update = coinUpdate(interpreted, request);
-  if (plan.action === "build" && plan.unresolved.length) return { reply: plan.reply, ...update, ruleSpec: plan.composable ?? previousSpec,
+  if (plan.action === "build" && plan.unresolved.length) return { reply: plan.reply, ...update, ruleSpec: previousSpec ?? plan.composable,
     memory: plan.memory, change: "blocked", unresolved: plan.unresolved, ...(researched ? { chargedAs: "research", sources } : {}) };
   if (plan.action !== "build") return { reply: plan.reply, ...update, memory: plan.memory,
     ...(previousSpec ? { ruleSpec: previousSpec } : {}),
@@ -152,8 +152,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     const userText = request.messages.filter(message => message.role === "user").map(message => message.content.toLowerCase()).join("\n");
     if (ruleSpec.actions.some(action => action.recipient && action.recipient !== "creator"
       && !userText.includes(action.recipient.toLowerCase())
-      && !previousSpec?.actions.some(previous => previous.id === action.id && previous.recipient.toLowerCase() === action.recipient.toLowerCase()))) {
-      return { reply: "Provide the exact recipient address for that allocation.", ruleSpec, change: "blocked", unresolved: ["Recipient address"], memory: plan.memory, ...update };
+      && !context.draft?.composable?.spec.actions.some(previous => previous.id === action.id && previous.recipient.toLowerCase() === action.recipient.toLowerCase()))) {
+      return { reply: "Provide the exact recipient address for that allocation.", ruleSpec: previousSpec, change: "blocked", unresolved: ["Recipient address"], memory: plan.memory, ...update };
     }
     const edits = parseRuleEdits(interpreted.ruleEdits, request.messages.at(-1)!.content);
     const coverage = reviewRuleEdits(previousSpec, ruleSpec, edits, request.editTarget);
