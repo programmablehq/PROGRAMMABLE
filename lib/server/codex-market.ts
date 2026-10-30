@@ -14,6 +14,7 @@ const PROVIDER_FAILURE_BACKOFF_MS = 300_000;
 // the same stable batches without turning a page refresh into an unbounded
 // request fan-out.
 const MAX_MARKET_PROVIDER_BATCHES_PER_READ = 20;
+const MAX_CONCURRENT_MARKET_BUCKETS = 3;
 // Address-sorted slices shift every time a new token is inserted. Stable
 // buckets keep a new launch from invalidating the provider cache for the
 // entire catalog and make a cold refresh spend at most one new batch.
@@ -189,16 +190,19 @@ async function readMarketBatch(identities: readonly Identity[], chainId: number)
 }
 
 /** Only enrich identities supplied by the verified launch catalog. No provider token becomes a launch. */
-export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663): Promise<Map<string, RobinhoodCoinMarket>> {
+export async function readCodexMarkets(tokens: readonly Identity[], chainId = 4663, options: { universe?: readonly Identity[] } = {}): Promise<Map<string, RobinhoodCoinMarket>> {
   if (![1, 4663, 8453, 999].includes(chainId) || tokens.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market request");
-  if (!process.env.CODEX_API_KEY?.trim()) return new Map();
+  if (!process.env.CODEX_API_KEY?.trim() || tokens.length === 0) return new Map();
+  const universe = options.universe ?? tokens;
+  if (universe.length > 10_000 || universe.some(token => !marketAddress.test(token.tokenAddress) || !marketPool.test(token.poolId))) throw new Error("Invalid market universe");
+  const requested = new Set(tokens.map(token => token.tokenAddress.toLowerCase()));
   const poolsByToken = new Map<string, string>();
-  for (const token of tokens) {
+  for (const token of [...universe, ...tokens]) {
     const address = token.tokenAddress.toLowerCase(), pool = token.poolId.toLowerCase();
     if (poolsByToken.has(address) && poolsByToken.get(address) !== pool) throw new Error("Ambiguous market identity");
     poolsByToken.set(address, pool);
   }
-  const identities = [...new Map(tokens.map(token => [token.tokenAddress.toLowerCase(), { tokenAddress: token.tokenAddress.toLowerCase(), poolId: token.poolId.toLowerCase() }])).values()];
+  const identities = [...poolsByToken].map(([tokenAddress, poolId]) => ({ tokenAddress, poolId }));
   const result = new Map<string, RobinhoodCoinMarket>();
   // One HTTP request for token stats and exact-pool liquidity per 100 verified
   // identities. Bucket membership is stable across catalog growth, so adding
@@ -211,11 +215,11 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
   if (identities.length > 100) {
     for (const token of identities) buckets[marketBucket(token.tokenAddress, chainId)]!.push(token);
   }
-  for (const bucket of buckets) {
-    if (Date.now() >= deadline || providerBatches >= MAX_MARKET_PROVIDER_BATCHES_PER_READ) break;
+  let nextBucket = 0;
+  async function readBucket(bucket: Identity[]) {
     bucket.sort((a, b) => a.tokenAddress.localeCompare(b.tokenAddress));
     const reads = new Map<string, MarketRead>();
-    for (const token of bucket) {
+    const reuse = (token: Identity) => {
       const key = marketIdentity(token, chainId), observation = marketObservations.get(key);
       if (observation && Date.now() < observation.expiresAt) {
         if (observation.market) result.set(token.tokenAddress, copyMarket(observation.market));
@@ -224,11 +228,17 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
         const active = marketReads.get(key);
         if (active) reads.set(token.tokenAddress, active);
       }
-    }
+    };
+    for (const token of bucket) reuse(token);
     // Always use complete stable batches. Removing the already priced tokens
     // from a batch changes the persistent cache key and re-bills the remainder.
-    for (let index = 0; index < bucket.length && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
+    for (let index = 0; index < bucket.length && Date.now() < deadline
+      && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
       const batch = bucket.slice(index, index + 100);
+      if (!batch.some(token => requested.has(token.tokenAddress))) continue;
+      // Another caller can complete this batch while an earlier one is in
+      // flight. Collect those observations before deciding it needs no read.
+      for (const token of batch) reuse(token);
       const missing = batch.filter(token => !reads.has(token.tokenAddress)
         && !((marketObservations.get(marketIdentity(token, chainId))?.expiresAt ?? 0) > Date.now()));
       if (!missing.length) continue;
@@ -254,6 +264,9 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
         marketReads.set(key, request);
         reads.set(token.tokenAddress, request);
       }
+      // Finish one batch per worker before starting another. Large buckets
+      // must obey the same concurrency bound as a well-distributed catalog.
+      await Promise.allSettled(missing.map(token => reads.get(token.tokenAddress)!));
     }
     const addresses = [...reads.keys()];
     const settled = await Promise.allSettled(reads.values());
@@ -261,7 +274,16 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
       if (read.status === "fulfilled" && read.value) result.set(addresses[index], copyMarket(read.value));
     });
   }
-  return result;
+  // Three bounded workers prevent slow early buckets from consuming the whole
+  // read deadline. Stable batches, the provider-call cap and shared reads stay
+  // intact, so this does not turn navigation into extra paid refreshes.
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_MARKET_BUCKETS, buckets.length) }, async () => {
+    while (nextBucket < buckets.length && Date.now() < deadline && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ) {
+      const bucket = buckets[nextBucket++]!;
+      if (bucket.some(token => requested.has(token.tokenAddress))) await readBucket(bucket);
+    }
+  }));
+  return new Map([...result].filter(([address]) => requested.has(address)));
 }
 
 async function fetchChart(address: string, chainId: number, range: CodexChartRange): Promise<CodexChart> {

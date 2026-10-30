@@ -35,14 +35,14 @@ beforeEach(() => {
 });
 
 describe("Robinhood Explore read model", () => {
-  it.each(["newest", "oldest"] as const)("fetches only visible market rows for %s pages", async sort => {
+  it.each(["newest", "oldest"] as const)("returns visible market rows while sharing canonical batches for %s pages", async sort => {
     const rows = Array.from({ length: 60 }, (_, index) => token(index + 1));
     mocks.read.mockResolvedValue({ snapshot: saved(rows) });
     mocks.markets.mockResolvedValue(new Map(rows.map(row => [row.tokenAddress, market(row, 1)])));
     const page = await readRobinhoodLaunches(2, "", { sort }, 10);
     expect(page.items).toHaveLength(10);
     expect(page.page.totalItems).toBe(60);
-    expect(mocks.markets).toHaveBeenCalledExactlyOnceWith(page.items);
+    expect(mocks.markets).toHaveBeenCalledExactlyOnceWith(page.items, rows);
   });
 
   it("applies shared chain exclusions to finalized projections before market reads and preserves direct lookup", async () => {
@@ -54,7 +54,7 @@ describe("Robinhood Explore read model", () => {
     mocks.read.mockResolvedValue({ snapshot }); mocks.markets.mockResolvedValue(new Map());
     expect((await readRobinhoodExploreCatalog()).items).toEqual([publicToken]);
     expect((await readRobinhoodLaunches()).items).toEqual([publicToken]);
-    expect(mocks.markets).toHaveBeenCalledWith([publicToken]);
+    expect(mocks.markets).toHaveBeenCalledWith([publicToken], [publicToken]);
     expect((await readRobinhoodToken(hidden.identity)).token).toEqual(projected);
   });
   it.each([

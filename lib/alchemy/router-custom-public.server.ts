@@ -576,7 +576,9 @@ export function createRouterCustomIdentitySnapshotReaderV1(
       const source = await withinDuration(
         dependencies.readCurrentSource ?? (async () => {
           const saved = await savedRead.catch(() => null);
-          return readAllEthereumCustomIdentitySourcesV1(saved?.entries);
+          return readAllEthereumCustomIdentitySourcesV1(saved?.entries, saved ? {
+            savedBoundary: { blockNumber: saved.asOfBlock, blockHash: saved.asOfBlockHash },
+          } : {});
         }),
         ROUTER_CUSTOM_SNAPSHOT_SOURCE_REFRESH_TIMEOUT_MS,
       );
