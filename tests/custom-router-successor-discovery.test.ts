@@ -70,6 +70,76 @@ describe("successor discovery survives optional metadata removal", () => {
     ], [entry])).toThrow("Conflicting successor");
   });
 
+  it("reuses 100 saved identities with one canonical boundary check and no per-launch RPC work", async () => {
+    const entries = Array.from({ length: 100 }, (_, index) => {
+      const entry = saved();
+      return { ...entry, tokenAddress: `0x${(index + 1).toString(16).padStart(40, "0")}` as `0x${string}`,
+        launchStampProvenance: { ...entry.launchStampProvenance,
+          launchId: `0x${(index + 1).toString(16).padStart(64, "0")}` as `0x${string}` } };
+    });
+    const stamp = entries[0]!.launchStampProvenance;
+    const legacy = { status: "current", reorgDetected: false, slice: { cursor: {
+      blockNumber: stamp.blockNumber, blockHash: stamp.blockHash,
+    }, tokens: [] } } as unknown as AlchemyRouterCustomIdentitySourceV1;
+    const verifySavedBoundary = vi.fn(async () => true);
+    const verifyCandidates = vi.fn(async () => []);
+    const result = await readAllEthereumCustomIdentitySourcesV1(entries, {
+      readLegacy: async () => legacy, readMetadata: async () => null,
+      savedBoundary: legacy.slice.cursor, verifySavedBoundary, verifyCandidates,
+    });
+    expect(result.slice.tokens).toEqual(entries);
+    expect(verifySavedBoundary).toHaveBeenCalledOnce();
+    expect(verifyCandidates).not.toHaveBeenCalled();
+  });
+
+  it("runs complete verification for new launches while reusing the saved finalized prefix", async () => {
+    const entry = saved(), stamp = entry.launchStampProvenance;
+    const novel = { ...entry, tokenAddress: "0x3333333333333333333333333333333333333333" as const,
+      launchStampProvenance: { ...stamp, launchId: `0x${"33".repeat(32)}` as `0x${string}` } };
+    const hints = mergeSuccessorDiscoveryCandidatesV1([], [novel], BigInt(stamp.blockNumber));
+    const legacy = { status: "current", reorgDetected: false, slice: { cursor: {
+      blockNumber: stamp.blockNumber, blockHash: stamp.blockHash,
+    }, tokens: [] } } as unknown as AlchemyRouterCustomIdentitySourceV1;
+    const verifyCandidates = vi.fn(async (..._args: unknown[]) => [novel]);
+    const result = await readAllEthereumCustomIdentitySourcesV1([entry], {
+      readLegacy: async () => legacy, readMetadata: async () => ({ launches: hints }) as never,
+      savedBoundary: legacy.slice.cursor, verifySavedBoundary: async () => true, verifyCandidates,
+    });
+    expect(result.slice.tokens).toEqual([entry, novel]);
+    expect(verifyCandidates).toHaveBeenCalledOnce();
+    expect(verifyCandidates.mock.calls[0]![1]).toEqual(hints);
+  });
+
+  it.each([false, true])("fully re-verifies saved identities after a changed boundary or reorg (%s)", async reorg => {
+    const entry = saved(), stamp = entry.launchStampProvenance;
+    const legacy = { status: "current", reorgDetected: reorg, slice: { cursor: {
+      blockNumber: stamp.blockNumber, blockHash: stamp.blockHash,
+    }, tokens: [] } } as unknown as AlchemyRouterCustomIdentitySourceV1;
+    const verifySavedBoundary = vi.fn(async () => false);
+    const verifyCandidates = vi.fn(async () => [entry]);
+    const result = await readAllEthereumCustomIdentitySourcesV1([entry], {
+      readLegacy: async () => legacy, readMetadata: async () => null,
+      savedBoundary: legacy.slice.cursor, verifySavedBoundary, verifyCandidates,
+    });
+    expect(result.slice.tokens).toEqual([entry]);
+    expect(verifyCandidates).toHaveBeenCalledOnce();
+    expect(verifySavedBoundary).toHaveBeenCalledTimes(reorg ? 0 : 1);
+  });
+
+  it("does not reuse saved identities when the canonical boundary cannot be read", async () => {
+    const entry = saved(), stamp = entry.launchStampProvenance;
+    const legacy = { status: "current", slice: { cursor: {
+      blockNumber: stamp.blockNumber, blockHash: stamp.blockHash,
+    }, tokens: [] } } as unknown as AlchemyRouterCustomIdentitySourceV1;
+    const verifyCandidates = vi.fn(async () => [entry]);
+    await expect(readAllEthereumCustomIdentitySourcesV1([entry], {
+      readLegacy: async () => legacy, readMetadata: async () => null,
+      savedBoundary: legacy.slice.cursor,
+      verifySavedBoundary: async () => { throw new Error("provider unavailable"); }, verifyCandidates,
+    })).rejects.toThrow("provider unavailable");
+    expect(verifyCandidates).not.toHaveBeenCalled();
+  });
+
   it("keeps freshness owned by the verified onchain cursor", () => {
     expect(statusAfterVerifiedSuccessorReadV1("current")).toBe("current");
     expect(statusAfterVerifiedSuccessorReadV1("last-known-good")).toBe("last-known-good");

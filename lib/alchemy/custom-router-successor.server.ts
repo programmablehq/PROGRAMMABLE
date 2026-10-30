@@ -19,6 +19,8 @@ const reader = createLaunchStampReaderV1({
 // later presentation metadata continue through the existing market read model.
 const identities = new Map<string, LauncherToken>();
 
+type SavedSuccessorBoundary = Readonly<{ blockNumber: string; blockHash: `0x${string}` }>;
+
 type DiscoveryCandidate = Readonly<{
   router: `0x${string}`;
   routerLaunchId: `0x${string}`;
@@ -29,7 +31,7 @@ type DiscoveryCandidate = Readonly<{
 }>;
 
 /** Saved identities supply discovery hints when optional API metadata disappears.
- * Every hint still passes the same onchain event, code and finality checks below. */
+ * Every hint uses verified event/code/finality evidence or passes the full checks below. */
 export function mergeSuccessorDiscoveryCandidatesV1(
   feed: readonly DiscoveryCandidate[], saved: readonly CanonicalTokenExploreEntry[], boundary: bigint,
 ): readonly DiscoveryCandidate[] {
@@ -139,6 +141,8 @@ export async function readAllEthereumCustomIdentitySourcesV1(
     readLegacy?: typeof readAlchemyRouterCustomIdentitySourceV1;
     readMetadata?: typeof readOptionalSuccessorMetadataFeedV1;
     verifyCandidates?: typeof readVerifiedSuccessorTokensV1;
+    savedBoundary?: SavedSuccessorBoundary;
+    verifySavedBoundary?: typeof verifySavedSuccessorBoundaryV1;
   }> = {},
 ): Promise<AlchemyRouterCustomIdentitySourceV1> {
   const [legacy, feed] = await Promise.all([
@@ -151,9 +155,47 @@ export async function readAllEthereumCustomIdentitySourcesV1(
     legacy.slice.tokens,
   );
   if (candidates.length === 0) return legacy;
-  const tokens = await (dependencies.verifyCandidates ?? readVerifiedSuccessorTokensV1)(legacy, candidates);
+  // The durable snapshot already contains fully verified identities. Reconfirm
+  // its finalized boundary once before reusing that immutable history, including
+  // on cold server instances. New candidates still take the complete verifier.
+  const savedBoundary = dependencies.savedBoundary;
+  const reuseSaved = savedBoundary && !legacy.reorgDetected
+    && BigInt(savedBoundary.blockNumber) <= boundary
+    && await (dependencies.verifySavedBoundary ?? verifySavedSuccessorBoundaryV1)(savedBoundary);
+  const reused: LauncherToken[] = [];
+  const reusable = reuseSaved ? savedEntries.filter(entry => {
+    const stamp = entry.launchStampProvenance;
+    return stamp?.kind === "custom-graph" && stamp.chainId === 1
+      && isAddressEqual(stamp.routerAddress, binding.routerAddress)
+      && stamp.routerRuntimeCodeHash.toLowerCase() === binding.routerRuntimeCodeHash.toLowerCase()
+      && BigInt(stamp.blockNumber) <= BigInt(savedBoundary.blockNumber);
+  }) : [];
+  const pending = reuseSaved
+    ? filterUnseenSuccessorDiscoveryCandidatesV1(candidates, reusable)
+    : candidates;
+  if (reuseSaved) {
+    const pendingIds = new Set(pending.map(candidate => candidate.routerLaunchId.toLowerCase()));
+    const candidateIds = new Set(candidates.map(candidate => candidate.routerLaunchId.toLowerCase()));
+    for (const entry of reusable) {
+      const stamp = entry.launchStampProvenance;
+      if (stamp && candidateIds.has(stamp.launchId.toLowerCase())
+        && !pendingIds.has(stamp.launchId.toLowerCase())
+        && BigInt(stamp.blockNumber) <= BigInt(savedBoundary.blockNumber)) reused.push(entry);
+    }
+  }
+  const tokens = pending.length
+    ? await (dependencies.verifyCandidates ?? readVerifiedSuccessorTokensV1)(legacy, pending)
+    : [];
   return { ...legacy, status: statusAfterVerifiedSuccessorReadV1(legacy.status),
-    slice: { ...legacy.slice, tokens: [...legacy.slice.tokens, ...tokens] } };
+    slice: { ...legacy.slice, tokens: [...legacy.slice.tokens, ...reused, ...tokens] } };
+}
+
+async function verifySavedSuccessorBoundaryV1(boundary: SavedSuccessorBoundary): Promise<boolean> {
+  const deployment = getWebsiteReadOnchainDeployment("production");
+  if (deployment.status !== "ready") throw new Error("Ethereum launch identity reader unavailable");
+  const client = createPublicClient({ chain: mainnet, transport: http(deployment.rpcUrl, { retryCount: 1, timeout: 12_000 }) });
+  const block = await client.getBlock({ blockNumber: BigInt(boundary.blockNumber) });
+  return block.hash?.toLowerCase() === boundary.blockHash.toLowerCase();
 }
 
 async function readVerifiedSuccessorTokensV1(
