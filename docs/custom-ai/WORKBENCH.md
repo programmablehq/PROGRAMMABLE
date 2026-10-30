@@ -30,7 +30,7 @@ The current Custom AI launch core supports Ethereum and Robinhood. The separate 
 | New executable money behavior | Versioned rule/compiler/program implementation | Contract behavior and exact deployment evidence, then its own activation |
 | Chat UI | `components/custom-ai/` | Desktop/mobile interaction and draft recovery |
 
-Increment `AI_CONFIG.version` when changing planner behavior. In-flight requests keep their existing job identity; retries must not repeat a paid request blindly. Tool versions and implementation hashes are recorded per job. Do not modify a launched contract to roll out a chat improvement.
+Increment `AI_CONFIG.version` when changing planner behavior. In-flight requests keep their existing job identity; retries must not repeat a paid request blindly. Tool versions and implementation hashes are recorded per job. Do not modify a launched contract to roll out a chat improvement. Provider setup and Surplus activation are described in [Model providers](PROVIDERS.md).
 
 ## Remaining capability work
 

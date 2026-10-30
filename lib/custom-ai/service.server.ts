@@ -1,5 +1,7 @@
 import "server-only";
-import { callClaude, MODELS, type ClaudeInput, type ClaudeResult } from "./claude.server";
+import { type ClaudeInput, type ClaudeResult } from "./claude.server";
+import { callModel } from "./model-provider.server";
+import { configuredProvider, researchAvailable } from "./provider-config.server";
 import { compileLaunchDraft } from "./lifecycle.server";
 import core from "./core-sources.json";
 import { BUILD_RULES, FOUNDATION } from "./prompt";
@@ -78,7 +80,8 @@ function coinUpdate(answer: Record<string, unknown>, request: ChatRequest): Pick
 }
 
 export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
-  dependencies: Dependencies = { call: callClaude, compile: compileLaunchDraft }, context: AIContext = {}): Promise<ChatResult> {
+  dependencies: Dependencies = { call: callModel, compile: compileLaunchDraft }, context: AIContext = {}): Promise<ChatResult> {
+  const MODELS = configuredProvider().models;
   const originalCall=dependencies.call;
   dependencies={...dependencies,call:async input=>{
     const started=Date.now();
@@ -86,7 +89,7 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
     catch(error){context.onModelCall?.({model:input.model,durationMs:Date.now()-started,inputTokens:null,outputTokens:null,completed:false});throw error;}
   }};
   const capabilityContext: CapabilityContext = { owner: context.owner ?? "local-preview", chainId: request.coin?.chainId ?? 1,
-    signal, allowWeb: Boolean(process.env.ANTHROPIC_API_KEY) || Boolean(dependencies.lookup), budget: { remaining: AI_CONFIG.maximumLookups },onProviderUsage:context.onModelCall };
+    signal, allowWeb: researchAvailable() || Boolean(dependencies.lookup), budget: { remaining: AI_CONFIG.maximumLookups },onProviderUsage:context.onModelCall };
   const capabilities = getCapabilities(capabilityContext);
   const previousSpec = context.ruleSpec ?? context.draft?.composable?.spec;
   if (request.editTarget && (request.editTarget.sourceHash !== context.draft?.sourceHash

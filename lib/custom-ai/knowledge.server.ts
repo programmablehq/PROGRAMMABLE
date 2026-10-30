@@ -4,9 +4,12 @@ import { customAIChain } from "./chain.server";
 import { readUnifiedLaunches } from "@/lib/server/unified-explore";
 import { MODELS } from "./claude.server";
 import { CustomAIError } from "./types";
+import { configuredProvider, researchAvailable } from "./provider-config.server";
+import { readSurplusResearch } from "./surplus-research.server";
 import { safeKnowledgeSources, type KnowledgeLookup, type KnowledgeResult } from "./knowledge";
 
 export async function readWebKnowledge(query: string, signal?: AbortSignal, onUsage?:(value:import("./request-metrics").ModelCallMetric)=>void): Promise<KnowledgeResult> {
+  if (configuredProvider().id === "surplus") return readSurplusResearch(query, signal, onUsage);
   const started=Date.now();
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new CustomAIError("lookup", "Live research is not connected.", 503);
@@ -80,7 +83,7 @@ export async function readContractKnowledge(lookup: KnowledgeLookup, signal?: Ab
 export async function readLiveKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
   const { getCapabilities } = await import("./capabilities/registry.server");
   const { dispatchTool } = await import("./capabilities/dispatch.server");
-  const context = { owner: "legacy-read", chainId: lookup.chainId, signal, allowWeb: Boolean(process.env.ANTHROPIC_API_KEY), budget: { remaining: 1 } };
+  const context = { owner: "legacy-read", chainId: lookup.chainId, signal, allowWeb: researchAvailable(), budget: { remaining: 1 } };
   const tool = getCapabilities(context).find(entry => entry.ref.id === lookup.kind);
   if (!tool) throw new CustomAIError("lookup", "That lookup is not connected.", 503);
   return dispatchTool(tool.ref, lookup.input ?? { query: lookup.query, chainId: lookup.chainId, address: lookup.address }, context);

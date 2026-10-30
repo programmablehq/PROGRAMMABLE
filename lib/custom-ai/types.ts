@@ -94,7 +94,7 @@ export function parseChatRequest(value: unknown): ChatRequest {
       throw new CustomAIError("input", "Keep each message under 8,000 characters.");
     }
     length += message.content.length;
-    if (/sk-ant-[a-z0-9_-]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(message.content)) {
+    if (/sk-ant-[a-z0-9_-]{20,}|inf_[a-z0-9_-]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(message.content)) {
       throw new CustomAIError("secret", "That looks like a secret key. Remove it before sending your message.");
     }
   }
