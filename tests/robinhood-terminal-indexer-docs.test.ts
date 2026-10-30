@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { getRedirectUrl, getRewrittenUrl, unstable_getResponseFromNextConfig } from "next/experimental/testing/server";
 
 import nextConfig from "../next.config";
+import sitemap from "../app/sitemap";
 
 const fixturePath = resolve(
   process.cwd(),
@@ -39,10 +40,6 @@ const gitBookSource = readFileSync(
 );
 const gitBookSummary = readFileSync(
   resolve(process.cwd(), "docs/public/SUMMARY.md"),
-  "utf8",
-);
-const sitemapSource = readFileSync(
-  resolve(process.cwd(), "app/sitemap.ts"),
   "utf8",
 );
 const vercelConfig = JSON.parse(
@@ -178,10 +175,10 @@ describe("Robinhood terminal and indexer documentation", () => {
   it("redirects the Custom AI guide before the edge GitBook rewrite", async () => {
     const redirect = {
       source: "/docs/models/custom-ai",
-      destination: "/developer-reference/custom-ai",
+      destination: "/docs/launch/custom-ai",
       permanent: false,
     };
-    expect(vercelConfig.redirects).toContainEqual(redirect);
+    expect(await nextConfig.redirects?.()).toContainEqual(redirect);
     for (const suffix of ["", "/"]) {
       let response = await unstable_getResponseFromNextConfig({
         url: `https://programmable.market/docs/models/custom-ai${suffix}`,
@@ -193,23 +190,21 @@ describe("Robinhood terminal and indexer documentation", () => {
           url: getRedirectUrl(response)!, nextConfig,
         });
       }
-      expect(getRedirectUrl(response)).toBe("https://programmable.market/developer-reference/custom-ai");
+      expect(getRedirectUrl(response)).toBe("https://programmable.market/docs/launch/custom-ai");
     }
-    const native = await unstable_getResponseFromNextConfig({
+    const legacy = await unstable_getResponseFromNextConfig({
       url: "https://programmable.market/developer-reference/custom-ai", nextConfig,
     });
-    expect(getRewrittenUrl(native)).toBeNull();
-    expect(getRedirectUrl(native)).toBeNull();
+    expect(getRedirectUrl(legacy)).toBe("https://programmable.market/docs/launch/custom-ai");
+    const canonical = await unstable_getResponseFromNextConfig({
+      url: "https://programmable.market/docs/launch/custom-ai", nextConfig,
+    });
+    expect(getRewrittenUrl(canonical)).toBe("https://proxy.gitbook.site/sites/site_V93gQ/launch/custom-ai");
+    expect(getRedirectUrl(canonical)).toBeNull();
   });
-  it("preserves native guides before the GitBook rewrite", async () => {
+  it("serves every documentation path through GitBook without native guide exceptions", async () => {
     const rewriteOnly = { ...nextConfig, redirects: async () => [] };
-    for (const path of ["ethereum-direct-custom-hook", "models/custom-ai"]) {
-      const native = await unstable_getResponseFromNextConfig({
-        url: `https://programmable.market/docs/${path}`, nextConfig: rewriteOnly,
-      });
-      expect(getRewrittenUrl(native)).toBeNull();
-    }
-    for (const path of ["launch/launch", "ethereum-direct-custom-hook-other", "models/custom-ai-other"]) {
+    for (const path of ["ethereum-direct-custom-hook", "models/custom-ai", "launch/module-mode", "developers/custom-launch-quickstart/hyperevm-custom-launch"]) {
       const gitbook = await unstable_getResponseFromNextConfig({
         url: `https://programmable.market/docs/${path}`, nextConfig: rewriteOnly,
       });
@@ -231,8 +226,8 @@ describe("Robinhood terminal and indexer documentation", () => {
           destination: "https://proxy.gitbook.site/sites/site_V93gQ",
         },
         {
-          source: "/docs/:match((?!ethereum-direct-custom-hook$|models/custom-ai$).*)",
-          destination: "https://proxy.gitbook.site/sites/site_V93gQ/:match*",
+          source: "/docs/:path*",
+          destination: "https://proxy.gitbook.site/sites/site_V93gQ/:path*",
         },
       ],
     });
@@ -247,8 +242,8 @@ describe("Robinhood terminal and indexer documentation", () => {
     expect(pageSource).toContain(
       'canonical: "/developer-reference/robinhood-terminal-indexer"',
     );
-    expect(sitemapSource).toContain(
-      '"/developer-reference/robinhood-terminal-indexer"',
+    expect(sitemap().map(({ url }) => url)).toContain(
+      "https://programmable.market/docs/developers/indexing/robinhood-terminal-indexer",
     );
     expect(gitBookSummary).toContain(
       "(developers/robinhood-terminal-indexer.md)",

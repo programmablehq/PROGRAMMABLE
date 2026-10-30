@@ -83,11 +83,22 @@ describe("active Robinhood agent setup and generated documentation", () => {
 
   it("preserves historical Markdown and home output while updating the agent index", async () => {
     const docs = await activeDocs("4.0.0");
+    const canonicalGuide = "https://programmable.market/docs/developers/custom-launch-quickstart/custom-launch";
+    expect(docs.developerDocsMarkdown).toContain(canonicalGuide);
+    expect(docs.programmableHomeMarkdown).toContain("https://programmable.market/docs/developers/developers");
+    // Normalize only the migrated documentation links before comparing frozen
+    // historical content; API profiles, funding rules and wallet boundaries stay pinned.
+    const historicalMarkdown = docs.developerDocsMarkdown.replaceAll(
+      canonicalGuide, "https://programmable.market/docs/developers/custom-launch",
+    );
+    const historicalHome = docs.programmableHomeMarkdown
+      .replaceAll(canonicalGuide, "https://programmable.market/docs/developers/custom-launch")
+      .replaceAll("https://programmable.market/docs/developers/developers", "https://programmable.market/docs/developers");
     // Captured from source 1f488b4685e349f09d41cc45dbd5e27ce0d4a996 before this change.
-    expect(hash(docs.developerDocsMarkdown)).toBe("11c46682593943bc0495bbd36b80678c8318607c8b68db20d638379067806ee5");
+    expect(hash(historicalMarkdown)).toBe("11c46682593943bc0495bbd36b80678c8318607c8b68db20d638379067806ee5");
     expect(docs.programmableLlmsIndex).toContain("primary Robinhood create workflow is customLaunchPlan");
     expect(docs.programmableLlmsFullFallback).toContain(docs.developerDocsMarkdown);
-    expect(hash(docs.programmableHomeMarkdown)).toBe("d9b088638004c6837081c0ee4301a8ef95f3de37272606ff01294a3149c30a3d");
+    expect(hash(historicalHome)).toBe("d9b088638004c6837081c0ee4301a8ef95f3de37272606ff01294a3149c30a3d");
   });
 
   it("keeps 4.1 facts in historical references and makes the current agent index plan-first", async () => {

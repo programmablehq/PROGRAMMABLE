@@ -64,6 +64,11 @@ describe("profile-selected Robinhood well-known discovery", () => {
       readiness: "https://api.programmable.market/v4/chains/999/readiness",
     });
     const historical = JSON.parse(JSON.stringify(original));
+    expect(original.customLaunchApi.base.guide).toBe(
+      "https://programmable.market/docs/developers/custom-launch-quickstart/base-custom-launch",
+    );
+    // The guide moved to GitBook; retain the frozen API/funding proof below.
+    historical.customLaunchApi.base.guide = "https://programmable.market/developers/base-custom-launch-api-v1.md";
     historical.customLaunchApi.intake = programmableAgentIntakeV1("4.0.0");
     delete historical.customLaunchApi.hyperevm;
     historical.chains = historical.chains.filter((chain: { chainId: number }) => chain.chainId !== 999);
