@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { DOCUMENTATION } from "@/lib/documentation";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowUpRight, Check, ChevronRight, Copy, Inbox, Puzzle, RefreshCw } from "lucide-react";
 import { buildModuleSubmissionHandoff, moduleSubmissionFeedback, moduleSubmissionPresentation,
@@ -110,6 +110,6 @@ export function ProfileModuleSubmissions({ data = unavailable, onRetry }: { data
     <span className={styles.icon} aria-hidden="true"><Inbox size={28} strokeWidth={1.4} /></span>
     <h3>Couldn’t load your submissions.</h3>
     {onRetry ? <button type="button" className={styles.guide} onClick={onRetry}><RefreshCw size={16} aria-hidden="true" strokeWidth={1.8} />Try again</button>
-      : <Link className={styles.guide} href="/docs/models/module-mode">Module Mode guide<ArrowUpRight size={16} aria-hidden="true" strokeWidth={1.8} /></Link>}
+      : <a className={styles.guide} href={DOCUMENTATION.moduleMode}>Module Mode guide<ArrowUpRight size={16} aria-hidden="true" strokeWidth={1.8} /></a>}
   </div>;
 }

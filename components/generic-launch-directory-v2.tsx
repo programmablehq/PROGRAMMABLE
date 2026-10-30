@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { DOCUMENTATION } from "@/lib/documentation";
 
 import type { GenericLaunchRecordV2 } from
   "@/lib/server/custom-launch/generic-launch-contract-v2";
@@ -49,7 +50,7 @@ export function GenericLaunchDirectoryV2() {
         </p>
         <div className={styles.headerActions}>
           <Link href="/developers/api-keys">Manage API keys</Link>
-          <Link href="/docs/developers/custom-launch">Read the API guide</Link>
+          <a href={DOCUMENTATION.customLaunch}>Read the API guide</a>
         </div>
       </header>
       {state.status === "loading" ? (
