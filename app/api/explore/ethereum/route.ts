@@ -1,5 +1,6 @@
 import { parseEthereumExploreQuery } from "@/lib/ethereum-explore";
 import { readEthereumLaunches } from "@/lib/server/ethereum-explore";
+import { exploreResponsePolicy } from "@/lib/server/explore-response-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,9 +10,10 @@ export async function GET(request: Request) {
   if (!query) return Response.json({ error: "invalid_query" }, { status: 400, headers: { "cache-control": "no-store" } });
   try {
     const result = await readEthereumLaunches(query.page, query.q, query.filters, query.pageSize);
-    return Response.json(result, { status: result.status === "unavailable" ? 503 : 200, headers: {
-      "cache-control": result.status === "ready" ? "public, max-age=0, s-maxage=15" : "no-store",
-      "x-programmable-indexing-status": result.status,
+    const policy = exploreResponsePolicy(result, { maxAgeSeconds: 15 });
+    return Response.json({ ...result, status: policy.status }, { status: policy.status === "unavailable" ? 503 : 200, headers: {
+      "cache-control": policy.cacheControl,
+      "x-programmable-indexing-status": policy.status,
       "x-content-type-options": "nosniff",
     } });
   } catch {

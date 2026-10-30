@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const read = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/server/unified-explore", () => ({ readUnifiedLaunches: read }));
 import { GET } from "@/app/api/explore/launches/route";
-beforeEach(() => read.mockReset().mockResolvedValue({ scope: "all", status: "ready", items: [], presentations: [], page: {} }));
+beforeEach(() => read.mockReset().mockResolvedValue({ scope: "all", status: "ready", updatedAt: new Date().toISOString(), items: [], presentations: [], page: {} }));
 
 describe("Unified Explore HTTP contract", () => {
   it("defaults to global highest market cap and ten slots", async () => {

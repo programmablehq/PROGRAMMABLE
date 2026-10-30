@@ -334,6 +334,32 @@ describe("Codex server market adapter", () => {
     expect((await readCodexMarkets([...tokens, added])).size).toBe(385);
     expect(fetcher).toHaveBeenCalledTimes(5);
   });
+  it("prices every stable Ethereum bucket within the read budget without unbounded concurrency", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const tokens = Array.from({ length: 1_280 }, (_, index) => ({
+      tokenAddress: `0x${index.toString(16).padStart(8, "0")}${"0".repeat(32)}`,
+      poolId: `0x${index.toString(16).padStart(64, "0")}`,
+    }));
+    let active = 0, maximumActive = 0;
+    const fetcher = vi.fn(async (_url, request) => {
+      active += 1; maximumActive = Math.max(active, maximumActive);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      active -= 1;
+      const variables = JSON.parse(request.body).variables;
+      return Response.json({ data: { filterTokens: { results: variables.tokens.map((id: string) => ({
+        token: { address: id.split(":")[0], networkId: 1 }, priceUSD: "1",
+      })) }, filterPairs: { results: [] } } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = readCodexMarkets(tokens, 1);
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect((await result).size).toBe(tokens.length);
+    expect(fetcher).toHaveBeenCalledTimes(20);
+    expect(maximumActive).toBeLessThanOrEqual(3);
+    expect(maximumActive).toBeGreaterThan(1);
+    expect((await readCodexMarkets(tokens, 1)).size).toBe(tokens.length);
+    expect(fetcher).toHaveBeenCalledTimes(20);
+  });
   it("bounds a cold catalog read instead of fanning out without a limit", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const tokens = Array.from({ length: 2_105 }, (_, index) => ({ tokenAddress: `0x${index.toString(16).padStart(40, "0")}`, poolId: `0x${index.toString(16).padStart(64, "0")}` }));
