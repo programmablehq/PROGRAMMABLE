@@ -46,6 +46,11 @@
   min-width: 0;
 }
 
+.modelGrid[data-single-card="true"] {
+  grid-template-columns: minmax(0, 570px);
+  justify-content: center;
+}
+
 .modelCard.modelCard {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
