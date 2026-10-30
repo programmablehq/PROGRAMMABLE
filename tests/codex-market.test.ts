@@ -136,6 +136,21 @@ describe("Codex server market adapter", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("reads only the requested stable batch for a deep catalog page", async () => {
+    vi.stubEnv("CODEX_API_KEY", "test-private-key");
+    const universe = Array.from({ length: 4000 }, (_, i) => ({
+      tokenAddress: `0x00000004${i.toString(16).padStart(32, "0")}`,
+      poolId: `0x${i.toString(16).padStart(64, "0")}`,
+    }));
+    const selected = universe.at(-1)!;
+    const fetcher = vi.fn(async () => Response.json({ data: { filterTokens: { results: [{
+      ...row(), token: { address: selected.tokenAddress, networkId: 4663 },
+    }] }, filterPairs: { results: [] } } }));
+    vi.stubGlobal("fetch", fetcher);
+    expect((await readCodexMarkets([selected], 4663, { universe })).has(selected.tokenAddress)).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("shares canonical market batches across different Explore pages", async () => {
     vi.stubEnv("CODEX_API_KEY", "test-private-key");
     const universe = Array.from({ length: 320 }, (_, i) => ({

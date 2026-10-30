@@ -235,6 +235,7 @@ export async function readCodexMarkets(tokens: readonly Identity[], chainId = 46
     for (let index = 0; index < bucket.length && Date.now() < deadline
       && providerBatches < MAX_MARKET_PROVIDER_BATCHES_PER_READ; index += 100) {
       const batch = bucket.slice(index, index + 100);
+      if (!batch.some(token => requested.has(token.tokenAddress))) continue;
       // Another caller can complete this batch while an earlier one is in
       // flight. Collect those observations before deciding it needs no read.
       for (const token of batch) reuse(token);
