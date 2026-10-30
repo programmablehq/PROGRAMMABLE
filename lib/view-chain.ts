@@ -31,9 +31,8 @@ export function isViewChainId(value: unknown): value is ViewChainId {
 }
 
 export function parseViewChainId(value: unknown): ViewChainId {
-  // Preserve the Robinhood default for old preferences; retain explicit Base choices.
-  const chainId = tryParseViewChainId(value);
-  return chainId === 4663 || chainId === 8453 || chainId === 999 ? chainId : DEFAULT_VIEW_CHAIN_ID;
+  // The versioned cookie already separates legacy defaults from user choices.
+  return tryParseViewChainId(value) ?? DEFAULT_VIEW_CHAIN_ID;
 }
 
 export function serializeViewChainCookie(viewChainId: ViewChainId): string {
