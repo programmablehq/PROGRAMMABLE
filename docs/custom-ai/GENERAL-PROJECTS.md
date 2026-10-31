@@ -244,4 +244,29 @@ bounded by 16 targets, 200 million total synthetic gas, 35 seconds, a 384-MB hea
 and bounded input/output. The report is scoped to
 `isolated-constructor-runtime-v1`, always keeps `launchReady:false`, and does not
 establish live dependency state, pool behavior, backend admission or launch
-execution. Connecting it to the canonical packer is the next integration step.
+execution. The owned preparation and request persistence still need their
+integration.
+
+## Canonical packer runtime handoff
+
+The existing SDK's V3 `buildLaunch`/`packLaunch` can receive a trusted local
+`runtimeMaterializer`. Its internal prediction snapshot is separate from the
+final request. The callback cannot change source, constructors, target identities
+or permission addresses through that snapshot. It must return exactly one
+compiler-slot map and observed runtime hash for every target.
+
+The SDK reuses the compiler's original zero-filled immutable ranges and checks
+the supplied words with its existing normalizer. It retains each already mined
+applicant salt, rebuilds the graph once without a second grind, checks every exact
+prediction is unchanged and requires the resulting code hashes to match the
+observed constructor code. All original final profile, source, funding and
+verification-bundle checks still run. A callback failure produces no request
+file and does not fall back to placeholder words.
+
+The optional materialization receipt contains the exact words and salts needed
+to persist a reproducible config outside the source bundle. The normal
+`validateLaunchFile` path can then reproduce the same request without invoking
+the callback or running constructors again. Existing builds without a callback
+retain their original behavior. This hook is a local integration point; it is
+not a public HTTP authority or a new API key. The Custom AI owned pack writer,
+modern Robinhood Plan construction and signed submission workflow remain pending.

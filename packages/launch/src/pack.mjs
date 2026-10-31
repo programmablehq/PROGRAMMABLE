@@ -43,6 +43,7 @@ import {
 } from "./diagnostics.mjs";
 import { inspectEip3009FundingCompatibility } from "./funding-compatibility.mjs";
 import { buildGraphBundle, deriveRouteNamespace } from "./graph.mjs";
+import { completeGraphRuntimeV1 } from "./runtime-build-v1.mjs";
 import {
   assertExactKeys,
   atomicWrite,
@@ -85,9 +86,12 @@ const NONZERO_HEX32 = /^0x(?!0{64}$)[0-9a-f]{64}$/;
 const DECIMAL = /^(?:0|[1-9][0-9]*)$/;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-export async function buildLaunch({ configPath, directNativeProfileVersion, directNativeRouter, directNativeTradeFeePolicy }) {
+export async function buildLaunch({ configPath, directNativeProfileVersion, directNativeRouter, directNativeTradeFeePolicy, runtimeMaterializer }) {
   const absoluteConfig = path.resolve(configPath);
   const { config, apiVersion } = await readPackConfig(absoluteConfig);
+  if (runtimeMaterializer !== undefined && (apiVersion !== "v3" || typeof runtimeMaterializer !== "function")) {
+    throw new TypeError("runtime materialization is available only as a trusted local V3 build function");
+  }
   if (apiVersion === "v4") {
     if (directNativeProfileVersion !== undefined) {
       throw new TypeError("directNativeProfileVersion is available only for V3 exact retries");
@@ -135,7 +139,7 @@ export async function buildLaunch({ configPath, directNativeProfileVersion, dire
       : {}),
   });
   const unitsById = new Map(units.map((unit) => [unit.compilationUnitId, unit]));
-  const targets = [];
+  let targets = [];
   for (const [index, target] of config.targets.entries()) {
     targets.push(await loadTargetArtifact(target, index, sourceRoot, unitsById, {
       apiVersion: apiVersion === "v1" ? "v1" : "v2",
@@ -208,14 +212,7 @@ export async function buildLaunch({ configPath, directNativeProfileVersion, dire
     bundleContentSha256: sourceBundle.bundleContentSha256,
     publicOriginCommitment,
   };
-  const {
-    graphBundle,
-    graphBundleHash,
-    unboundGraphBundleHash,
-    predictions,
-    runtimeCodes,
-  } = buildGraphBundle({
-    targets,
+  const graphOptions = {
     pool: apiVersion === "v3" ? graphPoolFromV3Config(config.pool) : config.pool,
     sourceBundleSha256: sourceBundle.bundleContentSha256,
     launchWallet,
@@ -226,7 +223,14 @@ export async function buildLaunch({ configPath, directNativeProfileVersion, dire
       : [],
     enforceV4PermissionDependencies: apiVersion === "v3",
     ...(directNativeProfile ? { chainContext: directNativeProfile } : {}),
-  });
+  };
+  let graph = buildGraphBundle({ ...graphOptions, targets }), runtimeMaterialization;
+  if (runtimeMaterializer !== undefined) {
+    const completed = await completeGraphRuntimeV1({ targets, graph, graphOptions, chainId: config.chainId, launchWallet,
+      materialize: runtimeMaterializer });
+    targets = completed.targets; graph = completed.graph; runtimeMaterialization = completed.receipt;
+  }
+  const { graphBundle, graphBundleHash, unboundGraphBundleHash, predictions, runtimeCodes } = graph;
   const { verificationBundle, verificationBundleHash } = buildVerificationBundle(
     units,
     targets,
@@ -513,6 +517,7 @@ export async function buildLaunch({ configPath, directNativeProfileVersion, dire
     ...(behaviorScenarioInputsHash === null ? {} : { behaviorScenarioInputsHash }),
     verificationBundleHash,
     predictions,
+    ...(runtimeMaterialization === undefined ? {} : { runtimeMaterialization }),
     ...(diagnostics.length === 0 ? {} : { diagnostics }),
   };
   if (apiVersion !== "v1") {
@@ -525,8 +530,8 @@ export async function buildLaunch({ configPath, directNativeProfileVersion, dire
   return result;
 }
 
-export async function packLaunch({ configPath, outputPath, receiptPath, directNativeProfileVersion, directNativeRouter, directNativeTradeFeePolicy }) {
-  const built = await buildLaunch({ configPath, directNativeProfileVersion, directNativeRouter, directNativeTradeFeePolicy });
+export async function packLaunch({ configPath, outputPath, receiptPath, directNativeProfileVersion, directNativeRouter, directNativeTradeFeePolicy, runtimeMaterializer }) {
+  const built = await buildLaunch({ configPath, directNativeProfileVersion, directNativeRouter, directNativeTradeFeePolicy, runtimeMaterializer });
   const resolvedOutput = path.resolve(outputPath ?? path.join(built.configDirectory, "launch.json"));
   const resolvedReceipt = path.resolve(receiptPath ?? `${resolvedOutput}.receipt.json`);
   await atomicWrite(resolvedOutput, built.requestBytes, 0o600);
@@ -538,6 +543,7 @@ export async function packLaunch({ configPath, outputPath, receiptPath, directNa
     graphBundleHash: built.graphBundleHash,
     verificationBundleHash: built.verificationBundleHash,
     predictions: built.predictions,
+    ...(built.runtimeMaterialization === undefined ? {} : { runtimeMaterialization: built.runtimeMaterialization }),
   };
   if (built.projectMetadataHash !== undefined) {
     result.unboundGraphBundleHash = built.unboundGraphBundleHash;
