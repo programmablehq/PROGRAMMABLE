@@ -8,14 +8,16 @@ export function classifyProviderFailure(status: number, body: unknown, retryAfte
   if ([401, 403].includes(status)) return { kind: "authentication", retryable: false, cooldownMs: 600_000, refundAccount: true };
   if (status === 429) return { kind: "rate_limit", retryable: true, cooldownMs: wait, refundAccount: true };
   if (status >= 500) return { kind: "overloaded", retryable: true, cooldownMs: Math.max(15_000, wait), refundAccount: true };
-  return { kind: "request", retryable: false, cooldownMs: 0, refundAccount: false };
+  return { kind: "request", retryable: false, cooldownMs: 0, refundAccount: true };
 }
 export function providerError(failure: ProviderFailure): CustomAIError {
-  const message = failure.kind === "billing" || failure.kind === "authentication"
+  const message = failure.kind === "request"
+    ? "The AI request could not be processed. Your design is saved and this attempt will not use your generation allowance."
+    : failure.kind === "billing" || failure.kind === "authentication"
     ? "The AI provider is temporarily unavailable. Your design is saved and this attempt will not use your generation allowance."
     : "The AI provider is busy. Your design is saved; try again shortly.";
   return new CustomAIError(`provider_${failure.kind}`, message, 503, failure.cooldownMs);
 }
 export function refundsProviderFailure(code?: string) {
-  return ["provider_billing", "provider_authentication", "provider_rate_limit", "provider_overloaded", "provider_cooldown"].includes(code ?? "");
+  return ["provider_billing", "provider_authentication", "provider_rate_limit", "provider_overloaded", "provider_cooldown", "provider_request"].includes(code ?? "");
 }

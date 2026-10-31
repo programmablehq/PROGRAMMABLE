@@ -10,6 +10,8 @@ The configured roles are `claude-haiku-5.5` for planning, `claude-sonnet-5.5` fo
 
 Generation uses `/chat/completions` with strict JSON schema output. Streaming must complete with a normal stop and a terminal event. An HTTP 200 error envelope, a truncated result or a refused answer is not a usable draft. Responses and events are bounded. Provider failures retain the draft and follow the existing cooldown, request identity and allowance rules; the adapter does not blindly replay requests.
 
+The Claude bridge rejects the planner's nested `anyOf` tool envelopes, nullable object schemas and several JSON Schema length/range keywords. Object union values travel as JSON-encoded strings; unsupported constraints remain in field descriptions and are enforced locally. The adapter restores the result and validates it against the complete original schema before the planner or any tool can use it. Runtime tool validation, available tools and lookup limits remain authoritative.
+
 Surplus selection never falls back to the direct Anthropic key. An empty Surplus key stops before a provider request. Each provider has its own cooldown, so an Anthropic billing incident does not disable a valid Surplus connection.
 
 ## Web research

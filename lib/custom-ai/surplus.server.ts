@@ -4,6 +4,7 @@ import { CustomAIError } from "./types";
 import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { readServerEvents } from "./events";
+import { prepareSurplusSchema } from "./surplus-schema.server";
 
 const endpoint = "https://api.surplusintelligence.ai/v1";
 export async function boundedProviderJSON(response: Response, maximum = 512_000) {
@@ -55,11 +56,12 @@ export async function rejectEnvelopeError(value: { error?: unknown }) {
 }
 
 export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
+  const format = prepareSurplusSchema(input.schema);
   const response = await surplusRequest("/chat/completions", {
     model: input.model, max_tokens: input.maxTokens, stream: Boolean(input.onText),
     ...(input.onText ? { stream_options: { include_usage: true } } : {}),
     messages: [{ role: "system", content: input.system }, ...input.messages],
-    response_format: { type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: input.schema } },
+    response_format: { type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },
     reasoning_effort: input.effort ?? "medium",
   }, input.signal);
   let text = "", inputTokens = 0, outputTokens = 0, finish: unknown;
@@ -96,5 +98,5 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     inputTokens = value.usage?.prompt_tokens ?? 0; outputTokens = value.usage?.completion_tokens ?? 0;
   }
   if (finish !== "stop" || !text || text.length > 48_000) throw new CustomAIError("incomplete", "The answer was cut short. Your draft is still saved.", 502);
-  return { text, inputTokens, outputTokens };
+  return { text: format.decode(text), inputTokens, outputTokens };
 }

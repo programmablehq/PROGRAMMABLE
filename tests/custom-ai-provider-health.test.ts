@@ -9,6 +9,8 @@ describe("provider failure boundaries", () => {
     expect(classifyProviderFailure(401, "secret").kind).toBe("authentication");
     expect(classifyProviderFailure(429, "", "120")).toMatchObject({ kind: "rate_limit", cooldownMs: 120000 });
     expect(classifyProviderFailure(529, "").kind).toBe("overloaded");
+    expect(classifyProviderFailure(400, "unsupported output schema")).toMatchObject({ kind: "request", retryable: false, refundAccount: true });
+    expect(refundsProviderFailure("provider_request")).toBe(true);
     expect(refundsProviderFailure("provider_stream")).toBe(false);
   });
   it("blocks known outages until the cooldown ends without retrying the provider", async () => {
