@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions and source recovery are integrated locally. Independent behavior verification, existing backend submission and wallet execution still need their integration. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. Existing backend submission, exact launch preparation and wallet execution still need their integration. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
