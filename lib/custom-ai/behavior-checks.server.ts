@@ -43,6 +43,11 @@ export async function checkGeneralScenarios(project:ContractProject,compilation:
     ||result.failures.some(item=>!item||typeof item.caseId!=="string"||typeof item.code!=="string"||typeof item.message!=="string"||item.message.length>500)) {
     throw new CustomAIError("behavior-worker","The isolated checks returned an incomplete result. Your source is kept.",503);
   }
+  // An unavailable execution fixture or malformed example is a limitation of
+  // this checking path. It does not establish incorrect contract behavior and
+  // must not turn into a request to rewrite an otherwise untested contract.
+  if(result.failures.some(item=>item.code==="fixture-execution"))throw new CustomAIError("behavior-fixture",
+    "These contract examples need a supported execution fixture before they can finish. The saved source, artifacts and original examples are kept.",503);
   const body={version:1 as const,scope:"isolated-declared-scenarios-v1" as const,projectHash:project.hash,artifactHash,planHash,...result,
     requirementIds:project.intent.requirements.map(rule=>rule.id).sort(),launchReady:false as const};
   return {...body,hash:canonicalBrowserSha256V2("programmable.general-scenario-report.v1",body)};

@@ -89,4 +89,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("exact general source in th
     vi.stubEnv("CUSTOM_AI_COMPILER_DIR",join(process.cwd(),"scripts/custom-ai/toolchain-missing"));
     await expect(checkGeneralScenarios(source,compiled,plan)).rejects.toMatchObject({code:"behavior-worker",status:503});
   });
+  it("does not label an unsupported or malformed execution example as a contract defect",async()=>{
+    const source=project(counterBody),compiled=await compileContractProject(source),raw=counterChecks();
+    const declared=createGeneralCheckPlan({...raw,steps:raw.steps.map((step,index)=>index===1?{...step,arguments:["unexpected argument"]}:step)},source);
+    await expect(checkGeneralScenarios(source,compiled,declared)).rejects.toMatchObject({code:"behavior-fixture",status:503});
+  });
 });
