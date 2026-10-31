@@ -36,8 +36,12 @@ export function interfacePlan(paths) {
   const full = !paths || paths.some(path => !interfaceVerificationPaths.has(path) && (globalInput.test(path)
     || (!sourceInput.test(path) && !/^(?:docs\/|scripts\/|packages\/|contracts\/|config\/|ops\/|supabase\/|indexer\/|AGENTS\.md|README\.md)/u.test(path))));
   const any = (pattern) => full || paths.some(path => pattern.test(path));
-  const customAI = any(/^(?:components\/custom-ai\/|app\/launch\/custom-ai\/|lib\/custom-ai\/(?:client|readiness|studio|conversation|coin-setup|events)|tests\/custom-ai-browser\/|playwright\.custom-ai\.config)/u);
-  const browser = [...new Set(browserGroups.filter(([pattern]) => any(pattern)).flatMap(([, specs]) => specs))];
+  const customAI = any(/^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/(?:client|readiness|studio|conversation|coin-setup|events|wallet|launch|transaction|trade|recovery|reconcile)|tests\/custom-ai-browser\/|playwright\.custom-ai\.config)/u);
+  // Custom AI has its own browser flow. A filename containing "launch" must
+  // not select unrelated Module Mode suites; shared wallet inputs still do.
+  const separateCustomAI = /^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/|tests\/custom-ai(?:-browser\/|-))/u;
+  const sharedBrowserPaths = paths?.filter(path => !separateCustomAI.test(path));
+  const browser = [...new Set(browserGroups.filter(([pattern]) => full || sharedBrowserPaths.some(path => pattern.test(path))).flatMap(([, specs]) => specs))];
   for (const path of paths ?? []) {
     const match = path.match(/^tests\/browser\/([^/]+)\.spec\.ts$/u);
     if (match && match[1] !== "late-migration" && !browser.includes(match[1])) browser.push(match[1]);

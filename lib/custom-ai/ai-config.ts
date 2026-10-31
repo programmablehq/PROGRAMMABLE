@@ -2,7 +2,7 @@ import { VOICE } from "./prompt";
 
 /** Versioned per job; product and money rules remain in the enforcing core. */
 export const AI_CONFIG = Object.freeze({
-  id: "programmable-custom-ai", version: "2.2.1",
+  id: "programmable-custom-ai", version: "2.3.0",
   models: { chat: "claude-haiku-5-5", build: "claude-sonnet-5-5", escalation: "claude-opus-5-5" },
   surplusModels: { chat: "claude-haiku-5.5", build: "claude-sonnet-5.5", escalation: "claude-opus-5.5" },
   voice: VOICE,

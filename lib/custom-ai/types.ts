@@ -68,7 +68,7 @@ export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: s
 
 export function isBriefChat(request: ChatRequest): boolean {
   return request.intent === "chat" && request.messages.length === 1 && !request.contextId && !request.draftId
-    && /^(hi|hello|hey|thanks|thank you|ok|okay|cool|good morning|good evening)[!. ]*$/i
+    && /^(hi|hello|hey|hallo|moin|guten morgen|guten abend|danke|dankeschön|merci|salut|bonjour|hola|gracias|ciao|grazie|thanks|thank you|ok|okay|cool|good morning|good evening)[!. ]*$/i
       .test(request.messages.at(-1)?.content.trim() ?? "");
 }
 
