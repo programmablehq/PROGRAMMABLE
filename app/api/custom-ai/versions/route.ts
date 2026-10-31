@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { conversationStorageId } from "@/lib/custom-ai/conversation.server";
 import { getAddress } from "viem";
 import { authorizeCustomAI } from "@/lib/custom-ai/auth.server";
 import { productionAIStore } from "@/lib/custom-ai/store.server";
@@ -15,7 +15,7 @@ export async function GET(request:Request){
     if(!/^0x[0-9a-f]{40}$/i.test(rawAccount))throw new CustomAIError("input","Choose your connected wallet.",400);
     const account=getAddress(rawAccount);
     if(!auth.principal.wallets.some(w=>getAddress(w)===account))throw new CustomAIError("wallet","Select your connected wallet.",403);
-    const studioId=createHash("sha256").update(account.toLowerCase()).digest("hex"),store=productionAIStore(),id=query.get("id");
+    const studioId=conversationStorageId(account,query.get("conversation")??undefined),store=productionAIStore(),id=query.get("id");
     await store.consume(auth.owner,"versions",60);
     if(id){
       if(!/^[a-f0-9]{64}$/.test(id))throw new CustomAIError("input","Choose a saved version.",400);

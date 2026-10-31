@@ -1,3 +1,4 @@
+import { jobMatchesConversation } from "@/lib/custom-ai/conversation.server";
 import { after } from "next/server";
 import { providerHealth } from "@/lib/custom-ai/provider-health.server";
 import { assertModelConnection, researchAvailable } from "@/lib/custom-ai/provider-config.server";
@@ -23,14 +24,20 @@ export async function POST(request: Request) {
   try {
     const authority = await authorizeCustomAI(request, true);
     const input = parseChatRequest(await readPreviewBody(request));
+    if(input.conversation && (authority.kind!=="account" || !authority.principal.wallets.some(account=>account.toLowerCase()===input.conversation!.account))) {
+      throw new CustomAIError("wallet","Select the wallet that owns this chat.",403);
+    }
     const store = authority.kind === "account" ? productionAIStore() : null;
     const readResult = async (id?: string) => {
       if (!id) return undefined;
-      const result = store && authority.kind === "account" ? (await store.read(authority.owner, id))?.result : previewResults.get(id);
+      const saved=store&&authority.kind==="account"?await store.read(authority.owner,id):undefined;
+      if(saved?.request?.conversation&&!input.conversation||saved&&input.conversation&&!jobMatchesConversation(saved.request,input.conversation.account,input.conversation.id))throw new CustomAIError("context","That design belongs to another chat.",409);
+      const result=saved?.result??(authority.kind==="preview"?previewResults.get(id):undefined);
       if (!result) throw new CustomAIError("context", "Your saved conversation could not be found. Reload it before continuing.", 409);
       return result;
     };
-    const [previous, current] = await Promise.all([readResult(input.contextId), readResult(input.draftId)]);
+    const previousRead=readResult(input.contextId);
+    const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory,
       intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft };
     if (input.draftId && !context.draft) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);

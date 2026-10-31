@@ -6,6 +6,7 @@ import { callSurplus, boundedProviderJSON } from "../lib/custom-ai/surplus.serve
 import { prepareSurplusSchema } from "../lib/custom-ai/surplus-schema.server";
 import { createProviderHealth } from "../lib/custom-ai/provider-health.server";
 import { executionProfile, assertExecutionProfile } from "../lib/custom-ai/capabilities/registry.server";
+import capturedAnswer from "./fixtures/custom-ai/surplus-answer-null-v1.json";
 import { parseChatRequest } from "../lib/custom-ai/types";
 
 const input = { model: "claude-haiku-5.5", system: "Keep the complete design.", messages: [{ role: "user" as const, content: "Explain this rule." }], schema: { type: "object" }, maxTokens: 200 };
@@ -83,6 +84,17 @@ const toolSchema = { type: "object", properties: {
 }, required: ["reply", "lookups"], additionalProperties: false };
 
 describe("Surplus planner schema transport", () => {
+  it("replays the actual optional-null answer through the adapter without another request",async()=>{
+    useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:capturedAnswer.text},finish_reason:"stop"}],usage:{prompt_tokens:12992,completion_tokens:934}}));vi.stubGlobal("fetch",fetcher);
+    const reply=await callSurplus({...input,schema:capturedAnswer.schema});
+    expect(JSON.parse(reply.text)).toEqual(JSON.parse(capturedAnswer.text));expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(reply.text)).toMatchObject({action:"answer",program:null,eventRule:null});
+  });
+  it("accepts mixed canonical and encoded tool values only when the original schema allows them",()=>{
+    const first={kind:"catalog",input:{query:"fees"}},second={kind:"search_hooks",input:{chain:"current"}},format=prepareSurplusSchema(toolSchema);
+    expect(JSON.parse(format.decode(JSON.stringify({reply:"Search",lookups:[first,JSON.stringify(second)]})))).toEqual({reply:"Search",lookups:[first,second]});
+    for(const value of [null,{kind:"unknown",input:{}},{kind:"catalog",input:{query:"fees",hidden:true}}])expect(()=>format.decode(JSON.stringify({reply:"Search",lookups:[value]}))).toThrow();
+  });
   it("encodes the unsupported union and restores a validated tool input through the real adapter", async () => {
     useSurplus();
     const lookup = { kind: "catalog", input: { query: "fees" } };
@@ -116,6 +128,9 @@ describe("Surplus planner schema transport", () => {
     const format = prepareSurplusSchema(schema);
     expect(format.schema.properties?.program.type).toBe("string");
     expect(JSON.parse(format.decode('{"program":"null"}'))).toEqual({ program: null });
+    expect(JSON.parse(format.decode('{"program":null}'))).toEqual({program:null});
+    expect(JSON.parse(format.decode('{"program":{"interval":600}}'))).toEqual({program:{interval:600}});
+    for(const value of [{},{interval:"600"},{interval:600,hidden:true}])expect(()=>format.decode(JSON.stringify({program:value}))).toThrow();
     expect(JSON.parse(format.decode(JSON.stringify({ program: '{"interval":600}' })))).toEqual({ program: { interval: 600 } });
     expect(() => format.decode(JSON.stringify({ program: '{}' }))).toThrow();
   });

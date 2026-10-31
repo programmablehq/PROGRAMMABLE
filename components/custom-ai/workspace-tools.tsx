@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import styles from "./workspace.module.css";
 
-export function WorkspaceTools({ name, hasDraft, disabled, canClear, hasPrevious, onNewCoin, onClearMessages, onRestorePrevious, children }: {
+export function WorkspaceTools({ name, hasDraft, disabled, canClear, hasPrevious, onNewCoin, onClearMessages, onRestorePrevious, navigation, children }: {
   name: string; hasDraft: boolean; disabled: boolean; canClear: boolean; hasPrevious: boolean;
-  onNewCoin: () => void; onClearMessages: () => void; onRestorePrevious: () => void; children: ReactNode;
+  onNewCoin: () => void; onClearMessages: () => void; onRestorePrevious: () => void; navigation?: ReactNode; children: ReactNode;
 }) {
   return <header className={styles.chatToolbar}>
     <div className={styles.chatIdentity}>
@@ -14,6 +14,7 @@ export function WorkspaceTools({ name, hasDraft, disabled, canClear, hasPrevious
       <p>{name.trim() || "New coin"}</p>
     </div>
     <div className={styles.toolbarActions}>
+      {navigation}
       <button type="button" className={styles.newCoin} disabled={disabled} onClick={onNewCoin}>
         <Plus size={16} aria-hidden="true" />New coin
       </button>
