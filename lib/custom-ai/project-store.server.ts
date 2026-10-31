@@ -4,6 +4,7 @@ import { projectCompilerInput, type ContractProject } from "./contract-project";
 import type { CompiledProject } from "./contract-project.server";
 import { CustomAIError } from "./types";
 import type { AIConnection } from "./store.server";
+import { projectOverview, type ProjectOverview } from "./project-overview";
 
 export type ProjectCheckpoint = {
   version: 1;
@@ -11,6 +12,7 @@ export type ProjectCheckpoint = {
   payloadHash: string;
   project: ContractProject;
   compilation?: CompiledProject;
+  overview?: ProjectOverview;
 };
 type Transaction = <T>(work: (connection: AIConnection) => Promise<T>) => Promise<T>;
 const kind = "contract-project";
@@ -44,7 +46,7 @@ export function createProjectStore(transaction: Transaction) {
         if (previous.project.hash !== project.hash) throw conflict();
         return previous;
       }
-      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, project };
+      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, project, overview: projectOverview(id, project) };
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,$2,$3,$4)`, [owner, kind, id, JSON.stringify(value)]);
       return value;
@@ -63,11 +65,20 @@ export function createProjectStore(transaction: Transaction) {
         if (previous.compilation.artifactHash !== artifactHash) throw conflict();
         return previous;
       }
-      const value: ProjectCheckpoint = { ...previous, compilation };
+      const value: ProjectCheckpoint = { ...previous, compilation, overview: projectOverview(id, previous.project, compilation) };
       await db.query(`UPDATE programmable_custom_ai_v1.objects SET value=$4,revision=revision+1,updated_at=now()
         WHERE owner=$1 AND kind=$2 AND id=$3`, [owner, kind, id, JSON.stringify(value)]);
       return value;
     });
   }
-  return { save, complete, read: (owner: string, id: string) => transaction(db => saved(db, owner, id)) };
+  async function overview(owner: string, id: string): Promise<ProjectOverview | null> {
+    return transaction(async db => {
+      const row = (await db.query(`SELECT o.value->'overview' AS overview FROM programmable_custom_ai_v1.objects o
+        JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
+        AND j.payload_hash=o.value->>'payloadHash'
+        WHERE o.owner=$1 AND o.id=$2 AND o.kind=$3`, [owner, id, kind])).rows[0];
+      return row?.overview ? row.overview as ProjectOverview : null;
+    });
+  }
+  return { save, complete, overview, read: (owner: string, id: string) => transaction(db => saved(db, owner, id)) };
 }

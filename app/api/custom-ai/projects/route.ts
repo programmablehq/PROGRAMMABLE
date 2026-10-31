@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const job = await store.read(authority.owner, id);
     if (!job) throw new CustomAIError("missing", "That saved source was not found.", 404);
     if (!job.request?.conversation || !jobMatchesConversation(job.request, account, conversation.toLowerCase())) throw new CustomAIError("context", "That source belongs to another chat.", 409);
-    const saved = await store.projects.read(authority.owner, id);
+    const saved = query.get("overview") === "1" ? await store.projects.overview(authority.owner, id) : await store.projects.read(authority.owner, id);
     if (!saved) throw new CustomAIError("missing", "Source has not been saved for this request yet.", 404);
     return Response.json(saved, { headers: aiHeaders });
   } catch (error) { return aiError(error); }

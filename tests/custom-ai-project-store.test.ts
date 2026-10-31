@@ -43,6 +43,11 @@ describe("owned general contract checkpoints", () => {
     await store.finish("alice", id, attempt.lease!, undefined, "project-compiler");
     expect((await store.projects.read("alice", id))?.project).toEqual(source);
     expect(await store.projects.read("bob", id)).toBeNull();
+    const overview = await store.projects.overview("alice", id);
+    expect(overview).toMatchObject({ requestId: id, projectHash: source.hash, chainId: 999, compilation: "pending", sourceFiles: 1 });
+    expect(overview).not.toHaveProperty("artifactHash");
+    expect(overview).not.toHaveProperty("sources");
+    expect(await store.projects.overview("bob", id)).toBeNull();
     expect((await store.read("alice", id, false))?.result).toBeUndefined();
     expect((await store.usage("alice")).hourly.used).toBe(5);
   });
@@ -86,6 +91,8 @@ describe("owned general contract checkpoints", () => {
     await store.projects.complete("alice", id, attempt.lease!, result);
     await store.projects.complete("alice", id, attempt.lease!, result);
     expect((await store.projects.read("alice", id))?.compilation).toEqual(result);
+    expect(await store.projects.overview("alice", id)).toMatchObject({ projectHash: source.hash, artifactHash: result.artifactHash,
+      compilation: "diagnostics", diagnostics: result.diagnostics });
     const changed = compilation(source); changed.diagnostics[0].message = "Changed after hashing";
     await expect(store.projects.complete("alice", id, attempt.lease!, changed)).rejects.toMatchObject({ code: "project-conflict" });
   });
