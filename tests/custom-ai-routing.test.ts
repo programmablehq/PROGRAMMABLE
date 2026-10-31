@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { builderChain, selectExecutionRoute } from "../lib/custom-ai/execution-routing";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
+import { builderCapabilities } from "../lib/custom-ai/builder-capabilities";
 
 const intent: LaunchIntent = { version: 1, id: "routing-fixture", revision: "a".repeat(64), unresolved: [], changes: [], requirements: [
   { id: "fees", text: "Different buy and sell fees", kind: "behavior", open: null, origin: { kind: "legacy" } },
   { id: "no-mint", text: "No later minting", kind: "constraint", open: null, origin: { kind: "legacy" } },
 ] };
 describe("Custom AI execution path selection", () => {
+  it("only describes general source generation when its durable job bridge is connected", () => {
+    expect(builderCapabilities({ events: false, programs: false }).find(item => item.id === "arbitrary-hooks")?.state).toBe("design-only");
+    expect(builderCapabilities({ events: false, programs: false, generalSources: true }).find(item => item.id === "arbitrary-hooks")?.state).toBe("source-draft");
+  });
   it.each([1, 4663] as const)("retains the complete fee route on %i without claiming preparation", chainId => {
     const result = selectExecutionRoute(intent, chainId, { route: "fee-module", requirementIds: ["fees", "no-mint"], missingCapabilities: [] });
     expect(result).toMatchObject({ chainId, route: "fee-module", state: "selected", launchReady: false });
