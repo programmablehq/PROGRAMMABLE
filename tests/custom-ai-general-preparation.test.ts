@@ -165,11 +165,11 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     await database.query("UPDATE programmable_custom_ai_v1.objects SET value=jsonb_set(value,'{requestBody}',to_jsonb('changed'::text)) WHERE owner=$1 AND kind='general-launch-pack'",[owner]);
     await expect(store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId)).rejects.toMatchObject({code:"launch-preparation-storage"});
   });
-  it("requires a matching non-blocked preflight and keeps review admission separate from deployability",async()=>{
-    await stage();await expect(store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId)).rejects.toMatchObject({code:"launch-preflight-required"});
-    const checked=await markPreflight();expect(checked.preflight?.disposition).toBe("needs_evidence");
+  it("submits the exact source into canonical review without a second preparation approval",async()=>{
+    await stage();
     const create=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
     expect(create.lease).toBeTruthy();expect(create.pack!.requestBody).toBe(pack.requestBody);
+    expect(create.record.preflight).toBeUndefined();
     expect(generalPreparationView(create.record,clock).launchReady).toBe(false);
   });
   it("keeps one sending lease and one canonical request when two tabs submit together",async()=>{
@@ -196,7 +196,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     expect(new Headers(sent[1].headers).get("x-programmable-bff-assertion-nonce")).not.toBe(new Headers(sent[0].headers).get("x-programmable-bff-assertion-nonce"));
     expect(view.submission).toMatchObject({state:"completed",resourceId:launchId,backendState:"pending_review"});expect(view.launchReady).toBe(false);
     const third=await request();await f.instance.exchange(third.req,third.authority,ticket,"create");
-    expect(transport).toHaveBeenCalledTimes(2);expect(f.production).toHaveBeenCalledTimes(2);
+    expect(transport).toHaveBeenCalledTimes(2);expect(f.production).toHaveBeenCalledTimes(1);
   });
   it("recovers a process death after claiming a send without changing the original window",async()=>{
     await stage();await markPreflight();const first=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
@@ -215,6 +215,13 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     f.production.mockResolvedValue({...fixture.source.project.production!,id:`sha256:${"f".repeat(64)}`});
     const changed=await request();await expect(f.instance.exchange(changed.req,changed.authority,ticket,"create")).rejects.toMatchObject({code:"launch-context-changed"});
     expect(transport).not.toHaveBeenCalled();
+  });
+  it("rejects a changed current design before the first submission without contacting the backend",async()=>{
+    await stage();const key=conversationStorageId(record.account,record.selection.conversation),state=await store.readObject<{settings:object}>(owner,"studio",key);
+    await store.saveObject(owner,"studio",key,{...state!.value,settings:{...state!.value.settings,name:"A later design"}},state!.revision);
+    const transport=vi.fn(),f=service(transport),action=await request();
+    await expect(f.instance.exchange(action.req,action.authority,ticket,"create")).rejects.toMatchObject({code:"launch-source-changed"});
+    expect(transport).not.toHaveBeenCalled();expect((await store.projects.preparations.read(owner,ticket))!.submission).toBeUndefined();
   });
   it("prepares from one durable lease and the original compiler package without any outbound mutation",async()=>{
     await store.projects.preparations.failPack(owner,ticket,record.packLease.token,"interrupted");

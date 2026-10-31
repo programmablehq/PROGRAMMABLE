@@ -4,9 +4,10 @@ import { requireFreshCustomAIAuthority, type AIAuthority } from "./auth.server";
 import { BackendLaunchRejected, type createCustomAIBackendLaunchBridge } from "./backend-launch.server";
 import { createGeneralPublicSource, generalSourcePublicUri } from "./public-launch-source.server";
 import { packGeneralGraph } from "./general-pack.server";
+import { packGeneralRobinhoodPlan } from "./general-plan-pack.server";
 import { readLaunchProductionContext } from "./launch-production.server";
 import { generalPreparationView, type GeneralExchangeOperation } from "./general-preparation-store.server";
-import { projectGeneralGraphReply } from "./general-launch-response.server";
+import { projectGeneralGraphReply, projectGeneralPlanReply } from "./general-launch-response.server";
 import type { GeneralLaunchSourceSelection } from "./general-launch-source.server";
 import type { AIStore } from "./store.server";
 import { CustomAIError } from "./types";
@@ -15,7 +16,7 @@ export function createGeneralPreparationService(deps: {
   store: AIStore;
   image: (owner:string,image:NonNullable<Awaited<ReturnType<AIStore["projects"]["readForLaunch"]>>["binding"]["image"]>,signal:AbortSignal)=>Promise<Uint8Array>;
   bridge: () => ReturnType<typeof createCustomAIBackendLaunchBridge>;
-  pack?: typeof packGeneralGraph; production?: typeof readLaunchProductionContext; now?:()=>number;
+  pack?: typeof packGeneralGraph; packPlan?: typeof packGeneralRobinhoodPlan; production?: typeof readLaunchProductionContext; now?:()=>number;
 }) {
   const preparations=deps.store.projects.preparations, now=deps.now??Date.now;
   function linked(request:Request,authority:AIAuthority,account:string) {
@@ -25,11 +26,10 @@ export function createGeneralPreparationService(deps: {
     return current;
   }
   return {
-    async prepare(request:Request,authority:AIAuthority,input:{id:string;selection:GeneralLaunchSourceSelection;nativeFundingWei?:string}) {
+    async prepare(request:Request,authority:AIAuthority,input:{id:string;selection:GeneralLaunchSourceSelection;nativeFundingWei?:string;controllerKind?:"eoa"}) {
       input=structuredClone(input);
       const current=linked(request,authority,input.selection.account);
-      if(input.selection.chainId===4663)throw new CustomAIError("launch-plan-preparation","This network needs its current Launch Plan preparation. The saved source stays on its selected network.",422);
-      const reserved=await preparations.reserve(current.owner,input.id,input.selection,input.nativeFundingWei);
+      const reserved=await preparations.reserve(current.owner,input.id,input.selection,input.nativeFundingWei,input.controllerKind);
       if(!reserved.lease || !reserved.source)return generalPreparationView(reserved.record,now());
       const {record,source,lease}=reserved;
       try {
@@ -38,8 +38,11 @@ export function createGeneralPreparationService(deps: {
         const image=source.binding.image;
         if(!image)throw new CustomAIError("launch-image","Choose the saved coin image before preparing it.",422);
         const bytes=await deps.image(current.owner,image,request.signal), exported=createGeneralPublicSource(source);
-        const packed=await (deps.pack??packGeneralGraph)({source,exported,url:generalSourcePublicUri(exported.id),controller:record.account,
-          identity:record.identity,imageBytes:bytes,...(record.nativeFundingWei===undefined?{}:{nativeFundingWei:record.nativeFundingWei})},request.signal);
+        const packInput={source,exported,url:generalSourcePublicUri(exported.id),controller:record.account,
+          identity:record.identity,imageBytes:bytes,...(record.nativeFundingWei===undefined?{}:{nativeFundingWei:record.nativeFundingWei})};
+        const packed=record.chainId===4663
+          ? await (deps.packPlan??packGeneralRobinhoodPlan)(packInput,{address:record.account,kind:record.controllerKind!},request.signal)
+          : await (deps.pack??packGeneralGraph)(packInput,request.signal);
         linked(request,authority,record.account);
         return generalPreparationView(await preparations.completePack(current.owner,record.id,lease,packed),now());
       } catch(error) {
@@ -55,16 +58,22 @@ export function createGeneralPreparationService(deps: {
       // In particular, ordinary polling never repeats discovery or submission.
       const previous=operation==="create"?saved.submission:saved.preflight;
       if(previous?.state==="completed" || previous?.state==="sending" && previous.until>now())return generalPreparationView(saved,now());
-      const context=await (deps.production??readLaunchProductionContext)(saved.chainId,request.signal,{fresh:true});
-      if(context.id!==saved.productionId)throw new CustomAIError("launch-context-changed","The network configuration changed. Keep this original request and update the design before a new submission.",409);
+      if(operation==="preflight"&&saved.submission)return generalPreparationView(saved,now());
+      // A recovery is an exact replay of a previously attempted request. The
+      // backend checks that original resource before parsing a new request, so
+      // a later chat edit or retired profile must not reinterpret its bytes.
+      if(!saved.submission){
+        const context=await (deps.production??readLaunchProductionContext)(saved.chainId,request.signal,{fresh:true});
+        if(context.id!==saved.productionId)throw new CustomAIError("launch-context-changed","The network configuration changed. Keep this original request and update the design before a new submission.",409);
+      }
       linked(request,authority,saved.account);
-      const claimed=await preparations.claimExchange(current.owner,id,operation,context.id);
+      const claimed=await preparations.claimExchange(current.owner,id,operation,saved.productionId);
       if(!claimed.lease||!claimed.pack)return generalPreparationView(claimed.record,now());
       const {record,lease,pack}=claimed;
       try {
         const reply=await deps.bridge().submit(request,authority,{chainId:record.chainId,operation,account:record.account,
           bodyBytes:Buffer.from(pack.requestBody),idempotencyKey:operation==="create"?record.idempotencyKey:null});
-        const summary=projectGeneralGraphReply(operation,reply,record);
+        const summary=(record.chainId===4663?projectGeneralPlanReply:projectGeneralGraphReply)(operation,reply,record);
         return generalPreparationView(await preparations.finishExchange(current.owner,id,operation,lease,{state:"completed",summary,reply:reply.value}),now());
       } catch(error) {
         // Any unconfirmed create retains its original identity and blocks a new

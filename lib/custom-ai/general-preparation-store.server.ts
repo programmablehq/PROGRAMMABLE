@@ -1,15 +1,16 @@
 import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
 import { getAddress, type Address } from "viem";
-import { canonicalBrowserSha256V2, fileSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
+import { canonicalBrowserJsonV2, canonicalBrowserSha256V2, fileSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import type { AIConnection } from "./store.server";
 import type { GeneralLaunchSourceSelection } from "./general-launch-source.server";
 import type { GeneralPackIdentity } from "./general-pack-config.server";
 import type { packGeneralGraph } from "./general-pack.server";
+import type { packGeneralRobinhoodPlan } from "./general-plan-pack.server";
 import { createGeneralPublicSource, type OwnedGeneralLaunchSource } from "./public-launch-source.server";
 import { CustomAIError } from "./types";
 
-export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>>;
+export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
 export type GeneralExchange = {
   state: "sending" | "unknown" | "rejected" | "completed";
@@ -22,6 +23,8 @@ export type GeneralPreparation = {
   selection: GeneralLaunchSourceSelection; bindingHash: `sha256:${string}`; productionId: `sha256:${string}`;
   inputHash: `sha256:${string}`; identity: GeneralPackIdentity; idempotencyKey: string;
   nativeFundingWei?: string; createdAt: number; updatedAt: number;
+  controllerKind?: "eoa"; manifestDigest?: `sha256:${string}`;
+  coin?: {name:string;symbol:string};
   packState: "packing" | "failed" | "complete";
   packLease: { token: string; until: number; slot: number };
   packCode?: string; packHash?: `sha256:${string}`; requestSha256?: `sha256:${string}`; requestHash?: `sha256:${string}`;
@@ -52,16 +55,26 @@ function validRecord(value: unknown, id: string): GeneralPreparation {
 }
 function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation) {
   const { hash, ...body } = pack;
-  if (Buffer.byteLength(JSON.stringify(pack)) > 24_000_000 || pack.version !== 1 || pack.route !== "graph-v3"
-    || record.chainId === 4663 || pack.chainId !== record.chainId || pack.bindingHash !== record.bindingHash
+  if (Buffer.byteLength(JSON.stringify(pack)) > 24_000_000 || pack.version !== 1
+    || pack.route !== (record.chainId===4663?"plan-v1":"graph-v3") || pack.chainId !== record.chainId || pack.bindingHash !== record.bindingHash
     || pack.productionId !== record.productionId || pack.launchReady !== false
     || pack.projectHash !== record.selection.projectHash || pack.artifactHash !== record.selection.artifactHash
-    || canonicalBrowserSha256V2("programmable.custom-ai-general-graph-pack.v1", body) !== hash
+    || canonicalBrowserSha256V2(pack.route==="plan-v1"?"programmable.custom-ai-general-plan-pack.v1":"programmable.custom-ai-general-graph-pack.v1", body) !== hash
     || canonicalBrowserSha256V2("programmable.custom-ai-pack-identity.v1", pack.identity)
       !== canonicalBrowserSha256V2("programmable.custom-ai-pack-identity.v1", record.identity)
-    || typeof pack.requestBody !== "string" || Buffer.byteLength(pack.requestBody) > 8_388_608
+    || typeof pack.requestBody !== "string" || Buffer.byteLength(pack.requestBody) > (record.chainId===4663?16_777_216:8_388_608)
     || fileSha256V2(Buffer.from(pack.requestBody)) !== pack.requestSha256) throw corrupt();
   const request = JSON.parse(pack.requestBody);
+  if(pack.route==="plan-v1") {
+    const requestHash=canonicalBrowserSha256V2("programmable.custom-launch-plan.v1",request);
+    if(record.chainId!==4663 || record.controllerKind!=="eoa" || !record.manifestDigest
+      || request.schemaVersion!=="programmable.custom-launch-plan.v1" || request.chainId!=="4663"
+      || request.controller?.address?.toLowerCase()!==record.account.toLowerCase() || request.controller.kind!==record.controllerKind
+      || request.manifestDigest!==record.manifestDigest || request.executor!=="atomic_execute_and_stamp_v2"
+      || request.budgets?.validAfter!==record.identity.validAfter || request.budgets.deadline!==record.identity.deadline
+      || requestHash!==pack.planHash || pack.requestBody!==canonicalBrowserJsonV2(request))throw corrupt();
+    return {requestHash};
+  }
   if (request.schemaVersion !== "programmable.custom-launch-create-request.v3" || request.chainId !== String(record.chainId)
     || request.launchWallet?.toLowerCase() !== record.account.toLowerCase() || request.nonce !== record.identity.nonce
     || request.permitWindow?.validAfter !== record.identity.validAfter || request.permitWindow.deadline !== record.identity.deadline
@@ -139,7 +152,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         WHERE owner=$1 AND kind='active-general-prepare' AND id=$2`,[owner,pointerId(getAddress(account))])).rows[0];
       return row ? readIn(db,owner,String(row.id)) : null;
     }),
-    async reserve(owner: string,id: string,selection: GeneralLaunchSourceSelection,nativeFundingWei?: string) {
+    async reserve(owner: string,id: string,selection: GeneralLaunchSourceSelection,nativeFundingWei?: string,controllerKind?:"eoa") {
       if (!validId(id) || nativeFundingWei !== undefined && (!/^(?:0|[1-9][0-9]{0,77})$/u.test(nativeFundingWei) || BigInt(nativeFundingWei)>=2n**256n)) throw conflict();
       selection=structuredClone(selection);
       return transaction(async db=>{
@@ -147,8 +160,10 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         // lock. A background pack cannot freeze chat editing for its duration.
         const source=await sources.read(db,owner,selection), account=getAddress(source.binding.account), production=source.project.production;
         if (!production || production.version!==2) throw conflict();
+        if(source.project.chainId===4663 ? controllerKind!=="eoa" || !production.manifestDigest : controllerKind!==undefined)throw conflict();
         const bound={...selection,bindingHash:source.bindingHash};
-        const inputHash=canonicalBrowserSha256V2("programmable.custom-ai-general-prepare-input.v1",{bindingHash:source.bindingHash,nativeFundingWei:nativeFundingWei??null});
+        const inputHash=canonicalBrowserSha256V2("programmable.custom-ai-general-prepare-input.v1",{bindingHash:source.bindingHash,nativeFundingWei:nativeFundingWei??null,
+          ...(source.project.chainId===4663?{controllerKind}: {})});
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`custom-ai-general-launch:${owner}:${account.toLowerCase()}`]);
         let previous=await readIn(db,owner,id,true);
         if (previous && previous.inputHash!==inputHash) throw conflict();
@@ -169,7 +184,9 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         const record:GeneralPreparation={version:1,id,account,chainId:source.project.chainId,selection:bound,bindingHash:source.bindingHash,
           productionId:production.id,inputHash,identity:{nonce,sourceLineageNonce:BigInt(nonce).toString(),validAfter:String(Math.max(0,seconds-30)),
             deadline:String(seconds+1800),checkedAt:new Date(time).toISOString()},idempotencyKey:`custom-ai-${randomUUID()}`,
-          ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),createdAt:time,updatedAt:time,packState:"packing",packLease:await capacity(db,owner)};
+          ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),coin:{name:source.binding.settings.name,symbol:source.binding.settings.symbol},
+          createdAt:time,updatedAt:time,packState:"packing",packLease:await capacity(db,owner)};
+        if(source.project.chainId===4663){record.controllerKind=controllerKind;record.manifestDigest=production.manifestDigest!;}
         await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,$2,$3,$4)",[owner,KIND,id,JSON.stringify(record)]);
         await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,'active-general-prepare',$2,$3)
           ON CONFLICT(owner,kind,id) DO UPDATE SET value=$3,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`,[owner,pointerId(account),JSON.stringify({id})]);
@@ -203,7 +220,10 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
     async claimExchange(owner: string,id: string,operation: GeneralExchangeOperation,productionId: string) {
       return transaction(async db=>{
         const initial=await readIn(db,owner,id);if(!initial)throw conflict();
-        await revalidate(db,owner,initial);
+        // First submission binds the current chat. Recovery explicitly uses
+        // the already sealed original ticket, even if the chat was later
+        // edited or archived. It can only replay the saved exact body/key.
+        if(!initial.submission)await revalidate(db,owner,initial);
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`custom-ai-general-launch:${owner}:${initial.account.toLowerCase()}`]);
         const record=await readIn(db,owner,id,true);if(!record || record.packState!=="complete" || record.productionId!==productionId)throw conflict();
         const active=(await db.query(`SELECT value->>'id' AS id FROM programmable_custom_ai_v1.objects
@@ -216,9 +236,9 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         // A create retry recovers the original identity even after expiry. It
         // can never allocate a fresh window, source, nonce or idempotency key.
         if(!record.submission)withinWindow(record);
-        if(operation==="create" && (!record.preflight || record.preflight.state!=="completed"
-          || !["supported","supported_with_warnings","needs_evidence"].includes(record.preflight.disposition??"")))
-          throw new CustomAIError("launch-preflight-required","Check this exact saved package before submitting it for review.",409);
+        // Create enters the existing durable review/lifecycle pipeline. A
+        // separate preflight is optional; it confers no additional authority.
+        // The backend repeats its own canonical admission before any permit.
         const pack=await readPackIn(db,owner,record);
         await charge(db,`operation:general-launch-${operation}:${owner}`,operation==="create"?12:20);
         const exchange:GeneralExchange={state:"sending",lease:randomUUID(),until:now()+SEND_LEASE_MS,attempts:(previous?.attempts??0)+1};
@@ -257,6 +277,7 @@ export function generalPreparationView(record: GeneralPreparation, now=Date.now(
     })),
   }:undefined;
   return {version:1 as const,id:record.id,account:record.account,chainId:record.chainId,
+    sourceId:record.selection.id,conversationId:record.selection.conversation,...(record.coin?{coin:{name:record.coin.name,symbol:record.coin.symbol}}:{}),
     projectHash:record.selection.projectHash,artifactHash:record.selection.artifactHash,
     packState:record.packState==="packing"&&record.packLease.until<=now?"interrupted":record.packState,
     ...(record.packCode?{code:record.packCode}:{}),...(record.requestHash?{requestHash:record.requestHash}:{}),

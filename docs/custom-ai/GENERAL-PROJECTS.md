@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan packing is also qualified locally with the existing independent backend parser/compiler. Its journal integration, protected component evidence, UI submission, backend activation and wallet execution remain unfinished. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan packing is also qualified locally with the existing independent backend parser/compiler. The shared owned journal and response bindings are locally integrated. Protected component evidence, UI/status/handoff integration, backend activation and wallet execution remain unfinished. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
@@ -302,8 +302,8 @@ The new `/api/custom-ai/general-launch` route is disabled unless the release
 explicitly sets `CUSTOM_AI_GENERAL_LAUNCH_ENABLED=true`. The backend's separate
 wallet-session intake also stays disabled. Neither flag is activated by these
 source changes. The general preview does not yet expose this action. Robinhood
-uses the local modern Plan packer below; its journal integration remains pending
-and never falls back to a graph route.
+uses the local modern Plan packer below through the same owned journal and
+never falls back to a graph route.
 
 An authenticated `prepare` action selects one owned chat, studio revision,
 complete intent and exact checked source. The browser cannot supply internal
@@ -330,21 +330,30 @@ words and their hashes in separate private objects. An edited or archived chat
 cannot publish a stale package. Unsent input alone can change without replacing
 the checked coin design.
 
-Explicit `preflight` and `create` actions each make at most one signed backend
-POST. Before a send, fresh selected-chain discovery, current request authority,
-linked wallet, owned source and exact stored package must match. A preflight
+The normal explicit `create` action makes one signed backend POST to the existing
+durable review/lifecycle intake. An optional `preflight` is a separate diagnostic
+action and creates no second frontend approval authority. A first submission
+requires fresh selected-chain discovery, current request authority, linked wallet,
+current owned source and the exact stored package. A preflight
 response must identify that exact request and retain the canonical no-persistence,
 no-nonce-allocation and no-broadcast facts. A hard block cannot become a supported
-disposition. `needs_evidence` can proceed to the normal review intake; it is not
-deployability or approval. Create responses must match the request, original
-profile/intent hashes, wallet and canonical resource location.
+disposition. These diagnostic facts establish no deployability, approval or
+permission. The canonical backend performs its original admission and review
+checks on create and before any permit. Graph responses must match request and
+original profile/intent hashes; Plan responses must match original Plan, raw-body,
+manifest, controller and window. Both require the canonical resource location.
 
 An interrupted send, process death or mismatched successful response keeps the
 original ticket, body and idempotency key. It blocks allocation of another
 unconfirmed create for that wallet. Only a fresh explicit retry may resend the
-same stored bytes, using a new request assertion. It cannot extend the old window
-or silently change the source. The original request remains available after
-expiry. A completed exchange is not repeated by polling or another click.
+same stored bytes, using a fresh current-account/linked-wallet request assertion.
+It cannot extend the old window or silently change the source. This explicit
+recovery uses the original sealed package after later chat edits, archiving or
+profile retirement. It does not load a replacement design or production profile.
+The backend resolves the original byte-identical resource before accepting a new
+request and retains its own owner, source, expiry and admission rules. The original
+request remains available after expiry. A completed exchange is not repeated by
+polling or another click.
 
 GET reads only the small owned journal. It never loads the complete source or
 request, observes a provider, refreshes discovery or submits anything. A stored
@@ -402,5 +411,7 @@ creation/runtime bindings. Eight Plan cases and six graph regression cases pass;
 one additional case qualifies optional Plan presentation. This does not prove
 protected component review, nested-child/dependency behavior, liquidity, fees,
 funding, issuer acceptance, a wallet action or availability. The modern Plan pack
-still needs the owned submission-journal/response integration and Chat controls.
+uses the shared owned journal with a separately declared controller kind and
+Plan-specific response bindings. Chat controls, canonical live status and wallet
+handoff remain unfinished.
 Every local receipt retains `launchReady:false`.
