@@ -15,7 +15,7 @@ export function DraftVersions({account,headers,disabled,currentDraftId,onRestore
     const result=await aiRequest<Pick<StoredStudio,"state"|"draft">>(`/versions?account=${encodeURIComponent(account)}&id=${id}`,headers);
     await onRestore(result);
   }catch(cause){setError(cause instanceof Error?cause.message:"The version could not be restored.");}finally{setLoading(false);}}
-  return <details className={styles.usage} onToggle={event=>{if(event.currentTarget.open)void load();else request.current++;}}>
+  return <details className={styles.toolSection} onToggle={event=>{if(event.currentTarget.open)void load();else request.current++;}}>
     <summary>Versions</summary><div className={styles.versionList}>
       <p role="status">{loading?"Loading saved versions…":versions.length?"Your recent checked drafts":"No checked versions saved yet."}</p>
       {versions.map(v=><article key={v.id}><strong>{v.name||"Untitled coin"}</strong><p>{v.summary}</p><small>{new Date(v.createdAt).toLocaleString()}</small>

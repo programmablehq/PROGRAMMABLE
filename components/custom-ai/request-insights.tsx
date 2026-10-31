@@ -4,17 +4,26 @@ import { aiRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { RequestMetricsSummary } from "@/lib/custom-ai/request-metrics";
 import styles from "./workspace.module.css";
 
-export function RequestInsights({headers}:{headers:AISessionHeaders}){
-  const [metrics,setMetrics]=useState<RequestMetricsSummary|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState("");
-  const pending=useRef<AbortController|null>(null);
-  useEffect(()=>()=>pending.current?.abort(),[]);
-  async function load(){
-    pending.current?.abort();const controller=new AbortController();pending.current=controller;setLoading(true);setError("");
-    try{const result=await aiRequest<RequestMetricsSummary>("/metrics",headers,undefined,controller.signal);if(!controller.signal.aborted)setMetrics(result);}
-    catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Request details could not load.");}
-    finally{if(!controller.signal.aborted)setLoading(false);}
-  }
-  return <details className={styles.usage} onToggle={event=>{if(event.currentTarget.open)void load();else pending.current?.abort();}}>
+export function RequestInsights({headers,refreshKey=0}:{headers:AISessionHeaders;refreshKey?:number}){
+  const [view,setView]=useState({open:false,epoch:0});
+  const requestKey=`${view.epoch}:${refreshKey}`;
+  const [result,setResult]=useState<{key:string;metrics?:RequestMetricsSummary;error?:string}>();
+  const loading=view.open&&result?.key!==requestKey;
+  const metrics=result?.metrics;
+  const error=result?.key===requestKey?result.error:undefined;
+  const headersRef=useRef(headers);
+  useEffect(()=>{headersRef.current=headers;},[headers]);
+  useEffect(()=>{
+    if(!view.open)return;
+    const controller=new AbortController();
+    void aiRequest<RequestMetricsSummary>("/metrics",()=>headersRef.current(),undefined,controller.signal)
+      .then(metrics=>{if(!controller.signal.aborted)setResult({key:requestKey,metrics});})
+      .catch(cause=>{if(!controller.signal.aborted)setResult({key:requestKey,error:cause instanceof Error?cause.message:"Request details could not load."});});
+    return ()=>controller.abort();
+  },[view.open,requestKey]);
+  return <details className={styles.toolSection} onToggle={event=>{
+    const open=event.currentTarget.open;setView(previous=>({open,epoch:previous.epoch+(open?1:0)}));
+  }}>
     <summary>Request details</summary><div>
       {loading&&<p role="status">Loading your request details…</p>}
       {metrics&&<>

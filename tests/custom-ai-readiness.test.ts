@@ -28,6 +28,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe("one version-bound launch preparation", () => {
+  it("requests only missing coin details and keeps their focus order", () => {
+    const base = { sourceHash, checked: true, name: "Rain", symbol: "RAIN", image: true, connected: false };
+    expect(designReadiness({ ...base, image: false })).toMatchObject({ message: "Add your coin’s image.", missingFields: ["image"] });
+    expect(designReadiness({ ...base, name: "  " })).toMatchObject({ message: "Add your coin’s name.", missingFields: ["name"] });
+    expect(designReadiness({ ...base, symbol: "" })).toMatchObject({ message: "Add your coin’s ticker.", missingFields: ["symbol"] });
+    expect(designReadiness({ ...base, name: "", symbol: "", image: false })).toMatchObject({ missingFields: ["name", "symbol", "image"] });
+    expect(designReadiness({ ...base, pendingChange: "change fees", image: false })).not.toHaveProperty("missingFields");
+  });
   it("keeps a pending edit and disconnected design distinct from launch readiness", () => {
     const base = { sourceHash, checked: true, name: "EX", symbol: "EX", image: true, connected: false };
     expect(designReadiness(base).state).toBe("design-ready");

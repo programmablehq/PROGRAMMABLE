@@ -2,7 +2,7 @@
 
 Describe your coin's fee rules in the [Custom AI chat](https://programmable.market/launch/custom-ai), review the result and confirm the launch in your wallet. Ethereum and Robinhood are supported. Accepted drafts do not need a manual submission review.
 
-The chat can fill in the name, ticker, chain, pair token and initial buy. Choose an image, review the checked rules and select **Launch coin**. The final action confirms that exact version. Keep an interrupted launch open so its saved wallet transaction can be checked again.
+The chat can fill in the name, ticker, chain, pair token and initial buy. Open **Coin details** to edit those settings. Choose an image, review the checked rules and select **Launch coin**. If a name, ticker or image is missing, the next action opens the relevant editor. The final launch action confirms that exact version. Keep an interrupted launch open so its saved wallet transaction can be checked again.
 
 ## Fixed rules
 
@@ -14,7 +14,7 @@ Initial one-sided liquidity stays locked. Buys and sells change the pool reserve
 
 The current builder creates immutable fee rules and schedules, including different buy and sell fees and changes over time. For example, a coin can charge a 3% total fee for its first day, then 1%. The schedule starts when the coin launches.
 
-Edits use the saved contract and show whether the requested change was applied. Checked fee examples show the expected buy and sell fees over time. A new conversation can keep the existing design. The usage menu shows remaining generation credits and their reset times. Known provider outages preserve your design; a rejected provider request returns your generation allowance. A lost connection checks the saved request instead of generating it again.
+Edits use the saved contract and show whether the requested change was applied. Checked fee examples show the expected buy and sell fees over time. **New coin** starts a separate design and keeps a recoverable copy of the previous coin, including an unsent message. Under **Options**, **Clear messages** clears the conversation view while retaining the current coin and its rules. Options also contains saved versions, request details and remaining generation credits. Known provider outages preserve your design; a rejected provider request returns your generation allowance. A lost connection checks the saved request instead of generating it again.
 
 The chat can look up public sources, indexed markets and basic onchain contract information. It includes source links; research does not establish that a contract is safe.
 
