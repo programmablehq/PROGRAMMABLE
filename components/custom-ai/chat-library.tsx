@@ -20,15 +20,23 @@ export function ChatLibrary({account,headers,children}:{account:string;headers:A
   const registerFlush=(save:Flush)=>{flushRef.current=save;return()=>{if(flushRef.current===save)flushRef.current=null;};};
   const apiHeaders=useRef(headers);useEffect(()=>{apiHeaders.current=headers;},[headers]);
   const key=`programmable.custom-ai.selected.v1:${account}`,generation=useRef(0),listAbort=useRef<AbortController|null>(null);
+  const query=useRef({search:"",archived:false});
   const load=useCallback(async(q:string,archive:boolean,cursor?:string)=>{
+    const currentQuery=()=>query.current.search===q&&query.current.archived===archive;
+    if(!currentQuery())return null;
     const seq=++generation.current;listAbort.current?.abort();const controller=new AbortController();listAbort.current=controller;setLoading(true);setError("");
     try{
       const result=await aiRequest<ConversationPage>(`/conversations?account=${encodeURIComponent(account)}&q=${encodeURIComponent(q)}&archived=${archive}${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`,()=>apiHeaders.current(),undefined,controller.signal);
-      if(seq===generation.current)setPage(current=>cursor?{...result,conversations:[...current.conversations,...result.conversations].filter((chat,index,rows)=>rows.findIndex(item=>item.id===chat.id)===index)}:result);
+      if(seq===generation.current&&currentQuery())setPage(current=>cursor?{...result,conversations:[...current.conversations,...result.conversations].filter((chat,index,rows)=>rows.findIndex(item=>item.id===chat.id)===index)}:result);
       return result;
-    }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Your chats could not load.");return null;}
-    finally{if(seq===generation.current)setLoading(false);}
+    }catch(cause){if(!controller.signal.aborted&&seq===generation.current&&currentQuery())setError(cause instanceof Error?cause.message:"Your chats could not load.");return null;}
+    finally{if(seq===generation.current&&currentQuery())setLoading(false);}
   },[account]);
+  function filter(nextSearch:string,nextArchived:boolean){
+    query.current={search:nextSearch,archived:nextArchived};
+    ++generation.current;listAbort.current?.abort();setPage({conversations:[]});setLoading(true);
+    setSearch(nextSearch);setArchived(nextArchived);
+  }
   useEffect(()=>{
     let active=true;const controller=new AbortController();
     void (async()=>{
@@ -62,11 +70,12 @@ export function ChatLibrary({account,headers,children}:{account:string;headers:A
     if(transition.current)return;transition.current=true;setTransitioning(true);
     setLoading(true);setError("");try{
       await flush();const result=await aiRequest<ConversationItem>("/conversations",()=>apiHeaders.current(),{account,action:"create",id:crypto.randomUUID()});
-      await writeDraftCache(key,result.id);setSelected(result.id);setOpen(false);setSearch("");setArchived(false);setEditing(undefined);
+      await writeDraftCache(key,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);
     }catch(cause){setOpen(true);setError(cause instanceof Error?cause.message:"A new chat could not be opened.");}finally{transition.current=false;setTransitioning(false);setLoading(false);}
   }
   async function update(chat:ConversationItem,patch:{title?:string;archived?:boolean},flush:Flush){
     if(transition.current)return;transition.current=true;setTransitioning(true);
+    let refreshed=false;
     setLoading(true);setError("");try{
       await flush();
       // Flushing may have renamed or advanced the metadata. Read its latest
@@ -74,17 +83,19 @@ export function ChatLibrary({account,headers,children}:{account:string;headers:A
       const current=await aiRequest<ConversationItem>(`/conversations?account=${encodeURIComponent(account)}&id=${encodeURIComponent(chat.id)}`,()=>apiHeaders.current());
       const result=await aiRequest<ConversationItem>("/conversations",()=>apiHeaders.current(),{account,action:"update",id:chat.id,revision:current.revision,...patch});
       setEditing(undefined);
-      const list=await load(search,archived);
-      if(result.archived&&selected===chat.id){setSelected(undefined);await writeDraftCache(key,null);setOpen(true);if(list?.conversations[0])setSelected(list.conversations[0].id);}
-    }catch(cause){setError(cause instanceof Error?cause.message:"The chat could not be updated.");}finally{transition.current=false;setTransitioning(false);setLoading(false);}
+      // Metadata writes may outlive a filter change. Refresh the current view,
+      // never the search/archive values captured when the write began.
+      refreshed=true;const list=await load(query.current.search,query.current.archived);
+      if(result.archived&&selected===chat.id){const replacement=list?.conversations.find(item=>!item.archived);setSelected(replacement?.id);await writeDraftCache(key,replacement?.id??null);setOpen(true);}
+    }catch(cause){setError(cause instanceof Error?cause.message:"The chat could not be updated.");}finally{transition.current=false;setTransitioning(false);if(!refreshed)setLoading(false);}
   }
   const panel=(locked:boolean)=><div className={styles.chatLibrary} ref={root} data-custom-ai-library="true">
     <button type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls="custom-ai-chats" onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
     {open&&<section id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
       <header><strong>Your chats</strong><button type="button" aria-label="Close chat list" onClick={()=>setOpen(false)}><X size={16}/></button></header>
       <button type="button" disabled={locked||loading} onClick={()=>void newChat()}><Plus size={16} aria-hidden="true"/>New chat</button>
-      <label className={styles.librarySearch}><Search size={16} aria-hidden="true"/><span className={styles.srOnly}>Search your chats</span><input value={search} onChange={e=>setSearch(e.target.value)} maxLength={80} placeholder="Search chats"/></label>
-      <label className={styles.archiveFilter}><input type="checkbox" checked={archived} onChange={e=>setArchived(e.target.checked)}/>Show archived</label>
+      <label className={styles.librarySearch}><Search size={16} aria-hidden="true"/><span className={styles.srOnly}>Search your chats</span><input value={search} onChange={e=>filter(e.target.value,query.current.archived)} maxLength={80} placeholder="Search chats"/></label>
+      <label className={styles.archiveFilter}><input type="checkbox" checked={archived} onChange={e=>filter(query.current.search,e.target.checked)}/>Show archived</label>
       <div className={styles.libraryList} aria-busy={loading}>
         {page.conversations.map(chat=><article key={chat.id} data-current={selected===chat.id}>
           {editing===chat.id?<form onSubmit={e=>{e.preventDefault();void update(chat,{title},flush);}}><label className={styles.srOnly} htmlFor="chat-title">Chat name</label><input id="chat-title" autoFocus maxLength={80} value={title} onChange={e=>setTitle(e.target.value)}/><button type="submit" disabled={!title.trim()||loading} aria-label="Save chat name"><Check size={16}/></button><button type="button" aria-label="Cancel rename" onClick={()=>setEditing(undefined)}><X size={16}/></button></form>:
