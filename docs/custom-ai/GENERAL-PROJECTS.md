@@ -126,3 +126,20 @@ It does not establish approval, a wallet permit, execution or public availabilit
 This producer is server-only and not connected to a public general-project
 submission action yet. The owned exact revision, deployment recipe, actual chain
 profile and metadata pack must be integrated before it is enabled and released.
+
+## Exact owned source selection
+
+`store.projects.readForLaunch` reads the selected working source, current chat
+intent, original blueprint, compiled artifacts and scenario report in one owned
+transaction. It uses the existing conversation/studio lock order and at most two
+owner-indexed jobs. Archived chats, an unfinished reply, pending edits, changed
+intent, another wallet/network and missing or modified evidence stop preparation.
+The last failed source proposal cannot replace the saved working source.
+
+The returned semantic binding covers the owner, linked wallet, chat, source and
+context jobs, full intent revision, settings, image and every evidence hash.
+After asynchronous packing, callers can revalidate that binding while allowing
+only unsent-input changes to the studio revision. No source is written, compiled
+or sent to a provider by this read. The result retains `launchReady:false`;
+current-profile packing and backend preparation remain required. This local
+loader is not a public submission endpoint.

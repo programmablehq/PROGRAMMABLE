@@ -1,3 +1,8 @@
+import { checkedGeneralLaunchSource, type GeneralLaunchSourceSelection } from "./general-launch-source.server";
+import { conversationStorageId } from "./conversation.server";
+import type { Conversation } from "./conversation";
+import type { StudioState } from "./studio";
+import type { ChatRequest, ChatResult } from "./types";
 import "server-only";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { projectCompilerInput, type ContractProject } from "./contract-project";
@@ -139,7 +144,36 @@ export function createProjectStore(transaction: Transaction) {
       return row?.overview ? row.overview as ProjectOverview : null;
     });
   }
-  return { save, complete, overview, saveBlueprint, saveScenarios,
+  async function readForLaunch(owner: string, selected: GeneralLaunchSourceSelection) {
+    const storageId = conversationStorageId(selected.account, selected.conversation);
+    return transaction(async db => {
+      // Match the conversation/studio CAS lock order. No model, compiler,
+      // network, funding or signing work is performed while these are held.
+      const meta = (await db.query(`SELECT value FROM programmable_custom_ai_v1.objects
+        WHERE owner=$1 AND kind='conversation' AND id=$2 FOR UPDATE`, [owner, storageId])).rows[0];
+      const studio = (await db.query(`SELECT revision,value FROM programmable_custom_ai_v1.objects
+        WHERE owner=$1 AND kind='studio' AND id=$2 FOR UPDATE`, [owner, storageId])).rows[0];
+      const state = studio?.value as StudioState | undefined;
+      const conversation = meta?.value as Conversation | undefined;
+      if (!conversation || conversation.archived || conversation.activeRequest || !studio || !state?.contextId || state.draftId !== selected.id
+        || state.pendingChange?.trim() || state.settings?.chainId !== selected.chainId
+        || Number(studio.revision) !== selected.studioRevision && selected.bindingHash === undefined)
+        throw new CustomAIError("launch-source-changed", "Open the current saved design before preparing this launch.", 409);
+      const rows = (await db.query(`SELECT id,payload_hash,request,result,state FROM programmable_custom_ai_v1.jobs
+        WHERE owner=$1 AND id=ANY($2::text[])`, [owner, [...new Set([selected.id, state.contextId])]])).rows;
+      const source = rows.find(row => row.id === selected.id), context = rows.find(row => row.id === state.contextId);
+      if (!source || !context || source.state !== "completed" || context.state !== "completed")
+        throw new CustomAIError("launch-source-changed", "Finish the current saved reply before preparing this launch.", 409);
+      const checkpoint = await saved(db, owner, selected.id), declared = await savedBlueprint(db, owner, selected.id);
+      if (!source || !context || !checkpoint || !declared)
+        throw new CustomAIError("launch-source-checks", "Finish the saved source and behavior checks before preparing this launch.", 422);
+      return checkedGeneralLaunchSource(owner, selected, { conversation: meta.value as Conversation,
+        studioRevision: Number(studio.revision), studio: state,
+        sourceJob: { state: String(source.state), payloadHash: String(source.payload_hash), request: source.request as ChatRequest, result: source.result as ChatResult },
+        contextJob: { state: String(context.state), request: context.request as ChatRequest, result: context.result as ChatResult }, checkpoint, declared });
+    });
+  }
+  return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch,
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),
     read: (owner: string, id: string) => transaction(db => saved(db, owner, id)) };
 }
