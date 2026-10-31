@@ -3,6 +3,7 @@ import { createPrivyWalletPrincipalAuthenticatorV1, WalletPrincipalAuthenticatio
   type AuthenticatedWalletPrincipalV1 } from "../server/creator-article/wallet-principal.server";
 import { allowLocalPreview } from "./access.server";
 import { CustomAIError } from "./types";
+import { customAICacheScope } from "./cache-scope.server";
 
 export type AIAuthority = { kind: "preview" } | { kind: "account"; owner: string; principal: AuthenticatedWalletPrincipalV1 };
 export async function authorizeCustomAI(request: Request, previewAllowed = false): Promise<AIAuthority> {
@@ -15,8 +16,11 @@ export async function authorizeCustomAI(request: Request, previewAllowed = false
   if (origin && origin !== new URL(request.url).origin) throw new CustomAIError("origin", "Open the builder on Programmable to continue.", 403);
   try {
     const principal = await createPrivyWalletPrincipalAuthenticatorV1().authenticate(request);
+    const scope = request.headers.get("x-custom-ai-cache-scope");
+    if (scope !== null && scope !== customAICacheScope(principal.privyUserId)) throw new CustomAIError("session_changed", "Your signed-in account changed. Reload to open its saved chats.", 409);
     return { kind: "account", owner: principal.privyUserId, principal };
   } catch (error) {
+    if (error instanceof CustomAIError) throw error;
     if (error instanceof WalletPrincipalAuthenticationErrorV1) throw new CustomAIError(error.code,
       error.status === 503 ? "Your wallet session could not be checked. Try again shortly." : "Connect your wallet to continue.", error.status);
     throw new CustomAIError("auth", "Wallet sign-in is temporarily unavailable.", 503);

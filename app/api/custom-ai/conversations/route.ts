@@ -5,6 +5,7 @@ import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
 import { readPreviewBody } from "@/lib/custom-ai/access.server";
 import { CustomAIError } from "@/lib/custom-ai/types";
 import { LEGACY_CONVERSATION } from "@/lib/custom-ai/conversation";
+import { customAICacheScope } from "@/lib/custom-ai/cache-scope.server";
 export const runtime="nodejs";
 async function context(request:Request,value:unknown){
   const authority=await authorizeCustomAI(request);
@@ -35,6 +36,6 @@ export async function POST(request:Request){
       :input.action==="update"?await store.conversations.update(owner,account,input.id,input.revision,{title:input.title,archived:input.archived})
       :undefined;
     if(!result)throw new CustomAIError("input","Choose a chat action.");
-    return Response.json(result,{headers:aiHeaders});
+    return Response.json(input.action==="bootstrap"?{...result,cacheScope:customAICacheScope(owner)}:result,{headers:aiHeaders});
   }catch(error){return aiError(error);}
 }

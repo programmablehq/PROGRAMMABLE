@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
 import { parseChatRequest, type AIUsage, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
@@ -25,6 +26,7 @@ import { cachedLaunchIntent, type LaunchIntent } from "@/lib/custom-ai/launch-in
 import { LEGACY_CONVERSATION } from "@/lib/custom-ai/conversation";
 import { ChatLibrary, useChatLibrary } from "./chat-library";
 import { useAIReply } from "./use-ai-reply";
+import { canMigrateLegacyCache, scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
@@ -38,12 +40,20 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
     return { Authorization: `Bearer ${access}` };
   };
   if(!localPreview&&(wallet.authReady===false||wallet.sessionReady===false))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
-  if(!localPreview&&owner!=="signed-out")return <ChatLibrary key={owner} account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false}/></ChatLibrary>;
+  if(!localPreview&&owner!=="signed-out")return <AuthenticatedChats account={owner} headers={headers}/>;
   return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} />;
 }
 
-function CustomAISession({ owner, headers, localPreview }: { owner: string; headers: AISessionHeaders; localPreview: boolean }) {
+function AuthenticatedChats({account,headers}:{account:string;headers:AISessionHeaders}) {
+  const {user}=usePrivy();
+  if(!user?.id)return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
+  return <ChatLibrary key={`${user.id}:${account}`} account={account} headers={headers}><CustomAISession owner={account} headers={headers} localPreview={false}/></ChatLibrary>;
+}
+
+function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { owner: string; headers: AISessionHeaders; localPreview: boolean }) {
   const library=useChatLibrary(),conversationId=library?.id,navigation=library?.navigation;
+  const cacheScope=library?.cacheScope;
+  const headers: AISessionHeaders=useCallback(async():Promise<Record<string,string>>=>({...await sessionHeaders(),...(cacheScope?{"X-Custom-AI-Cache-Scope":cacheScope}:{})}),[sessionHeaders,cacheScope]);
   type RetryBase = { messages: ChatMessage[]; pendingChange?: string };
   type PreviousCoin = StudioState & { draft?: Draft; intent?: LaunchIntent; imageBlob?: Blob; input?: string; editTarget?: EditTarget; request?: ChatRequest; retryBase?: RetryBase };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -88,7 +98,9 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const [conflict, setConflict] = useState<{ server: StoredStudio | null } | null>(null);
   const [previewRevision, setPreviewRevision] = useState(0);
   const saveQueue = useRef(Promise.resolve());
-  const storageKey = `programmable.custom-ai.studio.v1:${owner}${conversationId&&conversationId!==LEGACY_CONVERSATION?`:chat:${conversationId}`:""}`;
+  const cacheKeys=cacheScope?scopedCacheKeys(cacheScope,owner,conversationId):undefined;
+  const storageKey = cacheKeys?.studio ?? `programmable.custom-ai.studio.v1:${owner}${conversationId&&conversationId!==LEGACY_CONVERSATION?`:chat:${conversationId}`:""}`;
+  const legacyStorageKey=cacheKeys?.legacyStudio;
   const [chatRevision, setChatRevision] = useState(0);
   function changeSettings(patch: CoinSetupPatch) { setSettings(current => applyCoinSetupPatch(current, patch)); }
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -137,7 +149,18 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     lifetime.current = controller;
     saveEpoch.current += 1;
     remote.current.ready = false;
-    void readDraftCache<string>(storageKey).then(raw => {
+    let serverRead:Promise<StoredStudio|null>|undefined;
+    const readServer=()=>serverRead??=loadStudio(owner,()=>headersRef.current(),controller.signal,conversationId);
+    void readDraftCache<string>(storageKey).then(async raw => {
+      if(typeof raw!=="string"&&legacyStorageKey){
+        const server=await readServer(),legacy=await readDraftCache<string>(legacyStorageKey);
+        if(typeof legacy==="string"&&legacy.length<400_000&&canMigrateLegacyCache(JSON.parse(legacy),server)){
+          raw=legacy;
+          // Old copies remain recoverable. Copy only the image paired with an
+          // owned receipt; never adopt an unbound browser blob.
+          if(server?.state.image){const blob=await readDraftCache<Blob>(`${legacyStorageKey}:image`);if(blob instanceof Blob)await writeDraftCache(`${storageKey}:image`,blob);}
+        }
+      }
       if (cancelled) return;
       if (typeof raw === "string" && raw.length < 400_000) {
         const saved = JSON.parse(raw);
@@ -171,7 +194,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         if (cancelled) return;
         if (!localPreview && owner !== "signed-out") {
           try {
-            const server = await loadStudio(owner, () => headersRef.current(), controller.signal,conversationId);
+            const server = await readServer();
             if (cancelled) return;
             const restored = restoreStudio(local, previousBase, server);
             if (server && !restored.keepLocal) {
@@ -197,7 +220,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         if (!cancelled) setRestored(true);
       });
     return () => { cancelled = true; controller.abort(); };
-  }, [storageKey, localPreview, owner, restoreRevision,conversationId]);
+  }, [storageKey, legacyStorageKey, localPreview, owner, restoreRevision,conversationId]);
   useEffect(() => {
     if (!restored || owner === "signed-out") return;
     void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, input, editTarget, settings, draft, intent, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,retryBase:retryBase.current,
