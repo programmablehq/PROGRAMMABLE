@@ -59,6 +59,13 @@ describe("bound Custom AI contract projects", () => {
 });
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("isolated general contract compilation", { timeout: 80_000 }, () => {
+  it("keeps Cancun transient-storage source distinct from an incompatible Paris build", async () => {
+    const value=input();value.sources["GeneralHook.sol"].content="pragma solidity 0.8.26; contract GeneralHook { function write() external { assembly { tstore(0, 1) } } }";
+    const paris=await compileContractProject(createContractProject(value,intent,1));
+    expect(paris.compiled).toBe(false);expect(paris.contracts).toEqual([]);
+    const cancun=await compileContractProject(createContractProject({...value,compiler:{...value.compiler,evmVersion:"cancun"}},intent,1));
+    expect(cancun.compiled).toBe(true);expect(cancun.verification).toBe("not-run");expect(cancun.launchReady).toBe(false);
+  });
   it("builds reproducibly while keeping behavior verification and launch unavailable", async () => {
     const project = createContractProject(input(), intent, 999);
     const first = await compileContractProject(project), second = await compileContractProject(project);

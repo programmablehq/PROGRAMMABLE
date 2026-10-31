@@ -133,7 +133,12 @@ describe("complete launch intent and source revisions", () => {
   });
   it("replays the real Surplus design and follow-up through the current server without provider calls", async () => {
     let index=0;
-    const call=vi.fn(async(input:{schema:object})=>response(JSON.parse(prepareSurplusSchema(input.schema).decode(JSON.stringify(recording.responses[index++])))));
+    const call=vi.fn(async(input:{schema:object})=>{
+      // Preserve the captured 2.4 transport values. Its explicit route did not
+      // exist yet; supply that versioned metadata to the new planner schema.
+      const captured={...recording.responses[index++],executionRoute:"fee-module"};
+      return response(JSON.parse(prepareSurplusSchema(input.schema).decode(JSON.stringify(captured))));
+    });
     const compile=vi.fn();
     const first=await runCustomAI({id:"recorded-intent-0001",intent:"chat",messages:[{role:"user",content:recording.prompts[0]}]},undefined,{call,compile});
     expect(first.intent?.requirements).toHaveLength(10);expect(first.intent?.unresolved).toHaveLength(4);

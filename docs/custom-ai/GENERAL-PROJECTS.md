@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package is a foundation for the general Custom Contract route. It is not publicly connected to chat generation, submission or wallet execution yet. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. The studio/preview, existing backend submission and wallet execution still need their integration. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
@@ -31,6 +31,16 @@ General projects use the same conversation and data-integration voice as the fee
 `store.projects` saves the complete source before compilation in the existing owned job/object storage. It binds the source to the request payload hash and admits writes only from that job's current, unexpired running lease. Cancellation, a completed job, a wrong owner or an expired worker cannot write or attach later compiler output. An identical save is idempotent; another source revision requires a new owned request.
 
 The source remains readable by its owner after a compiler failure. Compiler output must match both the exact saved project hash and its canonical artifact hash; it cannot claim behavior verification or launch readiness. Status polling continues to omit these larger checkpoints. The dedicated server-only checkpoint method supports the bounded complete project without increasing the ordinary studio/image object limit. No schema migration, new model call, submission or wallet action is part of this storage step.
+
+## Existing chat job handoff
+
+The local planner selects an explicit execution route. A proposed template missing a canonical requirement selects the general route when durable project storage is connected. An open material choice still blocks generation of a partial design. The general generation call receives every canonical requirement and negative constraint. The existing account-owned job supplies lease-bound source and compilation saves; its completion uses the same durable reply transport and request metrics. The fee compiler is not called for general projects, and compiler failure does not start a paid repair loop.
+
+New general source uses the Cancun compiler target by default, while an existing project keeps its recorded target. A caller may supply an explicit Paris target. This source-compilation choice does not prove chain compatibility or authorize a launch; the selected route must still check its current network and runtime bindings. The isolated compiler case distinguishes code requiring transient storage from a Paris build. The worker tracing rule includes the bounded worker files without needing a separate configuration entry for every new worker.
+
+General follow-up questions use saved requirements and a compact project summary. Explicit source inspection includes the source, with the same 160,000-character planning-context bound. The complete source stays in owned storage. Historical captured planner responses retain their original bytes; the replay fixture explicitly adds the route metadata introduced after its recorded configuration version.
+
+Before publication this new planner schema needs its versioned AI configuration, source references in the public reply/studio, complete source recovery, four-chain settings, independent behavior verification and the existing submission adapter. The current public capability announcement remains unchanged.
 
 ## Qualification
 

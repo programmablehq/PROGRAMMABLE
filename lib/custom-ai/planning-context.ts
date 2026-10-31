@@ -1,19 +1,22 @@
 import type {ChatRequest,Draft} from "./types";
 import type {LaunchIntent} from "./launch-intent";
 import type {RuleSpecV2} from "./rule-spec";
+import type {GeneralProjectDraft} from "./general-builder.server";
 
 /** Source inspection is opt-in for checked drafts. Older drafts without a
  * verified behavior record retain their full source context. This changes
  * model input size; it never chooses a build or authorizes an edit. */
-export function plannerNeedsSource(request:ChatRequest,draft?:Draft){
+export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:GeneralProjectDraft){
+  const inspection=/\b(source|code|contract|solidity|bytecode|function|implementation|audit|quellcode|vertrag|funktion|implementierung|zeile)\b|```/i.test(request.messages.at(-1)?.content??"");
+  if(project)return inspection;
   if(!draft)return false;
   const checked=draft.compiled&&draft.verification?.status==="passed"
     &&draft.verification.sourceHash===draft.sourceHash&&Array.isArray(draft.verification.requirements)&&draft.verification.requirements.length>0
     &&Array.isArray(draft.verification.checks)&&draft.verification.checks.length>0;
-  return !checked||/\b(source|code|contract|solidity|bytecode|function|implementation|audit|quellcode|vertrag|funktion|implementierung|zeile)\b|```/i.test(request.messages.at(-1)?.content??"");
+  return !checked||inspection;
 }
-export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;editTarget?:ChatRequest["editTarget"];draft?:Draft},includeSource:boolean){
-  const {draft,intent}=input;
+export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft},includeSource:boolean){
+  const {draft,intent,generalProject}=input;
   return {
     memory:input.memory,ruleSpec:input.ruleSpec,editTarget:input.editTarget,
     // Full provenance and change history stay in the server-owned revision.
@@ -23,5 +26,8 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
     currentDraft:draft?{sourceHash:draft.sourceHash,...(includeSource?{source:draft.source}:{}),hookSummary:draft.hookSummary,
       requirements:draft.verification?.requirements,feeChecks:draft.verification?.checks,program:draft.program?.spec,eventRule:draft.feed?.rule,
       sourceIncluded:includeSource}:null,
+    ...(generalProject?{generalProject:{projectHash:generalProject.project.hash,chainId:generalProject.project.chainId,summary:generalProject.summary,
+      entrypoints:generalProject.project.entrypoints,compiler:generalProject.project.compiler,compiled:generalProject.compilation.compiled,
+      verification:"not-run",sourceIncluded:includeSource,...(includeSource?{sources:generalProject.project.sources}:{})}}:{}),
   };
 }

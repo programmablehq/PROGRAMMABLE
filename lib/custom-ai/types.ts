@@ -68,6 +68,8 @@ export type Draft = {
   };
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  generalProject?: import("./general-builder.server").GeneralProjectDraft;
+  selection?: import("./execution-routing").RouteSelection;
   intent?: import("./launch-intent").LaunchIntent;
   memory?: string; change?: "applied" | "unchanged" | "blocked"; unresolved?: string[]; chargedAs?: "build" | "research";
   sources?: import("./knowledge").KnowledgeSource[] };

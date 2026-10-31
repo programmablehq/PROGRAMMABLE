@@ -39,8 +39,8 @@ export async function POST(request: Request) {
     const previousRead=readResult(input.contextId);
     const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory,
-      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft };
-    if (input.draftId && !context.draft) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
+      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProject: current?.generalProject };
+    if (input.draftId && !context.draft && !context.generalProject) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
     // Known billing/rate-limit outages do not reserve a new user attempt.
     if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) {
       assertModelConnection();
@@ -80,7 +80,12 @@ export async function POST(request: Request) {
           const saved=await store.read(authority.owner,input.id);
           throw new CustomAIError(saved?.errorCode==="cancelled"?"cancelled":"interrupted","This request ended before generation could start.",409);
         }
-        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call) });
+        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
+          ...(store&&authority.kind==="account"&&reserved?.lease?{
+            saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
+            saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
+          }:{}),
+        });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();
         await phaseWrites;
         if (store && authority.kind === "account" && reserved?.lease && !await store.finish(authority.owner, input.id, reserved.lease, result)) {
