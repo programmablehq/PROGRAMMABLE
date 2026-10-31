@@ -23,7 +23,8 @@ export async function GET(request:Request){
       if(!v||v.studioId!==studioId||!v.state.draftId)throw new CustomAIError("missing","That version was not found.",404);
       const draft=(await store.read(auth.owner,v.state.draftId))?.result?.draft;
       if(!draft||draft.sourceHash!==v.sourceHash)throw new CustomAIError("version","That version needs to be checked again before use.",409);
-      return Response.json({state:v.state,draft},{headers:aiHeaders});
+      const context=v.state.contextId===v.state.draftId?undefined:v.state.contextId?(await store.read(auth.owner,v.state.contextId))?.result:undefined;
+      return Response.json({state:v.state,draft,intent:context?.intent??draft.intent},{headers:aiHeaders});
     }
     const rows=await store.draftVersions(auth.owner,studioId);
     const versions:DraftVersion[]=rows.map(row=>{const v=row.value as SavedVersion;return {id:String(row.id),createdAt:new Date(String(row.updated_at)).toISOString(),name:v.state.settings.name,summary:v.summary??"Saved rules",sourceHash:v.sourceHash,draftId:v.state.draftId!};});

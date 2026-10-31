@@ -101,3 +101,11 @@ test("Custom AI interactions use their own browser suite while shared wallet cha
   assert.equal(contracts.activation, true);
   assert.equal(contracts.customAI, true);
 });
+
+test("Custom AI design documentation does not select Module Mode browser flows", () => {
+  const docs = interfacePlan(["docs/custom-ai/LAUNCH-INTENT.md"]);
+  assert.deepEqual(docs.browser, []);assert.equal(docs.wallet, false);assert.equal(docs.activation, false);
+  const source = interfacePlan(["docs/custom-ai/LAUNCH-INTENT.md", "lib/custom-ai/launch-preparation.server.ts"]);
+  assert.deepEqual(source.browser, []);assert.equal(source.customAI, true);assert.equal(source.wallet, true);
+  assert.ok(interfacePlan(["docs/custom-ai/LAUNCH-INTENT.md", "components/module-foundation-launch.tsx"]).browser.includes("module-signing"));
+});

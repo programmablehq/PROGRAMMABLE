@@ -13,6 +13,7 @@ import { quantityV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 import { inspectCustomAIQuote } from "./quote.server";
 import { makeStep } from "./transaction.server";
 import { assertComposableAvailable } from "./composable-release.server";
+import { intentMatchesCandidate } from "./launch-intent";
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
 export type LaunchInputs = { draftId: string; settings: CoinSettings; account: Address; imageId: string };
 type Ticket = { input: LaunchInputs; revision: string; sourceHash: string; expiresAt: number };
@@ -22,6 +23,7 @@ export async function prepareLaunch(store: AIStore, owner: string, input: Launch
   if (!draft?.artifact || draft.validation?.status !== "passed" || draft.verification?.status !== "passed" || draft.lifecycle?.status !== "passed"
     || draft.lifecycle.bundleHash !== CUSTOM_AI_BUNDLE_HASH || draft.verification.sourceHash !== draft.sourceHash
     || artifactHash(draft.artifact) !== draft.validation.artifactHash || hashSource(draft.source) !== draft.sourceHash) throw new CustomAIError("rules", "Finish checking this design in the chat first.", 422);
+  if (!intentMatchesCandidate(draft.intent, draft)) throw new CustomAIError("intent", "The complete design does not match this contract revision.", 422);
   if (draft.composable) await assertComposableAvailable(draft.composable);
   if (draft.feed && process.env.CUSTOM_AI_EVENTS_ENABLED !== "true" || draft.program && process.env.CUSTOM_AI_PROGRAMS_ENABLED !== "true") throw new CustomAIError("deployment", "This design needs a capability that is not active on this network yet.", 503);
   const image = await store.readObject<{ url: string }>(owner, "image", input.imageId);

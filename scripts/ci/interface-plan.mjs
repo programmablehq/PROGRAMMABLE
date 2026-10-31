@@ -39,7 +39,7 @@ export function interfacePlan(paths) {
   const customAI = any(/^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/(?:client|readiness|studio|conversation|coin-setup|events|wallet|launch|transaction|trade|recovery|reconcile)|tests\/custom-ai-browser\/|playwright\.custom-ai\.config)/u);
   // Custom AI has its own browser flow. A filename containing "launch" must
   // not select unrelated Module Mode suites; shared wallet inputs still do.
-  const separateCustomAI = /^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/|tests\/custom-ai(?:-browser\/|-))/u;
+  const separateCustomAI = /^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/|docs\/custom-ai\/|tests\/custom-ai(?:-browser\/|-))/u;
   const sharedBrowserPaths = paths?.filter(path => !separateCustomAI.test(path));
   const browser = [...new Set(browserGroups.filter(([pattern]) => full || sharedBrowserPaths.some(path => pattern.test(path))).flatMap(([, specs]) => specs))];
   for (const path of paths ?? []) {

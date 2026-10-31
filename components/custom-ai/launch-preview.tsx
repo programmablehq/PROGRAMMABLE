@@ -18,9 +18,10 @@ import { useWallet } from "@/components/wallet-provider";
 import { aiRequest } from "@/lib/custom-ai/client";
 import { designReadiness, type LaunchPreparation } from "@/lib/custom-ai/readiness";
 import { RuleReview } from "./rule-review";
+import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 
-export function CustomAILaunchPreview({ draft, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule }: {
-  draft?: Draft; disabled: boolean; settings: CoinSetup; chatRevision: number; onChange: (patch: CoinSetupPatch) => void;
+export function CustomAILaunchPreview({ draft, intent, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule }: {
+  draft?: Draft; intent?: LaunchIntent; disabled: boolean; settings: CoinSetup; chatRevision: number; onChange: (patch: CoinSetupPatch) => void;
   draftId?: string; headers: AISessionHeaders; localPreview: boolean;
   cacheKey: string;
   onLaunchLocked: (locked: boolean) => void;
@@ -38,7 +39,8 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
   const imageRequest = useRef(0);
   const [image, setImage] = useState<{ blob: Blob; url: string }>();
   const reviewedSourceHash = !pendingChange && draft?.compiled && draft.validation?.status === "passed"
-    && draft.verification?.status === "passed" && draft.verification.sourceHash === draft.sourceHash ? draft.sourceHash : undefined;
+    && draft.verification?.status === "passed" && draft.verification.sourceHash === draft.sourceHash
+    && intentMatchesCandidate(intent, draft) ? draft.sourceHash : undefined;
   const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview, readyTicket: preparation?.inputKey === preparationKey && preparation?.revision === draft?.sourceHash ? preparation?.ticket : undefined });
   const bound = launch.saved?.session;
   const settings: CoinSetup = useMemo(() => bound ? { ...editingSettings, name: bound.settings.name, symbol: bound.settings.symbol,
@@ -111,7 +113,7 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
       else if (parseEther(settings.initialBuy) < 10n ** 16n) buyError = "Minimum 0.01 ETH";
     }
   }
-  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), pendingChange,
+  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), pendingChange, openRequirements: intent ? intentHasOpenParts(intent) : false,
     name: settings.name, symbol: settings.symbol, image: Boolean(imageURL), connected: Boolean(account) });
   useEffect(() => {
     if (localPreview || !account || !draftId || !reviewedSourceHash || !imageReceipt || disabled || launch.locked || !editingSettings.name.trim() || !editingSettings.symbol.trim()) return;
@@ -209,7 +211,7 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (isEth ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent")}</p>
       </fieldset>
       </details>
-      {!bound && <RuleReview draft={draft} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
+      {!bound && <RuleReview draft={draft} intent={intent} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
         quoteLabel={isEth ? "ETH" : "pair tokens"}
         onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
       {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}

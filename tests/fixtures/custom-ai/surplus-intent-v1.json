@@ -1,0 +1,137 @@
+{
+  "source": {
+    "provider": "surplus",
+    "model": "claude-haiku-5.5",
+    "aiConfigVersion": "2.4.0",
+    "capturedAt": "2026-10-31T07:26:31.878Z",
+    "scope": "Synthetic ten-rule design and a follow-up. No compilation, data connectors or wallet execution."
+  },
+  "prompts": [
+    "Baue einen Coin mit genau diesen zehn getrennten Anforderungen. Behalte alle zehn im Entwurf. Fehlende Anbindungen oder Entscheidungen bleiben offen. Keine Live-Daten abrufen.\n1. Am Anfang 10% Gesamtgebühren auf Käufe.\n2. Am Anfang 8% Gesamtgebühren auf Verkäufe.\n3. Beide Sätze sollen innerhalb von zehn Minuten linear auf 1% fallen.\n4. Keine Gebühren auf normale Wallet-Transfers.\n5. Kein nachträgliches Minting.\n6. Der Creator darf die anfängliche Liquidität nicht herausziehen.\n7. Danach sollen die Gebühren bei Regen in London auf 5% umschalten.\n8. 50% der zusätzlichen Gebühren sollen automatisch in gesperrte Liquidität fließen.\n9. Die anderen 50% sollen Buybacks finanzieren; das Ausführungslimit ist noch offen.\n10. Unser noch nicht angebundener privater Spieleserver soll bei einem gewonnenen Match eine zusätzliche Ausschüttung auslösen; Betrag und Datenanbindung sind offen.",
+    "erklär mir nur den countdown ganz kurz, bitte nichts ändern"
+  ],
+  "responses": [
+    {
+      "reply": "Die Gebühren auf Käufe und Verkäufe, der lineare Abfall auf 1 % in zehn Minuten, die Regeln ohne Wallet-Transfer-Gebühren, kein Minting und die gesperrte Anfangsliquidität lassen sich als Gebührenplan umsetzen. Die Regen-Regel in London, die Liquiditäts- und Buyback-Aufteilung der zusätzlichen Gebühren und die Spiel-Ausschüttung bleiben offen, weil keine Wetterdaten, kein Ausführungslimit und keine Spieledatenquelle angebunden sind. Bis dahin ist das ein Entwurf. Soll der 5-Prozent-Satz bei Regen sowohl für Käufe als auch für Verkäufe gelten, und welcher Satz gilt, wenn es nicht regnet?",
+      "intentRequirements": [
+        {
+          "id": "start-buy-fee",
+          "text": "Am Anfang 10 % Gesamtgebühren auf Käufe.",
+          "kind": "behavior",
+          "instruction": "Am Anfang 10% Gesamtgebühren auf Käufe.",
+          "open": null
+        },
+        {
+          "id": "start-sell-fee",
+          "text": "Am Anfang 8 % Gesamtgebühren auf Verkäufe.",
+          "kind": "behavior",
+          "instruction": "Am Anfang 8% Gesamtgebühren auf Verkäufe.",
+          "open": null
+        },
+        {
+          "id": "linear-fee-ramp",
+          "text": "Käufe und Verkäufe fallen innerhalb von zehn Minuten linear auf 1 % Gesamtgebühr.",
+          "kind": "behavior",
+          "instruction": "Beide Sätze sollen innerhalb von zehn Minuten linear auf 1% fallen.",
+          "open": null
+        },
+        {
+          "id": "no-wallet-transfer-fee",
+          "text": "Keine Gebühren auf normale Wallet-Transfers.",
+          "kind": "constraint",
+          "instruction": "Keine Gebühren auf normale Wallet-Transfers.",
+          "open": null
+        },
+        {
+          "id": "no-minting",
+          "text": "Kein nachträgliches Minting.",
+          "kind": "constraint",
+          "instruction": "Kein nachträgliches Minting.",
+          "open": null
+        },
+        {
+          "id": "no-initial-liquidity-withdrawal",
+          "text": "Der Creator kann die anfängliche Liquidität nicht herausziehen.",
+          "kind": "constraint",
+          "instruction": "Der Creator darf die anfängliche Liquidität nicht herausziehen.",
+          "open": null
+        },
+        {
+          "id": "london-rain-fee",
+          "text": "Nach dem Ramp soll die Gebühr bei Regen in London auf 5 % steigen.",
+          "kind": "behavior",
+          "instruction": "Danach sollen die Gebühren bei Regen in London auf 5% umschalten.",
+          "open": "Es ist keine Wetterdatenquelle angebunden. Offen sind: gilt der 5-Prozent-Satz für Käufe, Verkäufe oder beide, welcher Satz gilt ohne Regen, und ob die Regel nach Ende des Zehn-Minuten-Ramps greift."
+        },
+        {
+          "id": "fee-locked-liquidity-half",
+          "text": "50 % der zusätzlichen Gebühren fließen automatisch in gesperrte Liquidität.",
+          "kind": "behavior",
+          "instruction": "50% der zusätzlichen Gebühren sollen automatisch in gesperrte Liquidität fließen.",
+          "open": "Das automatische Einfließen in gesperrte Liquidität braucht ein bereitgestelltes Programm, das noch nicht bestätigt ist. Offen ist auch, ob die 50 % auf Käufe und Verkäufe gleich verteilt werden."
+        },
+        {
+          "id": "fee-buyback-half",
+          "text": "50 % der zusätzlichen Gebühren finanzieren Buybacks des Coins.",
+          "kind": "behavior",
+          "instruction": "Die anderen 50% sollen Buybacks finanzieren; das Ausführungslimit ist noch offen.",
+          "open": "Das Ausführungslimit fehlt: maximaler Quote-Betrag pro Ausführung, Mindestmenge neuer Coins pro Quote-Einheit und Mindestabstand zwischen Ausführungen. Der Empfänger der gekauften Coins ist ebenfalls offen."
+        },
+        {
+          "id": "game-win-distribution",
+          "text": "Ein gewonnenes Match auf dem privaten Spieleserver soll eine zusätzliche Ausschüttung auslösen.",
+          "kind": "behavior",
+          "instruction": "Unser noch nicht angebundener privater Spieleserver soll bei einem gewonnenen Match eine zusätzliche Ausschüttung auslösen; Betrag und Datenanbindung sind offen.",
+          "open": "Der Spieleserver ist nicht angebunden. Solidity kann keine HTTP-Aufrufe ausführen, und es gibt keine geprüfte Onchain-Quelle für Match-Ergebnisse. Betrag, Auslösungslogik, Empfänger und Finanzierung aus den Gebühren sind offen."
+        }
+      ],
+      "composable": null,
+      "program": "null",
+      "eventRule": "null",
+      "ruleEdits": [],
+      "action": "clarify",
+      "memory": "Entwurf: Kauf 10 % und Verkauf 8 % Gesamtgebühr am Anfang, linearer Abfall auf 1 % in zehn Minuten. Keine Gebühren auf normale Wallet-Transfers, kein nachträgliches Minting, Creator darf die anfängliche Liquidität nicht herausziehen. Offen: Regen-in-London-Regel mit 5 % (Datenquelle nicht angebunden, Richtung und Gebühr ohne Regen offen). Zusätzliche Gebühren: 50 % gesperrte Liquidität und 50 % Buybacks, Ausführungslimit offen. Spieleserver-Ausschüttung nicht angebunden, Betrag offen. Noch nichts gebaut.",
+      "requirements": [
+        "Kaufgebühr startet bei 10 % Gesamtgebühr.",
+        "Verkaufsgebühr startet bei 8 % Gesamtgebühr.",
+        "Beide Gebühren fallen innerhalb von zehn Minuten linear auf 1 %.",
+        "Keine Gebühren auf normale Wallet-Transfers.",
+        "Kein nachträgliches Minting.",
+        "Der Creator darf die anfängliche Liquidität nicht herausziehen.",
+        "Bei Regen in London soll die Gebühr auf 5 % steigen; Datenquelle und Richtung sind offen.",
+        "50 % der zusätzlichen Gebühren sollen automatisch in gesperrte Liquidität fließen; Umsetzung offen.",
+        "50 % der zusätzlichen Gebühren sollen Buybacks finanzieren; Ausführungslimit offen.",
+        "Gewonnene Matches auf dem privaten Spieleserver sollen eine zusätzliche Ausschüttung auslösen; Datenanbindung und Betrag offen."
+      ],
+      "setupPatch": {
+        "name": null,
+        "symbol": null,
+        "chainId": null,
+        "pairToken": null,
+        "initialBuy": null
+      },
+      "lookups": [],
+      "feeChecks": []
+    },
+    {
+      "reply": "Der Countdown ist der Zehn-Minuten-Ramp: Die Gesamtgebühr startet bei 10 % für Käufe und 8 % für Verkäufe und fällt linear auf 1 %, sobald zehn Minuten nach dem Start vergangen sind. Ich ändere dabei nichts am Entwurf.",
+      "intentRequirements": [],
+      "composable": null,
+      "program": "null",
+      "eventRule": "null",
+      "ruleEdits": [],
+      "action": "answer",
+      "memory": "Entwurf: Kauf 10 % und Verkauf 8 % Gesamtgebühr am Anfang, linearer Abfall auf 1 % in zehn Minuten. Keine Gebühren auf normale Wallet-Transfers, kein nachträgliches Minting, Creator darf die anfängliche Liquidität nicht herausziehen. Offen: Regen-in-London-Regel mit 5 % (Datenquelle nicht angebunden). Zusätzliche Gebühren: 50 % gesperrte Liquidität und 50 % Buybacks, Ausführungslimit offen. Spieleserver-Ausschüttung nicht angebunden, Betrag offen. Noch nichts gebaut.",
+      "requirements": [],
+      "setupPatch": {
+        "name": null,
+        "symbol": null,
+        "chainId": null,
+        "pairToken": null,
+        "initialBuy": null
+      },
+      "lookups": [],
+      "feeChecks": []
+    }
+  ]
+}

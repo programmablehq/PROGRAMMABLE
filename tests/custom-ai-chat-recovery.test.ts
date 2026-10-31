@@ -10,6 +10,7 @@ import { createAIStore, CUSTOM_AI_SCHEMA } from "../lib/custom-ai/store.server";
 import { POST, GET } from "../app/api/custom-ai/route";
 import { AIRequestError, sendAIChat } from "../lib/custom-ai/client";
 import { CustomAIError, type ChatProgress, type ChatRequest } from "../lib/custom-ai/types";
+import { reviseLaunchIntent } from "../lib/custom-ai/launch-intent.server";
 
 let database: PGlite;
 const request: ChatRequest = { id: "recovery-request-00001", intent: "chat", messages: [{ role: "user", content: "Make the buy fee 2%." }] };
@@ -71,5 +72,21 @@ describe("durable chat retry and streaming", () => {
     runtime.owner = "bob";
     await expect(sendAIChat({ ...request, id: "other-request-0001", contextId: request.id }, async () => ({}), new AbortController().signal)).rejects.toBeInstanceOf(AIRequestError);
     expect(runtime.run).toHaveBeenCalledTimes(1);
+  });
+  it("persists complete open requirements and passes that same authority to the next job", async () => {
+    const intent=reviseLaunchIntent({request,proposed:[{id:"fees",text:"Make the buy fee 2%.",kind:"behavior",instruction:request.messages[0].content,open:null},
+      {id:"feed",text:"Choose the external feed",kind:"decision",instruction:request.messages[0].content,open:"Which source?"}],unresolved:["Which source?"],edits:[]}).intent;
+    runtime.run.mockResolvedValueOnce({reply:"A source remains open.",intent,change:"blocked"});
+    const saved=await sendAIChat(request,async()=>({}),new AbortController().signal);
+    expect(saved.intent).toEqual(intent);
+    const reloaded=await GET(new Request(`https://programmable.market/api/custom-ai?id=${request.id}`));
+    expect((await reloaded.json()).result.intent).toEqual(intent);
+    expect(runtime.run).toHaveBeenCalledTimes(1);
+    runtime.run.mockImplementationOnce(async(_request,_signal,_deps,context)=>{
+      expect(context.intent).toEqual(intent);
+      return {reply:"The first rule affects buys.",intent:context.intent,change:"unchanged"};
+    });
+    const next=await sendAIChat({...request,id:"intent-followup-0001",contextId:request.id,messages:[{role:"user",content:"Explain the first rule."}]},async()=>({}),new AbortController().signal);
+    expect(next.intent).toEqual(intent);expect(runtime.run).toHaveBeenCalledTimes(2);
   });
 });

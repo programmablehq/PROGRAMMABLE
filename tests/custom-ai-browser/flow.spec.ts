@@ -4,6 +4,35 @@ const hash = "a".repeat(64);
 const draft = { source: "fixture-source", sourceHash: hash, compiled: true, diagnostics: [], hookSummary: "charges 3% on buys and sells",
   verification: { status: "passed", sourceHash: hash, requirements: ["Charge 3% on buys and sells"], checks: [true,false].map(buy=>({afterSeconds:0,buy,totalFeeBps:300})), cases:8 },
   validation: { status: "passed", samples: [], cases:8 } };
+test("keeps ten requested rules and four open choices through reload and a coin switch",async({page},testInfo)=>{
+  const texts=["Start at 10%","Fall over ten minutes","Then stay at 1%","No transfer tax","No later minting","No creator liquidity withdrawal",
+    "Use London rain","Send fees to liquidity","Buy back on a trigger","Cap the initial wallet buy"];
+  const questions=["Which weather feed?","What execution limit?","Which trigger?","What wallet cap?"];
+  const intent={version:1,id:"intent-browser-0001",revision:"b".repeat(64),unresolved:questions,changes:[],
+    requirements:texts.map((text,index)=>({id:`rule-${index}`,text,kind:index>=3&&index<=5?"constraint":"behavior",
+      origin:{kind:"message",requestId:"intent-browser-0001",messageIndex:0,quote:text},open:index<6?null:questions[index-6]}))};
+  let calls=0;
+  await page.route("**/api/custom-ai",route=>{calls++;return route.fulfill({json:{reply:"All ten requirements are saved. Four choices remain open.",intent,change:"blocked",setupPatch:{name:"Complete Idea",symbol:"IDEA"}}});});
+  await page.goto("/launch/custom-ai");
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await box.fill(`Build this: ${texts.join(". ")}`);await box.press("Enter");
+  const requested=page.locator("details").filter({has:page.locator("summary",{hasText:"Requested rules (10)"})});
+  await expect(requested).toBeVisible();
+  for(const text of texts)await expect(requested.getByText(text,{exact:true})).toBeVisible();
+  for(const question of questions)await expect(requested.getByText(`Open: ${question}`,{exact:true})).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath("complete-intent.png"),fullPage:true});
+  await expect(page.getByText("Checked draft",{exact:true})).toHaveCount(0);
+  await box.fill("Only adjust the weather rule later.");await page.reload();
+  await expect(box).toHaveValue("Only adjust the weather rule later.");
+  await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"New coin",exact:true}).click();
+  await expect(page.getByText("Requested rules (10)",{exact:true})).toHaveCount(0);
+  await page.getByText("Options",{exact:true}).click();
+  await page.getByRole("button",{name:"Restore previous coin",exact:true}).click();
+  await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
+  await expect(box).toHaveValue("Only adjust the weather rule later.");
+  expect(calls).toBe(1);
+});
 test("keeps a checked draft on reload and blocks an unapplied edit without a rule checkbox", async ({ page }) => {
   let calls = 0;
   await page.route("**/api/custom-ai", async route => {

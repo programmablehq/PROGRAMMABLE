@@ -40,6 +40,7 @@ describe("one version-bound launch preparation", () => {
     const base = { sourceHash, checked: true, name: "EX", symbol: "EX", image: true, connected: false };
     expect(designReadiness(base).state).toBe("design-ready");
     expect(designReadiness({ ...base, pendingChange: "change fee" }).state).toBe("blocked");
+    expect(designReadiness({ ...base, openRequirements: true })).toMatchObject({ state: "blocked", message: "Resolve the open choices in the chat." });
   });
   it("rejects another owner, modified settings and an expired ticket", async () => {
     const ready = await prepareLaunch(store, "alice", input);

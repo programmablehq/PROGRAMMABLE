@@ -11,6 +11,8 @@ const hash = "a".repeat(64);
 const instruction = "Change the opening fee to 8%. Keep the weather and liquidity rules.";
 const edit = { requirementId: "decay", operation: "replace" as const, instruction };
 const request: ChatRequest = { id: "edit-request-00001", intent: "chat", messages: [{ role: "user", content: instruction }] };
+const intentData = (spec = previous, open: string[] = []) => [...spec.requirements.map(rule => ({ ...rule, kind: "behavior", instruction, open: null })),
+  ...open.map((text, index) => ({ id: `choice-${index}`, text, kind: "decision", instruction, open: text }))];
 const revised = () => {
   const next = structuredClone(previous);
   next.phases[0].fee = { ...next.phases[0].fee, fromBuyBps: 800, fromSellBps: 800 } as typeof next.phases[0]["fee"];
@@ -62,7 +64,7 @@ describe("editing a complete hook design", () => {
   it("keeps unresolved composed designs out of compilation", async () => {
     const compile = vi.fn();
     const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "Which execution limit should this use?", action: "build", memory: "Keep all three rules.",
-      requirements: fixture.requirements.map(rule => rule.text), feeChecks: [], unresolved: ["Execution limit"], setupPatch: {}, composable: JSON.stringify(previous) }), inputTokens: 1, outputTokens: 1 }));
+      intentRequirements: intentData(previous, ["Execution limit"]), requirements: fixture.requirements.map(rule => rule.text), feeChecks: [], unresolved: ["Execution limit"], setupPatch: {}, composable: JSON.stringify(previous) }), inputTokens: 1, outputTokens: 1 }));
     const result = await runCustomAI(request, undefined, { call, compile });
     expect(result).toMatchObject({ change: "blocked", unresolved: ["Execution limit"], ruleSpec: previous });
     expect(call).toHaveBeenCalledTimes(1); expect(compile).not.toHaveBeenCalled();
@@ -70,7 +72,7 @@ describe("editing a complete hook design", () => {
   it("cannot turn a saved complete design into a fee-only replacement", async () => {
     const compile = vi.fn();
     const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "Changed the fee.", action: "build", memory: "Keep all rules.",
-      requirements: ["8% fees"], feeChecks: [true, false].map(buy => ({ afterSeconds: 0, buy, totalFeeBps: 800 })), unresolved: [], setupPatch: {} }), inputTokens: 1, outputTokens: 1 }));
+      intentRequirements: intentData(), requirements: ["8% fees"], feeChecks: [true, false].map(buy => ({ afterSeconds: 0, buy, totalFeeBps: 800 })), unresolved: [], setupPatch: {} }), inputTokens: 1, outputTokens: 1 }));
     const result = await runCustomAI(request, undefined, { call, compile }, { ruleSpec: previous });
     expect(result).toMatchObject({ change: "blocked", ruleSpec: previous });
     expect(call).toHaveBeenCalledTimes(1); expect(compile).not.toHaveBeenCalled();
@@ -78,7 +80,7 @@ describe("editing a complete hook design", () => {
   it("does not let an incomplete proposal replace the design used by the next turn", async () => {
     const partial = { ...previous, requirements: previous.requirements.slice(0, 2), actions: [], creatorShareBps: 10000 };
     const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "What limit should I use?", action: "build", memory: "Keep liquidity too.",
-      requirements: partial.requirements.map(rule => rule.text), feeChecks: [], unresolved: ["Limit"], setupPatch: {}, composable: JSON.stringify(partial) }), inputTokens: 1, outputTokens: 1 }));
+      intentRequirements: intentData(partial, ["Limit"]), requirements: partial.requirements.map(rule => rule.text), feeChecks: [], unresolved: ["Limit"], setupPatch: {}, composable: JSON.stringify(partial) }), inputTokens: 1, outputTokens: 1 }));
     const result = await runCustomAI(request, undefined, { call, compile: vi.fn() }, { ruleSpec: previous });
     expect(result.ruleSpec).toEqual(previous);
   });
@@ -86,7 +88,7 @@ describe("editing a complete hook design", () => {
     const proposed = structuredClone(previous);
     proposed.actions[0] = { ...proposed.actions[0], kind: "distribution", when: null, maximumQuote: "0", recipient: `0x${"1".repeat(40)}` };
     const call = vi.fn(async () => ({ text: JSON.stringify({ reply: "Use that recipient.", action: "build", memory: "Proposed recipient.",
-      requirements: proposed.requirements.map(rule => rule.text), feeChecks: [], unresolved: [], setupPatch: {}, composable: JSON.stringify(proposed) }), inputTokens: 1, outputTokens: 1 }));
+      intentRequirements: intentData(proposed), requirements: proposed.requirements.map(rule => rule.text), feeChecks: [], unresolved: [], setupPatch: {}, composable: JSON.stringify(proposed) }), inputTokens: 1, outputTokens: 1 }));
     const result = await runCustomAI(request, undefined, { call, compile: vi.fn() }, { ruleSpec: proposed });
     expect(result).toMatchObject({ change: "blocked", unresolved: ["Recipient address"] });
     expect(result.draft).toBeUndefined();

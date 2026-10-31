@@ -18,6 +18,8 @@ Edits use the saved contract and show whether the requested change was applied. 
 
 The assistant follows the language and level of detail you use. Copy an answer or a code block with its copy action. Streaming replies respect reduced motion. If you scroll back while a reply arrives, **Latest message** takes you back to the current response.
 
+**Requested rules** keeps the complete design, including exclusions and open choices. Unsupported parts remain visible. A partial implementation does not replace the full request. New and changed rules retain a reference to your message; a later question keeps the same design. When a change cannot be completed, the earlier contract remains available. **Keep previous rules** restores that contract's design. Saved requirements and source checks are different states, and neither proves public activation of an external capability.
+
 The chat can look up public sources, indexed markets and basic onchain contract information. It includes source links; research does not establish that a contract is safe.
 
 Event rules require a connected, named data feed. Optional funded programs support fixed distributions, proportional staking rewards and buybacks with a fixed batch cap and minimum exchange rate. These new launch paths remain unavailable until enabled on the selected network; the chat says when a design is only prepared for testing. Execution is permissionless and its timing is not guaranteed. The combined builder can prepare versioned time and event rules with locked-liquidity allocations. This path remains unavailable for public launches until its network deployment, data service and execution service have matching acceptance evidence. Arbitrary reward code is unsupported.
