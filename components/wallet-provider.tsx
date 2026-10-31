@@ -155,6 +155,7 @@ export type CustomLaunchWalletActionInputV4 = Readonly<{
 }>;
 
 type WalletContextValue = {
+  readonly sessionOwner?: string | null;
   wallet: WalletState | null;
   walletLinked: boolean;
   username: string;
@@ -1064,6 +1065,7 @@ function DeferredWalletProvider({
       avatarDataUrl: "",
       authReady: false,
       sessionReady: false,
+      sessionOwner: null,
       authenticated: false,
       hasSession: false,
       connecting: active && !loadFailed,
@@ -3695,6 +3697,7 @@ function PrivyWalletBridge({
       avatarDataUrl,
       authReady: ready,
       sessionReady: providerSettled,
+      sessionOwner: activeAuthenticated ? user?.id ?? null : null,
       authenticated: activeAuthenticated,
       hasSession,
       connecting:
@@ -3791,6 +3794,7 @@ function PrivyWalletBridge({
       username,
       wallet,
       walletLinked,
+      user?.id,
     ],
   );
 
@@ -3844,6 +3848,7 @@ function UnconfiguredWalletProvider({ children }: { children: ReactNode }) {
       avatarDataUrl: "",
       authReady: false,
       sessionReady: false,
+      sessionOwner: null,
       authenticated: false,
       hasSession: false,
       connecting: false,
