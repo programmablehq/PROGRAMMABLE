@@ -1,0 +1,390 @@
+{
+  "schema": {
+    "type": "object",
+    "properties": {
+      "reply": {
+        "type": "string"
+      },
+      "intentRequirements": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "behavior",
+                "constraint",
+                "decision"
+              ]
+            },
+            "instruction": {
+              "type": "string"
+            },
+            "open": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "text",
+            "kind",
+            "instruction",
+            "open"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "composable": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "program": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "distribution",
+              "staking",
+              "buyback"
+            ]
+          },
+          "rewardShareBps": {
+            "type": "integer"
+          },
+          "intervalSeconds": {
+            "type": "integer"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "maximumBatch": {
+            "type": "string"
+          },
+          "minimumTokensPerQuote": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "rewardShareBps",
+          "intervalSeconds",
+          "recipient",
+          "maximumBatch",
+          "minimumTokensPerQuote"
+        ],
+        "additionalProperties": false
+      },
+      "eventRule": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "string"
+          },
+          "belowBuyBps": {
+            "type": "integer"
+          },
+          "belowSellBps": {
+            "type": "integer"
+          },
+          "aboveBuyBps": {
+            "type": "integer"
+          },
+          "aboveSellBps": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "threshold",
+          "belowBuyBps",
+          "belowSellBps",
+          "aboveBuyBps",
+          "aboveSellBps"
+        ],
+        "additionalProperties": false
+      },
+      "ruleEdits": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "object",
+          "properties": {
+            "requirementId": {
+              "type": "string"
+            },
+            "operation": {
+              "type": "string",
+              "enum": [
+                "replace",
+                "remove"
+              ]
+            },
+            "instruction": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "requirementId",
+            "operation",
+            "instruction"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "answer",
+          "build",
+          "clarify"
+        ]
+      },
+      "memory": {
+        "type": "string"
+      },
+      "requirements": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "setupPatch": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chainId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pairToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "initialBuy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "symbol",
+          "chainId",
+          "pairToken",
+          "initialBuy"
+        ],
+        "additionalProperties": false
+      },
+      "lookups": {
+        "type": "array",
+        "maxItems": 2,
+        "items": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "catalog"
+                },
+                "input": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "chainId": {
+                      "enum": [
+                        1,
+                        4663
+                      ]
+                    },
+                    "address": {
+                      "type": "string",
+                      "maxLength": 42
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "chainId",
+                    "address"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "kind",
+                "input"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "contract"
+                },
+                "input": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "chainId": {
+                      "enum": [
+                        1,
+                        4663
+                      ]
+                    },
+                    "address": {
+                      "type": "string",
+                      "maxLength": 42
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "chainId",
+                    "address"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "kind",
+                "input"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "search_hooks"
+                },
+                "input": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "chain": {
+                      "enum": [
+                        "current",
+                        "all"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "chain"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "kind",
+                "input"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "feeChecks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "afterSeconds": {
+              "type": "integer"
+            },
+            "buy": {
+              "type": "boolean"
+            },
+            "totalFeeBps": {
+              "type": "integer"
+            },
+            "feedValue": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "feedFresh": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "afterSeconds",
+            "buy",
+            "totalFeeBps",
+            "feedValue",
+            "feedFresh"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "reply",
+      "intentRequirements",
+      "action",
+      "memory",
+      "requirements",
+      "feeChecks",
+      "setupPatch",
+      "lookups",
+      "program",
+      "eventRule",
+      "composable",
+      "ruleEdits"
+    ],
+    "additionalProperties": false
+  },
+  "text": "{\"reply\":\"Der Countdown ist eine Gebührenrampe. Die Gebühren starten bei 10 % auf Käufe und 8 % auf Verkäufe und sinken innerhalb von zehn Minuten linear auf 1 % Gesamtgebühr. Die Wetterregel kommt danach, ist aber noch offen, weil keine Wetterquelle angebunden ist.\",\"intentRequirements\":[],\"action\":\"answer\",\"memory\":\"Gespeicherter Entwurf unverändert. Die Gebühren starten bei 10 % auf Käufe und 8 % auf Verkäufe und fallen innerhalb von zehn Minuten linear auf 1 % Gesamtgebühr. Die Wetterregel (5 % bei Regen in London) ist noch offen, da keine Wetterdatenquelle angebunden ist. Gebühren auf normale Wallet-Transfers entfallen. Anfängliche Liquidität kann der Creator nicht abziehen, und nachträgliches Minting ist ausgeschlossen. Offen bleiben außerdem die 50-Prozent-Regeln für gesperrte Liquidität und Buybacks sowie die Spieleserver-Ausschüttung.\",\"requirements\":[],\"feeChecks\":[],\"setupPatch\":{\"name\":null,\"symbol\":null,\"chainId\":null,\"pairToken\":null,\"initialBuy\":null},\"lookups\":[],\"program\":null,\"eventRule\":null,\"composable\":null,\"ruleEdits\":[]}"
+}

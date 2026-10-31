@@ -38,8 +38,10 @@ export function prepareSurplusSchema(original: object) {
   const validate = changed ? new Ajv({ strict: false, coerceTypes: false, removeAdditional: false, useDefaults: false }).compile(original) : undefined;
   function restore(value: unknown, node: Schema): unknown {
     if (needsEncoding(node)) {
-      if (typeof value !== "string") throw Error("Expected encoded union");
-      return JSON.parse(value);
+      // The gateway may already return the canonical object or null instead
+      // of its string transport form. Preserve it and validate the entire
+      // response against the unchanged original schema below.
+      return typeof value === "string" ? JSON.parse(value) : value;
     }
     if (Array.isArray(value) && node.items) return value.map(item => restore(item, node.items!));
     if (value && typeof value === "object" && !Array.isArray(value) && node.properties) {
