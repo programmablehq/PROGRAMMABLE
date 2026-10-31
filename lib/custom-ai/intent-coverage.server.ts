@@ -1,7 +1,8 @@
 import "server-only";
-import type { RuleSpecV2 } from "./rule-spec";
-import { reviewRuleEdits } from "./design-edits";
-export function verifyIntentCoverage(previous: RuleSpecV2 | undefined, next: RuleSpecV2) {
-  return { ...reviewRuleEdits(previous, next, []),
-    requirements: next.requirements.map(r => ({ id: r.id, status: "covered" as const })) };
+import type { LaunchIntent } from "./launch-intent";
+
+/** Coverage is a mapping to the intended implementation, not an audit verdict.
+ * Open requirements are retained even when the executable subset omits them. */
+export function intentImplementationGaps(intent: LaunchIntent, implemented: { id?: string; text: string }[]) {
+  return intent.requirements.filter(rule => !implemented.some(item => item.text === rule.text && (!item.id || item.id === rule.id))).map(rule => rule.text);
 }

@@ -36,6 +36,21 @@ describe("private studio drafts", () => {
     expect((await POST(request({...state,image:{id:"someone-elses-image",url:"https://example.org/image"}}))).status).toBe(400);
     expect(store.saveObject).not.toHaveBeenCalled();
   });
+  it("restores the complete open design separately from its older checked source", async () => {
+    const intent={revision:"pending-revision",requirements:[{id:"weather",text:"Use London rain",open:"Choose a feed"}]};
+    store.readObject.mockResolvedValue({revision:3,value:{...state,draftId:"old-draft",contextId:"new-design",pendingChange:"Add weather"}});
+    store.read.mockImplementation(async (_owner,id)=>id==="old-draft"?{result:{draft:{source:"old source"}}}:{result:{intent}});
+    const response=await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`));
+    const value=await response.json();
+    expect(value.intent).toEqual(intent);expect(value.draft.source).toBe("old source");
+    expect(store.read.mock.calls).toEqual([["alice","old-draft"],["alice","new-design"]]);
+  });
+  it("reads one job when the contract and current design share an identity", async () => {
+    store.readObject.mockResolvedValue({revision:3,value:{...state,draftId:"same-job",contextId:"same-job"}});
+    store.read.mockResolvedValue({result:{draft:{source:"source"},intent:{revision:"same-intent"}}});
+    const value=await (await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`))).json();
+    expect(value.intent.revision).toBe("same-intent");expect(store.read).toHaveBeenCalledTimes(1);
+  });
   it("uses the verified image receipt rather than a browser-supplied URL", async () => {
     const image={id:"ours",url:"https://verified.example/image.webp",hash:"bound-hash"};
     store.readObject.mockResolvedValue({value:image});

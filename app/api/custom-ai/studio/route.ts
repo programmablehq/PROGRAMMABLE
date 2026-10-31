@@ -23,7 +23,10 @@ export async function GET(request: Request) {
     const saved = await store.readObject<StudioState>(owner, "studio", id);
     if (!saved) return Response.json(null, { headers: aiHeaders });
     const job = saved.value.draftId ? await store.read(owner, saved.value.draftId) : null;
-    return Response.json({ revision: saved.revision, state: saved.value, draft: job?.result?.draft }, { headers: aiHeaders });
+    const latest = saved.value.contextId === saved.value.draftId ? job
+      : saved.value.contextId ? await store.read(owner, saved.value.contextId) : null;
+    return Response.json({ revision: saved.revision, state: saved.value, draft: job?.result?.draft,
+      intent: latest?.result?.intent ?? job?.result?.intent }, { headers: aiHeaders });
   } catch (error) { return aiError(error); }
 }
 export async function POST(request: Request) {

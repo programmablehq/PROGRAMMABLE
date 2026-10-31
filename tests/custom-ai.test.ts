@@ -69,9 +69,13 @@ describe("Custom AI boundaries", () => {
 });
 
 const checks = [{ afterSeconds: 0, buy: true, totalFeeBps: 300 }, { afterSeconds: 0, buy: false, totalFeeBps: 300 }];
-const plan = (action = "build", extra: object = {}) => result({ reply: "A 3% total fee on buys and sells.",
-  action, memory: "The user requested 3% total fees.", requirements: ["3% total fees on buys and sells"],
-  feeChecks: checks, unresolved: [], setupPatch: {}, ...extra });
+const plan = (action = "build", extra: { requirements?: string[]; unresolved?: string[]; [key: string]: unknown } = {}, quote = request.messages[0].content) => {
+  const requirements = extra.requirements ?? ["3% total fees on buys and sells"], unresolved = extra.unresolved ?? [];
+  return result({ reply: "A 3% total fee on buys and sells.", action, memory: "The user requested 3% total fees.", requirements,
+    intentRequirements: [...requirements.map((text, index) => ({ id: `fee-${index}`, text, kind: "behavior", instruction: quote, open: null })),
+      ...unresolved.map((text, index) => ({ id: `choice-${index}`, text, kind: "decision", instruction: quote, open: text }))],
+    feeChecks: checks, unresolved, setupPatch: {}, ...extra });
+};
 const generated = () => result({ reply: "The coin charges 3% on buys and sells.", source: "contract GeneratedFeeModule {}", hookSummary: "charges 3% on buys and sells" });
 
 describe("Claude planning and generation", () => {
@@ -87,7 +91,7 @@ describe("Claude planning and generation", () => {
     expect(compile).not.toHaveBeenCalled();
   });
   it("interprets a confirmation before generation and checks its independent examples", async () => {
-    const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(generated());
+    const call = vi.fn().mockResolvedValueOnce(plan("build", {}, "okay")).mockResolvedValueOnce(generated());
     const compile = vi.fn(async () => draft(true));
     const answer = await runCustomAI({ ...request, contextId: "previous-context-001", messages: [
       { role: "assistant", content: "I can build that schedule." }, { role: "user", content: "okay" },

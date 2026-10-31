@@ -31,7 +31,8 @@ export async function POST(request: Request) {
       return result;
     };
     const [previous, current] = await Promise.all([readResult(input.contextId), readResult(input.draftId)]);
-    const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, ruleSpec: previous?.ruleSpec, draft: current?.draft };
+    const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory,
+      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft };
     if (input.draftId && !context.draft) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
     // Known billing/rate-limit outages do not reserve a new user attempt.
     if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) {

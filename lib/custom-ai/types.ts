@@ -32,6 +32,8 @@ export type LifecycleCheck = {
     fixedRecipientsPaid: boolean; replayWithoutPayment: boolean }[];
 };
 export type Draft = {
+  intent?: import("./launch-intent").LaunchIntent;
+  revision?: import("./launch-intent").CandidateRevision;
   composable?: import("./rule-compiler.server").BoundRuleSpec;
   feed?: import("./feed").FeedBinding;
   program?: { spec: import("./program").ProgramSpec; bundleHash: string; chainId: 1 | 4663; quote: `0x${string}`; available: boolean };
@@ -63,6 +65,7 @@ export type Draft = {
   };
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  intent?: import("./launch-intent").LaunchIntent;
   memory?: string; change?: "applied" | "unchanged" | "blocked"; unresolved?: string[]; chargedAs?: "build" | "research";
   sources?: import("./knowledge").KnowledgeSource[] };
 

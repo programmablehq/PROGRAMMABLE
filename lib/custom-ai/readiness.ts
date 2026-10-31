@@ -1,8 +1,9 @@
 export type LaunchPreparation = { state: "needs-input" | "working" | "blocked" | "design-ready" | "ready";
   inputKey?: string; message: string; revision: string; expiresAt: number; ticket?: string;
   missingFields?: ("name" | "symbol" | "image")[] };
-export function designReadiness(input: { sourceHash?: string; checked: boolean; pendingChange?: string; name: string; symbol: string; image: boolean; connected: boolean }): LaunchPreparation {
+export function designReadiness(input: { sourceHash?: string; checked: boolean; pendingChange?: string; openRequirements?: boolean; name: string; symbol: string; image: boolean; connected: boolean }): LaunchPreparation {
   const revision = input.sourceHash ?? "";
+  if (input.openRequirements) return { state: "blocked", message: "Resolve the open choices in the chat.", revision, expiresAt: 0 };
   if (input.pendingChange) return { state: "blocked", message: "Finish your latest change before launching.", revision, expiresAt: 0 };
   if (!input.checked) return { state: "needs-input", message: "Describe your coin’s rules in the chat.", revision, expiresAt: 0 };
   const missingFields: NonNullable<LaunchPreparation["missingFields"]> = [];

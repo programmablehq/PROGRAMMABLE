@@ -1,6 +1,7 @@
 import type { Draft } from "@/lib/custom-ai/types";
 import { summarizeRules } from "@/lib/custom-ai/rule-summary";
 import styles from "./workspace.module.css";
+import { intentHasOpenParts, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 
 const percent = (bps: number) => `${bps / 100}%`;
 function timeLabel(seconds: number) {
@@ -15,24 +16,33 @@ function timeLabel(seconds: number) {
   return `After ${label.join(" ")}`;
 }
 
-export function RuleReview({ draft, pendingChange, disabled, onKeepRules, quoteLabel, onEditRule }: {
-  draft?: Draft; pendingChange?: string; reviewed: boolean; disabled: boolean;
+export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules, quoteLabel, onEditRule }: {
+  draft?: Draft; intent?: LaunchIntent; pendingChange?: string; reviewed: boolean; disabled: boolean;
   quoteLabel?: string;
   onReview: (checked: boolean) => void; onKeepRules: () => void;
   onEditRule?: (requirementId: string) => void;
 }) {
   const verified = draft?.verification;
-  if (!draft && !pendingChange) return null;
+  if (!draft && !pendingChange && !intent) return null;
   const ready = verified?.status === "passed" && verified.sourceHash === draft?.sourceHash && draft?.validation?.status === "passed";
   const times = [...new Set(verified?.checks.map(check => check.afterSeconds))].sort((a, b) => a - b);
   const summary = ready && draft?.composable ? summarizeRules(draft.composable.spec, quoteLabel,draft.composable.feeds) : null;
   return <section className={styles.ruleReview} aria-label="Rules for this coin">
-    <h3>{pendingChange ? "Change not applied" : "Rules for this coin"}</h3>
-    {pendingChange && <>
+    <h3>{pendingChange && draft ? "Change not applied" : intent && intentHasOpenParts(intent) ? "Open choices" : pendingChange ? "Change not applied" : "Rules for this coin"}</h3>
+    {pendingChange && !draft && intent ? <p>Your complete idea is saved. Resolve the open choices in the chat to continue.</p> : pendingChange && <>
       <p>Your latest request has not been applied. {draft ? "The previous rules are shown below." : "Finish the rules in the chat before creating your coin."}</p>
       <p className={styles.pendingRequest}>{pendingChange}</p>
       {draft && <button type="button" className={styles.textButton} disabled={disabled} onClick={onKeepRules}>Keep previous rules</button>}
     </>}
+    {intent && <details open={intentHasOpenParts(intent)}>
+      <summary>Requested rules ({intent.requirements.length})</summary>
+      <ul>{intent.requirements.map(rule => <li key={rule.id}>
+        <span>{rule.text}</span>
+        {rule.open && <p>Open: {rule.open}</p>}
+      </li>)}</ul>
+      {intent.unresolved.filter(question => !intent.requirements.some(rule => rule.open === question)).map(question => <p key={question}>Open: {question}</p>)}
+      <p className={styles.note}>These are your requested rules. Source checks and launch preparation are separate.</p>
+    </details>}
     {ready ? <>
       {summary && <>
         <ol className={styles.ruleTimeline} aria-label="Fee timeline">
@@ -47,7 +57,7 @@ export function RuleReview({ draft, pendingChange, disabled, onKeepRules, quoteL
       {draft?.program && <p>{draft.program.spec.rewardShareBps / 100}% of additional fees fund {draft.program.spec.kind}.
         {" "}Execution is permissionless; its timing is not guaranteed.
         {!draft.program.available && " This program is prepared for testing; public launch is not enabled yet."}</p>}
-      {!summary && <ul>{verified.requirements.map((rule, index) => <li key={index}>{rule}</li>)}</ul>}
+      {!summary && !intent && <ul>{verified.requirements.map((rule, index) => <li key={index}>{rule}</li>)}</ul>}
       {draft?.composable && onEditRule && <details>
         <summary>Edit a rule</summary>
         <ul className={styles.ruleEditList}>{draft.composable.spec.requirements.map(rule => <li key={rule.id}>

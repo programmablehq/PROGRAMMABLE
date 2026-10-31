@@ -10,6 +10,7 @@ const request: ChatRequest = { id: "coin-setup-test-0001", intent: "chat", coin:
 const response = (value: object) => ({ text: JSON.stringify(value), inputTokens: 20, outputTokens: 20 });
 
 const plan = (action: string, setupPatch: object = {}) => response({ reply: "Requested coin details.", action,
+  intentRequirements: [{ id: "fees", text: "1% total fees", kind: "behavior", instruction: request.messages[0].content, open: null }],
   memory: "Keep the requested coin details.", requirements: ["1% total fees"], unresolved: [], setupPatch,
   feeChecks: [{ afterSeconds: 0, buy: true, totalFeeBps: 100 }, { afterSeconds: 0, buy: false, totalFeeBps: 100 }] });
 
@@ -75,7 +76,7 @@ describe("Chat-driven coin details", () => {
       setupPatch: { name: "Example", symbol: "EXM", chainId: 4663 } }))
       .mockResolvedValueOnce(response({ reply: "Done.", source: "repaired", hookSummary: "charges 1% on swaps", setupPatch: { name: null, initialBuy: "500" } }));
     const compile = vi.fn().mockResolvedValueOnce({ source: "first", sourceHash: "first", compiled: false, diagnostics: ["repair"] })
-      .mockResolvedValueOnce({ source: "repaired", sourceHash: "repaired", compiled: true, diagnostics: [], validation: { status: "passed", expectationCases: 8 } });
+      .mockResolvedValueOnce({ source: "repaired", sourceHash: "repaired", compiled: true, diagnostics: [], validation: { status: "passed", artifactHash: "repaired-artifact", expectationCases: 8 } });
     const result = await runCustomAI(request, undefined, { call, compile });
     expect(result.setupPatch).toEqual({ name: "Example", symbol: "EXM", chainId: 4663 });
     expect(result.draft?.sourceHash).toBe("repaired");
