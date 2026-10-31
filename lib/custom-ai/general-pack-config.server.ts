@@ -18,14 +18,13 @@ const invalid = (message = "This saved source needs a complete production deploy
 
 /** Build only bounded local files from an owned source and a separately stored
  * public export. No inference, source regeneration, live reads or submission. */
-export function generalGraphPackConfig(input: GeneralPackInput) {
+export function generalSourcePackInputs(input: GeneralPackInput, presentation: "graph" | "plan" = "graph") {
   const source = input.source, { project, compilation } = source;
   if (source.bindingHash !== canonicalBrowserSha256V2("programmable.custom-ai-launch-source.v1", source.binding)
     || source.binding.projectHash !== project.hash || source.binding.artifactHash !== compilation.artifactHash
     || source.binding.scenarioHash !== source.scenarios.hash || source.binding.blueprintId !== source.blueprint.id) return invalid();
   const production = project.production, recipe = project.deployment, settings = source.binding.settings;
-  if (!production || production.route !== "graph-v3" || !production.graphProfile || project.chainId === 4663)
-    return invalid("This network uses its own Launch Plan preparation. Keep the saved source on its selected network.");
+  if (!production) return invalid();
   const controller = getAddress(input.controller);
   if (controller.toLowerCase() !== source.binding.account.toLowerCase()) return invalid();
   const values = resolveGeneralDeploymentValues(project, compilation, { controller, settings,
@@ -34,13 +33,13 @@ export function generalGraphPackConfig(input: GeneralPackInput) {
   // EIP-3009 and ERC20 funding need their own explicit signed authorization.
   // Never turn a quote-token amount into ETH/HYPE or select another currency.
   if (values.quoteCurrency !== zeroAddress) return invalid("This design needs its explicit token-funding authorization before launch preparation.");
-  if ((production.graphProfile.fundingPolicy as { launchFundingRequired?: boolean })?.launchFundingRequired === true
-    && BigInt(values.nativeValueWei) === 0n) return invalid("This launch profile needs the declared native funding amount. Keep the amount in the coin details and deployment consistent.");
   const exported = checkedGeneralPublicSource(input.exported, createGeneralPublicSource(source).id);
   if (input.url !== generalSourcePublicUri(exported.id)) return invalid();
   for (const field of ["description", "website", "x"] as const) {
+    if(presentation==="plan"&&!settings[field]?.trim())continue;
     const issue = coinPresentationIssue(settings, field); if (issue) return invalid(issue);
   }
+  if(presentation==="plan"&&!settings.website?.trim()&&!settings.x?.trim())return invalid("Add a public project or social link before preparing this launch.");
   const image = source.binding.image;
   if (!image || !/^[a-f0-9]{64}$/u.test(image.id) || !/^[a-f0-9]{64}$/u.test(image.hash)
     || image.url !== `https://${PROGRAMMABLE_TOKEN_IMAGE_HOST}/token-images/custom-ai-${image.id}.webp`
@@ -57,6 +56,18 @@ export function generalGraphPackConfig(input: GeneralPackInput) {
   for (const artifact of exported.content.artifacts) json(artifact.path, artifact.artifact);
   for (const [id, evidence] of Object.entries(exported.content.evidence)) json(`evidence/${id}.json`, evidence);
   files.push({ path: "image.webp", bytes: Uint8Array.from(input.imageBytes) });
+  return {source:structuredClone(source),production:structuredClone(production),
+    recipe:{...structuredClone(recipe),fees:structuredClone(recipe.fees),liquidityModel:recipe.liquidityModel},settings:structuredClone(settings),
+    values,controller,exported,image:structuredClone(image),identity,files};
+}
+
+export function generalGraphPackConfig(input: GeneralPackInput) {
+  const {source,production,recipe,settings,values,controller,exported,image,identity,files}=generalSourcePackInputs(input);
+  const {project,compilation}=source;
+  if (production.route !== "graph-v3" || !production.graphProfile || project.chainId === 4663)
+    return invalid("This network uses its own Launch Plan preparation. Keep the saved source on its selected network.");
+  if ((production.graphProfile.fundingPolicy as { launchFundingRequired?: boolean })?.launchFundingRequired === true
+    && BigInt(values.nativeValueWei) === 0n) return invalid("This launch profile needs the declared native funding amount. Keep the amount in the coin details and deployment consistent.");
   const targets = values.targets.map((target, index) => {
     const artifact = exported.content.artifacts.find(artifact => artifact.source === target.source && artifact.contract === target.contract && artifact.role === target.role);
     const compiled = compilation.contracts.find(artifact => artifact.source === target.source && artifact.contract === target.contract && artifact.role === target.role);

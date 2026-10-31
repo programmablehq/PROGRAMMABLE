@@ -18,7 +18,8 @@ import type { GeneralPackInput } from "../../lib/custom-ai/general-pack-config.s
 
 /** Actual compiler + isolated declared examples, never an LP, fee, protected
  * review or mainnet acceptance fixture. It intentionally lacks those proofs. */
-export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false): Promise<GeneralPackInput> {
+export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false, extraTargets = 0): Promise<GeneralPackInput> {
+  if(!Number.isSafeInteger(extraTargets)||extraTargets<0||extraTargets>13)throw Error("Bounded fixture target count exceeded");
   const owner = "pack-fixture-owner", controller = `0x${"11".repeat(20)}` as const, conversation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", id = "general-pack-source-00001";
   const production = projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain, protection);
   const intent: LaunchIntent = { version: 1, id: "pack-fixture", revision: "a".repeat(64), changes: [], unresolved: [], requirements: [
@@ -38,6 +39,11 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
       functions: ["function poolManager() view returns(address)", "function beforeInitialize(address,(address,address,uint24,int24,address),uint160) view returns(bytes4)", "function arbitraryProjectMethod() pure returns(uint256)"], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
     { id: "initializer", source: "Project.sol", contract: "Initializer", role: "liquidity", arguments: [], functions: ["function initialize() payable"], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
   ];
+  for(let index=0;index<extraTargets;index++){
+    declaration.targets.push({id:`aux${index}`,source:"Project.sol",contract:`Aux${index}`,constructorArguments:[],initializer:null,
+      deploymentValue:"0",initializerValue:"0",hookPermissions:null});
+    contracts.push({id:`aux${index}`,source:"Project.sol",contract:`Aux${index}`,role:"auxiliary",arguments:[],functions:[],allowReceive:false,allowFallback:false,surfaceRequirements:["surface"]});
+  }
   const blueprint = createGeneralCheckBlueprint({ contracts, allowedCalls: [], deployment: declaration, steps: [
     { id: "marker", contract: "hook", signature: "arbitraryProjectMethod()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,
       requirementIds: ["marker"], expect: { status: "success", returns: ["42"] } },
@@ -51,7 +57,7 @@ struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpa
 function beforeInitialize(address,PoolKey calldata,uint160) external view returns(bytes4) { require(msg.sender==poolManager);return this.beforeInitialize.selector; }
 function arbitraryProjectMethod() external pure returns(uint256) {return 42;} }
 contract Initializer { function initialize() external payable {} }
-`;
+`+Array.from({length:extraTargets},(_,index)=>`contract Aux${index} {}\n`).join("");
   const project = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion: "paris" },
     sources: { "Project.sol": { content } }, entrypoints: blueprint.entrypoints }, intent, chain, production, blueprint.deployment);
   const compilation = await compileContractProject(project);

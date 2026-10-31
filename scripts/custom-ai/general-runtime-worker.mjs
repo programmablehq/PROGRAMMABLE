@@ -11,13 +11,13 @@ process.stdin.on("end", async () => {
 
 /** Execute only exact owned creation bytes in an in-memory EVM. Unknown chain
  * state is never replaced with a successful dependency observation. */
-async function materialize({ chainId, evmVersion, controller, deployer, targets }) {
+async function materialize({ chainId, evmVersion, controller, deployer, targets, includeConstructionGas = false }) {
   const { createVM } = requireTool("@ethereumjs/vm"), { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block"), { createAddressFromString, createAccount, hexToBytes, bytesToHex } = requireTool("@ethereumjs/util");
   const { keccak256 } = requireTool("viem");
   if (![1,4663,8453,999].includes(chainId) || !["paris","cancun"].includes(evmVersion) || !Array.isArray(targets) || !targets.length || targets.length > 16) throw Error();
   const common = createCustomCommon({ chainId }, Mainnet, { hardfork: evmVersion === "cancun" ? Hardfork.Cancun : Hardfork.Paris });
-  const failures = [], observations = []; let totalGas = 0n;
+  const failures = [], observations = [], constructionGas = new Map(); let totalGas = 0n;
   const fail = (target, code) => { if (failures.length < 16 && !failures.some(f => f.target === target && f.code === code)) failures.push({ target, code }); };
   for (let pass = 0; pass < 2; pass++) {
     const vm = await createVM({ common }), deployed = new Set(); let current = "setup", forbidden = false;
@@ -58,6 +58,10 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets 
           baseFeePerGas: BigInt(pass + 1), coinbase: pass ? "0x3000000000000000000000000000000000000003" : "0x0000000000000000000000000000000000000000",
           mixHash: hexToBytes(`0x${(pass ? "11" : "00").repeat(32)}`) } }, { common }) });
       totalGas += result.execResult.executionGasUsed;
+      if (includeConstructionGas) {
+        const used = result.execResult.executionGasUsed;
+        constructionGas.set(target.id, used > (constructionGas.get(target.id) ?? 0n) ? used : constructionGas.get(target.id));
+      }
       if (forbidden) break;
       if (result.execResult.exceptionError || result.createdAddress?.toString().toLowerCase() !== target.address.toLowerCase()) { fail(current, "constructor-execution"); break; }
       const actual = await vm.stateManager.getCode(address), template = hexToBytes(target.runtimeTemplate);
@@ -85,5 +89,6 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets 
   }
   if (!failures.length && JSON.stringify(observations[0]) !== JSON.stringify(observations[1])) fail("graph", "environment-dependent-runtime");
   return { status: failures.length ? "needs-context" : "materialized", passes: observations.length, gasUsed: totalGas.toString(), failures,
-    contracts: failures.length ? [] : observations[0] };
+    contracts: failures.length ? [] : observations[0],
+    ...(includeConstructionGas ? { constructionGas: targets.map(target => ({targetId:target.id,maximumGasUsed:(constructionGas.get(target.id)??0n).toString()})) } : {}) };
 }

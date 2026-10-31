@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan construction, protected component evidence, UI submission, backend activation and wallet execution remain unfinished. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan packing is also qualified locally with the existing independent backend parser/compiler. Its journal integration, protected component evidence, UI submission, backend activation and wallet execution remain unfinished. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
@@ -170,7 +170,7 @@ This loader has no direct RPCs, authentication keys, redirects or automatic
 retries. Failures are cached for ten
 seconds and expired successes are not returned as current configuration. One
 stopped chat detaches without cancelling another chat's shared observation.
-The future explicit preparation action can force a current observation while
+The explicit preparation action can force a current observation while
 still sharing an in-flight request and respecting the short failure cache.
 
 New discovery returns production context V2. It binds the actual global review
@@ -192,8 +192,8 @@ Ordinary unchanged-network builds retain two model calls. If a setup patch
 changes the network in that turn, the new network gets a separate source-blind
 declaration before generation. A discovery outage still permits explanations;
 source generation pauses with the complete saved intent. Brief greetings skip
-discovery. Public intake, deployment recipes, exact packing and launch execution
-remain unfinished and unpublished.
+discovery. The local exact packers below consume the saved deployment declaration. Public
+intake activation, UI integration and launch execution remain unpublished.
 
 ## Explicit deployment declaration
 
@@ -233,8 +233,8 @@ declarations keep their original hash without invented zero rates. Preparation
 must obtain a complete declaration before packing. Inventory accounting requires
 the corresponding swap-return-delta permission.
 
-The declaration and value resolver are qualified locally. Canonical graph/Plan
-packing, review submission and wallet authorization remain unfinished. No new
+The declaration and value resolver feed the local graph and Plan packers below.
+Production review submission and wallet authorization remain unfinished. No new
 public launch capability is claimed.
 
 ## Isolated constructor runtime materialization
@@ -268,8 +268,8 @@ bounded by 16 targets, 200 million total synthetic gas, 35 seconds, a 384-MB hea
 and bounded input/output. The report is scoped to
 `isolated-constructor-runtime-v1`, always keeps `launchReady:false`, and does not
 establish live dependency state, pool behavior, backend admission or launch
-execution. The owned preparation and request persistence still need their
-integration.
+execution. The durable graph preparation below persists this receipt. Modern
+Plan journal integration and complete production execution remain separate work.
 
 ## Canonical packer runtime handoff
 
@@ -292,8 +292,9 @@ to persist a reproducible config outside the source bundle. The normal
 `validateLaunchFile` path can then reproduce the same request without invoking
 the callback or running constructors again. Existing builds without a callback
 retain their original behavior. This hook is a local integration point; it is
-not a public HTTP authority or a new API key. The Custom AI owned pack writer,
-modern Robinhood Plan construction and complete production submission remain pending.
+not a public HTTP authority or a new API key. The local owned graph writer and
+modern Plan packer below reuse these exact source and constructor bindings.
+Complete production submission remains pending.
 
 ## Durable graph preparation and submission journal
 
@@ -301,7 +302,8 @@ The new `/api/custom-ai/general-launch` route is disabled unless the release
 explicitly sets `CUSTOM_AI_GENERAL_LAUNCH_ENABLED=true`. The backend's separate
 wallet-session intake also stays disabled. Neither flag is activated by these
 source changes. The general preview does not yet expose this action. Robinhood
-still requires its own modern Plan packer and never falls back to a graph route.
+uses the local modern Plan packer below; its journal integration remains pending
+and never falls back to a graph route.
 
 An authenticated `prepare` action selects one owned chat, studio revision,
 complete intent and exact checked source. The browser cannot supply internal
@@ -351,3 +353,54 @@ The UI and canonical status/handoff integration remain separate work. Every
 projection keeps `launchReady:false`; HTTP success alone establishes no review,
 funding, transaction, finality, indexing or public availability. No new database
 role, grant, schema migration or production write was performed for this step.
+
+## Modern Robinhood Plan packing
+
+`packGeneralRobinhoodPlan` builds the current `programmable.custom-launch-plan.v1`
+transport from the same owned source, independent declaration, exact compiler
+artifacts, metadata and immutable preparation identity. It keeps the current
+manifest digest, `atomic_execute_and_stamp_v2`, all declared source components,
+constructor inputs, initializer calls, pool and permissions. It produces exact
+canonical JSON without the V3 graph serialization's trailing newline. Its Plan
+hash and raw-body hash remain separate.
+
+The Atomic executor calls a separate deterministic deployment proxy. The packer
+pins the same proxy address/runtime as the reviewed Atomic deployment tool and
+declares that intended dependency in the Plan. It does not claim a fresh live
+code observation. Constructor materialization requires this explicit dependency
+on the Plan path; substituting the executor address or an arbitrary deployer
+fails before execution. Graph callers retain their original published factory
+binding and cannot supply a Plan override. The existing backend remains
+responsible for current chain/runtime and complete transaction checks.
+
+The local address search is bounded to 262,144 hook salts and 75 seconds, with
+cancellation checks. Actual creation execution supplies each exact runtime word
+and hash, as well as the maximum constructor execution gas across the two
+isolated contexts. The Plan uses those measurements with a planning margin,
+calldata/creation allowance and an outer reserve inside the existing 16-million
+gas ceiling. Remaining gas is allocated to every declared initializer. These are
+bounded planning limits, not a live gas estimate, gas-price authorization or
+proof that the source initializes a usable pool. A sixteen-component qualification
+retains all seventeen deployment/initialization actions without multiplying a
+fixed three-million allowance for every component.
+
+The inline verification bundle contains exact Standard JSON and independently
+materialized artifacts. It copies no private chat, intent text or transcript.
+Public Plan presentation follows the actual existing API contract: name, ticker,
+image and at least one public project/social link. An X profile and public
+description are optional on this route. Graph profiles retain their own metadata
+requirements. No project URL or affiliation is invented.
+
+The caller must explicitly declare its controller kind. This local packer
+currently accepts an EOA declaration; contract wallets need their own current
+authority snapshot and integration. The backend must independently verify the
+controller at admission. A local address is not proof of an EOA.
+
+The original backend parser accepts the exact local three-component request
+without findings, and its separate bounded compiler reproduces all three actual
+creation/runtime bindings. Eight Plan cases and six graph regression cases pass;
+one additional case qualifies optional Plan presentation. This does not prove
+protected component review, nested-child/dependency behavior, liquidity, fees,
+funding, issuer acceptance, a wallet action or availability. The modern Plan pack
+still needs the owned submission-journal/response integration and Chat controls.
+Every local receipt retains `launchReady:false`.
