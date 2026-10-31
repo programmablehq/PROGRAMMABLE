@@ -13,7 +13,7 @@ import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
 
 export const runtime = "nodejs";
 async function context(request: Request, accountValue: unknown, conversationValue: unknown) {
-  const authority = await authorizeCustomAI(request);
+  const authority = await authorizeCustomAI(request, false, request.method === "POST");
   if (authority.kind !== "account") throw new CustomAIError("auth", "Connect your wallet to continue.", 401);
   if(typeof accountValue!=="string"||!/^0x[0-9a-f]{40}$/i.test(accountValue))throw new CustomAIError("wallet","Select your connected wallet.");
   const account = getAddress(accountValue);

@@ -6,7 +6,7 @@ import { CustomAIError } from "./types";
 import { customAICacheScope } from "./cache-scope.server";
 
 export type AIAuthority = { kind: "preview" } | { kind: "account"; owner: string; principal: AuthenticatedWalletPrincipalV1 };
-export async function authorizeCustomAI(request: Request, previewAllowed = false): Promise<AIAuthority> {
+export async function authorizeCustomAI(request: Request, previewAllowed = false, scopeRequired = false): Promise<AIAuthority> {
   if (previewAllowed && process.env.NODE_ENV === "development" && process.env.CUSTOM_AI_LOCAL_PREVIEW === "true") {
     allowLocalPreview(request);
     return { kind: "preview" };
@@ -17,7 +17,7 @@ export async function authorizeCustomAI(request: Request, previewAllowed = false
   try {
     const principal = await createPrivyWalletPrincipalAuthenticatorV1().authenticate(request);
     const scope = request.headers.get("x-custom-ai-cache-scope");
-    if (scope !== null && scope !== customAICacheScope(principal.privyUserId)) throw new CustomAIError("session_changed", "Your signed-in account changed. Reload to open its saved chats.", 409);
+    if (scopeRequired && scope === null || scope !== null && scope !== customAICacheScope(principal.privyUserId)) throw new CustomAIError("session_changed", "Reload Custom AI to open and save chats with your current signed-in account.", 409);
     return { kind: "account", owner: principal.privyUserId, principal };
   } catch (error) {
     if (error instanceof CustomAIError) throw error;

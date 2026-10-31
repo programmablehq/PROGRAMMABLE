@@ -38,6 +38,12 @@ describe("account-bound Custom AI browser state",()=>{
     authenticate.mockResolvedValue({privyUserId:"bob",wallets:[account]});
     await expect(authorizeCustomAI(new Request("https://site.test/api/custom-ai/studio",{headers:{"X-Custom-AI-Cache-Scope":customAICacheScope("alice")}}))).rejects.toMatchObject({code:"session_changed",status:409});
   });
+  it("requires the confirmed namespace before an older page can save or start a paid chat",async()=>{
+    const request=(headers:Record<string,string>={})=>new Request("https://site.test/api/custom-ai/studio",{method:"POST",headers});
+    await expect(authorizeCustomAI(request(),false,true)).rejects.toMatchObject({code:"session_changed",status:409});
+    expect(await authorizeCustomAI(request({"X-Custom-AI-Cache-Scope":customAICacheScope("alice")}),false,true)).toMatchObject({kind:"account",owner:"alice"});
+    expect(await authorizeCustomAI(new Request("https://site.test/api/custom-ai?id=owned"))).toMatchObject({kind:"account",owner:"alice"});
+  });
   it("never upgrades a failed authentication because a client knows a cache namespace",async()=>{
     authenticate.mockRejectedValue(Error("session missing"));
     await expect(authorizeCustomAI(new Request("https://site.test/api/custom-ai/studio",{headers:{"X-Custom-AI-Cache-Scope":customAICacheScope("alice")}}))).rejects.toMatchObject({code:"auth",status:503});

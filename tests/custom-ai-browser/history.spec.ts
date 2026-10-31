@@ -19,6 +19,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
  await page.route("**/api/**",async route=>{
   const request=route.request(),url=new URL(request.url()),body=request.method()==="POST"?request.postDataJSON():undefined;
   const principal=request.headers().authorization?.endsWith(":bob")?"bob":"alice";
+  if(body&&["/api/custom-ai","/api/custom-ai/studio"].includes(url.pathname)&&request.headers()["x-custom-ai-cache-scope"]!==(principal==="bob"?"b".repeat(64):cacheScope))return route.fulfill({status:409,json:{code:"session_changed",error:"Reload for the current account"}});
   const account=body?.account??url.searchParams.get("account")??"",id=body?.conversationId??url.searchParams.get("conversation")??LEGACY_CONVERSATION,k=key(account,id,principal);
   if(url.pathname==="/api/custom-ai/conversations"){
    if(body?.action==="bootstrap"||body?.action==="create")return route.fulfill({json:{...create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id,principal),...(body.action==="bootstrap"?{cacheScope:principal==="bob"?"b".repeat(64):cacheScope}:{})}});
