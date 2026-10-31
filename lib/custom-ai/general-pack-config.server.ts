@@ -6,7 +6,7 @@ import { MAX_TOKEN_IMAGE_UPLOAD_BYTES, PROGRAMMABLE_TOKEN_IMAGE_HOST } from "@/l
 import { HOOK_PERMISSION_BITS, LAUNCH_SEEDED_CONCENTRATED_LIQUIDITY_VECTORS, HOOK_INVENTORY_CUSTOM_ACCOUNTING_VECTORS } from "@/packages/launch/src/constants.mjs";
 import { createGeneralPublicSource, checkedGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource, type OwnedGeneralLaunchSource } from "./public-launch-source.server";
 import { resolveGeneralDeploymentValues } from "./deployment-values.server";
-import { coinPresentationIssue } from "./coin-setup";
+import { generalLaunchDetailIssue } from "./general-details";
 import { CustomAIError } from "./types";
 
 export type GeneralPackIdentity = { nonce: `0x${string}`; sourceLineageNonce: string; validAfter: string; deadline: string; checkedAt: string };
@@ -35,11 +35,8 @@ export function generalSourcePackInputs(input: GeneralPackInput, presentation: "
   if (values.quoteCurrency !== zeroAddress) return invalid("This design needs its explicit token-funding authorization before launch preparation.");
   const exported = checkedGeneralPublicSource(input.exported, createGeneralPublicSource(source).id);
   if (input.url !== generalSourcePublicUri(exported.id)) return invalid();
-  for (const field of ["description", "website", "x"] as const) {
-    if(presentation==="plan"&&!settings[field]?.trim())continue;
-    const issue = coinPresentationIssue(settings, field); if (issue) return invalid(issue);
-  }
-  if(presentation==="plan"&&!settings.website?.trim()&&!settings.x?.trim())return invalid("Add a public project or social link before preparing this launch.");
+  const detailIssue=generalLaunchDetailIssue(settings,Boolean(source.binding.image),presentation);
+  if(detailIssue)return invalid(detailIssue.message);
   const image = source.binding.image;
   if (!image || !/^[a-f0-9]{64}$/u.test(image.id) || !/^[a-f0-9]{64}$/u.test(image.hash)
     || image.url !== `https://${PROGRAMMABLE_TOKEN_IMAGE_HOST}/token-images/custom-ai-${image.id}.webp`

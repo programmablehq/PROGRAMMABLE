@@ -9,6 +9,7 @@ import type { packGeneralGraph } from "./general-pack.server";
 import type { packGeneralRobinhoodPlan } from "./general-plan-pack.server";
 import { createGeneralPublicSource, type OwnedGeneralLaunchSource } from "./public-launch-source.server";
 import { CustomAIError } from "./types";
+import { generalLaunchDetailIssue } from "./general-details";
 
 export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
@@ -161,6 +162,8 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         const source=await sources.read(db,owner,selection), account=getAddress(source.binding.account), production=source.project.production;
         if (!production || production.version!==2) throw conflict();
         if(source.project.chainId===4663 ? controllerKind!=="eoa" || !production.manifestDigest : controllerKind!==undefined)throw conflict();
+        const issue=generalLaunchDetailIssue(source.binding.settings,Boolean(source.binding.image));
+        if(issue)throw new CustomAIError("launch-details",issue.message,422);
         const bound={...selection,bindingHash:source.bindingHash};
         const inputHash=canonicalBrowserSha256V2("programmable.custom-ai-general-prepare-input.v1",{bindingHash:source.bindingHash,nativeFundingWei:nativeFundingWei??null,
           ...(source.project.chainId===4663?{controllerKind}: {})});

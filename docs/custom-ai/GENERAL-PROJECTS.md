@@ -320,6 +320,11 @@ that a later worker acquired. These CPU/admission guards do not change provider
 budgets, require an API key or authorize spending. No compiler, model, network
 call or signing operation runs while a database transaction is held.
 
+Missing coin details are rejected before a compute slot, request identity or
+compute budget is allocated. The editor and server share one small presentation
+check that identifies the first actionable field. A missing project link cannot
+consume a pack attempt or start an image read, compiler or backend request.
+
 The packer reads only the original owned image receipt at its fixed immutable
 public blob URL. It verifies the owner-derived image ID and exact content hash;
 the existing bounded reader handles the single five-second read without retries

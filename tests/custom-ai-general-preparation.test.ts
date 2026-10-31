@@ -149,6 +149,16 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     await expect(store.projects.preparations.reserve(owner,ticket,selected())).rejects.toMatchObject({code:"launch-preparation-budget",status:429});
     expect((await store.projects.preparations.read(owner,ticket))!.packState).toBe("failed");
   });
+  it("rejects missing cheap launch details before charging a compute budget or acquiring another slot",async()=>{
+    await store.projects.preparations.failPack(owner,ticket,record.packLease.token,"interrupted");
+    const key=conversationStorageId(record.account,record.selection.conversation),state=await store.readObject<{settings:object}>(owner,"studio",key);
+    const revision=await store.saveObject(owner,"studio",key,{...state!.value,settings:{...state!.value.settings,website:""}},state!.revision);
+    await expect(store.projects.preparations.reserve(owner,nextTicket,{...selected(),studioRevision:revision})).rejects.toMatchObject({code:"launch-details",status:422});
+    expect((await database.query<{used:number}>("SELECT used FROM programmable_custom_ai_v1.budgets WHERE subject=$1",[`operation:general-pack:${owner}`])).rows[0].used).toBe(1);
+    expect(await store.projects.preparations.read(owner,nextTicket)).toBeNull();
+    const slot=(await database.query<{until:string}>("SELECT value->>'until' AS until FROM programmable_custom_ai_v1.objects WHERE owner='system' AND kind='general-pack-slot' AND id=$1",[`custom-ai-pack-slot-${record.packLease.slot}`])).rows[0];
+    expect(slot.until).toBe("0");
+  });
   it("allows an explicitly new preparation after an unsent window expires, while the old ticket stays immutable",async()=>{
     await stage();clock=Number(record.identity.deadline)*1000+1;
     const fresh=await store.projects.preparations.reserve(owner,nextTicket,selected());
