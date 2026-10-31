@@ -29,7 +29,7 @@ import { useAIReply } from "./use-ai-reply";
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
-  const headers: AISessionHeaders = async () => {
+  const headers: AISessionHeaders = async (): Promise<Record<string, string>> => {
     if (localPreview) return {};
     const access = await wallet.getAccessToken();
     if (!access) { wallet.openWallet(); throw Error("Connect your wallet to continue."); }
