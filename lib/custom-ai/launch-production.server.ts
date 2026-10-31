@@ -3,7 +3,7 @@ import { resolveDirectNativeProfile, validateEmbeddedDirectNativeProfile } from 
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { parseStrictJson } from "@/lib/server/projection-target/canonical-json";
 import { builderChain, type BuilderChainId } from "./execution-routing";
-import { createLaunchProductionContext, type LaunchProductionContext, type ProductionBinding } from "./launch-production";
+import { createLaunchProductionContext, PROTECTED_COMPONENT_ROLES, type LaunchProductionContext, type ProductionBinding } from "./launch-production";
 import { CustomAIError } from "./types";
 
 const ORIGIN = "https://api.programmable.market", MAX_BYTES = 1_048_576;
@@ -15,6 +15,33 @@ const object = (value: unknown): ObjectValue => {
 };
 const same = (a: unknown, b: unknown) => canonicalBrowserJsonV2(a) === canonicalBrowserJsonV2(b);
 const unavailable = () => new CustomAIError("launch-context", "The launch network configuration could not be checked. Your saved design is kept.", 503);
+type ProtectionStatus = { required: boolean; protections: NonNullable<LaunchProductionContext["protections"]>; openingTaxRecipient: `0x${string}` };
+export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus {
+  try {
+    const v = object(value);
+    const expected = { schemaVersion: "programmable.launch-protection-status.v1", policyVersion: "programmable.launch-protection.v1",
+      minimumFdvUsd: "15000", walletLimitBps: 200, buyerLimitBps: 200, protectionSeconds: 300, openingTotalFeePpm: 990000,
+      openingFeeSeconds: 30, maximumAdditionalTaxExemptWallets: 6, moduleModeExempt: true, exemptWalletsRemainCapped: true,
+      platformFeeBps: 30,
+      openingExtraFeeEndsAtZero: true, buyerCapBasis: "cumulative-authenticated-buys", walletCapBasis: "cumulative-recipient-inflow",
+      openingTaxRecipient: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da" };
+    if (typeof v.required !== "boolean" || v.unsupportedLegacyLaunches !== (v.required ? "paused" : "unchanged")
+      || Object.entries(expected).some(([key, expected]) => v[key] !== expected)
+      || !Array.isArray(v.supportedChains) || !same([...v.supportedChains].sort(), ["1","4663","8453","999"])) throw Error();
+    return { required: v.required, openingTaxRecipient: v.openingTaxRecipient as `0x${string}`, protections: {
+      openingFeePpm: 990000, openingSeconds: 30, buyerLimitBps: 200, recipientLimitBps: 200,
+      protectionSeconds: 300, maximumAdditionalTaxExemptWallets: 6, minimumFdvUsd: "15000" } };
+  } catch { throw unavailable(); }
+}
+function protectionFields(chainId: BuilderChainId, status: ProtectionStatus | undefined, legacy: LaunchProductionContext["protections"]) {
+  if (!status) return { version: 1 as const, protections: legacy };
+  const required = status.required || chainId === 8453 || chainId === 999;
+  if (legacy && !same(legacy, status.protections)) throw unavailable();
+  return { version: 2 as const, protections: required ? status.protections : null,
+    protectionPolicy: { policyVersion: "programmable.launch-protection.v1" as const, required, appliesTo: "custom-contract" as const,
+      evidenceAuthority: "authenticated-original-source-and-graph-review" as const,
+      componentRoles: required ? [...PROTECTED_COMPONENT_ROLES] : [], openingTaxRecipient: required ? status.openingTaxRecipient : null } };
+}
 function binding(address: unknown, runtimeCodeHash: unknown): ProductionBinding {
   if (typeof address !== "string" || !/^0x(?!0{40}$)[a-f0-9]{40}$/iu.test(address)
     || typeof runtimeCodeHash !== "string" || !/^0x(?!0{64}$)[a-f0-9]{64}$/u.test(runtimeCodeHash)) throw Error();
@@ -32,9 +59,10 @@ function policyFee(value: unknown, chainId: BuilderChainId): LaunchProductionCon
 
 /** Typed projection of discovery data. Foreign prose, URLs, RPCs, historical
  * releases and instructions never enter the model context. This is not admission. */
-export function projectLaunchProductionContext(value: unknown, chainId: BuilderChainId): LaunchProductionContext {
+export function projectLaunchProductionContext(value: unknown, chainId: BuilderChainId, protectionValue?: unknown): LaunchProductionContext {
   try {
     const chain = builderChain(chainId), cap = object(value);
+    const protection = protectionValue === undefined ? undefined : projectLaunchProtectionStatus(protectionValue);
     if (cap.schemaVersion !== "programmable.custom-launch-capabilities.v1") throw Error();
     if (chainId === 4663) {
       const availability = object(cap.availability), bindings = object(availability.bindings), execution = object(bindings.execution), atomic = object(execution.atomic), fee = object(cap.currentTradeFeePolicy);
@@ -43,8 +71,8 @@ export function projectLaunchProductionContext(value: unknown, chainId: BuilderC
         || fee.appliesTo !== "programmable-routed-open-provenance-trades" || fee.basis !== "gross-output-credit"
         || fee.currency !== "swap-output-asset" || fee.collection !== "atomic-output-transfer-in-swap"
         || !Number.isSafeInteger(fee.rateBps) || Number(fee.rateBps) < 0 || Number(fee.rateBps) > 10000) throw Error();
-      return createLaunchProductionContext({ version: 1, chainId, route: "plan-v1", profileVersion: "custom-launch-plan.v1",
-        manifestDigest: cap.manifestDigest as `sha256:${string}`, graphProfile: null, protections: null,
+      return createLaunchProductionContext({ ...protectionFields(chainId, protection, null), chainId, route: "plan-v1", profileVersion: "custom-launch-plan.v1",
+        manifestDigest: cap.manifestDigest as `sha256:${string}`, graphProfile: null,
         poolManager: binding(atomic.poolManager, atomic.poolManagerRuntimeCodeHash), executor: binding(atomic.address, atomic.runtimeCodeHash),
         tradeFee: { policyVersion: String(fee.policyVersion), ratePpm: Number(fee.rateBps) * 100,
           recipient: String(fee.recipient) as `0x${string}`, collection: "programmable-routed-output" } });
@@ -79,35 +107,54 @@ export function projectLaunchProductionContext(value: unknown, chainId: BuilderC
       || policy.platformFeeBps !== Number(object(profile.programmableTradeFeePolicy).rateBps)
       || policy.treasury !== object(object(profile.programmableTradeFeePolicy).defaultCollection).recipient
       || policy.exemptionScope !== "additional-opening-fee-only")) throw Error();
-    return createLaunchProductionContext({ version: 1, chainId, route: "graph-v3", profileVersion: "3.6.0", manifestDigest: null,
+    const legacyProtections = policy ? { openingFeePpm: policy.initialBuyFeePpm as number, openingSeconds: policy.openingFeeSeconds as number,
+      buyerLimitBps: policy.cumulativeBuyerLimitBps as number, recipientLimitBps: policy.cumulativeRecipientLimitBps as number,
+      protectionSeconds: policy.protectionSeconds as number, maximumAdditionalTaxExemptWallets: policy.maximumAdditionalTaxExemptWallets as number,
+      minimumFdvUsd: policy.minimumFdvUsd as string } : null;
+    return createLaunchProductionContext({ ...protectionFields(chainId, protection, legacyProtections), chainId, route: "graph-v3", profileVersion: "3.6.0", manifestDigest: null,
       poolManager: binding(profile.poolManager, profile.poolManagerRuntimeCodeHash), executor: binding(profile.router, profile.routerRuntimeCodeHash),
-      graphProfile: profile as LaunchProductionContext["graphProfile"], tradeFee: policyFee(profile.programmableTradeFeePolicy, chainId),
-      protections: policy ? { openingFeePpm: policy.initialBuyFeePpm as number, openingSeconds: policy.openingFeeSeconds as number,
-        buyerLimitBps: policy.cumulativeBuyerLimitBps as number, recipientLimitBps: policy.cumulativeRecipientLimitBps as number,
-        protectionSeconds: policy.protectionSeconds as number, maximumAdditionalTaxExemptWallets: policy.maximumAdditionalTaxExemptWallets as number,
-        minimumFdvUsd: policy.minimumFdvUsd as string } : null });
+      graphProfile: profile as LaunchProductionContext["graphProfile"], tradeFee: policyFee(profile.programmableTradeFeePolicy, chainId) });
   } catch { throw unavailable(); }
 }
 
 export function createLaunchProductionDiscovery(dependencies: { fetch: typeof fetch; now: () => number }) {
   const cache = new Map<BuilderChainId, { until: number; value?: LaunchProductionContext; pending?: Promise<LaunchProductionContext> }>();
-  async function load(chainId: BuilderChainId) {
-    const chain = builderChain(chainId), timeout = AbortSignal.timeout(TIMEOUT);
-    const response = await dependencies.fetch(`${ORIGIN}${chain.capabilitiesPath}`, { method: "GET", cache: "no-store", redirect: "error", signal: timeout, headers: { accept: "application/json" } });
+  let policyCache: { until: number; value?: unknown; pending?: Promise<unknown> } | undefined;
+  async function readJson(path: string, maximumBytes: number) {
+    const response = await dependencies.fetch(`${ORIGIN}${path}`, { method: "GET", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(TIMEOUT), headers: { accept: "application/json" } });
     if (!response.ok || response.redirected || !/^application\/json(?:;|$)/iu.test(response.headers.get("content-type") ?? "")
-      || Number(response.headers.get("content-length") ?? 0) > MAX_BYTES || !response.body) {
+      || Number(response.headers.get("content-length") ?? 0) > maximumBytes || !response.body) {
       await response.body?.cancel().catch(() => undefined); throw unavailable();
     }
     const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
     try {
       for (;;) {
         const result = await reader.read(); if (result.done) break;
-        size += result.value.length; if (size > MAX_BYTES) throw unavailable(); chunks.push(result.value);
+        size += result.value.length; if (size > maximumBytes) throw unavailable(); chunks.push(result.value);
       }
       const bytes = new Uint8Array(size); let offset = 0;
       for (const part of chunks) { bytes.set(part, offset); offset += part.length; }
-      return projectLaunchProductionContext(parseStrictJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes)), chainId);
+      return parseStrictJson(new TextDecoder("utf-8", { fatal: true }).decode(bytes), { maximumBytes, maximumDepth: 64 });
     } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  }
+  async function readPolicy(fresh: boolean) {
+    const hit = policyCache;
+    if (hit?.pending) return hit.pending;
+    if (hit && hit.until > dependencies.now()) {
+      if (hit.value === undefined) throw unavailable();
+      if (!fresh) return hit.value;
+    }
+    const pending = readJson("/v1/launch-protection", 16_384).then(value => {
+      projectLaunchProtectionStatus(value);
+      policyCache = { until: dependencies.now() + TTL, value }; return value;
+    }, () => { throw unavailable(); }).catch(error => {
+      policyCache = { until: dependencies.now() + NEGATIVE_TTL }; throw error;
+    });
+    policyCache = { until: 0, pending }; return pending;
+  }
+  async function load(chainId: BuilderChainId, fresh: boolean) {
+    const [capabilities, policy] = await Promise.all([readJson(builderChain(chainId).capabilitiesPath, MAX_BYTES), readPolicy(fresh)]);
+    return projectLaunchProductionContext(capabilities, chainId, policy);
   }
   return async function read(chainId: BuilderChainId, signal?: AbortSignal, options: { fresh?: boolean } = {}) {
     signal?.throwIfAborted(); builderChain(chainId);
@@ -118,7 +165,7 @@ export function createLaunchProductionDiscovery(dependencies: { fetch: typeof fe
       if (!hit.value) throw unavailable(); return structuredClone(hit.value);
     }
     if (!pending) {
-      pending = load(chainId).then(value => {
+      pending = load(chainId, options.fresh === true).then(value => {
         cache.set(chainId, { until: dependencies.now() + TTL, value }); return value;
       }, () => { cache.set(chainId, { until: dependencies.now() + NEGATIVE_TTL }); throw unavailable(); });
       cache.set(chainId, { until: 0, pending });

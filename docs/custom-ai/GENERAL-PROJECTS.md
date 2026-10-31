@@ -162,14 +162,31 @@ once; the nested blueprint carries its ID. User requirements remain unchanged.
 A policy conflict requires a concrete clarification. Configuration discovery is
 not admission, dependency runtime verification or funded launch evidence.
 
-Discovery uses one fixed public GET for the selected chain, a five-minute
-per-process cache, shared in-flight work, a five-second deadline and a 1 MiB
-strict-JSON bound. There are four possible keys, no RPCs, authentication keys,
-redirects or automatic retries in this loader. Failures are cached for ten
+Discovery uses the selected chain GET plus one shared `/v1/launch-protection`
+observation. A five-minute per-process cache and shared in-flight work cover the
+four fixed chain keys and single policy key. Calls have a five-second deadline;
+strict JSON is bounded to 1 MiB for capabilities and 16 KiB for global policy.
+This loader has no direct RPCs, authentication keys, redirects or automatic
+retries. Failures are cached for ten
 seconds and expired successes are not returned as current configuration. One
 stopped chat detaches without cancelling another chat's shared observation.
 The future explicit preparation action can force a current observation while
 still sharing an in-flight request and respecting the short failure cache.
+
+New discovery returns production context V2. It binds the actual global review
+mode, protected component roles, custody recipient and authenticated evidence
+authority. Ordinary Ethereum/Robinhood Custom Contracts follow that current
+mode; Base/HyperEVM still require protected evidence when the global default is
+candidate. Module Mode's separate exemption is preserved. Exact historical owner
+exceptions are not general permissions and are not supplied to the generator.
+The observed current global policy requires protection on all four chains.
+
+Saved V1 contexts retain their original domain, bytes and hash for reading and
+rebuilding. They are not silently upgraded or treated as current preparation.
+An actual launch preparation must compare the saved context against a fresh
+observation. The V2 local qualification retrieves all four chain configurations
+with five public GETs, including exactly one shared policy read; it does not
+establish source review approval, wallet execution or publication.
 
 Ordinary unchanged-network builds retain two model calls. If a setup patch
 changes the network in that turn, the new network gets a separate source-blind

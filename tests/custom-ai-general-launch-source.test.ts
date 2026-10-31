@@ -14,13 +14,14 @@ import type { StudioState } from "../lib/custom-ai/studio";
 import type { GeneralLaunchSourceSelection } from "../lib/custom-ai/general-launch-source.server";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import captured from "./fixtures/custom-ai-launch-discovery.json";
+import protection from "./fixtures/custom-ai-launch-protection.json";
 import { projectLaunchProductionContext } from "../lib/custom-ai/launch-production.server";
 
 const owner = "alice", account = `0x${"11".repeat(20)}`, chat = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const id = "checked-general-source-0001", storageId = conversationStorageId(account, chat);
 const intent: LaunchIntent = { version: 1, id: "marker-design", revision: "a".repeat(64), changes: [], unresolved: [],
   requirements: [{ id: "marker", text: "The marker returns one", kind: "behavior", origin: { kind: "legacy" }, open: null }] };
-const production = projectLaunchProductionContext(captured.chains["999"], 999);
+const production = projectLaunchProductionContext(captured.chains["999"], 999, protection);
 const blueprint = createGeneralCheckBlueprint({ contracts: [{ id: "marker", source: "Marker.sol", contract: "Marker", role: "auxiliary", arguments: [],
   functions: ["function marker() pure returns (uint256)"], allowReceive: false, allowFallback: false, surfaceRequirements: [] }], allowedCalls: [],
   steps: [{ id: "one", contract: "marker", signature: "marker()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,

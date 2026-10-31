@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import captured from "./fixtures/custom-ai-launch-discovery.json";
+import protection from "./fixtures/custom-ai-launch-protection.json";
 import { runCustomAI, type AIContext } from "../lib/custom-ai/service.server";
 import { projectLaunchProductionContext } from "../lib/custom-ai/launch-production.server";
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
@@ -26,7 +27,7 @@ const plan = (patch = {}) => response({ reply: "I will preserve the agreed count
   lookups: [], program: null, eventRule: null, composable: null, ruleEdits: [], generalChecks: JSON.stringify(declaration), ...patch });
 const generated = () => response({ reply: "The source is saved.", summary: "Counter without an owner", sourceFiles: [{ path: "Counter.sol", content: "pragma solidity 0.8.26; contract Counter { uint public count; function increment() external { count++; } }" }],
   entrypoints: [{ source: "Counter.sol", contract: "Counter", role: "auxiliary" }], requirementIds: requirements.map(rule => rule.id) });
-const production = (chain: BuilderChainId) => projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain);
+const production = (chain: BuilderChainId) => projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain, protection);
 const compile = async (project: ContractProject) => {
   const body = { version: 1 as const, projectHash: project.hash, compiled: false, compiler: GENERAL_PROJECT_COMPILER, diagnostics: [{ severity: "error" as const, message: "Fixture stops before scenario execution" }],
     contracts: [], verification: "not-run" as const, launchReady: false as const };
@@ -42,6 +43,7 @@ describe("production context in the existing owned generation handoff", () => {
     const load = vi.fn(async () => { events.push("discovery"); return expected; });
     const call = vi.fn(async (input: ClaudeInput) => {
       expect(input.system).toContain(expected.id);
+      expect(expected.version).toBe(2); expect(expected.protectionPolicy?.required).toBe(true);
       if (call.mock.calls.length === 1) { events.push("declaration"); return plan(); }
       events.push("generation"); expect(events).toContain("oracle-saved");
       // The complete profile appears once; fixedChecks carries only its ID.
