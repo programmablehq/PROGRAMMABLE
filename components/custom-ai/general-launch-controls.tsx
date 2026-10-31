@@ -23,7 +23,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   const controllerKey = `${scope}:${account.toLowerCase()}`;
   const [controller, setController] = useState({ key: controllerKey, kind: "" });
   const controllerKind = controller.key === controllerKey ? controller.kind : "";
-  useEffect(() => { onLaunchLocked(launch.busy); return () => onLaunchLocked(false); }, [launch.busy, onLaunchLocked]);
+  useEffect(() => { onLaunchLocked(launch.locked); return () => onLaunchLocked(false); }, [launch.locked, onLaunchLocked]);
   if (!enabled) return null;
   const saved = launch.preparation, sameSource = saved && saved.conversationId === conversationId && saved.sourceId === draftId
     && saved.projectHash === project?.projectHash && saved.artifactHash === project?.artifactHash && saved.chainId === settings.chainId

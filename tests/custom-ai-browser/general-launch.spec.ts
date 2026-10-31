@@ -9,14 +9,14 @@ let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createGeneralLaunchServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing local renderer");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
 async function fixture(page:Page){
- const control={saved:null as GeneralPreparationView|null,posts:[] as {action:string;id:string;selection?:Record<string,unknown>}[],saves:[] as {settings:CoinSetup;image:{id:string}}[],reads:0,lostCreate:false,beforePrepare:undefined as undefined|(()=>Promise<void>),errors:[] as string[]};
+ const control={saved:null as GeneralPreparationView|null,posts:[] as {action:string;id:string;selection?:Record<string,unknown>}[],saves:[] as {settings:CoinSetup;image:{id:string}}[],reads:0,lostCreate:false,beforePrepare:undefined as undefined|(()=>Promise<void>),beforeRead:undefined as undefined|(()=>Promise<void>),errors:[] as string[]};
  page.on('pageerror',error=>control.errors.push(error.message));
  await page.route('**/fixture-studio',async route=>{control.saves.push(route.request().postDataJSON());await route.fulfill({json:{revision:33}});});
  await page.route('**/api/**',async route=>{
   const request=route.request(),url=new URL(request.url());
   if(url.pathname!=="/api/custom-ai/general-launch")throw Error("Unexpected API call: "+url.pathname);
   if(request.method()==="GET"){
-   control.reads++;const account=url.searchParams.get('account');
+   control.reads++;await control.beforeRead?.();const account=url.searchParams.get('account');
    return route.fulfill({json:{preparation:account&&control.saved?.account.toLowerCase()!==account.toLowerCase()?null:control.saved}});
   }
   const body=request.postDataJSON();control.posts.push(body);
@@ -83,6 +83,13 @@ test('Robinhood wallet declarations are cleared on a wallet or private scope cha
 test('disabled intake does no journal reads and exposes no submit control',async({page})=>{
  const f=await fixture(page);await page.goto(origin+'/?disabled=1');await expect(page.getByRole('heading',{name:'Original coin',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Launch submission'})).toHaveCount(0);expect(f.reads).toBe(0);expect(f.posts).toEqual([]);
+});
+test('a slow read of the saved journal does not lock chat or coin editing',async({page})=>{
+ const f=await fixture(page);let release:()=>void=()=>{};f.beforeRead=()=>new Promise<void>(resolve=>{release=resolve;});
+ await page.goto(origin);await expect.poll(()=>f.reads).toBe(1);
+ await expect(page.getByLabel('Chat editing')).toHaveText('Available');
+ await page.locator('summary').filter({hasText:'Coin details'}).click();await expect(page.getByRole('textbox',{name:'Name',exact:true})).toBeEnabled();
+ release();await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();expect(f.posts).toEqual([]);
 });
 
 for(const width of [360,1440])test(`submission controls render and remain keyboard accessible at ${width}px`,async({page},testInfo)=>{
