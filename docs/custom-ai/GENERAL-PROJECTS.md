@@ -89,4 +89,12 @@ Passing primitive scenarios remains separate from trusted v4/world fixtures, sub
 
 The worker checks the complete declared public interface, constructors, callers, success/revert expectations and exact ABI return values. Calls outside declared targets, delegated execution and unbound child deployments fail the supported fixture. The actual-source mutation cases include wrong fees, an extra admin function, an admin-only condition hidden inside an otherwise matching interface, and a payment sent to a hidden recipient while its getter reports the expected recipient.
 
-The report is scoped to `isolated-declared-scenarios-v1`. It always keeps `launchReady: false`. Declared scenario coverage is not proof of every branch, live pool behavior, a fresh external feed, chain compatibility, review approval or a funded launch. This helper is not yet attached to the owning job, model planning or public UI. Trusted v4/graph fixtures, the independent planner binding and the existing backend admission/preparation remain integration work.
+The report is scoped to `isolated-declared-scenarios-v1`. It always keeps `launchReady: false`. Declared scenario coverage is not proof of every branch, live pool behavior, a fresh external feed, chain compatibility, review approval or a funded launch. The local owned-job integration is described above. Trusted v4/graph fixtures and the existing backend admission/preparation remain integration work.
+
+## Trusted v4 fixture foundation
+
+`GeneralV4Fixture.sol` is an adapter only for local execution. It uses the actual pinned PoolManager from the existing core bundle, settles native/token currency deltas, refunds unused native funds and rejects callbacks from any other caller or manager runtime. It supports bounded CREATE2 deployment so a general hook can use a real permission-matched address. Its bytecode is compiled from the saved source closure, without fetching packages or executing candidate code on the host. `build-general-v4-fixture.mjs --check` reproduces the exact fixture without writing it.
+
+The actual EVM qualification provides liquidity, buys, sells and transfers tokens. A separate timed hook is deployed at its correct permission address. The PoolManager's actual Swap event records 3000 ppm at second 599 and 500 ppm at second 600. Direct calls to the hook callback are rejected. These are synthetic fixture rates, assets and accounts, not any user's live token or current chain profile.
+
+The fixture is not yet connected to the interpreter's scenario declaration or the production worker. No live chain, new wallet transaction, RPC provider or launch authority is used by this foundation. Existing fixed-core fee limits are not a policy for these general projects.
