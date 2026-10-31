@@ -10,6 +10,7 @@ import type { packGeneralRobinhoodPlan } from "./general-plan-pack.server";
 import { createGeneralPublicSource, type OwnedGeneralLaunchSource } from "./public-launch-source.server";
 import { CustomAIError } from "./types";
 import { generalLaunchDetailIssue } from "./general-details";
+import type { CoinSetup } from "./coin-setup";
 
 export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
@@ -26,6 +27,7 @@ export type GeneralPreparation = {
   nativeFundingWei?: string; createdAt: number; updatedAt: number;
   controllerKind?: "eoa"; manifestDigest?: `sha256:${string}`;
   coin?: {name:string;symbol:string};
+  editor?: {settings:CoinSetup;imageId:string};
   packState: "packing" | "failed" | "complete";
   packLease: { token: string; until: number; slot: number };
   packCode?: string; packHash?: `sha256:${string}`; requestSha256?: `sha256:${string}`; requestHash?: `sha256:${string}`;
@@ -188,6 +190,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
           productionId:production.id,inputHash,identity:{nonce,sourceLineageNonce:BigInt(nonce).toString(),validAfter:String(Math.max(0,seconds-30)),
             deadline:String(seconds+1800),checkedAt:new Date(time).toISOString()},idempotencyKey:`custom-ai-${randomUUID()}`,
           ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),coin:{name:source.binding.settings.name,symbol:source.binding.settings.symbol},
+          editor:{settings:structuredClone(source.binding.settings),imageId:source.binding.image!.id},
           createdAt:time,updatedAt:time,packState:"packing",packLease:await capacity(db,owner)};
         if(source.project.chainId===4663){record.controllerKind=controllerKind;record.manifestDigest=production.manifestDigest!;}
         await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,$2,$3,$4)",[owner,KIND,id,JSON.stringify(record)]);
@@ -281,6 +284,7 @@ export function generalPreparationView(record: GeneralPreparation, now=Date.now(
   }:undefined;
   return {version:1 as const,id:record.id,account:record.account,chainId:record.chainId,
     sourceId:record.selection.id,conversationId:record.selection.conversation,...(record.coin?{coin:{name:record.coin.name,symbol:record.coin.symbol}}:{}),
+    ...(record.editor?{editor:structuredClone(record.editor)}:{}),
     projectHash:record.selection.projectHash,artifactHash:record.selection.artifactHash,
     packState:record.packState==="packing"&&record.packLease.until<=now?"interrupted":record.packState,
     ...(record.packCode?{code:record.packCode}:{}),...(record.requestHash?{requestHash:record.requestHash}:{}),

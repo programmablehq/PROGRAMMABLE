@@ -34,7 +34,7 @@ import { ProjectSource } from "./project-source";
 import { builderChain } from "@/lib/custom-ai/execution-routing";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
-export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
+export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
   const [pendingPrompt,setPendingPrompt]=useState<PromptHandoff>();
@@ -67,11 +67,11 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
     return { Authorization: `Bearer ${access}` };
   };
   if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
-  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
-  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} onConnectPrompt={connectPrompt}/>;
+  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
+  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} onConnectPrompt={connectPrompt}/>;
 }
 
-function CustomAISession({ owner, headers: sessionHeaders, localPreview, initialPrompt, onPromptAccepted, onConnectPrompt }: { owner: string; headers: AISessionHeaders; localPreview: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void }) {
+function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, initialPrompt, onPromptAccepted, onConnectPrompt }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void }) {
   const incomingPrompt=useRef(initialPrompt?{prompt:initialPrompt,accept:onPromptAccepted}:undefined);
   const library=useChatLibrary(),conversationId=library?.id,navigation=library?.navigation;
   const cacheScope=library?.cacheScope;
@@ -618,6 +618,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, initial
     {!restored?<aside className={styles.coinPanel} aria-label="Coin preview and details" aria-busy="true"><p role="status">Loading your coin…</p></aside>:generalProject||!builderChain(settings.chainId).feeCore?<GeneralProjectPreview key={previewRevision} project={generalProject} intent={intent} draftId={draftId} account={owner} conversationId={conversationId}
       headers={headers} disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored} settings={settings} onChange={changeSettings} chatRevision={chatRevision}
       localPreview={localPreview} cacheKey={storageKey} imageReceipt={imageReceipt} onImageReceipt={setImageReceipt}
+      generalLaunchEnabled={generalLaunchEnabled} pendingChange={pendingChange} flush={()=>flushCurrent(true)} onLaunchLocked={setLaunchLocked}
       onEditRule={requirementId=>{if(generalProject&&!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
       {sourcePanel}
     </GeneralProjectPreview>:<CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}

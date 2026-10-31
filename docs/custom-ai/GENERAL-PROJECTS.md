@@ -417,6 +417,42 @@ one additional case qualifies optional Plan presentation. This does not prove
 protected component review, nested-child/dependency behavior, liquidity, fees,
 funding, issuer acceptance, a wallet action or availability. The modern Plan pack
 uses the shared owned journal with a separately declared controller kind and
-Plan-specific response bindings. Chat controls, canonical live status and wallet
+Plan-specific response bindings. Canonical current status and the inline wallet
 handoff remain unfinished.
 Every local receipt retains `launchReady:false`.
+
+## Explicit Chat submission controls
+
+The unpublished controls use the same disabled-by-default
+`CUSTOM_AI_GENERAL_LAUNCH_ENABLED` flag as the server route. Opening or reloading
+the Chat only reads the compact owned journal. It does not prepare, publish,
+submit, infer or call a wallet. Local preview and disconnected users cannot
+mount an active submission flow.
+
+One explicit action saves the owned studio revision, prepares the selected
+source and directly submits its immutable ticket to the canonical backend.
+There is no mandatory second preflight or independent frontend approval. Missing
+presentation data focuses the first actual editor before any compute slot is
+reserved. Robinhood asks for an explicit standard-wallet declaration; smart
+account preparation is still unavailable.
+
+The source-publication notice appears next to the action. A complete pack
+atomically publishes only the sanitized source bundle. The private transcript
+and complete source package are not returned by journal polling. A small owned
+copy of the original coin settings and image ID keeps an accepted submission
+distinct from later editor changes; no source, nonce, key or lease is exposed.
+
+Double clicks share one action. Account and private cache-scope changes cancel
+the caller. An uncertain prepare reply triggers a read and stops. An uncertain
+create reply retains its original ticket; explicit recovery can only resubmit
+that ticket, without flushing a newer design or preparing different bytes.
+Following an already running pack uses bounded five-second journal reads for at
+most 130 seconds. Reload never resumes a mutation automatically.
+
+An accepted response links to the existing on-site launch workspace. Its status
+is the last accepted response and is never presented as current lifecycle
+readiness or an executed launch. Local renderer coverage includes all four
+chains, reload, ownership changes, original-ticket recovery, missing-field
+focus, changed coin details and keyboard use at 360 and 1440 pixels. Native
+acceptance, current lifecycle integration, protected source execution, source
+review, staged deployment and public verification remain release work.

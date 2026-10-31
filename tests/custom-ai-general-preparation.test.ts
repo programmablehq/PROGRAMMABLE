@@ -112,6 +112,10 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     const view=JSON.stringify(generalPreparationView(saved,clock));
     for(const privateField of ["requestBody","reproducibleConfig","idempotencyKey","sourceLineageNonce","lease","Private preparation"])expect(view).not.toContain(privateField);
     expect(JSON.parse(view).launchReady).toBe(false);expect(Buffer.byteLength(view)).toBeLessThan(2000);
+    const details=generalPreparationView(saved,clock).editor!;
+    expect(details).toEqual({settings:fixture.source.binding.settings,imageId:fixture.source.binding.image!.id});
+    details.settings.name="Browser edit";
+    expect((await store.projects.preparations.read(owner,ticket))!.editor!.settings.name).toBe(fixture.source.binding.settings.name);
     expect((await store.projects.preparations.completePack(owner,ticket,"old-lease",pack)).packHash).toBe(pack.hash);
     expect(await store.projects.preparations.read("another-owner",ticket)).toBeNull();
   });
