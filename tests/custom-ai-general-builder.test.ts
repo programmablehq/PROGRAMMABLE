@@ -71,6 +71,27 @@ describe("general project generation inside the owned AI job", () => {
     await expect(buildGeneralContract(request(), controller.signal, { call, compile })).rejects.toThrow();
     expect(call).not.toHaveBeenCalled(); expect(compile).not.toHaveBeenCalled();
   });
+  it("keeps every requirement while omitting repeated provenance and duplicate dependency contents", async () => {
+    const input = request(), marker = "fixed-dependency-content-once";
+    input.intent.requirements = Array.from({ length: 64 }, (_, index) => ({ id: `r-${index}`, text: `Keep requirement ${index}`, kind: "constraint" as const,
+      open: null, origin: { kind: "message" as const, requestId: "original-request", messageIndex: 0, quote: "UNNEEDED_PROVENANCE_QUOTE".repeat(40) } }));
+    const dependencySources = { "dep/Fixed.sol": { content: `// ${marker}\npragma solidity 0.8.26; contract Fixed {}` } };
+    const previous = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion: "paris" },
+      sources: { ...dependencySources, "GeneralHook.sol": { content: source } }, entrypoints: answer().entrypoints }, input.intent, 999);
+    const data = answer(); data.requirementIds = input.intent.requirements.map(rule => rule.id);
+    const call = vi.fn(async () => response(data));
+    await buildGeneralContract({ ...input, dependencySources, previous }, undefined, { call, compile: incompleteBuild });
+    const system = (call.mock.calls[0] as unknown as [{ system: string }])[0].system;
+    for (const rule of input.intent.requirements) expect(system).toContain(rule.text);
+    expect(system).not.toContain("UNNEEDED_PROVENANCE_QUOTE"); expect(system.split(marker)).toHaveLength(2);
+    expect(input.saveProject.mock.calls[0][0].intent).toEqual(input.intent);
+  });
+  it("rejects an excessive context before inference rather than sending oversized source repeatedly", async () => {
+    const input = request(), dependencySources = Object.fromEntries(Array.from({ length: 3 }, (_, index) => [`dep/Source${index}.sol`, { content: "x".repeat(60_000) }]));
+    const call = vi.fn(async () => response()), compile = vi.fn(incompleteBuild);
+    await expect(buildGeneralContract({ ...input, dependencySources }, undefined, { call, compile })).rejects.toMatchObject({ code: "project-context" });
+    expect(call).not.toHaveBeenCalled(); expect(compile).not.toHaveBeenCalled();
+  });
 });
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("generated general source in the isolated real compiler", { timeout: 40_000 }, () => {
