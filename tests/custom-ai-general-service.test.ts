@@ -10,6 +10,7 @@ import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
 import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import type {ClaudeInput,ClaudeResult} from "../lib/custom-ai/claude.server";
+import {generalProjectView} from "../lib/custom-ai/project-view";
 
 const instruction="Build a counter that anyone can increment with no owner.";
 const request:ChatRequest={id:"general-service-request-0001",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:instruction}]};
@@ -36,7 +37,7 @@ describe("general source generation inside the owned chat job",()=>{
    saveCompilation:async checked=>{events.push("artifacts");expect(checked.launchReady).toBe(false);},
   });
   expect(events).toEqual(["source","compile","artifacts"]);expect(call).toHaveBeenCalledTimes(2);expect(fee).not.toHaveBeenCalled();
-  expect(value.generalProject?.project.sources["Counter.sol"].content).toBe(source);expect(value.generalProject?.compilation.verification).toBe("not-run");expect(value.selection?.route).toBe("custom-contract");expect(value.draft).toBeUndefined();expect(value.chargedAs).toBe("build");
+  expect(value.generalProject?.sourceFiles).toBe(1);expect(value.generalProject?.verification).toBe("not-run");expect(JSON.stringify(value.generalProject)).not.toContain(source);expect(value.selection?.route).toBe("custom-contract");expect(value.draft).toBeUndefined();expect(value.chargedAs).toBe("build");
  });
  it("does not spend a generation when the durable project connection is missing",async()=>{
   const call=vi.fn(async()=>plan()),fee=vi.fn(),compiler=vi.fn(compile);
@@ -47,7 +48,7 @@ describe("general source generation inside the owned chat job",()=>{
   const call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",requirements:[requirements[0].text],feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated());
   const fee=vi.fn(),save=vi.fn(async()=>{});
   const value=await runCustomAI(request,undefined,{call,compile:fee,compileProject:compile},{saveProject:save});
-  expect(value.generalProject?.project.intent.requirements.map(r=>r.id)).toEqual(["counter","no-owner"]);expect(fee).not.toHaveBeenCalled();expect(save).toHaveBeenCalledTimes(1);expect(call).toHaveBeenCalledTimes(2);
+  expect(value.intent?.requirements.map(r=>r.id)).toEqual(["counter","no-owner"]);expect(value.generalProject?.intentRevision).toBe(value.intent?.revision);expect(fee).not.toHaveBeenCalled();expect(save).toHaveBeenCalledTimes(1);expect(call).toHaveBeenCalledTimes(2);
  });
  it("keeps material choices open without generating an executable subset",async()=>{
   const call=vi.fn(async()=>plan({intentRequirements:requirements.map(r=>r.id==="counter"?{...r,open:"Who may increment?"}:r)})),save=vi.fn(async()=>{}),compiler=vi.fn(compile);
@@ -73,5 +74,27 @@ describe("general source generation inside the owned chat job",()=>{
  it("rejects a stale selected general rule before any model call",async()=>{
   const previous=prior(),call=vi.fn();
   await expect(runCustomAI({...request,draftId:"owned-general-source-0001",editTarget:{sourceHash:"c".repeat(64),requirementId:"counter"}},undefined,{call,compile:vi.fn()},{generalProject:previous})).rejects.toMatchObject({code:"edit",status:409});expect(call).not.toHaveBeenCalled();
+ });
+ it("does not read the larger checkpoint for a normal question, but reads it once for explicit source inspection",async()=>{
+  const previous=prior(),view=generalProjectView(previous),load=vi.fn(async()=>previous);
+  const call=vi.fn<(input:ClaudeInput)=>Promise<ClaudeResult>>(async()=>plan({action:"answer",intentRequirements:[],requirements:[]}));
+  const context={intent:previous.project.intent,generalProjectView:view,loadGeneralProject:load};
+  await runCustomAI({...request,messages:[{role:"user",content:"Explain our agreed rule in one sentence."}]},undefined,{call,compile:vi.fn()},context);
+  expect(load).not.toHaveBeenCalled();expect(call.mock.calls[0][0].system).not.toContain(source);
+  await runCustomAI({...request,messages:[{role:"user",content:"Inspect the Solidity source."}]},undefined,{call,compile:vi.fn()},context);
+  expect(load).toHaveBeenCalledTimes(1);expect(call.mock.calls[1][0].system).toContain(source);
+ });
+ it("rejects a mismatched checkpoint before model use and never substitutes another source",async()=>{
+  const previous=prior(),view=generalProjectView(previous),call=vi.fn();
+  await expect(runCustomAI({...request,messages:[{role:"user",content:"Inspect the source."}]},undefined,{call,compile:vi.fn()},{intent:previous.project.intent,generalProjectView:{...view,artifactHash:`sha256:${"c".repeat(64)}`},loadGeneralProject:async()=>previous})).rejects.toMatchObject({code:"project-context",status:409});expect(call).not.toHaveBeenCalled();
+ });
+ it("keeps large source and bytecode out of the browser projection while retaining exact references",()=>{
+  const previous=prior(),content=source+"\n//"+"private-source".repeat(5000);
+  const project=createContractProject({compiler:previous.project.compiler,sources:{"Counter.sol":{content}},entrypoints:previous.project.entrypoints},previous.project.intent,1);
+  const bytecode=`0x${"ab".repeat(24_000)}` as `0x${string}`;
+  const body={version:1 as const,projectHash:project.hash,compiler:GENERAL_PROJECT_COMPILER,compiled:true,diagnostics:[],contracts:[{...project.entrypoints[0],abi:[],creationBytecode:bytecode,runtimeBytecode:bytecode,immutableReferences:{},storageLayout:{}}],verification:"not-run" as const,launchReady:false as const};
+  const full={...previous,project,compilation:{...body,artifactHash:canonicalBrowserSha256V2("programmable.custom-ai-project-artifacts.v1",body)}},view=generalProjectView(full),serialized=JSON.stringify(view);
+  expect(view.projectHash).toBe(project.hash);expect(view.artifactHash).toBe(full.compilation.artifactHash);expect(view.sourceBytes).toBe(new TextEncoder().encode(content).length);
+  expect(serialized.length).toBeLessThan(2000);expect(serialized).not.toContain("private-source");expect(serialized).not.toContain("ab".repeat(128));expect(view).not.toHaveProperty("sources");expect(view).not.toHaveProperty("contracts");expect(full.project.sources["Counter.sol"].content).toBe(content);expect(view.launchReady).toBe(false);
  });
 });

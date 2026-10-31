@@ -10,6 +10,7 @@ import { authorizeCustomAI } from "@/lib/custom-ai/auth.server";
 import { productionAIStore } from "@/lib/custom-ai/store.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
 import { requestMetrics, type ModelCallMetric } from "@/lib/custom-ai/request-metrics";
+import { selectExecutionRoute } from "@/lib/custom-ai/execution-routing";
 
 export const runtime = "nodejs";
 export const maxDuration = 480;
@@ -39,8 +40,17 @@ export async function POST(request: Request) {
     const previousRead=readResult(input.contextId);
     const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory,
-      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProject: current?.generalProject };
-    if (input.draftId && !context.draft && !context.generalProject) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
+      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
+    if(current?.generalProject&&store&&authority.kind==="account"&&input.draftId){
+      const view=current.generalProject;
+      context.loadGeneralProject=async()=>{
+        const saved=await store.projects.read(authority.owner,input.draftId!);
+        if(!saved?.compilation||saved.project.hash!==view.projectHash||saved.compilation.artifactHash!==view.artifactHash)throw new CustomAIError("project-context","Your saved contract source could not be found. Reload it before continuing.",409);
+        return {version:1,reply:current.reply,summary:view.summary,project:saved.project,compilation:saved.compilation,
+          selection:selectExecutionRoute(saved.project.intent,saved.project.chainId,{route:"custom-contract",requirementIds:saved.project.intent.requirements.map(rule=>rule.id),missingCapabilities:[]}),requirementCoverage:"proposed",launchReady:false};
+      };
+    }
+    if (input.draftId && !context.draft && !context.generalProjectView) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
     // Known billing/rate-limit outages do not reserve a new user attempt.
     if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) {
       assertModelConnection();
@@ -81,7 +91,7 @@ export async function POST(request: Request) {
           throw new CustomAIError(saved?.errorCode==="cancelled"?"cancelled":"interrupted","This request ended before generation could start.",409);
         }
         const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
-          ...(store&&authority.kind==="account"&&reserved?.lease?{
+          ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
             saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
           }:{}),

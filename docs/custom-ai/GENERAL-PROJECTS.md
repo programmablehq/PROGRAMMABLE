@@ -38,7 +38,11 @@ The local planner selects an explicit execution route. A proposed template missi
 
 New general source uses the Cancun compiler target by default, while an existing project keeps its recorded target. A caller may supply an explicit Paris target. This source-compilation choice does not prove chain compatibility or authorize a launch; the selected route must still check its current network and runtime bindings. The isolated compiler case distinguishes code requiring transient storage from a Paris build. The worker tracing rule includes the bounded worker files without needing a separate configuration entry for every new worker.
 
-General follow-up questions use saved requirements and a compact project summary. Explicit source inspection includes the source, with the same 160,000-character planning-context bound. The complete source stays in owned storage. Historical captured planner responses retain their original bytes; the replay fixture explicitly adds the route metadata introduced after its recorded configuration version.
+General follow-up questions use saved requirements and a compact project summary. The browser reply contains hashes, compiler information, bounded diagnostics and entrypoints; it does not repeat the source or bytecode. The complete checkpoint is loaded once when source inspection or a new build needs it. Explicit source inspection has the same 160,000-character planning-context bound. A mismatched project/artifact reference stops before inference.
+
+`GET /api/custom-ai/projects` is the explicit complete source read. It requires the authenticated owner, selected linked wallet, chat and saved request to match. It can return source kept after a compiler failure, without another inference or compile. Ordinary chat reload and polling do not use this larger endpoint. The route and its UI are not public yet.
+
+Historical captured planner responses retain their original bytes; the replay fixture explicitly adds the route metadata introduced after its recorded configuration version.
 
 Before publication this new planner schema needs its versioned AI configuration, source references in the public reply/studio, complete source recovery, four-chain settings, independent behavior verification and the existing submission adapter. The current public capability announcement remains unchanged.
 

@@ -2,11 +2,12 @@ import type {ChatRequest,Draft} from "./types";
 import type {LaunchIntent} from "./launch-intent";
 import type {RuleSpecV2} from "./rule-spec";
 import type {GeneralProjectDraft} from "./general-builder.server";
+import {generalProjectView,type GeneralProjectView} from "./project-view";
 
 /** Source inspection is opt-in for checked drafts. Older drafts without a
  * verified behavior record retain their full source context. This changes
  * model input size; it never chooses a build or authorizes an edit. */
-export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:GeneralProjectDraft){
+export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:GeneralProjectDraft|GeneralProjectView){
   const inspection=/\b(source|code|contract|solidity|bytecode|function|implementation|audit|quellcode|vertrag|funktion|implementierung|zeile)\b|```/i.test(request.messages.at(-1)?.content??"");
   if(project)return inspection;
   if(!draft)return false;
@@ -15,8 +16,9 @@ export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:Gen
     &&Array.isArray(draft.verification.checks)&&draft.verification.checks.length>0;
   return !checked||inspection;
 }
-export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft},includeSource:boolean){
+export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView},includeSource:boolean){
   const {draft,intent,generalProject}=input;
+  const projectView=generalProject?generalProjectView(generalProject):input.generalProjectView;
   return {
     memory:input.memory,ruleSpec:input.ruleSpec,editTarget:input.editTarget,
     // Full provenance and change history stay in the server-owned revision.
@@ -26,8 +28,8 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
     currentDraft:draft?{sourceHash:draft.sourceHash,...(includeSource?{source:draft.source}:{}),hookSummary:draft.hookSummary,
       requirements:draft.verification?.requirements,feeChecks:draft.verification?.checks,program:draft.program?.spec,eventRule:draft.feed?.rule,
       sourceIncluded:includeSource}:null,
-    ...(generalProject?{generalProject:{projectHash:generalProject.project.hash,chainId:generalProject.project.chainId,summary:generalProject.summary,
-      entrypoints:generalProject.project.entrypoints,compiler:generalProject.project.compiler,compiled:generalProject.compilation.compiled,
-      verification:"not-run",sourceIncluded:includeSource,...(includeSource?{sources:generalProject.project.sources}:{})}}:{}),
+    ...(projectView?{generalProject:{projectHash:projectView.projectHash,chainId:projectView.chainId,summary:projectView.summary,
+      entrypoints:projectView.entrypoints,compiler:projectView.compiler,compiled:projectView.compiled,
+      verification:"not-run",sourceIncluded:includeSource&&Boolean(generalProject),...(includeSource&&generalProject?{sources:generalProject.project.sources}:{})}}:{}),
   };
 }
