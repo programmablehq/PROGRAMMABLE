@@ -1,0 +1,76 @@
+import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
+import { builderChain, type BuilderChainId } from "./execution-routing";
+import { intentHasOpenParts, type LaunchIntent } from "./launch-intent";
+
+export const GENERAL_PROJECT_COMPILER = "0.8.26+commit.8a97fa7a";
+export const GENERAL_PROJECT_LIMITS = { files: 48, sourceBytes: 384_000, fileBytes: 96_000, entrypoints: 16 } as const;
+export type ProjectEntrypoint = { source: string; contract: string; role: "token" | "hook" | "liquidity" | "auxiliary" };
+export type ContractProject = {
+  version: 1;
+  hash: `sha256:${string}`;
+  chainId: BuilderChainId;
+  intent: LaunchIntent;
+  compiler: { version: typeof GENERAL_PROJECT_COMPILER; optimizerRuns: 1000; viaIR: false; evmVersion: "paris" | "cancun" };
+  sources: Record<string, { content: string }>;
+  entrypoints: ProjectEntrypoint[];
+};
+const fail = (): never => { throw new TypeError("Use a complete source package with the pinned compiler and supported settings."); };
+const object = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value) || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return fail();
+  return value as Record<string, unknown>;
+};
+const exact = (value: Record<string, unknown>, keys: string[]) => {
+  if (Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) fail();
+};
+function sourcePath(value: unknown): string {
+  if (typeof value !== "string" || value.length > 180 || !/^[A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)*\.sol$/.test(value)
+    || value.split("/").some(part => part === "." || part === ".." || part.startsWith("."))) return fail();
+  return value;
+}
+
+/** Only inline Standard JSON sources enter the compiler. There is no remote
+ * dependency resolution, model-selected command or host import callback. */
+export function createContractProject(value: unknown, intent: LaunchIntent, chainId: BuilderChainId): ContractProject {
+  builderChain(chainId);
+  if (!intent || !/^[a-f0-9]{64}$/.test(intent.revision) || intentHasOpenParts(intent)
+    || !intent.requirements.length || intent.requirements.length > 64) throw new TypeError("Resolve the complete saved design before compiling its contract.");
+  const input = object(value); exact(input, ["compiler", "sources", "entrypoints"]);
+  const compiler = object(input.compiler); exact(compiler, ["version", "optimizerRuns", "viaIR", "evmVersion"]);
+  if (compiler.version !== GENERAL_PROJECT_COMPILER || compiler.optimizerRuns !== 1000 || compiler.viaIR !== false
+    || !["paris", "cancun"].includes(String(compiler.evmVersion))) fail();
+  const rawSources = object(input.sources), names = Object.keys(rawSources).sort();
+  if (!names.length || names.length > GENERAL_PROJECT_LIMITS.files) fail();
+  const sources: ContractProject["sources"] = Object.create(null);
+  let bytes = 0;
+  for (const name of names) {
+    sourcePath(name);
+    const source = object(rawSources[name]); exact(source, ["content"]);
+    if (typeof source.content !== "string" || !source.content.trim() || source.content.includes("\0")) fail();
+    const size = new TextEncoder().encode(source.content as string).length;
+    if (size > GENERAL_PROJECT_LIMITS.fileBytes || (bytes += size) > GENERAL_PROJECT_LIMITS.sourceBytes) fail();
+    sources[name] = { content: source.content as string };
+  }
+  if (!Array.isArray(input.entrypoints) || !input.entrypoints.length || input.entrypoints.length > GENERAL_PROJECT_LIMITS.entrypoints) fail();
+  const entrypoints = (input.entrypoints as unknown[]).map(raw => {
+    const entry = object(raw); exact(entry, ["source", "contract", "role"]);
+    const source = sourcePath(entry.source);
+    if (!Object.hasOwn(sources, source) || typeof entry.contract !== "string" || !/^[A-Za-z_][A-Za-z0-9_]{0,99}$/.test(entry.contract)
+      || !["token", "hook", "liquidity", "auxiliary"].includes(String(entry.role))) return fail();
+    return { source, contract: entry.contract, role: entry.role as ProjectEntrypoint["role"] };
+  }).sort((a, b) => a.source < b.source ? -1 : a.source > b.source ? 1 : a.contract < b.contract ? -1 : a.contract > b.contract ? 1 : 0);
+  if (new Set(entrypoints.map(entry => `${entry.source}:${entry.contract}`)).size !== entrypoints.length) fail();
+  const body: Omit<ContractProject, "hash"> = { version: 1 as const, chainId, intent, compiler: { version: GENERAL_PROJECT_COMPILER,
+    optimizerRuns: 1000 as const, viaIR: false as const, evmVersion: compiler.evmVersion as "paris" | "cancun" }, sources, entrypoints };
+  const hash = canonicalBrowserSha256V2("programmable.custom-ai-project.v1", body);
+  // Copy the complete intent so later mutation of an interpreter object cannot
+  // change the source package behind its recorded hash.
+  return structuredClone({ ...body, hash });
+}
+
+export function projectCompilerInput(project: ContractProject) {
+  const checked = createContractProject({ compiler: project.compiler, sources: project.sources, entrypoints: project.entrypoints }, project.intent, project.chainId);
+  if (checked.hash !== project.hash) throw new TypeError("The contract project changed after it was saved.");
+  return { language: "Solidity", sources: checked.sources, settings: { optimizer: { enabled: true, runs: checked.compiler.optimizerRuns },
+    viaIR: checked.compiler.viaIR, evmVersion: checked.compiler.evmVersion, metadata: { bytecodeHash: "none", appendCBOR: false },
+    outputSelection: { "*": { "*": ["abi", "evm.bytecode", "evm.deployedBytecode", "storageLayout"] } } } };
+}
