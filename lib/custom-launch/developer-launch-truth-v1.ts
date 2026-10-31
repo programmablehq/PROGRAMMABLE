@@ -346,8 +346,9 @@ export function parseSourceVerificationStatusV1(
 export function parseCustomLaunchWalletHandoffV1(
   value: unknown,
   launchId: string,
+  chainId: "1" | "8453" | "999" = "1",
 ): CustomLaunchWalletHandoffV1 | null {
-  if (!isRecord(value) || !UUID.test(launchId)) return null;
+  if (!isRecord(value) || !UUID.test(launchId) || !["1", "8453", "999"].includes(chainId)) return null;
   const rawUrl = value.walletHandoffUrl;
   const rawExpiry = value.expiresAt;
   const rawSeconds = value.secondsRemaining;
@@ -385,7 +386,8 @@ export function parseCustomLaunchWalletHandoffV1(
       || url.pathname !== "/developers/api-keys"
       || url.searchParams.get("launchId") !== launchId
       || url.searchParams.getAll("launchId").length !== 1
-      || [...url.searchParams.keys()].some((key) => key !== "launchId")
+      || (chainId === "1" ? url.searchParams.has("chainId") : url.searchParams.getAll("chainId").length !== 1 || url.searchParams.get("chainId") !== chainId)
+      || [...url.searchParams.keys()].some((key) => key !== "launchId" && !(chainId !== "1" && key === "chainId"))
       || url.username
       || url.password
       || url.hash

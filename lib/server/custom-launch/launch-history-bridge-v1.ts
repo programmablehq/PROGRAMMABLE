@@ -1851,7 +1851,7 @@ function parseLaunch(
         fundingIntentHash,
         liquidityIntent: parseV3LiquidityIntent(record.liquidityIntent),
         ...projectMetadataPair!,
-        ...parseOptionalWalletHandoff(record),
+        ...parseOptionalWalletHandoff(record, options.chainId ?? "1"),
         ...(record.manualReview === undefined ? {} : { manualReview: parseCustomLaunchReview(record.manualReview) }),
       });
 }
@@ -1936,6 +1936,7 @@ function validatedV3FundingIntentHash(
 
 function parseOptionalWalletHandoff(
   record: Readonly<Record<string, JsonValue>>,
+  chainId: "1" | "8453" | "999" = "1",
 ) {
   const hasHandoff = [
     "walletHandoffUrl",
@@ -1943,7 +1944,7 @@ function parseOptionalWalletHandoff(
     "secondsRemaining",
   ].some((key) => Object.hasOwn(record, key));
   if (!hasHandoff) return Object.freeze({});
-  const parsed = parseCustomLaunchWalletHandoffV1(record, String(record.requestId));
+  const parsed = parseCustomLaunchWalletHandoffV1(record, String(record.requestId), chainId);
   if (!parsed) throw new BackendContractErrorV1();
   if (
     parsed.walletHandoffUrl

@@ -812,7 +812,7 @@ function parseV4Launch(
   };
 }
 
-export function parseLaunch(value: unknown, account: string): LaunchResource | null {
+export function parseLaunch(value: unknown, account: string, chainId: "1" | "8453" | "999" = "1"): LaunchResource | null {
   if (isRecord(value)
     && value.schemaVersion === "programmable.custom-launch-summary.v4") {
     return parseV4LaunchSummary(value, account);
@@ -834,6 +834,7 @@ export function parseLaunch(value: unknown, account: string): LaunchResource | n
   if (
     !isRecord(value)
     || (!v1 && !v2 && !v3)
+    || value.chainId !== undefined && value.chainId !== chainId
     || typeof value.launchId !== "string"
     || !requestIdPattern.test(value.launchId)
     || typeof value.requestId !== "string"
@@ -942,7 +943,7 @@ export function parseLaunch(value: unknown, account: string): LaunchResource | n
   ) return null;
   if (sourceVerification && value.status !== "finalized") return null;
   const walletHandoff = v3
-    ? parseCustomLaunchWalletHandoffV1(value, value.launchId)
+    ? parseCustomLaunchWalletHandoffV1(value, value.launchId, chainId)
     : { walletHandoffUrl: null, expiresAt: null, secondsRemaining: null };
   if (v3 && !walletHandoff) return null;
   if (
@@ -997,6 +998,7 @@ export function parseLaunch(value: unknown, account: string): LaunchResource | n
 export function parseHistoryPage(
   value: unknown,
   account: string,
+  chainId: "1" | "8453" | "999" = "1",
 ): HistoryPage | null {
   if (
     !isRecord(value)
@@ -1008,7 +1010,7 @@ export function parseHistoryPage(
   ) return null;
   const launches: LaunchResource[] = [];
   for (const candidate of value.launches) {
-    const parsed = parseLaunch(candidate, account);
+    const parsed = parseLaunch(candidate, account, chainId);
     if (!parsed) return null;
     launches.push(parsed);
   }
@@ -2516,7 +2518,7 @@ export function DeveloperLaunchHistory({
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) throw readApiError(response, body);
-      const page = parseHistoryPage(body, account);
+      const page = parseHistoryPage(body, account, initialLaunchChainId === "8453" || initialLaunchChainId === "999" ? initialLaunchChainId : "1");
       if (!page) throw new Error("The API returned an invalid launch history.");
       if (requestSequence !== requestSequenceRef.current) return;
       setLaunches((current) => mergeLaunchResources(
@@ -2587,7 +2589,7 @@ export function DeveloperLaunchHistory({
         "Unable to check launch status.",
       );
     }
-    const updated = parseLaunch(body, account);
+    const updated = parseLaunch(body, account, initialLaunchChainId === "8453" || initialLaunchChainId === "999" ? initialLaunchChainId : "1");
     if (
       !updated ||
       launchResourceIdentity(updated) !== resourceIdentity ||
@@ -2686,7 +2688,7 @@ export function DeveloperLaunchHistory({
     if (!response.ok) {
       throw readApiError(response, body, "Unable to open this wallet handoff.");
     }
-    const launch = parseLaunch(body, account);
+    const launch = parseLaunch(body, account, initialLaunchChainId === "8453" || initialLaunchChainId === "999" ? initialLaunchChainId : "1");
     if (
       !launch
       || launchResourceIdentity(launch) !== launchId
@@ -3354,7 +3356,7 @@ export function DeveloperLaunchHistory({
         body,
         "Unable to submit the funding authorization.",
       );
-      const updated = parseLaunch(body, account);
+      const updated = parseLaunch(body, account, initialLaunchChainId === "8453" || initialLaunchChainId === "999" ? initialLaunchChainId : "1");
       if (
         !updated
         || updated.routeId !== "custom-launch:create:v3"
