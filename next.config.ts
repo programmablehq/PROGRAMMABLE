@@ -85,6 +85,7 @@ const customAIWorkerFiles = [
   "./scripts/custom-ai/*-worker.mjs",
   "./scripts/custom-ai/artifact-hash.mjs", "./scripts/custom-ai/composable-module.mjs",
   "./scripts/custom-ai/validate-module.mjs", "./scripts/custom-ai/validate-lifecycle.mjs",
+  "./scripts/custom-ai/general-v4-world.mjs", "./scripts/custom-ai/general-v4-fixture.json",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];
 
