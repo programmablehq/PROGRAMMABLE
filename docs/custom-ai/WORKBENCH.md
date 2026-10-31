@@ -14,7 +14,7 @@ The current Custom AI launch core supports Ethereum and Robinhood. The separate 
 4. Bind targeted edits to a saved source hash and requirement. Reject stale targets before model use.
 5. Add starter ideas and direct rule selection. Launch remains unavailable while the current design is incomplete.
 6. Share capability descriptions between the planner and a public read-only discovery route: `GET /api/custom-ai/capabilities`. Configuration is not live execution proof.
-7. Version the behavior as AI configuration 2.1.0 and exercise regressions for lost rules, altered allocations, unrequested edits and interrupted design discussions.
+7. Version the behavior in `AI_CONFIG` (currently 2.2.1) and exercise regressions for lost rules, altered allocations, unrequested edits and interrupted design discussions.
 8. Preserve the unsent message and selected rule across reloads. Choosing to keep the previous rules restores that draft's conversation context too, so a discarded proposal does not silently return.
 
 ## Where to make a focused change

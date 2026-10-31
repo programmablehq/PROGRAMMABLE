@@ -3,6 +3,7 @@ vi.mock("server-only", () => ({}));
 import { callModel } from "../lib/custom-ai/model-provider.server";
 import { configuredProvider, researchAvailable } from "../lib/custom-ai/provider-config.server";
 import { callSurplus, boundedProviderJSON } from "../lib/custom-ai/surplus.server";
+import { prepareSurplusSchema } from "../lib/custom-ai/surplus-schema.server";
 import { createProviderHealth } from "../lib/custom-ai/provider-health.server";
 import { executionProfile, assertExecutionProfile } from "../lib/custom-ai/capabilities/registry.server";
 import { parseChatRequest } from "../lib/custom-ai/types";
@@ -70,5 +71,61 @@ describe("Surplus model routing", () => {
   });
   it("does not transmit a pasted Surplus API key as a chat prompt", () => {
     expect(()=>parseChatRequest({id:"private-key-test-001",intent:"chat",messages:[{role:"user",content:"inf_"+"x".repeat(40)}]})).toThrow();
+  });
+});
+
+const toolSchema = { type: "object", properties: {
+  reply: { type: "string" },
+  lookups: { type: "array", maxItems: 2, items: { anyOf: [
+    { type: "object", properties: { kind: { const: "catalog" }, input: { type: "object", properties: { query: { type: "string", maxLength: 10 } }, required: ["query"], additionalProperties: false } }, required: ["kind", "input"], additionalProperties: false },
+    { type: "object", properties: { kind: { const: "search_hooks" }, input: { type: "object", properties: { chain: { enum: ["current", "all"] } }, required: ["chain"], additionalProperties: false } }, required: ["kind", "input"], additionalProperties: false },
+  ] } },
+}, required: ["reply", "lookups"], additionalProperties: false };
+
+describe("Surplus planner schema transport", () => {
+  it("encodes the unsupported union and restores a validated tool input through the real adapter", async () => {
+    useSurplus();
+    const lookup = { kind: "catalog", input: { query: "fees" } };
+    const fetcher = vi.fn(async () => Response.json({ choices: [{ message: { content: JSON.stringify({ reply: "Search", lookups: [JSON.stringify(lookup)] }) }, finish_reason: "stop" }] }));
+    vi.stubGlobal("fetch", fetcher);
+    const answer = await callSurplus({ ...input, schema: toolSchema });
+    const sent = JSON.parse(String((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(sent.response_format.json_schema.schema.properties.lookups.items.type).toBe("string");
+    expect(sent.response_format.json_schema.schema.properties.lookups.items.anyOf).toBeUndefined();
+    expect(JSON.parse(answer.text)).toEqual({ reply: "Search", lookups: [lookup] });
+    expect(toolSchema.properties.lookups.items.anyOf).toHaveLength(2);
+  });
+
+  it.each([
+    "not json",
+    JSON.stringify({ kind: "unknown", input: { query: "fees" } }),
+    JSON.stringify({ kind: "catalog", input: { query: "fees", hidden: true } }),
+    JSON.stringify({ kind: "catalog", input: { query: "longer than ten" } }),
+    JSON.stringify({ kind: "search_hooks", input: { chain: "unsupported" } }),
+  ])("rejects invalid decoded union input %s", encoded => {
+    expect(() => prepareSurplusSchema(toolSchema).decode(JSON.stringify({ reply: "Search", lookups: [encoded] }))).toThrow();
+  });
+
+  it("retains the original limit on the number of requested lookups", () => {
+    const encoded = JSON.stringify({ kind: "catalog", input: { query: "fees" } });
+    expect(() => prepareSurplusSchema(toolSchema).decode(JSON.stringify({ reply: "Search", lookups: [encoded, encoded, encoded] }))).toThrow();
+  });
+
+  it("round-trips nullable objects without relaxing their required properties", () => {
+    const schema = { type: "object", properties: { program: { type: ["object", "null"], properties: { interval: { type: "integer" } }, required: ["interval"], additionalProperties: false } }, required: ["program"], additionalProperties: false };
+    const format = prepareSurplusSchema(schema);
+    expect(format.schema.properties?.program.type).toBe("string");
+    expect(JSON.parse(format.decode('{"program":"null"}'))).toEqual({ program: null });
+    expect(JSON.parse(format.decode(JSON.stringify({ program: '{"interval":600}' })))).toEqual({ program: { interval: 600 } });
+    expect(() => format.decode(JSON.stringify({ program: '{}' }))).toThrow();
+  });
+
+  it("keeps unsupported length and number constraints enforced locally", () => {
+    const format = prepareSurplusSchema({ type: "object", properties: { count: { type: "integer", maximum: 2 }, name: { type: "string", maxLength: 3 } }, required: ["count", "name"], additionalProperties: false });
+    expect(format.schema.properties?.count.maximum).toBeUndefined();
+    expect(format.schema.properties?.name.maxLength).toBeUndefined();
+    expect(JSON.parse(format.decode('{"count":2,"name":"ok"}'))).toEqual({ count: 2, name: "ok" });
+    expect(() => format.decode('{"count":3,"name":"ok"}')).toThrow();
+    expect(() => format.decode('{"count":2,"name":"long"}')).toThrow();
   });
 });
