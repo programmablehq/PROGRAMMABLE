@@ -11,7 +11,8 @@ export type ChatNavigation={pending:boolean;tools:(locked:boolean)=>ReactNode;ne
 const LibraryContext=createContext<{id:string;cacheScope:string;navigation:ChatNavigation}|undefined>(undefined);
 export const useChatLibrary=()=>useContext(LibraryContext);
 /** Owns only selection and metadata. Each keyed session owns its reply receiver. */
-export function ChatLibrary({account,headers,children}:{account:string;headers:AISessionHeaders;children:ReactNode}){
+export function ChatLibrary({account,headers,initialConversationId,children}:{account:string;headers:AISessionHeaders;initialConversationId?:string;children:ReactNode}){
+  const entryConversation=useRef(initialConversationId);
   const [selected,setSelected]=useState<string>(),[page,setPage]=useState<ConversationPage>({conversations:[]}),[open,setOpen]=useState(false);
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
   const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState("");
@@ -47,6 +48,15 @@ export function ChatLibrary({account,headers,children}:{account:string;headers:A
         const bootstrap=await aiRequest<ConversationItem&{cacheScope:string}>("/conversations",()=>apiHeaders.current(),{account,action:"bootstrap"},controller.signal);
         if(!active)return;
         key.current=scopedCacheKeys(bootstrap.cacheScope,account).selected;scope.current=bootstrap.cacheScope;setCacheScope(bootstrap.cacheScope);
+        if(entryConversation.current){
+          // The UUID belongs only to this explicit sign-in attempt. Repeating
+          // bootstrap after a lost response reopens the same private chat.
+          const entry=await aiRequest<ConversationItem>("/conversations",scopedHeaders,{account,action:"create",id:entryConversation.current},controller.signal);
+          if(!active)return;
+          await writeDraftCache(key.current,entry.id);
+          if(active)setSelected(entry.id);
+          return;
+        }
         const saved=await readDraftCache<string>(key.current),result=await load("",false);
         if(!active||!result)return;
         let choice=result.conversations.find(c=>c.id===saved);
