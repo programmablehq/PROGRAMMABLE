@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
 import { parseChatRequest, type AIUsage, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
@@ -24,9 +23,10 @@ import { CopyButton } from "./copy-button";
 import { StreamingReply } from "./streaming-reply";
 import { cachedLaunchIntent, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 import { LEGACY_CONVERSATION } from "@/lib/custom-ai/conversation";
-import { ChatLibrary, useChatLibrary } from "./chat-library";
+import { useChatLibrary } from "./chat-library";
 import { useAIReply } from "./use-ai-reply";
 import { canMigrateLegacyCache, scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
+const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
@@ -40,14 +40,8 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
     return { Authorization: `Bearer ${access}` };
   };
   if(!localPreview&&(wallet.authReady===false||wallet.sessionReady===false))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
-  if(!localPreview&&owner!=="signed-out")return <AuthenticatedChats account={owner} headers={headers}/>;
+  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false}/></AuthenticatedChats></Suspense>;
   return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} />;
-}
-
-function AuthenticatedChats({account,headers}:{account:string;headers:AISessionHeaders}) {
-  const {user}=usePrivy();
-  if(!user?.id)return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
-  return <ChatLibrary key={`${user.id}:${account}`} account={account} headers={headers}><CustomAISession owner={account} headers={headers} localPreview={false}/></ChatLibrary>;
 }
 
 function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { owner: string; headers: AISessionHeaders; localPreview: boolean }) {
