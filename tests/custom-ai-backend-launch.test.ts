@@ -31,6 +31,29 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("body-bound session launch producer", () => {
+  it.each([1,4663,8453,999] as const)("reads only one small V2-signed status response on %s",async chainId=>{
+    const req=new Request("https://site.test/api/custom-ai/general-launch?id=saved-ticket-0001&view=status"),authority=await authorizeCustomAI(req);
+    const f=bridge(vi.fn().mockResolvedValue(reply({schemaVersion:"programmable.wallet-launch-status.v1"},200)));
+    const value=await f.service.status(req,authority,{chainId,account:wallet,resourceId:id});
+    expect(f.fetchBackend).toHaveBeenCalledOnce();const [url,init]=f.fetchBackend.mock.calls[0] as [URL,RequestInit];
+    expect(url.pathname+url.search).toBe(`${walletLaunchMutationTargetV1(chainId,"create")}/${id}?view=status`);
+    expect(init.method).toBe("GET");expect(init.body).toBeUndefined();expect(init.redirect).toBe("error");
+    const headers=new Headers(init.headers),bodySha=`sha256:${createHash("sha256").update("").digest("hex")}`;
+    const fields=["GET",url.pathname+url.search,subject,wallet,now.toISOString(),nonce,bodySha];
+    const signature=createHmac("sha256",assertionKey).update(Buffer.concat([Buffer.from("programmable.custom-launch-api.wallet-bff-assertion.v2"),Buffer.from([0]),Buffer.from(fields.join("\0"))])).digest("hex");
+    expect(headers.get("x-programmable-bff-assertion-version")).toBe("2");expect(headers.get("x-programmable-bff-assertion-signature")).toBe(`hmac-sha256:${signature}`);
+    expect(headers.get("idempotency-key")).toBeNull();expect(headers.get("programmable-launch-response-version")).toBeNull();
+    expect(value.httpStatus).toBe(200);expect(mock.authenticate).toHaveBeenCalledOnce();
+  });
+  it("does not follow status redirects, retry errors, load a large source reply or accept a copied authority",async()=>{
+    const req=new Request("https://site.test/api/custom-ai/general-launch"),authority=await authorizeCustomAI(req);
+    for(const response of [reply({},302,{location:"https://elsewhere.test"}),reply({},503),reply({source:"x".repeat(5000)},200)]){
+      const f=bridge(vi.fn().mockResolvedValue(response));await expect(f.service.status(req,authority,{chainId:1,account:wallet,resourceId:id})).rejects.toMatchObject({status:503});
+      expect(f.fetchBackend).toHaveBeenCalledOnce();
+    }
+    const f=bridge();await expect(f.service.status(req,{...authority} as AIAuthority,{chainId:1,account:wallet,resourceId:id})).rejects.toMatchObject({code:"session_changed"});
+    await expect(f.service.status(req,authority,{chainId:1,account:other,resourceId:id})).rejects.toMatchObject({status:403});expect(f.fetchBackend).not.toHaveBeenCalled();
+  });
   it("matches the independent backend domain and all eight fixed mutation routes", () => {
     for (const [chainId, create, preflight] of [
       [1, "/v3/wallet-admin/custom-launches", "/v3/wallet-admin/custom-launches/preflight"],

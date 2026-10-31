@@ -6,7 +6,7 @@ import { type BuilderChainId } from "./execution-routing";
 import { CustomAIError } from "./types";
 import { createWalletLaunchBffAssertionV1, walletLaunchMutationTargetV1, type WalletLaunchMutationV1 } from
   "@/lib/server/custom-launch/wallet-launch-bff-assertion-v1";
-import { requireWalletAdminBffAssertionKeyV2 } from "@/lib/server/custom-launch/wallet-admin-bff-assertion-v2";
+import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "@/lib/server/custom-launch/wallet-admin-bff-assertion-v2";
 
 /** A private transport response only. Its HTTP status is never a source,
  * review, permit, wallet execution, finality or public-availability verdict. */
@@ -64,6 +64,30 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
     throw new TypeError("Custom AI launch backend configuration is invalid");
   const key = requireWalletAdminBffAssertionKeyV2(input.assertionKey, input.websiteToken);
   return Object.freeze({
+    async status(request: Request, authority: AIAuthority, candidate: Readonly<{
+      chainId: BuilderChainId; account: `0x${string}`; resourceId: string;
+    }>): Promise<BackendLaunchReply> {
+      if (request.method !== "GET") throw new CustomAIError("launch-method", "Read the saved launch status with GET.", 405);
+      const current = requireFreshCustomAIAuthority(request, authority), account = getAddress(candidate.account);
+      if (!current.principal.wallets.some(wallet => getAddress(wallet) === account))
+        throw new CustomAIError("wallet", "Select the wallet that owns this saved submission.", 403);
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(candidate.resourceId))
+        throw new CustomAIError("launch-status", "Open the original saved submission.", 400);
+      const target = `${walletLaunchMutationTargetV1(candidate.chainId, "create")}/${candidate.resourceId}?view=status`;
+      const assertion = createWalletAdminBffAssertionV2({ method: "GET", requestTarget: target, privyUserId: current.principal.privyUserId,
+        walletAddress: account, issuedAt: (input.now?.() ?? new Date()).toISOString(), nonce: input.nonce?.() ?? randomBytes(16).toString("base64url"),
+        bodyBytes: Buffer.alloc(0), assertionKey: key });
+      try {
+        const response = await input.fetchBackend(new URL(target, base), { method: "GET", cache: "no-store", redirect: "error",
+          signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(10_000, timeoutMs))]), headers: {
+            Accept: "application/json", Authorization: `Bearer ${input.websiteToken}`, "X-Programmable-Privy-User-Id": current.principal.privyUserId,
+            "X-Programmable-Wallet-Address": account.toLowerCase(), ...assertion,
+          } });
+        if (response.status !== 200) { await response.body?.cancel().catch(() => undefined); throw unavailable(); }
+        const value = await boundedReply(response, 4096);
+        return { httpStatus: 200, value, location: null };
+      } catch (error) { if (error instanceof CustomAIError) throw error; throw unavailable(); }
+    },
     async submit(request: Request, authority: AIAuthority, candidate: Readonly<{
       chainId: BuilderChainId; operation: WalletLaunchMutationV1; account: `0x${string}`;
       bodyBytes: Uint8Array; idempotencyKey: string | null;

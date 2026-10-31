@@ -12,6 +12,9 @@ function record(overrides: Partial<GeneralPreparationView> = {}): GeneralPrepara
     createdAt: 1000, updatedAt: 2000, expiresAt: 1800000, launchReady: false, ...overrides };
 }
 const completed = () => record({ submission: { state: "completed", httpStatus: 201, resourceId: conversation, backendState: "review_pending" } });
+const currentWire = (saved = completed()) => ({ schemaVersion: "programmable.wallet-launch-status.v1", kind: saved.chainId === 4663 ? "plan-v1" : "graph-v3", chainId: String(saved.chainId),
+  resourceId: conversation, controller: account, requestHash: projectHash, rawRequestSha256: saved.chainId === 4663 ? artifactHash : null,
+  status: "pending_review", errorCode: null, createdAt: new Date(1000).toISOString(), updatedAt: new Date(2000).toISOString(), checkedAt: new Date().toISOString(), deadline: String(saved.expiresAt / 1000), launchReady: false });
 function fixture() {
   let state: GeneralLaunchState | undefined;
   const lifetime = new AbortController(), request = vi.fn(), update = vi.fn((value: GeneralLaunchState) => { state = value; });
@@ -22,6 +25,24 @@ function fixture() {
 }
 
 describe("explicit general launch client", () => {
+  it("observes accepted status with GET and leaves the action phase idle", async () => {
+    const f = fixture(); await f.load(completed()); f.request.mockResolvedValueOnce({ status: currentWire() });
+    await f.client.observeStatus(); expect(f.request.mock.lastCall?.[0]).toContain("view=status"); expect(f.posts()).toHaveLength(0);
+    expect(f.state().currentStatus?.status).toBe("pending_review"); expect(f.state().phase).toBe("idle");
+  });
+  it("ignores duplicate background checks and a late status after a different ticket is selected", async () => {
+    const f = fixture(); await f.load(completed()); let finish: (value: unknown) => void = () => {};
+    f.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = f.client.observeStatus(); await f.client.observeStatus(); expect(f.request).toHaveBeenCalledTimes(2);
+    f.request.mockResolvedValueOnce({ preparation: { ...completed(), id: "different-preparation-0002" } }); await f.client.refresh();
+    finish({ status: currentWire() }); await pending; expect(f.state().currentStatus).toBeUndefined(); expect(f.posts()).toHaveLength(0);
+  });
+  it("retains the accepted submission when a current-status request fails", async () => {
+    const f = fixture(); await f.load(completed()); f.request.mockRejectedValueOnce(Error("Status unavailable"));
+    await f.client.observeStatus(); expect(f.state().statusError).toBe("Status unavailable"); expect(f.state().preparation?.submission?.state).toBe("completed");
+    expect(f.state().unconfirmedId).toBeUndefined(); expect(f.posts()).toHaveLength(0);
+    f.request.mockResolvedValueOnce({ status: currentWire() }); await f.client.refreshStatus(); expect(f.state().statusError).toBe("");
+  });
   it("reload reads only the compact owned journal and completed status is not launch readiness", async () => {
     const f = fixture(); await f.load(completed());
     expect(f.request.mock.calls[0][0]).toContain("account="); expect(f.posts()).toHaveLength(0);

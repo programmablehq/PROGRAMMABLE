@@ -24,10 +24,19 @@ export type GeneralPrepareSelection = {
   projectHash: `sha256:${string}`; artifactHash: `sha256:${string}`; intentRevision: string;
 };
 export type GeneralPrepareInput = { selection: GeneralPrepareSelection; controllerKind?: "eoa" };
+export type GeneralLaunchStatus = {
+  schemaVersion: "programmable.wallet-launch-status.v1"; kind: "graph-v3" | "plan-v1";
+  chainId: "1" | "4663" | "8453" | "999"; resourceId: string; controller: string;
+  requestHash: `sha256:${string}`; rawRequestSha256: `sha256:${string}` | null;
+  status: string; errorCode: string | null; createdAt: string; updatedAt: string; checkedAt: string;
+  deadline: string | null; launchReady: false;
+};
+export type GeneralStatusBinding = { account: string; chainId: BuilderChainId; resourceId: string;
+  requestHash: string; rawRequestSha256?: string; deadline: string };
 export type GeneralLaunchState = {
   preparation: GeneralPreparationView | null;
   phase: "loading" | "idle" | "preparing" | "submitting" | "checking";
-  error: string; loaded: boolean; unconfirmedId?: string;
+  error: string; loaded: boolean; unconfirmedId?: string; currentStatus?: GeneralLaunchStatus; statusError?: string;
 };
 const identifier = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9-]{16,64}$/u.test(v);
 const hash = (v: unknown): v is `sha256:${string}` => typeof v === "string" && /^sha256:[a-f0-9]{64}$/u.test(v);
@@ -36,6 +45,23 @@ const text = (v: unknown, max = 128): v is string => typeof v === "string" && v.
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const invalid = (): never => { throw Error("The saved submission could not be matched to this wallet. Check it again before continuing."); };
 const exactKeys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).every(key => allowed.includes(key));
+export function readGeneralLaunchStatus(value: unknown, binding: GeneralStatusBinding): GeneralLaunchStatus {
+  const bad = (): never => { throw Error("The current launch status could not be matched to the original submission."); };
+  if (!object(value) || !exactKeys(value, ["status"]) || !object(value.status)) return bad();
+  const v = value.status;
+  const date = (item: unknown): item is string => typeof item === "string" && Number.isFinite(Date.parse(item)) && new Date(item).toISOString() === item;
+  if (!exactKeys(v, ["schemaVersion", "kind", "chainId", "resourceId", "controller", "requestHash", "rawRequestSha256", "status", "errorCode",
+    "createdAt", "updatedAt", "checkedAt", "deadline", "launchReady"]) || v.schemaVersion !== "programmable.wallet-launch-status.v1"
+    || v.kind !== (binding.chainId === 4663 ? "plan-v1" : "graph-v3") || v.chainId !== String(binding.chainId) || !uuid(v.resourceId) || v.resourceId !== binding.resourceId
+    || typeof v.controller !== "string" || !/^0x[a-f0-9]{40}$/iu.test(v.controller) || v.controller.toLowerCase() !== binding.account.toLowerCase()
+    || !hash(v.requestHash) || v.requestHash !== binding.requestHash || typeof v.deadline !== "string" || !/^(?:0|[1-9][0-9]{0,19})$/u.test(v.deadline)
+    || BigInt(v.deadline) >= 2n ** 64n || v.deadline !== binding.deadline || v.launchReady !== false
+    || (binding.chainId === 4663 ? !hash(v.rawRequestSha256) || binding.rawRequestSha256 !== undefined && v.rawRequestSha256 !== binding.rawRequestSha256 : v.rawRequestSha256 !== null)
+    || typeof v.status !== "string" || !/^[a-z][a-z0-9_]{0,63}$/u.test(v.status)
+    || v.errorCode !== null && (typeof v.errorCode !== "string" || !/^[A-Za-z0-9_.:-]{1,128}$/u.test(v.errorCode))
+    || !date(v.createdAt) || !date(v.updatedAt) || !date(v.checkedAt) || Date.parse(v.updatedAt) < Date.parse(v.createdAt)) return bad();
+  return structuredClone(v) as GeneralLaunchStatus;
+}
 function exchange(value: unknown): GeneralExchangeView {
   if (!object(value) || !exactKeys(value, ["state", "httpStatus", "code", "disposition", "findingCodes", "resourceId", "backendState"])
     || !["sending", "unknown", "rejected", "completed"].includes(String(value.state))
@@ -99,8 +125,13 @@ export function createGeneralLaunchClient(options: {
   request?: typeof aiRequest; now?: () => number; delay?: typeof wait;
 }) {
   const { account, signal } = options, request = options.request ?? aiRequest, now = options.now ?? Date.now;
-  let state: GeneralLaunchState = { preparation: null, phase: "loading", error: "", loaded: false }, active = false;
+  let state: GeneralLaunchState = { preparation: null, phase: "loading", error: "", loaded: false }, active = false, statusActive = false;
   function update(patch: Partial<GeneralLaunchState>) {
+    if (patch.preparation !== undefined && (!patch.preparation || patch.preparation.id !== state.preparation?.id
+      || patch.preparation.requestHash !== state.preparation?.requestHash || patch.preparation.submission?.state !== "completed"
+      || patch.preparation.submission.resourceId !== state.preparation?.submission?.resourceId)) {
+      patch = { ...patch, currentStatus: undefined, statusError: "" };
+    }
     signal.throwIfAborted(); state = { ...state, ...patch }; options.update(state);
   }
   async function read(id?: string) {
@@ -132,7 +163,24 @@ export function createGeneralLaunchClient(options: {
       throw error;
     }
   }
+  async function currentStatus() {
+    const original = state.preparation, resourceId = original?.submission?.state === "completed" ? original.submission.resourceId : undefined;
+    if (!original || !resourceId || !original.requestHash || statusActive || signal.aborted) return;
+    statusActive = true;
+    const stillSelected = () => state.preparation?.id === original.id && state.preparation.requestHash === original.requestHash
+      && state.preparation.submission?.state === "completed" && state.preparation.submission.resourceId === resourceId;
+    try {
+      const value = await request(`/general-launch?${new URLSearchParams({ id: original.id, view: "status" })}`, options.headers, undefined, signal);
+      signal.throwIfAborted(); if (!stillSelected()) return;
+      update({ currentStatus: readGeneralLaunchStatus(value, { account, chainId: original.chainId, resourceId,
+        requestHash: original.requestHash, deadline: String(original.expiresAt / 1000) }), statusError: "" });
+    } catch (error) {
+      if (!signal.aborted && stillSelected()) update({ statusError: error instanceof Error ? error.message : "The current status could not be checked. Your submission is saved." });
+    } finally { statusActive = false; }
+  }
   return {
+    observeStatus: async () => { if (!active) await currentStatus(); },
+    refreshStatus: () => action("checking", currentStatus),
     refresh: () => action("checking", async () => { await read(state.unconfirmedId); }),
     submit: (select: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => action("preparing", async () => {
       if (!state.loaded) throw Error("Check the saved submission before preparing another one.");

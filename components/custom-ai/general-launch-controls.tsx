@@ -12,6 +12,17 @@ import type { CoinDetailsControls } from "./coin-details";
 import { useGeneralLaunch } from "./use-general-launch";
 import styles from "./workspace.module.css";
 
+function currentStatusMessage(status: string): string {
+  if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return "Your submission is waiting for review.";
+  if (["action_required", "needs_changes", "changes_requested"].includes(status)) return "Your submission needs an update. Open its details to continue.";
+  if (["authorized", "launch_ready", "wallet_action_ready", "awaiting_wallet_signature", "reserved"].includes(status)) return "Your submission has wallet steps to review.";
+  if (["submitted", "broadcast", "confirming", "finality_pending"].includes(status)) return "Waiting for the transaction to confirm.";
+  if (["completed", "confirmed", "final", "finalized"].includes(status)) return "Your submission is complete. Open its details.";
+  if (status === "expired") return "This submission expired. Open its details to continue.";
+  if (["failed", "rejected", "cancelled"].includes(status)) return "Open this submission to see its next step.";
+  return "Your launch preparation is in progress.";
+}
+
 export function GeneralLaunchControls({ enabled, account, conversationId, scope, headers, project, intent, draftId, settings,
   imageId, disabled, pendingChange, editor, flush, onLaunchLocked }: {
   enabled: boolean; account: string; conversationId?: string; scope: string; headers: AISessionHeaders;
@@ -40,7 +51,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   const busyLabel = launch.phase === "preparing" ? "Preparing submission…" : launch.phase === "submitting" ? "Submitting…" : "Checking saved submission…";
   let status = launch.phase !== "idle" ? busyLabel : !launch.loaded ? "Your saved submission has not been checked yet."
     : uncertain ? "The original submission is saved. Check its result before starting another one."
-    : accepted ? "Submission received. Open it to see its review and wallet steps."
+    : accepted ? launch.currentStatus ? currentStatusMessage(launch.currentStatus.status) : "Submission received. Open it to see its review and wallet steps."
     : detail ? detail.message : !complete ? "Finish the saved contract design in the chat before submitting it."
     : "Submit this saved design for launch review.";
   if (saved && (uncertain || href) && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;
@@ -73,6 +84,8 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
     {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
     {href && !accepted && <a className={styles.textButton} href={href}>Open {saved?.coin?.name ?? "previous"} submission</a>}
+    {href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}
+    {launch.statusError && <p className={styles.note} role="status">The current status could not be refreshed. Your saved submission is still available.</p>}
     {launch.error && <p className={styles.error} role="alert">{launch.error}</p>}
   </section>;
 }

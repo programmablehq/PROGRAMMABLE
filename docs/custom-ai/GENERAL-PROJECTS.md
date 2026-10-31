@@ -417,8 +417,8 @@ one additional case qualifies optional Plan presentation. This does not prove
 protected component review, nested-child/dependency behavior, liquidity, fees,
 funding, issuer acceptance, a wallet action or availability. The modern Plan pack
 uses the shared owned journal with a separately declared controller kind and
-Plan-specific response bindings. Canonical current status and the inline wallet
-handoff remain unfinished.
+Plan-specific response bindings. Current status is locally connected to the
+canonical owned reader. The inline wallet handoff remains unfinished.
 Every local receipt retains `launchReady:false`.
 
 ## Explicit Chat submission controls
@@ -454,5 +454,40 @@ is the last accepted response and is never presented as current lifecycle
 readiness or an executed launch. Local renderer coverage includes all four
 chains, reload, ownership changes, original-ticket recovery, missing-field
 focus, changed coin details and keyboard use at 360 and 1440 pixels. Native
-acceptance, current lifecycle integration, protected source execution, source
+acceptance, public lifecycle integration, protected source execution, source
 review, staged deployment and public verification remain release work.
+
+## Current owned launch status
+
+The original saved ticket can read `GET /general-launch?id=<ticket>&view=status`.
+The Website obtains one V2-signed compact backend response for the original
+accepted resource and binds its network, controller, resource ID, original
+request hash, Plan raw-byte hash and permit deadline. The response is limited to
+4 KiB and must use `programmable.wallet-launch-status.v1`, with
+`launchReady:false`. A generic HTTP 200 or a full-resource reply cannot satisfy
+this contract. No source package, permit, signature or transaction is exposed.
+
+This route uses the current request-local access session, private cache scope
+and linked wallet. It reads the owned journal directly, so later chat edits or
+archiving do not reinterpret an original accepted request. An unconfirmed create
+must recover its original ticket before requesting current resource status.
+No model, RPC, fresh package or second submission runs during these reads.
+
+Concurrent reads share one bounded request. A successful snapshot is retained
+for at most two seconds in an owner/request-bound cache of at most 128 entries.
+Errors are not cached. Every caller proves its own current request authority,
+and cached observations retain their original `checkedAt` timestamp.
+
+The Chat follows an accepted ticket at ten-second intervals for at most two
+minutes and twelve reads. An error or terminal state stops background reads;
+sleeping and reopening a tab does not produce a burst of catch-up requests. An
+explicit status check can read the same ticket again. Read-only activity leaves
+chat and coin editing available. A failed status read preserves the accepted
+submission and its original on-site continuation link.
+
+The new backend projection does not enter the legacy full-resource reader,
+which can resume pending work. Graph metadata is selected from an indexed owned
+row. The existing Plan SECURITY DEFINER reader still constructs its internal
+JSON, while only scalar projected fields cross the database driver. No database
+permission or schema change is introduced. This local integration is unpublished
+and depends on the reviewed backend successor before activation.

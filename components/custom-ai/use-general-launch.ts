@@ -19,8 +19,27 @@ export function useGeneralLaunch({ enabled, account, scope, headers }: { enabled
     return () => { lifetime.abort(); if (client.current?.current === current) client.current = null; };
   }, [key, enabled, account]);
   const state = saved?.key === key ? saved.state : initial;
+  const latest = useRef(state);
+  useLayoutEffect(() => { latest.current = state; }, [state]);
+  const submissionKey = state.preparation?.submission?.state === "completed" && state.preparation.submission.resourceId
+    ? JSON.stringify([state.preparation.id, state.preparation.requestHash, state.preparation.submission.resourceId]) : undefined;
+  useEffect(() => {
+    if (!enabled || !submissionKey) return;
+    const until = Date.now() + 120_000; let attempts = 0;
+    const tick = () => {
+      const view = latest.current;
+      if (Date.now() >= until || attempts >= 12 || view.statusError || view.currentStatus &&
+        ["completed", "confirmed", "final", "finalized", "failed", "rejected", "expired", "cancelled"].includes(view.currentStatus.status)) {
+        clearInterval(timer); return;
+      }
+      attempts++;
+      if (client.current?.key === key) void client.current.current.observeStatus();
+    };
+    const timer = setInterval(tick, 10_000); tick();
+    return () => clearInterval(timer);
+  }, [enabled, key, submissionKey]);
   const current = () => client.current?.key === key ? client.current.current : undefined;
   return { ...state, busy: state.phase !== "idle", locked: state.phase === "preparing" || state.phase === "submitting",
     submit: (input: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => current()?.submit(input),
-    recover: () => current()?.recover(), refresh: () => current()?.refresh() };
+    recover: () => current()?.recover(), refresh: () => current()?.refresh(), refreshStatus: () => current()?.refreshStatus() };
 }
