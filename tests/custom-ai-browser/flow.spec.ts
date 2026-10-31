@@ -32,8 +32,46 @@ test("mobile layout reflows and the editor remains keyboard accessible", async (
   const box=page.getByRole("textbox", {name:"Describe your coin or ask a question"});
   await box.focus(); await expect(box).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator("summary").filter({ hasText: "Coin details" }).click();
   await page.getByLabel("Name",{exact:true}).fill("Rain");
   await expect(page.getByLabel("Name",{exact:true})).toHaveValue("Rain");
+});
+test("new coin is separate from clearing messages and restores the unsent edit", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/api/custom-ai", route => {
+    calls++;
+    return route.fulfill({ json: { reply: "Saved Rain.", draft, setupPatch: { name: "Rain", symbol: "RAIN" }, change: "applied" } });
+  });
+  await page.goto("/launch/custom-ai");
+  const box = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
+  await box.fill("Build Rain with 3% fees"); await box.press("Enter");
+  await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add coin image", exact: true })).toBeEnabled();
+  await page.getByText("Options", { exact: true }).click();
+  await page.getByRole("button", { name: "Clear messages", exact: true }).click();
+  await expect(page.getByText("Keep shaping your coin", { exact: true })).toBeVisible();
+  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toBeVisible();
+  await box.fill("Only change the fee after five minutes");
+  await page.getByRole("button", { name: "New coin", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
+  await expect(box).toHaveValue("");
+  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Restore previous coin", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
+  await expect(box).toHaveValue("Only change the fee after five minutes");
+  expect(calls).toBe(1);
+});
+
+test("preview and composer remain reachable at each supported layout width", async ({ page }, testInfo) => {
+  await page.goto("/launch/custom-ai");
+  for (const width of [360, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("textbox", { name: "Describe your coin or ask a question" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`workspace-${width}.png`), fullPage: true });
+  }
 });
 test("starter ideas fill the composer without spending a request", async ({page}) => {
   let calls=0;

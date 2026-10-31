@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ImagePlus, LoaderCircle, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ImagePlus, LoaderCircle, X } from "lucide-react";
 import { isAddress, parseEther } from "viem";
 import { prepareTokenImage, TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 import { ChainMark } from "@/components/chain-mark";
@@ -30,13 +30,15 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
 }) {
   const account = useWallet().wallet?.account;
   const [preparation, setPreparation] = useState<LaunchPreparation>();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const headersRef = useRef(headers);
   useEffect(() => { headersRef.current = headers; }, [headers]);
   const preparationKey = JSON.stringify([editingSettings, account, imageReceipt?.id, draft?.sourceHash]);
   const fileInput = useRef<HTMLInputElement>(null);
   const imageRequest = useRef(0);
   const [image, setImage] = useState<{ blob: Blob; url: string }>();
-  const reviewedSourceHash = !pendingChange && draft?.verification?.status === "passed" && draft.verification.sourceHash === draft.sourceHash ? draft.sourceHash : undefined;
+  const reviewedSourceHash = !pendingChange && draft?.compiled && draft.validation?.status === "passed"
+    && draft.verification?.status === "passed" && draft.verification.sourceHash === draft.sourceHash ? draft.sourceHash : undefined;
   const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview, readyTicket: preparation?.inputKey === preparationKey && preparation?.revision === draft?.sourceHash ? preparation?.ticket : undefined });
   const bound = launch.saved?.session;
   const settings: CoinSetup = useMemo(() => bound ? { ...editingSettings, name: bound.settings.name, symbol: bound.settings.symbol,
@@ -130,30 +132,42 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
   }, [preparation]);
   const currentPreparation = preparation?.inputKey === preparationKey && preparation?.revision === reviewedSourceHash ? preparation : undefined;
   const summary = draft?.validation?.status === "passed" ? draft.hookSummary : undefined;
+  const missingField = readiness.missingFields?.[0];
+  const missingLabel = missingField ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image" }[missingField] : undefined;
+  function addMissingDetail() {
+    if (missingField === "image") { fileInput.current?.click(); return; }
+    setDetailsOpen(true);
+    requestAnimationFrame(() => document.getElementById(`custom-ai-${missingField}`)?.focus());
+  }
 
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
     <section className={styles.coinPreview} aria-label="Coin preview">
+      <div className={styles.coinHeading}>
       <div className={styles.artworkWrap}>
-        <button type="button" className={styles.artwork} disabled={imageBusy || launch.locked || launch.busy}
+        <button type="button" className={styles.artwork} disabled={disabled || imageBusy || launch.locked || launch.busy}
           aria-label={imageURL ? "Change coin image" : "Choose coin image"} aria-busy={imageBusy}
           aria-describedby={imageError ? "custom-ai-image-error" : undefined} onClick={() => fileInput.current?.click()}>
-          {imageURL ? <Image src={imageURL} alt={`${settings.name || "Your coin"} preview`} fill sizes="240px" unoptimized
+          {imageURL ? <Image src={imageURL} alt={`${settings.name || "Your coin"} preview`} fill sizes="72px" unoptimized
             onError={() => setImageError("The image could not load. Choose another image")} />
-            : <><ImagePlus size={28} strokeWidth={1.5} aria-hidden="true" /><span>Choose image</span></>}
+            : <><ImagePlus size={24} strokeWidth={1.5} aria-hidden="true" /><span className={styles.srOnly}>Choose image</span></>}
           {imageBusy && <span className={styles.imageLoading}><LoaderCircle size={22} aria-hidden="true" /><span className={styles.srOnly}>Preparing image</span></span>}
         </button>
-        {(image || imageReceipt) && <button type="button" className={styles.removeImage} disabled={imageBusy || launch.locked || launch.busy} aria-label="Remove coin image"
+        {(image || imageReceipt) && <button type="button" className={styles.removeImage} disabled={disabled || imageBusy || launch.locked || launch.busy} aria-label="Remove coin image"
           onClick={() => { imageRequest.current++; setImage(undefined); onImageReceipt(undefined); setImageError(""); void writeDraftCache(`${cacheKey}:image`, null).catch(() => undefined); }}><X size={14} aria-hidden="true" /></button>}
         <input ref={fileInput} className={styles.srOnly} type="file" tabIndex={-1} aria-label="Coin image file"
-          accept={TOKEN_IMAGE_ACCEPT} disabled={imageBusy}
+          accept={TOKEN_IMAGE_ACCEPT} disabled={disabled || imageBusy || launch.locked || launch.busy}
           onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void chooseImage(file); }} />
       </div>
+      <div className={styles.coinIdentity}><span className={styles.coinStage}>{bound?.state === "confirmed" ? "Published coin" : reviewedSourceHash ? "Checked draft" : "Coin preview"}</span>
+        <h2>{settings.name.trim() || "Your coin"}</h2><span>${settings.symbol.trim() || "COIN"}</span></div>
+      </div>
       <p id="custom-ai-image-error" className={styles.error} role="alert">{imageError}</p>
-      <div className={styles.coinIdentity}><h2>{settings.name.trim() || "Your coin"}</h2><span>${settings.symbol.trim() || "COIN"}</span></div>
-      {(bound?.description || summary) && <p className={styles.coinBio}>{bound?.description ?? coinBio(settings.name, summary!)}</p>}
+      {(bound?.description || summary) && <details className={styles.designSummary}><summary>About this coin</summary><p className={styles.coinBio}>{bound?.description ?? coinBio(settings.name, summary!)}</p></details>}
     </section>
 
     <form className={styles.coinForm} onSubmit={event => event.preventDefault()}>
+      <details className={styles.coinDetails} open={detailsOpen} onToggle={event => setDetailsOpen(event.currentTarget.open)}>
+        <summary><span>Coin details</span><span className={styles.settingsSummary}>{settings.chainId === 1 ? "Ethereum" : "Robinhood"} · {isEth ? "ETH" : "Custom pair"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
       <fieldset disabled={disabled || launch.locked || launch.busy}>
         <legend className={styles.srOnly}>Coin details</legend>
         <div className={styles.fieldPair}>
@@ -194,15 +208,16 @@ export function CustomAILaunchPreview({ draft, disabled, settings: editingSettin
         </label>
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (isEth ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent")}</p>
       </fieldset>
+      </details>
       {!bound && <RuleReview draft={draft} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
         quoteLabel={isEth ? "ETH" : "pair tokens"}
         onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
       {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
-      <button type="button" className={styles.createButton} disabled={localPreview || disabled || imageBusy || launch.busy
-        || !bound && readiness.state !== "design-ready"}
-        onClick={() => { if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>
-        {bound?.state === "confirmed" ? "Create another coin" : launch.label}<ArrowRight size={16} aria-hidden="true" /></button>
+      <button type="button" className={styles.createButton} disabled={disabled || imageBusy || launch.busy
+        || !missingField && (localPreview || !bound && readiness.state !== "design-ready")}
+        onClick={() => { if (!bound && missingField) addMissingDetail(); else if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>
+        {!bound && missingLabel ? missingLabel : bound?.state === "confirmed" ? "Create another coin" : launch.label}<ArrowRight size={16} aria-hidden="true" /></button>
       {launch.message && <p className={styles.note} role="status">{launch.message}</p>}
       {bound?.state === "confirmed" && bound.token && <a href={`/token/${bound.token}?chain=${bound.chainId}`} className={styles.note}>View {bound.settings.name}</a>}
       {launch.error && <p className={styles.error} role="alert">{launch.error}</p>}

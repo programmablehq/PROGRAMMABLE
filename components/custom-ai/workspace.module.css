@@ -1,5 +1,5 @@
-.workspace { width: min(1040px, calc(100% - 48px)); margin: 32px auto 64px; color: #f4f1eb; }
-.studio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: clamp(24px, 4vw, 48px); align-items: stretch; }
+.workspace { width: min(1140px, calc(100% - 48px)); margin: 32px auto 64px; color: #f4f1eb; }
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
 .conversation { position: sticky; top: 84px; align-self: start; display: flex; flex-direction: column; min-width: 0; height: clamp(360px, calc(100dvh - 124px), 800px); padding: 12px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
 .transcript { flex: 1; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; padding: 12px 8px 24px; }
 .empty { min-height: 100%; display: grid; align-content: center; text-align: center; padding: 24px; }
@@ -41,20 +41,31 @@
 .error { color: #ffc2af; }
 .note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
 /* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */
-.coinPanel { min-width: 0; }
-.coinPreview { text-align: center; }
-.artworkWrap { position: relative; width: min(100%, 200px); margin: 0 auto 20px; }
-.artwork { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px dashed #4a4842; border-radius: 22px; background: #171716; color: #aaa69f; font: inherit; font-size: 13px; cursor: pointer; }
+.coinPanel { min-width: 0; padding: 20px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.coinPreview { text-align: start; }
+.coinHeading { display: flex; align-items: center; gap: 16px; }
+.artworkWrap { position: relative; flex: 0 0 72px; width: 72px; }
+.artwork { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px dashed #4a4842; border-radius: 16px; background: #171716; color: #aaa69f; font: inherit; font-size: 13px; cursor: pointer; }
 .artwork:has(img) { border: 0; outline: 1px solid rgb(255 255 255 / .1); outline-offset: -1px; }
 .artwork img { object-fit: cover; }
 .artwork:hover { background: #20201e; color: #f4f1eb; border-color: #77736b; }
 .removeImage { position: absolute; top: -8px; right: -8px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid #44413b; border-radius: 50%; background: #22211f; color: #f4f1eb; cursor: pointer; }
 .imageLoading { position: absolute; inset: 0; display: grid; place-content: center; background: #171716b3; }
-.coinIdentity { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 8px; overflow-wrap: anywhere; }
-.coinIdentity h2 { margin: 0; font-size: 22px; line-height: 1.35; font-weight: 500; letter-spacing: -.025em; }
+.coinIdentity { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.coinIdentity h2 { margin: 0; font-size: 20px; line-height: 1.35; font-weight: 500; letter-spacing: -.025em; }
 .coinIdentity > span { font-size: 13px; color: #aaa69f; }
+.coinIdentity > .coinStage { font-size: 11px; }
 .coinBio { margin: 12px 0 0; font-size: 14px; line-height: 1.65; color: #c7c2ba; overflow-wrap: anywhere; text-wrap: pretty; }
-.coinForm { margin-top: 32px; }
+.coinForm { margin-top: 16px; }
+.designSummary { margin-top: 12px; color: #b8b4ad; font-size: 13px; }
+.designSummary summary { min-height: 40px; align-content: center; cursor: pointer; }
+.coinDetails { padding-block: 6px; border-block: 1px solid #343431; }
+.coinDetails > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #e2ddd4; font-size: 13px; cursor: pointer; list-style: none; }
+.coinDetails > summary::-webkit-details-marker { display: none; }
+.coinDetails > summary > svg { flex: 0 0 auto; }
+.coinDetails[open] > summary > svg { transform: rotate(180deg); }
+.settingsSummary { flex: 1; color: #aaa69f; text-align: end; font-size: 12px; }
+.coinForm .coinDetails fieldset { padding-block: 14px 12px; }
 .coinForm fieldset { padding: 0; margin: 0; min-width: 0; border: 0; display: grid; gap: 18px; }
 .coinForm label { display: grid; gap: 8px; color: #c7c2ba; font-size: 13px; }
 .fieldLabel { display: block; margin-bottom: 8px; color: #c7c2ba; font-size: 13px; }
@@ -117,8 +128,24 @@
   .transcript { padding-inline: 4px; }
   .message[data-role="user"] { max-width: 91%; }
 }
-.chatToolbar { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0 16px; padding: 0 8px 8px; border-bottom: 1px solid #343431; }
-.chatToolbar button, .textButton { min-height: 40px; padding: 4px 0; border: 0; background: transparent; color: #c7c2ba; font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.chatToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 2px 8px 14px; border-bottom: 1px solid #343431; }
+.chatIdentity { min-width: 0; flex: 1; }
+.chatIdentity > span { color: #aaa69f; font-size: 11px; }
+.chatIdentity p { margin: 3px 0 0; color: #f4f1eb; font-size: 16px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.toolbarActions { display: flex; align-items: center; gap: 8px; }
+.newCoin, .tools > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid #343431; border-radius: 9px; background: #171716; color: #d0cbc2; font: inherit; font-size: 12px; cursor: pointer; }
+.newCoin:hover, .tools > summary:hover { background: #242320; border-color: #77736b; }
+.tools { position: relative; }
+.tools > summary { list-style: none; }
+.tools > summary::-webkit-details-marker { display: none; }
+.tools[open] > summary > svg { transform: rotate(180deg); }
+.toolsPanel { position: absolute; inset-inline-end: 0; top: calc(100% + 8px); z-index: 12; width: min(300px, calc(100vw - 64px)); max-height: min(560px, 70dvh); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid #44413b; border-radius: 14px; background: #22211e; box-shadow: 0 8px 24px #0006; }
+.toolsPanel button, .textButton { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #e2ddd4; font: inherit; font-size: 13px; cursor: pointer; text-align: start; text-decoration: underline; text-underline-offset: 4px; }
+.contextActions > button { display: block; }
+.contextActions p, .toolSection p { margin: 4px 0 12px; color: #b8b4ad; font-size: 12px; line-height: 1.6; }
+.toolSection { padding-block: 8px; border-top: 1px solid #44413b; color: #d0cbc2; font-size: 13px; }
+.toolSection > summary { min-height: 44px; align-content: center; cursor: pointer; }
+.toolSection > div { padding-block: 8px; }
 .usage { position: relative; font-size: 13px; color: #c7c2ba; }
 .usage summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; }
 .usage > div { position: absolute; inset-inline-end: 0; top: 100%; z-index: 8; width: min(270px, 70vw); padding: 12px 16px; border: 1px solid #44413b; border-radius: 12px; background: #22211e; box-shadow: 0 6px 20px #0006; }
@@ -158,3 +185,12 @@
 .operationStatus h3 { margin: 0 0 8px; color: #f4f1eb; font-size: 15px; }
 .operationStatus p { line-height: 1.6; }
 .operationStatus small { display: block; margin-top: 10px; }
+@media (max-width: 740px) {
+  .studio { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .coinPanel { box-sizing: border-box; }
+}
+@media (max-width: 420px) {
+  .chatToolbar { padding-inline: 2px; gap: 8px; }
+  .newCoin, .tools > summary { padding-inline: 8px; }
+  .coinPanel { padding: 16px; }
+}
