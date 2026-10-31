@@ -18,6 +18,8 @@ Edits use the saved contract and show whether the requested change was applied. 
 
 The assistant follows the language and level of detail you use. Copy an answer or a code block with its copy action. Streaming replies respect reduced motion. If you scroll back while a reply arrives, **Latest message** takes you back to the current response.
 
+Reloading a running reply reconnects to the saved request. It does not start another generation. If the connection is unavailable, **Reconnect to saved reply** checks that same request again. Stopping waits for confirmation; if the reply finished before the stop arrived, its saved result is shown. Unsent text and earlier unapplied changes are retained.
+
 **Requested rules** keeps the complete design, including exclusions and open choices. Unsupported parts remain visible. A partial implementation does not replace the full request. New and changed rules retain a reference to your message; a later question keeps the same design. When a change cannot be completed, the earlier contract remains available. **Keep previous rules** restores that contract's design. Saved requirements and source checks are different states, and neither proves public activation of an external capability.
 
 The chat can look up public sources, indexed markets and basic onchain contract information. It includes source links; research does not establish that a contract is safe.

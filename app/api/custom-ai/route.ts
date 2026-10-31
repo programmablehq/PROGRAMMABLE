@@ -55,14 +55,32 @@ export async function POST(request: Request) {
       let checking = false;
       const cancelCheck = store && authority.kind === "account" ? setInterval(() => {
         if (checking) return; checking = true;
-        void store.read(authority.owner, input.id).then(job => {
-          if (job?.errorCode === "cancelled") cancellation.abort();
+        void store.heartbeat(authority.owner, input.id, reserved!.lease!).then(alive => {
+          if (!alive) cancellation.abort();
         }).catch(() => undefined).finally(() => { checking = false; });
       }, 10000) : undefined;
+      let phaseWrites = Promise.resolve(), lastPhase = "", phaseCount = 0;
+      const progress = (event: ChatProgress) => {
+        onProgress?.(event);
+        if (event.type === "phase" && event.phase !== "reconnecting" && event.phase !== lastPhase && phaseCount < 10 && store && authority.kind === "account" && reserved?.lease) {
+          lastPhase = event.phase; phaseCount++;
+          const phase = event.phase;
+          phaseWrites = phaseWrites.then(async () => { await store.setPhase(authority.owner, input.id, reserved.lease!, phase); }).catch(() => undefined);
+        }
+      };
       try {
-        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress,onModelCall:call=>calls.push(call) });
+        if(store&&authority.kind==="account"&&reserved?.lease&&!await store.heartbeat(authority.owner,input.id,reserved.lease)) {
+          const saved=await store.read(authority.owner,input.id);
+          throw new CustomAIError(saved?.errorCode==="cancelled"?"cancelled":"interrupted","This request ended before generation could start.",409);
+        }
+        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call) });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();
-        if (store && authority.kind === "account" && reserved?.lease) await store.finish(authority.owner, input.id, reserved.lease, result);
+        await phaseWrites;
+        if (store && authority.kind === "account" && reserved?.lease && !await store.finish(authority.owner, input.id, reserved.lease, result)) {
+          const saved = await store.read(authority.owner, input.id);
+          if (saved?.state === "completed" && saved.result) { completed=true;return saved.result; }
+          throw new CustomAIError(saved?.errorCode === "cancelled" ? "cancelled" : "interrupted", "This reply ended. Your last saved design is kept.", 409);
+        }
         if (authority.kind === "preview") {
           previewResults.set(input.id, result);
           if (previewResults.size > 128) previewResults.delete(previewResults.keys().next().value!);
@@ -106,16 +124,16 @@ export async function POST(request: Request) {
       cancel() { connected = false; if (authority.kind === "preview") abort.abort(); },
     });
     return new Response(stream, { headers: { ...aiHeaders, "Content-Type": "text/event-stream", "X-Accel-Buffering": "no" } });
-  } catch (error) { return aiError(error); }
+  } catch (error) { return aiError(error,error instanceof CustomAIError&&error.code==="cancelled"?"failed":undefined); }
 }
 
 export async function GET(request: Request) {
   try {
     const authority = await authorizeCustomAI(request);
     if (authority.kind !== "account") throw new CustomAIError("auth", "Connect your wallet to continue.", 401);
-    const id = new URL(request.url).searchParams.get("id");
+    const query = new URL(request.url).searchParams,id=query.get("id");
     const store = productionAIStore();
-    const value = id ? await store.read(authority.owner, id) : await store.list(authority.owner);
+    const value = id ? await store.read(authority.owner, id, query.get("view")!=="status") : await store.list(authority.owner);
     if (!value) throw new CustomAIError("missing", "This draft could not be found.", 404);
     return Response.json(value, { headers: aiHeaders });
   } catch (error) { return aiError(error); }

@@ -24,6 +24,42 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("shared Custom AI storage", () => {
+  it("records stop before reserve so a late POST cannot dispatch or consume allowance", async () => {
+    const input=request();expect(await store.cancel("alice",input.id)).toMatchObject({state:"failed",errorCode:"cancelled"});
+    await expect(store.reserve("alice",input)).rejects.toMatchObject({code:"cancelled"});
+    expect((await store.usage("alice")).hourly.used).toBe(0);
+    expect(await store.read("alice",input.id)).toMatchObject({state:"failed",errorCode:"cancelled"});
+    expect((await store.reserve("bob",input)).lease).toBeTruthy();
+  });
+  it("persists phase and worker liveness without changing payload identity or allowance", async () => {
+    const input=request(),reserved=await store.reserve("alice",input);
+    expect(await store.setPhase("alice",input.id,reserved.lease!,"checking")).toBe(true);
+    expect(await store.setPhase("alice",input.id,reserved.lease!,"checking")).toBe(false);
+    expect(await store.setPhase("bob",input.id,reserved.lease!,"building")).toBe(false);
+    expect(await store.heartbeat("alice",input.id,"wrong-lease")).toBe(false);
+    expect(await store.heartbeat("alice",input.id,reserved.lease!)).toBe(true);
+    const saved=await store.read("alice",input.id);
+    expect(saved?.phase).toBe("checking");expect(saved?.request).toEqual(input);expect(saved?.heartbeatAt).toBeGreaterThan(0);
+    expect((await store.reserve("alice",input)).lease).toBeNull();
+    expect((await store.usage("alice")).hourly.used).toBe(5);
+    const status=await store.read("alice",input.id,false);
+    expect(status?.request).toBeUndefined();expect(status?.payloadHash).toBe(saved?.payloadHash);expect(status?.phase).toBe("checking");
+  });
+  it("never revives a cancelled worker or commits its late result", async () => {
+    const input=request(),reserved=await store.reserve("alice",input);
+    await store.cancel("alice",input.id);
+    expect(await store.heartbeat("alice",input.id,reserved.lease!)).toBe(false);
+    expect(await store.setPhase("alice",input.id,reserved.lease!,"checking")).toBe(false);
+    expect(await store.finish("alice",input.id,reserved.lease!,{reply:"Too late"})).toBe(false);
+    expect(await store.read("alice",input.id)).toMatchObject({state:"failed",errorCode:"cancelled"});
+    expect((await store.read("alice",input.id))?.result).toBeUndefined();
+  });
+  it("keeps a completed reply when cancellation arrives afterwards", async () => {
+    const input=request(),reserved=await store.reserve("alice",input);
+    expect(await store.finish("alice",input.id,reserved.lease!,{reply:"Completed first"})).toBe(true);
+    expect(await store.cancel("alice",input.id)).toMatchObject({state:"completed",result:{reply:"Completed first"}});
+    expect(await store.heartbeat("alice",input.id,reserved.lease!)).toBe(false);
+  });
   it("archives a checked draft once and keeps versions isolated by account", async () => {
     const input=request();const reserved=await store.reserve("alice",input);
     await store.finish("alice",input.id,reserved.lease!,{reply:"Ready",draft:{source:"contract",sourceHash:"a".repeat(64),compiled:true,diagnostics:[],hookSummary:"3% fee"}});

@@ -4,6 +4,65 @@ const hash = "a".repeat(64);
 const draft = { source: "fixture-source", sourceHash: hash, compiled: true, diagnostics: [], hookSummary: "charges 3% on buys and sells",
   verification: { status: "passed", sourceHash: hash, requirements: ["Charge 3% on buys and sells"], checks: [true,false].map(buy=>({afterSeconds:0,buy,totalFeeBps:300})), cases:8 },
   validation: { status: "passed", samples: [], cases:8 } };
+test("reload resumes the saved request with GET and applies its result exactly once",async({page})=>{
+  let posts=0,reads=0,complete=false;let request:Record<string,unknown>;
+  await page.route("**/api/custom-ai**",async route=>{
+    const url=new URL(route.request().url());
+    if(url.pathname!=="/api/custom-ai")return route.fallback();
+    if(route.request().method()==="POST"){
+      posts++;request=route.request().postDataJSON();
+      return route.fulfill({contentType:"text/event-stream",body:'data: {"type":"phase","phase":"building"}\n\n'});
+    }
+    reads++;
+    return route.fulfill({json:{id:request.id,request,state:complete?"completed":"running",phase:"checking",heartbeatAt:Date.now(),
+      ...(complete?{result:{reply:"Recovered exactly once.",change:"applied",draft,setupPatch:{name:"Recovered",symbol:"RCV"}}}:{})}});
+  });
+  await page.goto("/launch/custom-ai");
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await box.fill("Build a 3% fee coin");await box.press("Enter");
+  await expect(page.getByRole("button",{name:"Stop response"})).toBeVisible();
+  complete=true;await page.reload();
+  await expect(page.getByRole("heading",{name:"Recovered",exact:true})).toBeVisible();
+  await expect(page.getByText("Recovered exactly once.",{exact:true})).toHaveCount(1);
+  expect(posts).toBe(1);expect(reads).toBeGreaterThan(0);
+});
+test("a resumed explanation preserves the earlier unapplied change",async({page})=>{
+  let posts=0,complete=false;let request:Record<string,unknown>;
+  await page.route("**/api/custom-ai**",async route=>{
+    if(new URL(route.request().url()).pathname!=="/api/custom-ai")return route.fallback();
+    if(route.request().method()==="POST"){
+      posts++;request=route.request().postDataJSON();
+      if(posts===1)return route.fulfill({json:{reply:"Saved the original rules.",change:"applied",draft,setupPatch:{name:"Rain",symbol:"RAIN"}}});
+      if(posts===2)return route.fulfill({json:{reply:"The weather source is not connected.",change:"blocked",unresolved:["Weather source"]}});
+      return route.fulfill({contentType:"text/event-stream",body:'data: {"type":"phase","phase":"thinking"}\n\n'});
+    }
+    return route.fulfill({json:{id:request.id,request,state:complete?"completed":"running",phase:"thinking",heartbeatAt:Date.now(),
+      ...(complete?{result:{reply:"Countdown explained.",change:"unchanged"}}:{})}});
+  });
+  await page.goto("/launch/custom-ai");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await box.fill("Build a 3% fee coin");await box.press("Enter");await expect(page.getByRole("heading",{name:"Rain",exact:true})).toBeVisible();
+  await box.fill("Add a weather trigger");await box.press("Enter");await expect(page.getByText("The weather source is not connected.",{exact:true})).toBeVisible();
+  await box.fill("Explain the countdown without changing it");await box.press("Enter");await expect(page.getByRole("button",{name:"Stop response"})).toBeVisible();
+  complete=true;await page.reload();await expect(page.getByText("Countdown explained.",{exact:true})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Rules for this coin"}).getByText("Add a weather trigger",{exact:true})).toBeVisible();
+  await expect(page.getByText("Checked draft",{exact:true})).toHaveCount(0);expect(posts).toBe(3);
+});
+test("stopping clears streamed presentation and retains the unsent request",async({page})=>{
+  let posts=0;let request:Record<string,unknown>;
+  await page.route("**/api/custom-ai**",async route=>{
+    if(new URL(route.request().url()).pathname!=="/api/custom-ai")return route.fallback();
+    if(route.request().method()==="POST"){
+      posts++;request=route.request().postDataJSON();return route.fulfill({contentType:"text/event-stream",body:'data: {"type":"reply","text":"Unfinished reply"}\n\n'});
+    }
+    return route.fulfill({json:{id:request.id,request,state:"running",phase:"building",heartbeatAt:Date.now()}});
+  });
+  await page.goto("/launch/custom-ai");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await box.fill("Build the saved fee schedule");await box.press("Enter");await expect(page.getByText("Unfinished reply",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Stop response"}).click();
+  await expect(box).toHaveValue("Build the saved fee schedule");await expect(page.getByText("Unfinished reply",{exact:true})).toHaveCount(0);
+  await expect(page.getByRole("paragraph").filter({hasText:/^Stopped\. Your last draft is unchanged\.$/})).toBeVisible();
+  expect(posts).toBe(1);
+});
 test("keeps ten requested rules and four open choices through reload and a coin switch",async({page},testInfo)=>{
   const texts=["Start at 10%","Fall over ten minutes","Then stay at 1%","No transfer tax","No later minting","No creator liquidity withdrawal",
     "Use London rain","Send fees to liquidity","Buy back on a trigger","Cap the initial wallet buy"];

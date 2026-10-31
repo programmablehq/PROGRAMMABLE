@@ -18,7 +18,9 @@ export type AIUsage = {
   available: boolean;
   resumesAt: number;
 };
-export type ChatProgress = { type: "phase"; phase: "thinking" | "reading" | "building" | "checking" | "repairing" }
+export const CHAT_PHASES = ["thinking", "reading", "building", "checking", "repairing"] as const;
+export type ChatPhase = typeof CHAT_PHASES[number];
+export type ChatProgress = { type: "phase"; phase: ChatPhase | "reconnecting" }
   | { type: "reply"; text: string };
 export type LifecycleCheck = {
   status: "passed" | "blocked";

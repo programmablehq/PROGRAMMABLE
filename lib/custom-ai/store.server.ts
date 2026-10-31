@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { CustomAIError, isBriefChat, type AIUsage, type ChatRequest, type ChatResult } from "./types";
+import { CHAT_PHASES, CustomAIError, isBriefChat, type AIUsage, type ChatPhase, type ChatRequest, type ChatResult } from "./types";
 import type { ExecutionProfile } from "./ai-config";
 import { refundsProviderFailure } from "./provider-errors";
 import type { WalletAction, WalletSession } from "./launch-session";
@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS programmable_custom_ai_v1.objects (
   value jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (owner,kind,id)
 );`;
 
-export type AIJob = { id: string; executionProfile?: ExecutionProfile; state: "running" | "completed" | "failed"; result?: ChatResult; errorCode?: string };
+export type AIJob = { id: string; executionProfile?: ExecutionProfile; state: "running" | "completed" | "failed"; result?: ChatResult; errorCode?: string;
+  request?: ChatRequest; payloadHash?: string; phase?: ChatPhase; heartbeatAt?: number };
 export type AIBudget = { hourlyUnits: number; dailyUnits: number; globalDailyUnits: number; concurrent: number };
 const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a],[b]) => a.localeCompare(b)).map(([key,item]) => [key,canonical(item)])) : value;
@@ -53,16 +54,26 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
     } catch (error) { await connection.query("ROLLBACK").catch(() => undefined); throw error; }
     finally { connection.release(); }
   }
-  function job(row: Record<string, unknown>): AIJob {
-    return { id: String(row.id), ...((row.request as { executionProfile?: ExecutionProfile } | undefined)?.executionProfile ? { executionProfile: (row.request as { executionProfile: ExecutionProfile }).executionProfile } : {}), state: row.state as AIJob["state"],
+  function job(row: Record<string, unknown>, includeRequest = false): AIJob {
+    const stored = row.request as (ChatRequest & { executionProfile?: ExecutionProfile; progress?: { phase?: ChatPhase } }) | undefined;
+    const { executionProfile, progress, ...payload } = stored ?? {};
+    const heartbeatAt = new Date(String(row.updated_at)).getTime();
+    return { id: String(row.id), ...(executionProfile ? { executionProfile } : {}), state: row.state as AIJob["state"],
+      ...(includeRequest && stored ? { request: payload as ChatRequest } : {}),
+      ...(typeof row.payload_hash==="string"?{payloadHash:row.payload_hash}:{}),
+      ...(progress?.phase && CHAT_PHASES.includes(progress.phase) ? { phase: progress.phase } : {}),
+      ...(Number.isFinite(heartbeatAt) ? { heartbeatAt } : {}),
       ...(row.result ? { result: row.result as ChatResult } : {}),
       ...(row.error_code ? { errorCode: String(row.error_code) } : {}) };
   }
-  async function read(owner: string, id: string) {
+  async function read(owner: string, id: string, includeRequest = true): Promise<AIJob | null> {
     return transaction(async db => {
       await db.query("UPDATE programmable_custom_ai_v1.jobs SET state='failed',error_code='interrupted',updated_at=now() WHERE owner=$1 AND id=$2 AND state='running' AND created_at < now()-interval '10 minutes'", [owner,id]);
-      const { rows } = await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2", [owner, id]);
-      return rows[0] ? job(rows[0]) : null;
+      const fields=includeRequest?"*":"id,state,error_code,result,payload_hash,updated_at,jsonb_build_object('executionProfile',request->'executionProfile','progress',request->'progress') AS request";
+      const { rows } = await db.query(`SELECT ${fields} FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2`, [owner, id]);
+      if (rows[0]) return job(rows[0], includeRequest);
+      const stopped = (await db.query("SELECT id FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='cancelled-request' AND id=$2",[owner,id])).rows[0];
+      return stopped ? { id, state: "failed" as const, errorCode: "cancelled" } : null;
     });
   }
   async function reserve(owner: string, request: ChatRequest, profile?: ExecutionProfile) {
@@ -75,7 +86,10 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       const previous = (await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2 FOR UPDATE", [owner, request.id])).rows[0];
       if (previous) {
         if (previous.payload_hash !== hash) throw new CustomAIError("conflict", "This request already has different settings. Start a new request.", 409);
-        return { job: job(previous), lease: null };
+        return { job: job(previous, true), lease: null };
+      }
+      if ((await db.query("SELECT id FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='cancelled-request' AND id=$2",[owner,request.id])).rows.length) {
+        throw new CustomAIError("cancelled", "This saved request was stopped. Send again to start a new reply.", 409);
       }
       // Expired jobs are never silently dispatched a second time. Their full
       // reservation remains charged because an upstream call may have run.
@@ -107,7 +121,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
     return transaction(async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
       const row = (await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2 AND lease=$3 FOR UPDATE", [owner, id, lease])).rows[0];
-      if (!row || row.state !== "running") return;
+      if (!row || row.state !== "running") return false;
       const request = row.request as ChatRequest;
       const normalRefund = result && request.intent === "chat" && !result.draft && !result.chargedAs ? Number(row.reserved) - 1 : 0;
       // Return user allowance only for confirmed infrastructure rejection. The
@@ -119,18 +133,35 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       }
       await db.query("UPDATE programmable_custom_ai_v1.jobs SET state=$4,result=$5,error_code=$6,updated_at=now() WHERE owner=$1 AND id=$2 AND lease=$3",
         [owner,id,lease,result ? "completed" : "failed", result ? JSON.stringify(result) : null, errorCode ?? null]);
+      return true;
     });
   }
-  async function cancel(owner: string, id: string) {
+  async function setPhase(owner: string, id: string, lease: string, phase: ChatPhase) {
+    if (!CHAT_PHASES.includes(phase)) throw new CustomAIError("phase", "Invalid saved request phase.");
+    return transaction(async db => (await db.query(`UPDATE programmable_custom_ai_v1.jobs
+      SET request=jsonb_set(request,'{progress}',jsonb_build_object('phase',$4::text)),updated_at=now()
+      WHERE owner=$1 AND id=$2 AND lease=$3 AND state='running'
+      AND request->'progress'->>'phase' IS DISTINCT FROM $4 RETURNING id`,[owner,id,lease,phase])).rows.length > 0);
+  }
+  async function heartbeat(owner: string, id: string, lease: string) {
+    return transaction(async db => (await db.query(`UPDATE programmable_custom_ai_v1.jobs SET updated_at=now()
+      WHERE owner=$1 AND id=$2 AND lease=$3 AND state='running' RETURNING id`,[owner,id,lease])).rows.length > 0);
+  }
+  async function cancel(owner: string, id: string): Promise<AIJob> {
     if (!identifier(id)) throw new CustomAIError("input", "Invalid saved request.");
     return transaction(async db => {
+      // A stop can arrive before the original POST reserves its job. Use the
+      // same lock as reserve so that a late reservation cannot start it again.
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",["custom-ai-budget-v1"]);
       await db.query("UPDATE programmable_custom_ai_v1.jobs SET state='failed',error_code='cancelled',updated_at=now() WHERE owner=$1 AND id=$2 AND state='running'", [owner, id]);
       const row = (await db.query("SELECT * FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2", [owner, id])).rows[0];
-      return row ? job(row) : null;
+      if (row) return job(row);
+      await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,'cancelled-request',$2,'{}'::jsonb) ON CONFLICT DO NOTHING",[owner,id]);
+      return { id, state: "failed" as const, errorCode: "cancelled" };
     });
   }
   async function list(owner: string) {
-    return transaction(async db => (await db.query("SELECT id,state,created_at,result,error_code FROM programmable_custom_ai_v1.jobs WHERE owner=$1 ORDER BY created_at DESC LIMIT 30", [owner])).rows.map(job));
+    return transaction(async db => (await db.query("SELECT id,state,created_at,result,error_code FROM programmable_custom_ai_v1.jobs WHERE owner=$1 ORDER BY created_at DESC LIMIT 30", [owner])).rows.map(row=>job(row)));
   }
   async function usage(owner: string): Promise<AIUsage> {
     return transaction(async db => {
@@ -271,7 +302,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { reserve, finish, read, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
+  return { reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;
