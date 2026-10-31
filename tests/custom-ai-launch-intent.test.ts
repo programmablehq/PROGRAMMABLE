@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { bindCandidateIntent, migrateLaunchIntent, parseIntentRequirements, reviseLaunchIntent } from "../lib/custom-ai/launch-intent.server";
-import { intentHasOpenParts, intentMatchesCandidate } from "../lib/custom-ai/launch-intent";
+import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "../lib/custom-ai/launch-intent";
 import { runCustomAI } from "../lib/custom-ai/service.server";
 import type { ChatRequest, Draft } from "../lib/custom-ai/types";
+import recording from "./fixtures/custom-ai/surplus-intent-v1.json";
+import { prepareSurplusSchema } from "../lib/custom-ai/surplus-schema.server";
 
 const texts = ["Start at 10%", "Fall over ten minutes", "Then stay at 1%", "No transfer tax", "No later minting", "No creator liquidity withdrawal",
   "Use London rain", "Send fees to liquidity", "Buy back on a trigger", "Cap the initial wallet buy"];
@@ -13,6 +15,9 @@ const proposed = texts.map((text, index) => ({ id: `rule-${index}`, text, kind: 
 const request: ChatRequest = { id: "intent-request-00001", intent: "chat", messages: [{ role: "user", content: `Build this: ${texts.join(". ")}` }] };
 const initial = () => reviseLaunchIntent({ proposed, unresolved: questions, edits: [], request }).intent;
 const response = (value: object) => ({ text: JSON.stringify(value), inputTokens: 1, outputTokens: 1 });
+const checkedDraft = (requirements = texts.slice(0, 2)): Draft => ({ source: "fixture", sourceHash: "a".repeat(64), compiled: true, diagnostics: [],
+  verification: { status: "passed", sourceHash: "a".repeat(64), requirements, checks: [], cases: 8 },
+  validation: { version: "self-contained-fee-v1", status: "passed", artifactHash: "b".repeat(64), cases: 8, samples: [], deployments: [], expectationCases: 8 } });
 const plan = (extra = {}) => response({ reply: "Four choices remain open.", action: "build", memory: "All ten rules are saved.",
   intentRequirements: proposed, requirements: texts.slice(0, 6), unresolved: questions, feeChecks: [true, false].map(buy => ({ afterSeconds: 0, buy, totalFeeBps: 1000 })), setupPatch: {}, ...extra });
 
@@ -70,6 +75,16 @@ describe("complete launch intent and source revisions", () => {
       expect(() => reviseLaunchIntent({ previous: initial(), proposed: [...proposed, { ...proposed[0], id: "extra" }], unresolved: questions, edits: [], request: { ...request, messages } })).toThrow();
     }
   });
+  it("keeps revision hashes stable when JSONB reorders stored object keys", () => {
+    const previous=initial(),instruction="Change the starting fee to 8%.";
+    const reorder=(value:unknown):unknown=>Array.isArray(value)?value.map(reorder):value&&typeof value==="object"
+      ?Object.fromEntries(Object.entries(value).reverse().map(([key,item])=>[key,reorder(item)])):value;
+    const restored=reorder(previous) as LaunchIntent;
+    expect(JSON.stringify(restored)).not.toBe(JSON.stringify(previous));
+    const input={proposed:proposed.map(rule=>rule.id==="rule-0"?{...rule,text:"Start at 8%"}:rule),unresolved:questions,
+      edits:[{requirementId:"rule-0",operation:"replace" as const,instruction}],request:{...request,messages:[{role:"user" as const,content:instruction}]}};
+    expect(reviseLaunchIntent({...input,previous:restored}).intent.revision).toBe(reviseLaunchIntent({...input,previous}).intent.revision);
+  });
   it("resolves one open choice only through an explicit replacement of its stable id", () => {
     const previous=initial(),instruction="Use the signed London rain feed for the weather rule.";
     const changed=proposed.map(rule=>rule.id==="rule-6"?{...rule,text:"Use the signed London rain feed",open:null}:rule);
@@ -95,19 +110,17 @@ describe("complete launch intent and source revisions", () => {
     }
   });
   it("migrates old source and open decisions without inventing user quotes", () => {
-    const intent = migrateLaunchIntent({ requestId: request.id, draft: { sourceHash: "a".repeat(64), verification: { requirements: texts.slice(0, 2) } } as Draft, unresolved: ["Choose the recipient"] })!;
+    const intent = migrateLaunchIntent({ requestId: request.id, draft: checkedDraft(), unresolved: ["Choose the recipient"] })!;
     expect(intent.requirements.map(rule => rule.text)).toEqual([...texts.slice(0, 2), "Choose the recipient"]);
     expect(intent.requirements.every(rule => rule.origin.kind === "legacy")).toBe(true);
     expect(intent.requirements[2].open).toBe("Choose the recipient");
-    const repeated=migrateLaunchIntent({draft:{sourceHash:"a".repeat(64),verification:{requirements:["3% fees","3% fees"]}} as Draft})!;
+    const repeated=migrateLaunchIntent({draft:checkedDraft(["3% fees","3% fees"])})!;
     expect(repeated.requirements).toHaveLength(2);
     expect(new Set(repeated.requirements.map(rule=>rule.id)).size).toBe(2);
   });
   it("binds the complete intent and parent source revision without promoting launch status", () => {
     const intent = reviseLaunchIntent({ proposed: proposed.slice(0, 2), unresolved: [], edits: [], request }).intent;
-    const draft = { source: "fixture", sourceHash: "a".repeat(64), compiled: true, diagnostics: [],
-      verification: { status: "passed", sourceHash: "a".repeat(64), requirements: texts.slice(0, 2), checks: [], cases: 8 },
-      validation: { status: "passed", artifactHash: "b".repeat(64) } } as Draft;
+    const draft = checkedDraft();
     const bound = bindCandidateIntent(intent, draft);
     expect(intentMatchesCandidate(intent, bound)).toBe(true);
     expect(intentMatchesCandidate(initial(), bound)).toBe(false);
@@ -117,5 +130,17 @@ describe("complete launch intent and source revisions", () => {
     expect(() => bindCandidateIntent(initial(), draft)).toThrow();
     expect(() => bindCandidateIntent(intent, { ...draft, verification: { ...draft.verification!, requirements: texts.slice(0, 1) } })).toThrow();
     expect(bound.intent?.requirements.every(rule => !("status" in rule))).toBe(true);
+  });
+  it("replays the real Surplus design and follow-up through the current server without provider calls", async () => {
+    let index=0;
+    const call=vi.fn(async(input:{schema:object})=>response(JSON.parse(prepareSurplusSchema(input.schema).decode(JSON.stringify(recording.responses[index++])))));
+    const compile=vi.fn();
+    const first=await runCustomAI({id:"recorded-intent-0001",intent:"chat",messages:[{role:"user",content:recording.prompts[0]}]},undefined,{call,compile});
+    expect(first.intent?.requirements).toHaveLength(10);expect(first.intent?.unresolved).toHaveLength(4);
+    expect(first.intent?.requirements.filter(rule=>rule.kind==="constraint").map(rule=>rule.id)).toEqual(["no-wallet-transfer-fee","no-minting","no-initial-liquidity-withdrawal"]);
+    expect(first.change).toBe("blocked");expect(first.draft).toBeUndefined();
+    const second=await runCustomAI({id:"recorded-followup-01",intent:"chat",messages:[{role:"user",content:recording.prompts[1]}]},undefined,{call,compile},{intent:first.intent,memory:first.memory});
+    expect(second.intent).toEqual(first.intent);expect(second.change).toBe("unchanged");
+    expect(call).toHaveBeenCalledTimes(2);expect(compile).not.toHaveBeenCalled();
   });
 });

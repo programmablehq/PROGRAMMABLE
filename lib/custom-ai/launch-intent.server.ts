@@ -8,7 +8,9 @@ import { intentImplementationGaps } from "./intent-coverage.server";
 export { intentImplementationGaps } from "./intent-coverage.server";
 
 type ProposedRequirement = Pick<IntentRequirement, "id" | "text" | "kind" | "open"> & { instruction: string };
-const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
+  : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
+const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
 const boundedText = (value: unknown, length: number): value is string => typeof value === "string" && Boolean(value.trim()) && value.length <= length;
 
 export function parseIntentRequirements(value: unknown): ProposedRequirement[] {
