@@ -38,7 +38,7 @@ export async function updateConversationStudio(db: AIConnection, owner: string, 
   if (!row) return;
   const meta = row.value as Conversation;
   if (meta.archived) throw new CustomAIError("archived", "Restore this chat before editing it.",409);
-  for (const contextId of new Set([state.draftId,state.contextId].filter((value): value is string => Boolean(value)))) {
+  for (const contextId of new Set([state.draftId,state.contextId,state.sourceId].filter((value): value is string => Boolean(value)))) {
     const job = (await db.query("SELECT request FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2",[owner,contextId])).rows[0];
     if (!job || !jobMatchesConversation(job.request as ChatRequest,meta.account,meta.id)) throw new CustomAIError("context", "That design belongs to another chat.",409);
   }

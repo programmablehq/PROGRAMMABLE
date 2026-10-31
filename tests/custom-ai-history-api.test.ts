@@ -6,9 +6,25 @@ vi.mock("@/lib/custom-ai/store.server",()=>({productionAIStore:()=>store}));
 import { GET as versions } from "../app/api/custom-ai/versions/route";
 import { GET as metrics } from "../app/api/custom-ai/metrics/route";
 import { requestMetrics, summarizeRequestMetrics } from "../lib/custom-ai/request-metrics";
+import { conversationStorageId } from "../lib/custom-ai/conversation.server";
 const account=`0x${"1".repeat(40)}`;
 beforeEach(()=>{vi.clearAllMocks();authorize.mockResolvedValue({kind:"account",owner:"owner-a",principal:{wallets:[account]}});store.consume.mockResolvedValue(undefined);});
 describe("private saved versions and request measurements",()=>{
+  it("restores an exact general source version as compact metadata without claiming behavior verification",async()=>{
+    const projectHash="sha256:"+"c".repeat(64),chat="00000000-0000-4000-8000-000000000002";
+    const generalProject={projectHash,compiled:true,verification:"not-run",launchReady:false};
+    store.readObject.mockResolvedValue({value:{studioId:conversationStorageId(account,chat),state:{draftId:"general-source-0001"},sourceHash:projectHash}});
+    store.read.mockResolvedValue({request:{conversation:{account,id:chat}},result:{generalProject,intent:{revision:"source-design"}}});
+    const response=await versions(new Request(`https://programmable.market/api/custom-ai/versions?account=${account}&conversation=${chat}&id=${"a".repeat(64)}`));
+    expect(response.status).toBe(200);const value=await response.json();
+    expect(value.generalProject).toEqual(generalProject);expect(value.intent.revision).toBe("source-design");expect(value.draft).toBeUndefined();
+  });
+  it("rejects an exact source hash whose job belongs to a different chat",async()=>{
+    const projectHash="sha256:"+"c".repeat(64),chat="00000000-0000-4000-8000-000000000002";
+    store.readObject.mockResolvedValue({value:{studioId:conversationStorageId(account,chat),state:{draftId:"general-source-0001"},sourceHash:projectHash}});
+    store.read.mockResolvedValue({request:{conversation:{account,id:"00000000-0000-4000-8000-000000000003"}},result:{generalProject:{projectHash}}});
+    expect((await versions(new Request(`https://programmable.market/api/custom-ai/versions?account=${account}&conversation=${chat}&id=${"a".repeat(64)}`))).status).toBe(409);
+  });
   it("rejects another wallet before reading its versions",async()=>{
     const response=await versions(new Request(`https://programmable.market/api/custom-ai/versions?account=0x${"2".repeat(40)}`));
     expect(response.status).toBe(403);expect(store.draftVersions).not.toHaveBeenCalled();expect(store.readObject).not.toHaveBeenCalled();

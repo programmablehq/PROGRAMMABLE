@@ -204,8 +204,11 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       if (kind === "studio" && value && typeof value === "object" && "draftId" in value && typeof value.draftId === "string") {
         const versionId=digest([id,value.draftId]);
         await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
-          SELECT $1,'studio-version',$2,jsonb_build_object('studioId',$3::text,'state',$4::jsonb,'sourceHash',result->'draft'->>'sourceHash','summary',result->'draft'->>'hookSummary')
-          FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$5 AND state='completed' AND result->'draft' IS NOT NULL
+          SELECT $1,'studio-version',$2,jsonb_build_object('studioId',$3::text,'state',$4::jsonb,
+            'sourceHash',COALESCE(result->'draft'->>'sourceHash',result->'generalProject'->>'projectHash'),
+            'summary',COALESCE(result->'draft'->>'hookSummary',result->'generalProject'->>'summary'))
+          FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$5 AND state='completed'
+            AND (result->'draft' IS NOT NULL OR result->'generalProject' IS NOT NULL)
           ON CONFLICT DO NOTHING`,[owner,versionId,id,JSON.stringify(value),value.draftId]);
       }
       return Number(row.rows[0].revision);

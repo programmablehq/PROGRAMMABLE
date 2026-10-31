@@ -5,6 +5,9 @@ import { createAIStore, CUSTOM_AI_SCHEMA, type AIStore } from "../lib/custom-ai/
 import { createContractProject, GENERAL_PROJECT_COMPILER, type ContractProject } from "../lib/custom-ai/contract-project";
 import type { CompiledProject } from "../lib/custom-ai/contract-project.server";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
+import { generalProjectView } from "../lib/custom-ai/project-view";
+import { selectExecutionRoute } from "../lib/custom-ai/execution-routing";
+import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 
 let database: PGlite, store: AIStore;
 const id = "00000000-0000-4000-8000-000000000001";
@@ -36,6 +39,18 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("keeps general source versions independently of fee drafts and without source blobs", async () => {
+    const attempt=await reserve(),source=project(),selection=selectExecutionRoute(source.intent,source.chainId);
+    const view=generalProjectView({version:1,reply:"Source diagnostics",summary:"A saved source proposal",project:source,
+      compilation:compilation(source),selection,requirementCoverage:"proposed",launchReady:false});
+    await store.finish("alice",id,attempt.lease!,{reply:"Source diagnostics",generalProject:view});
+    const studioId="b".repeat(64),state={draftId:id,settings:EMPTY_COIN_SETUP,messages:[]};
+    await store.saveObject("alice","studio",studioId,state,0);
+    await store.saveObject("alice","studio",studioId,state,1);
+    const versions=await store.draftVersions("alice",studioId);
+    expect(versions).toHaveLength(1);expect(versions[0].value).toMatchObject({sourceHash:source.hash,summary:"A saved source proposal",state});
+    expect(JSON.stringify(versions)).not.toContain("Hook.sol");expect(await store.draftVersions("bob",studioId)).toHaveLength(0);
+  });
   it("keeps complete source after the worker fails without exposing it to another owner", async () => {
     const attempt = await reserve(), source = project();
     const saved = await store.projects.save("alice", id, attempt.lease!, source);
