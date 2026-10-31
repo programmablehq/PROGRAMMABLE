@@ -24,6 +24,14 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("shared Custom AI storage", () => {
+  it("counts a compile-only retry once as a compute request without reserving a five-unit model build",async()=>{
+    const account="0x"+"a".repeat(40),chat="legacy-wallet-studio";
+    await store.conversations.create("alice",account,chat);
+    const input:ChatRequest={...request(),intent:"compile",conversation:{account,id:chat,revision:0},compilationOf:{id:"saved-source-request-0001",projectHash:`sha256:${"a".repeat(64)}`}};
+    const first=await store.reserve("alice",input);expect(first.lease).toBeTruthy();expect((await store.usage("alice")).hourly.used).toBe(1);
+    expect((await store.reserve("alice",input)).lease).toBeNull();expect((await store.usage("alice")).hourly.used).toBe(1);
+    await store.finish("alice",input.id,first.lease!,{reply:"Compiler check complete",chargedAs:"build"});expect((await store.usage("alice")).active).toBe(0);
+  });
   it("records stop before reserve so a late POST cannot dispatch or consume allowance", async () => {
     const input=request();expect(await store.cancel("alice",input.id)).toMatchObject({state:"failed",errorCode:"cancelled"});
     await expect(store.reserve("alice",input)).rejects.toMatchObject({code:"cancelled"});

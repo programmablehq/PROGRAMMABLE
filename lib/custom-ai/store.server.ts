@@ -99,7 +99,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       const active = (await db.query("SELECT count(*)::integer AS n FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND state='running'", [owner])).rows[0];
       if (Number(active.n) >= limits.concurrent) throw new CustomAIError("busy", "Your previous reply is still being prepared.", 429);
       await bindConversationJob(db,owner,request);
-      const units = isBriefChat(request) ? 1 : 5, time = now();
+      const units = isBriefChat(request) || request.intent === "compile" ? 1 : 5, time = now();
       const hour = Math.floor(time / 3_600_000), day = Math.floor(time / 86_400_000);
       for (const [subject, period, limit] of [
         [`account-hour:${owner}`, hour, limits.hourlyUnits],

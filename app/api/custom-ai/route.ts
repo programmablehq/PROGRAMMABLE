@@ -11,6 +11,7 @@ import { productionAIStore } from "@/lib/custom-ai/store.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
 import { requestMetrics, type ModelCallMetric } from "@/lib/custom-ai/request-metrics";
 import { selectExecutionRoute } from "@/lib/custom-ai/execution-routing";
+import { compileExistingProject, readCompilationSource } from "@/lib/custom-ai/compile-existing.server";
 
 export const runtime = "nodejs";
 export const maxDuration = 480;
@@ -51,12 +52,15 @@ export async function POST(request: Request) {
       };
     }
     if (input.draftId && !context.draft && !context.generalProjectView) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
+    const existingCompilationJob=input.intent==="compile"&&store&&authority.kind==="account"?await store.read(authority.owner,input.id):null;
+    const compilationSource=input.intent==="compile"&&!existingCompilationJob&&store&&authority.kind==="account"?await readCompilationSource(store,authority.owner,input,context.intent):undefined;
+    if(input.intent==="compile"&&!compilationSource&&!existingCompilationJob)throw new CustomAIError("project","Open this saved source in your signed-in chat before retrying.",401);
     // Known billing/rate-limit outages do not reserve a new user attempt.
-    if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) {
+    if (input.intent!=="compile"&&(!store || authority.kind !== "account" || !await store.read(authority.owner, input.id))) {
       assertModelConnection();
       await providerHealth().assertAvailable();
     }
-    const profile = executionProfile(getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
+    const profile = executionProfile(input.intent==="compile"?[]:getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
       allowWeb: researchAvailable(), budget: { remaining: 2 } }));
     const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile) : null;
     if (reserved && !reserved.lease) {
@@ -90,7 +94,9 @@ export async function POST(request: Request) {
           const saved=await store.read(authority.owner,input.id);
           throw new CustomAIError(saved?.errorCode==="cancelled"?"cancelled":"interrupted","This request ended before generation could start.",409);
         }
-        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
+        const run = () => compilationSource&&store&&authority.kind==="account"&&reserved?.lease
+          ? compileExistingProject({store,owner:authority.owner,id:input.id,lease:reserved.lease,source:compilationSource,onProgress:progress},signal)
+          : runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
           ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
             saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},

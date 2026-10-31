@@ -42,6 +42,14 @@ General follow-up questions use saved requirements and a compact project summary
 
 `GET /api/custom-ai/projects` is the explicit complete source read. It requires the authenticated owner, selected linked wallet, chat and saved request to match. It can return source kept after a compiler failure, without another inference or compile. Ordinary chat reload and polling do not use this larger endpoint. The route and its UI are not public yet.
 
+## Compile-only recovery
+
+The existing owned job transport accepts `intent: "compile"` with an exact `compilationOf` request ID and project hash. It accepts no replacement source, compiler command or edit target. The source must match the authenticated owner, selected wallet/chat, saved network and current or immediately preceding design. A still-running parent cannot start another build; a deterministic compiler diagnostic requires a source edit. A completed receipt is reused without running the compiler again.
+
+Recovery skips model connection and health checks. The same job reservation, request hash, compare-and-set chat binding, stop handling and durable result transport remain in force. It uses one compute request unit within the existing account/global allowance and concurrency limits, with no inference or provider tokens. An identical replay does not reserve another unit, reload the larger source or repeat compilation. A further compiler outage remains terminal for that attempt and retains its complete source checkpoint.
+
+The local API cases run with an unconfigured model provider, exercise real job/object transactions and a substituted compiler, and verify zero model calls, one compiler dispatch, unchanged original failed attempt, retained source and exact replay. The isolated real compiler has its separate qualification. The recovery control and source proposal handling in the browser still need their UI integration.
+
 Historical captured planner responses retain their original bytes; the replay fixture explicitly adds the route metadata introduced after its recorded configuration version.
 
 Before publication this new planner schema needs its versioned AI configuration, source references in the public reply/studio, complete source recovery, four-chain settings, independent behavior verification and the existing submission adapter. The current public capability announcement remains unchanged.

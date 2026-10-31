@@ -93,6 +93,7 @@ function coinUpdate(answer: Record<string, unknown>, request: ChatRequest): Pick
 
 export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   dependencies: Dependencies = { call: callModel, compile: compileLaunchDraft }, context: AIContext = {}): Promise<ChatResult> {
+  if(request.intent==="compile")throw new CustomAIError("project","Retry the saved source through its owned build job.");
   const MODELS = configuredProvider().models;
   const originalCall=dependencies.call;
   dependencies={...dependencies,call:async input=>{
