@@ -33,10 +33,13 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
   const [pendingPrompt,setPendingPrompt]=useState<PromptHandoff>();
-  const sessionReady=wallet.authReady!==false&&wallet.sessionReady!==false;
+  // Reading an owned chat needs the confirmed access session. Waiting for a
+  // transaction connector here can hide the chat while its signer reconnects.
+  // WalletProvider still enforces that connector for all signing operations.
+  const authReady=wallet.authReady!==false;
   // Adjust this transient state before committing children for a changed
   // identity. A subsequent account must never mount with the prior prompt.
-  if(pendingPrompt&&!localPreview&&sessionReady){
+  if(pendingPrompt&&!localPreview&&authReady){
     if(owner==="signed-out"){
       if(pendingPrompt.principal)setPendingPrompt(undefined);
     }else if(wallet.sessionOwner){
@@ -58,7 +61,7 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
     // the SDK for an optional identity token also refreshes /users/me.
     return { Authorization: `Bearer ${access}` };
   };
-  if(!localPreview&&(!sessionReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
+  if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
   if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
   return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} onConnectPrompt={connectPrompt}/>;
 }

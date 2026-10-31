@@ -90,6 +90,17 @@ test("a signed-out browser copy is not treated as a current sign-in prompt",asyn
  await page.reload();await expect(box).toBeEditable();await expect(box).toHaveValue("");await expect(page.getByText("Old anonymous rules",{exact:true})).toHaveCount(0);
  await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();await expect(box).toHaveValue("");expect(f.chats.size).toBe(1);expect(f.calls).toHaveLength(0);
 });
+test("authenticated chat reads do not wait for an unfinished signing connector",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"?signer-loading=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await expect(box).toBeEditable();await box.fill("Private unsent idea while the signer connects");
+ await expect.poll(()=>[...f.studios.values()].some(value=>value.state.input==="Private unsent idea while the signer connects")).toBe(true);
+ await page.reload();await expect(box).toHaveValue("Private unsent idea while the signer connects");expect(f.calls).toHaveLength(0);
+});
+test("a signed-out prompt can connect without waiting for transaction readiness",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"?signed-out=1&signer-loading=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await expect(box).toBeEditable();await box.fill("First idea without a signer");await box.press("Enter");
+ await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();await expect(box).toHaveValue("First idea without a signer");expect(f.calls).toHaveLength(0);
+});
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Keep this original unsent idea");
