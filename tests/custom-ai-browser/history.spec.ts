@@ -110,3 +110,16 @@ test("archiving the current chat cannot select an archived replacement",async({p
   await expect(box).toHaveValue("Keep the archived draft");expect(f.calls).toHaveLength(0);
  }finally{release();}
 });
+test("a rate-limited optional identity endpoint does not block an authenticated chat",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"/?identity-outage=1");
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Explain the hook without building");await box.press("Enter");
+ await expect(page.getByText("Reply for Explain the hook without building",{exact:true})).toBeVisible();expect(f.calls).toHaveLength(1);
+ await page.reload();await expect(page.getByText("Reply for Explain the hook without building",{exact:true})).toHaveCount(1);expect(f.calls).toHaveLength(1);
+});
+test("initial chat reads wait for the wallet session to finish restoring",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"/?session-loading=1");
+ await expect(page.getByRole("status").filter({hasText:"Restoring your wallet session"})).toBeVisible();expect(f.chats.size).toBe(0);expect(f.calls).toHaveLength(0);
+ await page.getByRole("button",{name:"Restore sample session",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();expect(f.chats.size).toBe(1);expect(f.calls).toHaveLength(0);
+});

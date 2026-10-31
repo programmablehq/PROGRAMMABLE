@@ -33,9 +33,11 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
     if (localPreview) return {};
     const access = await wallet.getAccessToken();
     if (!access) { wallet.openWallet(); throw Error("Connect your wallet to continue."); }
-    const identity = await wallet.getIdentityToken();
-    return { Authorization: `Bearer ${access}`, ...(identity ? { "X-Privy-Identity-Token": identity } : {}) };
+    // This API verifies the access session and current linked wallets. Asking
+    // the SDK for an optional identity token also refreshes /users/me.
+    return { Authorization: `Bearer ${access}` };
   };
+  if(!localPreview&&(wallet.authReady===false||wallet.sessionReady===false))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
   if(!localPreview&&owner!=="signed-out")return <ChatLibrary key={owner} account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false}/></ChatLibrary>;
   return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} />;
 }

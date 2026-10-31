@@ -12,8 +12,8 @@ export async function createHistoryServer(){
  p.onResolve({filter:/^next\/(image|link)$/},a=>({path:a.path,namespace:"fixture"}));
  p.onLoad({filter:/.*/,namespace:"fixture"},a=>({loader:"tsx",resolveDir:root,contents:a.path==="wallet"?`
  import React,{createContext,useContext,useState}from'react';const C=createContext(null);const account='0x'+'a'.repeat(40);
- const getAccessToken=async()=>'synthetic-local-session',getIdentityToken=async()=>null;
- export function FixtureProvider({children}){const[value,setValue]=useState(account);return <C.Provider value={{wallet:{account:value,chainId:'1'},getAccessToken,getIdentityToken,openWallet:()=>{}}}><button onClick={()=>setValue(value===account?'0x'+'b'.repeat(40):account)}>Switch sample wallet</button>{children}</C.Provider>;}export const useWallet=()=>useContext(C);
+ const getAccessToken=async()=>'synthetic-local-session',getIdentityToken=async()=>{if(new URL(location.href).searchParams.has('identity-outage'))throw Object.assign(Error('Optional identity endpoint rate limited'),{status:429});return null;};
+ export function FixtureProvider({children}){const[value,setValue]=useState(account),[ready,setReady]=useState(!new URL(location.href).searchParams.has('session-loading'));return <C.Provider value={{wallet:{account:value,chainId:'1'},authReady:ready,sessionReady:ready,getAccessToken,getIdentityToken,openWallet:()=>{}}}><button onClick={()=>setValue(value===account?'0x'+'b'.repeat(40):account)}>Switch sample wallet</button>{!ready&&<button onClick={()=>setReady(true)}>Restore sample session</button>}{children}</C.Provider>;}export const useWallet=()=>useContext(C);
  `:a.path==="next/link"?"import React from'react';export default function Link({prefetch,...props}){return <a {...props}/>;}":"import React from'react';export default function Image({fill,priority,unoptimized,...props}){return <img {...props}/>;}"}));
  }}]});
  const files=new Map(bundled.outputFiles.map(f=>[f.path.endsWith('.css')?'/fixture.css':'/fixture.js',f.contents]));
