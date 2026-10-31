@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
-import type { AIUsage, ChatMessage, ChatProgress, ChatRequest, Draft } from "@/lib/custom-ai/types";
+import { parseChatRequest, type AIUsage, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import { useWallet } from "@/components/wallet-provider";
-import { AIRequestError, aiRequest, sendAIChat, type AISessionHeaders } from "@/lib/custom-ai/client";
+import { AIRequestError, aiRequest, sameAIRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ImageReceipt, StoredStudio, StudioState } from "@/lib/custom-ai/studio";
 import { loadStudio, restoreStudio, saveStudio, studioBase, studioSnapshot, StudioConflictError, type StudioBase } from "@/lib/custom-ai/studio-sync";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
@@ -22,6 +22,7 @@ import { MessageContent } from "./message-content";
 import { CopyButton } from "./copy-button";
 import { StreamingReply } from "./streaming-reply";
 import { cachedLaunchIntent, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
+import { useAIReply } from "./use-ai-reply";
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
@@ -37,10 +38,12 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
 }
 
 function CustomAISession({ owner, headers, localPreview }: { owner: string; headers: AISessionHeaders; localPreview: boolean }) {
-  type PreviousCoin = StudioState & { draft?: Draft; intent?: LaunchIntent; imageBlob?: Blob; input?: string; editTarget?: EditTarget; request?: ChatRequest };
+  type RetryBase = { messages: ChatMessage[]; pendingChange?: string };
+  type PreviousCoin = StudioState & { draft?: Draft; intent?: LaunchIntent; imageBlob?: Blob; input?: string; editTarget?: EditTarget; request?: ChatRequest; retryBase?: RetryBase };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [switchingCoin, setSwitchingCoin] = useState(false);
   const coinTransition = useRef(false);
   const [metricsRevision, setMetricsRevision] = useState(0);
@@ -61,6 +64,10 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const [restored, setRestored] = useState(false);
   const [launchLocked, setLaunchLocked] = useState(false);
   const retry = useRef<ChatRequest | null>(null);
+  const retryBase = useRef<RetryBase | undefined>(undefined);
+  const [recoveryRequest,setRecoveryRequest]=useState<ChatRequest>();
+  const [canReconnect,setCanReconnect]=useState(false);
+  const recovered=useRef<string | undefined>(undefined);
   const headersRef = useRef(headers);
   useLayoutEffect(() => { headersRef.current = headers; }, [headers]);
   const remote = useRef({ ready: false, revision: 0, blocked: false, saved: "" });
@@ -76,7 +83,6 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const storageKey = `programmable.custom-ai.studio.v1:${owner}`;
   const [chatRevision, setChatRevision] = useState(0);
   function changeSettings(patch: CoinSetupPatch) { setSettings(current => applyCoinSetupPatch(current, patch)); }
-  const pending = useRef<AbortController | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const followReply = useRef(true);
@@ -84,6 +90,36 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const followLatest = useCallback(() => {
     if (followReply.current && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
   }, []);
+  const replyController=useAIReply(()=>headersRef.current(),localPreview,{busy:setBusy,stopping:setStopping,phase:setPhase,partial:setRevealing,error:setError,notice:setNotice});
+  const replyRef=useRef(replyController);
+  useLayoutEffect(()=>{replyRef.current=replyController;},[replyController]);
+  const applyReply=useCallback((request:ChatRequest,data:ChatResult,submitted:ChatMessage[],previousPending?:string)=>{
+    retry.current=null;
+    setCanReconnect(false);
+    if(data.draft){setDraft(data.draft);setDraftId(request.id);}
+    if(data.intent)setIntent(data.intent);
+    if(data.change==="applied")setEditTarget(undefined);
+    if(data.setupPatch){setSettings(current=>applyCoinSetupPatch(current,data.setupPatch!));setChatRevision(value=>value+1);}
+    setContextId(request.id);
+    setPendingChange(data.change==="applied"?undefined:data.change==="blocked"?request.messages.at(-1)!.content:previousPending);
+    const sources=safeKnowledgeSources(data.sources);
+    const completed:ChatMessage[]=[...submitted,{role:"assistant",content:data.reply,...(sources.length?{sources}:{})}];
+    const kept=conversationWindow(completed,40,30_000);setMessages(kept);
+    if(kept.length<completed.length)setNotice("Earlier messages are summarized. Your agreed rules and current contract are kept.");
+  },[]);
+  const restoreFailedReply=useCallback((request:ChatRequest,cause:unknown,base:RetryBase,preservedInput?:string)=>{
+    if(cause instanceof AIRequestError&&cause.requestState==="failed")retry.current=null;
+    setCanReconnect(retry.current!==null);
+    if(cause instanceof AIRequestError&&cause.code==="cancelled")setPendingChange(base.pendingChange);
+    setMessages(base.messages);setInput(preservedInput??request.messages.at(-1)!.content);setSaveRevision(value=>value+1);
+  },[]);
+  const replySettled=useCallback((focus:boolean)=>{
+    setRecoveryRequest(undefined);setMetricsRevision(value=>value+1);
+    if(focus)requestAnimationFrame(()=>{
+      const element=textarea.current;
+      if(element&&document.getSelection()?.isCollapsed!==false&&(document.activeElement===document.body||document.activeElement?.closest("form")===element.form))element.focus();
+    });
+  },[]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,12 +145,16 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
           if (saved.draft && typeof saved.draft.source === "string") setDraft(saved.draft);
           setIntent(cachedLaunchIntent(saved.intent) ?? cachedLaunchIntent(saved.draft?.intent));
           if (typeof saved.draftId === "string") setDraftId(saved.draftId);
-          retry.current = saved.retry ?? null;
-          setEditTarget(saved.editTarget ?? saved.retry?.editTarget);
-          if (saved.retry?.messages?.at(-1)?.role === "user") {
-            setMessages(saved.retry.messages.slice(0, -1));
-            setInput(saved.retry.messages.at(-1).content);
-            local.messages = saved.retry.messages.slice(0, -1);
+          retry.current = saved.retry ? parseChatRequest(saved.retry) : null;
+          setEditTarget(saved.editTarget ?? retry.current?.editTarget);
+          if (retry.current) {
+            const message=retry.current.messages.at(-1)!;
+            const hasPending=!saved.input&&saved.messages.at(-1)?.role==="user"&&saved.messages.at(-1)?.content===message.content;
+            const base:RetryBase=saved.retryBase&&Array.isArray(saved.retryBase.messages)?saved.retryBase
+              :{messages:hasPending?saved.messages.slice(0,-1):saved.messages,pendingChange:saved.pendingChange!==message.content?saved.pendingChange:undefined};
+            retryBase.current=base;
+            const submitted=[...base.messages,message];setMessages(submitted);local.messages=submitted;
+            setRecoveryRequest(retry.current);
           }
         }
       }
@@ -131,6 +171,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
               setDraftId(server.state.draftId); setDraft(server.draft); setImageReceipt(server.state.image);
               setIntent(server.intent ?? server.draft?.intent);
               setContextId(server.state.contextId); setPendingChange(server.state.pendingChange);
+              retry.current=null;setRecoveryRequest(undefined);
               setEditTarget(current => current?.sourceHash === server.draft?.sourceHash ? current : undefined);
             }
             remote.current = { ready: true, revision: restored.base.revision, blocked: restored.conflict, saved: restored.base.snapshot };
@@ -147,7 +188,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   }, [storageKey, localPreview, owner, restoreRevision]);
   useEffect(() => {
     if (!restored || owner === "signed-out") return;
-    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, input, editTarget, settings, draft, intent, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,
+    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, input, editTarget, settings, draft, intent, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,retryBase:retryBase.current,
       // Keep the last shared version so a failed save survives a reload.
       syncBase: cachedBase.current }))
       .catch(() => setNotice("This browser could not save your draft. Keep this tab open."));
@@ -197,6 +238,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       setMessages(server?.state.messages ?? []); setSettings(server?.state.settings ?? EMPTY_COIN_SETUP);
       setDraftId(server?.state.draftId); setDraft(server?.draft); setImageReceipt(server?.state.image); retry.current = null;
       setIntent(server?.intent ?? server?.draft?.intent);
+      setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
       setContextId(server?.state.contextId); setPendingChange(server?.state.pendingChange);
       setEditTarget(undefined);
       setPreviewRevision(value => value + 1);
@@ -208,7 +250,6 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     setConflict(null); setNotice(""); setSaveRevision(value => value + 1);
   }
 
-  useEffect(() => () => pending.current?.abort(), []);
   useEffect(() => {
     let active = true;
     void readDraftCache<PreviousCoin>(`${storageKey}:previous`).then(value => {
@@ -227,23 +268,24 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   }, [owner, localPreview, busy]);
 
   async function startAnother() {
-    if (coinTransition.current || busy || !restored || launchLocked) return;
+    if (coinTransition.current || busy || recoveryRequest || !restored || launchLocked) return;
     coinTransition.current = true; setSwitchingCoin(true);
     try {
-    const previous = { messages, settings, draft, intent, draftId, contextId, pendingChange, image: imageReceipt, input, editTarget, request: retry.current ?? undefined,
+    const previous = { messages, settings, draft, intent, draftId, contextId, pendingChange, image: imageReceipt, input, editTarget, request: retry.current ?? undefined,retryBase:retryBase.current,
       imageBlob: await readDraftCache<Blob>(`${storageKey}:image`) ?? undefined };
     await writeDraftCache(`${storageKey}:previous`, previous);
     setPreviousCoin(previous);
     await writeDraftCache(`${storageKey}:image`, null);
     setMessages([]); setSettings(EMPTY_COIN_SETUP); setDraft(undefined); setIntent(undefined); setDraftId(undefined);
     setContextId(undefined); setPendingChange(undefined); setImageReceipt(undefined); retry.current = null;
+    setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
     setEditTarget(undefined);
     setInput(""); setError(""); setNotice(""); setPreviewRevision(value => value + 1);
     textarea.current?.focus();
     } finally { coinTransition.current = false; setSwitchingCoin(false); }
   }
   async function restorePrevious() {
-    if (!previousCoin || coinTransition.current || busy || !restored || launchLocked) return;
+    if (!previousCoin || coinTransition.current || busy || recoveryRequest || !restored || launchLocked) return;
     coinTransition.current = true; setSwitchingCoin(true);
     try {
     await writeDraftCache(`${storageKey}:image`, previousCoin.imageBlob ?? null);
@@ -251,13 +293,14 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     setIntent(previousCoin.intent ?? previousCoin.draft?.intent);
     setDraftId(previousCoin.draftId); setContextId(previousCoin.contextId); setPendingChange(previousCoin.pendingChange);
     setImageReceipt(previousCoin.image); retry.current = previousCoin.request ?? null; setInput(previousCoin.input ?? ""); setError("");
+    retryBase.current=previousCoin.retryBase??{messages:previousCoin.messages,pendingChange:previousCoin.pendingChange};recovered.current=undefined;setRecoveryRequest(previousCoin.request);
     setEditTarget(previousCoin.editTarget);
     setNotice("Previous coin restored."); setPreviewRevision(value => value + 1);
     textarea.current?.focus();
     } finally { coinTransition.current = false; setSwitchingCoin(false); }
   }
   async function restoreVersion(version:Pick<StoredStudio,"state"|"draft"|"intent">){
-    if(busy||coinTransition.current||launchLocked||!version.draft)return;
+    if(busy||recoveryRequest||coinTransition.current||launchLocked||!version.draft)return;
     coinTransition.current=true;setSwitchingCoin(true);
     try{
     await writeDraftCache(`${storageKey}:image`,null);
@@ -266,6 +309,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     setIntent(version.intent ?? version.draft.intent);
     setContextId(state.contextId);setPendingChange(state.pendingChange);setImageReceipt(state.image);
     retry.current=null;setInput("");setError("");setNotice("Saved rules restored.");setPreviewRevision(v=>v+1);
+    setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
     setEditTarget(undefined);
     }finally{coinTransition.current=false;setSwitchingCoin(false);}
   }
@@ -285,63 +329,51 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     }
   }, [messages, busy, revealing]);
 
+  useEffect(()=>{
+    if(!restored||!recoveryRequest||conflict||recovered.current===recoveryRequest.id)return;
+    recovered.current=recoveryRequest.id;
+    const request=recoveryRequest,base:RetryBase=retryBase.current??{messages:request.messages.slice(0,-1)};
+    const submitted=[...base.messages,request.messages.at(-1)!];
+    const currentInput=textarea.current?.value??"";
+    const preservedInput=currentInput&&currentInput.trim()!==request.messages.at(-1)!.content?currentInput:undefined;
+    void replyRef.current.run({request,
+      beforeSend:async()=>{setMessages(submitted);if(!preservedInput)setInput("");},
+      onResult:data=>applyReply(request,data,submitted,base.pendingChange),
+      onFailure:cause=>restoreFailedReply(request,cause,base,preservedInput),
+      onSettled:()=>replySettled(false),
+    },true);
+  },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
+
   async function send() {
-    if (pending.current || coinTransition.current || !restored || launchLocked) return;
+    if (replyRef.current.isActive() || recoveryRequest || coinTransition.current || !restored || launchLocked) return;
     const content = input.trim();
     if (!content) { textarea.current?.focus(); return; }
-    const previous = messages;
-    const previousPending = pendingChange;
+    const base:RetryBase={messages,pendingChange};
     const next: ChatMessage[] = [...messages, { role: "user", content }];
-    const controller = new AbortController();
-    pending.current = controller;
-    followReply.current = true;
-    setShowLatest(false);
-    setBusy(true); setError(""); setNotice(""); setMessages(next); setInput(""); setPendingChange(content); setPhase({ type: "phase", phase: "thinking" });
-    try {
-      const payload = { intent: "chat" as const, messages: conversationWindow(next), coin: settings, ...(draftId ? { draftId } : {}), ...(contextId ? { contextId } : {}), ...(editTarget ? { editTarget } : {}) };
-      const previousRequest = retry.current;
-      const request: ChatRequest = previousRequest && JSON.stringify({ ...previousRequest, id: undefined }) === JSON.stringify(payload)
-        ? previousRequest : { ...payload, id: crypto.randomUUID() };
-      retry.current = request;
-      await writeDraftCache(storageKey, JSON.stringify({ version: 1, messages: next, input: "", editTarget, settings, draft, intent, draftId, contextId,
-        pendingChange: content, image: imageReceipt, retry: request, syncBase: cachedBase.current }));
-      const data = await sendAIChat(request, headers, controller.signal, event => {
-        if (event.type === "reply") setRevealing(event.text);
-        else setPhase(event);
-      });
-      if (typeof data.reply !== "string") throw new Error("The reply did not arrive. Try again.");
-      retry.current = null;
-      if (data.draft) { setDraft(data.draft); setDraftId(request.id); }
-      if (data.intent) setIntent(data.intent);
-      if (data.change === "applied") setEditTarget(undefined);
-      if (data.setupPatch) { changeSettings(data.setupPatch); setChatRevision(value => value + 1); }
-      setContextId(request.id);
-      setPendingChange(data.change === "applied" ? undefined : data.change === "blocked" ? content : previousPending);
-      const sources = safeKnowledgeSources(data.sources);
-      const completed: ChatMessage[] = [...next, { role: "assistant", content: data.reply, ...(sources.length ? { sources } : {}) }];
-      const kept = conversationWindow(completed, 40, 30_000);
-      setMessages(kept);
-      if (kept.length < completed.length) setNotice("Earlier messages are summarized. Your agreed rules and current contract are kept.");
-    } catch (cause) {
-      // A terminal failure starts a fresh attempt on the next user action.
-      // Lost responses retain their ID so a paid request is never replayed blindly.
-      if (cause instanceof AIRequestError && cause.requestState === "failed") retry.current = null;
-      setMessages(previous); setInput(content);
-      setSaveRevision(value => value + 1);
-      if (controller.signal.aborted) setNotice("Stopped. Your last draft is unchanged.");
-      else setError(cause instanceof Error ? cause.message : "The reply did not arrive. Try again.");
-    } finally {
-      pending.current = null;
-      setBusy(false); setRevealing(null);
-      setMetricsRevision(value => value + 1);
-      if (document.activeElement?.closest("form") || document.activeElement === document.body) textarea.current?.focus();
-    }
+    const payload={intent:"chat" as const,messages:conversationWindow(next),coin:settings,...(draftId?{draftId}:{}),...(contextId?{contextId}:{}),...(editTarget?{editTarget}:{})};
+    const previousRequest=retry.current,candidate:ChatRequest={...payload,id:previousRequest?.id??crypto.randomUUID()};
+    const request:ChatRequest=previousRequest&&sameAIRequest(previousRequest,candidate)?previousRequest:previousRequest?{...payload,id:crypto.randomUUID()}:candidate;
+    const previousRetryBase=retryBase.current;
+    const focus=document.activeElement===textarea.current||document.activeElement?.closest("form")===textarea.current?.form;
+    await replyRef.current.run({request,
+      beforeSend:async()=>{
+        followReply.current=true;setShowLatest(false);setMessages(next);setInput("");setPendingChange(content);
+        retry.current=request;retryBase.current=base;
+        try{
+          await writeDraftCache(storageKey,JSON.stringify({version:1,messages:next,input:"",editTarget,settings,draft,intent,draftId,contextId,pendingChange:content,image:imageReceipt,
+            retry:request,retryBase:base,syncBase:cachedBase.current}));
+        }catch{retry.current=previousRequest;retryBase.current=previousRetryBase;throw Error("This browser could not save the new request. Your previous saved request is kept.");}
+      },
+      onResult:data=>applyReply(request,data,next,base.pendingChange),
+      onFailure:cause=>restoreFailedReply(request,cause,base),
+      onSettled:()=>replySettled(focus),
+    });
   }
 
   return <div className={styles.workspace}>
     <div className={styles.studio}>
     <section className={styles.conversation} aria-label="Build your coin">
-      <WorkspaceTools name={settings.name} hasDraft={Boolean(draft)} disabled={busy || switchingCoin || !restored || launchLocked}
+      <WorkspaceTools name={settings.name} hasDraft={Boolean(draft)} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
         canClear={Boolean(messages.length)} hasPrevious={Boolean(previousCoin)}
         onNewCoin={() => { void startAnother().catch(() => setError("Your current coin could not be saved. Try again.")); }}
         onRestorePrevious={() => { void restorePrevious().catch(() => setError("The previous coin could not be restored.")); }}
@@ -389,7 +421,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         followReply.current = true; followLatest(); setShowLatest(false);
       }}>Latest message<ArrowDown size={14} aria-hidden="true" /></button>}
       <span className={busy ? styles.progress : styles.srOnly} role="status">
-        {busy ? ({ thinking: "Considering your request…", reading: "Checking current information…", building: "Building your rules…", checking: "Checking your rules…", repairing: "Refining your rules…" }[phase.phase]) : notice}
+        {busy ? stopping ? "Confirming your stop request…" : ({ thinking: "Considering your request…", reading: "Checking current information…", building: "Building your rules…", checking: "Checking your rules…", repairing: "Refining your rules…", reconnecting: "Reconnecting to your saved reply…" }[phase.phase]) : notice}
       </span>
       {notice && <p className={styles.notice}>{notice}</p>}
       {conflict && <div className={styles.saveActions}>
@@ -403,6 +435,9 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         }}>Retry saving</button>
       </div>}
       {error && <p className={styles.error} role="alert" id="custom-ai-error">{error}</p>}
+      {error&&canReconnect&&!busy&&<button type="button" className={styles.textButton} onClick={()=>{
+        const request=retry.current;if(!request)return;recovered.current=undefined;setRecoveryRequest(request);
+      }}>Reconnect to saved reply</button>}
 
       {editTarget && <div className={styles.editScope} role="status">
         <span>Editing: {draft?.composable?.spec.requirements.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
@@ -410,7 +445,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
       </div>}
       <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send(); }}>
         <label htmlFor="custom-ai-message" className={styles.srOnly}>Describe your coin or ask a question</label>
-        <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={8000} readOnly={busy || switchingCoin || !restored || launchLocked}
+        <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={8000} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
           aria-describedby={error ? "custom-ai-error" : "custom-ai-help"}
           placeholder="Describe your idea…" rows={1} onChange={event => setInput(event.target.value)}
           onKeyDown={event => {
@@ -418,22 +453,20 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
               event.preventDefault(); void send();
             }
           }} />
-        {busy ? <button type="button" className={styles.send}
+        {busy ? <button type="button" className={styles.send} disabled={stopping}
           aria-label="Stop response" onClick={event => {
             event.preventDefault();
-            const id = retry.current?.id;
-            if (!localPreview && id) void aiRequest("/cancel", headers, { id }).catch(() => undefined);
-            pending.current?.abort();
+            void replyRef.current.stop();
           }}>
           <Square size={15} strokeWidth={1.75} aria-hidden="true" />
-        </button> : <button type="submit" className={styles.send} disabled={!restored || switchingCoin || launchLocked} data-empty={!input.trim()} aria-label="Send message">
+        </button> : <button type="submit" className={styles.send} disabled={!restored || Boolean(recoveryRequest) || switchingCoin || launchLocked} data-empty={!input.trim()} aria-label="Send message">
           <ArrowUp size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>}
       </form>
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. Messages are processed by the configured AI provider.</p>
     </section>
 
-    <CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
+    <CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}
       imageReceipt={imageReceipt} onImageReceipt={setImageReceipt} pendingChange={busy ? undefined : pendingChange}
       onKeepRules={() => {

@@ -18,7 +18,11 @@ beforeEach(async () => {
   vi.stubEnv("CUSTOM_AI_PROVIDER", "anthropic");vi.stubEnv("ANTHROPIC_API_KEY", "test-only-configuration");
   runtime.run.mockReset(); runtime.owner = "alice";
   database = new PGlite(); await database.exec(CUSTOM_AI_SCHEMA);
-  runtime.store = createAIStore({ connect: async () => ({ query: (sql, values) => database.query(sql, values), release() {} }) },
+  let queue=Promise.resolve();
+  runtime.store = createAIStore({ connect: async () => {
+    const previous=queue;let release!:()=>void;queue=new Promise<void>(resolve=>{release=resolve;});await previous;
+    return { query: (sql, values) => database.query(sql, values), release };
+  } },
     { hourlyUnits: 100, dailyUnits: 200, globalDailyUnits: 300, concurrent: 1 });
   vi.stubGlobal("fetch", vi.fn(async (url, init) => {
     const call = new Request(`https://programmable.market${url}`, init);
@@ -28,6 +32,35 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await database.close(); });
 
 describe("durable chat retry and streaming", () => {
+  it("does not dispatch when cancellation wins immediately after reservation",async()=>{
+    const store=runtime.store as ReturnType<typeof createAIStore>,reserve=store.reserve;
+    vi.spyOn(store,"reserve").mockImplementationOnce(async(owner,input,profile)=>{
+      const reserved=await reserve(owner,input,profile);await store.cancel(owner,input.id);return reserved;
+    });
+    const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request)}));
+    expect(response.status).toBe(409);expect((await response.json()).code).toBe("cancelled");expect(runtime.run).not.toHaveBeenCalled();
+  });
+  it("does not report success or success metrics for a reply cancelled before commit", async () => {
+    const store=runtime.store as ReturnType<typeof createAIStore>;
+    runtime.run.mockImplementationOnce(async()=>{await store.cancel(runtime.owner,request.id);return {reply:"This late reply must not be delivered"};});
+    const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request)}));
+    expect(response.status).toBe(409);expect((await response.json()).code).toBe("cancelled");
+    expect((await store.read(runtime.owner,request.id))?.result).toBeUndefined();
+    const metrics=await store.readObject<{state:string}>(runtime.owner,"request-metrics",request.id);
+    expect(metrics?.value.state).toBe("failed");
+  });
+  it("exposes the saved phase and original request after a stream disconnect", async () => {
+    let complete!:()=>void;const waiting=new Promise<void>(resolve=>{complete=resolve;});
+    runtime.run.mockImplementationOnce(async(_input,_signal,_deps,context)=>{context.onProgress({type:"phase",phase:"checking"});await waiting;return {reply:"Saved after reconnect"};});
+    const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json",accept:"text/event-stream"},body:JSON.stringify(request)}));
+    await response.body!.cancel();
+    const store=runtime.store as ReturnType<typeof createAIStore>;
+    await expect.poll(async()=> (await store.read(runtime.owner,request.id))?.phase).toBe("checking");
+    expect((await store.read(runtime.owner,request.id))?.request).toEqual(request);
+    complete();
+    await expect.poll(async()=> (await store.read(runtime.owner,request.id))?.state).toBe("completed");
+    expect(runtime.run).toHaveBeenCalledTimes(1);
+  });
   it("does not reserve an attempt or call a model when the selected provider is unconfigured", async () => {
     vi.stubEnv("CUSTOM_AI_PROVIDER", "surplus");vi.stubEnv("SURPLUS_API_KEY", "");
     const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request)}));

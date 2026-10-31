@@ -1,4 +1,4 @@
-import type { ChatProgress, ChatRequest, ChatResult } from "./types";
+import { CHAT_PHASES, parseChatRequest, type ChatPhase, type ChatProgress, type ChatRequest, type ChatResult } from "./types";
 import { readServerEvents } from "./events";
 
 export type AISessionHeaders = () => Promise<Record<string, string>>;
@@ -26,16 +26,54 @@ export async function aiRequest<T>(path: string, headers: AISessionHeaders, body
   return value as T;
 }
 
+type SavedReply = { id?: string; state: string; request?: ChatRequest; payloadHash?: string; result?: ChatResult; errorCode?: string; phase?: ChatPhase; heartbeatAt?: number };
+export const sameAIRequest = (left: ChatRequest, right: ChatRequest) => JSON.stringify(parseChatRequest(left)) === JSON.stringify(parseChatRequest(right));
+const readReply = (input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal, statusOnly=false) =>
+  aiRequest<SavedReply>(`?id=${encodeURIComponent(input.id)}${statusOnly?"&view=status":""}`, headers, undefined, signal);
+
+async function followSavedReply(initial: SavedReply, input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,
+  onProgress?: (event: ChatProgress) => void): Promise<ChatResult> {
+  let job=initial,delay=2000,boundHash:string|undefined;
+  const deadline=Date.now()+450_000;
+  for (;;) {
+    signal.throwIfAborted();
+    if (job.id !== input.id) {
+      throw new AIRequestError("The saved reply belongs to another request. Your current design is kept.",409,0,"context");
+    }
+    if (job.state === "failed") throw new AIRequestError(job.errorCode === "cancelled" ? "This reply was stopped. Your saved design is kept."
+      : "The previous attempt ended. Send your message again to retry.",409,0,job.errorCode??"interrupted","failed");
+    if (job.request) {
+      if(!sameAIRequest(input,job.request)||boundHash&&job.payloadHash!==boundHash)throw new AIRequestError("The saved reply belongs to another request. Your current design is kept.",409,0,"context");
+      if(typeof job.payloadHash==="string"&&/^[a-f0-9]{64}$/.test(job.payloadHash))boundHash=job.payloadHash;
+    } else if(!boundHash||job.payloadHash!==boundHash)throw new AIRequestError("The saved reply belongs to another request. Your current design is kept.",409,0,"context");
+    if (job.state === "completed" && job.result) return job.result;
+    if (job.state !== "running") throw new AIRequestError("The saved reply could not be read. Your design is kept.",502,0,"response");
+    if (Date.now() >= deadline) throw new AIRequestError("This request is still saved. Reconnect to check its result.",503);
+    const age=Date.now()-(job.heartbeatAt??0),fresh=age>=-5000&&age<45000;
+    onProgress?.({type:"phase",phase:fresh&&job.phase&&CHAT_PHASES.includes(job.phase)?job.phase:"reconnecting"});
+    await new Promise<void>((resolve,reject)=>{
+      const abort=()=>{clearTimeout(timer);reject(new DOMException("Aborted","AbortError"));};
+      const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},delay);
+      signal.addEventListener("abort",abort,{once:true});if(signal.aborted)abort();
+    });
+    delay=Math.min(10000,delay*1.5);
+    job=await readReply(input,headers,signal,Boolean(boundHash));
+  }
+}
+
+/** Reload/reconnect only reads an existing owned request. It never POSTs. */
+export async function resumeAIChat(input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,
+  onProgress?: (event: ChatProgress) => void): Promise<ChatResult> {
+  return followSavedReply(await readReply(input,headers,signal),input,headers,signal,onProgress);
+}
+
 export async function sendAIChat(input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,
   onProgress?: (event: ChatProgress) => void): Promise<ChatResult> {
   signal.throwIfAborted();
   const credentials = await headers();
   signal.throwIfAborted();
-  const readStored = async () => {
-    const job = await aiRequest<{ state: string; result?: ChatResult }>(`?id=${encodeURIComponent(input.id)}`, headers, undefined, signal);
-    return job.state === "completed" && job.result ? job.result : job;
-  };
-  let result: ChatResult | { state: string } = { state: "running" };
+  const readStored = () => readReply(input,headers,signal);
+  let result: ChatResult | SavedReply = { state: "running" };
   let response: Response | undefined;
   try {
     response = await fetch("/api/custom-ai", { method: "POST", cache: "no-store", credentials: "same-origin", signal,
@@ -63,20 +101,5 @@ export async function sendAIChat(input: ChatRequest, headers: AISessionHeaders, 
       Math.max(0, Number(response.headers.get("retry-after")) || 0) * 1000, value.code, value.requestState);
     result = value;
   }
-  const recoveryDeadline = Date.now() + 450_000;
-  let pollDelay = 2000;
-  while ("state" in result) {
-    if (Date.now() >= recoveryDeadline) throw new AIRequestError("This request is still saved. Open it again to check the result.", 503);
-    if (result.state !== "running") throw new AIRequestError("The previous attempt ended. Send your message again to retry.", 409, 0, "interrupted", "failed");
-    await new Promise<void>((resolve, reject) => {
-      const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
-      const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, pollDelay);
-      signal.addEventListener("abort", abort, { once: true });
-      if (signal.aborted) abort();
-    });
-    pollDelay = Math.min(10_000, pollDelay * 1.5);
-    const job = await aiRequest<{ state: string; result?: ChatResult }>(`?id=${encodeURIComponent(input.id)}`, headers, undefined, signal);
-    result = job.state === "completed" && job.result ? job.result : job;
-  }
-  return result;
+  return "state" in result ? followSavedReply(result,input,headers,signal,onProgress) : result;
 }

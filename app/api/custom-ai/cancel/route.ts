@@ -10,7 +10,8 @@ export async function POST(request: Request) {
     if (authority.kind !== "account") throw new CustomAIError("auth", "Connect your wallet to cancel this request.", 401);
     const input = await readPreviewBody(request) as { id?: unknown };
     if (typeof input.id !== "string") throw new CustomAIError("input", "Choose a saved request.");
-    const job = await productionAIStore().cancel(authority.owner, input.id);
+    const store=productionAIStore();await store.consume(authority.owner,"cancel",60);
+    const job = await store.cancel(authority.owner, input.id);
     if (!job) throw new CustomAIError("missing", "The saved request was not found.", 404);
     return Response.json(job, { headers: aiHeaders });
   } catch (error) { return aiError(error); }
