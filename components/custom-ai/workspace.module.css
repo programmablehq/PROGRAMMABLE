@@ -203,3 +203,35 @@
   .newCoin, .tools > summary { padding-inline: 8px; }
   .coinPanel { padding: 16px; }
 }
+
+.chatLibrary { position:relative; }
+.libraryToggle { display:flex; align-items:center; gap:6px; min-height:38px; padding:8px 10px; border:1px solid var(--border, #2b2b2b); border-radius:10px; background:transparent; color:inherit; font:inherit; font-size:13px; }
+.libraryPanel { position:absolute; right:0; top:calc(100% + 8px); z-index:45; width:min(340px,calc(100vw - 40px)); padding:14px; border:1px solid var(--border, #2b2b2b); border-radius:14px; background:#101112; box-shadow:0 16px 40px #0006; text-align:left; }
+.libraryPanel header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.libraryPanel button { display:inline-flex; align-items:center; gap:7px; min-height:36px; border-radius:8px; padding:7px; color:inherit; background:transparent; border:0; font:inherit; font-size:13px; cursor:pointer; }
+.libraryPanel button:hover { background:#ffffff0a; }
+.libraryPanel button:focus-visible,.libraryToggle:focus-visible { outline:2px solid #b6facc; outline-offset:2px; }
+.libraryPanel button:disabled,.libraryToggle:disabled { opacity:.45; cursor:default; }
+.librarySearch { display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px; border:1px solid #ffffff20; border-radius:8px; }
+.libraryPanel input:not([type=checkbox]) { background:transparent; border:0; color:inherit; width:100%; min-width:0; font:inherit; font-size:16px; outline-offset:4px; }
+.archiveFilter { display:flex; align-items:center; gap:7px; padding:12px 0; font-size:13px; cursor:pointer; }
+.archiveFilter input { appearance:auto; width:16px; height:16px; flex:0 0 16px; margin:0; accent-color:#c7c2ba; }
+.archiveFilter input:focus-visible { outline:2px solid #ede7dc; outline-offset:3px; }
+.libraryList { max-height:min(50vh,380px); overflow-y:auto; overscroll-behavior:contain; }
+.libraryList article { display:flex; align-items:center; gap:4px; border-radius:8px; }
+.libraryList article[data-current=true] { background:#ffffff08; }
+.libraryList .chatChoice { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:3px; text-align:left; }
+.chatChoice strong { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.chatChoice small { opacity:.55; font-size:11px; }
+.chatItemActions { display:flex; flex-shrink:0; }
+.libraryList form { display:flex; min-width:0; flex:1; align-items:center; gap:4px; }
+.libraryEmpty { display:flex; align-items:center; justify-content:center; gap:16px; min-height:260px; }
+.libraryEmpty .libraryPanel { right:auto; left:0; }
+
+@media (max-width:1100px) {
+  .libraryPanel, .libraryEmpty .libraryPanel { position:fixed; inset-inline:16px; top:auto; bottom:16px; width:auto; max-height:min(70dvh,560px); overflow-y:auto; }
+}
+@media (max-width:420px) {
+  .toolbarActions { flex-wrap:wrap; }
+  .newCoin { white-space:nowrap; }
+}

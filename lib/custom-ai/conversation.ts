@@ -44,3 +44,12 @@ export function partialReply(json: string): string | undefined {
   }
   return undefined;
 }
+
+/** The original wallet studio keeps its storage key during migration. */
+export const LEGACY_CONVERSATION = "legacy-wallet-studio";
+export type ConversationScope = { id: string; account: string; revision: number };
+export type Conversation = { id: string; account: string; title: string; customTitle?: boolean; archived: boolean; createdAt: string; activeRequest?: string };
+export type ConversationItem = Conversation & { revision: number; updatedAt: string };
+export type ConversationPage = { conversations: ConversationItem[]; cursor?: string };
+export const validConversationId = (id: unknown): id is string => typeof id === "string" && (id === LEGACY_CONVERSATION || /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
+export function conversationTitle(value: string) { return value.replace(/\s+/g, " ").trim().slice(0, 80) || "New coin"; }

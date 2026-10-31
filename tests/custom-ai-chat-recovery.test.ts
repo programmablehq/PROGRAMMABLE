@@ -32,6 +32,14 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await database.close(); });
 
 describe("durable chat retry and streaming", () => {
+  it("loads a shared draft and conversation job only once",async()=>{
+    const store=runtime.store as ReturnType<typeof createAIStore>,prior={...request,id:"previous-context-00001"};
+    const lease=(await store.reserve(runtime.owner,prior)).lease!;
+    await store.finish(runtime.owner,prior.id,lease,{reply:"Previous design",draft:{source:"saved source",sourceHash:"a".repeat(64),compiled:false,diagnostics:[]}});
+    const read=vi.spyOn(store,"read");runtime.run.mockResolvedValueOnce({reply:"The design is kept",change:"unchanged"});
+    const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...request,draftId:prior.id,contextId:prior.id})}));
+    expect(response.status).toBe(200);expect(read.mock.calls.filter(([,id])=>id===prior.id)).toHaveLength(1);expect(runtime.run).toHaveBeenCalledTimes(1);
+  });
   it("does not dispatch when cancellation wins immediately after reservation",async()=>{
     const store=runtime.store as ReturnType<typeof createAIStore>,reserve=store.reserve;
     vi.spyOn(store,"reserve").mockImplementationOnce(async(owner,input,profile)=>{

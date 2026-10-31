@@ -109,3 +109,10 @@ describe("restoring local changes", () => {
     expect(restoreStudio(changed, undefined, { revision: 2, state: changed })).toMatchObject({ keepLocal: false, conflict: false });
   });
 });
+
+it("upgrades the original snapshot without a false conflict while keeping unsent input",()=>{
+  const previous={revision:server.revision,snapshot:JSON.stringify(JSON.parse(studioSnapshot(original)).slice(0,10))};
+  const local={...original,input:"Keep this unsent idea"};
+  expect(restoreStudio(local,previous,server)).toMatchObject({keepLocal:true,conflict:false});
+  expect(restoreStudio(local,previous,{...server,revision:2})).toMatchObject({keepLocal:true,conflict:true});
+});

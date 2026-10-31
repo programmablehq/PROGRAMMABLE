@@ -13,13 +13,16 @@ export function studioSnapshot(state: StudioState) {
   const { settings, image } = state;
   return JSON.stringify([settings.name, settings.symbol, settings.chainId, settings.pairToken, settings.initialBuy,
     state.messages.map(message => [message.role, message.content, ...(message.sources?.length ? [message.sources] : [])]), state.draftId ?? null,
-    image ? [image.id, image.url, image.hash] : null, state.contextId ?? null, state.pendingChange ?? null]);
+    image ? [image.id, image.url, image.hash] : null, state.contextId ?? null, state.pendingChange ?? null, state.input ?? "", state.editTarget ? [state.editTarget.sourceHash,state.editTarget.requirementId] : null]);
 }
 export function studioBase(server: StoredStudio | null): StudioBase {
   return { revision: server?.revision ?? 0, snapshot: server ? studioSnapshot(server.state) : "" };
 }
 export function restoreStudio(local: StudioState | null, previous: StudioBase | undefined, server: StoredStudio | null) {
   const base = studioBase(server);
+  // Older saves did not include unsent input or a selected rule in the remote
+  // snapshot. Upgrade that exact format without accepting a changed revision.
+  if(previous)try{const values=JSON.parse(previous.snapshot);if(Array.isArray(values)&&values.length===10)previous={...previous,snapshot:JSON.stringify([...values,"",null])};}catch{/* Invalid old metadata still conflicts. */}
   const snapshot = local ? studioSnapshot(local) : "";
   const dirty = Boolean(local && snapshot !== base.snapshot && snapshot !== previous?.snapshot);
   const conflict = dirty && (previous
@@ -44,9 +47,9 @@ function wait(ms: number, signal: AbortSignal) {
 }
 
 /** Only draft reads/writes retry here. Wallet actions never use this path. */
-export async function loadStudio(account: string, headers: AISessionHeaders, signal: AbortSignal) {
+export async function loadStudio(account: string, headers: AISessionHeaders, signal: AbortSignal, conversationId?: string) {
   for (let attempt = 0; ; attempt++) {
-    try { return await aiRequest<StoredStudio | null>(`/studio?account=${account}`, headers, undefined, signal); }
+    try { return await aiRequest<StoredStudio | null>(`/studio?account=${account}${conversationId ? `&conversation=${encodeURIComponent(conversationId)}` : ""}`, headers, undefined, signal); }
     catch (error) {
       const delay = retryDelay(error, attempt);
       if (signal.aborted || delay === null || attempt >= 3) throw error;
@@ -56,17 +59,17 @@ export async function loadStudio(account: string, headers: AISessionHeaders, sig
 }
 
 export async function saveStudio(input: {
-  account: string; headers: AISessionHeaders; state: StudioState; base: StudioBase;
+  account: string; conversationId?: string; headers: AISessionHeaders; state: StudioState; base: StudioBase;
   signal: AbortSignal; onRetry: () => void;
 }): Promise<StudioBase> {
-  const { account, headers, state, base, signal } = input;
+  const { account, conversationId, headers, state, base, signal } = input;
   const snapshot = studioSnapshot(state);
   let reconcile = false;
   for (let attempt = 0; ; attempt++) {
     signal.throwIfAborted();
     try {
       if (reconcile) {
-        const server = await aiRequest<StoredStudio | null>(`/studio?account=${account}`, headers, undefined, signal);
+        const server = await aiRequest<StoredStudio | null>(`/studio?account=${account}${conversationId ? `&conversation=${encodeURIComponent(conversationId)}` : ""}`, headers, undefined, signal);
         const current = studioBase(server);
         // A lost response is not a failed write. Never replay it blindly.
         if (current.snapshot === snapshot) return current;
@@ -74,7 +77,7 @@ export async function saveStudio(input: {
           throw new StudioConflictError(server);
         }
       }
-      const saved = await aiRequest<{ revision: number }>("/studio", headers, { account, revision: base.revision, state }, signal);
+      const saved = await aiRequest<{ revision: number }>("/studio", headers, { account, ...(conversationId ? { conversationId } : {}), revision: base.revision, state }, signal);
       return { revision: saved.revision, snapshot };
     } catch (error) {
       if (signal.aborted) throw error;

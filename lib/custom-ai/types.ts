@@ -1,7 +1,8 @@
+import { validConversationId } from "./conversation";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetup, type CoinSetupPatch } from "./coin-setup";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string; sources?: import("./knowledge").KnowledgeSource[] };
-export type ChatRequest = { id: string; intent: "chat" | "build"; messages: ChatMessage[]; coin?: CoinSetup; draftId?: string; contextId?: string; editTarget?: import("./design-edits").EditTarget };
+export type ChatRequest = { id: string; conversation?: import("./conversation").ConversationScope; intent: "chat" | "build"; messages: ChatMessage[]; coin?: CoinSetup; draftId?: string; contextId?: string; editTarget?: import("./design-edits").EditTarget };
 export type FeeExpectation = { afterSeconds: number; buy: boolean; totalFeeBps: number; feedValue?: string | null; feedFresh?: boolean | null; feeds?: import("./rule-evaluator").FeedSnapshot[] };
 export type RuleVerification = {
   status: "passed" | "blocked";
@@ -106,6 +107,8 @@ export function parseChatRequest(value: unknown): ChatRequest {
   if (length > 24_000 || input.messages.at(-1)?.role !== "user") {
     throw new CustomAIError("input", "Start a new draft with a shorter description of your rules.");
   }
+  if (input.conversation && (!validConversationId(input.conversation.id) || !/^0x[0-9a-f]{40}$/i.test(input.conversation.account)
+    || !Number.isSafeInteger(input.conversation.revision) || input.conversation.revision < 0)) throw new CustomAIError("conversation", "Reload this chat before sending.");
   let coin: CoinSetup | undefined;
   if (input.coin !== undefined) {
     try { coin = applyCoinSetupPatch(EMPTY_COIN_SETUP, parseCoinSetupPatch(input.coin)); }
@@ -120,7 +123,7 @@ export function parseChatRequest(value: unknown): ChatRequest {
     || !/^[a-z][a-z0-9-]{0,63}$/.test(input.editTarget.requirementId))) {
     throw new CustomAIError("edit", "Reload the saved rule before editing it.", 400);
   }
-  return { id: input.id, intent: input.intent!, messages: input.messages.map(({ role, content }) => ({ role, content })), ...(coin ? { coin } : {}),
+  return { id: input.id, ...(input.conversation ? { conversation: { id: input.conversation.id.toLowerCase(), account: input.conversation.account.toLowerCase(), revision: input.conversation.revision } } : {}), intent: input.intent!, messages: input.messages.map(({ role, content }) => ({ role, content })), ...(coin ? { coin } : {}),
     ...(input.draftId ? { draftId: input.draftId } : {}), ...(input.contextId ? { contextId: input.contextId } : {}),
     ...(input.editTarget ? { editTarget: { sourceHash: input.editTarget.sourceHash, requirementId: input.editTarget.requirementId } } : {}) };
 }

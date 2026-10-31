@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { CHAT_PHASES, CustomAIError, isBriefChat, type AIUsage, type ChatPhase, type ChatRequest, type ChatResult } from "./types";
 import type { ExecutionProfile } from "./ai-config";
 import { refundsProviderFailure } from "./provider-errors";
+import { bindConversationJob, createConversationStore, updateConversationStudio } from "./conversation.server";
 import type { WalletAction, WalletSession } from "./launch-session";
 
 export interface AIConnection {
@@ -96,6 +97,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       await db.query("UPDATE programmable_custom_ai_v1.jobs SET state='failed',error_code='interrupted',updated_at=now() WHERE state='running' AND created_at < now()-interval '10 minutes'");
       const active = (await db.query("SELECT count(*)::integer AS n FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND state='running'", [owner])).rows[0];
       if (Number(active.n) >= limits.concurrent) throw new CustomAIError("busy", "Your previous reply is still being prepared.", 429);
+      await bindConversationJob(db,owner,request);
       const units = isBriefChat(request) ? 1 : 5, time = now();
       const hour = Math.floor(time / 3_600_000), day = Math.floor(time / 86_400_000);
       for (const [subject, period, limit] of [
@@ -191,6 +193,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
     if (!identifier(id) || !/^[a-z-]{1,32}$/.test(kind) || !Number.isSafeInteger(revision) || revision < 0
       || Buffer.byteLength(JSON.stringify(value)) > 256_000) throw new CustomAIError("input", "This draft could not be saved.");
     return transaction(async db => {
+      if (kind === "studio") await updateConversationStudio(db,owner,id,value as import("./studio").StudioState);
       const row = revision === 0
         ? await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,$2,$3,$4)
           ON CONFLICT DO NOTHING RETURNING revision`, [owner,kind,id,JSON.stringify(value)])
@@ -302,7 +305,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
+  return { conversations: createConversationStore(transaction), reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;
