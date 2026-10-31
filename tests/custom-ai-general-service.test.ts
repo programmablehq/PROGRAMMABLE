@@ -65,6 +65,14 @@ describe("general source generation inside the owned chat job",()=>{
   const value=await runCustomAI(request,undefined,{call,compile:fee,compileProject:compiler});
   expect(value.change).toBe("blocked");expect(value.intent?.requirements).toHaveLength(2);expect(value.generalProject).toBeUndefined();expect(call).toHaveBeenCalledTimes(1);expect(fee).not.toHaveBeenCalled();expect(compiler).not.toHaveBeenCalled();
  });
+ it("continues from its owned source after more than one saved clarification revision",async()=>{
+  const previous=prior(),latest={...structuredClone(previous.project.intent),revision:"c".repeat(64),parentRevision:"b".repeat(64)},fee=vi.fn();
+  const call=vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(generated()),save=vi.fn<(project:ContractProject)=>Promise<void>>(async()=>{});
+  const value=await runCustomAI(request,undefined,{call,compile:fee,compileProject:compile},{intent:latest,generalProject:previous,saveProject:save});
+  expect(value.intent?.id).toBe(latest.id);expect(value.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","no-owner"]);
+  expect(save.mock.calls[0][0].intent).toEqual(value.intent);expect(previous.project.intent.revision).toBe("a".repeat(64));
+  expect(call).toHaveBeenCalledTimes(2);expect(fee).not.toHaveBeenCalled();
+ });
  it("routes a proposed template missing a saved constraint to the complete contract path",async()=>{
   const call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",requirements:[requirements[0].text],feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated());
   const fee=vi.fn(),save=vi.fn(async()=>{});

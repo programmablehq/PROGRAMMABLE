@@ -43,8 +43,11 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     || input.messages.reduce((sum, message) => sum + message.content.length, 0) > 24_000) throw new CustomAIError("project-input", "Keep this request focused on the contract change.", 400);
   if (input.previous) {
     projectCompilerInput(input.previous);
-    if (input.previous.chainId !== chainId || input.previous.intent.id !== intent.id
-      || input.previous.intent.revision !== intent.revision && intent.parentRevision !== input.previous.intent.revision) {
+    // The owned studio selects this source, which may lag several clarification
+    // turns. Generate against the complete latest intent instead of requiring
+    // the last source to be its immediate parent. Ownership/CAS is enforced by
+    // the caller's existing job; another design or network still cannot attach.
+    if (input.previous.chainId !== chainId || input.previous.intent.id !== intent.id) {
       throw new CustomAIError("project-context", "Use the saved contract from this design and network.", 409);
     }
   }

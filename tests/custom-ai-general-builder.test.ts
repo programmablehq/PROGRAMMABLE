@@ -59,6 +59,17 @@ describe("general project generation inside the owned AI job", () => {
     await expect(buildGeneralContract(input, undefined, { call, compile })).rejects.toThrow("storage offline");
     expect(call).toHaveBeenCalledTimes(1); expect(compile).not.toHaveBeenCalled();
   });
+  it("uses the latest full design when its selected source predates several clarification turns",async()=>{
+    const input=request(),previous=createContractProject({compiler:{version:GENERAL_PROJECT_COMPILER,optimizerRuns:1000,viaIR:false,evmVersion:"paris"},
+      sources:{"GeneralHook.sol":{content:source}},entrypoints:answer().entrypoints},intent,999);
+    const latest={...structuredClone(intent),revision:"c".repeat(64),parentRevision:"b".repeat(64),requirements:[...intent.requirements,
+      {id:"read-count",text:"Read the counter through its public getter",kind:"behavior" as const,open:null,origin:{kind:"legacy" as const}}]};
+    const data=answer();data.requirementIds=latest.requirements.map(rule=>rule.id);const call=vi.fn(async()=>response(data));
+    const result=await buildGeneralContract({...input,intent:latest,previous},undefined,{call,compile:incompleteBuild});
+    expect(result.project.intent).toEqual(latest);expect(previous.intent.revision).toBe(intent.revision);expect(input.saveProject).toHaveBeenCalledWith(result.project);
+    const other=createContractProject({compiler:previous.compiler,sources:previous.sources,entrypoints:previous.entrypoints},{...intent,id:"another-design"},999);
+    call.mockClear();await expect(buildGeneralContract({...input,intent:latest,previous:other},undefined,{call,compile:incompleteBuild})).rejects.toMatchObject({code:"project-context"});expect(call).not.toHaveBeenCalled();
+  });
   it("retains the saved source when the compiler is temporarily unavailable", async () => {
     const input = request(), call = vi.fn(async () => response());
     const compile = vi.fn(async () => { throw Error("compiler unavailable"); });
