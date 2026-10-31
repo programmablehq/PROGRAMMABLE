@@ -127,3 +127,38 @@ test("shows the full timed and weather rule together with its liquidity allocati
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath("combined-rules-mobile.png"),fullPage:true});
 });
+
+test("copies complete answers and exact code without another model request", async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = window as unknown as { copied: string[] };
+    state.copied = [];
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async (value: string) => { state.copied.push(value); } } });
+  });
+  let calls = 0;
+  const code = "uint256 fee = 50;\naddress recipient = 0x1000000000000000000000000000000000000001;\n";
+  const reply = `These are the exact values.\n\n\`\`\`solidity\n${code}\`\`\`\nKeep the recipient unchanged.`;
+  await page.route("**/api/custom-ai", route => { calls++; return route.fulfill({ json: { reply, change: "unchanged" } }); });
+  await page.goto("/launch/custom-ai");
+  const box = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
+  await box.fill("Show the exact code"); await box.press("Enter");
+  await page.getByRole("button", { name: "Copy answer", exact: true }).click();
+  await page.getByRole("button", { name: "Copy code", exact: true }).click();
+  expect(await page.evaluate(() => (window as unknown as { copied: string[] }).copied)).toEqual([reply, code]);
+  expect(calls).toBe(1);
+});
+
+test("reports a blocked clipboard and displays unsafe markup as text", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => { throw Error("Permission denied"); } } });
+  });
+  const reply = '<img src=x onerror="alert(1)"> javascript:alert(1)';
+  await page.route("**/api/custom-ai", route => route.fulfill({ json: { reply, change: "unchanged" } }));
+  await page.goto("/launch/custom-ai");
+  const box = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
+  await box.fill("Explain this pasted markup"); await box.press("Enter");
+  await page.getByRole("button", { name: "Copy answer", exact: true }).click();
+  await expect(page.getByText("Copy did not work. Select the text and copy it manually.", { exact: true })).toBeVisible();
+  await expect(page.locator('img[src="x"]')).toHaveCount(0);
+  await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
+  await expect(page.getByText(reply, { exact: true })).toBeVisible();
+});

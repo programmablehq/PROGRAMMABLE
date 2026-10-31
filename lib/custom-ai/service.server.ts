@@ -38,11 +38,12 @@ const buildSchema = { type: "object", properties: {
 }, required: ["reply", "source", "hookSummary", "setupPatch"], additionalProperties: false };
 const strings = { type: "array", items: { type: "string" } };
 const planSchema = { type: "object", properties: {
+  reply: { type: "string" },
   composable: { type: ["string", "null"] }, program: programSchema, eventRule: eventRuleSchema,
   ruleEdits: { type: "array", maxItems: 24, items: { type: "object", properties: {
     requirementId: { type: "string" }, operation: { type: "string", enum: ["replace", "remove"] }, instruction: { type: "string" },
   }, required: ["requirementId", "operation", "instruction"], additionalProperties: false } },
-  reply: { type: "string" }, action: { type: "string", enum: ["answer", "build", "clarify"] }, memory: { type: "string" },
+  action: { type: "string", enum: ["answer", "build", "clarify"] }, memory: { type: "string" },
   requirements: strings, unresolved: strings, setupPatch: setupSchema,
   lookups: { type: "array", items: { type: "object", properties: {
     kind: { type: "string", enum: ["catalog", "contract", "web"] }, query: { type: "string" },

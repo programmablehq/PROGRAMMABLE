@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, Square, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
 import type { AIUsage, ChatMessage, ChatProgress, ChatRequest, Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
@@ -18,6 +18,9 @@ import { RequestInsights } from "./request-insights";
 import { starterIdeas } from "@/lib/custom-ai/builder-capabilities";
 import type { EditTarget } from "@/lib/custom-ai/design-edits";
 import { WorkspaceTools } from "./workspace-tools";
+import { MessageContent } from "./message-content";
+import { CopyButton } from "./copy-button";
+import { StreamingReply } from "./streaming-reply";
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
@@ -75,6 +78,10 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
   const textarea = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const followReply = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
+  const followLatest = useCallback(() => {
+    if (followReply.current && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,6 +288,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
     const controller = new AbortController();
     pending.current = controller;
     followReply.current = true;
+    setShowLatest(false);
     setBusy(true); setError(""); setNotice(""); setMessages(next); setInput(""); setPendingChange(content); setPhase({ type: "phase", phase: "thinking" });
     try {
       const payload = { intent: "chat" as const, messages: conversationWindow(next), coin: settings, ...(draftId ? { draftId } : {}), ...(contextId ? { contextId } : {}), ...(editTarget ? { editTarget } : {}) };
@@ -346,6 +354,7 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         aria-live="polite" aria-relevant="additions" onScroll={event => {
           const element = event.currentTarget;
           followReply.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72;
+          setShowLatest(!followReply.current);
         }}>
         {!messages.length && !busy && <div className={styles.empty}>
           <h2>{draft ? "Keep shaping your coin" : "What are we building?"}</h2>
@@ -357,18 +366,20 @@ function CustomAISession({ owner, headers, localPreview }: { owner: string; head
         </div>}
         {messages.map((message, index) => <article className={styles.message} key={index} data-role={message.role}>
           <span className={styles.srOnly}>{message.role === "user" ? "You" : "Custom AI"}</span>
-          <div className={styles.messageText}>{message.content}</div>
+          <MessageContent content={message.content} />
           {message.role === "assistant" && message.sources?.length ? <ul className={styles.sources} aria-label="Sources">
             {safeKnowledgeSources(message.sources).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}
           </ul> : null}
+          <CopyButton label={message.role === "user" ? "Copy your message" : "Copy answer"} value={message.content} />
         </article>)}
         {busy && revealing === null && <div className={styles.typing} aria-hidden="true">
           <span /><span /><span />
         </div>}
-        {revealing !== null && <div className={styles.message} data-role="assistant" aria-hidden="true">
-          <div className={`${styles.messageText} ${styles.revealing}`}>{revealing}</div>
-        </div>}
+        {revealing !== null && <StreamingReply text={revealing} onAdvance={followLatest} />}
       </div>
+      {showLatest && messages.length > 0 && <button type="button" className={styles.jumpToLatest} onClick={() => {
+        followReply.current = true; followLatest(); setShowLatest(false);
+      }}>Latest message<ArrowDown size={14} aria-hidden="true" /></button>}
       <span className={busy ? styles.progress : styles.srOnly} role="status">
         {busy ? ({ thinking: "Considering your request…", reading: "Checking current information…", building: "Building your rules…", checking: "Checking your rules…", repairing: "Refining your rules…" }[phase.phase]) : notice}
       </span>

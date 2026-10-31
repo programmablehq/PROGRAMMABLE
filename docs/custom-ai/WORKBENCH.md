@@ -14,10 +14,13 @@ The current Custom AI launch core supports Ethereum and Robinhood. The separate 
 4. Bind targeted edits to a saved source hash and requirement. Reject stale targets before model use.
 5. Add starter ideas and direct rule selection. Launch remains unavailable while the current design is incomplete.
 6. Share capability descriptions between the planner and a public read-only discovery route: `GET /api/custom-ai/capabilities`. Configuration is not live execution proof.
-7. Version the behavior in `AI_CONFIG` (currently 2.2.1) and exercise regressions for lost rules, altered allocations, unrequested edits and interrupted design discussions.
+7. Version the behavior in `AI_CONFIG` (currently 2.3.0) and exercise regressions for lost rules, altered allocations, unrequested edits and interrupted design discussions.
 8. Preserve the unsent message and selected rule across reloads. Choosing to keep the previous rules restores that draft's conversation context too, so a discarded proposal does not silently return.
 9. Keep the conversation dominant, with a compact coin preview and a single collapsible settings editor. Options contains versions, request details and usage. New coin preserves the previous coin and its unsent edit; Clear messages explicitly retains the current rules.
 10. Request only missing coin fields. The next action opens the matching editor or image picker. Request details refresh after a finished attempt when their panel is open.
+11. Add exact copy actions for messages and fenced code, bounded display smoothing and a return-to-latest action that respects the user's scroll position. HTML and unsafe URL text remain inert.
+12. Follow the current user's language and requested level of detail. Keep prose direct and avoid decorative dashes; code, identifiers and contract data stay unchanged. Three real Surplus questions qualified this behavior with one model call each; this is a bounded sample, not a statistical guarantee.
+13. Scope Custom AI interface checks to its own browser flow. Shared wallet changes still select the shared wallet suites, and contract changes retain activation checks. UI filenames containing “launch” no longer select unrelated Module Mode browser tests.
 
 See [Workspace flow](WORKSPACE-FLOW.md) for state and navigation behavior and [Execution routes](EXECUTION-ROUTES.md) for the current four-chain integration inventory.
 

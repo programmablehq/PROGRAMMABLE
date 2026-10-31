@@ -85,3 +85,19 @@ test("compiler changes require the isolated EVM toolchain in CI", () => {
     assert.equal(interfacePlan([path]).customAICompiler, true, path);
   }
 });
+
+test("Custom AI interactions use their own browser suite while shared wallet changes retain coverage", () => {
+  for (const path of ["components/custom-ai/launch-preview.tsx", "lib/custom-ai/wallet.ts", "app/api/custom-ai/launch/route.ts"]) {
+    const plan = interfacePlan([path]);
+    assert.equal(plan.customAI, true, path);
+    assert.equal(plan.wallet, true, path);
+    assert.deepEqual(plan.browser, [], path);
+    assert.equal(plan.activation, false, path);
+  }
+  const mixed = interfacePlan(["components/custom-ai/launch-preview.tsx", "components/wallet-provider.tsx"]);
+  assert.ok(mixed.browser.includes("wallet-request-lock"));
+  assert.ok(mixed.browser.includes("wallet-session"));
+  const contracts = interfacePlan(["components/custom-ai/launch-preview.tsx", "contracts/src/custom-ai/CustomAIProgramFactoryV1.sol"]);
+  assert.equal(contracts.activation, true);
+  assert.equal(contracts.customAI, true);
+});

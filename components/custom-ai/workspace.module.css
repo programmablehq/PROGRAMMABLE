@@ -23,6 +23,15 @@
 .message[data-role="assistant"] { padding-block: 2px; }
 .messageText { font-size: 16px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .revealing::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-inline-start: 3px; vertical-align: -.1em; background: #b8b4ad; }
+.copyAction { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: 100%; white-space: normal; }
+.message > .copyAction { margin-top: 6px; }
+.copyAction button { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 0; border: 0; background: transparent; color: #aaa69f; font: inherit; font-size: 11px; cursor: pointer; }
+.copyAction button:hover { color: #f4f1eb; }
+.copyError { color: #ffc2af; font-size: 12px; line-height: 1.5; }
+.codeBlock { margin-block: 14px; overflow: hidden; border: 1px solid #44413b; border-radius: 12px; background: #171716; white-space: normal; }
+.codeToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 14px; border-bottom: 1px solid #343431; color: #aaa69f; font-size: 12px; }
+.codeBlock pre { max-width: 100%; margin: 0; padding: 14px; overflow: auto; overscroll-behavior: contain; font-size: 13px; line-height: 1.6; tab-size: 2; white-space: pre; }
+.jumpToLatest { display: flex; align-items: center; align-self: center; gap: 8px; min-height: 44px; margin-block: 4px 8px; padding: 6px 14px; border: 1px solid #44413b; border-radius: 24px; background: #22211e; color: #e2ddd4; font: inherit; font-size: 12px; cursor: pointer; }
 .typing { display: flex; align-items: center; gap: 5px; width: fit-content; min-height: 40px; padding: 0 15px; border-radius: 16px 16px 16px 5px; background: #20201e; }
 .typing span { width: 5px; height: 5px; border-radius: 50%; background: #c7c2ba; }
 .composer { display: flex; align-items: flex-end; gap: 8px; padding: 4px; border: 1px solid #3a3935; border-radius: 12px; background: #171716; }
