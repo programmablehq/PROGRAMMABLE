@@ -31,6 +31,7 @@ import { cachedGeneralProjectView, type GeneralProjectView } from "@/lib/custom-
 import { cachedProjectOverview, overviewFromView, type ProjectOverview } from "@/lib/custom-ai/project-overview";
 import { GeneralProjectPreview } from "./general-preview";
 import { ProjectSource } from "./project-source";
+import { builderChain } from "@/lib/custom-ai/execution-routing";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
@@ -513,7 +514,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, initial
     finally{coinTransition.current=false;setSwitchingCoin(false);}
   }
 
-  const sourcePanel=sourceRecovery&&<ProjectSource key={sourceRecovery.requestId} source={sourceRecovery} account={owner} conversationId={conversationId} headers={headers}
+  const sourcePanel=sourceRecovery&&<ProjectSource key={sourceRecovery.requestId} source={sourceRecovery} chainId={settings.chainId} account={owner} conversationId={conversationId} headers={headers}
     disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored||launchLocked||saveFailed||Boolean(conflict)} recovery
     onCompile={source=>void retryCompilation(source)} onEdit={source=>void editSavedSource(source)}/>;
 
@@ -614,10 +615,10 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, initial
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. Messages are processed by the configured AI provider.</p>
     </section>
 
-    {!restored?<aside className={styles.coinPanel} aria-label="Coin preview and details" aria-busy="true"><p role="status">Loading your coin…</p></aside>:generalProject&&draftId?<GeneralProjectPreview key={previewRevision} project={generalProject} intent={intent} draftId={draftId} account={owner} conversationId={conversationId}
+    {!restored?<aside className={styles.coinPanel} aria-label="Coin preview and details" aria-busy="true"><p role="status">Loading your coin…</p></aside>:generalProject||!builderChain(settings.chainId).feeCore?<GeneralProjectPreview key={previewRevision} project={generalProject} intent={intent} draftId={draftId} account={owner} conversationId={conversationId}
       headers={headers} disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored} settings={settings} onChange={changeSettings} chatRevision={chatRevision}
       localPreview={localPreview} cacheKey={storageKey} imageReceipt={imageReceipt} onImageReceipt={setImageReceipt}
-      onEditRule={requirementId=>{if(!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
+      onEditRule={requirementId=>{if(generalProject&&!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
       {sourcePanel}
     </GeneralProjectPreview>:<CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}

@@ -80,9 +80,9 @@
 .coinForm label { display: grid; gap: 8px; color: #c7c2ba; font-size: 13px; }
 .fieldLabel { display: block; margin-bottom: 8px; color: #c7c2ba; font-size: 13px; }
 .fieldPair { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; }
-.networkPair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.networkPair { grid-template-columns: minmax(0, 1fr); }
 .chainOptions { display: flex; gap: 4px; min-height: 46px; padding: 3px; border: 1px solid #44413b; border-radius: 12px; background: #171716; }
-.chainOptions button { display: grid; place-items: center; flex: 1; min-width: 40px; min-height: 38px; padding: 6px; border: 0; border-radius: 8px; background: transparent; color: #aaa69f; cursor: pointer; }
+.chainOptions button { display: grid; place-items: center; flex: 1; min-width: 40px; min-height: 44px; padding: 6px; border: 0; border-radius: 8px; background: transparent; color: #aaa69f; cursor: pointer; }
 .chainOptions button[aria-pressed="true"] { background: #3b3934; color: #f4f1eb; }
 .chainOptions button:hover:not(:disabled) { background: #302e29; color: #f4f1eb; }
 .chainOptions button[aria-pressed="true"]:hover:not(:disabled) { background: #45423b; }

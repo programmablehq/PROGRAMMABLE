@@ -23,6 +23,12 @@ export function builderChain(chainId: number) {
   return chain;
 }
 
+/** Existing fixed-core execution retains its own two-network boundary. */
+export function feeCoreChainId(chainId:number):1|4663 {
+  if(chainId!==1&&chainId!==4663)throw new TypeError("This network uses Custom Contract launches instead of the fixed fee core.");
+  return chainId;
+}
+
 export type RouteProposal = {
   route: BuilderRoute;
   /** The interpreter proposes coverage; it cannot confer verification. */

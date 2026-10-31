@@ -28,15 +28,26 @@ describe("Chat-driven coin details", () => {
     expect(applyCoinSetupPatch(EMPTY_COIN_SETUP, { pairToken: address }).initialBuy).toBe("");
     expect(parseCoinSetupPatch({ pairToken: "WETH" })).toEqual({ pairToken: "ETH" });
   });
+  it("keeps four-chain source settings separate from the two-chain fee core",()=>{
+    const base=applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId:8453});expect(base.pairToken).toBe("ETH");
+    const hype=applyCoinSetupPatch({...base,initialBuy:"300"},{chainId:999});expect(hype).toMatchObject({chainId:999,pairToken:"HYPE",initialBuy:""});
+    expect(applyCoinSetupPatch(hype,{chainId:1})).toMatchObject({chainId:1,pairToken:"ETH",initialBuy:""});
+    expect(parseCoinSetupPatch({chainId:999,pairToken:"WHYPE",initialBuy:"0.1"})).toEqual({chainId:999,pairToken:"HYPE",initialBuy:"0.1"});
+    for(const setup of [base,hype])expect(()=>setupQuoteAddress(setup)).toThrow("fixed fee core");
+    expect(()=>applyCoinSetupPatch(EMPTY_COIN_SETUP,{pairToken:"HYPE"})).toThrow();
+    expect(()=>applyCoinSetupPatch(hype,{pairToken:"ETH"})).toThrow();
+  });
   it("rejects unsupported chains, malformed addresses and non-decimal amounts", () => {
-    for (const patch of [{ chainId: 8453 }, { pairToken: "USDC" }, { pairToken: "0x0" }, { initialBuy: "1e5" }, { name: "x".repeat(49) }]) {
+    for (const patch of [{ chainId: 56 }, { pairToken: "USDC" }, { pairToken: "0x0" }, { initialBuy: "1e5" }, { name: "x".repeat(49) }]) {
       expect(() => parseCoinSetupPatch(patch)).toThrow();
     }
     expect(parseCoinSetupPatch({ name: null, initialBuy: "0.009" })).toEqual({ initialBuy: "0.009" });
   });
   it("includes bounded current form values in chat without allowing an injected context", () => {
     expect(parseChatRequest(request).coin).toEqual(EMPTY_COIN_SETUP);
-    expect(() => parseChatRequest({ ...request, coin: { chainId: 8453 } })).toThrow();
+    expect(parseChatRequest({...request,coin:{chainId:8453}}).coin?.chainId).toBe(8453);
+    expect(parseChatRequest({...request,coin:{chainId:999,pairToken:"HYPE",initialBuy:"0.1"}}).coin?.pairToken).toBe("HYPE");
+    expect(() => parseChatRequest({ ...request, coin: { chainId: 56 } })).toThrow();
   });
   it("changes settings without compiling a new hook", async () => {
     const compile = vi.fn();

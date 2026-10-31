@@ -3,14 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { aiRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ProjectOverview } from "@/lib/custom-ai/project-overview";
 import type { ProjectCheckpoint } from "@/lib/custom-ai/project-store.server";
+import { builderChain, type BuilderChainId } from "@/lib/custom-ai/execution-routing";
 import styles from "./workspace.module.css";
 
-export function ProjectSource({source,account,conversationId,headers,disabled,recovery=false,onCompile,onEdit}:{
+export function ProjectSource({source,chainId,account,conversationId,headers,disabled,recovery=false,onCompile,onEdit}:{
   source:ProjectOverview;account:string;conversationId?:string;headers:AISessionHeaders;disabled:boolean;recovery?:boolean;
+  chainId?:BuilderChainId;
   onCompile:(source:ProjectOverview)=>void;onEdit?:(source:ProjectOverview)=>void;
 }) {
   const [saved,setSaved]=useState<ProjectCheckpoint>(),[loading,setLoading]=useState(false),[error,setError]=useState("");
   const controller=useRef<AbortController|null>(null);
+  const matchesNetwork=chainId===undefined||chainId===source.chainId;
   useEffect(()=>()=>controller.current?.abort(),[]);
   async function open(){
     if(saved||loading||!conversationId)return;
@@ -33,7 +36,7 @@ export function ProjectSource({source,account,conversationId,headers,disabled,re
     {recovery&&<p>Your previous draft is kept. {source.compilation==="pending"?"The compiler did not finish. Retry this saved source without another AI request.":"This source needs an edit before another build."}</p>}
     <details onToggle={event=>{if(event.currentTarget.open)void open();}}>
       <summary>View saved source</summary>
-      <p>{source.sourceFiles} {source.sourceFiles===1?"file":"files"} · {Math.ceil(source.sourceBytes/1024)} KB · Solidity {source.compiler.version.split("+")[0]}</p>
+      <p>{builderChain(source.chainId).name} · {source.sourceFiles} {source.sourceFiles===1?"file":"files"} · {Math.ceil(source.sourceBytes/1024)} KB · Solidity {source.compiler.version.split("+")[0]}</p>
       {loading&&<p role="status">Opening your saved source…</p>}
       {saved&&<>
         <button type="button" className={styles.textButton} onClick={download}>Download source project</button>
@@ -42,7 +45,8 @@ export function ProjectSource({source,account,conversationId,headers,disabled,re
       {error&&<><p role="alert">{error}</p><button type="button" className={styles.textButton} disabled={loading} onClick={()=>void open()}>Try opening source again</button></>}
     </details>
     {source.diagnostics.length>0&&<details><summary>Build diagnostics</summary><ul>{source.diagnostics.map((item,index)=><li key={index}>{item.message}</li>)}</ul></details>}
-    {recovery&&source.compilation==="pending"&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId} onClick={()=>onCompile(source)}>Retry saved build</button>}
-    {recovery&&source.compilation==="diagnostics"&&onEdit&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId} onClick={()=>onEdit(source)}>Edit this source</button>}
+    {!matchesNetwork&&<p>This source belongs to {builderChain(source.chainId).name}. Select its network before retrying or editing it.</p>}
+    {recovery&&source.compilation==="pending"&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId||!matchesNetwork} onClick={()=>onCompile(source)}>Retry saved build</button>}
+    {recovery&&source.compilation==="diagnostics"&&onEdit&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId||!matchesNetwork} onClick={()=>onEdit(source)}>Edit this source</button>}
   </section>;
 }

@@ -123,10 +123,11 @@ Output JSON with reply (string in the user's language), source (Solidity string)
 setupPatch contains name, symbol, chainId, pairToken and initialBuy. Set each field to null unless the user
 asks to set or change it. Apply explicit coin details in chat even without a request to change the hook.
 When building a named coin, include its supplied name and ticker in setupPatch as well as the source.
-Use chainId 1 for Ethereum mainnet and 4663 for Robinhood. Never infer an unsupported chain.
-For the default ETH pair, set pairToken to "ETH" (including when the user says WETH). For any other pair,
+Use chainId 1 for Ethereum mainnet, 4663 for Robinhood, 8453 for Base and 999 for HyperEVM. Never infer an unsupported chain.
+Base and HyperEVM source builds use the general Custom Contract route, not the fixed fee core. Select the route for the new chain when setupPatch changes it.
+For the default native pair, set pairToken to "ETH" on Ethereum, Robinhood or Base (including WETH), or "HYPE" on HyperEVM (including WHYPE). For any other pair,
 use the exact contract address supplied by the user. Never invent an address or silently replace a named
-token with ETH. If only a token name was supplied, ask for its address on the chosen chain.
+token with the native currency. If only a token name was supplied, ask for its address on the chosen chain.
 initialBuy is a decimal string in pair-token units. Do not invent or increase a user's purchase amount.
 Do not regenerate the hook for a change to name, ticker, network, pair or initial buy; use an empty source.
 Image selection uses the file picker; do not ask users for an image URL.

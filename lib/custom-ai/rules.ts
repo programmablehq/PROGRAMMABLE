@@ -71,7 +71,7 @@ export function parseRulePlan(value: Record<string, unknown>, availableTools: Re
   if (!Array.isArray(lookups) || lookups.length > 2 || lookups.some(item => !item
     || !availableTools.has(item.kind)
     || (item.input !== undefined ? !item.input || typeof item.input !== "object" || Array.isArray(item.input)
-      : typeof item.query !== "string" || item.query.length > 500 || ![1, 4663].includes(item.chainId)
+      : typeof item.query !== "string" || item.query.length > 500 || ![1, 4663, 8453, 999].includes(item.chainId)
         || typeof item.address !== "string" || (item.kind === "contract"
           ? !/^0x[0-9a-fA-F]{40}$/.test(item.address) : item.address !== "")
         || item.kind !== "contract" && !item.query.trim()))) {

@@ -11,6 +11,8 @@ describe("Custom AI execution path selection", () => {
   it("only describes general source generation when its durable job bridge is connected", () => {
     expect(builderCapabilities({ events: false, programs: false }).find(item => item.id === "arbitrary-hooks")?.state).toBe("design-only");
     expect(builderCapabilities({ events: false, programs: false, generalSources: true }).find(item => item.id === "arbitrary-hooks")?.state).toBe("source-draft");
+    expect(builderCapabilities({events:false,programs:false,generalSources:true,chainId:999}).find(item=>item.id==="fee-schedules")?.state).toBe("source-draft");
+    expect(builderCapabilities({events:false,programs:false,chainId:8453}).find(item=>item.id==="fee-schedules")?.state).toBe("design-only");
   });
   it.each([1, 4663] as const)("retains the complete fee route on %i without claiming preparation", chainId => {
     const result = selectExecutionRoute(intent, chainId, { route: "fee-module", requirementIds: ["fees", "no-mint"], missingCapabilities: [] });

@@ -5,6 +5,7 @@ import { ChevronDown, ImagePlus, LoaderCircle, X } from "lucide-react";
 import { isAddress, parseEther } from "viem";
 import { prepareTokenImage, TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 import { ChainMark } from "@/components/chain-mark";
+import { builderChain, builderChains } from "@/lib/custom-ai/execution-routing";
 import { coinBio, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import type { AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
@@ -31,8 +32,9 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   const [pairInput, setPairInput] = useState("");
   const [pairError, setPairError] = useState("");
   const [buyTouched, setBuyTouched] = useState(false);
-  const isEth = settings.pairToken === "ETH";
-  const hasCustomPair = customPair || !isEth;
+  const native=builderChain(settings.chainId).currency;
+  const isNative = settings.pairToken === native;
+  const hasCustomPair = customPair || !isNative;
   const lastSettings = useRef(settings);
   const lastChatRevision = useRef(chatRevision);
 
@@ -49,11 +51,11 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   useEffect(() => {
     if (settings.chainId !== lastSettings.current.chainId || settings.pairToken !== lastSettings.current.pairToken
       || chatRevision !== lastChatRevision.current) {
-      setCustomPair(!isEth); setPairInput(isEth ? "" : settings.pairToken); setPairError(""); setBuyTouched(false);
+      setCustomPair(!isNative); setPairInput(isNative ? "" : settings.pairToken); setPairError(""); setBuyTouched(false);
     }
     lastSettings.current = settings;
     lastChatRevision.current = chatRevision;
-  }, [settings, isEth, chatRevision]);
+  }, [settings, isNative, chatRevision]);
 
   async function chooseImage(file?: File) {
     if (!file) return;
@@ -84,8 +86,8 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
 
   let buyError = "";
   if (buyTouched) {
-    if (!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(settings.initialBuy) || !/[1-9]/.test(settings.initialBuy)) buyError = "Enter an initial buy";
-    else if (isEth) {
+    if (!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(settings.initialBuy) || feeCore && !/[1-9]/.test(settings.initialBuy)) buyError = "Enter an initial buy";
+    else if (isNative) {
       if ((settings.initialBuy.split(".")[1]?.length ?? 0) > 18) buyError = "Use up to 18 decimal places";
       else if (feeCore && parseEther(settings.initialBuy) < 10n ** 16n) buyError = "Minimum 0.01 ETH";
     }
@@ -120,7 +122,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
 
     <form className={styles.coinForm} onSubmit={event => event.preventDefault()}>
       <details className={styles.coinDetails} open={detailsOpen} onToggle={event => setDetailsOpen(event.currentTarget.open)}>
-        <summary><span>Coin details</span><span className={styles.settingsSummary}>{settings.chainId === 1 ? "Ethereum" : "Robinhood"} · {isEth ? "ETH" : "Custom pair"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
+        <summary><span>Coin details</span><span className={styles.settingsSummary}>{builderChain(settings.chainId).name} · {isNative ? native : "Custom pair"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
       <fieldset disabled={disabled}>
         <legend className={styles.srOnly}>Coin details</legend>
         <div className={styles.fieldPair}>
@@ -133,17 +135,17 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
           <div>
             <span className={styles.fieldLabel} id="custom-ai-chain-label">Chain</span>
             <div className={styles.chainOptions} role="group" aria-labelledby="custom-ai-chain-label">
-              {([{ id: 1, name: "Ethereum" }, { id: 4663, name: "Robinhood" }] as const).map(chain =>
+              {builderChains.map(chain =>
                 <button key={chain.id} type="button" disabled={disabled} title={chain.name} aria-label={chain.name}
                   aria-pressed={settings.chainId === chain.id} onClick={() => onChange({ chainId: chain.id })}>
                   <span aria-hidden="true"><ChainMark chainId={chain.id} className={styles.chainLogo} /></span>
                 </button>)}
             </div>
           </div>
-          <CoinSelect label="Pair" value={hasCustomPair ? "custom" : "ETH"} disabled={disabled}
-            options={[{ value: "ETH", label: "ETH" }, { value: "custom", label: "Token address" }]}
+          <CoinSelect label="Pair" value={hasCustomPair ? "custom" : native} disabled={disabled}
+            options={[{ value: native, label: native }, { value: "custom", label: "Token address" }]}
             onChange={value => { setCustomPair(value === "custom"); setPairError("");
-              if (value === "ETH") onChange({ pairToken: "ETH" });
+              if (value === native) onChange({ pairToken: native });
               else requestAnimationFrame(() => document.getElementById("custom-ai-pair")?.focus()); }} />
         </div>
         {hasCustomPair && <label htmlFor="custom-ai-pair">Token address
@@ -155,11 +157,11 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
         <p id="custom-ai-pair-error" className={styles.error} role="alert">{pairError}</p>
         <label htmlFor="custom-ai-buy">Initial buy
           <div className={styles.amountInput}><input id="custom-ai-buy" value={settings.initialBuy} inputMode="decimal" autoComplete="off"
-            placeholder={isEth ? "0.01" : "Amount"} aria-invalid={Boolean(buyError) || undefined} aria-describedby="custom-ai-buy-help"
+            placeholder={feeCore&&isNative ? "0.01" : "Amount"} aria-invalid={Boolean(buyError) || undefined} aria-describedby="custom-ai-buy-help"
             onChange={event => onChange({ initialBuy: event.target.value })} onBlur={() => setBuyTouched(true)} />
-            <span aria-hidden="true">{isEth ? "ETH" : "Tokens"}</span></div>
+            <span aria-hidden="true">{isNative ? native : "Tokens"}</span></div>
         </label>
-        <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (feeCore ? isEth ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent" : "The selected launch route confirms the required amount.")}</p>
+        <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (feeCore ? isNative ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent" : "The selected launch route confirms the required amount.")}</p>
       </fieldset>
       </details>
     </form>

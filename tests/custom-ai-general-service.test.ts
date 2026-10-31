@@ -8,7 +8,7 @@ import { selectExecutionRoute } from "../lib/custom-ai/execution-routing";
 import type { ChatRequest } from "../lib/custom-ai/types";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
-import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
+import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import type {ClaudeInput,ClaudeResult} from "../lib/custom-ai/claude.server";
 import {generalProjectView} from "../lib/custom-ai/project-view";
 
@@ -30,14 +30,19 @@ function prior():GeneralProjectDraft{
 }
 
 describe("general source generation inside the owned chat job",()=>{
- it("saves every rule before compilation, uses no fee compiler and retains unverified status",async()=>{
+ it.each([1,4663,8453,999] as const)("saves every rule on chain%i before compilation and never calls the fee compiler",async chainId=>{
   const events:string[]=[],call=vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(generated()),fee=vi.fn();
-  const value=await runCustomAI(request,undefined,{call,compile:fee,compileProject:async project=>{events.push("compile");return compile(project);}},{
-   saveProject:async project=>{events.push("source");expect(project.intent.requirements.map(r=>r.id)).toEqual(["counter","no-owner"]);},
+  const value=await runCustomAI({...request,coin:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId})},undefined,{call,compile:fee,compileProject:async project=>{events.push("compile");return compile(project);}},{
+   saveProject:async project=>{events.push("source");expect(project.chainId).toBe(chainId);expect(project.intent.requirements.map(r=>r.id)).toEqual(["counter","no-owner"]);},
    saveCompilation:async checked=>{events.push("artifacts");expect(checked.launchReady).toBe(false);},
   });
   expect(events).toEqual(["source","compile","artifacts"]);expect(call).toHaveBeenCalledTimes(2);expect(fee).not.toHaveBeenCalled();
   expect(value.generalProject?.sourceFiles).toBe(1);expect(value.generalProject?.verification).toBe("not-run");expect(JSON.stringify(value.generalProject)).not.toContain(source);expect(value.selection?.route).toBe("custom-contract");expect(value.draft).toBeUndefined();expect(value.chargedAs).toBe("build");
+ });
+ it.each([8453,999] as const)("cannot route even a proposed complete fee template on chain%i into another chain's fixed core",async chainId=>{
+  const call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated()),fee=vi.fn();
+  const value=await runCustomAI({...request,coin:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId})},undefined,{call,compile:fee,compileProject:compile},{saveProject:async()=>{}});
+  expect(value.selection).toMatchObject({route:"custom-contract",chainId,reason:"no-fee-core-on-network"});expect(fee).not.toHaveBeenCalled();expect(call).toHaveBeenCalledTimes(2);
  });
  it("does not spend a generation when the durable project connection is missing",async()=>{
   const call=vi.fn(async()=>plan()),fee=vi.fn(),compiler=vi.fn(compile);
