@@ -20,14 +20,14 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled} headers={headers}
       localPreview={localPreview} cacheKey={cacheKey} imageReceipt={imageReceipt} onImageReceipt={onImageReceipt} onImage={setImage}
-      stage={!project?"Contract design":project.compiled?"Source compiled":"Source needs changes"} description={project?.summary} feeCore={false}/>
+      stage={!project?"Contract design":project.scenarios?.passed===false?"Contract checks failed":project.compiled?"Source compiled":"Source needs changes"} description={project?.summary} feeCore={false}/>
     {intent&&<section className={styles.ruleReview} aria-label="Requested contract rules"><h3>Rules for this coin</h3>
       <ul className={styles.ruleEditList}>{intent.requirements.map(rule=><li key={rule.id}><span>{rule.text}</span>
         {rule.open&&<p>Open: {rule.open}</p>}<button type="button" className={styles.textButton} disabled={disabled||!matches} aria-label={`Edit rule: ${rule.text}`} onClick={()=>onEditRule(rule.id)}>Edit</button>
       </li>)}</ul>
       {intent.unresolved.filter(question=>!intent.requirements.some(rule=>rule.open===question)).map(question=><p key={question}>Open: {question}</p>)}
     </section>}
-    <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{!project?"Describe your contract in the chat to build its source on this network.":!matches?"The design or network changed. Ask the chat to update the saved source.":project.compiled?"Source compiled. Contract checks and launch preparation are still pending.":"The source has build diagnostics. Ask the chat to fix this source."}</p>
+    <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{!project?"Describe your contract in the chat to build its source on this network.":!matches?"The design or network changed. Ask the chat to update the saved source.":project.scenarios?.passed?"Source compiled and declared examples passed. Launch review and preparation are still pending.":project.scenarios?.passed===false?"A declared contract check failed. Ask the chat to fix this saved source.":project.compiled?"Source compiled. Contract checks and launch preparation are still pending.":"The source has build diagnostics. Ask the chat to fix this source."}</p>
     {project&&draftId&&<ProjectSource key={draftId} source={overviewFromView(draftId,project)} chainId={settings.chainId} account={account} conversationId={conversationId} headers={headers} disabled={disabled} onCompile={()=>undefined}/>}
     {children}
   </aside>;

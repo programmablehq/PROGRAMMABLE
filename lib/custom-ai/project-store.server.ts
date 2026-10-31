@@ -78,7 +78,7 @@ export function createProjectStore(transaction: Transaction) {
       }
       const declared=await savedBlueprint(db,owner,id);
       if(declared)try{bindGeneralCheckBlueprint(declared.blueprint,project);}catch{throw conflict();}
-      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, project, overview: projectOverview(id, project),
+      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, project, overview: projectOverview(id, project,undefined,declared?{blueprintId:declared.blueprint.id}:undefined),
         ...(declared?{blueprintId:declared.blueprint.id}:{}) };
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,$2,$3,$4)`, [owner, kind, id, JSON.stringify(value)]);
@@ -104,7 +104,7 @@ export function createProjectStore(transaction: Transaction) {
       if(plan.id!==report.planHash||report.passed&&report.cases!==plan.contracts.length*2+plan.steps.length
         ||JSON.stringify(report.requirementIds)!==JSON.stringify(previous.project.intent.requirements.map(rule=>rule.id).sort()))throw conflict();
       if(previous.scenarios){if(previous.scenarios.hash!==hash)throw conflict();return previous;}
-      const value:ProjectCheckpoint={...previous,scenarios:structuredClone(report)};
+      const value:ProjectCheckpoint={...previous,scenarios:report,overview:projectOverview(id,previous.project,previous.compilation,{blueprintId:declared.blueprint.id,scenarios:report})};
       await db.query(`UPDATE programmable_custom_ai_v1.objects SET value=$4,revision=revision+1,updated_at=now()
         WHERE owner=$1 AND kind=$2 AND id=$3`,[owner,kind,id,JSON.stringify(value)]);
       return value;
@@ -124,7 +124,7 @@ export function createProjectStore(transaction: Transaction) {
         if (previous.compilation.artifactHash !== artifactHash) throw conflict();
         return previous;
       }
-      const value: ProjectCheckpoint = { ...previous, compilation, overview: projectOverview(id, previous.project, compilation) };
+      const value: ProjectCheckpoint = { ...previous, compilation, overview: projectOverview(id, previous.project, compilation,{blueprintId:previous.blueprintId,scenarios:previous.scenarios}) };
       await db.query(`UPDATE programmable_custom_ai_v1.objects SET value=$4,revision=revision+1,updated_at=now()
         WHERE owner=$1 AND kind=$2 AND id=$3`, [owner, kind, id, JSON.stringify(value)]);
       return value;

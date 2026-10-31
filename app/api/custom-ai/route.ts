@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       context.loadGeneralProject=async()=>{
         const saved=await store.projects.read(authority.owner,input.draftId!);
         if(!saved?.compilation||saved.project.hash!==view.projectHash||saved.compilation.artifactHash!==view.artifactHash)throw new CustomAIError("project-context","Your saved contract source could not be found. Reload it before continuing.",409);
-        return {version:1,reply:current.reply,summary:view.summary,project:saved.project,compilation:saved.compilation,
+        return {version:1,reply:current.reply,summary:view.summary,project:saved.project,compilation:saved.compilation,...(saved.blueprintId?{blueprintId:saved.blueprintId}:{}),...(saved.scenarios?{scenarios:saved.scenarios}:{}),
           selection:selectExecutionRoute(saved.project.intent,saved.project.chainId,{route:"custom-contract",requirementIds:saved.project.intent.requirements.map(rule=>rule.id),missingCapabilities:[]}),requirementCoverage:"proposed",launchReady:false};
       };
     }
@@ -100,6 +100,8 @@ export async function POST(request: Request) {
           ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
             saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
+            saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent});},
+            saveScenarios:async(report:import("@/lib/custom-ai/behavior-checks.server").GeneralScenarioReport)=>{await store.projects.saveScenarios(authority.owner,input.id,reserved.lease!,report);},
           }:{}),
         });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();

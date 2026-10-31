@@ -144,7 +144,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, initial
     setCanReconnect(false);
     if(data.draft){setDraft(data.draft);setGeneralProject(undefined);setSourceRecovery(undefined);setDraftId(request.id);}
     if(data.generalProject){
-      if(data.generalProject.compiled){setGeneralProject(data.generalProject);setDraft(undefined);setDraftId(request.id);setSourceRecovery(undefined);}
+      if(data.generalProject.compiled&&data.generalProject.scenarios?.passed!==false){setGeneralProject(data.generalProject);setDraft(undefined);setDraftId(request.id);setSourceRecovery(undefined);}
       else setSourceRecovery(overviewFromView(request.id,data.generalProject));
     }
     if(data.intent)setIntent(data.intent);
