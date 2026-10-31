@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. Existing backend submission, exact launch preparation and wallet execution still need their integration. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Owned-project submission, current-profile packing, exact launch preparation and wallet execution still need their integration. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
@@ -102,3 +102,27 @@ The local scenario declaration now supports the closed `v4-native-token-v1` worl
 The isolated worker deploys the actual pinned manager and trusted adapter, deploys the complete generated token/hook source graph, mines a bounded CREATE2 salt for the declared hook permissions, and runs the original ordered examples. Nested deployment is allowed only for the exact declared hook creation bytes from that adapter. The original call-target and delegation guards remain. An expected swap fee is read from the actual manager's Swap event. It is not inferred from a hook getter or its claimed requirement IDs. Only the additional fixed helper and fixture files are readable in this worker; the parent environment and network remain unavailable.
 
 The actual generated-source qualification checks a hook whose initialization starts the ten-minute timer. Both buys and sells settle against real pool state. A 2700-ppm implementation fails the independently declared 3000-ppm expectation; the correct source passes its 3000/500 boundary, transfer and unauthorized-callback cases. The complete local plan binds these expectations to source/artifact hashes and still returns `launchReady:false`. This path is unpublished and does not establish a live chain, provider listing or public launch. External feed worlds, nonstandard settlement/quote fixtures and the existing backend submission/preparation remain distinct work.
+
+
+## Current request session producer
+
+`authorizeCustomAI` keeps an immutable request-local receipt after the existing
+access-token and current linked-wallet check. A saved AI-job owner ID, copied
+receipt, another Request, expired receipt or stopped request cannot authorize
+`backend-launch.server.ts`. Reusing that receipt within the same request avoids
+a second Privy user lookup. New requests check current ownership again; no user
+permission cache or persistent key is introduced.
+
+The producer derives fixed private mutation targets from the existing four-chain
+route registry. Assertion version 3 has a separate domain and binds the exact
+body, selected wallet, chain path, operation, idempotency key and Robinhood
+response negotiation. V2 assertion consumers retain their original framing.
+Bodies retain the canonical 8 MiB graph and 16 MiB Plan limits. The bridge uses
+one explicit POST, a request-bound deadline, no redirects or automatic retries,
+and bounded private JSON replies. An HTTP reply is untrusted transport data until
+the preparation workflow checks its source/identity and canonical launch state.
+It does not establish approval, a wallet permit, execution or public availability.
+
+This producer is server-only and not connected to a public general-project
+submission action yet. The owned exact revision, deployment recipe, actual chain
+profile and metadata pack must be integrated before it is enabled and released.
