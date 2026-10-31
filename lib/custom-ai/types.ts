@@ -92,7 +92,7 @@ export function parseChatRequest(value: unknown): ChatRequest {
   const input = value as Partial<ChatRequest>;
   if (typeof input.id !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(input.id)
     || !["chat", "build", "compile"].includes(input.intent ?? "") || !Array.isArray(input.messages)
-    || input.messages.length < 1 || input.messages.length > 24) {
+    || input.messages.length < (input.intent === "compile" ? 0 : 1) || input.messages.length > 24) {
     throw new CustomAIError("input", "This conversation is too long. Start a new draft with the rules you want to keep.");
   }
   let length = 0;
@@ -106,7 +106,7 @@ export function parseChatRequest(value: unknown): ChatRequest {
       throw new CustomAIError("secret", "That looks like a secret key. Remove it before sending your message.");
     }
   }
-  if (length > 24_000 || input.messages.at(-1)?.role !== "user") {
+  if (length > 24_000 || input.messages.length > 0 && input.messages.at(-1)?.role !== "user") {
     throw new CustomAIError("input", "Start a new draft with a shorter description of your rules.");
   }
   if (input.conversation && (!validConversationId(input.conversation.id) || !/^0x[0-9a-f]{40}$/i.test(input.conversation.account)

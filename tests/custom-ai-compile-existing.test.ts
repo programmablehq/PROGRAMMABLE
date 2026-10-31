@@ -22,6 +22,8 @@ beforeEach(()=>{vi.clearAllMocks();read.mockResolvedValue({id:sourceId,state:"fa
 describe("compile-only owned recovery",()=>{
  it("round-trips only an exact saved source reference and rejects an injected edit or compiler command",()=>{
   expect(parseChatRequest(request)).toEqual(request);
+  expect(parseChatRequest({...request,messages:[]})).toMatchObject({intent:"compile",messages:[],compilationOf:request.compilationOf});
+  expect(()=>parseChatRequest({...request,intent:"chat",messages:[],compilationOf:undefined})).toThrow();
   for(const value of [{...request,compilationOf:undefined},{...request,conversation:undefined},{...request,intent:"chat"},{...request,compilationOf:{...request.compilationOf,command:"curl somewhere"}},{...request,editTarget:{sourceHash:"a".repeat(64),requirementId:"no-owner"}},{...request,compilationOf:{id:request.id,projectHash:project.hash}}])expect(()=>parseChatRequest(value)).toThrow();
  });
  it("reads the same failed source under its owner and preserves every saved requirement",async()=>{

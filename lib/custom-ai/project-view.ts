@@ -1,5 +1,6 @@
 import type { ContractProject } from "./contract-project";
 import type { GeneralProjectDraft } from "./general-builder.server";
+import { cachedProjectOverview } from "./project-overview";
 
 /** Public-to-the-owning-browser projection. Complete source and bytecode stay
  * in the owned checkpoint and are read explicitly for inspection or a build. */
@@ -28,4 +29,17 @@ export function generalProjectView(value: GeneralProjectDraft): GeneralProjectVi
     sourceBytes: Object.values(project.sources).reduce((sum, source) => sum + new TextEncoder().encode(source.content).length, 0),
     compiled: compilation.compiled, diagnostics: compilation.diagnostics.slice(0, 24).map(item => ({ severity: item.severity, message: item.message.slice(0, 800) })),
     requirementCoverage: "proposed", verification: "not-run", launchReady: false };
+}
+
+export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undefined {
+  if(!value||typeof value!=="object"||Array.isArray(value))return;
+  const v=value as GeneralProjectView;
+  if(v.version!==1||typeof v.compiled!=="boolean"||v.launchReady!==false||v.verification!=="not-run"||v.requirementCoverage!=="proposed"
+    ||typeof v.summary!=="string"||!v.summary.trim()||v.summary.length>360||!Array.isArray(v.entrypoints)||!v.entrypoints.length||v.entrypoints.length>16
+    ||v.entrypoints.some(item=>!item||typeof item.source!=="string"||item.source.length>180||typeof item.contract!=="string"||!/^[a-zA-Z_][a-zA-Z0-9_]{0,99}$/.test(item.contract)||!["token","hook","liquidity","auxiliary"].includes(item.role)))return;
+  const base=cachedProjectOverview({...v,requestId:"cached-project-view",compilation:v.compiled?"compiled":"diagnostics"});
+  if(!base?.artifactHash)return;
+  return {version:1,projectHash:base.projectHash,artifactHash:base.artifactHash,chainId:base.chainId,intentRevision:base.intentRevision,summary:v.summary,
+    compiler:base.compiler,entrypoints:v.entrypoints.map(item=>({source:item.source,contract:item.contract,role:item.role})),sourceFiles:base.sourceFiles,sourceBytes:base.sourceBytes,
+    compiled:v.compiled,diagnostics:base.diagnostics,requirementCoverage:"proposed",verification:"not-run",launchReady:false};
 }

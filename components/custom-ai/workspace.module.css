@@ -51,6 +51,7 @@
 .note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
 /* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */
 .coinPanel { min-width: 0; padding: 20px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.sourceCode { max-height: 360px; overflow: auto; padding: 12px; border: 1px solid #343431; border-radius: 10px; white-space: pre; font: 12px/1.6 monospace; }
 .coinPreview { text-align: start; }
 .coinHeading { display: flex; align-items: center; gap: 16px; }
 .artworkWrap { position: relative; flex: 0 0 72px; width: 72px; }
