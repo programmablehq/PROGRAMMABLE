@@ -6,7 +6,7 @@ import { isAddress, parseEther } from "viem";
 import { prepareTokenImage, TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 import { ChainMark } from "@/components/chain-mark";
 import { builderChain, builderChains } from "@/lib/custom-ai/execution-routing";
-import { coinBio, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
+import { coinBio, coinPresentationIssue, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import type { AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
@@ -14,7 +14,7 @@ import { CoinSelect } from "./coin-select";
 import styles from "./workspace.module.css";
 
 export type CoinEditorImage = { blob: Blob; url: string };
-export type CoinDetailsControls = { focus: (field: "name" | "symbol" | "image") => void };
+export type CoinDetailsControls = { focus: (field: "name" | "symbol" | "image" | "description" | "website" | "x") => void };
 export function CoinDetails({settings,onChange,chatRevision,disabled,headers,localPreview,cacheKey,imageReceipt,onImageReceipt,onImage,onImageBusy,controlsRef,stage,summary,description,imageURI,feeCore=true}:{
   settings:CoinSetup;onChange:(patch:CoinSetupPatch)=>void;chatRevision:number;disabled:boolean;
   headers:AISessionHeaders;localPreview:boolean;cacheKey:string;imageReceipt?:ImageReceipt;
@@ -32,6 +32,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   const [pairInput, setPairInput] = useState("");
   const [pairError, setPairError] = useState("");
   const [buyTouched, setBuyTouched] = useState(false);
+  const [presentationTouched, setPresentationTouched] = useState<Partial<Record<"description" | "website" | "x", boolean>>>({});
   const native=builderChain(settings.chainId).currency;
   const isNative = settings.pairToken === native;
   const hasCustomPair = customPair || !isNative;
@@ -51,7 +52,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   useEffect(() => {
     if (settings.chainId !== lastSettings.current.chainId || settings.pairToken !== lastSettings.current.pairToken
       || chatRevision !== lastChatRevision.current) {
-      setCustomPair(!isNative); setPairInput(isNative ? "" : settings.pairToken); setPairError(""); setBuyTouched(false);
+      setCustomPair(!isNative); setPairInput(isNative ? "" : settings.pairToken); setPairError(""); setBuyTouched(false); setPresentationTouched({});
     }
     lastSettings.current = settings;
     lastChatRevision.current = chatRevision;
@@ -94,7 +95,8 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   }
   const imageURL=imageURI??imageReceipt?.url??image?.url;
   useEffect(()=>{onImage(image);},[image,onImage]);
-  useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);requestAnimationFrame(()=>document.getElementById(`custom-ai-${field}`)?.focus());}}),[]);
+  useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);if(field==="description"||field==="website"||field==="x")setPresentationTouched(current=>({...current,[field]:true}));requestAnimationFrame(()=>document.getElementById(`custom-ai-${field}`)?.focus());}}),[]);
+  const presentationError = (field: "description" | "website" | "x") => presentationTouched[field] ? coinPresentationIssue(settings, field) : "";
   return <>
     <section className={styles.coinPreview} aria-label="Coin preview">
       <div className={styles.coinHeading}>
@@ -117,7 +119,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
         <h2>{settings.name.trim() || "Your coin"}</h2><span>${settings.symbol.trim() || "COIN"}</span></div>
       </div>
       <p id="custom-ai-image-error" className={styles.error} role="alert">{imageError}</p>
-      {(description || summary) && <details className={styles.designSummary}><summary>About this coin</summary><p className={styles.coinBio}>{description ?? coinBio(settings.name, summary!)}</p></details>}
+      {(settings.description || description || summary) && <details className={styles.designSummary}><summary>About this coin</summary><p className={styles.coinBio}>{settings.description || description || coinBio(settings.name, summary!)}</p></details>}
     </section>
 
     <form className={styles.coinForm} onSubmit={event => event.preventDefault()}>
@@ -162,6 +164,31 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
             <span aria-hidden="true">{isNative ? native : "Tokens"}</span></div>
         </label>
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (feeCore ? isNative ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent" : "The selected launch route confirms the required amount.")}</p>
+        {!feeCore && <>
+          <label htmlFor="custom-ai-description">Public description
+            <textarea id="custom-ai-description" value={settings.description ?? ""} maxLength={4096} rows={3}
+              placeholder="What does your coin do?" autoComplete="off" aria-describedby="custom-ai-description-help"
+              aria-invalid={Boolean(presentationError("description")) || undefined}
+              onChange={event => onChange({ description: event.target.value })}
+              onBlur={() => setPresentationTouched(current => ({ ...current, description: true }))} />
+          </label>
+          <p id="custom-ai-description-help" className={presentationError("description") ? styles.error : styles.note}>
+            {presentationError("description") || "Shown publicly with your coin. You can also write it in the chat."}
+          </p>
+          {(["website", "x"] as const).map(field => <div key={field} className={styles.presentationField}>
+            <label htmlFor={`custom-ai-${field}`}>{field === "website" ? "Project website" : "X profile"}
+              <input id={`custom-ai-${field}`} name={field} type="url" inputMode="url" value={settings[field] ?? ""}
+                placeholder={field === "website" ? "https://your-project.com" : "https://x.com/your_coin"}
+                maxLength={2048} autoComplete="off" autoCapitalize="none" spellCheck={false}
+                aria-invalid={Boolean(presentationError(field)) || undefined} aria-describedby={`custom-ai-${field}-help`}
+                onChange={event => onChange({ [field]: event.target.value })}
+                onBlur={() => setPresentationTouched(current => ({ ...current, [field]: true }))} />
+            </label>
+            <p id={`custom-ai-${field}-help`} className={presentationError(field) ? styles.error : styles.note}>
+              {presentationError(field) || "Your project's own link, included when you submit."}
+            </p>
+          </div>)}
+        </>}
       </fieldset>
       </details>
     </form>

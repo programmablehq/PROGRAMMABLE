@@ -44,7 +44,8 @@ const setupSchema = { type: "object", properties: {
   name: { type: ["string", "null"] }, symbol: { type: ["string", "null"] },
   chainId: { type: ["integer", "null"] },
   pairToken: { type: ["string", "null"] }, initialBuy: { type: ["string", "null"] },
-}, required: ["name", "symbol", "chainId", "pairToken", "initialBuy"], additionalProperties: false };
+  description: { type: ["string", "null"] }, website: { type: ["string", "null"] }, x: { type: ["string", "null"] },
+}, required: ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x"], additionalProperties: false };
 const buildSchema = { type: "object", properties: {
   reply: { type: "string" }, source: { type: "string" }, hookSummary: { type: "string" }, setupPatch: setupSchema,
 }, required: ["reply", "source", "hookSummary", "setupPatch"], additionalProperties: false };
@@ -93,8 +94,14 @@ function coinUpdate(answer: Record<string, unknown>, request: ChatRequest): Pick
         throw new Error("Unprovided pair address");
       }
     }
+    for (const field of ["website", "x"] as const) {
+      const link = setupPatch[field]?.replace(/\/$/u, "");
+      if (link && request.coin?.[field]?.replace(/\/$/u, "") !== link
+        && !request.messages.filter(message => message.role === "user").some(message => message.content.includes(link)))
+        throw new Error("Unprovided project link");
+    }
     return Object.keys(setupPatch).length ? { setupPatch } : {};
-  } catch { throw new CustomAIError("settings", "I couldn't apply those coin details. Please give me the network and pair address again.", 502); }
+  } catch { throw new CustomAIError("settings", "I couldn't apply those coin details. Please check the network, pair address and project links.", 502); }
 }
 
 export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,

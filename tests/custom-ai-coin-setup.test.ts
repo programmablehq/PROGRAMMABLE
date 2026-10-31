@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { applyCoinSetupPatch, coinBio, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "../lib/custom-ai/coin-setup";
+import { applyCoinSetupPatch, coinBio, coinPresentationIssue, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "../lib/custom-ai/coin-setup";
 import { parseChatRequest, type ChatRequest, type Draft } from "../lib/custom-ai/types";
 import { runCustomAI } from "../lib/custom-ai/service.server";
 
@@ -15,6 +15,26 @@ const plan = (action: string, setupPatch: object = {}) => response({ reply: "Req
   feeChecks: [{ afterSeconds: 0, buy: true, totalFeeBps: 100 }, { afterSeconds: 0, buy: false, totalFeeBps: 100 }] });
 
 describe("Chat-driven coin details", () => {
+  it("keeps owned public metadata across saves and network changes without inventing defaults", () => {
+    const metadata = { description: "This coin follows the agreed volume rule.\nOnly that rule.", website: "https://example.com/", x: "https://x.com/example_coin" };
+    const current = applyCoinSetupPatch(EMPTY_COIN_SETUP, parseCoinSetupPatch(metadata));
+    expect(parseChatRequest({ ...request, coin: current }).coin).toEqual(current);
+    expect(applyCoinSetupPatch(current, { chainId: 999 })).toMatchObject(metadata);
+    for (const field of ["description", "website", "x"] as const) expect(coinPresentationIssue(current, field)).toBe("");
+    expect(parseCoinSetupPatch({ website: "https://exa", x: "" })).toEqual({ website: "https://exa", x: "" });
+    expect(parseCoinSetupPatch({})).not.toHaveProperty("website");
+    for (const value of [{ description: "é".repeat(2049) }, { website: "https://example.com/\nsecret" }, { x: "x".repeat(2049) }])
+      expect(() => parseCoinSetupPatch(value)).toThrow();
+    expect(coinPresentationIssue({ ...current, website: "http://localhost/" }, "website")).not.toBe("");
+    expect(coinPresentationIssue({ ...current, x: "https://x.com/example/status/123" }, "x")).not.toBe("");
+  });
+  it("accepts supplied public links without regenerating code, and rejects model-invented links", async () => {
+    const metadata = { description: "This coin follows the agreed volume rule.", website: "https://example.com/", x: "https://x.com/example_coin" };
+    const compile = vi.fn(), call = vi.fn(async () => plan("answer", metadata));
+    await expect(runCustomAI(request, undefined, { call, compile })).rejects.toMatchObject({ code: "settings" });
+    const result = await runCustomAI({ ...request, messages: [{ role: "user", content: `Use ${metadata.website} and ${metadata.x}. Write this description: ${metadata.description}` }] }, undefined, { call, compile });
+    expect(result.setupPatch).toEqual(metadata); expect(compile).not.toHaveBeenCalled();
+  });
   it("applies only the named fields and retains the rest", () => {
     expect(applyCoinSetupPatch(EMPTY_COIN_SETUP, { name: "Example", symbol: "EXM" })).toEqual({ ...EMPTY_COIN_SETUP, name: "Example", symbol: "EXM" });
   });

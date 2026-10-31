@@ -197,10 +197,20 @@ test("four-chain source settings retain native currency and never load a foreign
  await page.locator("summary").filter({hasText:"Coin details"}).click();await expect(page.getByRole("button",{name:"Pair ETH",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"HyperEVM",exact:true}).click();await expect(page.getByRole("button",{name:"Pair HYPE",exact:true})).toBeVisible();
  await expect(page.getByRole("textbox",{name:"Initial buy",exact:true})).toHaveValue("");await page.getByRole("textbox",{name:"Initial buy",exact:true}).fill("0.2");
- await expect.poll(()=>[...f.studios.values()][0]?.state.settings).toMatchObject({chainId:999,pairToken:"HYPE",initialBuy:"0.2"});
+ const metadata={description:"A public coin following its saved volume rule.",website:"https://example.com/",x:"https://x.com/example_coin"};
+ await page.getByRole("textbox",{name:"Public description",exact:true}).fill(metadata.description);
+ await page.getByRole("textbox",{name:"Project website",exact:true}).fill(metadata.website);
+ await page.getByRole("textbox",{name:"X profile",exact:true}).fill(metadata.x);
+ await expect.poll(()=>[...f.studios.values()][0]?.state.settings).toMatchObject({chainId:999,pairToken:"HYPE",initialBuy:"0.2",...metadata});
  await page.reload();await expect(box).toBeEditable();await expect(page.getByText("Contract design",{exact:true})).toBeVisible();
  await page.locator("summary").filter({hasText:"Coin details"}).click();await expect(page.getByRole("button",{name:"Pair HYPE",exact:true})).toBeVisible();
  await expect(page.getByRole("textbox",{name:"Initial buy",exact:true})).toHaveValue("0.2");
+ await expect(page.getByRole("textbox",{name:"Public description",exact:true})).toHaveValue(metadata.description);
+ await expect(page.getByRole("textbox",{name:"Project website",exact:true})).toHaveValue(metadata.website);
+ await expect(page.getByRole("textbox",{name:"X profile",exact:true})).toHaveValue(metadata.x);
+ await page.getByRole("textbox",{name:"Public description",exact:true}).focus();await page.keyboard.press("Tab");
+ await expect(page.getByRole("textbox",{name:"Project website",exact:true})).toBeFocused();await page.keyboard.press("Tab");
+ await expect(page.getByRole("textbox",{name:"X profile",exact:true})).toBeFocused();
  for(const width of [360,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`four-chain-${width}.png`),fullPage:true});}
  expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);expect(f.calls).toHaveLength(0);
 });

@@ -72,6 +72,10 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("isolated general contract 
     expect(first.compiled).toBe(true); expect(first.artifactHash).toBe(second.artifactHash);
     expect(first.contracts[0].abi.some(item => item.type === "function" && item.name === "setBalance")).toBe(true);
     expect(first.contracts[0].creationBytecode).toMatch(/^0x[0-9a-f]+$/);
+    const metadata = JSON.parse(first.contracts[0].compilerMetadata!);
+    expect(metadata.compiler.version).toBe(GENERAL_PROJECT_COMPILER);
+    expect(metadata.settings.compilationTarget).toEqual({ "GeneralHook.sol": "GeneralHook" });
+    expect(metadata.settings.metadata).toEqual({ bytecodeHash: "none", appendCBOR: false });
     expect(first).toMatchObject({ projectHash: project.hash, verification: "not-run", launchReady: false });
   });
   it("cannot read an unsupplied host import", async () => {

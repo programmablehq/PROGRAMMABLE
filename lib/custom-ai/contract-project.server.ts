@@ -15,7 +15,10 @@ export type CompiledProject = {
   compiler: string;
   diagnostics: { severity: "error" | "warning"; message: string }[];
   contracts: (ProjectEntrypoint & { abi: import("viem").Abi; creationBytecode: `0x${string}`; runtimeBytecode: `0x${string}`;
-    immutableReferences: Record<string, { start: number; length: number }[]>; storageLayout: unknown })[];
+    immutableReferences: Record<string, { start: number; length: number }[]>; storageLayout: unknown;
+    /** Older saved builds remain readable; new production packing requires the
+     * exact compiler metadata rather than a client-created reconstruction. */
+    compilerMetadata?: string })[];
   /** Compilation does not establish intended behavior or review approval. */
   verification: "not-run";
   launchReady: false;

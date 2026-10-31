@@ -24,7 +24,7 @@ process.stdin.on("end", () => {
     if (!hasCompilerErrors) for (const entry of envelope.entrypoints) {
       const contract = output.contracts?.[entry.source]?.[entry.contract];
       const bytecode = contract?.evm?.bytecode, runtime = contract?.evm?.deployedBytecode;
-      if (!contract || !bytecode?.object || !runtime?.object) {
+      if (!contract || !bytecode?.object || !runtime?.object || typeof contract.metadata !== "string") {
         diagnostics.push({ severity: "error", message: `${entry.source}:${entry.contract} must be a concrete contract.` });
         continue;
       }
@@ -39,7 +39,7 @@ process.stdin.on("end", () => {
         continue;
       }
       contracts.push({ ...entry, abi: contract.abi, creationBytecode: `0x${bytecode.object}`, runtimeBytecode: `0x${runtime.object}`,
-        immutableReferences: runtime.immutableReferences ?? {}, storageLayout: contract.storageLayout });
+        immutableReferences: runtime.immutableReferences ?? {}, storageLayout: contract.storageLayout, compilerMetadata: contract.metadata });
     }
     const compiled = !hasCompilerErrors && !diagnostics.some(error => error.severity === "error") && contracts.length === envelope.entrypoints.length;
     process.stdout.write(JSON.stringify({ compiled, compiler: solc.version(), diagnostics,

@@ -79,5 +79,5 @@ export function projectCompilerInput(project: ContractProject) {
   if (checked.hash !== project.hash) throw new TypeError("The contract project changed after it was saved.");
   return { language: "Solidity", sources: checked.sources, settings: { optimizer: { enabled: true, runs: checked.compiler.optimizerRuns },
     viaIR: checked.compiler.viaIR, evmVersion: checked.compiler.evmVersion, metadata: { bytecodeHash: "none", appendCBOR: false },
-    outputSelection: { "*": { "*": ["abi", "evm.bytecode", "evm.deployedBytecode", "storageLayout"] } } } };
+    outputSelection: { "*": { "*": ["abi", "metadata", "evm.bytecode", "evm.deployedBytecode", "storageLayout"] } } } };
 }

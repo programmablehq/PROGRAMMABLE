@@ -120,7 +120,7 @@ https://developers.uniswap.org/docs/protocols/v4/concepts/hooks`;
 
 export const BUILD_RULES = `Generate a draft for the described fee logic, preserving the user's intent.
 Output JSON with reply (string in the user's language), source (Solidity string), hookSummary (English string), and setupPatch.
-setupPatch contains name, symbol, chainId, pairToken and initialBuy. Set each field to null unless the user
+setupPatch contains name, symbol, chainId, pairToken, initialBuy, description, website and x. Set each field to null unless the user
 asks to set or change it. Apply explicit coin details in chat even without a request to change the hook.
 When building a named coin, include its supplied name and ticker in setupPatch as well as the source.
 Use chainId 1 for Ethereum mainnet, 4663 for Robinhood, 8453 for Base and 999 for HyperEVM. Never infer an unsupported chain.
@@ -129,7 +129,9 @@ For the default native pair, set pairToken to "ETH" on Ethereum, Robinhood or Ba
 use the exact contract address supplied by the user. Never invent an address or silently replace a named
 token with the native currency. If only a token name was supplied, ask for its address on the chosen chain.
 initialBuy is a decimal string in pair-token units. Do not invent or increase a user's purchase amount.
-Do not regenerate the hook for a change to name, ticker, network, pair or initial buy; use an empty source.
+description is the public coin description. Set it only when the user supplies it or asks you to write it from the agreed design.
+website and x are the project's own links, supplied by the user or already saved in the coin details. Never invent links, use Programmable's links as the project's links, or infer an affiliation. Ask for missing project links only when preparing the launch.
+Do not regenerate the hook for a change to name, ticker, network, pair, initial buy, description or project links; use an empty source.
 Image selection uses the file picker; do not ask users for an image URL.
 For every generated source, write hookSummary as a short factual clause completing
 "Example is a coin with a hook that …". Describe the exact generated behavior, including total fee rates,
