@@ -79,6 +79,27 @@ describe("a production deployment declared before source", () => {
     const value = raw(); value.targets[1].hookPermissions = 128 | 8;
     expect(declare(value).targets[1].hookPermissions).toBe(136);
   });
+  it("binds explicit selected fees and liquidity without inventing defaults for older declarations", () => {
+    const value = { ...raw(), fees: { buyPpm: 100000, sellPpm: 3000 }, liquidityModel: "launch-seeded-concentrated-liquidity" };
+    const complete = declare(value);
+    expect(complete.fees).toEqual(value.fees); expect(complete.liquidityModel).toBe(value.liquidityModel);
+    expect(complete.id).not.toBe(declare().id); expect(declare().fees).toBeUndefined();
+    expect(checkedGeneralDeploymentBlueprint(complete, entries, production(999), intent)).toEqual(complete);
+    const changed = { ...value, fees: { ...value.fees, sellPpm: 0 } };
+    expect(declare(changed).id).not.toBe(complete.id);
+  });
+  it("rejects incomplete, out-of-profile or unsupported fee/liquidity declarations", () => {
+    for (const patch of [{ fees: { buyPpm: 3000, sellPpm: 3000 } }, { liquidityModel: "launch-seeded-concentrated-liquidity" },
+      { fees: { buyPpm: -1, sellPpm: 3000 }, liquidityModel: "launch-seeded-concentrated-liquidity" },
+      { fees: { buyPpm: 100001, sellPpm: 3000 }, liquidityModel: "launch-seeded-concentrated-liquidity" },
+      { fees: { buyPpm: 3000.5, sellPpm: 3000 }, liquidityModel: "launch-seeded-concentrated-liquidity" },
+      { fees: { buyPpm: 3000, sellPpm: 3000 }, liquidityModel: "made-up" },
+      { fees: { buyPpm: 3000, sellPpm: 3000 }, liquidityModel: "hook-inventory-custom-accounting" }])
+      expect(() => declare({ ...raw(), ...patch })).toThrow();
+    const value = { ...raw(), fees: { buyPpm: 3000, sellPpm: 3000 }, liquidityModel: "hook-inventory-custom-accounting" };
+    value.targets[1].hookPermissions = 128 | 8;
+    expect(declare(value).liquidityModel).toBe("hook-inventory-custom-accounting");
+  });
   it("keeps the deployment recipe inside the original oracle/source hash and rejects later replacement", () => {
     const p = production(999), recipe = declare();
     const contracts = entries.map((entry, index) => ({ ...entry, id: ["token", "hook", "liquidity"][index], arguments: [], functions: [], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] }));

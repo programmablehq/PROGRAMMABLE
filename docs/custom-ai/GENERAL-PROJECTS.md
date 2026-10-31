@@ -209,6 +209,13 @@ is never treated as native launch funding; that path needs an explicit native
 funding value. The resolver has no network, model, wallet or signing access and
 keeps `launchReady:false`.
 
+New launch declarations also bind explicit applicant-selected buy/sell rates
+and the intended liquidity model. The source and profile retain their own fee
+rules; variable behavior is not reclassified as a constant fee. Older saved
+declarations keep their original hash without invented zero rates. Preparation
+must obtain a complete declaration before packing. Inventory accounting requires
+the corresponding swap-return-delta permission.
+
 The declaration and value resolver are qualified locally. Canonical graph/Plan
 packing, review submission and wallet authorization remain unfinished. No new
 public launch capability is claimed.

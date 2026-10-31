@@ -18,6 +18,8 @@ export type GeneralDeploymentBlueprint = {
   version: 1; id: `sha256:${string}`; productionId: LaunchProductionContext["id"];
   targets: GeneralDeploymentTarget[];
   pool: { token: string; hook: string; initializer: string; platformFeeBinding: string; fee: number; tickSpacing: number };
+  fees?: { buyPpm: number; sellPpm: number };
+  liquidityModel?: "external-concentrated-liquidity" | "launch-seeded-concentrated-liquidity" | "hook-inventory-custom-accounting";
 };
 type ObjectValue = Record<string, unknown>;
 const invalid = (): never => { throw new TypeError("Declare a complete deployment graph separately from the local test fixtures."); };
@@ -38,7 +40,11 @@ function nativeValue(value: unknown): DeploymentNativeValue {
 export function createGeneralDeploymentBlueprint(value: unknown, entries: ProjectEntrypoint[], production: LaunchProductionContext,
   intent: LaunchIntent): GeneralDeploymentBlueprint {
   production = checkedLaunchProductionContext(production, production.chainId);
-  const raw = object(value, "targets,pool");
+  if (!value || typeof value !== "object" || Array.isArray(value)) return invalid();
+  const fields = Object.keys(value);
+  const hasFees = fields.includes("fees"), hasLiquidity = fields.includes("liquidityModel");
+  if (hasFees !== hasLiquidity) return invalid();
+  const raw = object(value, hasFees ? "targets,pool,fees,liquidityModel" : "targets,pool");
   if (!Array.isArray(raw.targets) || raw.targets.length < 3 || raw.targets.length > 16 || raw.targets.length !== entries.length
     || new TextEncoder().encode(JSON.stringify(value)).length > 64_000) return invalid();
   const all = new Set(raw.targets.map(target => identifier(object(target,
@@ -104,7 +110,16 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
     || !target(pool.platformFeeBinding) || !target(pool.initializer)?.initializer
     || !Number.isSafeInteger(p.fee) || pool.fee < 0 || pool.fee > 1_000_000 && pool.fee !== 0x800000
     || !Number.isSafeInteger(p.tickSpacing) || pool.tickSpacing < 1 || pool.tickSpacing > 32767) return invalid();
-  const body = { version: 1 as const, productionId: production.id, targets, pool };
+  let fees: GeneralDeploymentBlueprint["fees"], liquidityModel: GeneralDeploymentBlueprint["liquidityModel"];
+  if (hasFees) {
+    const selected = object(raw.fees, "buyPpm,sellPpm");
+    if (![selected.buyPpm, selected.sellPpm].every(rate => Number.isSafeInteger(rate) && Number(rate) >= 0 && Number(rate) <= 100_000)
+      || !["external-concentrated-liquidity", "launch-seeded-concentrated-liquidity", "hook-inventory-custom-accounting"].includes(String(raw.liquidityModel))) return invalid();
+    fees = { buyPpm: Number(selected.buyPpm), sellPpm: Number(selected.sellPpm) };
+    liquidityModel = raw.liquidityModel as GeneralDeploymentBlueprint["liquidityModel"];
+    if (liquidityModel === "hook-inventory-custom-accounting" && !(Number(target(pool.hook)?.hookPermissions) & 12)) return invalid();
+  }
+  const body = { version: 1 as const, productionId: production.id, targets, pool, ...(fees ? { fees, liquidityModel } : {}) };
   return structuredClone({ ...body, id: canonicalBrowserSha256V2("programmable.custom-ai-deployment-blueprint.v1", body) });
 }
 
@@ -119,10 +134,12 @@ export function checkedGeneralDeploymentBlueprint(value: GeneralDeploymentBluepr
 export function deploymentBlueprintInput(value: GeneralDeploymentBlueprint) {
   return { targets: value.targets.map(target => ({ id: target.id, source: target.source, contract: target.contract,
     constructorArguments: target.constructorArguments, initializer: target.initializer, deploymentValue: target.deploymentValue,
-    initializerValue: target.initializerValue, hookPermissions: target.hookPermissions })), pool: value.pool };
+    initializerValue: target.initializerValue, hookPermissions: target.hookPermissions })), pool: value.pool,
+    ...(value.fees ? { fees: value.fees, liquidityModel: value.liquidityModel } : {}) };
 }
 
-export const generalDeploymentPlanningRules = `A launchable general token/hook design also declares deployment inside generalChecks, separately from the local examples. Its object has exactly targets and pool.
+export const generalDeploymentPlanningRules = `A launchable general token/hook design also declares deployment inside generalChecks, separately from the local examples. Its object has exactly targets, pool, fees and liquidityModel.
 targets is an ordered array, one per source entrypoint, with {id,source,contract,constructorArguments,initializer,deploymentValue,initializerValue,hookPermissions}. The role comes from the declared source entrypoint. Constructor target refs point only to earlier targets. initializer is null or {function:unambiguousPublicFunctionName,arguments:[...]}; its target refs may point forward. Values are strings, booleans, nested arrays, {target:id}, {input:'controller'|'name'|'symbol'|'quote'|'funding'}, or {binding:'pool-manager'|'launch-executor'|'graph-factory'|'permit-authority'|'fee-recipient'|'funding-token'}. Literal external addresses require explicit saved design provenance. Never use fixture, account, pool, v4-router or test-trader refs in a production deployment.
 Native deploymentValue/initializerValue is either '0' or {input:'funding'}. The saved wallet funding amount may be consumed once in the entire graph, never multiplied. initializerValue must be '0' when initializer is null. hookPermissions is the exact integer bit mask for a hook, otherwise null.
-pool has exactly {token,hook,initializer,platformFeeBinding,fee,tickSpacing}. It selects one token, one hook, a real source liquidity initializer with a declared initializer call, and the source component binding the platform fee. The initializer must implement the actual PoolManager settlement/funding path, never call the synthetic v4-router. A recipe is a declaration; actual ABI, source/runtime, canonical packing and backend admission still follow. For Robinhood do not invent graph-factory, permit-authority or funding-token roots that its Plan context does not expose.`;
+pool has exactly {token,hook,initializer,platformFeeBinding,fee,tickSpacing}. It selects one token, one hook, a real source liquidity initializer with a declared initializer call, and the source component binding the platform fee. The initializer must implement the actual PoolManager settlement/funding path, never call the synthetic v4-router. A recipe is a declaration; actual ABI, source/runtime, canonical packing and backend admission still follow. For Robinhood do not invent graph-factory, permit-authority or funding-token roots that its Plan context does not expose.
+fees has {buyPpm,sellPpm}, integer applicant-selected source rates in the canonical profile's 0..100000 ppm range. Derive them from the complete agreed design and selected policy; do not silently choose zero or claim variable fees are constant. The selected chain's platform/opening fee rules still apply independently. Preserve or clarify a concrete conflict. liquidityModel is launch-seeded-concentrated-liquidity for a coin whose declared source seeds liquidity, external-concentrated-liquidity only when external liquidity is explicitly intended, or hook-inventory-custom-accounting for an agreed inventory/delta mechanism. The inventory model needs a declared swap-return-delta permission. These are declarations, never execution evidence.`;
