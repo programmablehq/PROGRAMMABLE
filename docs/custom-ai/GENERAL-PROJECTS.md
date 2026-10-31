@@ -26,6 +26,12 @@ The model context carries all stable requirement IDs, text, kind and open choice
 
 General projects use the same conversation and data-integration voice as the fee builder. The fee core's token supply, fee bounds and restricted interface stay scoped to that core. The selected general route's current source, funding and platform-fee policies must still be supplied and enforced through its existing backend.
 
+## Owned checkpoints
+
+`store.projects` saves the complete source before compilation in the existing owned job/object storage. It binds the source to the request payload hash and admits writes only from that job's current, unexpired running lease. Cancellation, a completed job, a wrong owner or an expired worker cannot write or attach later compiler output. An identical save is idempotent; another source revision requires a new owned request.
+
+The source remains readable by its owner after a compiler failure. Compiler output must match both the exact saved project hash and its canonical artifact hash; it cannot claim behavior verification or launch readiness. Status polling continues to omit these larger checkpoints. The dedicated server-only checkpoint method supports the bounded complete project without increasing the ordinary studio/image object limit. No schema migration, new model call, submission or wallet action is part of this storage step.
+
 ## Qualification
 
 The local cases cover complete intent, negative constraints, chain isolation, missing template coverage, retained open choices, stable selection after JSON storage reordering, project mutation, unsafe paths and remote dependencies. The real isolated compiler cases check repeatable artifacts, general mutable contracts, an inline dependency, missing entrypoints, inaccessible host imports and unresolved library addresses. They do not use RPCs, model calls, wallet transactions or provider funding.

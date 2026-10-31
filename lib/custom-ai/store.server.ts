@@ -6,6 +6,7 @@ import type { ExecutionProfile } from "./ai-config";
 import { refundsProviderFailure } from "./provider-errors";
 import { bindConversationJob, createConversationStore, updateConversationStudio } from "./conversation.server";
 import type { WalletAction, WalletSession } from "./launch-session";
+import { createProjectStore } from "./project-store.server";
 
 export interface AIConnection {
   query(sql: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
@@ -305,7 +306,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { conversations: createConversationStore(transaction), reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
+  return { projects: createProjectStore(transaction), conversations: createConversationStore(transaction), reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;
