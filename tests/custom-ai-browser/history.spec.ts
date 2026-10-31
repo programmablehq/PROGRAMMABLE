@@ -13,7 +13,7 @@ test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127
 test.afterAll(async()=>{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
- const calls:ChatRequest[]=[],control={delay:false,beforeUpdate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[]};
+ const calls:ChatRequest[]=[],control={delay:false,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[]};
  const key=(account:string,id:string,principal="alice")=>principal+":"+account+":"+id;
  const create=(account:string,id:string,principal="alice")=>{const k=key(account,id,principal);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
  await page.route("**/api/**",async route=>{
@@ -22,7 +22,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
   if(body&&["/api/custom-ai","/api/custom-ai/studio"].includes(url.pathname)&&request.headers()["x-custom-ai-cache-scope"]!==(principal==="bob"?"b".repeat(64):cacheScope))return route.fulfill({status:409,json:{code:"session_changed",error:"Reload for the current account"}});
   const account=body?.account??url.searchParams.get("account")??"",id=body?.conversationId??url.searchParams.get("conversation")??LEGACY_CONVERSATION,k=key(account,id,principal);
   if(url.pathname==="/api/custom-ai/conversations"){
-   if(body?.action==="bootstrap"||body?.action==="create")return route.fulfill({json:{...create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id,principal),...(body.action==="bootstrap"?{cacheScope:principal==="bob"?"b".repeat(64):cacheScope}:{})}});
+   if(body?.action==="bootstrap"||body?.action==="create"){const chat=create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id,principal);if(body.action==="create")await control.beforeCreate?.();return route.fulfill({json:{...chat,...(body.action==="bootstrap"?{cacheScope:principal==="bob"?"b".repeat(64):cacheScope}:{})}});}
    if(body?.action==="update"){await control.beforeUpdate?.();const chat=chats.get(key(account,body.id,principal))!;if(body.revision!==chat.revision)return route.fulfill({status:409,json:{error:"Chat changed"}});Object.assign(chat,body.title?{title:body.title,customTitle:true}:{archived:body.archived});chat.revision++;return route.fulfill({json:chat});}
    const one=url.searchParams.get("id");if(one)return route.fulfill({json:chats.get(key(account,one,principal))});
    control.listQueries.push({q:url.searchParams.get("q")??"",archived:url.searchParams.get("archived")==="true"});
@@ -45,6 +45,51 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
  });
  return {chats,studios,jobs,calls,control};
 }
+test("a submitted signed-out idea survives connection in its own private chat",async({page})=>{
+ const f=await fixture(page),account="0x"+"a".repeat(40),oldKey="alice:"+account+":"+LEGACY_CONVERSATION,now=new Date().toISOString();
+ f.chats.set(oldKey,{id:LEGACY_CONVERSATION,account,title:"Existing private coin",archived:false,revision:1,createdAt:now,updatedAt:now});
+ const old:StudioState={settings:{...EMPTY_COIN_SETUP,name:"Existing private coin",symbol:"OLD"},messages:[{role:"user",content:"Earlier private rules"}],input:"Earlier unsent message"};
+ f.studios.set(oldKey,{revision:1,state:old});await page.goto(origin+"?signed-out=1");
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("A new idea before connecting");await box.press("Enter");
+ expect(f.calls).toHaveLength(0);
+ await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();
+ await expect(box).toHaveValue("A new idea before connecting");
+ expect(f.calls).toHaveLength(0);
+ await expect.poll(()=>[...f.studios.entries()].find(([key])=>key!==oldKey)?.[1].state.input).toBe("A new idea before connecting");
+ await page.reload();await expect(box).toHaveValue("A new idea before connecting");expect(f.calls).toHaveLength(0);
+ await box.press("Enter");await expect(page.getByText("Reply for A new idea before connecting",{exact:true})).toBeVisible();
+ expect(f.calls).toHaveLength(1);expect(f.calls[0].messages).toEqual([{role:"user",content:"A new idea before connecting"}]);
+ expect(f.calls[0].conversation?.id).not.toBe(LEGACY_CONVERSATION);expect(f.calls[0].coin).toEqual(EMPTY_COIN_SETUP);
+ expect(f.studios.get(oldKey)).toEqual({revision:1,state:old});
+ await page.getByRole("button",{name:"Chats",exact:true}).click();await page.getByRole("button",{name:/^Existing private coin/}).click();
+ await expect(box).toHaveValue("Earlier unsent message");
+});
+test("a principal switch during sign-in bootstrap cannot receive the pending prompt",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"?signed-out=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await expect(box).toBeEditable();await box.fill("Only for the first connected identity");await box.press("Enter");
+ let release!:()=>void,started=false;const gate=new Promise<void>(resolve=>{release=resolve;});f.control.beforeCreate=async()=>{started=true;await gate;};
+ try{
+  await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();await expect.poll(()=>started).toBe(true);
+  await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();await expect(box).toBeEditable();await expect(box).toHaveValue("");
+  release();expect(f.calls).toHaveLength(0);expect([...f.studios.entries()].filter(([key])=>key.startsWith("bob:")).every(([,value])=>!value.state.input)).toBe(true);
+ }finally{release();}
+});
+test("signed-out submission rejects a secret before opening any private chat",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"?signed-out=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await expect(box).toBeEditable();const secret="-----BEGIN PRIVATE KEY----- synthetic fixture";await box.fill(secret);await box.press("Enter");
+ await expect(page.getByRole("alert")).toContainText("secret key");await expect(box).toHaveValue(secret);expect(f.calls).toHaveLength(0);expect(f.chats.size).toBe(0);
+ await box.fill("");await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();await expect(box).toHaveValue("");expect(f.chats.size).toBe(1);
+});
+test("a signed-out browser copy is not treated as a current sign-in prompt",async({page})=>{
+ const f=await fixture(page);await page.goto(origin+"?signed-out=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open("programmable-custom-ai-v1",1);r.onupgradeneeded=()=>r.result.createObjectStore("drafts");r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  await new Promise<void>((resolve,reject)=>{const tx=db.transaction("drafts","readwrite");tx.objectStore("drafts").put(JSON.stringify({version:1,messages:[{role:"user",content:"Old anonymous rules"}],input:"Old anonymous input"}),"programmable.custom-ai.studio.v1:signed-out");tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});db.close();
+ });
+ await page.reload();await expect(box).toBeEditable();await expect(box).toHaveValue("");await expect(page.getByText("Old anonymous rules",{exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();await expect(box).toHaveValue("");expect(f.chats.size).toBe(1);expect(f.calls).toHaveLength(0);
+});
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Keep this original unsent idea");

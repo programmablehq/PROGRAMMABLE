@@ -26,11 +26,30 @@ import { LEGACY_CONVERSATION } from "@/lib/custom-ai/conversation";
 import { useChatLibrary } from "./chat-library";
 import { useAIReply } from "./use-ai-reply";
 import { canMigrateLegacyCache, scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
+import { bindPromptHandoff, createPromptHandoff, type PromptHandoff } from "@/lib/custom-ai/prompt-handoff";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boolean }) {
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
+  const [pendingPrompt,setPendingPrompt]=useState<PromptHandoff>();
+  const sessionReady=wallet.authReady!==false&&wallet.sessionReady!==false;
+  // Adjust this transient state before committing children for a changed
+  // identity. A subsequent account must never mount with the prior prompt.
+  if(pendingPrompt&&!localPreview&&sessionReady){
+    if(owner==="signed-out"){
+      if(pendingPrompt.principal)setPendingPrompt(undefined);
+    }else if(wallet.sessionOwner){
+      const bound=bindPromptHandoff(pendingPrompt,wallet.sessionOwner,owner);
+      if(bound!==pendingPrompt)setPendingPrompt(bound);
+    }
+  }
+  const acceptPrompt=(id:string)=>setPendingPrompt(current=>current?.id===id?undefined:current);
+  const boundPrompt=pendingPrompt?.principal===wallet.sessionOwner&&pendingPrompt?.account===owner?pendingPrompt:undefined;
+  const connectPrompt=(content:string)=>{
+    setPendingPrompt(createPromptHandoff(content));
+    wallet.openWallet();
+  };
   const headers: AISessionHeaders = async (): Promise<Record<string, string>> => {
     if (localPreview) return {};
     const access = await wallet.getAccessToken();
@@ -39,12 +58,13 @@ export function CustomAIWorkspace({ localPreview = false }: { localPreview?: boo
     // the SDK for an optional identity token also refreshes /users/me.
     return { Authorization: `Bearer ${access}` };
   };
-  if(!localPreview&&(wallet.authReady===false||wallet.sessionReady===false))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
-  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false}/></AuthenticatedChats></Suspense>;
-  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} />;
+  if(!localPreview&&(!sessionReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
+  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
+  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} onConnectPrompt={connectPrompt}/>;
 }
 
-function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { owner: string; headers: AISessionHeaders; localPreview: boolean }) {
+function CustomAISession({ owner, headers: sessionHeaders, localPreview, initialPrompt, onPromptAccepted, onConnectPrompt }: { owner: string; headers: AISessionHeaders; localPreview: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void }) {
+  const incomingPrompt=useRef(initialPrompt?{prompt:initialPrompt,accept:onPromptAccepted}:undefined);
   const library=useChatLibrary(),conversationId=library?.id,navigation=library?.navigation;
   const cacheScope=library?.cacheScope;
   const headers: AISessionHeaders=useCallback(async():Promise<Record<string,string>>=>({...await sessionHeaders(),...(cacheScope?{"X-Custom-AI-Cache-Scope":cacheScope}:{})}),[sessionHeaders,cacheScope]);
@@ -138,6 +158,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { own
   useEffect(() => {
     let cancelled = false;
     let local: StudioState | null = null;
+    let hasServerCopy = false;
     let previousBase: StudioBase | undefined;
     const controller = new AbortController();
     lifetime.current = controller;
@@ -145,7 +166,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { own
     remote.current.ready = false;
     let serverRead:Promise<StoredStudio|null>|undefined;
     const readServer=()=>serverRead??=loadStudio(owner,()=>headersRef.current(),controller.signal,conversationId);
-    void readDraftCache<string>(storageKey).then(async raw => {
+    void (owner==="signed-out"?Promise.resolve(undefined):readDraftCache<string>(storageKey)).then(async raw => {
       if(typeof raw!=="string"&&legacyStorageKey){
         const server=await readServer(),legacy=await readDraftCache<string>(legacyStorageKey);
         if(typeof legacy==="string"&&legacy.length<400_000&&canMigrateLegacyCache(JSON.parse(legacy),server)){
@@ -190,6 +211,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { own
           try {
             const server = await readServer();
             if (cancelled) return;
+            hasServerCopy=Boolean(server);
             const restored = restoreStudio(local, previousBase, server);
             if (server && !restored.keepLocal) {
               setMessages(server.state.messages); setSettings(server.state.settings);
@@ -211,7 +233,17 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { own
             if (!cancelled) { setSaveFailed(true); setNotice("Your online draft could not be loaded. This device still has its copy."); }
           }
         }
-        if (!cancelled) setRestored(true);
+        if (!cancelled) {
+          const incoming=incomingPrompt.current;
+          if(incoming&&incoming.prompt.id===conversationId&&remote.current.ready&&!remote.current.blocked){
+            // Repeating a lost bootstrap may find an already saved input.
+            // Keep that copy, and never replace newer private work.
+            if(!local&&!hasServerCopy){setInput(incoming.prompt.content);setNotice("Your message is ready to send.");}
+            incomingPrompt.current=undefined;
+            incoming.accept?.(incoming.prompt.id);
+          }
+          setRestored(true);
+        }
       });
     return () => { cancelled = true; controller.abort(); };
   }, [storageKey, legacyStorageKey, localPreview, owner, restoreRevision,conversationId]);
@@ -393,6 +425,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview }: { own
     if (replyRef.current.isActive() || recoveryRequest || coinTransition.current || !restored || launchLocked) return;
     const content = input.trim();
     if (!content) { textarea.current?.focus(); return; }
+    if(!localPreview&&owner==="signed-out"){
+      try{onConnectPrompt?.(content);setError("");setNotice("Connect your wallet. Your message stays here.");}
+      catch(cause){setError(cause instanceof Error?cause.message:"Your message could not be prepared.");}
+      return;
+    }
     const base:RetryBase={messages,pendingChange};
     const next: ChatMessage[] = [...messages, { role: "user", content }];
     const payload={...(conversationId?{conversation:{id:conversationId,account:owner,revision:retry.current?.conversation?.revision??remote.current.revision}}:{}),intent:"chat" as const,messages:conversationWindow(next),coin:settings,...(draftId?{draftId}:{}),...(contextId?{contextId}:{}),...(editTarget?{editTarget}:{})};
