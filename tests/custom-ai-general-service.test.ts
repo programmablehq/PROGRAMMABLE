@@ -30,6 +30,22 @@ function prior():GeneralProjectDraft{
 }
 
 describe("general source generation inside the owned chat job",()=>{
+ it("keeps an existing general project on its source route even if the interpreter proposes a fee template",async()=>{
+  const previous=prior(),call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated()),fee=vi.fn();
+  const value=await runCustomAI(request,undefined,{call,compile:fee,compileProject:compile},{generalProject:previous,saveProject:async()=>{}});
+  expect(value.selection?.route).toBe("custom-contract");expect(value.generalProject).toBeDefined();expect(fee).not.toHaveBeenCalled();
+ });
+ it("omits unavailable fee-program schemas and context from an ordinary general-source question",async()=>{
+  const captured:ClaudeInput[]=[],call=vi.fn(async(input:ClaudeInput)=>{captured.push(input);return plan({action:"answer",intentRequirements:[],requirements:[]});});
+  const question={...request,messages:[{role:"user" as const,content:"Explain the agreed behavior briefly."}]};
+  await runCustomAI(question,undefined,{call,compile:vi.fn()});
+  await runCustomAI(question,undefined,{call,compile:vi.fn()},{generalProject:prior()});
+  const fee=captured[0],general=captured[1],schema=general.schema as {properties:{program:unknown;eventRule:unknown;composable:unknown;executionRoute:unknown}};
+  expect(schema.properties.program).toEqual({type:"null"});expect(schema.properties.eventRule).toEqual({type:"null"});expect(schema.properties.composable).toEqual({type:"null"});
+  expect(schema.properties.executionRoute).toEqual({type:"string",enum:["custom-contract"]});
+  expect(JSON.stringify(general.schema).length).toBeLessThan(JSON.stringify(fee.schema).length);
+  expect(general.system.length).toBeLessThan(fee.system.length);expect(call).toHaveBeenCalledTimes(2);
+ });
  it.each([1,4663,8453,999] as const)("saves every rule on chain%i before compilation and never calls the fee compiler",async chainId=>{
   const events:string[]=[],call=vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(generated()),fee=vi.fn();
   const value=await runCustomAI({...request,coin:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId})},undefined,{call,compile:fee,compileProject:async project=>{events.push("compile");return compile(project);}},{
