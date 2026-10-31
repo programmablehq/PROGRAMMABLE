@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Owned-project submission, current-profile packing, exact launch preparation and wallet execution still need their integration. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan construction, protected component evidence, UI submission, backend activation and wallet execution remain unfinished. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
@@ -293,4 +293,61 @@ to persist a reproducible config outside the source bundle. The normal
 the callback or running constructors again. Existing builds without a callback
 retain their original behavior. This hook is a local integration point; it is
 not a public HTTP authority or a new API key. The Custom AI owned pack writer,
-modern Robinhood Plan construction and signed submission workflow remain pending.
+modern Robinhood Plan construction and complete production submission remain pending.
+
+## Durable graph preparation and submission journal
+
+The new `/api/custom-ai/general-launch` route is disabled unless the release
+explicitly sets `CUSTOM_AI_GENERAL_LAUNCH_ENABLED=true`. The backend's separate
+wallet-session intake also stays disabled. Neither flag is activated by these
+source changes. The general preview does not yet expose this action. Robinhood
+still requires its own modern Plan packer and never falls back to a graph route.
+
+An authenticated `prepare` action selects one owned chat, studio revision,
+complete intent and exact checked source. The browser cannot supply internal
+binding receipts, bytecode, nonces, request bytes or a replacement chain. The
+store reserves its immutable preparation identity, permit window and idempotency
+key before expensive work. Repeated clicks, including a new browser request ID
+for the same active input, recover the original ticket. An expired local compute
+lease can be recovered explicitly without a new identity or model call.
+
+Two fixed shared lease rows bound concurrent local packs. Account and global
+hourly request budgets are debited in the same short transaction. Busy leases
+and hourly limits have distinct bounded errors. A worker cannot release a slot
+that a later worker acquired. These CPU/admission guards do not change provider
+budgets, require an API key or authorize spending. No compiler, model, network
+call or signing operation runs while a database transaction is held.
+
+The packer reads only the original owned image receipt at its fixed immutable
+public blob URL. It verifies the owner-derived image ID and exact content hash;
+the existing bounded reader handles the single five-second read without retries
+or credentials. On successful packing the store checks the complete current
+semantic source binding again. It atomically publishes the sanitized source
+export and stores the final request bytes, reproducible configuration, runtime
+words and their hashes in separate private objects. An edited or archived chat
+cannot publish a stale package. Unsent input alone can change without replacing
+the checked coin design.
+
+Explicit `preflight` and `create` actions each make at most one signed backend
+POST. Before a send, fresh selected-chain discovery, current request authority,
+linked wallet, owned source and exact stored package must match. A preflight
+response must identify that exact request and retain the canonical no-persistence,
+no-nonce-allocation and no-broadcast facts. A hard block cannot become a supported
+disposition. `needs_evidence` can proceed to the normal review intake; it is not
+deployability or approval. Create responses must match the request, original
+profile/intent hashes, wallet and canonical resource location.
+
+An interrupted send, process death or mismatched successful response keeps the
+original ticket, body and idempotency key. It blocks allocation of another
+unconfirmed create for that wallet. Only a fresh explicit retry may resend the
+same stored bytes, using a new request assertion. It cannot extend the old window
+or silently change the source. The original request remains available after
+expiry. A completed exchange is not repeated by polling or another click.
+
+GET reads only the small owned journal. It never loads the complete source or
+request, observes a provider, refreshes discovery or submits anything. A stored
+backend status is the last accepted response, not a fresh lifecycle observation.
+The UI and canonical status/handoff integration remain separate work. Every
+projection keeps `launchReady:false`; HTTP success alone establishes no review,
+funding, transaction, finality, indexing or public availability. No new database
+role, grant, schema migration or production write was performed for this step.

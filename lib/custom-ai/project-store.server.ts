@@ -14,6 +14,7 @@ import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCh
 import type { LaunchIntent } from "./launch-intent";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
+import { createGeneralPreparationStore } from "./general-preparation-store.server";
 
 export type ProjectCheckpoint = {
   version: 1;
@@ -33,7 +34,7 @@ const conflict = () => new CustomAIError("project-conflict", "This saved source 
 
 /** Uses the existing owned job and object tables. Source survives a compiler
  * failure; polling never needs to transfer it. Only the active lease may write. */
-export function createProjectStore(transaction: Transaction) {
+export function createProjectStore(transaction: Transaction, now: () => number = Date.now) {
   async function active(db: AIConnection, owner: string, id: string, lease: string) {
     const row = (await db.query(`SELECT payload_hash FROM programmable_custom_ai_v1.jobs
       WHERE owner=$1 AND id=$2 AND lease=$3 AND state='running'
@@ -178,15 +179,20 @@ export function createProjectStore(transaction: Transaction) {
    * this fixed, sanitized record. A normal project read never publishes it. */
   async function publishForLaunch(owner: string, selected: GeneralLaunchSourceSelection) {
     return transaction(async db => {
-      const source = await readForLaunchInTransaction(db, owner, selected), exported = createGeneralPublicSource(source);
+      const source = await readForLaunchInTransaction(db, owner, selected);
+      const saved = await publishSourceInTransaction(db, source);
+      return { source, exported: saved, url: generalSourcePublicUri(saved.id), launchReady: false as const };
+    });
+  }
+  async function publishSourceInTransaction(db: AIConnection, source: Awaited<ReturnType<typeof readForLaunchInTransaction>>) {
+      const exported = createGeneralPublicSource(source);
       const id = exported.id.slice(7);
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES('public','launch-source',$1,$2) ON CONFLICT DO NOTHING`, [id, JSON.stringify(exported)]);
       const row = (await db.query(`SELECT value FROM programmable_custom_ai_v1.objects
         WHERE owner='public' AND kind='launch-source' AND id=$1`, [id])).rows[0];
       const saved = checkedGeneralPublicSource(row?.value as GeneralPublicSource, exported.id);
-      return { source, exported: saved, url: generalSourcePublicUri(saved.id), launchReady: false as const };
-    });
+      return saved;
   }
   async function readPublicSource(id: string) {
     if (!/^[a-f0-9]{64}$/u.test(id)) return null;
@@ -197,6 +203,8 @@ export function createProjectStore(transaction: Transaction) {
     });
   }
   return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch, publishForLaunch, readPublicSource,
+    preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
+      publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),
     read: (owner: string, id: string) => transaction(db => saved(db, owner, id)) };
 }
