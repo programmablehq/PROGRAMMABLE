@@ -22,7 +22,7 @@ const object = (value: unknown): Record<string, unknown> => {
 const exact = (value: Record<string, unknown>, keys: string[]) => {
   if (Object.keys(value).sort().join("\0") !== [...keys].sort().join("\0")) fail();
 };
-function sourcePath(value: unknown): string {
+export function projectSourcePath(value: unknown): string {
   if (typeof value !== "string" || value.length > 180 || !/^[A-Za-z0-9_@-]+(?:\/[A-Za-z0-9_.@-]+)*\.sol$/.test(value)
     || value.split("/").some(part => part === "." || part === ".." || part.startsWith("."))) return fail();
   return value;
@@ -43,7 +43,7 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
   const sources: ContractProject["sources"] = Object.create(null);
   let bytes = 0;
   for (const name of names) {
-    sourcePath(name);
+    projectSourcePath(name);
     const source = object(rawSources[name]); exact(source, ["content"]);
     if (typeof source.content !== "string" || !source.content.trim() || source.content.includes("\0")) fail();
     const size = new TextEncoder().encode(source.content as string).length;
@@ -53,7 +53,7 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
   if (!Array.isArray(input.entrypoints) || !input.entrypoints.length || input.entrypoints.length > GENERAL_PROJECT_LIMITS.entrypoints) fail();
   const entrypoints = (input.entrypoints as unknown[]).map(raw => {
     const entry = object(raw); exact(entry, ["source", "contract", "role"]);
-    const source = sourcePath(entry.source);
+    const source = projectSourcePath(entry.source);
     if (!Object.hasOwn(sources, source) || typeof entry.contract !== "string" || !/^[A-Za-z_][A-Za-z0-9_]{0,99}$/.test(entry.contract)
       || !["token", "hook", "liquidity", "auxiliary"].includes(String(entry.role))) return fail();
     return { source, contract: entry.contract, role: entry.role as ProjectEntrypoint["role"] };

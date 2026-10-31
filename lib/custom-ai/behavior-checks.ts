@@ -1,5 +1,6 @@
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import type { ContractProject } from "./contract-project";
+import type { LaunchIntent } from "./launch-intent";
 
 export const CHECK_ACCOUNTS = ["creator", "trader-a", "trader-b"] as const;
 export type CheckAccount = typeof CHECK_ACCOUNTS[number];
@@ -17,6 +18,7 @@ export type GeneralCheckPlan = {
   version: 1; id: `sha256:${string}`; projectHash: ContractProject["hash"]; intentRevision: string;
   contracts: ContractCheckFixture[]; allowedCalls: CheckValue[]; steps: ContractCheckStep[];
 };
+export type GeneralCheckScenarios = Pick<GeneralCheckPlan, "contracts" | "allowedCalls" | "steps">;
 const bad=():never=>{throw new TypeError("Use a bounded declared check plan for the complete saved design.");};
 const object=(value:unknown,keys:string[],optional:string[]=[])=>{
   if(!value||typeof value!=="object"||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return bad();
@@ -41,10 +43,10 @@ function values(value:unknown,contracts:ReadonlySet<string>,depth=0):CheckValue[
 /** A declared oracle is not a semantic verdict. The caller supplies checks
  * independently of generated source; execution binds them to the exact project.
  * These references never grant ownership, review approval or launch authority. */
-export function createGeneralCheckPlan(value:unknown,project:ContractProject):GeneralCheckPlan {
+export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent,entrypoints:ContractProject["entrypoints"]):GeneralCheckScenarios {
   if(new TextEncoder().encode(JSON.stringify(value)).length>96_000)return bad();
-  const input=object(value,["contracts","allowedCalls","steps"]),requirements=new Map(project.intent.requirements.map(rule=>[rule.id,rule]));
-  if(!Array.isArray(input.contracts)||input.contracts.length!==project.entrypoints.length||input.contracts.length>16
+  const input=object(value,["contracts","allowedCalls","steps"]),requirements=new Map(intent.requirements.map(rule=>[rule.id,rule]));
+  if(!Array.isArray(input.contracts)||input.contracts.length!==entrypoints.length||input.contracts.length>16
     ||!Array.isArray(input.steps)||!input.steps.length||input.steps.length>256)return bad();
   const covered=new Set<string>(),contractIds=new Set<string>(),entries=new Set<string>();
   const ids=(value:unknown,constraint=false):string[]=>{
@@ -54,7 +56,7 @@ export function createGeneralCheckPlan(value:unknown,project:ContractProject):Ge
   const contracts:ContractCheckFixture[]=input.contracts.map(raw=>{
     const v=object(raw,["id","source","contract","arguments","functions","allowReceive","allowFallback","surfaceRequirements"]),id=identifier(v.id);
     if(contractIds.has(id)||typeof v.source!=="string"||typeof v.contract!=="string"
-      ||!project.entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract)||entries.has(`${v.source}:${v.contract}`)
+      ||!entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract)||entries.has(`${v.source}:${v.contract}`)
       ||typeof v.allowReceive!=="boolean"||typeof v.allowFallback!=="boolean"||!Array.isArray(v.functions)||v.functions.length>128
       ||v.functions.some(fn=>typeof fn!=="string"||!fn.startsWith("function ")||fn.length>800)||new Set(v.functions).size!==v.functions.length)return bad();
     const args=values(v.arguments,contractIds);contractIds.add(id);entries.add(`${v.source}:${v.contract}`);
@@ -63,7 +65,7 @@ export function createGeneralCheckPlan(value:unknown,project:ContractProject):Ge
   });
   const allowedCalls=values(input.allowedCalls,contractIds);
   if(allowedCalls.some(item=>typeof item==="string"
-    ? !/^0x[0-9a-f]{40}$/i.test(item)||!project.intent.requirements.some(rule=>(rule.text+(rule.origin.kind==="message"?rule.origin.quote:"")).toLowerCase().includes(item.toLowerCase()))
+    ? !/^0x[0-9a-f]{40}$/i.test(item)||!intent.requirements.some(rule=>(rule.text+(rule.origin.kind==="message"?rule.origin.quote:"")).toLowerCase().includes(item.toLowerCase()))
     : typeof item!=="object"||Array.isArray(item)))return bad();
   const stepIds=new Set<string>(),observed=new Set<string>();let lastTime=0;
   const steps:ContractCheckStep[]=input.steps.map(raw=>{
@@ -83,6 +85,11 @@ export function createGeneralCheckPlan(value:unknown,project:ContractProject):Ge
       expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds)}:{})}};
   });
   if(covered.size!==requirements.size||[...requirements.values()].some(rule=>rule.kind==="behavior"&&!observed.has(rule.id)))return bad();
+  return {contracts,allowedCalls,steps};
+}
+
+export function createGeneralCheckPlan(value:unknown,project:ContractProject):GeneralCheckPlan {
+  const {contracts,allowedCalls,steps}=normalizeGeneralCheckScenarios(value,project.intent,project.entrypoints);
   const body={version:1 as const,projectHash:project.hash,intentRevision:project.intent.revision,contracts,allowedCalls,steps};
   return {...body,id:canonicalBrowserSha256V2("programmable.general-declared-checks.v1",body)};
 }

@@ -73,6 +73,10 @@ This implementation state does not establish a public general-contract launch. I
 
 ## Declared scenario checks
 
+`check-blueprint.ts` defines interfaces and observable scenarios against the complete canonical design before source exists. Its hash includes the full intent, revision, chain, compiler target and declared role of every entrypoint. The generated source cannot change that blueprint. Binding later creates a separate source-specific plan, so the same expected behavior can reject a different implementation. Durable JSON object key reordering does not change the binding.
+
+This pure blueprint helper is not yet an interpreter integration or a durable pre-generation receipt. The owned job must save it before any source is written or generated, then bind reports to that original receipt. Passing primitive scenarios remains separate from trusted v4/world fixtures, submission, review and launch preparation.
+
 `behavior-checks.ts` binds a bounded, declared oracle to the exact project and intent revision. It covers every saved requirement ID, requires observable expectations for behavior requirements, and keeps explicit contract interfaces, constructor arguments, allowed call targets and ordered cases. Contract references follow deployment order. Fixture accounts are local test identities. A literal allowed call address must occur in the saved design; the model cannot add an unrelated payment target to make a check pass.
 
 `checkGeneralScenarios` verifies the exact source/artifact/plan binding and uses the existing pinned EthereumJS toolchain in a separate worker. Only the compiler/toolchain and worker files are readable, the parent environment is not inherited, and the runner exposes no RPC, model call, shell command or user-selected URL. The declared Solidity bytecode runs in memory. Execution has per-call and total gas bounds, a 30-second worker limit and a 384-MB heap limit.
