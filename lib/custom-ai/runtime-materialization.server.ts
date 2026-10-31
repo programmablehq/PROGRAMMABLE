@@ -1,0 +1,84 @@
+import "server-only";
+import { execFile } from "node:child_process";
+import { realpath } from "node:fs/promises";
+import { join } from "node:path";
+import { concatHex, encodeDeployData, getAddress, getCreate2Address, keccak256, type Address, type Hex } from "viem";
+import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
+import type { ContractProject } from "./contract-project";
+import type { CompiledProject } from "./contract-project.server";
+import { resolveGeneralDeploymentValues } from "./deployment-values.server";
+import type { CoinSetup } from "./coin-setup";
+import { CustomAIError } from "./types";
+
+export type GeneralDeploymentPrediction = { targetId: string; predictedAddress: Address; effectiveSalt: Hex; resolvedConstructorArguments: Hex };
+type RuntimeResult = { status: "materialized" | "needs-context"; passes: number; gasUsed: string; failures: { target: string; code: string }[];
+  contracts: { id: string; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[] };
+const invalid = (): never => { throw new CustomAIError("runtime-context", "The saved constructor inputs or deployment addresses changed. Refresh this preparation.", 409); };
+export class GeneralRuntimeContextIncomplete extends CustomAIError {
+  readonly findings: readonly Readonly<{ target: string; code: string }>[];
+  constructor(findings: RuntimeResult["failures"]) {
+    super("runtime-dependency", "The constructors need additional network context or a deterministic runtime before this design can be prepared. Your source is saved.", 422);
+    this.findings = Object.freeze(findings.slice(0, 16).map(finding => Object.freeze({ target: finding.target, code: finding.code })));
+  }
+}
+
+export async function materializeGeneralRuntime(project: ContractProject, compilation: CompiledProject,
+  selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string }, predictions: GeneralDeploymentPrediction[], signal?: AbortSignal) {
+  signal?.throwIfAborted();
+  const values = resolveGeneralDeploymentValues(project, compilation, selected);
+  const production = project.production!, factory = production.route === "plan-v1" ? production.executor.address : production.graphProfile?.graphFactory;
+  if (typeof factory !== "string" || !/^0x(?!0{40}$)[a-f0-9]{40}$/iu.test(factory)) return invalid();
+  const deployer = getAddress(factory);
+  if (!Array.isArray(predictions) || predictions.length !== values.targets.length
+    || predictions.some(value => !value || typeof value.targetId !== "string" || typeof value.predictedAddress !== "string" || !/^0x(?!0{40}$)[a-f0-9]{40}$/iu.test(value.predictedAddress))
+    || new Set(predictions.map(value => value.targetId)).size !== predictions.length
+    || new Set(predictions.map(value => value.predictedAddress.toLowerCase())).size !== predictions.length) return invalid();
+  const byId = new Map(predictions.map(value => [value.targetId, value]));
+  function resolve(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(resolve);
+    if (value && typeof value === "object") {
+      if (Object.keys(value).join() !== "target" || !("target" in value) || typeof value.target !== "string") return invalid();
+      return byId.get(value.target)?.predictedAddress ?? invalid();
+    }
+    return value;
+  }
+  const targets = values.targets.map(target => {
+    const prediction = byId.get(target.id), artifact = compilation.contracts.find(artifact => artifact.source === target.source && artifact.contract === target.contract)!;
+    if (!prediction || !/^0x[a-f0-9]{64}$/u.test(prediction.effectiveSalt) || !/^0x(?:[a-f0-9]{2})*$/u.test(prediction.resolvedConstructorArguments)) return invalid();
+    const initCode = encodeDeployData({ abi: artifact.abi, bytecode: artifact.creationBytecode, args: target.constructorArguments.map(resolve) });
+    if (initCode !== concatHex([artifact.creationBytecode, prediction.resolvedConstructorArguments])
+      || getCreate2Address({ from: deployer, salt: prediction.effectiveSalt, bytecodeHash: keccak256(initCode) }).toLowerCase() !== prediction.predictedAddress.toLowerCase()
+      || target.role === "hook" && Number(BigInt(prediction.predictedAddress) & 16383n) !== target.hookPermissions) return invalid();
+    return { id: target.id, address: prediction.predictedAddress, salt: prediction.effectiveSalt, initCode, value: target.deploymentValueWei,
+      runtimeTemplate: artifact.runtimeBytecode, immutableReferences: artifact.immutableReferences };
+  });
+  // Snapshot the complete bounded input before waiting for any worker. A later
+  // caller mutation cannot change source or constructor data behind the receipt.
+  const payload = JSON.stringify({ chainId: project.chainId, evmVersion: project.compiler.evmVersion, controller: values.controller, deployer, targets });
+  if (Buffer.byteLength(payload) > 6_000_000) return invalid();
+  const sourceBinding = { chainId: values.chainId, projectHash: project.hash, artifactHash: compilation.artifactHash, productionId: values.productionId, deploymentId: values.deploymentId,
+    settingsHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-settings.v1", values.settings),
+    initializationHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-initialization.v1", values.targets.map(target => ({ id: target.id, initializer: target.initializer, value: target.initializerValueWei }))),
+    controller: values.controller, deployer, targets: targets.map(target => ({ id: target.id, address: target.address, salt: target.salt,
+      initCodeHash: keccak256(target.initCode), value: target.value })) };
+  let toolchain: string;
+  try { toolchain = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain")); }
+  catch { throw new CustomAIError("runtime-worker", "The isolated constructor preparation is unavailable. Your saved source is kept.", 503); }
+  const worker = join(process.cwd(), "scripts/custom-ai/general-runtime-worker.mjs");
+  const output = await new Promise<string>((resolve, reject) => {
+    const child = execFile(process.execPath, ["--permission", `--allow-fs-read=${toolchain}`, `--allow-fs-read=${worker}`, "--max-old-space-size=384", worker, toolchain],
+      { env: { NODE_ENV: "production" }, encoding: "utf8", timeout: 35_000, maxBuffer: 4_000_000, signal }, (error, stdout) => error
+        ? reject(new CustomAIError("runtime-worker", "The isolated constructor preparation did not finish. Your saved source is kept.", 503)) : resolve(stdout));
+    child.stdin?.on("error", () => undefined); child.stdin?.end(payload);
+  });
+  signal?.throwIfAborted();
+  const result = JSON.parse(output) as RuntimeResult;
+  if (result.status !== "materialized" || result.passes !== 2 || result.failures.length || result.contracts.length !== targets.length)
+    throw new GeneralRuntimeContextIncomplete(result.failures);
+  for (const target of targets) {
+    const contract = result.contracts.find(contract => contract.id === target.id);
+    if (!contract || keccak256(contract.runtimeCode) !== contract.runtimeCodeHash) return invalid();
+  }
+  const body = { version: 1 as const, scope: "isolated-constructor-runtime-v1" as const, ...sourceBinding, ...result, launchReady: false as const };
+  return { ...body, hash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-materialization.v1", body) };
+}

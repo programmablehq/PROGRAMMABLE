@@ -209,6 +209,39 @@ is never treated as native launch funding; that path needs an explicit native
 funding value. The resolver has no network, model, wallet or signing access and
 keeps `launchReady:false`.
 
-The declaration and value resolver are qualified locally. They do not yet
-materialize immutable runtime words, pack a complete canonical graph/Plan,
-submit a review or authorize a wallet. No new public launch capability is claimed.
+The declaration and value resolver are qualified locally. Canonical graph/Plan
+packing, review submission and wallet authorization remain unfinished. No new
+public launch capability is claimed.
+
+## Isolated constructor runtime materialization
+
+`materializeGeneralRuntime` accepts exact saved artifacts, owned selected values
+and canonical CREATE2 predictions. It reconstructs each creation byte sequence
+from the actual ABI, verifies the salt/address and hook permission bits, and
+snapshots all input before waiting for its worker. A mutated caller object cannot
+change the later worker payload or receipt. The result binds source/artifacts,
+production/deployment context, settings, initialization, controller, deployer and
+every exact constructor input.
+
+The worker executes the actual constructors in an in-memory EVM at those exact
+addresses on the selected chain. It reads each compiler-declared immutable range
+from the resulting runtime and requires all other bytes to match the compiled
+template. The canonical packer's `bytes32` immutable words contain these actual
+observed bytes; no model-supplied word map is used. Two synthetic contexts must
+produce the same runtime, but this comparison alone is not treated as proof of
+independence from arbitrary future state.
+
+Reads of unbound block/time/randomness/gas context, transaction origin, ambient
+balances and unknown dependency state remain unresolved. Delegation and unbound
+child construction are also outside this fixture. Known source targets and
+standard deterministic precompiles can be called; missing chain code is never
+invented as a successful observation. Failure retains bounded component/code
+findings for a later focused edit. No raw constructor revert data is returned.
+
+The worker has no parent credentials, RPC or inference access. Filesystem reads
+are limited to its fixed script and the existing pinned toolchain. Execution is
+bounded by 16 targets, 200 million total synthetic gas, 35 seconds, a 384-MB heap
+and bounded input/output. The report is scoped to
+`isolated-constructor-runtime-v1`, always keeps `launchReady:false`, and does not
+establish live dependency state, pool behavior, backend admission or launch
+execution. Connecting it to the canonical packer is the next integration step.
