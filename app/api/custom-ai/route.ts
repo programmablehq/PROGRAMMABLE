@@ -22,7 +22,7 @@ if (process.env.NODE_ENV === "development") previewGlobal.customAIPreviewResults
 
 export async function POST(request: Request) {
   try {
-    const authority = await authorizeCustomAI(request, true);
+    const authority = await authorizeCustomAI(request, true, true);
     const input = parseChatRequest(await readPreviewBody(request));
     if(input.conversation && (authority.kind!=="account" || !authority.principal.wallets.some(account=>account.toLowerCase()===input.conversation!.account))) {
       throw new CustomAIError("wallet","Select the wallet that owns this chat.",403);

@@ -25,4 +25,10 @@ describe("private conversation API authorization",()=>{
   expect((await POST(req(null))).status).toBe(400);
   expect((await POST(req({account:wallet,action:"bootstrap"}))).status).toBe(200);expect(mocked.create).toHaveBeenCalledWith("alice",expect.any(String),"legacy-wallet-studio");
  });
+ it("derives the local namespace from the verified principal rather than a client-supplied scope",async()=>{
+  const request=()=>new Request(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({account:wallet,action:"bootstrap",cacheScope:"invented"})});
+  const alice=await(await POST(request())).json();expect(alice.cacheScope).toMatch(/^[a-f0-9]{64}$/);expect(alice.cacheScope).not.toContain("alice");
+  mocked.auth.mockResolvedValue({kind:"account",owner:"bob",principal:{wallets:[wallet]}});
+  const bob=await(await POST(request())).json();expect(bob.cacheScope).not.toBe(alice.cacheScope);
+ });
 });

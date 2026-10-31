@@ -6,23 +6,27 @@ import {createHistoryServer} from "./history-server.mjs";
 import {LEGACY_CONVERSATION,type ConversationItem} from "../../lib/custom-ai/conversation";
 import type {ChatRequest,ChatResult} from "../../lib/custom-ai/types";
 import type {StudioState} from "../../lib/custom-ai/studio";
+import {EMPTY_COIN_SETUP} from "../../lib/custom-ai/coin-setup";
+import {studioSnapshot} from "../../lib/custom-ai/studio-sync";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
-async function fixture(page:Page){
+async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
  const calls:ChatRequest[]=[],control={delay:false,beforeUpdate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[]};
- const key=(account:string,id:string)=>account+":"+id;
- const create=(account:string,id:string)=>{const k=key(account,id);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
+ const key=(account:string,id:string,principal="alice")=>principal+":"+account+":"+id;
+ const create=(account:string,id:string,principal="alice")=>{const k=key(account,id,principal);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
  await page.route("**/api/**",async route=>{
   const request=route.request(),url=new URL(request.url()),body=request.method()==="POST"?request.postDataJSON():undefined;
-  const account=body?.account??url.searchParams.get("account")??"",id=body?.conversationId??url.searchParams.get("conversation")??LEGACY_CONVERSATION,k=key(account,id);
+  const principal=request.headers().authorization?.endsWith(":bob")?"bob":"alice";
+  if(body&&["/api/custom-ai","/api/custom-ai/studio"].includes(url.pathname)&&request.headers()["x-custom-ai-cache-scope"]!==(principal==="bob"?"b".repeat(64):cacheScope))return route.fulfill({status:409,json:{code:"session_changed",error:"Reload for the current account"}});
+  const account=body?.account??url.searchParams.get("account")??"",id=body?.conversationId??url.searchParams.get("conversation")??LEGACY_CONVERSATION,k=key(account,id,principal);
   if(url.pathname==="/api/custom-ai/conversations"){
-   if(body?.action==="bootstrap"||body?.action==="create")return route.fulfill({json:create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id)});
-   if(body?.action==="update"){await control.beforeUpdate?.();const chat=chats.get(key(account,body.id))!;if(body.revision!==chat.revision)return route.fulfill({status:409,json:{error:"Chat changed"}});Object.assign(chat,body.title?{title:body.title,customTitle:true}:{archived:body.archived});chat.revision++;return route.fulfill({json:chat});}
-   const one=url.searchParams.get("id");if(one)return route.fulfill({json:chats.get(key(account,one))});
+   if(body?.action==="bootstrap"||body?.action==="create")return route.fulfill({json:{...create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id,principal),...(body.action==="bootstrap"?{cacheScope:principal==="bob"?"b".repeat(64):cacheScope}:{})}});
+   if(body?.action==="update"){await control.beforeUpdate?.();const chat=chats.get(key(account,body.id,principal))!;if(body.revision!==chat.revision)return route.fulfill({status:409,json:{error:"Chat changed"}});Object.assign(chat,body.title?{title:body.title,customTitle:true}:{archived:body.archived});chat.revision++;return route.fulfill({json:chat});}
+   const one=url.searchParams.get("id");if(one)return route.fulfill({json:chats.get(key(account,one,principal))});
    control.listQueries.push({q:url.searchParams.get("q")??"",archived:url.searchParams.get("archived")==="true"});
-   return route.fulfill({json:{conversations:[...chats.values()].filter(c=>c.account===account&&c.archived===(url.searchParams.get("archived")==="true")&&c.title.toLowerCase().includes((url.searchParams.get("q")??"").toLowerCase()))}});
+   return route.fulfill({json:{conversations:[...chats.entries()].filter(([entry])=>entry.startsWith(principal+":" )).map(([,chat])=>chat).filter(c=>c.account===account&&c.archived===(url.searchParams.get("archived")==="true")&&c.title.toLowerCase().includes((url.searchParams.get("q")??"").toLowerCase()))}});
   }
   if(url.pathname==="/api/custom-ai/studio"){
    if(body){const prev=studios.get(k);if((prev?.revision??0)!==body.revision)return route.fulfill({status:409,json:{error:"Studio changed"}});studios.set(k,{revision:body.revision+1,state:body.state});const chat=chats.get(k)!;if(!chat.customTitle)chat.title=body.state.settings.name||body.state.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;if(chat.activeRequest===body.state.contextId)delete chat.activeRequest;return route.fulfill({json:{revision:body.revision+1}});}
@@ -30,7 +34,7 @@ async function fixture(page:Page){
    return route.fulfill({json:saved?{...saved,...(active&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
   }
   if(url.pathname==="/api/custom-ai"){
-   if(body){calls.push(body);const scope=body.conversation,chat=chats.get(key(scope.account,scope.id))!;expect(scope.revision).toBe(studios.get(key(scope.account,scope.id))?.revision);chat.activeRequest=body.id;if(!chat.customTitle)chat.title=body.coin?.name||body.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;
+   if(body){calls.push(body);const scope=body.conversation,chat=chats.get(key(scope.account,scope.id,principal))!;expect(scope.revision).toBe(studios.get(key(scope.account,scope.id,principal))?.revision);chat.activeRequest=body.id;if(!chat.customTitle)chat.title=body.coin?.name||body.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;
     if(control.delay){jobs.set(body.id,{request:body,state:"running"});return route.fulfill({contentType:"text/event-stream",body:'data: {"type":"phase","phase":"building"}\n\n'});}
     const result={reply:`Reply for ${body.messages.at(-1).content}`,change:"unchanged" as const};jobs.set(body.id,{request:body,state:"completed",result});return route.fulfill({json:result});
    }
@@ -122,4 +126,53 @@ test("initial chat reads wait for the wallet session to finish restoring",async(
  await expect(page.getByRole("status").filter({hasText:"Restoring your wallet session"})).toBeVisible();expect(f.chats.size).toBe(0);expect(f.calls).toHaveLength(0);
  await page.getByRole("button",{name:"Restore sample session",exact:true}).click();
  await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();expect(f.chats.size).toBe(1);expect(f.calls).toHaveLength(0);
+});
+test("another authenticated owner using the same wallet cannot inherit a private browser draft",async({page})=>{
+ const alice=await fixture(page,"a".repeat(64));await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Alice private unsent design");
+ await expect.poll(()=>[...alice.studios.values()].some(studio=>studio.state.input==="Alice private unsent design")).toBe(true);
+ // A different verified server principal has its own empty storage but the
+ // same linked wallet and legacy chat id. Browser storage is unchanged.
+ const bob=await fixture(page,"b".repeat(64));await page.reload();
+ await expect(box).toBeEditable();await expect(box).toHaveValue("");
+ await expect(page.getByText("Alice private unsent design",{exact:true})).toHaveCount(0);
+ expect(bob.calls).toHaveLength(0);expect(alice.calls).toHaveLength(0);
+});
+
+test("changing principal without changing the wallet immediately remounts the private workspace",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await expect(box).toBeEditable();await box.fill("Private to Alice only");
+ await expect.poll(()=>[...f.studios.values()].some(s=>s.state.input==="Private to Alice only")).toBe(true);
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();await expect(box).toHaveValue("");await box.fill("Private to Bob only");
+ await expect.poll(()=>[...f.studios.values()].some(s=>s.state.input==="Private to Bob only")).toBe(true);
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();await expect(box).toHaveValue("Private to Alice only");
+ expect(f.calls).toHaveLength(0);
+});
+async function seedLegacy(page:Page,value:unknown){
+ return page.evaluate(async value=>{
+  const account="0x"+"a".repeat(40),prefix="programmable.custom-ai.studio.";
+  const db=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open("programmable-custom-ai-v1",1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  await new Promise<void>((resolve,reject)=>{const tx=db.transaction("drafts","readwrite"),store=tx.objectStore("drafts");
+   store.put(JSON.stringify(value),prefix+"v1:"+account);store.delete(prefix+"v2:"+"a".repeat(64)+":"+account);
+   tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });db.close();
+ },value);
+}
+test("an older local copy migrates only after its saved job is returned in the owned studio",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ const account="0x"+"a".repeat(40),job="owned-old-request-00001",state:StudioState={settings:EMPTY_COIN_SETUP,messages:[],contextId:job};
+ f.studios.set("alice:"+account+":"+LEGACY_CONVERSATION,{revision:1,state});
+ await seedLegacy(page,{version:1,...state,input:"Earlier owned unsent change",syncBase:{revision:1,snapshot:studioSnapshot(state)}});
+ await page.reload();await expect(box).toHaveValue("Earlier owned unsent change");
+ expect(f.calls).toHaveLength(0);await expect(page.getByText("Choose which draft to keep.",{exact:false})).toHaveCount(0);
+});
+test("an older local-only copy remains stored without being adopted by a newly signed-in principal",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await seedLegacy(page,{version:1,settings:EMPTY_COIN_SETUP,messages:[],input:"Unattributed older private input"});
+ await page.reload();await expect(box).toHaveValue("");expect(f.calls).toHaveLength(0);
+ const retained=await page.evaluate(async()=>{
+  const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open("programmable-custom-ai-v1",1);r.onsuccess=()=>resolve(r.result);});
+  const raw=await new Promise<unknown>(resolve=>{const r=db.transaction("drafts").objectStore("drafts").get("programmable.custom-ai.studio.v1:0x"+"a".repeat(40));r.onsuccess=()=>resolve(r.result);});db.close();return raw;
+ });expect(JSON.parse(retained as string).input).toBe("Unattributed older private input");
 });
