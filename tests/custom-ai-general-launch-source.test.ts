@@ -13,18 +13,21 @@ import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import type { StudioState } from "../lib/custom-ai/studio";
 import type { GeneralLaunchSourceSelection } from "../lib/custom-ai/general-launch-source.server";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
+import captured from "./fixtures/custom-ai-launch-discovery.json";
+import { projectLaunchProductionContext } from "../lib/custom-ai/launch-production.server";
 
 const owner = "alice", account = `0x${"11".repeat(20)}`, chat = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const id = "checked-general-source-0001", storageId = conversationStorageId(account, chat);
 const intent: LaunchIntent = { version: 1, id: "marker-design", revision: "a".repeat(64), changes: [], unresolved: [],
   requirements: [{ id: "marker", text: "The marker returns one", kind: "behavior", origin: { kind: "legacy" }, open: null }] };
+const production = projectLaunchProductionContext(captured.chains["999"], 999);
 const blueprint = createGeneralCheckBlueprint({ contracts: [{ id: "marker", source: "Marker.sol", contract: "Marker", role: "auxiliary", arguments: [],
   functions: ["function marker() pure returns (uint256)"], allowReceive: false, allowFallback: false, surfaceRequirements: [] }], allowedCalls: [],
   steps: [{ id: "one", contract: "marker", signature: "marker()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,
-    requirementIds: ["marker"], expect: { status: "success", returns: ["1"] } }] }, intent, 999, "paris");
+    requirementIds: ["marker"], expect: { status: "success", returns: ["1"] } }] }, intent, 999, "paris", production);
 const project = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion: "paris" },
   sources: { "Marker.sol": { content: "pragma solidity 0.8.26; contract Marker { function marker() external pure returns (uint256) { return 1; } }" } },
-  entrypoints: [{ source: "Marker.sol", contract: "Marker", role: "auxiliary" }] }, intent, 999);
+  entrypoints: [{ source: "Marker.sol", contract: "Marker", role: "auxiliary" }] }, intent, 999, production);
 let compilation: CompiledProject, scenarios: GeneralScenarioReport, database: PGlite, store: AIStore, state: StudioState, revision: number;
 beforeAll(async () => {
   // One actual local compile/EVM qualification for the immutable receipt used by
@@ -67,6 +70,7 @@ describe("current owned source selection before general launch packing", () => {
     const first = await store.projects.readForLaunch(owner, selection()), second = await store.projects.readForLaunch(owner, selection());
     expect(first.bindingHash).toBe(second.bindingHash); expect(first.project).toEqual(project);
     expect(first.compilation.artifactHash).toBe(compilation.artifactHash); expect(first.scenarios.hash).toBe(scenarios.hash);
+    expect(first.project.production?.id).toBe(production.id); expect(first.blueprint.production?.id).toBe(production.id);
     expect(first.binding).toMatchObject({ account, conversation: chat, sourceId: id, contextId: id, chainId: 999 });
     expect(first.launchReady).toBe(false);
     expect((await database.query("SELECT owner,kind,id,revision FROM programmable_custom_ai_v1.objects ORDER BY kind,id")).rows).toEqual(before);

@@ -3,6 +3,7 @@ import { GENERAL_PROJECT_COMPILER, projectCompilerInput, projectSourcePath, type
 import { builderChain, type BuilderChainId } from "./execution-routing";
 import { intentHasOpenParts, type LaunchIntent } from "./launch-intent";
 import { createGeneralCheckPlan, normalizeGeneralCheckScenarios, type GeneralCheckScenarios } from "./behavior-checks";
+import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 
 /** The interpreter declares this before code generation. It contains agreed
  * interfaces and scenarios, no implementation source or compiler artifacts. */
@@ -16,6 +17,7 @@ export type GeneralCheckBlueprint = {
   compiler: ContractProject["compiler"];
   entrypoints: ProjectEntrypoint[];
   scenarios: GeneralCheckScenarios;
+  production?: LaunchProductionContext;
 };
 const fail=():never=>{throw new TypeError("Declare complete contract scenarios before generating source.");};
 
@@ -27,7 +29,7 @@ Values are strings for all numbers, booleans, nested arrays, {account:'creator'|
 For a token and standard native/token v4 hook, the supported local Cancun world adds world:{kind:'v4-native-token-v1',token:contractId,hook:contractId,hookPermissions:integerMask,fee:integer,tickSpacing:integer,sqrtPriceX96:decimalString}. Its exact pinned PoolManager and v4-router are fixtures, never live deployment addresses. Token/hook IDs must have those source roles. The hook is deployed by CREATE2 at the declared permission bits. Constructors may use {fixture:'pool-manager'} or {fixture:'v4-router'}. {pool:true} resolves only the declared canonical PoolKey. Deployment order still applies to ordinary {contract:id} references.
 Declare initialization, token approve/funding, liquidity, buys and sells as real ordered steps rather than claiming a getter proves a swap. The trusted v4-router accepts ONLY initialize((address,address,uint24,int24,address),uint160), liquidity((address,address,uint24,int24,address),(int24,int24,int256,bytes32),bytes), or swap((address,address,uint24,int24,address),(bool,int256,uint160),bytes). Their first argument is {pool:true}. The uint160 initialization price must equal world.sqrtPriceX96. These steps are state-changing; native value is an explicit decimal wei string. Token methods are ordinary source-contract steps. For an actual swap, expect.swapFeePpm (integer) checks the pinned PoolManager's actual Swap event, not a hook getter. Check both sides of each exact time boundary and direct unauthorized callbacks. A synthetic world uses no live addresses, RPCs, keys, deposits or launch authority. Unsupported external-world mechanics remain unresolved evidence, not permission to omit their requirement.`;
 
-export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,chainId:BuilderChainId,evmVersion:"paris"|"cancun"):GeneralCheckBlueprint {
+export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,chainId:BuilderChainId,evmVersion:"paris"|"cancun",production?:LaunchProductionContext):GeneralCheckBlueprint {
   builderChain(chainId);
   if(!intent?.id||!/^[a-f0-9]{64}$/.test(intent.revision)||intentHasOpenParts(intent)||!intent.requirements.length||intent.requirements.length>64
     ||!["paris","cancun"].includes(evmVersion)||!value||typeof value!=="object"||Array.isArray(value)
@@ -46,7 +48,7 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
   if(scenarios.world&&evmVersion!=="cancun")return fail();
   const compiler:ContractProject["compiler"]={version:GENERAL_PROJECT_COMPILER,optimizerRuns:1000,viaIR:false,evmVersion};
   const body={version:1 as const,intentId:intent.id,intentRevision:intent.revision,intentHash:canonicalBrowserSha256V2("programmable.general-check-intent.v1",intent),chainId,
-    compiler,entrypoints,scenarios};
+    compiler,entrypoints,scenarios,...(production?{production:checkedLaunchProductionContext(production,chainId)}:{})};
   return structuredClone({...body,id:canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body)});
 }
 
@@ -54,7 +56,7 @@ export function checkedGeneralCheckBlueprint(value:GeneralCheckBlueprint,intent:
   if(!value||value.version!==1||!value.scenarios||!Array.isArray(value.entrypoints))return fail();
   const parsed=createGeneralCheckBlueprint({contracts:value.scenarios.contracts.map(fixture=>({...fixture,
     role:value.entrypoints.find(entry=>entry.source===fixture.source&&entry.contract===fixture.contract)?.role})),
-    allowedCalls:value.scenarios.allowedCalls,steps:value.scenarios.steps,...(value.scenarios.world?{world:value.scenarios.world}:{})},intent,value.chainId,value.compiler?.evmVersion);
+    allowedCalls:value.scenarios.allowedCalls,steps:value.scenarios.steps,...(value.scenarios.world?{world:value.scenarios.world}:{})},intent,value.chainId,value.compiler?.evmVersion,value.production);
   // Reconstruct all fields; extra or changed metadata cannot inherit an ID.
   const {id,...body}=value;
   if(id!==parsed.id||id!==canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body))return fail();
@@ -65,6 +67,7 @@ export function bindGeneralCheckBlueprint(blueprint:GeneralCheckBlueprint,projec
   projectCompilerInput(project);
   const checked=checkedGeneralCheckBlueprint(blueprint,project.intent);
   if(checked.chainId!==project.chainId||checked.compiler.version!==project.compiler.version||checked.compiler.evmVersion!==project.compiler.evmVersion
+    ||checked.production?.id!==project.production?.id
     ||checked.compiler.optimizerRuns!==project.compiler.optimizerRuns||checked.compiler.viaIR!==project.compiler.viaIR
     ||canonicalBrowserSha256V2("programmable.project-entrypoints.v1",checked.entrypoints)!==canonicalBrowserSha256V2("programmable.project-entrypoints.v1",project.entrypoints))return fail();
   return createGeneralCheckPlan(checked.scenarios,project);

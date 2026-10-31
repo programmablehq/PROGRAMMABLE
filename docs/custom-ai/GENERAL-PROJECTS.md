@@ -143,3 +143,37 @@ only unsent-input changes to the studio revision. No source is written, compiled
 or sent to a provider by this read. The result retains `launchReady:false`;
 current-profile packing and backend preparation remain required. This local
 loader is not a public submission endpoint.
+
+## Production configuration before generation
+
+The owned chat route supplies `readLaunchProductionContext` before independent
+planning. It projects the selected chain's public discovery into typed source
+context. Ethereum uses the canonical CLI profile resolver and current closed
+trade-fee policy. Base and HyperEVM require their exact embedded profiles and
+include the opening fee, buyer/recipient protection and exemption bounds from
+their chain policy. Robinhood uses the Plan manifest and atomic executor binding;
+the older graph capability endpoint cannot replace it. Foreign URLs, prose,
+historical releases and RPC configuration are omitted from the model context.
+
+The complete context hash is saved in both the original independent blueprint
+and generated project. Their binding rejects a different network/profile and
+detects later modification. The source generator receives the complete policy
+once; the nested blueprint carries its ID. User requirements remain unchanged.
+A policy conflict requires a concrete clarification. Configuration discovery is
+not admission, dependency runtime verification or funded launch evidence.
+
+Discovery uses one fixed public GET for the selected chain, a five-minute
+per-process cache, shared in-flight work, a five-second deadline and a 1 MiB
+strict-JSON bound. There are four possible keys, no RPCs, authentication keys,
+redirects or automatic retries in this loader. Failures are cached for ten
+seconds and expired successes are not returned as current configuration. One
+stopped chat detaches without cancelling another chat's shared observation.
+The future explicit preparation action can force a current observation while
+still sharing an in-flight request and respecting the short failure cache.
+
+Ordinary unchanged-network builds retain two model calls. If a setup patch
+changes the network in that turn, the new network gets a separate source-blind
+declaration before generation. A discovery outage still permits explanations;
+source generation pauses with the complete saved intent. Brief greetings skip
+discovery. Public intake, deployment recipes, exact packing and launch execution
+remain unfinished and unpublished.
