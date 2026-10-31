@@ -73,6 +73,13 @@ test('completed submission details stay distinct when the coin is edited',async(
  await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();
  await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
 });
+test('Robinhood wallet declarations are cleared on a wallet or private scope change',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?chain=4663');
+ const choice=page.getByLabel('Launch wallet type'),button=page.getByRole('button',{name:'Submit for review',exact:true});
+ await choice.selectOption('eoa');await expect(button).toBeEnabled();
+ await page.getByRole('button',{name:'Switch sample wallet'}).click();
+ await expect(choice).toHaveValue('');await expect(button).toBeDisabled();expect(f.posts).toEqual([]);
+});
 test('disabled intake does no journal reads and exposes no submit control',async({page})=>{
  const f=await fixture(page);await page.goto(origin+'/?disabled=1');await expect(page.getByRole('heading',{name:'Original coin',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Launch submission'})).toHaveCount(0);expect(f.reads).toBe(0);expect(f.posts).toEqual([]);

@@ -20,7 +20,9 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   flush: () => Promise<{ revision: number } | undefined>; onLaunchLocked: (locked: boolean) => void;
 }) {
   const launch = useGeneralLaunch({ enabled, account, scope, headers });
-  const [controllerKind, setControllerKind] = useState("");
+  const controllerKey = `${scope}:${account.toLowerCase()}`;
+  const [controller, setController] = useState({ key: controllerKey, kind: "" });
+  const controllerKind = controller.key === controllerKey ? controller.kind : "";
   useEffect(() => { onLaunchLocked(launch.busy); return () => onLaunchLocked(false); }, [launch.busy, onLaunchLocked]);
   if (!enabled) return null;
   const saved = launch.preparation, sameSource = saved && saved.conversationId === conversationId && saved.sourceId === draftId
@@ -60,7 +62,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   return <section className={styles.generalLaunch} aria-label="Launch submission" aria-busy={launch.busy}>
     <p className={styles.note} role="status">{status}</p>
     {!uncertain && !accepted && settings.chainId === 4663 && <label className={styles.controllerChoice}>Launch wallet type
-      <select value={controllerKind} disabled={disabled || launch.busy} onChange={event => setControllerKind(event.target.value)}>
+      <select value={controllerKind} disabled={disabled || launch.busy} onChange={event => setController({ key: controllerKey, kind: event.target.value })}>
         <option value="">Choose wallet type</option><option value="eoa">Standard wallet</option><option value="smart">Smart account</option>
       </select>
       {controllerKind === "smart" && <span>Smart account preparation for this design is not available yet.</span>}
