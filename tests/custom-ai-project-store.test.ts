@@ -8,6 +8,8 @@ import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority
 import { generalProjectView } from "../lib/custom-ai/project-view";
 import { selectExecutionRoute } from "../lib/custom-ai/execution-routing";
 import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
+import { bindGeneralCheckBlueprint, createGeneralCheckBlueprint } from "../lib/custom-ai/check-blueprint";
+import type { GeneralScenarioReport } from "../lib/custom-ai/behavior-checks.server";
 
 let database: PGlite, store: AIStore;
 const id = "00000000-0000-4000-8000-000000000001";
@@ -27,6 +29,23 @@ function compilation(input: ContractProject): CompiledProject {
   return { ...body, artifactHash: canonicalBrowserSha256V2("programmable.custom-ai-project-artifacts.v1", body) };
 }
 const reserve = () => store.reserve("alice", { id, intent: "build", messages: [{ role: "user", content: "Build a general hook" }] });
+function blueprint(source=project()){
+  return createGeneralCheckBlueprint({contracts:[{id:"hook",source:"Hook.sol",contract:"Hook",role:"hook",arguments:[],
+    functions:["function marker() pure returns (uint256)"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-mint"]}],allowedCalls:[],steps:[
+    {id:"marker",contract:"hook",signature:"marker()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:true,requirementIds:[],expect:{status:"success",returns:["1"]}},
+  ]},source.intent,source.chainId,source.compiler.evmVersion);
+}
+function compiledReceipt(source:ContractProject):CompiledProject{
+  const {artifactHash:discarded,...base}=compilation(source);void discarded;
+  const body={...base,compiled:true,diagnostics:[],contracts:[{...source.entrypoints[0],abi:[],creationBytecode:"0x00" as const,runtimeBytecode:"0x00" as const,immutableReferences:{},storageLayout:{}}]};
+  return {...body,artifactHash:canonicalBrowserSha256V2("programmable.custom-ai-project-artifacts.v1",body)};
+}
+function scenarioReceipt(source:ContractProject):GeneralScenarioReport{
+  const plan=bindGeneralCheckBlueprint(blueprint(source),source),compiled=compiledReceipt(source);
+  const body={version:1 as const,scope:"isolated-declared-scenarios-v1" as const,projectHash:source.hash,artifactHash:compiled.artifactHash,planHash:plan.id,
+    passed:true,cases:3,gasUsed:"1",failures:[],requirementIds:["no-mint"],launchReady:false as const};
+  return {...body,hash:canonicalBrowserSha256V2("programmable.general-scenario-report.v1",body)};
+}
 beforeEach(async () => {
   database = new PGlite(); await database.exec(CUSTOM_AI_SCHEMA);
   let queue = Promise.resolve();
@@ -39,6 +58,50 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("saves the complete design and immutable oracle before source, bound to the running job",async()=>{
+    const attempt=await reserve(),source=project(),declared=blueprint(source);
+    await store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:declared});
+    await store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:declared});
+    expect(await store.projects.read("alice",id)).toBeNull();expect(await store.projects.readBlueprint("bob",id)).toBeNull();
+    expect(await store.projects.readBlueprint("alice",id)).toMatchObject({requestId:id,intent:source.intent,blueprint:declared});
+    await store.projects.save("alice",id,attempt.lease!,source);
+    expect(await store.projects.read("alice",id)).toMatchObject({blueprintId:declared.id});
+    const other=createGeneralCheckBlueprint({...declared.scenarios,contracts:declared.scenarios.contracts.map(item=>({...item,role:"auxiliary"}))},source.intent,999,"paris");
+    await expect(store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:other})).rejects.toMatchObject({code:"project-conflict"});
+  });
+  it("refuses to create an independent-plan receipt after source was already saved",async()=>{
+    const attempt=await reserve(),source=project();await store.projects.save("alice",id,attempt.lease!,source);
+    await expect(store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:blueprint(source)})).rejects.toMatchObject({code:"project-conflict"});
+    expect(await store.projects.readBlueprint("alice",id)).toBeNull();
+  });
+  it("cannot attach source with a different planned target or role",async()=>{
+    const attempt=await reserve(),source=project();await store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:blueprint(source)});
+    const other=createContractProject({compiler:source.compiler,sources:source.sources,entrypoints:[{...source.entrypoints[0],role:"auxiliary"}]},source.intent,999);
+    await expect(store.projects.save("alice",id,attempt.lease!,other)).rejects.toMatchObject({code:"project-conflict"});
+    expect(await store.projects.read("alice",id)).toBeNull();
+  });
+  it("enforces owner, lease, expiry and cancellation for pre-generation plans",async()=>{
+    const attempt=await reserve(),source=project(),input={intent:source.intent,blueprint:blueprint(source)};
+    for(const [owner,lease] of [["bob",attempt.lease!],["alice","old-lease"]])await expect(store.projects.saveBlueprint(owner,id,lease,input)).rejects.toMatchObject({code:"interrupted"});
+    await store.projects.saveBlueprint("alice",id,attempt.lease!,input);await store.cancel("alice",id);
+    await expect(store.projects.saveBlueprint("alice",id,attempt.lease!,input)).rejects.toMatchObject({code:"interrupted"});
+    expect(await store.projects.readBlueprint("alice",id)).toMatchObject(input);
+  });
+  it("binds a synthetic report receipt to the original plan and exact saved artifacts without granting readiness",async()=>{
+    const attempt=await reserve(),source=project(),report=scenarioReceipt(source),input={intent:source.intent,blueprint:blueprint(source)};
+    await store.projects.saveBlueprint("alice",id,attempt.lease!,input);await store.projects.save("alice",id,attempt.lease!,source);
+    await expect(store.projects.saveScenarios("alice",id,attempt.lease!,report)).rejects.toMatchObject({code:"project-conflict"});
+    await store.projects.complete("alice",id,attempt.lease!,compiledReceipt(source));
+    for(const patch of [{projectHash:`sha256:${"f".repeat(64)}`},{planHash:`sha256:${"f".repeat(64)}`},{artifactHash:`sha256:${"f".repeat(64)}`},{cases:1},{requirementIds:[]},{launchReady:true}]){
+      const {hash:discarded,...body}={...report,...patch};void discarded;
+      await expect(store.projects.saveScenarios("alice",id,attempt.lease!,{...body,hash:canonicalBrowserSha256V2("programmable.general-scenario-report.v1",body)} as GeneralScenarioReport)).rejects.toMatchObject({code:"project-conflict"});
+    }
+    await store.projects.saveScenarios("alice",id,attempt.lease!,report);await store.projects.saveScenarios("alice",id,attempt.lease!,report);
+    expect(await store.projects.read("alice",id)).toMatchObject({scenarios:{hash:report.hash,launchReady:false}});
+    const {hash:discarded,...body}={...report,gasUsed:"2"};void discarded;
+    await expect(store.projects.saveScenarios("alice",id,attempt.lease!,{...body,hash:canonicalBrowserSha256V2("programmable.general-scenario-report.v1",body)})).rejects.toMatchObject({code:"project-conflict"});
+    await store.cancel("alice",id);await expect(store.projects.saveScenarios("alice",id,attempt.lease!,report)).rejects.toMatchObject({code:"interrupted"});
+  });
   it("keeps general source versions independently of fee drafts and without source blobs", async () => {
     const attempt=await reserve(),source=project(),selection=selectExecutionRoute(source.intent,source.chainId);
     const view=generalProjectView({version:1,reply:"Source diagnostics",summary:"A saved source proposal",project:source,

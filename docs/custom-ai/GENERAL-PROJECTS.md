@@ -75,7 +75,9 @@ This implementation state does not establish a public general-contract launch. I
 
 `check-blueprint.ts` defines interfaces and observable scenarios against the complete canonical design before source exists. Its hash includes the full intent, revision, chain, compiler target and declared role of every entrypoint. The generated source cannot change that blueprint. Binding later creates a separate source-specific plan, so the same expected behavior can reject a different implementation. Durable JSON object key reordering does not change the binding.
 
-This pure blueprint helper is not yet an interpreter integration or a durable pre-generation receipt. The owned job must save it before any source is written or generated, then bind reports to that original receipt. Passing primitive scenarios remains separate from trusted v4/world fixtures, submission, review and launch preparation.
+The project store can save the complete intent and blueprint under the current owned job lease before source exists. The receipt is immutable, tied to the request payload, and cannot be added after source has already been saved. Source roles, network and compiler target must match it. Scenario reports require that original receipt and the exact saved compiled artifacts; repeating the same report is idempotent. Cancellation and expired leases reject late writes. These operations use the existing object and job tables.
+
+The interpreter and recovery flow have not yet been wired to these operations. Passing primitive scenarios remains separate from trusted v4/world fixtures, submission, review and launch preparation.
 
 `behavior-checks.ts` binds a bounded, declared oracle to the exact project and intent revision. It covers every saved requirement ID, requires observable expectations for behavior requirements, and keeps explicit contract interfaces, constructor arguments, allowed call targets and ordered cases. Contract references follow deployment order. Fixture accounts are local test identities. A literal allowed call address must occur in the saved design; the model cannot add an unrelated payment target to make a check pass.
 
