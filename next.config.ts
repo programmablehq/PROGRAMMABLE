@@ -88,7 +88,7 @@ const customAIWorkerFiles = [
   "./scripts/custom-ai/general-v4-world.mjs", "./scripts/custom-ai/general-v4-fixture.json",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];
-const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/src/**/*", "./packages/launch/contracts/**/*"];
+const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/package.json", "./packages/launch/src/**/*", "./packages/launch/contracts/**/*"];
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
