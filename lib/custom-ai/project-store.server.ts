@@ -13,6 +13,7 @@ import { projectOverview, type ProjectOverview } from "./project-overview";
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { LaunchIntent } from "./launch-intent";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
+import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 
 export type ProjectCheckpoint = {
   version: 1;
@@ -144,9 +145,8 @@ export function createProjectStore(transaction: Transaction) {
       return row?.overview ? row.overview as ProjectOverview : null;
     });
   }
-  async function readForLaunch(owner: string, selected: GeneralLaunchSourceSelection) {
+  async function readForLaunchInTransaction(db: AIConnection, owner: string, selected: GeneralLaunchSourceSelection) {
     const storageId = conversationStorageId(selected.account, selected.conversation);
-    return transaction(async db => {
       // Match the conversation/studio CAS lock order. No model, compiler,
       // network, funding or signing work is performed while these are held.
       const meta = (await db.query(`SELECT value FROM programmable_custom_ai_v1.objects
@@ -171,9 +171,32 @@ export function createProjectStore(transaction: Transaction) {
         studioRevision: Number(studio.revision), studio: state,
         sourceJob: { state: String(source.state), payloadHash: String(source.payload_hash), request: source.request as ChatRequest, result: source.result as ChatResult },
         contextJob: { state: String(context.state), request: context.request as ChatRequest, result: context.result as ChatResult }, checkpoint, declared });
+  }
+  const readForLaunch = (owner: string, selected: GeneralLaunchSourceSelection) => transaction(db => readForLaunchInTransaction(db, owner, selected));
+  /** Called only after an explicit authenticated launch-preparation action.
+   * Revalidate the owned selection under the same CAS locks before publishing
+   * this fixed, sanitized record. A normal project read never publishes it. */
+  async function publishForLaunch(owner: string, selected: GeneralLaunchSourceSelection) {
+    return transaction(async db => {
+      const source = await readForLaunchInTransaction(db, owner, selected), exported = createGeneralPublicSource(source);
+      const id = exported.id.slice(7);
+      await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
+        VALUES('public','launch-source',$1,$2) ON CONFLICT DO NOTHING`, [id, JSON.stringify(exported)]);
+      const row = (await db.query(`SELECT value FROM programmable_custom_ai_v1.objects
+        WHERE owner='public' AND kind='launch-source' AND id=$1`, [id])).rows[0];
+      const saved = checkedGeneralPublicSource(row?.value as GeneralPublicSource, exported.id);
+      return { source, exported: saved, url: generalSourcePublicUri(saved.id), launchReady: false as const };
     });
   }
-  return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch,
+  async function readPublicSource(id: string) {
+    if (!/^[a-f0-9]{64}$/u.test(id)) return null;
+    return transaction(async db => {
+      const row = (await db.query(`SELECT value FROM programmable_custom_ai_v1.objects
+        WHERE owner='public' AND kind='launch-source' AND id=$1`, [id])).rows[0];
+      return row ? checkedGeneralPublicSource(row.value as GeneralPublicSource, `sha256:${id}`) : null;
+    });
+  }
+  return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch, publishForLaunch, readPublicSource,
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),
     read: (owner: string, id: string) => transaction(db => saved(db, owner, id)) };
 }

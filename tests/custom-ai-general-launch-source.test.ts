@@ -66,6 +66,28 @@ const selection = (): GeneralLaunchSourceSelection => ({ id, account, conversati
   projectHash: project.hash, artifactHash: compilation.artifactHash, intentRevision: intent.revision });
 
 describe("current owned source selection before general launch packing", () => {
+  it("publishes only a deliberate exact-source export and reuses its immutable public identity", async () => {
+    expect(await store.projects.readPublicSource(project.hash.slice(7))).toBeNull();
+    const first = await store.projects.publishForLaunch(owner, selection()), second = await store.projects.publishForLaunch(owner, selection());
+    expect(second.exported).toEqual(first.exported); expect(second.url).toBe(first.url); expect(first.launchReady).toBe(false);
+    expect(await store.projects.readPublicSource(first.exported.id.slice(7))).toEqual(first.exported);
+    const text = JSON.stringify(first.exported);
+    expect(text).toContain(project.sources["Marker.sol"].content);
+    for (const privateText of [intent.requirements[0].text, owner, chat, id])
+      expect(text).not.toContain(privateText);
+    expect(first.exported.content).not.toHaveProperty("intent"); expect(first.exported.content).not.toHaveProperty("blueprint");
+    expect(first.exported.content.artifacts[0].artifact.metadata).toBe(compilation.contracts[0].compilerMetadata);
+    expect((await database.query("SELECT id FROM programmable_custom_ai_v1.objects WHERE owner='public' AND kind='launch-source'")).rows).toHaveLength(1);
+  });
+  it("does not publish another owner's source or a stale preparation, and detects a changed public record", async () => {
+    await expect(store.projects.publishForLaunch("bob", selection())).rejects.toMatchObject({ code: "launch-source-changed" });
+    await expect(store.projects.publishForLaunch(owner, { ...selection(), studioRevision: revision - 1 })).rejects.toMatchObject({ code: "launch-source-changed" });
+    expect((await database.query("SELECT id FROM programmable_custom_ai_v1.objects WHERE owner='public'")).rows).toHaveLength(0);
+    const published = await store.projects.publishForLaunch(owner, selection()), publicId = published.exported.id.slice(7);
+    await database.query("UPDATE programmable_custom_ai_v1.objects SET value=jsonb_set(value,'{content,projectHash}','\"sha256:changed\"') WHERE owner='public' AND kind='launch-source' AND id=$1", [publicId]);
+    await expect(store.projects.readPublicSource(publicId)).rejects.toMatchObject({ code: "launch-source-export" });
+    expect(await store.projects.readPublicSource("../private")).toBeNull();
+  });
   it("loads actual checked source, oracle and artifacts in one private snapshot without creating a launch", async () => {
     const before = (await database.query("SELECT owner,kind,id,revision FROM programmable_custom_ai_v1.objects ORDER BY kind,id")).rows;
     const first = await store.projects.readForLaunch(owner, selection()), second = await store.projects.readForLaunch(owner, selection());
