@@ -2,6 +2,7 @@ import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-
 import { builderChain, type BuilderChainId } from "./execution-routing";
 import { intentHasOpenParts, type LaunchIntent } from "./launch-intent";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
+import { checkedGeneralDeploymentBlueprint, type GeneralDeploymentBlueprint } from "./deployment-blueprint";
 
 export const GENERAL_PROJECT_COMPILER = "0.8.26+commit.8a97fa7a";
 export const GENERAL_PROJECT_LIMITS = { files: 48, sourceBytes: 384_000, fileBytes: 96_000, entrypoints: 16 } as const;
@@ -15,6 +16,7 @@ export type ContractProject = {
   sources: Record<string, { content: string }>;
   entrypoints: ProjectEntrypoint[];
   production?: LaunchProductionContext;
+  deployment?: GeneralDeploymentBlueprint;
 };
 const fail = (): never => { throw new TypeError("Use a complete source package with the pinned compiler and supported settings."); };
 const object = (value: unknown): Record<string, unknown> => {
@@ -32,7 +34,7 @@ export function projectSourcePath(value: unknown): string {
 
 /** Only inline Standard JSON sources enter the compiler. There is no remote
  * dependency resolution, model-selected command or host import callback. */
-export function createContractProject(value: unknown, intent: LaunchIntent, chainId: BuilderChainId, production?: LaunchProductionContext): ContractProject {
+export function createContractProject(value: unknown, intent: LaunchIntent, chainId: BuilderChainId, production?: LaunchProductionContext, deployment?: GeneralDeploymentBlueprint): ContractProject {
   builderChain(chainId);
   if (!intent || !/^[a-f0-9]{64}$/.test(intent.revision) || intentHasOpenParts(intent)
     || !intent.requirements.length || intent.requirements.length > 64) throw new TypeError("Resolve the complete saved design before compiling its contract.");
@@ -61,9 +63,11 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
     return { source, contract: entry.contract, role: entry.role as ProjectEntrypoint["role"] };
   }).sort((a, b) => a.source < b.source ? -1 : a.source > b.source ? 1 : a.contract < b.contract ? -1 : a.contract > b.contract ? 1 : 0);
   if (new Set(entrypoints.map(entry => `${entry.source}:${entry.contract}`)).size !== entrypoints.length) fail();
+  if (deployment && !production) fail();
   const body: Omit<ContractProject, "hash"> = { version: 1 as const, chainId, intent, compiler: { version: GENERAL_PROJECT_COMPILER,
     optimizerRuns: 1000 as const, viaIR: false as const, evmVersion: compiler.evmVersion as "paris" | "cancun" }, sources, entrypoints,
-    ...(production ? { production: checkedLaunchProductionContext(production, chainId) } : {}) };
+    ...(production ? { production: checkedLaunchProductionContext(production, chainId) } : {}),
+    ...(deployment ? { deployment: checkedGeneralDeploymentBlueprint(deployment, entrypoints, production!, intent) } : {}) };
   const hash = canonicalBrowserSha256V2("programmable.custom-ai-project.v1", body);
   // Copy the complete intent so later mutation of an interpreter object cannot
   // change the source package behind its recorded hash.
@@ -71,7 +75,7 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
 }
 
 export function projectCompilerInput(project: ContractProject) {
-  const checked = createContractProject({ compiler: project.compiler, sources: project.sources, entrypoints: project.entrypoints }, project.intent, project.chainId, project.production);
+  const checked = createContractProject({ compiler: project.compiler, sources: project.sources, entrypoints: project.entrypoints }, project.intent, project.chainId, project.production, project.deployment);
   if (checked.hash !== project.hash) throw new TypeError("The contract project changed after it was saved.");
   return { language: "Solidity", sources: checked.sources, settings: { optimizer: { enabled: true, runs: checked.compiler.optimizerRuns },
     viaIR: checked.compiler.viaIR, evmVersion: checked.compiler.evmVersion, metadata: { bytecodeHash: "none", appendCBOR: false },

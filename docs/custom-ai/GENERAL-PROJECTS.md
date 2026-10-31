@@ -177,3 +177,38 @@ declaration before generation. A discovery outage still permits explanations;
 source generation pauses with the complete saved intent. Brief greetings skip
 discovery. Public intake, deployment recipes, exact packing and launch execution
 remain unfinished and unpublished.
+
+## Explicit deployment declaration
+
+An independent blueprint may now include a production `deployment` alongside
+its isolated scenarios. It declares every source target, constructor argument,
+initializer, primary pool and hook permission mask before generation. Its hash
+binds the selected production context and complete graph. Source generation
+copies that original declaration into the project; generated code cannot replace
+it. Missing declarations remain missing and cannot be inferred from passing tests.
+
+This first declaration supports one primary token/hook pool, its actual source
+liquidity initializer and auxiliary components within the existing 16-target
+bound. Constructor references follow deployment order; initializer references
+may point forward. Native funding can be consumed once. Return-delta hook bits
+require their base callbacks. A declared local v4 world must identify the same
+token/hook source, pool fee, tick spacing and permission mask as the deployment.
+
+Closed input references name the controller, coin name/symbol, quote and funding.
+Closed binding references select actual published platform roots. Local fixture
+routers, funded test identities, arbitrary commands and unrequested recipient
+addresses are rejected. Robinhood cannot borrow graph-factory/funding-token roots
+absent from its Plan context. Literal addresses require saved design provenance;
+that provenance does not establish current runtime or external-service behavior.
+
+`resolveGeneralDeploymentValues` validates the saved source and artifact binding,
+current settings/network, actual constructor/initializer ABI, reference types and
+payability. It retains symbolic target refs for the canonical packer. Native
+amounts reject precision below one wei before conversion. An ERC20 quote amount
+is never treated as native launch funding; that path needs an explicit native
+funding value. The resolver has no network, model, wallet or signing access and
+keeps `launchReady:false`.
+
+The declaration and value resolver are qualified locally. They do not yet
+materialize immutable runtime words, pack a complete canonical graph/Plan,
+submit a review or authorize a wallet. No new public launch capability is claimed.
