@@ -29,6 +29,7 @@ import programCode from "./program-manifest.json";
 import type { ModelCallMetric } from "./request-metrics";
 import { intentRequirementSchema, launchIntentPlanningRules, intentHasOpenParts, MAX_INTENT_REQUIREMENTS, type LaunchIntent } from "./launch-intent";
 import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, parseIntentRequirements, reviseLaunchIntent } from "./launch-intent.server";
+import { bindIntentImplementation } from "./intent-coverage.server";
 import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
 import { buildGeneralContract, type GeneralProjectDraft } from "./general-builder.server";
 import { compileContractProject } from "./contract-project.server";
@@ -49,7 +50,6 @@ const setupSchema = { type: "object", properties: {
 const buildSchema = { type: "object", properties: {
   reply: { type: "string" }, source: { type: "string" }, hookSummary: { type: "string" }, setupPatch: setupSchema,
 }, required: ["reply", "source", "hookSummary", "setupPatch"], additionalProperties: false };
-const strings = { type: "array", items: { type: "string" } };
 const planSchema = { type: "object", properties: {
   reply: { type: "string" },
   executionRoute: { type: "string", enum: ["fee-module", "composed-module", "custom-contract"] },
@@ -59,7 +59,7 @@ const planSchema = { type: "object", properties: {
     requirementId: { type: "string" }, operation: { type: "string", enum: ["replace", "remove"] }, instruction: { type: "string" },
   }, required: ["requirementId", "operation", "instruction"], additionalProperties: false } },
   action: { type: "string", enum: ["answer", "build", "clarify"] }, memory: { type: "string" },
-  requirements: strings, setupPatch: setupSchema,
+  implementedRequirementIds: { type: "array", maxItems: MAX_INTENT_REQUIREMENTS, items: { type: "string" } }, setupPatch: setupSchema,
   lookups: { type: "array", items: { type: "object", properties: {
     kind: { type: "string", enum: ["catalog", "contract", "web"] }, query: { type: "string" },
     chainId: { type: "integer" }, address: { type: "string" },
@@ -68,7 +68,7 @@ const planSchema = { type: "object", properties: {
     afterSeconds: { type: "integer" }, buy: { type: "boolean" }, totalFeeBps: { type: "integer" },
     feedValue: { type: ["string", "null"] }, feedFresh: { type: ["boolean", "null"] },
   }, required: ["afterSeconds", "buy", "totalFeeBps", "feedValue", "feedFresh"], additionalProperties: false } },
-}, required: ["reply", "executionRoute", "intentRequirements", "action", "memory", "requirements", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
+}, required: ["reply", "executionRoute", "intentRequirements", "action", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
 type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compile: (source: string, signal?: AbortSignal, expectations?: FeeExpectation[], feed?: FeedBinding) => Promise<Draft>; compileProject?: typeof compileContractProject;checkProject?:typeof checkGeneralScenarios; feed?: typeof prepareEventFeed; lookup?: typeof readLiveKnowledge };
 export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec?: RuleSpecV2; owner?: string; draft?: Draft; generalProject?: GeneralProjectDraft; generalProjectView?: GeneralProjectView; loadGeneralProject?:()=>Promise<GeneralProjectDraft>; memory?: string; onProgress?: (event: ChatProgress) => void; onModelCall?:(call:ModelCallMetric)=>void;
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
@@ -177,8 +177,24 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   let interpreted = await interpret();
   // Open questions have one authority: their canonical requirement. Do not
   // make the model repeat them in a second list and compare paraphrases.
-  const readPlan = (value: Record<string, unknown>) => parseRulePlan({ ...value, unresolved: value.action === "answer" ? []
-    : parseIntentRequirements(value.intentRequirements).flatMap(rule => rule.open ? [rule.open] : []) }, availableTools);
+  const readPlan = (value: Record<string, unknown>) => {
+    const declared = value.action === "answer" && value.intentRequirements === undefined && value.implementedRequirementIds === undefined
+      ? [] : parseIntentRequirements(value.intentRequirements);
+    const implemented = value.implementedRequirementIds === undefined ? undefined : bindIntentImplementation(declared, value.implementedRequirementIds);
+    // Old saved/test planner envelopes keep their strict text coverage. New
+    // envelopes name the subset once and derive its labels from canonical IDs.
+    if (implemented && value.requirements !== undefined && JSON.stringify(value.requirements) !== JSON.stringify(implemented.map(rule => rule.text)))
+      throw new CustomAIError("plan", "The proposed implementation conflicts with your saved rules. Your complete idea is kept.", 502);
+    const parsed = parseRulePlan({ ...value, ...(implemented ? { requirements: implemented.map(rule => rule.text) } : {}),
+      unresolved: value.action === "answer" ? [] : declared.flatMap(rule => rule.open ? [rule.open] : []) }, availableTools);
+    if (implemented && parsed.action === "build" && parsed.composable) {
+      const selected = bindIntentImplementation(declared, parsed.composable.requirements.map(rule => rule.id));
+      if (selected.length !== implemented.length || selected.some(rule => !implemented.some(item => item.id === rule.id)))
+        throw new CustomAIError("plan", "The fee program does not cover the same saved rules. Your complete idea is kept.", 502);
+      parsed.composable = { ...parsed.composable, requirements: selected };
+    }
+    return parsed;
+  };
   let plan = readPlan(interpreted);
   const sources: KnowledgeSource[] = [];
   const researched = plan.lookups.length > 0;
@@ -242,7 +258,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       try{
         if(typeof declaration!=="string"||declaration.length>96_000)throw Error();
         blueprint=createGeneralCheckBlueprint(JSON.parse(declaration),intent,coin.chainId,evmVersion,selectedProduction,previous?.project.compiler);
-      }catch{return {reply:"Your complete design is saved. Its independent contract examples need a complete supported declaration before source generation can continue.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Independent contract examples"]};}
+      }catch{return {reply:"Your complete idea is saved. I couldn't finish the contract checks for this draft yet.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract checks could not be prepared"]};}
       await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
     }
     const generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
