@@ -26,6 +26,10 @@ contract GeneralProtectedV4Fixture is IUnlockCallback {
         return executing ? authenticatedPayer : address(0);
     }
 
+    function nativeBalance(address account) external view returns (uint256) {
+        return account.balance;
+    }
+
     error FixtureExecution();
 
     constructor(IPoolManager manager_) {

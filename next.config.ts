@@ -86,6 +86,8 @@ const customAIWorkerFiles = [
   "./scripts/custom-ai/artifact-hash.mjs", "./scripts/custom-ai/composable-module.mjs",
   "./scripts/custom-ai/validate-module.mjs", "./scripts/custom-ai/validate-lifecycle.mjs",
   "./scripts/custom-ai/general-v4-world.mjs", "./scripts/custom-ai/general-v4-fixture.json",
+  "./scripts/custom-ai/general-protected-v4-world.mjs", "./scripts/custom-ai/general-protected-v4-fixture.json",
+  "./scripts/custom-ai/protected-world-fixture-pin.mjs",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];
 const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/package.json", "./packages/launch/src/**/*", "./packages/launch/contracts/**/*"];

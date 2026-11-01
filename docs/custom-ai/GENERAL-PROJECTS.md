@@ -772,3 +772,28 @@ retries, caps responses at 512 KiB, limits each endpoint to four concurrent and
 sixteen starts per second, and pauses exhausted providers for thirty seconds.
 The observation and replay layers retain their smaller per-preparation read
 budgets. No URL, provider credential or RPC method comes from generated code.
+
+## Declared protected pool examples
+
+The separate `v4-protected-native-token-v1` example world provides a pinned
+local manager, router, USD feed and, on Base, sequencer feed at the selected
+chain's canonical addresses. Its router exposes the active payer through
+`msgSender()` and a read-only `nativeBalance(address)` observation. This world
+keeps the original unprotected v4 fixture unchanged.
+
+The declaration includes the source initializer and a synthetic USD answer.
+Normalization adds the exact fixture version and hash to the plan. Constructor
+values may reference a fixture address or its runtime hash; they cannot select
+external code, a provider, URL or source file. The initializer, token and hook
+must agree with the source deployment declaration when one is present.
+
+Original-source examples on Ethereum, Robinhood, Base and HyperEVM cover pool
+initialization, a buy, a sell, fee ledgers, fixed-recipient payouts and refusal of
+a repeated claim. A changed source that redirects creator fees fails the
+independent recipient-balance expectation. The checker snapshots source,
+artifacts and examples before its first asynchronous operation.
+
+These are declared local EVM examples. Synthetic feed values are not live
+oracle observations; passing them does not admit a public launch. Current
+pricing, constructor observations, graph/Plan integration and backend review
+remain separate requirements.

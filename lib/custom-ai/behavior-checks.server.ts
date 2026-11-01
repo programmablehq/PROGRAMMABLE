@@ -17,7 +17,9 @@ export type GeneralScenarioReport = {
 };
 
 export async function checkGeneralScenarios(project:ContractProject,compilation:CompiledProject,plan:GeneralCheckPlan,signal?:AbortSignal):Promise<GeneralScenarioReport> {
-  signal?.throwIfAborted();projectCompilerInput(project);
+  signal?.throwIfAborted();
+  project=structuredClone(project);compilation=structuredClone(compilation);plan=structuredClone(plan);
+  projectCompilerInput(project);
   const {artifactHash,...artifacts}=compilation,{id:planHash,...declared}=plan;
   const reconstructed=createGeneralCheckPlan({contracts:plan.contracts,allowedCalls:plan.allowedCalls,steps:plan.steps,...(plan.world?{world:plan.world}:{}),
     ...(plan.constructorChildren?{constructorChildren:plan.constructorChildren}:{})},project);
@@ -32,9 +34,11 @@ export async function checkGeneralScenarios(project:ContractProject,compilation:
   catch{throw new CustomAIError("behavior-worker","The isolated contract checks are temporarily unavailable. Your saved source and artifacts are kept.",503);}
   const worker=join(process.cwd(),plan.version===2?"scripts/custom-ai/general-behavior-v2-worker.mjs":"scripts/custom-ai/general-behavior-worker.mjs");
   const worldModule=join(process.cwd(),"scripts/custom-ai/general-v4-world.mjs");
-  const worldFiles=plan.world?[join(process.cwd(),"scripts/custom-ai/general-v4-fixture.json"),join(process.cwd(),"scripts/custom-ai/core-bundle.json")]:[];
+  const protectedWorldModule=join(process.cwd(),"scripts/custom-ai/general-protected-v4-world.mjs");
+  const fixturePin=join(process.cwd(),"scripts/custom-ai/protected-world-fixture-pin.mjs");
+  const worldFiles=plan.world?[join(process.cwd(),plan.world.kind==="v4-protected-native-token-v1"?"scripts/custom-ai/general-protected-v4-fixture.json":"scripts/custom-ai/general-v4-fixture.json"),join(process.cwd(),"scripts/custom-ai/core-bundle.json")]:[];
   const output=await new Promise<string>((resolve,reject)=>{
-    const child=execFile(process.execPath,["--permission",...[toolchain,worker,worldModule,...worldFiles].map(path=>`--allow-fs-read=${path}`),"--max-old-space-size=384",worker,toolchain],
+    const child=execFile(process.execPath,["--permission",...[toolchain,worker,worldModule,protectedWorldModule,fixturePin,...worldFiles].map(path=>`--allow-fs-read=${path}`),"--max-old-space-size=384",worker,toolchain],
       {cwd:toolchain,env:{NODE_ENV:"production"},encoding:"utf8",timeout:30_000,maxBuffer:512_000,signal},(error,stdout)=>error
         ?reject(new CustomAIError("behavior-worker","The isolated contract checks did not finish. Your saved source and artifacts are kept.",503)):resolve(stdout));
     child.stdin?.on("error",()=>undefined);child.stdin?.end(JSON.stringify({chainId:project.chainId,evmVersion:project.compiler.evmVersion,contracts:compilation.contracts,plan}));

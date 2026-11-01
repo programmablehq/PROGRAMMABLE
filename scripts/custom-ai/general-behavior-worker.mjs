@@ -1,6 +1,7 @@
 import {createRequire} from "node:module";
 import {join} from "node:path";
 import {createGeneralV4World} from "./general-v4-world.mjs";
+import {createGeneralProtectedV4World} from "./general-protected-v4-world.mjs";
 const requireTool=createRequire(join(process.argv[2],"package.json"));
 let input="";process.stdin.setEncoding("utf8");
 process.stdin.on("data",chunk=>{input+=chunk;if(Buffer.byteLength(input)>6_000_000)process.exit(3);});
@@ -22,6 +23,7 @@ async function check({chainId,evmVersion,contracts,plan}){
    if(input.account&&Object.hasOwn(accounts,input.account))return accounts[input.account];
    if(input.contract&&deployed.has(input.contract))return deployed.get(input.contract).address;
    if(input.fixture&&world?.contracts.has(input.fixture))return world.contracts.get(input.fixture).address;
+   if(input.fixtureHash&&world?.contracts.has(input.fixtureHash))return world.contracts.get(input.fixtureHash).runtimeCodeHash;
    if(input.pool===true&&world&&deployed.has(plan.world.token)&&deployed.has(plan.world.hook))return [
     "0x0000000000000000000000000000000000000000",deployed.get(plan.world.token).address,plan.world.fee,plan.world.tickSpacing,deployed.get(plan.world.hook).address,
    ];
@@ -59,7 +61,9 @@ async function check({chainId,evmVersion,contracts,plan}){
  try{
   if(plan.world){
    if(evmVersion!=="cancun")throw Error("This pinned v4 world requires its Cancun execution profile.");
-   world=await createGeneralV4World(requireTool,run);
+   world=plan.world.kind==="v4-protected-native-token-v1"
+    ?await createGeneralProtectedV4World(requireTool,{vm,common,chainId,run,onBootstrapGas:used=>{gasUsed+=used;}},plan.world)
+    :await createGeneralV4World(requireTool,run);
    for(const [id,target] of world.contracts)deployed.set(id,target);
   }
   for(const fixture of plan.contracts){
