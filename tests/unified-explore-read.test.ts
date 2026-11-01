@@ -228,7 +228,7 @@ describe("Unified verified source adapter", () => {
       links: [{ label: "Website", url: "https://example.com/" }],
     })]);
     expect(recent).toHaveBeenCalledWith(new Set([`1:${address}`, `4663:${address}`]));
-    expect(sources.ethMarkets).toHaveBeenCalledWith([eth], 1);
+    expect(sources.ethMarkets).toHaveBeenCalledWith([eth], 1, { universe: [{ tokenAddress: address, poolId: pool }] });
   });
   it("starts a ready network's market batch without waiting for the other catalog", async () => {
     const slowCatalog = Promise.withResolvers<unknown>();
@@ -246,6 +246,33 @@ describe("Unified verified source adapter", () => {
     expect(sources.rhMarkets).toHaveBeenCalledTimes(1);
     expect(sources.ethMarkets).toHaveBeenCalledTimes(1);
   });
+  it("checks receipt-backed launches while market reads are still running", async () => {
+    const prices = Promise.withResolvers<Map<string, RobinhoodCoinMarket>>();
+    const started = Promise.withResolvers<void>();
+    sources.rhMarkets.mockImplementation(() => { started.resolve(); return prices.promise; });
+    sources.ethMarkets.mockReturnValue(prices.promise);
+    const pending = readUnifiedLaunches();
+    await started.promise;
+    await new Promise(resolve => setImmediate(resolve));
+    try { expect(recent).toHaveBeenCalledTimes(1); }
+    finally { prices.resolve(new Map()); await pending; }
+  });
+  it("keeps stable market batches across pages while pricing only the selected page", async () => {
+    const rows = Array.from({ length: 24 }, (_, index) => ({ ...rh,
+      tokenAddress: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+      launchedAt: new Date(Date.UTC(2026, 9, 10, 0, index)).toISOString(),
+    }));
+    sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: rows, sourceEvidence: {} });
+    const first = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain: 4663 }, 6);
+    const second = await readUnifiedLaunches(2, "", { sort: "newest", mode: "all", chain: 4663 }, 6);
+    expect(sources.rhMarkets).toHaveBeenCalledTimes(2);
+    expect(sources.rhMarkets.mock.calls[0][0].map((row: RobinhoodLaunch) => row.tokenAddress))
+      .toEqual(expect.arrayContaining(first.items.map(row => row.tokenAddress)));
+    expect(sources.rhMarkets.mock.calls[1][0].map((row: RobinhoodLaunch) => row.tokenAddress))
+      .toEqual(expect.arrayContaining(second.items.map(row => row.tokenAddress)));
+    const universe = rows.map(row => ({ tokenAddress: row.tokenAddress, poolId: row.poolId }));
+    expect(sources.rhMarkets.mock.calls.map(call => call[1])).toEqual([universe, universe]);
+  });
   it("keeps a selected Classic launch's category and existing artwork and links", async () => {
     const classic = { ...eth, name: "Helix", symbol: "HELIX", imageUrl: "https://helixlev.fun/brand/helix-logo.png",
       links: [{ kind: "website", url: "https://helixlev.fun/" }, { kind: "x", url: "https://x.com/Helixlevdotfun" }],
@@ -262,8 +289,8 @@ describe("Unified verified source adapter", () => {
     expect(result.presentations.map(row => [row.chainId, row.market?.marketCapUsd])).toEqual([[4663, 20], [1, 100]]);
     expect(result.items).toHaveLength(2);
     expect(result.sourceEvidence).toEqual({ robinhood: { verified: "rh" }, ethereum: { verified: "eth" }, base: { verified: "base" }, hyperevm: { verified: "hyperevm" } });
-    expect(sources.rhMarkets).toHaveBeenCalledExactlyOnceWith([rh]);
-    expect(sources.ethMarkets).toHaveBeenCalledExactlyOnceWith([eth], 1);
+    expect(sources.rhMarkets).toHaveBeenCalledExactlyOnceWith([rh], [{ tokenAddress: address, poolId: pool }]);
+    expect(sources.ethMarkets).toHaveBeenCalledExactlyOnceWith([eth], 1, { universe: [{ tokenAddress: address, poolId: pool }] });
   });
 
   it("retains verified launches when optional market enrichment fails", async () => {

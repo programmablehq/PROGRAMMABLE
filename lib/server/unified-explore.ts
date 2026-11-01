@@ -30,8 +30,8 @@ const readers = {
   robinhood: readRobinhoodExploreCatalog,
   ethereum: readEthereumUnifiedExploreCatalog,
   robinhoodMarkets: readRobinhoodMarkets,
-  ethereumMarkets: async (tokens: Parameters<typeof readCodexMarkets>[0], chainId = 1) => {
-    const markets=await readCodexMarkets(tokens,chainId).catch(error=>{if(chainId!==999)throw error;return new Map<string,RobinhoodCoinMarket>();});
+  ethereumMarkets: async (tokens: Parameters<typeof readCodexMarkets>[0], chainId = 1, universe = tokens) => {
+    const markets=await readCodexMarkets(tokens,chainId,{ universe }).catch(error=>{if(chainId!==999)throw error;return new Map<string,RobinhoodCoinMarket>();});
     return chainId===999?enrichHyperEvmMarkets(tokens,markets):markets;
   },
   robinhoodPresentations: readRobinhoodPresentations,
@@ -47,36 +47,59 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
   const requestedChain = exploreChainFilter(filters);
   const wants = (chainId: 1 | 4663 | 8453 | 999) => requestedChain === "all" || requestedChain === chainId;
   const marketRanked = ["highest", "lowest", "activity"].includes(filters.sort);
+  type MarketIdentity = Parameters<typeof readCodexMarkets>[0][number];
+  const universes = new Map<1 | 4663 | 8453 | 999, MarketIdentity[]>();
+  const indexedCatalog = new Set<string>();
+  const retainUniverse = (chainId: 1 | 4663 | 8453 | 999, rows: readonly { tokenAddress: string; poolId?: string | null }[]) => {
+    for (const row of rows) indexedCatalog.add(exploreIdentityKey({ chainId, tokenAddress: row.tokenAddress }));
+    universes.set(chainId, rows.filter(row => isVisibleExploreQueryIdentityV1(row, chainId, ""))
+      .flatMap(row => typeof row.poolId === "string" && marketPool.test(row.poolId)
+        ? [{ tokenAddress: row.tokenAddress, poolId: row.poolId }] : []));
+  };
+  const universeFor = (chainId: 1 | 4663 | 8453 | 999, extra: readonly { tokenAddress: string; poolId?: string | null }[] = []) => [...new Map([
+    ...(universes.get(chainId) ?? []), ...extra.flatMap(row => typeof row.poolId === "string" && marketPool.test(row.poolId)
+      ? [{ tokenAddress: row.tokenAddress, poolId: row.poolId }] : []),
+  ].map(row => [`${row.tokenAddress.toLowerCase()}:${row.poolId.toLowerCase()}`, row])).values()];
   const observations = wants(1) ? readConfirmingEthereumLaunches().catch(() => []) : Promise.resolve([]);
   const aiRead = wants(4663)
     ? readCustomAICatalog().catch(() => ({ status:"unavailable" as const, updatedAt:null, items:[] }))
     : Promise.resolve({ status: "inactive" as const, updatedAt: null, items: [] });
-  // Each network can enrich its catalog as soon as it arrives. A slower index
-  // must not hold up the other network's independent market request. A chain
-  // filter also skips catalogs and Codex reads that cannot affect the result.
-  const [[rh, rhMarkets], [eth, ethMarkets], [base, baseMarkets], [hyperevm, hyperMarkets]] = await Promise.all([
+  // Preserve each network's full visible universe before query/profile filters.
+  // Every page and search then uses the same stable provider cache batches.
+  const catalogs = [
     (wants(4663) ? dependencies.robinhood() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, items: [], sourceEvidence: null })).catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], sourceEvidence: null })).then(catalog => {
+      retainUniverse(4663, catalog.items);
       for (const row of catalog.items) catalogSymbols.set(exploreIdentityKey({ chainId: 4663, tokenAddress: row.tokenAddress }), row.symbol);
       return { ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 4663, query)) };
-    }).then(async catalog => [catalog,
-      marketRanked && catalog.items.length ? await dependencies.robinhoodMarkets(catalog.items).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>(),
-    ] as const),
+    }),
     (wants(1) ? dependencies.ethereum() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, entries: [], sourceEvidence: null })).catch(() => ({ status: "unavailable" as const, updatedAt: null, entries: [], sourceEvidence: null })).then(catalog => {
+      retainUniverse(1, catalog.entries);
       for (const entry of catalog.entries) catalogSymbols.set(exploreIdentityKey({ chainId: 1, tokenAddress: entry.tokenAddress }), entry.symbol);
       return { ...catalog, entries: catalog.entries.filter(entry => owned(entry.creatorAddress) && isVisibleExploreQueryIdentityV1(entry, 1, query)) };
-    }).then(async catalog => [catalog,
-      marketRanked && catalog.entries.length ? await dependencies.ethereumMarkets(catalog.entries, 1).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>(),
-    ] as const),
+    }),
     (wants(8453) && dependencies.base ? dependencies.base() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
       .catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
-      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 8453, query)) }))
-      .then(async catalog => [catalog, marketRanked && catalog.items.length ? await dependencies.ethereumMarkets(catalog.items, 8453)
-        .catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
+      .then(catalog => { retainUniverse(8453, catalog.items); return { ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 8453, query)) }; }),
     (wants(999) && dependencies.hyperevm ? dependencies.hyperevm() : Promise.resolve({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
       .catch(() => ({ status: "unavailable" as const, updatedAt: null, items: [], presentations: [], sourceEvidence: null }))
-      .then(catalog => ({ ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 999, query)) }))
-      .then(async catalog => [catalog, marketRanked && catalog.items.length ? await dependencies.ethereumMarkets(catalog.items, 999)
-        .catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
+      .then(catalog => { retainUniverse(999, catalog.items); return { ...catalog, items: catalog.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row, 999, query)) }; }),
+  ] as const;
+  // Recent receipt checks need catalog identities, not price responses. Start
+  // them while independent market requests run, preserving indexed supersession.
+  const recentRead = wants(1) || wants(4663) ? Promise.all([...catalogs, aiRead]).then(([, , , , ai]) => {
+    const indexed = new Set(indexedCatalog);
+    for (const row of ai.items) indexed.add(exploreIdentityKey(row));
+    return readRecentFoundationLaunches(indexed).catch(() => []);
+  }) : Promise.resolve([]);
+  const [[rh, rhMarkets], [eth, ethMarkets], [base, baseMarkets], [hyperevm, hyperMarkets]] = await Promise.all([
+    catalogs[0].then(async catalog => [catalog, marketRanked && catalog.items.length
+      ? await dependencies.robinhoodMarkets(catalog.items, universes.get(4663)).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
+    catalogs[1].then(async catalog => [catalog, marketRanked && catalog.entries.length
+      ? await dependencies.ethereumMarkets(catalog.entries, 1, universes.get(1)).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
+    catalogs[2].then(async catalog => [catalog, marketRanked && catalog.items.length
+      ? await dependencies.ethereumMarkets(catalog.items, 8453, universes.get(8453)).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
+    catalogs[3].then(async catalog => [catalog, marketRanked && catalog.items.length
+      ? await dependencies.ethereumMarkets(catalog.items, 999, universes.get(999)).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
   ]);
   const ai = await aiRead;
   const aiRows = ai.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row,row.chainId,query));
@@ -123,8 +146,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     ...[...ethMarkets].map(([address, market]) => [`1:${address}`, market] as const),
   ]);
   const indexed = new Set([...rhRows, ...ethRows, ...baseRows, ...hyperRows, ...aiRows].map(exploreIdentityKey));
-  const recent = (wants(1) || wants(4663) ? await readRecentFoundationLaunches(indexed).catch(() => []) : [])
-    .filter(item => wants(item.chainId) && owned(item.row.creator));
+  const recent = (await recentRead).filter(item => wants(item.chainId) && owned(item.row.creator));
   const recentRows = recent.map(item => ({ ...item.row, chainId: item.chainId, mode: "module" as const,
     category: "custom" as const, confirmation: "confirmed" as const }));
   const known = new Set([...indexed, ...recentRows.map(exploreIdentityKey)]);
@@ -138,8 +160,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
     const rows = fresh.filter(row => row.chainId === chainId && typeof row.poolId === "string" && marketPool.test(row.poolId));
     if (!rows.length) return;
     const values = await (chainId === 1
-      ? dependencies.ethereumMarkets(rows as { tokenAddress: string; poolId: string }[], 1)
-      : dependencies.robinhoodMarkets(rows as (typeof rhRows)[number][])).catch(() => new Map<string, RobinhoodCoinMarket>());
+      ? dependencies.ethereumMarkets(rows as { tokenAddress: string; poolId: string }[], 1, universeFor(1, rows))
+      : dependencies.robinhoodMarkets(rows as (typeof rhRows)[number][], universeFor(4663, rows))).catch(() => new Map<string, RobinhoodCoinMarket>());
     for (const row of rows) {
       const market = values.get(row.tokenAddress.toLowerCase());
       if (market) markets.set(exploreIdentityKey(row), market);
@@ -165,8 +187,8 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
       const rows = [...new Map(candidates.map(row => [row.tokenAddress.toLowerCase(), row])).values()];
       if (!rows.length) return;
       const result = await (chainId === 4663
-        ? dependencies.robinhoodMarkets(rows as (typeof rh.items))
-        : dependencies.ethereumMarkets(rows as { tokenAddress: string; poolId: string }[], chainId))
+        ? dependencies.robinhoodMarkets(rows as (typeof rh.items), universeFor(chainId, rows))
+        : dependencies.ethereumMarkets(rows as { tokenAddress: string; poolId: string }[], chainId, universeFor(chainId, rows)))
         .catch(() => new Map<string, RobinhoodCoinMarket>());
       const chainMarkets = chainId === 1 ? ethMarkets : chainId === 4663 ? rhMarkets : chainId === 999 ? hyperMarkets : baseMarkets;
       for (const [address, market] of result) {
