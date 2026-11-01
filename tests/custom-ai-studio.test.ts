@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const auth = vi.hoisted(() => vi.fn());
-const store = vi.hoisted(() => ({ readObject: vi.fn(), read: vi.fn(), saveObject: vi.fn(), consume: vi.fn() }));
+const store = vi.hoisted(() => ({ readObject: vi.fn(), read: vi.fn(), saveObject: vi.fn(), consume: vi.fn(), projects: { overview: vi.fn() } }));
 vi.mock("../lib/custom-ai/auth.server", () => ({ authorizeCustomAI: auth }));
 vi.mock("../lib/custom-ai/store.server", () => ({ productionAIStore: () => store }));
 import { GET, POST } from "../app/api/custom-ai/studio/route";
@@ -18,6 +18,32 @@ beforeEach(() => {
   store.saveObject.mockResolvedValue(1);
 });
 describe("private studio drafts", () => {
+  it("restores a compact general source result without reading its complete source", async () => {
+    const generalProject={projectHash:"sha256:"+"a".repeat(64),compiled:true,launchReady:false};
+    store.readObject.mockResolvedValue({revision:2,value:{...state,draftId:"general-source-0001"}});
+    store.read.mockResolvedValue({result:{generalProject}});
+    const value=await (await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`))).json();
+    expect(value.generalProject).toEqual(generalProject);expect(value.draft).toBeUndefined();
+    expect(store.projects.overview).not.toHaveBeenCalled();
+  });
+  it("retains a failed source separately from the previous working draft", async () => {
+    const sourceId="failed-source-request-0001",draftId="previous-draft-0001";
+    store.read.mockImplementation(async (_owner,id)=>id===sourceId?{id,state:"failed"}:{result:{draft:{source:"previous working source"}}});
+    store.readObject.mockImplementation(async (_owner,kind)=>kind==="studio"?{revision:3,value:{...state,draftId}}:{value:{activeRequest:sourceId}});
+    store.projects.overview.mockResolvedValue({requestId:sourceId,projectHash:"sha256:"+"b".repeat(64),compilation:"pending"});
+    const response=await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`));const value=await response.json();
+    expect(value.draft.source).toBe("previous working source");expect(value.sourceRecovery.requestId).toBe(sourceId);
+    expect(value).not.toHaveProperty("activeRequest");expect(store.projects.overview).toHaveBeenCalledWith("alice",sourceId);
+  });
+  it("binds a separately retained source to the same chat and does not accept it as a finished draft", async () => {
+    const sourceId="failed-source-request-0001";store.read.mockResolvedValue({state:"failed"});store.projects.overview.mockResolvedValue({requestId:sourceId});
+    expect((await POST(request({...state,sourceId}))).status).toBe(200);
+    expect(store.saveObject.mock.calls[0][3].sourceId).toBe(sourceId);
+    expect((await POST(request({...state,sourceId,draftId:sourceId}))).status).toBe(400);
+    store.read.mockResolvedValueOnce({state:"failed",request:{conversation:{account,id:"00000000-0000-4000-8000-000000000002"}}});
+    expect((await POST(request({...state,sourceId}))).status).toBe(409);
+    expect(store.saveObject).toHaveBeenCalledTimes(1);
+  });
   it("rejects a wallet outside the authenticated account before reading data", async () => {
     const response=await GET(new Request("https://programmable.market/api/custom-ai/studio?account=0x2000000000000000000000000000000000000002"));
     expect(response.status).toBe(403); expect(store.readObject).not.toHaveBeenCalled();

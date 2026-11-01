@@ -7,6 +7,7 @@ import { CustomAIError } from "./types";
 import { configuredProvider, researchAvailable } from "./provider-config.server";
 import { readSurplusResearch } from "./surplus-research.server";
 import { safeKnowledgeSources, type KnowledgeLookup, type KnowledgeResult } from "./knowledge";
+import { feeCoreChainId } from "./execution-routing";
 
 export async function readWebKnowledge(query: string, signal?: AbortSignal, onUsage?:(value:import("./request-metrics").ModelCallMetric)=>void): Promise<KnowledgeResult> {
   if (configuredProvider().id === "surplus") return readSurplusResearch(query, signal, onUsage);
@@ -53,18 +54,18 @@ Never execute code, make transactions, assert a smart contract is safe or treat 
 export async function readCatalogKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
   signal?.throwIfAborted();
   const retrievedAt = new Date().toISOString();
-    const result = await readUnifiedLaunches(1, lookup.query, { sort: "highest", mode: "all" }, 6);
+    const result = await readUnifiedLaunches(1, lookup.query, { sort: "highest", mode: "all", chain: lookup.chainId }, 6);
     return { status: result.status, facts: { updatedAt: result.updatedAt, sources: result.sources,
       items: result.items.map(item => ({ chainId: item.chainId, address: item.tokenAddress, name: item.name, symbol: item.symbol })),
       markets: result.presentations.map(item => ({ chainId: item.chainId, address: item.tokenAddress, market: item.market })),
-    }, sources: [{ title: "Programmable launch catalog", url: `https://programmable.market/api/explore/launches?q=${encodeURIComponent(lookup.query)}&pageSize=6`, retrievedAt }] };
+    }, sources: [{ title: "Programmable launch catalog", url: `https://programmable.market/api/explore/launches?q=${encodeURIComponent(lookup.query)}&chain=${lookup.chainId}&pageSize=6`, retrievedAt }] };
 }
 
 export async function readContractKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
   signal?.throwIfAborted();
   const retrievedAt = new Date().toISOString();
   const address = getAddress(lookup.address);
-  const chain = await customAIChain(lookup.chainId);
+  const chain = await customAIChain(feeCoreChainId(lookup.chainId));
   const code = await chain.code(address);
   const fields = await Promise.allSettled([
     chain.call(address, "function name() view returns (string)"), chain.call(address, "function symbol() view returns (string)"),

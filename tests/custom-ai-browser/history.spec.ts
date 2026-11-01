@@ -8,12 +8,29 @@ import type {ChatRequest,ChatResult} from "../../lib/custom-ai/types";
 import type {StudioState} from "../../lib/custom-ai/studio";
 import {EMPTY_COIN_SETUP} from "../../lib/custom-ai/coin-setup";
 import {studioSnapshot} from "../../lib/custom-ai/studio-sync";
+import type { GeneralProjectView } from "../../lib/custom-ai/project-view";
+import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
+import { overviewFromView } from "../../lib/custom-ai/project-overview";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
-test.afterAll(async()=>{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
+test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
+function generalFixture(revision=1,compiled=true){
+ const intent:LaunchIntent={version:1,id:"general-browser-design",revision:(revision===1?"c":"d").repeat(64),...(revision>1?{parentRevision:"c".repeat(64)}:{}),
+  requirements:[{id:"counter",text:revision===1?"Anyone can increment the counter":"Anyone can increment and read the counter",kind:"behavior",open:null,origin:{kind:"legacy"}}],unresolved:[],changes:[]};
+ const generalProject:GeneralProjectView={version:1,projectHash:`sha256:${(revision===1?"a":"b").repeat(64)}`,artifactHash:`sha256:${"f".repeat(64)}`,chainId:1,intentRevision:intent.revision,summary:"A general counter contract",
+  compiler:{version:"0.8.26+commit.8a97fa7a",optimizerRuns:1000,viaIR:false,evmVersion:"cancun"},entrypoints:[{source:"Counter.sol",contract:"Counter",role:"auxiliary"}],sourceFiles:1,sourceBytes:240,compiled,
+  diagnostics:compiled?[]:[{severity:"error",message:"The source needs a declared helper."}],requirementCoverage:"proposed",verification:"not-run",launchReady:false};
+ return {intent,generalProject,reply:"The complete general source is saved.",change:compiled?"applied" as const:"blocked" as const};
+}
+function checkedFixture(revision=1,passed=true){
+ const base=generalFixture(revision);
+ return {...base,change:passed?"applied" as const:"blocked" as const,generalProject:{...base.generalProject,blueprintId:`sha256:${"2".repeat(64)}` as const,
+  scenarios:{scope:"isolated-declared-scenarios-v1" as const,hash:`sha256:${"3".repeat(64)}` as const,planHash:`sha256:${"4".repeat(64)}` as const,passed,cases:5,
+    failures:passed?[]:[{caseId:"increment-one",code:"return-value",message:"The declared increment did not match."}]}}};
+}
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
- const calls:ChatRequest[]=[],control={delay:false,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[]};
+ const calls:ChatRequest[]=[],control={delay:false,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
  const key=(account:string,id:string,principal="alice")=>principal+":"+account+":"+id;
  const create=(account:string,id:string,principal="alice")=>{const k=key(account,id,principal);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
  await page.route("**/api/**",async route=>{
@@ -31,17 +48,21 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
   if(url.pathname==="/api/custom-ai/studio"){
    if(body){const prev=studios.get(k);if((prev?.revision??0)!==body.revision)return route.fulfill({status:409,json:{error:"Studio changed"}});studios.set(k,{revision:body.revision+1,state:body.state});const chat=chats.get(k)!;if(!chat.customTitle)chat.title=body.state.settings.name||body.state.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;if(chat.activeRequest===body.state.contextId)delete chat.activeRequest;return route.fulfill({json:{revision:body.revision+1}});}
    const saved=studios.get(k),chat=chats.get(k),active=chat?.activeRequest?jobs.get(chat.activeRequest):undefined;
-   return route.fulfill({json:saved?{...saved,...(active&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
+   const draft=saved?.state.draftId?jobs.get(saved.state.draftId)?.result:undefined,context=saved?.state.contextId?jobs.get(saved.state.contextId)?.result:undefined;
+   const proposal=saved?.state.sourceId?jobs.get(saved.state.sourceId)?.result?.generalProject:undefined;
+   return route.fulfill({json:saved?{...saved,draft:draft?.draft,generalProject:draft?.generalProject,intent:context?.intent??draft?.intent,...(proposal?{sourceRecovery:overviewFromView(saved!.state.sourceId!,proposal)}:{}),...(active&&active.state!=="failed"&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
   }
   if(url.pathname==="/api/custom-ai"){
    if(body){calls.push(body);const scope=body.conversation,chat=chats.get(key(scope.account,scope.id,principal))!;expect(scope.revision).toBe(studios.get(key(scope.account,scope.id,principal))?.revision);chat.activeRequest=body.id;if(!chat.customTitle)chat.title=body.coin?.name||body.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;
     if(control.delay){jobs.set(body.id,{request:body,state:"running"});return route.fulfill({contentType:"text/event-stream",body:'data: {"type":"phase","phase":"building"}\n\n'});}
-    const result={reply:`Reply for ${body.messages.at(-1).content}`,change:"unchanged" as const};jobs.set(body.id,{request:body,state:"completed",result});return route.fulfill({json:result});
+    const proposed=control.respond?.(body);
+    if(control.failure){jobs.set(body.id,{request:body,state:"failed"});return route.fulfill({status:503,json:{code:control.failure,error:"The isolated contract build did not finish. Your source package is saved.",requestState:"failed"}});}
+    const result=proposed??{reply:`Reply for ${body.messages.at(-1).content}`,change:"unchanged" as const};jobs.set(body.id,{request:body,state:"completed",result});return route.fulfill({json:result});
    }
    const job=jobs.get(url.searchParams.get("id")!);return route.fulfill({json:{id:job?.request.id,...job,phase:"building",heartbeatAt:Date.now()}});
   }
   if(url.pathname.endsWith("/usage"))return route.fulfill({json:{available:true,active:0,hourly:{used:0,limit:100,remaining:100,resetsAt:Date.now()+100000},daily:{used:0,limit:100,remaining:100,resetsAt:Date.now()+100000},resumesAt:0}});
-  return route.fulfill({json:{versions:[],requests:[]}});
+  control.otherReads.push(url.pathname);return route.fulfill({json:{versions:[],requests:[]}});
  });
  return {chats,studios,jobs,calls,control};
 }
@@ -100,6 +121,98 @@ test("a signed-out prompt can connect without waiting for transaction readiness"
  const f=await fixture(page);await page.goto(origin+"?signed-out=1&signer-loading=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
  await expect(box).toBeEditable();await box.fill("First idea without a signer");await box.press("Enter");
  await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();await expect(box).toHaveValue("First idea without a signer");expect(f.calls).toHaveLength(0);
+});
+test("general source restores compactly and reads complete code only when explicitly opened",async({page},info)=>{
+ const f=await fixture(page),result=generalFixture();f.control.respond=()=>result;let sourceReads=0;
+ await page.route("**/api/custom-ai/projects?**",route=>{sourceReads++;return route.fulfill({json:{version:1,requestId:f.calls[0].id,project:{hash:result.generalProject.projectHash,sources:{"Counter.sol":{content:"pragma solidity 0.8.26; contract Counter { uint256 public value; }"}}}}});});
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Build a general counter contract");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toHaveCount(0);expect(sourceReads).toBe(0);
+ await box.fill("Keep this unsent source edit");await expect.poll(()=>[...f.studios.values()].some(s=>s.state.input==="Keep this unsent source edit")).toBe(true);
+ f.control.otherReads=[];await page.reload();await expect(box).toHaveValue("Keep this unsent source edit");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ expect(f.calls).toHaveLength(1);expect(sourceReads).toBe(0);expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);
+ const source=page.getByRole("region",{name:"Contract source",exact:true});await source.locator("summary",{hasText:"View saved source"}).click();
+ await expect(source.getByText("Counter.sol",{exact:true})).toBeVisible();expect(sourceReads).toBe(1);
+ await source.locator("summary",{hasText:"View saved source"}).click();await source.locator("summary",{hasText:"View saved source"}).click();expect(sourceReads).toBe(1);
+ const download=page.waitForEvent("download");await source.getByRole("button",{name:"Download source project"}).click();expect((await download).suggestedFilename()).toMatch(/^programmable-source-/);
+ for(const width of [360,768,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`general-source-${width}.png`),fullPage:true});}
+});
+test("compile-only recovery keeps the working source, unsent text and pending request without fake chat turns",async({page})=>{
+ const f=await fixture(page),first=generalFixture(),second=generalFixture(2);let inferenceRequests=0;
+ f.control.respond=request=>{if(request.intent==="compile"){f.control.failure="";return second;}inferenceRequests++;if(inferenceRequests===1)return first;f.control.failure="project-compiler";return undefined;};
+ await page.route("**/api/custom-ai/projects?**",route=>route.fulfill({json:{requestId:f.calls[1].id,projectHash:second.generalProject.projectHash,chainId:1,intentRevision:second.intent.revision,compiler:second.generalProject.compiler,sourceFiles:1,sourceBytes:240,compilation:"pending",diagnostics:[]}}));
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Build a general counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ const change="Add a read helper";await box.fill(change);await box.press("Enter");
+ const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();await expect(box).toHaveValue(change);
+ expect([...f.studios.values()][0].state.draftId).toBe(f.calls[0].id);
+ await box.fill("Keep this other unsent change");await recovery.getByRole("button",{name:"Retry saved build"}).click();
+ await expect(recovery).toHaveCount(0);await expect(box).toHaveValue("Keep this other unsent change");
+ await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[2].id);
+ expect(f.calls[2]).toMatchObject({intent:"compile",messages:[],compilationOf:{id:f.calls[1].id,projectHash:second.generalProject.projectHash}});
+ expect([...f.studios.values()][0].state.pendingChange).toBe(change);
+ expect([...f.studios.values()][0].state.messages).toEqual([{role:"user",content:"Build a general counter"},{role:"assistant",content:first.reply}]);
+ await page.reload();await expect(box).toHaveValue("Keep this other unsent change");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ expect(inferenceRequests).toBe(2);expect(f.calls).toHaveLength(3);
+});
+test("general source diagnostics stay a separate proposal until explicitly selected for editing",async({page})=>{
+ const f=await fixture(page);let n=0;f.control.respond=()=>++n===1?generalFixture():generalFixture(2,false);
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Build a general counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Add a read helper");await box.press("Enter");const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();
+ await expect.poll(()=>[...f.studios.values()][0].state.sourceId).toBe(f.calls[1].id);expect([...f.studios.values()][0].state.draftId).toBe(f.calls[0].id);
+ await expect(recovery.getByRole("button",{name:"Retry saved build"})).toHaveCount(0);
+ await recovery.getByRole("button",{name:"Edit this source"}).click();await expect(recovery).toHaveCount(0);await expect(page.getByText("Source needs changes",{exact:true})).toBeVisible();
+ await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[1].id);expect(f.calls).toHaveLength(2);
+});
+test("a failed declared contract check preserves the working source and can be explicitly edited",async({page})=>{
+ const f=await fixture(page);let n=0;f.control.respond=()=>++n===1?checkedFixture():checkedFixture(2,false);
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Build the complete counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Add a read helper");await box.press("Enter");const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();
+ await expect.poll(()=>[...f.studios.values()][0].state.sourceId).toBe(f.calls[1].id);expect([...f.studios.values()][0].state.draftId).toBe(f.calls[0].id);
+ await expect(recovery.getByRole("button",{name:"Resume contract checks"})).toHaveCount(0);await recovery.locator("summary",{hasText:"A declared contract check failed"}).click();await expect(recovery.getByText("The declared increment did not match.",{exact:true})).toBeVisible();
+ await page.reload();await expect(recovery).toBeVisible();expect(f.calls).toHaveLength(2);
+ await recovery.getByRole("button",{name:"Edit this source"}).click();await expect(recovery).toHaveCount(0);await expect(page.getByText("Contract checks failed",{exact:true})).toBeVisible();
+ await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[1].id);expect(f.calls).toHaveLength(2);
+});
+test("resuming saved contract checks preserves the unsent input and does not request another generation",async({page})=>{
+ const f=await fixture(page);let modelRequests=0;
+ f.control.respond=request=>{if(request.intent==="compile"){f.control.failure="";return checkedFixture(2);}if(++modelRequests===1)return checkedFixture();f.control.failure="behavior-worker";return undefined;};
+ await page.route("**/api/custom-ai/projects?**",route=>route.fulfill({json:{requestId:f.calls[1].id,projectHash:generalFixture(2).generalProject.projectHash,chainId:1,intentRevision:generalFixture(2).intent.revision,
+  compiler:generalFixture(2).generalProject.compiler,sourceFiles:1,sourceBytes:240,compilation:"compiled",artifactHash:generalFixture(2).generalProject.artifactHash,blueprintId:checkedFixture().generalProject.blueprintId,diagnostics:[]}}));
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Build the complete counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Add a read helper");await box.press("Enter");const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();
+ await box.fill("Keep this newer unsent idea");await recovery.getByRole("button",{name:"Resume contract checks"}).click();await expect(recovery).toHaveCount(0);await expect(box).toHaveValue("Keep this newer unsent idea");
+ await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[2].id);expect(f.calls[2]).toMatchObject({intent:"compile",messages:[]});expect(modelRequests).toBe(2);expect(f.calls).toHaveLength(3);
+ await page.reload();await expect(box).toHaveValue("Keep this newer unsent idea");expect(f.calls).toHaveLength(3);
+});
+test("four-chain source settings retain native currency and never load a foreign fee core",async({page},info)=>{
+ const f=await fixture(page);await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await page.locator("summary").filter({hasText:"Coin details"}).click();
+ for(const name of ["Ethereum","Robinhood","Base","HyperEVM"])await expect(page.getByRole("button",{name,exact:true})).toBeVisible();
+ await page.getByRole("textbox",{name:"Initial buy",exact:true}).fill("2");f.control.otherReads=[];
+ await page.getByRole("button",{name:"Base",exact:true}).click();await expect(page.getByText("Contract design",{exact:true})).toBeVisible();
+ // Changing from the fixed core to the general preview remounts its details.
+ await page.locator("summary").filter({hasText:"Coin details"}).click();await expect(page.getByRole("button",{name:"Pair ETH",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"HyperEVM",exact:true}).click();await expect(page.getByRole("button",{name:"Pair HYPE",exact:true})).toBeVisible();
+ await expect(page.getByRole("textbox",{name:"Initial buy",exact:true})).toHaveValue("");await page.getByRole("textbox",{name:"Initial buy",exact:true}).fill("0.2");
+ const metadata={description:"A public coin following its saved volume rule.",website:"https://example.com/",x:"https://x.com/example_coin"};
+ await page.getByRole("textbox",{name:"Public description",exact:true}).fill(metadata.description);
+ await page.getByRole("textbox",{name:"Project website",exact:true}).fill(metadata.website);
+ await page.getByRole("textbox",{name:"X profile",exact:true}).fill(metadata.x);
+ await expect.poll(()=>[...f.studios.values()][0]?.state.settings).toMatchObject({chainId:999,pairToken:"HYPE",initialBuy:"0.2",...metadata});
+ await page.reload();await expect(box).toBeEditable();await expect(page.getByText("Contract design",{exact:true})).toBeVisible();
+ await page.locator("summary").filter({hasText:"Coin details"}).click();await expect(page.getByRole("button",{name:"Pair HYPE",exact:true})).toBeVisible();
+ await expect(page.getByRole("textbox",{name:"Initial buy",exact:true})).toHaveValue("0.2");
+ await expect(page.getByRole("textbox",{name:"Public description",exact:true})).toHaveValue(metadata.description);
+ await expect(page.getByRole("textbox",{name:"Project website",exact:true})).toHaveValue(metadata.website);
+ await expect(page.getByRole("textbox",{name:"X profile",exact:true})).toHaveValue(metadata.x);
+ await page.getByRole("textbox",{name:"Public description",exact:true}).focus();await page.keyboard.press("Tab");
+ await expect(page.getByRole("textbox",{name:"Project website",exact:true})).toBeFocused();await page.keyboard.press("Tab");
+ await expect(page.getByRole("textbox",{name:"X profile",exact:true})).toBeFocused();
+ for(const width of [360,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`four-chain-${width}.png`),fullPage:true});}
+ expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);expect(f.calls).toHaveLength(0);
 });
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);

@@ -10,5 +10,5 @@ export const metadata: Metadata = { title: "Custom AI · Programmable",
 export default function CustomAIPage() {
   const localPreview = process.env.NODE_ENV === "development" && process.env.CUSTOM_AI_LOCAL_PREVIEW === "true";
   if (!localPreview && process.env.CUSTOM_AI_PUBLIC_ENABLED !== "true") notFound();
-  return <CustomAIWorkspace localPreview={localPreview} />;
+  return <CustomAIWorkspace localPreview={localPreview} generalLaunchEnabled={process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true"} />;
 }

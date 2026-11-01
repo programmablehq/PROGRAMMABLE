@@ -6,6 +6,7 @@ import type { ExecutionProfile } from "./ai-config";
 import { refundsProviderFailure } from "./provider-errors";
 import { bindConversationJob, createConversationStore, updateConversationStudio } from "./conversation.server";
 import type { WalletAction, WalletSession } from "./launch-session";
+import { createProjectStore } from "./project-store.server";
 
 export interface AIConnection {
   query(sql: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
@@ -98,7 +99,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       const active = (await db.query("SELECT count(*)::integer AS n FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND state='running'", [owner])).rows[0];
       if (Number(active.n) >= limits.concurrent) throw new CustomAIError("busy", "Your previous reply is still being prepared.", 429);
       await bindConversationJob(db,owner,request);
-      const units = isBriefChat(request) ? 1 : 5, time = now();
+      const units = isBriefChat(request) || request.intent === "compile" ? 1 : 5, time = now();
       const hour = Math.floor(time / 3_600_000), day = Math.floor(time / 86_400_000);
       for (const [subject, period, limit] of [
         [`account-hour:${owner}`, hour, limits.hourlyUnits],
@@ -203,8 +204,11 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       if (kind === "studio" && value && typeof value === "object" && "draftId" in value && typeof value.draftId === "string") {
         const versionId=digest([id,value.draftId]);
         await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
-          SELECT $1,'studio-version',$2,jsonb_build_object('studioId',$3::text,'state',$4::jsonb,'sourceHash',result->'draft'->>'sourceHash','summary',result->'draft'->>'hookSummary')
-          FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$5 AND state='completed' AND result->'draft' IS NOT NULL
+          SELECT $1,'studio-version',$2,jsonb_build_object('studioId',$3::text,'state',$4::jsonb,
+            'sourceHash',COALESCE(result->'draft'->>'sourceHash',result->'generalProject'->>'projectHash'),
+            'summary',COALESCE(result->'draft'->>'hookSummary',result->'generalProject'->>'summary'))
+          FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$5 AND state='completed'
+            AND (result->'draft' IS NOT NULL OR result->'generalProject' IS NOT NULL)
           ON CONFLICT DO NOTHING`,[owner,versionId,id,JSON.stringify(value),value.draftId]);
       }
       return Number(row.rows[0].revision);
@@ -305,7 +309,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
         ON CONFLICT(owner,kind,id) DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [id,JSON.stringify(cursor)]);
     });
   }
-  return { conversations: createConversationStore(transaction), reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
+  return { projects: createProjectStore(transaction,now), conversations: createConversationStore(transaction), reserve, finish, read, setPhase, heartbeat, cancel, list, usage, readObject, saveObject, consume, createLaunch, activeLaunch, saveWalletAction, listObjects, draftVersions, recentRequestMetrics, saveIndexBatch };
 }
 
 export type AIStore = ReturnType<typeof createAIStore>;

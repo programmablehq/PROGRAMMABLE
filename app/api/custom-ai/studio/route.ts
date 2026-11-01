@@ -33,7 +33,10 @@ export async function GET(request: Request) {
       : saved.value.contextId ? await store.read(owner, saved.value.contextId) : null;
     const meta=(await store.readObject<Conversation>(owner,"conversation",id))?.value;
     const active=meta?.activeRequest&&saved.value.contextId!==meta.activeRequest?await store.read(owner,meta.activeRequest):null;
+    const sourceId = active?.state === "failed" ? active.id : saved.value.sourceId;
+    const sourceRecovery = sourceId ? await store.projects.overview(owner, sourceId) : null;
     return Response.json({ revision: saved.revision, state: saved.value, ...(active?.request&&active.state!=="failed"?{activeRequest:active.request}:{}), draft: job?.result?.draft,
+      generalProject: job?.result?.generalProject, ...(sourceRecovery ? { sourceRecovery } : {}),
       intent: latest?.result?.intent ?? job?.result?.intent }, { headers: aiHeaders });
   } catch (error) { return aiError(error); }
 }
@@ -56,15 +59,18 @@ export async function POST(request: Request) {
     if (raw.pendingChange !== undefined && (typeof raw.pendingChange !== "string" || raw.pendingChange.length > 8000)) throw new CustomAIError("input", "The pending change could not be saved.");
     if(raw.input!==undefined&&(typeof raw.input!=="string"||raw.input.length>8000))throw new CustomAIError("input","The unsent message could not be saved.");
     if(raw.editTarget&&(!raw.draftId||!/^([a-f0-9]{64})$/i.test(raw.editTarget.sourceHash)||!/^([a-z][a-z0-9-]{0,63})$/.test(raw.editTarget.requirementId)))throw new CustomAIError("edit","Choose a saved rule.");
-    for(const contextId of new Set([raw.draftId,raw.contextId].filter((value):value is string=>Boolean(value)))){
+    for(const contextId of new Set([raw.draftId,raw.contextId,raw.sourceId].filter((value):value is string=>Boolean(value)))){
       if(typeof contextId!=="string"||!/^([a-zA-Z0-9-]{16,64})$/.test(contextId))throw new CustomAIError("context","Choose a saved design.");
       const job=await store.read(owner,contextId);
-      if(!job?.result||contextId===raw.draftId&&!job.result.draft)throw new CustomAIError("draft","The saved design could not be found.");
+      if(!job || contextId===raw.draftId && !job.result?.draft && !job.result?.generalProject
+        || contextId===raw.contextId && !job.result)throw new CustomAIError("draft","The saved design could not be found.");
       if(!jobMatchesConversation(job.request,account,chatId))throw new CustomAIError("context","That design belongs to another chat.",409);
+      if(contextId===raw.sourceId && !await store.projects.overview(owner,contextId))throw new CustomAIError("draft","The saved source could not be found.");
     }
     const image = raw.image?.id ? (await store.readObject<ImageReceipt>(owner, "image", raw.image.id))?.value : undefined;
     if (raw.image && !image) throw new CustomAIError("image", "The saved image could not be found.");
     const state: StudioState = { settings, messages, ...(raw.draftId ? { draftId: raw.draftId } : {}), ...(image ? { image } : {}),
+      ...(raw.sourceId ? { sourceId: raw.sourceId } : {}),
       ...(raw.contextId ? { contextId: raw.contextId } : {}), ...(raw.pendingChange ? { pendingChange: raw.pendingChange } : {}), ...(raw.input ? { input:raw.input } : {}), ...(raw.editTarget ? { editTarget:{sourceHash:raw.editTarget.sourceHash,requirementId:raw.editTarget.requirementId} } : {}) };
     const revision = await store.saveObject(owner, "studio", id, state, input.revision);
     return Response.json({ revision }, { headers: aiHeaders });

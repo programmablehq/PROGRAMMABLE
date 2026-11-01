@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   runWithBrowserWalletRequestLock,
+  releaseFinalizedBrowserWalletRequest,
   WALLET_REQUEST_LOCK_TTL_MS,
   WalletRequestPendingError,
   WalletRequestNotSubmittedError,
@@ -74,6 +75,37 @@ const SUBJECT = JSON.stringify({
   to: `0x${"b".repeat(40)}`,
   data: "0x1234",
   value: "0x0",
+});
+
+describe("release of an exact independently finalized wallet request", () => {
+  async function unresolved() {
+    const current = runtime();
+    await expect(request(async () => { throw new Error("Unknown after request"); }, current)).rejects.toThrow("Unknown after request");
+    return current;
+  }
+  it("releases the original retained lease only after the current scope is checked", async () => {
+    const current = await unresolved(), guard = vi.fn();
+    await expect(releaseFinalizedBrowserWalletRequest({ account: ACCOUNT, chainId: "1", requestSubject: SUBJECT, assertCurrentSession: guard, runtime: current })).resolves.toBe(true);
+    expect(guard).toHaveBeenCalledTimes(1);
+    await expect(request(async () => "new explicit request", current)).resolves.toBe("new explicit request");
+  });
+  it.each(["subject", "chain", "account"])("does not clear an unrelated %s lease", async changed => {
+    const current = await unresolved();
+    await expect(releaseFinalizedBrowserWalletRequest({ account: changed === "account" ? `0x${"c".repeat(40)}` : ACCOUNT,
+      chainId: changed === "chain" ? "8453" : "1", requestSubject: changed === "subject" ? "different" : SUBJECT, assertCurrentSession: () => {}, runtime: current })).resolves.toBe(false);
+    await expect(request(async () => "duplicate", current)).rejects.toBeInstanceOf(WalletRequestPendingError);
+  });
+  it("keeps an original lease when the private scope changed during reconciliation", async () => {
+    const current = await unresolved();
+    await expect(releaseFinalizedBrowserWalletRequest({ account: ACCOUNT, chainId: "1", requestSubject: SUBJECT,
+      assertCurrentSession: () => { throw Error("Scope changed"); }, runtime: current })).rejects.toThrow("Scope changed");
+    await expect(request(async () => "duplicate", current)).rejects.toBeInstanceOf(WalletRequestPendingError);
+  });
+  it("does not reinterpret corrupt lease bytes as permission to continue", async () => {
+    const current = await unresolved(), key = [...current.localStorage.values.keys()][0]; current.localStorage.setItem(key, "corrupt");
+    await expect(releaseFinalizedBrowserWalletRequest({ account: ACCOUNT, chainId: "1", requestSubject: SUBJECT, assertCurrentSession: () => {}, runtime: current })).resolves.toBe(false);
+    await expect(request(async () => "duplicate", current)).rejects.toBeInstanceOf(WalletRequestPendingError);
+  });
 });
 const cryptoRuntime = {
   subtle: webcrypto.subtle,

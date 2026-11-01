@@ -2,21 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async original => ({ ...await original<object>(), after: (task: () => Promise<unknown>) => { void task(); } }));
-const runtime = vi.hoisted(() => ({ store: null as unknown, owner: "alice", run: vi.fn() }));
-vi.mock("../lib/custom-ai/auth.server", () => ({ authorizeCustomAI: async () => ({ kind: "account", owner: runtime.owner }) }));
+const runtime = vi.hoisted(() => ({ store: null as unknown, owner: "alice", run: vi.fn(), compile:vi.fn() }));
+vi.mock("../lib/custom-ai/auth.server", () => ({ authorizeCustomAI: async () => ({ kind: "account", owner: runtime.owner,principal:{wallets:["0x"+"a".repeat(40)]} }) }));
 vi.mock("../lib/custom-ai/service.server", () => ({ runCustomAI: runtime.run }));
+vi.mock("../lib/custom-ai/contract-project.server",async original=>({...await original<object>(),compileContractProject:(...args:unknown[])=>runtime.compile(...args)}));
 vi.mock("../lib/custom-ai/store.server", async original => ({ ...await original<object>(), productionAIStore: () => runtime.store }));
 import { createAIStore, CUSTOM_AI_SCHEMA } from "../lib/custom-ai/store.server";
 import { POST, GET } from "../app/api/custom-ai/route";
 import { AIRequestError, sendAIChat } from "../lib/custom-ai/client";
 import { CustomAIError, type ChatProgress, type ChatRequest } from "../lib/custom-ai/types";
 import { reviseLaunchIntent } from "../lib/custom-ai/launch-intent.server";
+import {createContractProject,GENERAL_PROJECT_COMPILER} from "../lib/custom-ai/contract-project";
+import {canonicalBrowserSha256V2} from "../lib/custom-launch/browser-authority-v2";
+import {EMPTY_COIN_SETUP} from "../lib/custom-ai/coin-setup";
 
 let database: PGlite;
 const request: ChatRequest = { id: "recovery-request-00001", intent: "chat", messages: [{ role: "user", content: "Make the buy fee 2%." }] };
 beforeEach(async () => {
   vi.stubEnv("CUSTOM_AI_PROVIDER", "anthropic");vi.stubEnv("ANTHROPIC_API_KEY", "test-only-configuration");
-  runtime.run.mockReset(); runtime.owner = "alice";
+  runtime.run.mockReset();runtime.compile.mockReset(); runtime.owner = "alice";
   database = new PGlite(); await database.exec(CUSTOM_AI_SCHEMA);
   let queue=Promise.resolve();
   runtime.store = createAIStore({ connect: async () => {
@@ -32,6 +36,33 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await database.close(); });
 
 describe("durable chat retry and streaming", () => {
+  async function savedCompilerSource(){
+    const store=runtime.store as ReturnType<typeof createAIStore>,account="0x"+"a".repeat(40),chat="legacy-wallet-studio";
+    await store.conversations.create(runtime.owner,account,chat);
+    const parent:ChatRequest={...request,id:"saved-compiler-source-01",intent:"build",coin:EMPTY_COIN_SETUP,conversation:{account,id:chat,revision:0}};
+    const lease=(await store.reserve(runtime.owner,parent)).lease!;
+    const project=createContractProject({compiler:{version:GENERAL_PROJECT_COMPILER,optimizerRuns:1000,viaIR:false,evmVersion:"cancun"},sources:{"Hook.sol":{content:"pragma solidity 0.8.26; contract Hook {}"}},entrypoints:[{source:"Hook.sol",contract:"Hook",role:"hook"}]},{version:1,id:"design",revision:"a".repeat(64),requirements:[{id:"no-owner",text:"No owner privileges",kind:"constraint",open:null,origin:{kind:"legacy"}}],changes:[],unresolved:[]},1);
+    await store.projects.save(runtime.owner,parent.id,lease,project);await store.finish(runtime.owner,parent.id,lease,undefined,"project-compiler");
+    const input:ChatRequest={...parent,id:"compile-retry-attempt-01",intent:"compile",compilationOf:{id:parent.id,projectHash:project.hash}};
+    return {store,parent,project,input};
+  }
+  it("recovers compilation through the same job while its model provider is unconfigured, without inference or duplicate compute",async()=>{
+    const {store,parent,project,input}=await savedCompilerSource();vi.stubEnv("CUSTOM_AI_PROVIDER","surplus");vi.stubEnv("SURPLUS_API_KEY","");
+    const sourceReads=vi.spyOn(store.projects,"read");
+    const body={version:1 as const,projectHash:project.hash,compiled:true,compiler:GENERAL_PROJECT_COMPILER,diagnostics:[],contracts:[],verification:"not-run" as const,launchReady:false as const};
+    runtime.compile.mockResolvedValue({...body,artifactHash:canonicalBrowserSha256V2("programmable.custom-ai-project-artifacts.v1",body)});
+    const result=await sendAIChat(input,async()=>({}),new AbortController().signal);
+    expect(result.generalProject).toMatchObject({projectHash:project.hash,compiled:true,verification:"not-run",launchReady:false});expect(runtime.run).not.toHaveBeenCalled();expect(runtime.compile).toHaveBeenCalledTimes(1);
+    expect(await sendAIChat(input,async()=>({}),new AbortController().signal)).toEqual(result);expect(runtime.compile).toHaveBeenCalledTimes(1);expect(sourceReads).toHaveBeenCalledTimes(1);
+    expect((await store.read(runtime.owner,parent.id))?.state).toBe("failed");expect((await store.read(runtime.owner,input.id))?.state).toBe("completed");expect((await store.usage(runtime.owner)).hourly.used).toBe(6);
+    expect((await store.readObject<{calls:unknown[]}>(runtime.owner,"request-metrics",input.id))?.value.calls).toEqual([]);
+  });
+  it("keeps another compiler outage terminal while preserving the exact source without calling a model",async()=>{
+    const {store,project,input}=await savedCompilerSource();vi.stubEnv("CUSTOM_AI_PROVIDER","surplus");vi.stubEnv("SURPLUS_API_KEY","");runtime.compile.mockRejectedValue(new CustomAIError("project-compiler","Compiler unavailable",503));
+    await expect(sendAIChat(input,async()=>({}),new AbortController().signal)).rejects.toMatchObject({status:503,requestState:"failed"});
+    expect((await store.projects.read(runtime.owner,input.id))?.project.hash).toBe(project.hash);expect(runtime.run).not.toHaveBeenCalled();expect(runtime.compile).toHaveBeenCalledTimes(1);
+    await expect(sendAIChat(input,async()=>({}),new AbortController().signal)).rejects.toMatchObject({status:409,requestState:"failed"});expect(runtime.compile).toHaveBeenCalledTimes(1);
+  });
   it("loads a shared draft and conversation job only once",async()=>{
     const store=runtime.store as ReturnType<typeof createAIStore>,prior={...request,id:"previous-context-00001"};
     const lease=(await store.reserve(runtime.owner,prior)).lease!;

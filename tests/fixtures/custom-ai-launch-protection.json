@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "programmable.launch-protection-status.v1",
+  "policyVersion": "programmable.launch-protection.v1",
+  "required": true,
+  "minimumFdvUsd": "15000",
+  "walletLimitBps": 200,
+  "buyerLimitBps": 200,
+  "protectionSeconds": 300,
+  "buyerCapBasis": "cumulative-authenticated-buys",
+  "walletCapBasis": "cumulative-recipient-inflow",
+  "openingTotalFeePpm": 990000,
+  "openingFeeSeconds": 30,
+  "openingExtraFeeEndsAtZero": true,
+  "platformFeeBps": 30,
+  "openingTaxRecipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+  "maximumAdditionalTaxExemptWallets": 6,
+  "exemptWalletsRemainCapped": true,
+  "supportedChains": [
+    "1",
+    "4663",
+    "8453",
+    "999"
+  ],
+  "moduleModeExempt": true,
+  "unsupportedLegacyLaunches": "paused",
+  "sourcePackage": "https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts/launch-protection-v1",
+  "builderModule": "@programmable/launch/launch-protection"
+}

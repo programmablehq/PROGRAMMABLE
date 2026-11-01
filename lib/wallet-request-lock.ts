@@ -347,3 +347,20 @@ export async function runWithBrowserWalletRequestLock<Result>(
     },
   );
 }
+
+/** Bookkeeping after independently verified exact finality, called while the
+ * account/network Web Lock is already held. Never clears an unrelated lease.
+ * The caller supplies the original request subject and current private scope. */
+export async function releaseFinalizedBrowserWalletRequest(input: {
+  account: string; chainId: string; requestSubject: string; assertCurrentSession(): void | Promise<void>;
+  runtime?: WalletRequestLockRuntime;
+}): Promise<boolean> {
+  if (input.requestSubject.length < 1 || input.requestSubject.length > MAX_REQUEST_SUBJECT_LENGTH) throw new Error("The original wallet subject is invalid");
+  const runtime = input.runtime ?? browserRuntime(), key = storageKey(input.account, input.chainId);
+  const subjectHash = await sha256(runtime.crypto, input.requestSubject);
+  await input.assertCurrentSession();
+  const existing = readLease(runtime.localStorage, key);
+  if (!existing.raw || existing.lease?.subjectHash !== subjectHash) return false;
+  removeExactLease(runtime, key, existing.raw);
+  return runtime.localStorage.getItem(key) === null;
+}

@@ -133,7 +133,16 @@ describe("complete launch intent and source revisions", () => {
   });
   it("replays the real Surplus design and follow-up through the current server without provider calls", async () => {
     let index=0;
-    const call=vi.fn(async(input:{schema:object})=>response(JSON.parse(prepareSurplusSchema(input.schema).decode(JSON.stringify(recording.responses[index++])))));
+    const call=vi.fn(async(input:{schema:object})=>{
+      // Keep the recorded design and reply. New optional coin metadata was
+      // absent in 2.4, so its current schema values are explicitly null.
+      const original=recording.responses[index++];
+      const captured={...original,executionRoute:"fee-module",setupPatch:{description:null,website:null,x:null,...original.setupPatch}};
+      const properties=(input.schema as {properties?:Record<string,unknown>}).properties;
+      // Short explanatory follow-ups now use the cheaper reply-only contract.
+      if(properties&&Object.keys(properties).join() === "reply")return response({reply:original.reply});
+      return response(JSON.parse(prepareSurplusSchema(input.schema).decode(JSON.stringify(captured))));
+    });
     const compile=vi.fn();
     const first=await runCustomAI({id:"recorded-intent-0001",intent:"chat",messages:[{role:"user",content:recording.prompts[0]}]},undefined,{call,compile});
     expect(first.intent?.requirements).toHaveLength(10);expect(first.intent?.unresolved).toHaveLength(4);

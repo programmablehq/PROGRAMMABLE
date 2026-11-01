@@ -82,17 +82,20 @@ export const sharpRuntimeFiles = [
 ];
 
 const customAIWorkerFiles = [
-  "./scripts/custom-ai/compile-worker.mjs", "./scripts/custom-ai/lifecycle-worker.mjs",
+  "./scripts/custom-ai/*-worker.mjs",
   "./scripts/custom-ai/artifact-hash.mjs", "./scripts/custom-ai/composable-module.mjs",
   "./scripts/custom-ai/validate-module.mjs", "./scripts/custom-ai/validate-lifecycle.mjs",
+  "./scripts/custom-ai/general-v4-world.mjs", "./scripts/custom-ai/general-v4-fixture.json",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];
+const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/package.json", "./packages/launch/src/**/*", "./packages/launch/contracts/**/*"];
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   outputFileTracingIncludes: {
     "/api/custom-ai": customAIWorkerFiles,
     "/api/custom-ai/preview": customAIWorkerFiles,
+    "/api/custom-ai/general-launch": customAIPackFiles,
     "/api/custom-ai/image": sharpRuntimeFiles,
     "/api/token-image": sharpRuntimeFiles,
     "/api/prediction/asset-logo/*": sharpRuntimeFiles,

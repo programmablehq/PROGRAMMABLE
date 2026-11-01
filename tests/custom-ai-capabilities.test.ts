@@ -3,7 +3,7 @@ vi.mock("server-only", () => ({}));
 import { GET } from "../app/api/custom-ai/capabilities/route";
 import { defineTool } from "../lib/custom-ai/capabilities/definition.server";
 import { dispatchTool } from "../lib/custom-ai/capabilities/dispatch.server";
-import { capabilityMetadata, executionProfile, assertExecutionProfile } from "../lib/custom-ai/capabilities/registry.server";
+import { capabilityMetadata, executionProfile, assertExecutionProfile, getCapabilities } from "../lib/custom-ai/capabilities/registry.server";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("Custom AI capability discovery", () => {
@@ -28,6 +28,10 @@ const context = () => ({ owner: "test", chainId: 1 as const, allowWeb: false, bu
 const hooks = defineTool("search_hooks", "Find hooks in a verified catalog", async () => ({ status: "current", facts: ["example"], sources: [] }),
   () => true, { type: "object", properties: { q: { type: "string", minLength: 1 } }, required: ["q"], additionalProperties: false });
 describe("registered capability dispatch", () => {
+  it.each([8453,999] as const)("only advertises connected read capabilities on chain%i",chainId=>{
+    const ids=getCapabilities({...context(),chainId}).map(entry=>entry.ref.id);
+    expect(ids).toContain("catalog");expect(ids).toContain("search_hooks");expect(ids).not.toContain("contract");expect(ids).not.toContain("web");
+  });
   it("adds a new search tool through registration and schema alone", async () => {
     expect(capabilityMetadata([hooks])[0].ref.id).toBe("search_hooks");
     expect(await dispatchTool(hooks.ref, { q: "fee" }, context(), [hooks])).toMatchObject({ facts: ["example"] });

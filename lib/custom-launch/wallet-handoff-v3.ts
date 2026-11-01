@@ -385,6 +385,20 @@ export type CustomLaunchRouterReviewV3 = Readonly<{
   calldataLengthBytes: number;
 }>;
 
+/** Read-only finality projection for an already owned, request-bound resource.
+ * It is not a wallet action or signing authorization. Require the current
+ * two-provider checkpoint before a local send journal can be reconciled. */
+export function readCustomGraphFinalizedTransactionV3(value: unknown, expected: {
+  chainId: "1" | "8453" | "999"; onchainLaunchId: Hex;
+}): Hex {
+  const evidence = record(value);
+  if (evidence.finalityState !== "finalized" || !Object.hasOwn(evidence, "finalizedCheckpoint")
+    || evidence.chainId !== expected.chainId || customLaunchChainForRouterV1(evidence.router) !== expected.chainId
+    || exactNonzeroLowerBytes32(expected.onchainLaunchId) !== evidence.onchainLaunchId) return invalid();
+  assertOnchainEvidenceV3(evidence, evidence.router);
+  return exactNonzeroLowerBytes32(evidence.transactionHash);
+}
+
 export class CustomLaunchWalletHandoffErrorV3 extends Error {
   constructor(message = "The V3 wallet request failed the safety checks. Refresh the launch and try again.") {
     super(message);

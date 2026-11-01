@@ -1,11 +1,17 @@
+import { builderChain, type BuilderChainId } from "./execution-routing";
 /** Shared product vocabulary. Configuration never certifies a funded, live service. */
-export function builderCapabilities(configuration: { events: boolean; programs: boolean }) {
+export function builderCapabilities(configuration: { events: boolean; programs: boolean; generalSources?: boolean; chainId?:BuilderChainId }) {
+  const feeCore=configuration.chainId===undefined||builderChain(configuration.chainId).feeCore;
   return [
-    { id: "fee-schedules", version: 1, state: "buildable", description: "Different buy/sell fees, countdowns, ramps and schedules; total fees 0.5–15%." },
+    { id: "fee-schedules", version: 1, state: feeCore?"buildable":configuration.generalSources?"source-draft":"design-only", description: feeCore
+      ? "Different buy/sell fees, countdowns, ramps and schedules; total fees 0.5–15%."
+      : "Fee schedules on this network use general Custom Contract source and its separate verification, review and preparation." },
     { id: "hook-research", version: 1, state: "research", description: "Search existing hooks and discuss mechanics. Finding a hook does not install or audit it." },
-    { id: "external-events", version: 1, state: configuration.events ? "requires-live-check" : "design-only", description: "Weather or market rules need a connected, verified feed on the selected chain." },
-    { id: "fee-programs", version: 1, state: configuration.programs ? "requires-live-check" : "design-only", description: "Fee-funded staking, distributions, buybacks and locked liquidity need a deployed program; automatic execution also needs a running, funded service." },
-    { id: "arbitrary-hooks", version: 1, state: "design-only", description: "Arbitrary stateful v4 hooks can be designed here but cannot bypass this builder's fixed core or launch as a fee module." },
+    { id: "external-events", version: 1, state: configuration.events && feeCore ? "requires-live-check" : "design-only", description: "Weather or market rules need a connected, verified feed on the selected chain." },
+    { id: "fee-programs", version: 1, state: configuration.programs && feeCore ? "requires-live-check" : "design-only", description: "Fee-funded staking, distributions, buybacks and locked liquidity need a deployed program; automatic execution also needs a running, funded service." },
+    { id: "arbitrary-hooks", version: 1, state: configuration.generalSources ? "source-draft" : "design-only", description: configuration.generalSources
+      ? "General contract source can be generated, saved and compiled. Behavior verification, Custom Launch review and exact network preparation still determine readiness."
+      : "Arbitrary stateful v4 hooks can be designed here but cannot bypass this builder's fixed core or launch as a fee module." },
   ] as const;
 }
 

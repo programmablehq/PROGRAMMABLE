@@ -2,7 +2,7 @@ import { validConversationId } from "./conversation";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetup, type CoinSetupPatch } from "./coin-setup";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string; sources?: import("./knowledge").KnowledgeSource[] };
-export type ChatRequest = { id: string; conversation?: import("./conversation").ConversationScope; intent: "chat" | "build"; messages: ChatMessage[]; coin?: CoinSetup; draftId?: string; contextId?: string; editTarget?: import("./design-edits").EditTarget };
+export type ChatRequest = { id: string; conversation?: import("./conversation").ConversationScope; intent: "chat" | "build" | "compile"; compilationOf?: { id: string; projectHash: `sha256:${string}` }; messages: ChatMessage[]; coin?: CoinSetup; draftId?: string; contextId?: string; editTarget?: import("./design-edits").EditTarget };
 export type FeeExpectation = { afterSeconds: number; buy: boolean; totalFeeBps: number; feedValue?: string | null; feedFresh?: boolean | null; feeds?: import("./rule-evaluator").FeedSnapshot[] };
 export type RuleVerification = {
   status: "passed" | "blocked";
@@ -68,6 +68,8 @@ export type Draft = {
   };
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  generalProject?: import("./project-view").GeneralProjectView;
+  selection?: import("./execution-routing").RouteSelection;
   intent?: import("./launch-intent").LaunchIntent;
   memory?: string; change?: "applied" | "unchanged" | "blocked"; unresolved?: string[]; chargedAs?: "build" | "research";
   sources?: import("./knowledge").KnowledgeSource[] };
@@ -89,8 +91,8 @@ export function parseChatRequest(value: unknown): ChatRequest {
   if (!value || typeof value !== "object") throw new CustomAIError("input", "Send a message first.");
   const input = value as Partial<ChatRequest>;
   if (typeof input.id !== "string" || !/^[a-zA-Z0-9-]{16,64}$/.test(input.id)
-    || !["chat", "build"].includes(input.intent ?? "") || !Array.isArray(input.messages)
-    || input.messages.length < 1 || input.messages.length > 24) {
+    || !["chat", "build", "compile"].includes(input.intent ?? "") || !Array.isArray(input.messages)
+    || input.messages.length < (input.intent === "compile" ? 0 : 1) || input.messages.length > 24) {
     throw new CustomAIError("input", "This conversation is too long. Start a new draft with the rules you want to keep.");
   }
   let length = 0;
@@ -104,11 +106,17 @@ export function parseChatRequest(value: unknown): ChatRequest {
       throw new CustomAIError("secret", "That looks like a secret key. Remove it before sending your message.");
     }
   }
-  if (length > 24_000 || input.messages.at(-1)?.role !== "user") {
+  if (length > 24_000 || input.messages.length > 0 && input.messages.at(-1)?.role !== "user") {
     throw new CustomAIError("input", "Start a new draft with a shorter description of your rules.");
   }
   if (input.conversation && (!validConversationId(input.conversation.id) || !/^0x[0-9a-f]{40}$/i.test(input.conversation.account)
     || !Number.isSafeInteger(input.conversation.revision) || input.conversation.revision < 0)) throw new CustomAIError("conversation", "Reload this chat before sending.");
+  if(input.intent==="compile"){
+    const source=input.compilationOf;
+    if(!input.conversation||input.editTarget||!source||typeof source!=="object"||Object.keys(source).sort().join()!=="id,projectHash"
+      ||typeof source.id!=="string"||!/^[a-zA-Z0-9-]{16,64}$/.test(source.id)||source.id===input.id
+      ||typeof source.projectHash!=="string"||!/^sha256:[a-f0-9]{64}$/.test(source.projectHash))throw new CustomAIError("project","Choose the exact saved source from this chat before retrying its build.");
+  }else if(input.compilationOf!==undefined)throw new CustomAIError("project","A saved-source reference is only used when retrying its build.");
   let coin: CoinSetup | undefined;
   if (input.coin !== undefined) {
     try { coin = applyCoinSetupPatch(EMPTY_COIN_SETUP, parseCoinSetupPatch(input.coin)); }
@@ -123,7 +131,7 @@ export function parseChatRequest(value: unknown): ChatRequest {
     || !/^[a-z][a-z0-9-]{0,63}$/.test(input.editTarget.requirementId))) {
     throw new CustomAIError("edit", "Reload the saved rule before editing it.", 400);
   }
-  return { id: input.id, ...(input.conversation ? { conversation: { id: input.conversation.id.toLowerCase(), account: input.conversation.account.toLowerCase(), revision: input.conversation.revision } } : {}), intent: input.intent!, messages: input.messages.map(({ role, content }) => ({ role, content })), ...(coin ? { coin } : {}),
+  return { id: input.id, ...(input.conversation ? { conversation: { id: input.conversation.id.toLowerCase(), account: input.conversation.account.toLowerCase(), revision: input.conversation.revision } } : {}), intent: input.intent!, ...(input.compilationOf?{compilationOf:{id:input.compilationOf.id,projectHash:input.compilationOf.projectHash}}:{}), messages: input.messages.map(({ role, content }) => ({ role, content })), ...(coin ? { coin } : {}),
     ...(input.draftId ? { draftId: input.draftId } : {}), ...(input.contextId ? { contextId: input.contextId } : {}),
     ...(input.editTarget ? { editTarget: { sourceHash: input.editTarget.sourceHash, requirementId: input.editTarget.requirementId } } : {}) };
 }

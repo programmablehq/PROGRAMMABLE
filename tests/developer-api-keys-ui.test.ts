@@ -1922,7 +1922,7 @@ describe("developer launch history interface", () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(boundary.indexOf("assertCustomLaunchWalletActionV1(")).toBeGreaterThan(-1);
-    expect(boundary.indexOf("sendBrowserWalletAction(checked)")).toBeGreaterThan(
+    expect(boundary.search(/sendBrowserWalletAction\(checked(?:,|\))/u)).toBeGreaterThan(
       boundary.indexOf("assertCustomLaunchWalletActionV1("),
     );
   });

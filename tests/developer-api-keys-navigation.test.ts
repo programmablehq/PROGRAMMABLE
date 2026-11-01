@@ -5,6 +5,7 @@ vi.mock("next/navigation", () => ({ redirect }));
 
 import CustomHookBuilderPage from "../app/developers/hooks/page";
 import { developerApiKeysInitialSection, developerLaunchDestination } from "../lib/developer-api-key-route";
+import { generalSubmissionUrl, type GeneralPreparationView } from "../lib/custom-ai/general-preparation";
 
 describe("the canonical custom-hook key page", () => {
   beforeEach(() => redirect.mockReset());
@@ -48,12 +49,14 @@ describe("the canonical custom-hook key page", () => {
 describe("opening exact launch handoffs", () => {
   const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   it.each([1, 4663, 8453, 999] as const)("opens chain %s directly in the correct launch history", chainId => {
-    // Existing canonical API/SDK destinations; this regression must also run
-    // without the unpublished Custom AI producer in the public release tree.
-    const href = `/developers/api-keys?launchId=${id}${chainId === 1 ? "" : `&chainId=${chainId}`}${chainId === 4663 ? "&view=history" : ""}`;
-    const query = new URL(href, "https://programmable.market").searchParams;
-    expect(developerLaunchDestination(query)).toEqual({ launchId: id, chainId: chainId === 1 ? null : String(chainId) });
-    expect(developerApiKeysInitialSection(Object.fromEntries(query))).toBe("history");
+    const preparation = { chainId, submission: { state: "completed", resourceId: id } } as GeneralPreparationView;
+    const generated = generalSubmissionUrl(preparation)!;
+    const canonical = `/developers/api-keys?launchId=${id}${chainId === 1 ? "" : `&chainId=${chainId}`}${chainId === 4663 ? "&view=history" : ""}`;
+    for (const href of [canonical, generated]) {
+      const query = new URL(href, "https://programmable.market").searchParams;
+      expect(developerLaunchDestination(query)).toEqual({ launchId: id, chainId: chainId === 1 ? null : String(chainId) });
+      expect(developerApiKeysInitialSection(Object.fromEntries(query))).toBe("history");
+    }
   });
   it("preserves explicit Ethereum links and ordinary key/history defaults", () => {
     expect(developerLaunchDestination(new URLSearchParams({ launchId: id, chainId: "1" }))).toEqual({ launchId: id, chainId: null });

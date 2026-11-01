@@ -698,3 +698,11 @@ paths = [
   '''^public/openapi/hyperevm-custom-launch-v1\.json$''',
 ]
 regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04",\s*$''']
+
+[[allowlists]]
+description = "Custom AI discovery fixture pins only these exact public funding-token runtime hashes"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^tests/fixtures/custom-ai-launch-discovery\.json$''']
+regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "(?:0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c|0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04)",\s*$''']

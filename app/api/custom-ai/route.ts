@@ -5,11 +5,14 @@ import { assertModelConnection, researchAvailable } from "@/lib/custom-ai/provid
 import { executionProfile, getCapabilities } from "@/lib/custom-ai/capabilities/registry.server";
 import { createPreviewBudget, readPreviewBody } from "@/lib/custom-ai/access.server";
 import { runCustomAI, type AIContext } from "@/lib/custom-ai/service.server";
+import { readLaunchProductionContext } from "@/lib/custom-ai/launch-production.server";
 import { CustomAIError, parseChatRequest, type ChatProgress, type ChatResult } from "@/lib/custom-ai/types";
 import { authorizeCustomAI } from "@/lib/custom-ai/auth.server";
 import { productionAIStore } from "@/lib/custom-ai/store.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
 import { requestMetrics, type ModelCallMetric } from "@/lib/custom-ai/request-metrics";
+import { selectExecutionRoute } from "@/lib/custom-ai/execution-routing";
+import { compileExistingProject, readCompilationSource } from "@/lib/custom-ai/compile-existing.server";
 
 export const runtime = "nodejs";
 export const maxDuration = 480;
@@ -39,14 +42,26 @@ export async function POST(request: Request) {
     const previousRead=readResult(input.contextId);
     const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory,
-      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft };
-    if (input.draftId && !context.draft) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
+      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
+    if(current?.generalProject&&store&&authority.kind==="account"&&input.draftId){
+      const view=current.generalProject;
+      context.loadGeneralProject=async()=>{
+        const saved=await store.projects.read(authority.owner,input.draftId!);
+        if(!saved?.compilation||saved.project.hash!==view.projectHash||saved.compilation.artifactHash!==view.artifactHash)throw new CustomAIError("project-context","Your saved contract source could not be found. Reload it before continuing.",409);
+        return {version:1,reply:current.reply,summary:view.summary,project:saved.project,compilation:saved.compilation,...(saved.blueprintId?{blueprintId:saved.blueprintId}:{}),...(saved.scenarios?{scenarios:saved.scenarios}:{}),
+          selection:selectExecutionRoute(saved.project.intent,saved.project.chainId,{route:"custom-contract",requirementIds:saved.project.intent.requirements.map(rule=>rule.id),missingCapabilities:[]}),requirementCoverage:"proposed",launchReady:false};
+      };
+    }
+    if (input.draftId && !context.draft && !context.generalProjectView) throw new CustomAIError("context", "Your saved contract could not be found. Reload it before continuing.", 409);
+    const existingCompilationJob=input.intent==="compile"&&store&&authority.kind==="account"?await store.read(authority.owner,input.id):null;
+    const compilationSource=input.intent==="compile"&&!existingCompilationJob&&store&&authority.kind==="account"?await readCompilationSource(store,authority.owner,input,context.intent):undefined;
+    if(input.intent==="compile"&&!compilationSource&&!existingCompilationJob)throw new CustomAIError("project","Open this saved source in your signed-in chat before retrying.",401);
     // Known billing/rate-limit outages do not reserve a new user attempt.
-    if (!store || authority.kind !== "account" || !await store.read(authority.owner, input.id)) {
+    if (input.intent!=="compile"&&(!store || authority.kind !== "account" || !await store.read(authority.owner, input.id))) {
       assertModelConnection();
       await providerHealth().assertAvailable();
     }
-    const profile = executionProfile(getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
+    const profile = executionProfile(input.intent==="compile"?[]:getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
       allowWeb: researchAvailable(), budget: { remaining: 2 } }));
     const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile) : null;
     if (reserved && !reserved.lease) {
@@ -80,7 +95,17 @@ export async function POST(request: Request) {
           const saved=await store.read(authority.owner,input.id);
           throw new CustomAIError(saved?.errorCode==="cancelled"?"cancelled":"interrupted","This request ended before generation could start.",409);
         }
-        const run = () => runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call) });
+        const run = () => compilationSource&&store&&authority.kind==="account"&&reserved?.lease
+          ? compileExistingProject({store,owner:authority.owner,id:input.id,lease:reserved.lease,source:compilationSource,onProgress:progress},signal)
+          : runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
+          ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
+            loadProductionContext:readLaunchProductionContext,
+            saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
+            saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
+            saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent});},
+            saveScenarios:async(report:import("@/lib/custom-ai/behavior-checks.server").GeneralScenarioReport)=>{await store.projects.saveScenarios(authority.owner,input.id,reserved.lease!,report);},
+          }:{}),
+        });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();
         await phaseWrites;
         if (store && authority.kind === "account" && reserved?.lease && !await store.finish(authority.owner, input.id, reserved.lease, result)) {

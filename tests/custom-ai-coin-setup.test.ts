@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { applyCoinSetupPatch, coinBio, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "../lib/custom-ai/coin-setup";
+import { applyCoinSetupPatch, coinBio, coinPresentationIssue, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "../lib/custom-ai/coin-setup";
 import { parseChatRequest, type ChatRequest, type Draft } from "../lib/custom-ai/types";
 import { runCustomAI } from "../lib/custom-ai/service.server";
 
@@ -15,6 +15,26 @@ const plan = (action: string, setupPatch: object = {}) => response({ reply: "Req
   feeChecks: [{ afterSeconds: 0, buy: true, totalFeeBps: 100 }, { afterSeconds: 0, buy: false, totalFeeBps: 100 }] });
 
 describe("Chat-driven coin details", () => {
+  it("keeps owned public metadata across saves and network changes without inventing defaults", () => {
+    const metadata = { description: "This coin follows the agreed volume rule.\nOnly that rule.", website: "https://example.com/", x: "https://x.com/example_coin" };
+    const current = applyCoinSetupPatch(EMPTY_COIN_SETUP, parseCoinSetupPatch(metadata));
+    expect(parseChatRequest({ ...request, coin: current }).coin).toEqual(current);
+    expect(applyCoinSetupPatch(current, { chainId: 999 })).toMatchObject(metadata);
+    for (const field of ["description", "website", "x"] as const) expect(coinPresentationIssue(current, field)).toBe("");
+    expect(parseCoinSetupPatch({ website: "https://exa", x: "" })).toEqual({ website: "https://exa", x: "" });
+    expect(parseCoinSetupPatch({})).not.toHaveProperty("website");
+    for (const value of [{ description: "é".repeat(2049) }, { website: "https://example.com/\nsecret" }, { x: "x".repeat(2049) }])
+      expect(() => parseCoinSetupPatch(value)).toThrow();
+    expect(coinPresentationIssue({ ...current, website: "http://localhost/" }, "website")).not.toBe("");
+    expect(coinPresentationIssue({ ...current, x: "https://x.com/example/status/123" }, "x")).not.toBe("");
+  });
+  it("accepts supplied public links without regenerating code, and rejects model-invented links", async () => {
+    const metadata = { description: "This coin follows the agreed volume rule.", website: "https://example.com/", x: "https://x.com/example_coin" };
+    const compile = vi.fn(), call = vi.fn(async () => plan("answer", metadata));
+    await expect(runCustomAI(request, undefined, { call, compile })).rejects.toMatchObject({ code: "settings" });
+    const result = await runCustomAI({ ...request, messages: [{ role: "user", content: `Use ${metadata.website} and ${metadata.x}. Write this description: ${metadata.description}` }] }, undefined, { call, compile });
+    expect(result.setupPatch).toEqual(metadata); expect(compile).not.toHaveBeenCalled();
+  });
   it("applies only the named fields and retains the rest", () => {
     expect(applyCoinSetupPatch(EMPTY_COIN_SETUP, { name: "Example", symbol: "EXM" })).toEqual({ ...EMPTY_COIN_SETUP, name: "Example", symbol: "EXM" });
   });
@@ -28,15 +48,26 @@ describe("Chat-driven coin details", () => {
     expect(applyCoinSetupPatch(EMPTY_COIN_SETUP, { pairToken: address }).initialBuy).toBe("");
     expect(parseCoinSetupPatch({ pairToken: "WETH" })).toEqual({ pairToken: "ETH" });
   });
+  it("keeps four-chain source settings separate from the two-chain fee core",()=>{
+    const base=applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId:8453});expect(base.pairToken).toBe("ETH");
+    const hype=applyCoinSetupPatch({...base,initialBuy:"300"},{chainId:999});expect(hype).toMatchObject({chainId:999,pairToken:"HYPE",initialBuy:""});
+    expect(applyCoinSetupPatch(hype,{chainId:1})).toMatchObject({chainId:1,pairToken:"ETH",initialBuy:""});
+    expect(parseCoinSetupPatch({chainId:999,pairToken:"WHYPE",initialBuy:"0.1"})).toEqual({chainId:999,pairToken:"HYPE",initialBuy:"0.1"});
+    for(const setup of [base,hype])expect(()=>setupQuoteAddress(setup)).toThrow("fixed fee core");
+    expect(()=>applyCoinSetupPatch(EMPTY_COIN_SETUP,{pairToken:"HYPE"})).toThrow();
+    expect(()=>applyCoinSetupPatch(hype,{pairToken:"ETH"})).toThrow();
+  });
   it("rejects unsupported chains, malformed addresses and non-decimal amounts", () => {
-    for (const patch of [{ chainId: 8453 }, { pairToken: "USDC" }, { pairToken: "0x0" }, { initialBuy: "1e5" }, { name: "x".repeat(49) }]) {
+    for (const patch of [{ chainId: 56 }, { pairToken: "USDC" }, { pairToken: "0x0" }, { initialBuy: "1e5" }, { name: "x".repeat(49) }]) {
       expect(() => parseCoinSetupPatch(patch)).toThrow();
     }
     expect(parseCoinSetupPatch({ name: null, initialBuy: "0.009" })).toEqual({ initialBuy: "0.009" });
   });
   it("includes bounded current form values in chat without allowing an injected context", () => {
     expect(parseChatRequest(request).coin).toEqual(EMPTY_COIN_SETUP);
-    expect(() => parseChatRequest({ ...request, coin: { chainId: 8453 } })).toThrow();
+    expect(parseChatRequest({...request,coin:{chainId:8453}}).coin?.chainId).toBe(8453);
+    expect(parseChatRequest({...request,coin:{chainId:999,pairToken:"HYPE",initialBuy:"0.1"}}).coin?.pairToken).toBe("HYPE");
+    expect(() => parseChatRequest({ ...request, coin: { chainId: 56 } })).toThrow();
   });
   it("changes settings without compiling a new hook", async () => {
     const compile = vi.fn();

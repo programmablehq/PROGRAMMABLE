@@ -40,6 +40,16 @@ describe("bounded read-only knowledge", () => {
     expect(result.status).toBe("stale");
     expect(result.facts).toMatchObject({ markets: [] });
   });
+  it.each([1,4663,8453,999] as const)("keeps the catalog's requested network%i in the read and source link",async chainId=>{
+    readers.catalog.mockResolvedValue({status:"current",updatedAt:"2026-10-31",sources:{},items:[],presentations:[]});
+    const result=await readLiveKnowledge({...lookup,kind:"catalog",chainId,query:"example"});
+    expect(readers.catalog).toHaveBeenCalledWith(1,"example",{sort:"highest",mode:"all",chain:chainId},6);
+    expect(new URL(result.sources[0].url).searchParams.get("chain")).toBe(String(chainId));
+  });
+  it.each([8453,999] as const)("does not borrow another network's RPC for unavailable contract reads on%i",async chainId=>{
+    await expect(readLiveKnowledge({...lookup,kind:"contract",chainId,address:"0x"+"1".repeat(40)})).rejects.toMatchObject({code:"lookup"});
+    expect(readers.chain).not.toHaveBeenCalled();
+  });
   it("does not expose signing, arbitrary URLs or other operations as lookup tools", () => {
     expect(() => parseRulePlan({ action: "answer", reply: "", memory: "", requirements: [], feeChecks: [], unresolved: [],
       lookups: [{ ...lookup, kind: "sendTransaction" }] })).toThrow();

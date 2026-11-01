@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import solc from "solc";
+import { keccak256 } from "viem";
 import Ajv2020 from "ajv/dist/2020.js";
 import { getLaunchCapabilities, validateLaunchRemote } from "../src/api-client.mjs";
 import { canonicalizeJson } from "../src/canonical-json.mjs";
@@ -133,11 +134,88 @@ test("3.6 preflight against historical capabilities refuses before reading crede
   assert.equal(keyReads, 0); assert.equal(posts, 0);
 });
 
-async function fixture(t) {
+test("a trusted runtime callback retains exact predictions and writes only the fully validated request", async t => {
+  const f = await fixture(t), baseline = await buildLaunch({ configPath: f.configPath });
+  const observed = { targets: baseline.request.graphBundle.targets.map(target => ({ targetId: target.targetId, runtimeImmutables: [], runtimeCodeHash: target.expectedRuntimeCodeHash })) };
+  let calls = 0;
+  const built = await packLaunch({ configPath: f.configPath, runtimeMaterializer: async snapshot => {
+    calls++; assert.equal(snapshot.chainId, "1"); assert.equal(snapshot.launchWallet, f.config.launchWallet);
+    assert.deepEqual(snapshot.predictions, baseline.predictions);
+    snapshot.predictions[0].predictedAddress = f.config.launchWallet;
+    return observed;
+  } });
+  assert.equal(calls, 1); assert.equal(built.requestSha256, baseline.requestSha256);
+  assert.deepEqual(built.predictions, baseline.predictions);
+  assert.equal(built.runtimeMaterialization.version, 1);
+  for (const target of built.runtimeMaterialization.targets) {
+    assert.equal(target.applicantSalt, baseline.predictions.find(prediction => prediction.targetId === target.targetId).applicantSalt);
+  }
+  assert.equal((await validateLaunchFile({ launchPath: built.outputPath, configPath: f.configPath })).requestSha256, baseline.requestSha256);
+});
+
+test("runtime callbacks cannot omit targets, alter compiler slots or claim a different runtime hash", async t => {
+  const f = await fixture(t), baseline = await buildLaunch({ configPath: f.configPath });
+  // Subsequent negative cases reuse this exact mined salt instead of repeating
+  // permission searches unrelated to their boundary.
+  for (const target of f.config.targets) target.applicantSalt = baseline.predictions.find(value => value.targetId === target.targetId).applicantSalt;
+  await writeFile(f.configPath, JSON.stringify(f.config));
+  const observed = () => ({ targets: baseline.request.graphBundle.targets.map(target => ({ targetId: target.targetId, runtimeImmutables: [], runtimeCodeHash: target.expectedRuntimeCodeHash })) });
+  for (const mutate of [
+    value => { value.targets.pop(); },
+    value => { value.targets[1].targetId = value.targets[0].targetId; },
+    value => { value.targets[0].runtimeCodeHash = `0x${"ff".repeat(32)}`; },
+    value => { value.targets[0].runtimeImmutables = [{ immutableId: "999", abiType: "bytes32", literal: `0x${"00".repeat(32)}` }]; },
+    value => { value.targets[0].authority = true; },
+  ]) {
+    const changed = observed(); mutate(changed);
+    await assert.rejects(buildLaunch({ configPath: f.configPath, runtimeMaterializer: async () => changed }));
+  }
+  const outputPath = path.join(f.root, "must-not-exist.json");
+  await assert.rejects(packLaunch({ configPath: f.configPath, outputPath, runtimeMaterializer: async () => { throw Error("missing construction context"); } }), /missing construction context/);
+  await assert.rejects(access(outputPath), error => error.code === "ENOENT");
+});
+
+test("materialized immutable words and mined salts reproduce through the unchanged exact-config validator", async t => {
+  const f = await fixture(t, true);
+  const observed = { targets: f.config.targets.map(target => {
+    const artifact = f.compiled.contracts["src/Test.sol"][target.targetId === "token" ? "Token" : target.targetId === "hook" ? "Hook" : "Initializer"];
+    const bytes = Buffer.from(artifact.evm.deployedBytecode.object, "hex"), word = Buffer.from("2a".padStart(64, "0"), "hex");
+    const runtimeImmutables = Object.entries(artifact.evm.deployedBytecode.immutableReferences).map(([immutableId, ranges]) => {
+      // Independent fixture expectation: Token's constructor assigns marker=42.
+      for (const range of ranges) word.copy(bytes, range.start);
+      return { immutableId, abiType: "bytes32", literal: `0x${word.toString("hex")}` };
+    });
+    return { targetId: target.targetId, runtimeImmutables, runtimeCodeHash: keccak256(bytes) };
+  }) };
+  assert.equal(observed.targets[0].runtimeImmutables.length, 1);
+  const built = await buildLaunch({ configPath: f.configPath, runtimeMaterializer: async () => observed });
+  for (const completed of built.runtimeMaterialization.targets) {
+    const target = f.config.targets.find(target => target.targetId === completed.targetId);
+    target.applicantSalt = completed.applicantSalt; target.runtimeImmutables = completed.runtimeImmutables;
+  }
+  await writeFile(f.configPath, JSON.stringify(f.config));
+  const repeated = await packLaunch({ configPath: f.configPath });
+  assert.equal(repeated.requestSha256, built.requestSha256);
+  assert.equal((await validateLaunchFile({ launchPath: repeated.outputPath, configPath: f.configPath })).requestSha256, built.requestSha256);
+});
+
+test("the runtime callback cannot bypass the existing final profile graph gate", async t => {
+  const f = await fixture(t), baseline = await buildLaunch({ configPath: f.configPath });
+  const observed = { targets: baseline.request.graphBundle.targets.map(target => ({ targetId: target.targetId, runtimeImmutables: [], runtimeCodeHash: target.expectedRuntimeCodeHash })) };
+  f.config.launchProfile.targetRoles.platformFeeBindingTargetId = "missing-target";
+  for (const target of f.config.targets) target.applicantSalt = baseline.predictions.find(value => value.targetId === target.targetId).applicantSalt;
+  await writeFile(f.configPath, JSON.stringify(f.config));
+  let calls = 0;
+  await assert.rejects(buildLaunch({ configPath: f.configPath, runtimeMaterializer: async () => { calls++; return observed; } }), /platform fee binding/);
+  assert.equal(calls, 1);
+});
+
+async function fixture(t, immutable = false) {
   const root = await mkdtemp(path.join(os.tmpdir(), "programmable-profile36-pack-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "src"));
-  const source = 'pragma solidity 0.8.26; contract Token { string public name; string public symbol; constructor(string memory name_, string memory symbol_) { name = name_; symbol = symbol_; } } contract Hook { struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; } function beforeInitialize(address, PoolKey calldata, uint160) external view returns(bytes4) { require(msg.sender == address(0x000000000004444c5dc75cB358380D2e3dE08A90)); return this.beforeInitialize.selector; } function arbitraryProjectMethod() external pure returns(uint256) { return 42; } } contract Initializer { function initialize() external {} }';
+  let source = 'pragma solidity 0.8.26; contract Token { string public name; string public symbol; constructor(string memory name_, string memory symbol_) { name = name_; symbol = symbol_; } } contract Hook { struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; } function beforeInitialize(address, PoolKey calldata, uint160) external view returns(bytes4) { require(msg.sender == address(0x000000000004444c5dc75cB358380D2e3dE08A90)); return this.beforeInitialize.selector; } function arbitraryProjectMethod() external pure returns(uint256) { return 42; } } contract Initializer { function initialize() external {} }';
+  if (immutable) source = source.replace("string public name;", "uint256 public immutable marker; string public name;").replace("symbol = symbol_;", "symbol = symbol_; marker = 42;");
   await writeFile(path.join(root, "src/Test.sol"), source);
   const input = { language: "Solidity", sources: { "src/Test.sol": { content: source } }, settings: {
     evmVersion: "paris", optimizer: { enabled: true, runs: 1000 }, viaIR: false,
@@ -155,7 +233,8 @@ async function fixture(t) {
     targets.push({ targetId: ["token", "hook", "initializer"][index], compilationUnitId: "unit", artifact: `${name}.json`,
       applicantSalt: index === 1 ? { mode: "deterministic-hook-permission-grind-v1", start: "0", maxAttempts: "262144" } : `0x${String(index + 1).padStart(2, "0").repeat(32)}`, constructorArguments: index === 0 ? ["Profile Test", "P36"] : [],
       initializer: null, deploymentValueWei: "0", initializerValueWei: "0", componentKind: index === 0 ? "token" : index === 1 ? "hook" : "other",
-      declaredHookPermissions: index === 1 ? ["beforeInitialize"] : null, runtimeImmutables: [] });
+      declaredHookPermissions: index === 1 ? ["beforeInitialize"] : null,
+      runtimeImmutables: Object.keys(contract.evm.deployedBytecode.immutableReferences).map(immutableId => ({ immutableId, abiType: "bytes32", literal: `0x${"00".repeat(32)}` })) });
   }
   await writeFile(path.join(root, "src/image.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
   await writeFile(path.join(root, "evidence.txt"), "Local synthetic compiler fixture; no execution or launch authority.");
@@ -168,11 +247,11 @@ async function fixture(t) {
     projectMetadata: { schemaVersion: "programmable.project-metadata-input.v1", token: { name: "Profile Test", symbol: "P36" },
       presentation: { description: "A complete synthetic exact-source arbitrary hook fixture.", image: { sourcePath: "src/image.png", uri: "https://example.com/image.png" },
         links: [{ kind: "website", uri: "https://example.com/" }, { kind: "x", uri: "https://x.com/profiletest" }] } },
-    launchProfile: selection, permitWindow: { deadline: String(now + 600), validAfter: String(now) },
+    launchProfile: structuredClone(selection), permitWindow: { deadline: String(now + 600), validAfter: String(now) },
     agentAttestation: { agentId: "synthetic-test", checkedAt: new Date().toISOString(), checks: [{ checkId: "compiler", evidence: "evidence.txt" }] },
   };
   const configPath = path.join(root, "config.json"); await writeFile(configPath, JSON.stringify(config));
-  return { root, configPath, config };
+  return { root, configPath, config, compiled };
 }
 
 
