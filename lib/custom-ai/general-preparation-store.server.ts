@@ -263,9 +263,8 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         withinWindow(record);
         const identity=exactPack(pack,record,now()), exported=createGeneralPublicSource(source);
         if(pack.publicSourceId!==exported.id)throw conflict();
-        // Publish the sanitized export and save the final exact bytes together,
-        // only after the explicitly selected owned source still matches.
-        await sources.publish(db,source);
+        // Preparing may run ahead while the owner edits the chat. Keep the
+        // sanitized source private until an explicit exchange is requested.
         await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,$2,$3,$4)",[owner,PACK_KIND,id,JSON.stringify(pack)]);
         Object.assign(record,identity,{packState:"complete",packHash:pack.hash,requestSha256:pack.requestSha256,publicSourceId:pack.publicSourceId});
         await release(db,record.packLease);return write(db,owner,record);
@@ -283,7 +282,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         // First submission binds the current chat. Recovery explicitly uses
         // the already sealed original ticket, even if the chat was later
         // edited or archived. It can only replay the saved exact body/key.
-        if(!initial.submission)await revalidate(db,owner,initial);
+        const source=!initial.submission?await revalidate(db,owner,initial):null;
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`custom-ai-general-launch:${owner}:${initial.account.toLowerCase()}`]);
         const record=await readIn(db,owner,id,true);if(!record || record.packState!=="complete" || record.productionId!==productionId)throw conflict();
         const active=(await db.query(`SELECT value->>'id' AS id FROM programmable_custom_ai_v1.objects
@@ -300,6 +299,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         // separate preflight is optional; it confers no additional authority.
         // The backend repeats its own canonical admission before any permit.
         const pack=await readPackIn(db,owner,record);
+        if(source)await sources.publish(db,source);
         await charge(db,`operation:general-launch-${operation}:${owner}`,operation==="create"?12:20);
         const exchange:GeneralExchange={state:"sending",lease:randomUUID(),until:now()+SEND_LEASE_MS,attempts:(previous?.attempts??0)+1};
         record[key]=exchange;await write(db,owner,record);

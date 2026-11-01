@@ -25,6 +25,36 @@ function fixture() {
 }
 
 describe("explicit general launch client", () => {
+  it("prepares ahead without publishing or submitting, then reuses the server-bound package on launch", async () => {
+    const f = fixture(); await f.load();
+    f.request.mockResolvedValueOnce({ preparation: record() });
+    await f.client.prepare(async () => input);
+    expect(f.posts().map(call => call[2].action)).toEqual(["prepare"]);
+    expect(f.state().unconfirmedId).toBeUndefined();
+    expect(f.state().preparation?.submission).toBeUndefined();
+    f.request.mockResolvedValueOnce({ preparation: record() }).mockResolvedValueOnce({ preparation: completed() });
+    await f.client.submit(async () => input);
+    expect(f.posts().map(call => call[2].action)).toEqual(["prepare", "prepare", "create"]);
+    expect(f.posts()[2][2]).toEqual({ action: "create", id: record().id });
+  });
+  it("does not start duplicate preparation or submit while an ahead-of-time package is still being prepared", async () => {
+    const f = fixture(); await f.load(); let finish!: (value: unknown) => void;
+    f.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const select = vi.fn(async () => input), pending = f.client.prepare(select);
+    await Promise.resolve();
+    await f.client.prepare(select); await f.client.submit(select);
+    expect(select).toHaveBeenCalledOnce(); expect(f.posts()).toHaveLength(1);
+    finish({ preparation: record() }); await pending;
+    expect(f.posts().map(call => call[2].action)).toEqual(["prepare"]);
+  });
+  it("keeps the prior accepted submission accessible while a new design is prepared privately", async () => {
+    const f = fixture(); await f.load(completed());
+    f.request.mockResolvedValueOnce({ preparation: record({ id: "general-client-ticket-0002" }) });
+    await f.client.prepare(async () => input);
+    expect(f.state().preparation?.submission).toBeUndefined();
+    expect(f.state().previousSubmission?.submission?.resourceId).toBe(conversation);
+    expect(f.posts().map(call => call[2].action)).toEqual(["prepare"]);
+  });
   it("observes accepted status with GET and leaves the action phase idle", async () => {
     const f = fixture(); await f.load(completed()); f.request.mockResolvedValueOnce({ status: currentWire() });
     await f.client.observeStatus(); expect(f.request.mock.lastCall?.[0]).toContain("view=status"); expect(f.posts()).toHaveLength(0);
