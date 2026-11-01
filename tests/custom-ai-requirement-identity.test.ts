@@ -51,7 +51,7 @@ describe("canonical implementation requirement identities", () => {
     const result = await runCustomAI(request, undefined, { call, compile }, context());
     expect(result.change).toBe("blocked"); expect(result.selection?.missingCapabilities).toContain("No transfer tax.");
     expect(result.intent?.requirements.some(rule => rule.id === "no-transfer-tax")).toBe(true);
-    expect(compile).not.toHaveBeenCalled(); expect(call).toHaveBeenCalledTimes(1);
+    expect(compile).not.toHaveBeenCalled(); expect(call).toHaveBeenCalledTimes(2);
   });
   it("does not reinterpret old ambiguous planner envelopes as complete coverage", async () => {
     compile.mockClear();

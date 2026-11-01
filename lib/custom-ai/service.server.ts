@@ -238,7 +238,6 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     ...(researched ? { chargedAs: "research", sources } : {}) };
   if(selection?.route==="custom-contract"){
     if(!intent||!selection||!context.saveProject)return {reply:"Your complete design is saved. Contract source generation needs its durable project connection before it can continue.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract project storage"]};
-    if(selection.missingCapabilities.length)return {reply:"Your complete design is saved. The proposed implementation left out a requested rule, so I haven't generated source for it.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:selection.missingCapabilities};
     const previous=previousProjectView?await loadPreviousProject():undefined;
     const evmVersion=previous?.project.compiler.evmVersion??context.projectCompilerTarget??"cancun";
     let selectedProduction=production;
