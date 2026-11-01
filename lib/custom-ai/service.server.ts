@@ -33,6 +33,7 @@ import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, par
 import { bindIntentImplementation } from "./intent-coverage.server";
 import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
 import { buildGeneralContract, type GeneralProjectDraft } from "./general-builder.server";
+import {auditGeneralSource,type GeneralSourceAudit} from "./source-audit.server";
 import { compileContractProject } from "./contract-project.server";
 import type { ContractProject } from "./contract-project";
 import { generalProjectView, type GeneralProjectView } from "./project-view";
@@ -77,7 +78,8 @@ export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
   loadProductionContext?:(chainId:BuilderChainId,signal?:AbortSignal)=>Promise<LaunchProductionContext>;
   loadSourceLibraries?:(previous:ContractProject|undefined,chainId:BuilderChainId)=>ContractProject["sources"];
-  saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void> };
+  saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void>;
+  saveSourceAudit?:(audit:GeneralSourceAudit)=>Promise<void> };
 
 function parseAnswer(text: string): Record<string, unknown> {
   try {
@@ -280,14 +282,19 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
     }
     const generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
-      availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
+      availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject,
+      ...(context.saveSourceAudit?{auditSource:async(project:ContractProject,auditSignal?:AbortSignal)=>{
+        const audit=await auditGeneralSource(project,auditSignal,{call:dependencies.call});await context.saveSourceAudit!(audit);return audit;
+      }}:{})},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
     await context.saveCompilation?.(generated.compilation);
     if(blueprint&&generated.compilation.compiled){
       generated.scenarios=await (dependencies.checkProject??checkGeneralScenarios)(generated.project,generated.compilation,bindGeneralCheckBlueprint(blueprint,generated.project),signal);
       signal?.throwIfAborted();await context.saveScenarios!(generated.scenarios);
     }
-    const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false;
-    return {reply:generated.scenarios?.passed===false?"The source is saved, but a declared contract check failed. Your previous draft is kept. Ask me to fix this source.":generated.reply,intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
+    const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
+    return {reply:generated.sourceAudit?.status==="changes_required"?`The source is saved. The independent review found a correction: ${generated.sourceAudit.findings[0]?.message}`
+      :generated.scenarios?.passed===false?"The source is saved, but a declared contract check failed. Your previous draft is kept. Ask me to fix this source.":generated.reply,
+      intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);
   if (previousSpec && !plan.composable) return { reply: "This change left out part of your saved design. Keep the complete rule before building.",

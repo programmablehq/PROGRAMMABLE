@@ -13,6 +13,7 @@ import { projectOverview, type ProjectOverview } from "./project-overview";
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { LaunchIntent } from "./launch-intent";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
+import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.server";
 import { generalCheckCaseCount } from "./behavior-checks";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 import { createGeneralPreparationStore } from "./general-preparation-store.server";
@@ -28,6 +29,7 @@ export type ProjectCheckpoint = {
   overview?: ProjectOverview;
   blueprintId?: GeneralCheckBlueprint["id"];
   scenarios?: GeneralScenarioReport;
+  sourceAudit?: GeneralSourceAudit;
 };
 export type BlueprintCheckpoint = {version:1;requestId:string;payloadHash:string;intent:LaunchIntent;blueprint:GeneralCheckBlueprint};
 type Transaction = <T>(work: (connection: AIConnection) => Promise<T>) => Promise<T>;
@@ -74,7 +76,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       return value;
     });
   }
-  async function save(owner: string, id: string, lease: string, project: ContractProject) {
+  async function save(owner: string, id: string, lease: string, project: ContractProject, originalSourceId?:string) {
     projectCompilerInput(project);
     project=structuredClone(project);
     // This dedicated server-only path accommodates the complete bounded source
@@ -86,9 +88,14 @@ export function createProjectStore(transaction: Transaction, now: () => number =
         if (previous.project.hash !== project.hash) throw conflict();
         return previous;
       }
+      const original=originalSourceId?await saved(db,owner,originalSourceId):null;
+      if(originalSourceId&&(!original||original.project.hash!==project.hash))throw conflict();
       const declared=await savedBlueprint(db,owner,id);
       if(declared)try{bindGeneralCheckBlueprint(declared.blueprint,project);}catch{throw conflict();}
-      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, sourceGeneratedAt:now(), project, overview: projectOverview(id, project,undefined,declared?{blueprintId:declared.blueprint.id}:undefined),
+      // A compile retry reuses old source. It must not reset the time target,
+      // and a legacy source without timing must stay explicitly unknown.
+      const timing=original?(original.sourceGeneratedAt===undefined?{}:{sourceGeneratedAt:original.sourceGeneratedAt}):{sourceGeneratedAt:now()};
+      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, ...timing, project, overview: projectOverview(id, project,undefined,declared?{blueprintId:declared.blueprint.id}:undefined),
         ...(declared?{blueprintId:declared.blueprint.id}:{}) };
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,$2,$3,$4)`, [owner, kind, id, JSON.stringify(value)]);
@@ -115,6 +122,19 @@ export function createProjectStore(transaction: Transaction, now: () => number =
         ||JSON.stringify(report.requirementIds)!==JSON.stringify(previous.project.intent.requirements.map(rule=>rule.id).sort()))throw conflict();
       if(previous.scenarios){if(previous.scenarios.hash!==hash)throw conflict();return previous;}
       const value:ProjectCheckpoint={...previous,scenarios:report,overview:projectOverview(id,previous.project,previous.compilation,{blueprintId:declared.blueprint.id,scenarios:report})};
+      await db.query(`UPDATE programmable_custom_ai_v1.objects SET value=$4,revision=revision+1,updated_at=now()
+        WHERE owner=$1 AND kind=$2 AND id=$3`,[owner,kind,id,JSON.stringify(value)]);
+      return value;
+    });
+  }
+  async function saveSourceAudit(owner:string,id:string,lease:string,audit:GeneralSourceAudit){
+    return transaction(async db=>{
+      await active(db,owner,id,lease);
+      const previous=await saved(db,owner,id);if(!previous)throw conflict();
+      const checked=checkedGeneralSourceAudit(audit,previous.project);
+      if(previous.sourceAudit){if(previous.sourceAudit.hash!==checked.hash)throw conflict();return previous;}
+      if(Buffer.byteLength(JSON.stringify(checked))>64_000)throw conflict();
+      const value:ProjectCheckpoint={...previous,sourceAudit:checked};
       await db.query(`UPDATE programmable_custom_ai_v1.objects SET value=$4,revision=revision+1,updated_at=now()
         WHERE owner=$1 AND kind=$2 AND id=$3`,[owner,kind,id,JSON.stringify(value)]);
       return value;
@@ -219,7 +239,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       return value;
     });
   }
-  return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
+  return { save, complete, overview, saveBlueprint, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
     preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
       publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),

@@ -4,12 +4,14 @@ import { canonicalBrowserJsonV2,canonicalBrowserSha256V2,fileSha256V2 } from "@/
 import { projectCompilerInput,GENERAL_PROJECT_COMPILER } from "./contract-project";
 import type { OwnedGeneralLaunchSource } from "./public-launch-source.server";
 import { CustomAIError } from "./types";
+import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.server";
 
 export type AutomaticSourceReceipt = {
   schemaVersion:"programmable.automatic-source-context.v1";reviewId:string;subjectHash:`sha256:${string}`;
   chainId:"1"|"4663"|"8453"|"999";controller:string;sourceGeneratedAt:number;
   artifactHash:`sha256:${string}`;intentHash:`sha256:${string}`;productionHash:`sha256:${string}`;verifierRevision:`sha256:${string}`;
   intent:OwnedGeneralLaunchSource["project"]["intent"];compilationUnits:{id:string;inputHash:`sha256:${string}`}[];
+  projectHash:`sha256:${string}`;sourceAudit:GeneralSourceAudit;
 };
 const digest=/^sha256:[a-f0-9]{64}$/u;
 const invalid=():never=>{throw new CustomAIError("automatic-source-binding","The automatic review could not be matched to this saved source. Your draft is kept.",409);};
@@ -19,6 +21,9 @@ const invalid=():never=>{throw new CustomAIError("automatic-source-binding","The
 export function createAutomaticSourceReceipt(input:{source:OwnedGeneralLaunchSource;sourceGeneratedAt:number;requestBody:string;
   review:{reviewId:string;subjectHash:string;chainId:string;controller:string};verifierRevision:string},now=Date.now()):AutomaticSourceReceipt {
   const {source,review}=input,production=source.project.production;
+  if(!source.sourceAudit)throw new CustomAIError("automatic-source-audit","Finish the independent source check for this saved draft.",422);
+  const sourceAudit=checkedGeneralSourceAudit(source.sourceAudit,source.project);
+  if(sourceAudit.status!=="passed")throw new CustomAIError("automatic-source-audit",sourceAudit.findings[0]?.message??"The saved source needs a correction.",422);
   if(!production || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(review.reviewId)
     || !digest.test(review.subjectHash)||!digest.test(input.verifierRevision)
     || !Number.isSafeInteger(input.sourceGeneratedAt)||input.sourceGeneratedAt<0||input.sourceGeneratedAt>now
@@ -53,7 +58,8 @@ export function createAutomaticSourceReceipt(input:{source:OwnedGeneralLaunchSou
     subjectHash:review.subjectHash as `sha256:${string}`,chainId:review.chainId as AutomaticSourceReceipt["chainId"],controller:controller.toLowerCase(),
     sourceGeneratedAt:input.sourceGeneratedAt,artifactHash:source.compilation.artifactHash,
     intentHash:canonicalBrowserSha256V2("programmable.general-check-intent.v1",source.project.intent),
-    productionHash:production.id,verifierRevision:input.verifierRevision as `sha256:${string}`,intent:structuredClone(source.project.intent),compilationUnits};
+    productionHash:production.id,verifierRevision:input.verifierRevision as `sha256:${string}`,intent:structuredClone(source.project.intent),compilationUnits,
+    projectHash:source.project.hash,sourceAudit};
   if(Buffer.byteLength(JSON.stringify(receipt))>262_144)return invalid();
   return receipt;
 }

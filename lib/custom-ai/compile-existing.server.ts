@@ -26,6 +26,7 @@ export async function readCompilationSource(store: AIStore, owner: string, reque
   if (currentIntent && (currentIntent.id !== saved.project.intent.id || currentIntent.revision !== saved.project.intent.revision && currentIntent.revision !== saved.project.intent.parentRevision)) throw new CustomAIError("project-context", "Your design changed after this source was saved. Choose the version you want to restore.", 409);
   if (saved.compilation && !saved.compilation.compiled) throw new CustomAIError("project-edit", "The compiler returned source diagnostics. Update that source before building it again.", 422);
   if(saved.scenarios?.passed===false)throw new CustomAIError("project-edit","A declared contract check failed. Edit this source before running the same checks again.",422);
+  if(saved.sourceAudit?.status==="changes_required")throw new CustomAIError("project-edit","The independent source review found a correction. Update this source before continuing.",422);
   let blueprint:GeneralCheckBlueprint|undefined;
   if(saved.blueprintId){
     const declared=await store.projects.readBlueprint(owner,ref.id);
@@ -44,7 +45,8 @@ export async function compileExistingProject(input: {
   signal?.throwIfAborted();
   const { store, owner, id, lease, source } = input;
   if(source.blueprint)await store.projects.saveBlueprint(owner,id,lease,{intent:source.project.intent,blueprint:source.blueprint});
-  await store.projects.save(owner, id, lease, source.project);
+  await store.projects.save(owner, id, lease, source.project, source.requestId);
+  if(source.sourceAudit)await store.projects.saveSourceAudit(owner,id,lease,source.sourceAudit);
   signal?.throwIfAborted(); input.onProgress?.({ type: "phase", phase: "checking" });
   const compilation = source.compilation ?? await compile(source.project, signal);
   signal?.throwIfAborted();

@@ -5,6 +5,7 @@ import { createContractProject, GENERAL_PROJECT_COMPILER, type ContractProject }
 import { compileContractProject, type CompiledProject } from "../lib/custom-ai/contract-project.server";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import type { ClaudeInput } from "../lib/custom-ai/claude.server";
+import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
 
 const intent: LaunchIntent = { version: 1, id: "general-builder-fixture", revision: "a".repeat(64), unresolved: [], changes: [], requirements: [
   { id: "counter", text: "Keep a counter", kind: "behavior", open: null, origin: { kind: "legacy" } },
@@ -21,6 +22,15 @@ const incompleteBuild = async (project: ContractProject): Promise<CompiledProjec
   compiler: GENERAL_PROJECT_COMPILER, compiled: false, diagnostics: [{ severity: "error", message: "Fixture needs repair" }], contracts: [], verification: "not-run", launchReady: false });
 
 describe("general project generation inside the owned AI job", () => {
+  it("starts independent source audit beside compilation after saving the source",async()=>{
+    const events:string[]=[];let release!:()=>void;const waiting=new Promise<void>(resolve=>{release=resolve;});
+    const input=request();input.saveProject.mockImplementation(async()=>{events.push("saved");});
+    const pending=buildGeneralContract({...input,auditSource:async p=>{
+      events.push("audit");await waiting;return auditGeneralSource(p,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["counter","no-admin"],findings:[]}),inputTokens:1,outputTokens:1})});
+    }},undefined,{call:async()=>response(),compile:async p=>{events.push("compile");await waiting;return incompleteBuild(p);}});
+    await vi.waitFor(()=>expect(events).toEqual(["saved","compile","audit"]));release();
+    expect((await pending).sourceAudit?.status).toBe("passed");
+  });
   it("uses one model call and saves the entire source before compilation", async () => {
     const input = request(), events: string[] = [];
     input.saveProject.mockImplementation(async () => { events.push("saved"); });

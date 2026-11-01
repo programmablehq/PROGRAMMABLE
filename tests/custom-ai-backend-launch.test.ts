@@ -36,7 +36,8 @@ describe("body-bound session launch producer", () => {
     const req=request(),authority=await authorizeCustomAI(req),hash=`sha256:${"1".repeat(64)}` as const;
     const receipt:AutomaticSourceReceipt={schemaVersion:"programmable.automatic-source-context.v1",reviewId:id,subjectHash:hash,chainId:"8453",controller:wallet,
       sourceGeneratedAt:now.getTime()-90_000,artifactHash:hash,intentHash:hash,productionHash:hash,verifierRevision:hash,
-      intent:{version:1,id:"gqa",revision:"a".repeat(64),requirements:[],changes:[],unresolved:[]},compilationUnits:[{id:"gqa",inputHash:hash}]};
+      intent:{version:1,id:"gqa",revision:"a".repeat(64),requirements:[],changes:[],unresolved:[]},compilationUnits:[{id:"gqa",inputHash:hash}],
+      projectHash:hash,sourceAudit:{version:1,projectHash:hash,intentHash:hash,productionId:hash,model:"test",checkedAt:now.getTime(),reviewedRequirementIds:[],findings:[],status:"passed",launchReady:false,hash}};
     const f=bridge(vi.fn().mockResolvedValue(reply({schemaVersion:"programmable.automatic-source-bound.v1",reviewId:id,bound:true},200)));
     await f.service.automaticReview(req,authority,{account:wallet,reviewId:id,operation:"bind-source",receipt});
     const [url,init]=f.fetchBackend.mock.calls[0] as [URL,RequestInit];

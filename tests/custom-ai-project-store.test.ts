@@ -10,6 +10,7 @@ import { selectExecutionRoute } from "../lib/custom-ai/execution-routing";
 import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import { bindGeneralCheckBlueprint, createGeneralCheckBlueprint } from "../lib/custom-ai/check-blueprint";
 import type { GeneralScenarioReport } from "../lib/custom-ai/behavior-checks.server";
+import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
 
 let database: PGlite, store: AIStore;
 const id = "00000000-0000-4000-8000-000000000001";
@@ -58,6 +59,25 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("a compile retry inherits the original source time instead of creating a fresh speed claim",async()=>{
+    const first=await reserve(),p=project();const saved=await store.projects.save("alice",id,first.lease!,p);
+    await store.cancel("alice",id);
+    const retryId="00000000-0000-4000-8000-000000000002";
+    const retry=await store.reserve("alice",{id:retryId,intent:"build",messages:[{role:"user",content:"Retry the saved compiler"}]});
+    const copied=await store.projects.save("alice",retryId,retry.lease!,p,id);
+    expect(copied.sourceGeneratedAt).toBe(saved.sourceGeneratedAt);
+    await expect(store.projects.save("bob",retryId,retry.lease!,p,id)).rejects.toBeDefined();
+  });
+  it("stores and reuses one source-bound audit without changing the code or claiming a launch",async()=>{
+    const attempt=await reserve(),p=project();await store.projects.save("alice",id,attempt.lease!,p);
+    const audit=await auditGeneralSource(p,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["no-mint"],findings:[]}),inputTokens:1,outputTokens:1})});
+    const first=await store.projects.saveSourceAudit("alice",id,attempt.lease!,audit);
+    expect(first.sourceAudit?.status).toBe("passed");expect(first.sourceAudit?.launchReady).toBe(false);
+    expect((await store.projects.saveSourceAudit("alice",id,attempt.lease!,audit)).sourceAudit).toEqual(audit);
+    await expect(store.projects.saveSourceAudit("alice",id,attempt.lease!,{...audit,projectHash:`sha256:${"f".repeat(64)}`})).rejects.toBeDefined();
+    await store.projects.complete("alice",id,attempt.lease!,compilation(p));
+    expect((await store.projects.read("alice",id))?.sourceAudit).toEqual(audit);
+  });
   it("keeps the original server source time across later compilation and rejects another owner or source",async()=>{
     const attempt=await reserve(),source=project();
     const first=await store.projects.save("alice",id,attempt.lease!,source);

@@ -9,6 +9,7 @@ import { builderChain, type BuilderChainId } from "./execution-routing";
 import type { BlueprintCheckpoint, ProjectCheckpoint } from "./project-store.server";
 import type { Conversation } from "./conversation";
 import type { StudioState } from "./studio";
+import {checkedGeneralSourceAudit} from "./source-audit.server";
 
 export type GeneralLaunchSourceSelection = {
   id: string; account: string; conversation: string; studioRevision: number; chainId: BuilderChainId;
@@ -81,6 +82,8 @@ export function checkedGeneralLaunchSource(owner: string, selected: GeneralLaunc
     settings: studio.settings, image: studio.image ?? null };
   const bindingHash = canonicalBrowserSha256V2("programmable.custom-ai-launch-source.v1", binding);
   if (selected.bindingHash !== undefined && selected.bindingHash !== bindingHash) return changed();
+  const sourceAudit=checkpoint.sourceAudit?checkedGeneralSourceAudit(checkpoint.sourceAudit,project):undefined;
+  if(sourceAudit?.status==="changes_required")return checks();
   return structuredClone({ bindingHash, binding, studioRevision: snapshot.studioRevision, project, compilation,
-    blueprint: declared.blueprint, scenarios, launchReady: false as const });
+    blueprint: declared.blueprint, scenarios,...(sourceAudit?{sourceAudit}:{}), launchReady: false as const });
 }

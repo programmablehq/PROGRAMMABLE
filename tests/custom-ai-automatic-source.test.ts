@@ -6,6 +6,7 @@ import {packGeneralGraph} from "../lib/custom-ai/general-pack.server";
 import {packGeneralRobinhoodPlan} from "../lib/custom-ai/general-plan-pack.server";
 import {createAutomaticSourceReceipt} from "../lib/custom-ai/automatic-source.server";
 import {canonicalBrowserSha256V2} from "../lib/custom-launch/browser-authority-v2";
+import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("private automatic source receipt",()=>{
  const fixtures=new Map<number,Awaited<ReturnType<typeof generalPackFixture>>>();
@@ -14,7 +15,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("private automatic source r
  const id="20000000-0000-4000-8000-000000000001",digest=`sha256:${"1".repeat(64)}`;
  beforeAll(async()=>{
   for(const chain of [1,4663] as const){
-   const f=await generalPackFixture(chain);fixtures.set(chain,f);
+   const f=await generalPackFixture(chain);
+   f.source.sourceAudit=await auditGeneralSource(f.source.project,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:f.source.project.intent.requirements.map(r=>r.id),findings:[]}),inputTokens:1,outputTokens:1})});
+   fixtures.set(chain,f);
    const pack=chain===4663?await packGeneralRobinhoodPlan(f,{address:f.controller as `0x${string}`,kind:"eoa"}):await packGeneralGraph(f);
    requests.set(chain,pack.requestBody);
   }
