@@ -44,6 +44,30 @@ describe("Surplus model routing", () => {
     vi.stubGlobal("fetch",vi.fn(async()=>new Response(data,{headers:{"content-type":"text/event-stream"}})));
     await expect(callSurplus({...input,onText})).rejects.toMatchObject({code:"incomplete"});
   });
+  it("streams internal contract declarations even without a visible text callback",async()=>{
+    useSurplus();
+    const events=[{choices:[{index:0,delta:{content:'{"reply":"Complete checks"}'},finish_reason:null}]},
+      {choices:[{index:0,delta:{},finish_reason:"stop"}],usage:{prompt_tokens:12,completion_tokens:6}}];
+    const fetcher=vi.fn(async()=>new Response(events.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")+"data: [DONE]\n\n",{headers:{"content-type":"text/event-stream"}}));
+    vi.stubGlobal("fetch",fetcher);
+    await expect(callSurplus({...input,responseProfile:"contract"})).resolves.toEqual({text:'{"reply":"Complete checks"}',inputTokens:12,outputTokens:6});
+    const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(body).toMatchObject({stream:true,stream_options:{include_usage:true},max_tokens:200});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("records a real contract deadline with known partial usage and cancels the stream without retrying",async()=>{
+    useSurplus();const deadline=new AbortController(),cancel=vi.fn(),onText=vi.fn();
+    vi.spyOn(AbortSignal,"timeout").mockReturnValue(deadline.signal);
+    const fetcher=vi.fn(async()=>new Response(new ReadableStream({start(controller){
+      controller.enqueue(new TextEncoder().encode('data: {"choices":[{"index":0,"delta":{"content":"partial"}}],"usage":{"prompt_tokens":12,"completion_tokens":3}}\n\n'));
+    },cancel}),{headers:{"content-type":"text/event-stream"}}));
+    vi.stubGlobal("fetch",fetcher);
+    const result=callSurplus({...input,responseProfile:"contract",onText});
+    const rejected=expect(result).rejects.toMatchObject({code:"incomplete",failure:"timeout",usage:{inputTokens:12,outputTokens:3}});
+    await vi.waitFor(()=>expect(onText).toHaveBeenCalledWith("partial"));
+    deadline.abort(new DOMException("Deadline elapsed","TimeoutError"));
+    await rejected;expect(cancel).toHaveBeenCalledTimes(1);expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it("rejects a truncated or refused response without repeating the paid request", async () => {
     useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:"partial"},finish_reason:"length"}]}));vi.stubGlobal("fetch",fetcher);
     await expect(callSurplus(input)).rejects.toMatchObject({code:"incomplete"});expect(fetcher).toHaveBeenCalledTimes(1);

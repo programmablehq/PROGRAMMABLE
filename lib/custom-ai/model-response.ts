@@ -7,7 +7,7 @@ export function reportedTokenCount(value: unknown): number | null {
 }
 export function modelResponseLimits(profile?: ModelResponseProfile) {
   return profile === "contract"
-    ? { maximumCharacters: 128_000, timeoutMs: 120_000 }
+    ? { maximumCharacters: 128_000, timeoutMs: 180_000 }
     : { maximumCharacters: 48_000, timeoutMs: 60_000 };
 }
 
@@ -17,7 +17,9 @@ export class ModelResponseError extends CustomAIError {
   constructor(public failure: NonNullable<ModelCallMetric["failure"]>, usage: {
     inputTokens: number | null; outputTokens: number | null;
   }) {
-    super("incomplete", failure === "output-limit"
+    super("incomplete", failure === "timeout"
+      ? "The model reached its time limit. Your complete idea is still saved."
+      : failure === "output-limit"
       ? "The answer reached its response limit. Your complete idea is still saved."
       : "The answer was cut short. Your draft is still saved.", 502);
     this.usage = { inputTokens: reportedTokenCount(usage.inputTokens), outputTokens: reportedTokenCount(usage.outputTokens) };
