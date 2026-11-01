@@ -54,6 +54,10 @@ describe("Surplus model routing", () => {
     await expect(callSurplus(input)).rejects.toMatchObject({code:"incomplete",failure:"output-limit",usage:{inputTokens:14900,outputTokens:8000}});
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("reports absent or invalid usage as unknown instead of a zero-cost completed record",async()=>{
+    useSurplus();vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content:'{"reply":"OK"}'},finish_reason:"stop"}],usage:{prompt_tokens:-1,completion_tokens:"unknown"}})));
+    await expect(callSurplus(input)).resolves.toEqual({text:'{"reply":"OK"}',inputTokens:null,outputTokens:null});
+  });
   it("accepts a complete contract declaration beyond the ordinary answer limit only in its bounded profile",async()=>{
     useSurplus();const content=JSON.stringify({reply:"x".repeat(60_000)});
     vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content},finish_reason:"stop"}]})));

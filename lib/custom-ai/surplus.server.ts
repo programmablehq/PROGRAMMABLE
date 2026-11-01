@@ -5,7 +5,7 @@ import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { readServerEvents } from "./events";
 import { prepareSurplusSchema } from "./surplus-schema.server";
-import { ModelResponseError, modelResponseLimits } from "./model-response";
+import { ModelResponseError, modelResponseLimits, reportedTokenCount } from "./model-response";
 
 const endpoint = "https://api.surplusintelligence.ai/v1";
 export async function boundedProviderJSON(response: Response, maximum = 512_000) {
@@ -80,7 +80,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
           throw new CustomAIError("provider_stream", "The reply was interrupted. Your draft is still saved.", 503);
         }
         const usage = event.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
-        inputTokens = usage?.prompt_tokens ?? inputTokens; outputTokens = usage?.completion_tokens ?? outputTokens;
+        inputTokens = reportedTokenCount(usage?.prompt_tokens) ?? inputTokens; outputTokens = reportedTokenCount(usage?.completion_tokens) ?? outputTokens;
         const choices = event.choices as { index?: number; delta?: { content?: string; refusal?: string; tool_calls?: unknown }; finish_reason?: string }[] | undefined;
         const choice = choices?.find(item => item.index === 0) ?? choices?.[0];
         if (choice?.delta?.refusal || choice?.delta?.tool_calls) throw incomplete("refused");
@@ -98,12 +98,12 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     const value = await boundedProviderJSON(response); await rejectEnvelopeError(value);
     const choice = value.choices?.[0]; finish = choice?.finish_reason;
     text = typeof choice?.message?.content === "string" ? choice.message.content : "";
-    inputTokens = value.usage?.prompt_tokens ?? null; outputTokens = value.usage?.completion_tokens ?? null;
+    inputTokens = reportedTokenCount(value.usage?.prompt_tokens); outputTokens = reportedTokenCount(value.usage?.completion_tokens);
     if (choice?.message?.refusal || choice?.message?.tool_calls) throw incomplete("refused");
   }
   if (finish === "length" || finish === "max_tokens") throw incomplete("output-limit");
   if (finish !== "stop") throw incomplete("missing-end");
   if (!text) throw incomplete("empty-response");
   if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
-  return { text: format.decode(text), inputTokens: inputTokens ?? 0, outputTokens: outputTokens ?? 0 };
+  return { text: format.decode(text), inputTokens, outputTokens };
 }

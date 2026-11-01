@@ -4,12 +4,12 @@ import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { AI_CONFIG } from "./ai-config";
 import { readServerEvents } from "./events";
-import { modelResponseLimits, type ModelResponseProfile } from "./model-response";
+import { modelResponseLimits, reportedTokenCount, type ModelResponseProfile } from "./model-response";
 
 export const MODELS = AI_CONFIG.models;
 export type Model = string;
 export type ClaudeInput = { model: Model; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; responseProfile?: ModelResponseProfile; signal?: AbortSignal; onText?: (text: string) => void };
-export type ClaudeResult = { text: string; inputTokens: number; outputTokens: number };
+export type ClaudeResult = { text: string; inputTokens: number | null; outputTokens: number | null };
 
 export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   const key = process.env.ANTHROPIC_API_KEY;
@@ -43,7 +43,7 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
     throw providerError(failure);
   }
   if (input.onText && response.headers.get("content-type")?.includes("text/event-stream")) {
-    let text = "", inputTokens = 0, outputTokens = 0, stopReason: unknown, stopped = false;
+    let text = "", inputTokens: number | null = null, outputTokens: number | null = null, stopReason: unknown, stopped = false;
     try {
       for await (const event of readServerEvents(response, { signal })) {
         signal.throwIfAborted();
@@ -54,7 +54,7 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
         }
         if (event.type === "message_start") {
           const message = event.message as { usage?: { input_tokens?: number } } | undefined;
-          inputTokens = message?.usage?.input_tokens ?? 0;
+          inputTokens = reportedTokenCount(message?.usage?.input_tokens);
         }
         if (event.type === "content_block_start") {
           const block = event.content_block as { type?: string; text?: string } | undefined;
@@ -68,7 +68,7 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
         if (event.type === "content_block_delta" || event.type === "content_block_start") input.onText(text);
         if (event.type === "message_delta") {
           stopReason = (event.delta as { stop_reason?: string } | undefined)?.stop_reason;
-          outputTokens = (event.usage as { output_tokens?: number } | undefined)?.output_tokens ?? outputTokens;
+          outputTokens = reportedTokenCount((event.usage as { output_tokens?: number } | undefined)?.output_tokens) ?? outputTokens;
         }
         if (event.type === "message_stop") { stopped = true; break; }
       }
@@ -86,5 +86,5 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   const text = value.content.filter((block: { type: string }) => block.type === "text")
     .map((block: { text: string }) => block.text).join("");
   if (!text || text.length > limits.maximumCharacters) throw new CustomAIError("response", "The builder returned an incomplete answer.", 502);
-  return { text, inputTokens: value.usage?.input_tokens ?? 0, outputTokens: value.usage?.output_tokens ?? 0 };
+  return { text, inputTokens: reportedTokenCount(value.usage?.input_tokens), outputTokens: reportedTokenCount(value.usage?.output_tokens) };
 }

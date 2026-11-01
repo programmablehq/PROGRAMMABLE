@@ -2,6 +2,9 @@ import { CustomAIError } from "./types";
 import type { ModelCallMetric } from "./request-metrics";
 
 export type ModelResponseProfile = "contract";
+export function reportedTokenCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 2_000_000 ? value : null;
+}
 export function modelResponseLimits(profile?: ModelResponseProfile) {
   return profile === "contract"
     ? { maximumCharacters: 128_000, timeoutMs: 120_000 }
@@ -17,7 +20,6 @@ export class ModelResponseError extends CustomAIError {
     super("incomplete", failure === "output-limit"
       ? "The answer reached its response limit. Your complete idea is still saved."
       : "The answer was cut short. Your draft is still saved.", 502);
-    const count = (value: number | null) => Number.isSafeInteger(value) && value! >= 0 && value! <= 2_000_000 ? value : null;
-    this.usage = { inputTokens: count(usage.inputTokens), outputTokens: count(usage.outputTokens) };
+    this.usage = { inputTokens: reportedTokenCount(usage.inputTokens), outputTokens: reportedTokenCount(usage.outputTokens) };
   }
 }
