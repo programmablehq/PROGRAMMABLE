@@ -87,6 +87,16 @@ test("compiler changes require the isolated EVM toolchain in CI", () => {
   }
 });
 
+test("source generation and admission checks install their actual compiler dependency", () => {
+  for (const path of ["lib/custom-ai/service.server.ts", "lib/custom-ai/general-builder.server.ts",
+    "lib/custom-ai/intent-coverage.server.ts", "lib/custom-ai/contract-project.server.ts",
+    "lib/custom-ai/check-blueprint.ts", "lib/custom-ai/project-store.server.ts",
+    "tests/custom-ai-general-launch-source.test.ts", "tests/custom-ai-general-builder.test.ts"]) {
+    assert.equal(interfacePlan([path]).customAICompiler, true, path);
+  }
+  assert.equal(interfacePlan(["components/custom-ai/requested-rules.tsx"]).customAICompiler, false);
+});
+
 test("constructor worker changes retain real-EVM, browser and pack-consumer coverage", () => {
   const files = ["lib/custom-ai/runtime-materialization.server.ts", "lib/custom-ai/general-pack.server.ts",
     "lib/custom-ai/general-plan-pack.server.ts", "tests/custom-ai-runtime-materialization.test.ts",
