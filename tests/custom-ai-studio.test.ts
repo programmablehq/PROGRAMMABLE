@@ -20,6 +20,21 @@ beforeEach(() => {
   store.saveObject.mockResolvedValue(1);
 });
 describe("private studio drafts", () => {
+  it("saves a valid multilingual history and unsent text within the declared character limits", async () => {
+    const multilingual = { settings: EMPTY_COIN_SETUP,
+      messages: Array.from({ length: 6 }, (_, index) => ({ role: index % 2 ? "assistant" : "user", content: "界".repeat(7000) })),
+      input: "界".repeat(8000), pendingChange: "界".repeat(8000) };
+    const response = await POST(request(multilingual));
+    expect(response.status).toBe(200);
+    expect(store.saveObject.mock.calls[0][3]).toEqual(multilingual);
+  });
+
+  it("still rejects oversized storage requests before writing", async () => {
+    const response = await POST(request({ ...state, input: "x".repeat(256001) }));
+    expect(response.status).toBe(413);
+    expect(store.saveObject).not.toHaveBeenCalled();
+  });
+
   it("restores editable legacy rules from the owned checked source without a write or regeneration", async () => {
     const sourceHash="a".repeat(64),draftId="legacy-fee-draft-01";
     const draft:Draft={source:"saved unchanged source",sourceHash,compiled:true,diagnostics:[],verification:{status:"passed",sourceHash,

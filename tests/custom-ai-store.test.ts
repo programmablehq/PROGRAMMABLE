@@ -24,6 +24,16 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("shared Custom AI storage", () => {
+  it("cleans up only this owner's expired job while reserving, without touching another owner's work", async () => {
+    await store.reserve("alice", request());
+    await store.reserve("bob", request());
+    await database.query("UPDATE programmable_custom_ai_v1.jobs SET created_at=now()-interval '11 minutes'");
+    const next = request("00000000-0000-4000-8000-000000000002");
+    expect((await store.reserve("alice", next)).lease).toBeTruthy();
+    const rows = (await database.query<{ owner: string; state: string }>("SELECT owner,state FROM programmable_custom_ai_v1.jobs WHERE id=$1 ORDER BY owner", [request().id])).rows;
+    expect(rows).toEqual([{ owner: "alice", state: "failed" }, { owner: "bob", state: "running" }]);
+  });
+
   it("counts a compile-only retry once as a compute request without reserving a five-unit model build",async()=>{
     const account="0x"+"a".repeat(40),chat="legacy-wallet-studio";
     await store.conversations.create("alice",account,chat);

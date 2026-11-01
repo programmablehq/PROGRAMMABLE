@@ -47,7 +47,7 @@ export function createPreviewBudget() {
   };
 }
 
-export async function readPreviewBody(request: Request): Promise<unknown> {
+export async function readPreviewBody(request: Request, maximumBytes = 64_000): Promise<unknown> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") throw new CustomAIError("input", "Send a JSON request.", 415);
   const reader = request.body?.getReader();
   if (!reader) throw new CustomAIError("input", "Send a message first.");
@@ -56,7 +56,7 @@ export async function readPreviewBody(request: Request): Promise<unknown> {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       bytes += value.byteLength;
-      if (bytes > 64_000) { await reader.cancel(); throw new CustomAIError("input", "This message is too large.", 413); }
+      if (bytes > maximumBytes) { await reader.cancel(); throw new CustomAIError("input", "This message is too large.", 413); }
       chunks.push(value);
     }
     try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }

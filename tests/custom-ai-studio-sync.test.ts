@@ -96,6 +96,19 @@ describe("online draft recovery", () => {
 });
 
 describe("restoring local changes", () => {
+  it.each(["description", "website", "x"] as const)("saves and detects concurrent changes to %s alone", field => {
+    const local = { ...original, settings: { ...original.settings, [field]: "local value" } };
+    const other = { revision: 2, state: { ...original, settings: { ...original.settings, [field]: "other value" } } };
+    expect(studioSnapshot(local)).not.toBe(studioSnapshot(original));
+    expect(restoreStudio(local, studioBase(server), server)).toMatchObject({ keepLocal: true, conflict: false });
+    expect(restoreStudio(local, studioBase(server), other)).toMatchObject({ keepLocal: true, conflict: true });
+  });
+
+  it("upgrades the snapshot without metadata without treating unchanged local work as dirty", () => {
+    const previous = { revision: 1, snapshot: JSON.stringify(JSON.parse(studioSnapshot(original)).slice(0, 13)) };
+    expect(restoreStudio(original, previous, { revision: 2, state: changed })).toMatchObject({ keepLocal: false, conflict: false });
+  });
+
   it("preserves unsaved changes after reload when the online version is unchanged", () => {
     expect(restoreStudio(changed, studioBase(server), server)).toMatchObject({ keepLocal: true, conflict: false });
     expect(restoreStudio(changed, undefined, null)).toMatchObject({ keepLocal: true, conflict: false });

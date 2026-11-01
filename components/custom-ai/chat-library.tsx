@@ -15,6 +15,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   const entryConversation=useRef(initialConversationId);
   const [selected,setSelected]=useState<string>(),[page,setPage]=useState<ConversationPage>({conversations:[]}),[open,setOpen]=useState(false);
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
+  const pendingCreate=useRef<string>(undefined);
   const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState("");
   const root=useRef<HTMLDivElement|null>(null);
   const toggle=useRef<HTMLButtonElement|null>(null);
@@ -82,13 +83,18 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   },[open]);
   async function select(id:string,flush:Flush){
     if(transition.current)return;transition.current=true;setTransitioning(true);
-    setError("");try{await flush();await writeDraftCache(key.current,id);setSelected(id);setOpen(false);setEditing(undefined);}catch(cause){setError(cause instanceof Error?cause.message:"The current chat could not be saved.");}finally{transition.current=false;setTransitioning(false);}
+    setError("");try{await flush();await writeDraftCache(key.current,id);pendingCreate.current=undefined;setSelected(id);setOpen(false);setEditing(undefined);}catch(cause){setError(cause instanceof Error?cause.message:"The current chat could not be saved.");}finally{transition.current=false;setTransitioning(false);}
   }
   async function newChat(){
     if(transition.current)return;transition.current=true;setTransitioning(true);
     setLoading(true);setError("");try{
-      await flush();const result=await aiRequest<ConversationItem>("/conversations",scopedHeaders,{account,action:"create",id:crypto.randomUUID()});
-      await writeDraftCache(key.current,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);
+      // A lost response can still have created the chat. Reuse that identity
+      // until both the server result and local selection are saved.
+      await flush();pendingCreate.current??=crypto.randomUUID();
+      const result=await aiRequest<ConversationItem>("/conversations",scopedHeaders,{account,action:"create",id:pendingCreate.current});
+      if(result.id!==pendingCreate.current)throw Error("The new chat could not be confirmed. Try opening it again.");
+      if(result.archived){pendingCreate.current=undefined;throw Error("That chat was archived. Create a new chat to continue.");}
+      await writeDraftCache(key.current,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);pendingCreate.current=undefined;
     }catch(cause){setOpen(true);setError(cause instanceof Error?cause.message:"A new chat could not be opened.");}finally{transition.current=false;setTransitioning(false);setLoading(false);}
   }
   async function update(chat:ConversationItem,patch:{title?:string;archived?:boolean},flush:Flush){
@@ -100,6 +106,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       // revision, then use compare-and-set rather than overwriting another tab.
       const current=await aiRequest<ConversationItem>(`/conversations?account=${encodeURIComponent(account)}&id=${encodeURIComponent(chat.id)}`,scopedHeaders);
       const result=await aiRequest<ConversationItem>("/conversations",scopedHeaders,{account,action:"update",id:chat.id,revision:current.revision,...patch});
+      if(result.archived&&result.id===pendingCreate.current)pendingCreate.current=undefined;
       setEditing(undefined);
       // Metadata writes may outlive a filter change. Refresh the current view,
       // never the search/archive values captured when the write began.

@@ -30,7 +30,7 @@ function checkedFixture(revision=1,passed=true){
 }
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
- const calls:ChatRequest[]=[],control={delay:false,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
+ const calls:ChatRequest[]=[],control={delay:false,lostCreates:0,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
  const key=(account:string,id:string,principal="alice")=>principal+":"+account+":"+id;
  const create=(account:string,id:string,principal="alice")=>{const k=key(account,id,principal);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
  await page.route("**/api/**",async route=>{
@@ -39,7 +39,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
   if(body&&["/api/custom-ai","/api/custom-ai/studio"].includes(url.pathname)&&request.headers()["x-custom-ai-cache-scope"]!==(principal==="bob"?"b".repeat(64):cacheScope))return route.fulfill({status:409,json:{code:"session_changed",error:"Reload for the current account"}});
   const account=body?.account??url.searchParams.get("account")??"",id=body?.conversationId??url.searchParams.get("conversation")??LEGACY_CONVERSATION,k=key(account,id,principal);
   if(url.pathname==="/api/custom-ai/conversations"){
-   if(body?.action==="bootstrap"||body?.action==="create"){const chat=create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id,principal);if(body.action==="create")await control.beforeCreate?.();return route.fulfill({json:{...chat,...(body.action==="bootstrap"?{cacheScope:principal==="bob"?"b".repeat(64):cacheScope}:{})}});}
+   if(body?.action==="bootstrap"||body?.action==="create"){const chat=create(account,body.action==="bootstrap"?LEGACY_CONVERSATION:body.id,principal);if(body.action==="create"){await control.beforeCreate?.();if(control.lostCreates>0){control.lostCreates--;return route.abort("failed");}}return route.fulfill({json:{...chat,...(body.action==="bootstrap"?{cacheScope:principal==="bob"?"b".repeat(64):cacheScope}:{})}});}
    if(body?.action==="update"){await control.beforeUpdate?.();const chat=chats.get(key(account,body.id,principal))!;if(body.revision!==chat.revision)return route.fulfill({status:409,json:{error:"Chat changed"}});Object.assign(chat,body.title?{title:body.title,customTitle:true}:{archived:body.archived});chat.revision++;return route.fulfill({json:chat});}
    const one=url.searchParams.get("id");if(one)return route.fulfill({json:chats.get(key(account,one,principal))});
    control.listQueries.push({q:url.searchParams.get("q")??"",archived:url.searchParams.get("archived")==="true"});
@@ -213,6 +213,44 @@ test("four-chain source settings retain native currency and never load a foreign
  await expect(page.getByRole("textbox",{name:"X profile",exact:true})).toBeFocused();
  for(const width of [360,1440]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`four-chain-${width}.png`),fullPage:true});}
  expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);expect(f.calls).toHaveLength(0);
+});
+test("metadata-only edits survive online save and reload without changing the chain",async({page})=>{
+ const f=await fixture(page);
+ f.studios.set(`alice:0x${"a".repeat(40)}:${LEGACY_CONVERSATION}`,{revision:1,state:{settings:{...EMPTY_COIN_SETUP,chainId:8453},messages:[]}});
+ await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await page.locator("summary").filter({hasText:"Coin details"}).click();
+ const metadata={description:"A coin with a transparent fee schedule for its holders.",website:"https://example.com/coin",x:"https://x.com/example_coin"};
+ await page.getByRole("textbox",{name:"Public description",exact:true}).fill(metadata.description);
+ await page.getByRole("textbox",{name:"Project website",exact:true}).fill(metadata.website);
+ await page.getByRole("textbox",{name:"X profile",exact:true}).fill(metadata.x);
+ await expect.poll(()=>[...f.studios.values()][0]?.state.settings).toMatchObject(metadata);
+ await page.reload();await expect(box).toBeEditable();await page.locator("summary").filter({hasText:"Coin details"}).click();
+ await expect(page.getByRole("textbox",{name:"Public description",exact:true})).toHaveValue(metadata.description);
+ await expect(page.getByRole("textbox",{name:"Project website",exact:true})).toHaveValue(metadata.website);
+ await expect(page.getByRole("textbox",{name:"X profile",exact:true})).toHaveValue(metadata.x);
+ expect(f.calls).toHaveLength(0);
+});
+test("retrying a lost create response opens the same chat without making another one",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ f.control.lostCreates=1;await page.getByRole("button",{name:"New coin",exact:true}).click();
+ await expect(page.getByRole("region",{name:"Your saved chats"}).getByRole("alert")).toBeVisible();
+ expect(f.chats.size).toBe(2);const created=[...f.chats.values()].find(chat=>chat.id!==LEGACY_CONVERSATION)!;
+ await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toBeEditable();
+ await box.fill("This is the retried chat");
+ await expect.poll(()=>[...f.studios.entries()].some(([key,saved])=>key.endsWith(created.id)&&saved.state.input==="This is the retried chat")).toBe(true);
+ expect(f.chats.size).toBe(2);expect(f.calls).toHaveLength(0);
+});
+test("opening the recovered chat clears the pending create before the next new coin",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ f.control.lostCreates=1;await page.getByRole("button",{name:"New coin",exact:true}).click();
+ const library=page.getByRole("region",{name:"Your saved chats"});await expect(library.getByRole("alert")).toBeVisible();
+ await library.getByRole("button",{name:/^New coin/}).click();
+ await box.fill("Work in the recovered chat");
+ await page.getByRole("button",{name:"New coin",exact:true}).click();await expect(box).toHaveValue("");
+ expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
 });
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
