@@ -117,6 +117,13 @@ function validApiFixtures() {
       runner_group_id: 0,
       runner_group_name: "GitHub Actions",
       labels: ["ubuntu-latest"],
+      steps: [
+        { name: "Create exact production Verify proof", start: 34, end: 35 },
+        { name: "Attest exact production Verify proof", start: 35, end: 36 },
+        { name: "Preserve immutable production Verify proof", start: 36, end: 39 },
+        { name: "Record exact production Verify proof", start: 39, end: 40 },
+      ].map((step, index) => ({ name: step.name, number: index + 4, status: "completed", conclusion: "success",
+        started_at: `2026-08-11T18:04:${step.start}Z`, completed_at: `2026-08-11T18:04:${step.end}Z` })),
     },
     {
       id: 90_101,
@@ -644,7 +651,40 @@ test("resolver rejects stale proof completion", async () => {
   proofJob.completed_at = new Date(
     NOW_MS - PRODUCTION_VERIFY_PROOF_MAX_AGE_MS - 1,
   ).toISOString();
+  for (const step of proofJob.steps) step.started_at = step.completed_at = proofJob.completed_at;
   await assert.rejects(resolveFixtures(fixtures), /stale/u);
+});
+
+test("resolver uses the bound proof steps when the job envelope clock is shifted", async () => {
+  const fixtures = validApiFixtures();
+  const job = fixtures.jobs.jobs.find(({ name }) => name === VERIFY_PROOF_JOB_NAME);
+  job.started_at = "2026-08-11T19:04:34Z"; job.completed_at = "2026-08-11T19:04:40Z";
+  const resolved = await resolveFixtures(fixtures);
+  assert.equal(resolved.proofCompletedAt, "2026-08-11T18:04:40.000Z");
+});
+
+test("resolver rejects future proof steps even if the job envelope looks fresh", async () => {
+  const fixtures = validApiFixtures();
+  const job = fixtures.jobs.jobs.find(({ name }) => name === VERIFY_PROOF_JOB_NAME);
+  for (const step of job.steps) step.started_at = step.completed_at = new Date(NOW_MS + 1_000).toISOString();
+  await assert.rejects(resolveFixtures(fixtures), /stale/u);
+});
+
+test("resolver requires every unique successful proof step in execution order", async () => {
+  for (const mutate of [
+    (job) => { delete job.steps; },
+    (job) => { job.steps.pop(); },
+    (job) => { job.steps.push({ ...job.steps[0] }); },
+    (job) => { job.steps[1].conclusion = "failure"; },
+    (job) => { job.steps[1].status = "in_progress"; },
+    (job) => { job.steps[1].number = job.steps[0].number; },
+    (job) => { job.steps[1].started_at = "2026-08-11T18:04:34Z"; },
+    (job) => { job.steps[1].completed_at = "2026-08-11T18:04:34Z"; },
+  ]) {
+    const fixtures = validApiFixtures();
+    mutate(fixtures.jobs.jobs.find(({ name }) => name === VERIFY_PROOF_JOB_NAME));
+    await assert.rejects(resolveFixtures(fixtures), /proof step/iu);
+  }
 });
 
 test("resolver rejects branch, workflow, and run identity drift", async () => {
