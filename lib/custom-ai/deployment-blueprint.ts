@@ -6,7 +6,8 @@ import { constructorChildPlanningRules, declareConstructorChildren, type Constru
 
 export const DEPLOYMENT_INPUTS = ["controller", "name", "symbol", "quote", "funding"] as const;
 export const PROTECTION_DEPLOYMENT_BINDINGS = ["swap-router", "swap-router-runtime-hash", "native-usd-feed", "native-usd-feed-runtime-hash", "sequencer-uptime-feed"] as const;
-export const DEPLOYMENT_BINDINGS = ["pool-manager", "launch-executor", "graph-factory", "permit-authority", "fee-recipient", "funding-token", ...PROTECTION_DEPLOYMENT_BINDINGS] as const;
+export const OPENING_DEPLOYMENT_BINDINGS = ["opening-tick", "opening-sqrt-price-x96"] as const;
+export const DEPLOYMENT_BINDINGS = ["pool-manager", "launch-executor", "graph-factory", "permit-authority", "fee-recipient", "funding-token", ...PROTECTION_DEPLOYMENT_BINDINGS, ...OPENING_DEPLOYMENT_BINDINGS] as const;
 export type DeploymentValue = string | boolean | DeploymentValue[]
   | { input: typeof DEPLOYMENT_INPUTS[number] } | { binding: typeof DEPLOYMENT_BINDINGS[number] } | { target: string };
 export type DeploymentNativeValue = "0" | { input: "funding" };
@@ -22,6 +23,7 @@ type DeploymentBlueprintBody = {
   pool: { token: string; hook: string; initializer: string; platformFeeBinding: string; fee: number; tickSpacing: number };
   fees?: { buyPpm: number; sellPpm: number };
   liquidityModel?: "external-concentrated-liquidity" | "launch-seeded-concentrated-liquidity" | "hook-inventory-custom-accounting";
+  openingPrice?: { supply: string; targetFdvUsd: string };
 };
 export type GeneralDeploymentBlueprint = DeploymentBlueprintBody & ({ version: 1 } | { version: 2; constructorChildren: ConstructorChild[] });
 type ObjectValue = Record<string, unknown>;
@@ -45,15 +47,25 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
   production = checkedLaunchProductionContext(production, production.chainId);
   if (!value || typeof value !== "object" || Array.isArray(value)) return invalid();
   const fields = Object.keys(value);
-  const hasFees = fields.includes("fees"), hasLiquidity = fields.includes("liquidityModel"), hasChildren = fields.includes("constructorChildren");
+  const hasFees = fields.includes("fees"), hasLiquidity = fields.includes("liquidityModel"), hasChildren = fields.includes("constructorChildren"), hasOpening = fields.includes("openingPrice");
   if (hasFees !== hasLiquidity) return invalid();
-  const raw = object(value, (hasFees ? "targets,pool,fees,liquidityModel" : "targets,pool") + (hasChildren ? ",constructorChildren" : ""));
+  const raw = object(value, (hasFees ? "targets,pool,fees,liquidityModel" : "targets,pool") + (hasChildren ? ",constructorChildren" : "") + (hasOpening ? ",openingPrice" : ""));
+  let openingPrice: GeneralDeploymentBlueprint["openingPrice"];
+  if (hasOpening) {
+    const opening = object(raw.openingPrice, "supply,targetFdvUsd");
+    const positive = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,38}$/u.test(v) && BigInt(v) < (1n << 127n);
+    if (!positive(opening.supply) || !positive(opening.targetFdvUsd) || production.version !== 3 || !production.protectionBindings
+      || !production.protections || !production.protectionPolicy?.required || !hasFees
+      || raw.liquidityModel !== "launch-seeded-concentrated-liquidity"
+      || BigInt(opening.targetFdvUsd) < BigInt(production.protections.minimumFdvUsd)) return invalid();
+    openingPrice = { supply: opening.supply, targetFdvUsd: opening.targetFdvUsd };
+  }
   if (!Array.isArray(raw.targets) || raw.targets.length < 3 || raw.targets.length > 16 || !hasChildren && raw.targets.length !== entries.length
     || new TextEncoder().encode(JSON.stringify(value)).length > 64_000) return invalid();
   const all = new Set(raw.targets.map(target => identifier(object(target,
     "id,source,contract,constructorArguments,initializer,deploymentValue,initializerValue,hookPermissions").id)));
   if (all.size !== raw.targets.length) return invalid();
-  const seen = new Set<string>(), used = new Set<string>(); let fundingUses = 0, nodes = 0;
+  const seen = new Set<string>(), used = new Set<string>(), openingUsed = new Set<string>(); let fundingUses = 0, nodes = 0;
   const values = (input: unknown, available: Set<string>, depth = 0): DeploymentValue[] => {
     if (!Array.isArray(input) || input.length > 128 || depth > 8) return invalid();
     return input.map(item => {
@@ -71,6 +83,10 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
       const ref = item as ObjectValue;
       if (Object.hasOwn(ref, "input") && DEPLOYMENT_INPUTS.includes(ref.input as typeof DEPLOYMENT_INPUTS[number])) return { input: ref.input } as DeploymentValue;
       if (Object.hasOwn(ref, "binding") && DEPLOYMENT_BINDINGS.includes(ref.binding as typeof DEPLOYMENT_BINDINGS[number])) {
+        if ((OPENING_DEPLOYMENT_BINDINGS as readonly unknown[]).includes(ref.binding)) {
+          if (!openingPrice) return invalid();
+          openingUsed.add(String(ref.binding));
+        }
         if (production.chainId === 4663 && ["graph-factory", "permit-authority", "funding-token"].includes(String(ref.binding))) return invalid();
         if ((PROTECTION_DEPLOYMENT_BINDINGS as readonly unknown[]).includes(ref.binding)
           && (production.version!==3||!production.protectionBindings||ref.binding==="sequencer-uptime-feed"&&!production.protectionBindings.sequencerUptimeFeed)) return invalid();
@@ -118,6 +134,7 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
     || !target(pool.platformFeeBinding) || !target(pool.initializer)?.initializer
     || !Number.isSafeInteger(p.fee) || pool.fee < 0 || pool.fee > 1_000_000 && pool.fee !== 0x800000
     || !Number.isSafeInteger(p.tickSpacing) || pool.tickSpacing < 1 || pool.tickSpacing > 32767) return invalid();
+  if (openingPrice && (!openingUsed.size || pool.fee !== 0 || pool.tickSpacing !== 60)) return invalid();
   let fees: GeneralDeploymentBlueprint["fees"], liquidityModel: GeneralDeploymentBlueprint["liquidityModel"];
   if (hasFees) {
     const selected = object(raw.fees, "buyPpm,sellPpm");
@@ -127,7 +144,7 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
     liquidityModel = raw.liquidityModel as GeneralDeploymentBlueprint["liquidityModel"];
     if (liquidityModel === "hook-inventory-custom-accounting" && !(Number(target(pool.hook)?.hookPermissions) & 12)) return invalid();
   }
-  const body = { ...(constructorChildren ? { version: 2 as const, constructorChildren } : { version: 1 as const }), productionId: production.id, targets, pool, ...(fees ? { fees, liquidityModel } : {}) };
+  const body = { ...(constructorChildren ? { version: 2 as const, constructorChildren } : { version: 1 as const }), productionId: production.id, targets, pool, ...(fees ? { fees, liquidityModel } : {}), ...(openingPrice ? { openingPrice } : {}) };
   return structuredClone({ ...body, id: canonicalBrowserSha256V2(`programmable.custom-ai-deployment-blueprint.v${body.version}`, body) });
 }
 
@@ -144,13 +161,15 @@ export function deploymentBlueprintInput(value: GeneralDeploymentBlueprint) {
     constructorArguments: target.constructorArguments, initializer: target.initializer, deploymentValue: target.deploymentValue,
     initializerValue: target.initializerValue, hookPermissions: target.hookPermissions })), pool: value.pool,
     ...(value.fees ? { fees: value.fees, liquidityModel: value.liquidityModel } : {}),
+    ...(value.openingPrice ? { openingPrice: value.openingPrice } : {}),
     ...(value.version === 2 ? { constructorChildren: value.constructorChildren.map(child => ({ id: child.id, source: child.source, contract: child.contract,
       parent: child.parent, creation: child.creation, nonce: child.nonce, constructorArguments: child.constructorArguments, value: child.value })) } : {}) };
 }
 
-export const generalDeploymentPlanningRules = `A launchable general token/hook design also declares deployment inside generalChecks, separately from the local examples. Its object has targets, pool, fees and liquidityModel, and constructorChildren only for actual constructor-created auxiliary instances.
+export const generalDeploymentPlanningRules = `Declare deployment inside generalChecks separately from local examples: targets, pool, fees, liquidityModel, and constructorChildren only for constructor-created auxiliary instances.
 targets is an ordered array of direct roots with {id,source,contract,constructorArguments,initializer,deploymentValue,initializerValue,hookPermissions}. Without constructorChildren there is exactly one target per source entrypoint. With children every entrypoint must be used by a root or declared child. The role comes from the source entrypoint. Constructor target refs point only to earlier direct roots. initializer is null or {function:unambiguousPublicFunctionName,arguments:[...]}; its target refs may point forward to other roots. Values are strings, booleans, nested arrays, {target:id}, {input:'controller'|'name'|'symbol'|'quote'|'funding'}, or {binding:'pool-manager'|'launch-executor'|'graph-factory'|'permit-authority'|'fee-recipient'|'funding-token'}. Literal external addresses require explicit saved design provenance. Never use fixture, account, pool, v4-router or test-trader refs in a production deployment.
-V3 protection context also exposes {binding:'swap-router'|'swap-router-runtime-hash'|'native-usd-feed'|'native-usd-feed-runtime-hash'|'sequencer-uptime-feed'}. The two runtime-hash bindings are exact bytes32 words, not addresses. The sequencer address is available only where explicitly configured. The swap router is distinct from launch-executor; never substitute one for the other. These are pinned constructor inputs, not proof of current code, feed decimals, price freshness or live state. Missing dependency observations remain unresolved.
+V3 exposes {binding:'swap-router'|'swap-router-runtime-hash'|'native-usd-feed'|'native-usd-feed-runtime-hash'|'sequencer-uptime-feed'}. Hash bindings are bytes32. Sequencer is available only if configured. Swap router and launch-executor differ. Pins alone do not prove current code, price or feed state.
+For protected native seeded launches declare openingPrice:{supply:raw18DecimalInteger,targetFdvUsd:integerString}, at least the profile minimum. Use {binding:'opening-tick'} for initialize and {binding:'opening-sqrt-price-x96'} in the hook; never guess prices. Preparation derives them from one fresh observation and reads the actual token totalSupply(), decimals()=18 and hook initialSqrtPriceX96().
 Native deploymentValue/initializerValue is either '0' or {input:'funding'}. The saved wallet funding amount may be consumed once in the entire graph, never multiplied. initializerValue must be '0' when initializer is null. hookPermissions is the exact integer bit mask for a hook, otherwise null.
 pool has exactly {token,hook,initializer,platformFeeBinding,fee,tickSpacing}. It selects one token, one hook, a real source liquidity initializer with a declared initializer call, and the source component binding the platform fee. The initializer must implement the actual PoolManager settlement/funding path, never call the synthetic v4-router. A recipe is a declaration; actual ABI, source/runtime, canonical packing and backend admission still follow. For Robinhood do not invent graph-factory, permit-authority or funding-token roots that its Plan context does not expose.
 fees has {buyPpm,sellPpm}, integer applicant-selected source rates in the canonical profile's 0..100000 ppm range. Derive them from the complete agreed design and selected policy; do not silently choose zero or claim variable fees are constant. The selected chain's platform/opening fee rules still apply independently. Preserve or clarify a concrete conflict. liquidityModel is launch-seeded-concentrated-liquidity for a coin whose declared source seeds liquidity, external-concentrated-liquidity only when external liquidity is explicitly intended, or hook-inventory-custom-accounting for an agreed inventory/delta mechanism. The inventory model needs a declared swap-return-delta permission. These are declarations, never execution evidence.

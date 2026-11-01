@@ -11,12 +11,15 @@ process.stdin.on("end", async () => {
 
 /** V2 admits only predeclared, source-bound CREATE children. Unknown creation,
  * delegate calls and external state remain unsupported rather than fabricated. */
-async function materialize({ chainId, evmVersion, controller, deployer, targets, constructorChildren, dependencies, includeConstructionGas = false }) {
+async function materialize({ chainId, evmVersion, controller, deployer, targets, constructorChildren, dependencies, openingState, includeConstructionGas = false }) {
   const { createVM } = requireTool("@ethereumjs/vm"), { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block"), { createAddressFromString, createAccount, hexToBytes, bytesToHex } = requireTool("@ethereumjs/util");
-  const { keccak256 } = requireTool("viem");
+  const { keccak256, toFunctionSelector } = requireTool("viem");
   if (![1, 4663, 8453, 999].includes(chainId) || !["paris", "cancun"].includes(evmVersion) || !Array.isArray(targets) || targets.length < 3
-    || !Array.isArray(constructorChildren) || !constructorChildren.length || targets.length + constructorChildren.length > 16) throw Error();
+    || !Array.isArray(constructorChildren) || !constructorChildren.length && !openingState || targets.length + constructorChildren.length > 16) throw Error();
+  if (openingState && (!dependencies || openingState.decimals !== 18 || openingState.passes !== 2
+    || !/^[1-9][0-9]{0,38}$/.test(openingState.supply) || !/^[1-9][0-9]{0,48}$/.test(openingState.sqrtPriceX96)
+    || ![openingState.token, openingState.hook].every(address => targets.some(target => target.address === address)))) throw Error();
   const rootIds = new Set(targets.map(target => target.id)), allIds = new Set(rootIds), rootForChild = new Map();
   for (const child of constructorChildren) {
     if (allIds.has(child.id) || !allIds.has(child.parent) || child.creation !== "create") throw Error();
@@ -72,7 +75,7 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
   }
   for (let pass = 0; pass < 2; pass++) {
     const vm = await createVM({ common }), deployed = new Set(), deployedCode = new Map(), frames = [], observedChildren = new Map(), nextChild = new Map();
-    let current, forbidden = false, dependencyCalls = 0;
+    let current, forbidden = false, dependencyCalls = 0, readingOpening = false;
     for (const address of new Set([controller, deployer])) await vm.stateManager.putAccount(createAddressFromString(address), createAccount({ balance: 10n ** BigInt(24 + pass) }));
     for (const [raw, code] of dependencyCode) {
       const address = createAddressFromString(raw);
@@ -80,6 +83,14 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
       for (const [slot, value] of dependencyStorage.get(raw)) await vm.stateManager.putStorage(address, hexToBytes(slot), hexToBytes(value));
     }
     vm.evm.events?.on("beforeMessage", message => {
+      if (readingOpening) {
+        const address = message.to?.toString().toLowerCase();
+        frames.push({ kind: "call" });
+        if (!message.isStatic || message.delegatecall || message.value !== 0n || !deployed.has(address)) {
+          forbidden = true; fail(current.id, "opening-state-external-call");
+        }
+        return;
+      }
       if (message.depth === 0) { frames.push({ kind: "create", target: current }); return; }
       const parent = frames.at(-1);
       if (!message.to && !message.delegatecall) {
@@ -176,10 +187,35 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
         if (!observed || bytesToHex(await vm.stateManager.getCode(createAddressFromString(child.address))) !== observed.runtimeCode) { fail(child.id, "constructor-child-state-changed"); break; }
       }
     }
-    observations.push({ contracts: runtimes, children: constructorChildren.map(child => observedChildren.get(child.id)) }); if (failures.length) break;
+    if (openingState && !failures.length) {
+      readingOpening = true;
+      // Read the constructed source itself. A matching declaration alone does
+      // not establish supply, precision or the hook's opening price.
+      for (const [address, signature, expected] of [
+        [openingState.token, "totalSupply()", openingState.supply],
+        [openingState.token, "decimals()", "18"],
+        [openingState.hook, "initialSqrtPriceX96()", openingState.sqrtPriceX96],
+      ]) {
+        current = targets.find(target => target.address === address); forbidden = false;
+        await vm.evm.journal.cleanup(); vm.stateManager.originalStorageCache.clear();
+        const result = await vm.evm.runCall({ to: createAddressFromString(address), caller: createAddressFromString(controller),
+          origin: createAddressFromString(controller), data: hexToBytes(toFunctionSelector(signature)), isStatic: true,
+          gasLimit: 100_000n, value: 0n,
+          block: createBlock({ header: { number: BigInt(100 + pass), timestamp: 1_800_000_000n + BigInt(pass), gasLimit: 30_000_000n } }, { common }) });
+        totalGas += result.execResult.executionGasUsed;
+        const output = bytesToHex(result.execResult.returnValue);
+        if (forbidden || frames.length || result.execResult.exceptionError || !/^0x[a-f0-9]{64}$/.test(output) || BigInt(output) !== BigInt(expected)) {
+          fail(current.id, "opening-state-mismatch"); break;
+        }
+      }
+      readingOpening = false;
+    }
+    observations.push({ contracts: runtimes, children: constructorChildren.map(child => observedChildren.get(child.id)),
+      ...(openingState ? { openingState } : {}) }); if (failures.length) break;
   }
   if (!failures.length && JSON.stringify(observations[0]) !== JSON.stringify(observations[1])) fail("graph", "environment-dependent-runtime");
   return { status: failures.length ? "needs-context" : "materialized", passes: observations.length, gasUsed: totalGas.toString(), failures,
     contracts: failures.length ? [] : observations[0].contracts, children: failures.length ? [] : observations[0].children,
+    ...(openingState && !failures.length ? { openingState: observations[0].openingState } : {}),
     ...(includeConstructionGas ? { constructionGas: targets.map(target => ({ targetId: target.id, maximumGasUsed: (constructionGas.get(target.id) ?? 0n).toString() })) } : {}) };
 }

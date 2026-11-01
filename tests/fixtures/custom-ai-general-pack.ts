@@ -19,7 +19,8 @@ import type { LaunchProductionContext } from "../../lib/custom-ai/launch-product
 
 /** Actual compiler + isolated declared examples, never an LP, fee, protected
  * review or mainnet acceptance fixture. It intentionally lacks those proofs. */
-export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false, extraTargets = 0, withChildren = false, productionOverride?: LaunchProductionContext): Promise<GeneralPackInput> {
+export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false, extraTargets = 0, withChildren = false, productionOverride?: LaunchProductionContext,
+  opening?: { supply: string; targetFdvUsd: string; actualSupply?: string }): Promise<GeneralPackInput> {
   if(!Number.isSafeInteger(extraTargets)||extraTargets<0||extraTargets>(withChildren?10:13))throw Error("Bounded fixture target count exceeded");
   const owner = "pack-fixture-owner", controller = `0x${"11".repeat(20)}` as const, conversation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", id = "general-pack-source-00001";
   const production = productionOverride ?? projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain, protection);
@@ -36,16 +37,17 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
   ]:undefined;
   const declaration = { targets: [
     { id: "token", source: "Project.sol", contract: "Token", constructorArguments: [{ input: "name" }, { input: "symbol" }, { input: "controller" }], initializer: null, deploymentValue: "0", initializerValue: "0", hookPermissions: null },
-    { id: "hook", source: "Project.sol", contract: "Hook", constructorArguments: [{ binding: "pool-manager" },...(withChildren?[{input:"controller"}]:[])], initializer: null, deploymentValue: "0", initializerValue: "0", hookPermissions: 8192 },
-    { id: "initializer", source: "Project.sol", contract: "Initializer", constructorArguments: productionOverride?[{binding:"native-usd-feed"}]:[], initializer: { function: "initialize", arguments: [] }, deploymentValue: "0", initializerValue: { input: "funding" }, hookPermissions: null },
+    { id: "hook", source: "Project.sol", contract: "Hook", constructorArguments: [{ binding: "pool-manager" },...(withChildren?[{input:"controller"}]:[]),...(opening?[{binding:"opening-sqrt-price-x96"}]:[])], initializer: null, deploymentValue: "0", initializerValue: "0", hookPermissions: 8192 },
+    { id: "initializer", source: "Project.sol", contract: "Initializer", constructorArguments: productionOverride?[{binding:"native-usd-feed"}]:[], initializer: { function: "initialize", arguments: opening?[{binding:"opening-tick"}]:[] }, deploymentValue: "0", initializerValue: { input: "funding" }, hookPermissions: null },
   ], pool: { token: "token", hook: "hook", initializer: "initializer", platformFeeBinding: "hook", fee: 0, tickSpacing: 60 },
-  fees: { buyPpm: 30000, sellPpm: 0 }, liquidityModel: "external-concentrated-liquidity",...(childDeclaration?{constructorChildren:childDeclaration}:{}) };
+  fees: { buyPpm: 30000, sellPpm: 0 }, liquidityModel: opening?"launch-seeded-concentrated-liquidity":"external-concentrated-liquidity",...(childDeclaration?{constructorChildren:childDeclaration}:{}),
+  ...(opening?{openingPrice:{supply:opening.supply,targetFdvUsd:opening.targetFdvUsd}}:{}) };
   const contracts = [
     { id: "token", source: "Project.sol", contract: "Token", role: "token", arguments: ["Pack Fixture", "PACK", { account: "creator" }],
-      functions: ["function name() view returns(string)", "function symbol() view returns(string)", "function controller() view returns(address)", ...(unstable ? ["function start() view returns(uint256)"] : [])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
-    { id: "hook", source: "Project.sol", contract: "Hook", role: "hook", arguments: [{ account: "creator" },...(withChildren?[{account:"creator"}]:[])],
-      functions: ["function poolManager() view returns(address)", "function beforeInitialize(address,(address,address,uint24,int24,address),uint160) view returns(bytes4)", "function arbitraryProjectMethod() pure returns(uint256)",...(withChildren?["function vault() view returns(address)","function module() view returns(address)","function opening() view returns(address)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
-    { id: "initializer", source: "Project.sol", contract: "Initializer", role: "liquidity", arguments: productionOverride?[{fixture:"native-usd-feed"}]:[], functions: ["function initialize() payable",...(productionOverride?["function precision() view returns(uint8)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
+      functions: ["function name() view returns(string)", "function symbol() view returns(string)", "function controller() view returns(address)", ...(unstable ? ["function start() view returns(uint256)"] : []),...(opening?["function totalSupply() pure returns(uint256)","function decimals() pure returns(uint8)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
+    { id: "hook", source: "Project.sol", contract: "Hook", role: "hook", arguments: [{ account: "creator" },...(withChildren?[{account:"creator"}]:[]),...(opening?[(1n<<96n).toString()]:[])],
+      functions: ["function poolManager() view returns(address)", "function beforeInitialize(address,(address,address,uint24,int24,address),uint160) view returns(bytes4)", "function arbitraryProjectMethod() pure returns(uint256)",...(withChildren?["function vault() view returns(address)","function module() view returns(address)","function opening() view returns(address)"]:[]),...(opening?["function initialSqrtPriceX96() view returns(uint160)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
+    { id: "initializer", source: "Project.sol", contract: "Initializer", role: "liquidity", arguments: productionOverride?[{fixture:"native-usd-feed"}]:[], functions: [opening?"function initialize(int24) payable":"function initialize() payable",...(productionOverride?["function precision() view returns(uint8)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
   ];
   const children=withChildren?childDeclaration!.map(child=>({id:child.id,source:child.source,contract:child.contract,role:"auxiliary",parent:child.parent,
     creation:child.creation,nonce:child.nonce,value:child.value,arguments:child.id==="module"?[{contract:"vault"}]:[{contract:"hook"},{account:"creator"}],
@@ -72,15 +74,17 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
   const content = `pragma solidity 0.8.26;
 contract Token { string public name; string public symbol; address public immutable controller;
 ${unstable ? "uint256 public immutable start;" : ""}
-constructor(string memory name_,string memory symbol_,address controller_) { name=name_;symbol=symbol_;controller=controller_;${unstable ? "start=block.timestamp;" : ""} } }
+constructor(string memory name_,string memory symbol_,address controller_) { name=name_;symbol=symbol_;controller=controller_;${unstable ? "start=block.timestamp;" : ""} }
+${opening?`function totalSupply() external pure returns(uint256){return ${opening.actualSupply??opening.supply};} function decimals() external pure returns(uint8){return 18;}`:""} }
 ${withChildren?"contract Vault { address public immutable parent; address public immutable owner; constructor(address p,address o){parent=p;owner=o;} }\ncontract Module { address public immutable vault; constructor(address v){vault=v;} }":""}
 contract Hook { address public immutable poolManager; ${withChildren?"Vault public immutable vault; Module public immutable module; Vault public immutable opening;":""}
-constructor(address manager_${withChildren?",address owner_":""}) {poolManager=manager_;${withChildren?"vault=new Vault(address(this),owner_);module=new Module(address(vault));opening=new Vault(address(this),owner_);":""}}
+${opening?"uint160 public immutable initialSqrtPriceX96;":""}
+constructor(address manager_${withChildren?",address owner_":""}${opening?",uint160 sqrt_":""}) {poolManager=manager_;${withChildren?"vault=new Vault(address(this),owner_);module=new Module(address(vault));opening=new Vault(address(this),owner_);":""}${opening?"initialSqrtPriceX96=sqrt_;":""}}
 struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }
 function beforeInitialize(address,PoolKey calldata,uint160) external view returns(bytes4) { require(msg.sender==poolManager);return this.beforeInitialize.selector; }
 function arbitraryProjectMethod() external pure returns(uint256) {return 42;} }
 ${productionOverride?"interface Feed {function decimals() external view returns(uint8);}":""}
-contract Initializer { ${productionOverride?"uint8 public immutable precision; constructor(Feed feed){precision=feed.decimals();}":""} function initialize() external payable {} }
+contract Initializer { ${productionOverride?"uint8 public immutable precision; constructor(Feed feed){precision=feed.decimals();}":""} function initialize(${opening?"int24":""}) external payable {} }
 `+Array.from({length:extraTargets},(_,index)=>`contract Aux${index} {}\n`).join("");
   const project = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion },
     sources: { "Project.sol": { content } }, entrypoints: blueprint.entrypoints }, intent, chain, production, blueprint.deployment);

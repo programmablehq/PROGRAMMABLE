@@ -59,6 +59,7 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
     predicted.set(target.id,found);
   }
   const runtime=await materializeGeneralRuntime(source.project,source.compilation,{controller:base.controller,settings:values.settings,
+    ...(values.opening?{opening:values.opening}:{}),
     ...(resolveObservedDependencies?{resolveObservedDependencies}:{}),
     ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),planDeployer:ROBINHOOD_PLAN_DEPLOYER},[...predicted.values()],stop);
   stop.throwIfAborted();

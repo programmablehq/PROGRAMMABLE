@@ -67,3 +67,20 @@ export function deriveObservedOpeningInputs(context: LaunchProductionContext, va
     return { ...body, id: canonicalBrowserSha256V2("programmable.custom-ai-opening-inputs.v1", body) };
   } catch { return invalid(); }
 }
+
+export type ObservedOpeningPreparation = {
+  observation: LaunchDependencyObservation;
+  inputs: ReturnType<typeof deriveObservedOpeningInputs>;
+};
+
+/** Recheck an existing preparation without retargeting or repricing its inputs. */
+export function checkedObservedOpeningPreparation(production: LaunchProductionContext, selection: OpeningSourceSelection,
+  value: ObservedOpeningPreparation | undefined, now = Date.now()): ObservedOpeningPreparation {
+  if (!value) return invalid();
+  const snapshot = structuredClone(value), preparedAt = snapshot.inputs?.preparedAt;
+  if (!Number.isSafeInteger(now) || !Number.isSafeInteger(preparedAt) || preparedAt > now || now >= snapshot.inputs.expiresAt) return invalid();
+  const expected = deriveObservedOpeningInputs(production, snapshot.observation, selection, preparedAt);
+  if (canonicalBrowserSha256V2("programmable.custom-ai-opening-integrity.v1", expected)
+    !== canonicalBrowserSha256V2("programmable.custom-ai-opening-integrity.v1", snapshot.inputs)) return invalid();
+  return snapshot;
+}

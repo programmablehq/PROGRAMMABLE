@@ -12,29 +12,35 @@ import { CustomAIError } from "./types";
 import { ROBINHOOD_PLAN_DEPLOYER } from "./plan-deployer";
 import { constructorDependencyState, type ObservedConstructorDependencies } from "./dependency-witness";
 import type { LaunchProductionContext } from "./launch-production";
+import type { LaunchDependencyObservation } from "./dependency-observations.server";
+import type { ObservedOpeningPreparation } from "./opening-inputs.server";
 
 export type GeneralDeploymentPrediction = { targetId: string; predictedAddress: Address; effectiveSalt: Hex; resolvedConstructorArguments: Hex };
-export type GeneralRuntimeDependencyResolver = (production: LaunchProductionContext, caller: Address, signal?: AbortSignal) => Promise<ObservedConstructorDependencies>;
+export type GeneralRuntimeDependencyResolver = (production: LaunchProductionContext, caller: Address, signal?: AbortSignal, pinned?: LaunchDependencyObservation) => Promise<ObservedConstructorDependencies>;
 type RuntimeResult = { status: "materialized" | "needs-context"; passes: number; gasUsed: string; failures: { target: string; code: string }[];
   contracts: { id: string; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[];
   children?: { id: string; parent: string; nonce: string; address: Address; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[];
-  constructionGas?: {targetId:string;maximumGasUsed:string}[] };
+  constructionGas?: {targetId:string;maximumGasUsed:string}[];
+  openingState?: { token: Address; hook: Address; supply: string; decimals: 18; sqrtPriceX96: string; passes: 2 } };
 const invalid = (): never => { throw new CustomAIError("runtime-context", "The launch details changed. Refresh this preparation. Your design is saved.", 409); };
 export class GeneralRuntimeContextIncomplete extends CustomAIError {
   readonly findings: readonly Readonly<{ target: string; code: string }>[];
   constructor(findings: RuntimeResult["failures"]) {
-    super("runtime-dependency", "This contract needs additional network information before launch preparation. Your design is saved.", 422);
+    super("runtime-dependency", findings.some(finding=>finding.code.startsWith("opening-state-"))
+      ? "The token amount or opening price does not match this saved design. Update it before preparing the launch."
+      : "This contract needs additional network information before launch preparation. Your design is saved.", 422);
     this.findings = Object.freeze(findings.slice(0, 16).map(finding => Object.freeze({ target: finding.target, code: finding.code })));
   }
 }
 
 export async function materializeGeneralRuntime(project: ContractProject, compilation: CompiledProject,
-  selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string;
+  selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string; opening?: ObservedOpeningPreparation;
     planDeployer?: typeof ROBINHOOD_PLAN_DEPLOYER; observedDependencies?: ObservedConstructorDependencies;
     resolveObservedDependencies?: GeneralRuntimeDependencyResolver }, predictions: GeneralDeploymentPrediction[], signal?: AbortSignal) {
   signal?.throwIfAborted();
   project = structuredClone(project); compilation = structuredClone(compilation); predictions = structuredClone(predictions);
   selected = { ...selected, settings: structuredClone(selected.settings),
+    ...(selected.opening ? { opening: structuredClone(selected.opening) } : {}),
     ...(selected.planDeployer ? { planDeployer: structuredClone(selected.planDeployer) } : {}),
     ...(selected.observedDependencies ? { observedDependencies: structuredClone(selected.observedDependencies) } : {}) };
   if (selected.observedDependencies && selected.resolveObservedDependencies) return invalid();
@@ -86,37 +92,45 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
   });
   const withChildren = project.deployment?.version === 2;
   if (withChildren !== Boolean(constructorChildren.length)) return invalid();
+  const opening = values.opening;
+  const openingState = opening ? {
+    token: addressById.get(values.pool.token) ?? invalid(), hook: addressById.get(values.pool.hook) ?? invalid(),
+    supply: opening.inputs.supply, decimals: 18 as const, sqrtPriceX96: opening.inputs.sqrtPriceX96, passes: 2 as const,
+  } : undefined;
   const initializerId = values.targets.find(target => target.role === "liquidity")?.id;
   const initializer = initializerId ? byId.get(initializerId)?.predictedAddress : undefined;
   let observedDependencies: ReturnType<typeof constructorDependencyState> | undefined;
-  const resolvedDependencies = selected.observedDependencies ?? (withChildren && production.protectionBindings && initializer && selected.resolveObservedDependencies
-    ? await selected.resolveObservedDependencies(structuredClone(production), initializer, signal) : undefined);
+  const resolvedDependencies = selected.observedDependencies ?? ((withChildren || opening) && production.protectionBindings && initializer && selected.resolveObservedDependencies
+    ? await selected.resolveObservedDependencies(structuredClone(production), initializer, signal, opening?.observation) : undefined);
   signal?.throwIfAborted();
   if (resolvedDependencies) {
-    if (!withChildren || !initializer) return invalid();
+    if ((!withChildren && !opening) || !initializer || opening && resolvedDependencies.observation.id !== opening.observation.id) return invalid();
     try { observedDependencies = constructorDependencyState(resolvedDependencies, production, initializer, Date.now()); }
     catch { return invalid(); }
   }
+  if (opening && !observedDependencies) return invalid();
   // Snapshot the complete bounded input before waiting for any worker. A later
   // caller mutation cannot change source or constructor data behind the receipt.
   const payload = JSON.stringify({ chainId: project.chainId, evmVersion: project.compiler.evmVersion, controller: values.controller, deployer, targets,
     ...(observedDependencies ? { dependencies: { accounts: observedDependencies.accounts, call: observedDependencies.call } } : {}),
-    ...(production.route === "plan-v1" ? {includeConstructionGas:true}:{}), ...(withChildren ? { constructorChildren } : {}) });
+    ...(production.route === "plan-v1" ? {includeConstructionGas:true}:{}), ...((withChildren || opening) ? { constructorChildren } : {}),
+    ...(openingState ? { openingState } : {}) });
   if (Buffer.byteLength(payload) > 6_000_000) return invalid();
   const sourceBinding = { chainId: values.chainId, projectHash: project.hash, artifactHash: compilation.artifactHash, productionId: values.productionId, deploymentId: values.deploymentId,
     settingsHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-settings.v1", values.settings),
     initializationHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-initialization.v1", values.targets.map(target => ({ id: target.id, initializer: target.initializer, value: target.initializerValueWei }))),
     controller: values.controller, deployer,
     ...(observedDependencies ? { dependencyContext: observedDependencies.context, dependencyProduction: production, dependencyInitializerId: initializerId! } : {}),
+    ...(opening ? { openingInputs: opening.inputs } : {}),
     ...(production.route === "plan-v1" ? {deployerRuntimeCodeHash:selected.planDeployer!.runtimeCodeHash}:{}),
     targets: targets.map(target => ({ id: target.id, address: target.address, salt: target.salt,
       initCodeHash: keccak256(target.initCode), value: target.value })),
-    ...(withChildren ? { constructorChildren: constructorChildren.map(child => ({ id: child.id, parent: child.parent, nonce: child.nonce, address: child.address,
+    ...((withChildren || opening) ? { constructorChildren: constructorChildren.map(child => ({ id: child.id, parent: child.parent, nonce: child.nonce, address: child.address,
       source: child.source, contract: child.contract, constructorArguments: child.constructorArguments, initCodeHash: keccak256(child.initCode), value: child.value })) } : {}) };
   let toolchain: string;
   try { toolchain = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain")); }
   catch { throw new CustomAIError("runtime-worker", "Launch preparation is temporarily unavailable. Your design is saved.", 503); }
-  const worker = join(process.cwd(), withChildren ? "scripts/custom-ai/general-runtime-v2-worker.mjs" : "scripts/custom-ai/general-runtime-worker.mjs");
+  const worker = join(process.cwd(), withChildren || opening ? "scripts/custom-ai/general-runtime-v2-worker.mjs" : "scripts/custom-ai/general-runtime-worker.mjs");
   const output = await new Promise<string>((resolve, reject) => {
     const child = execFile(process.execPath, ["--permission", `--allow-fs-read=${toolchain}`, `--allow-fs-read=${worker}`, "--max-old-space-size=384", worker, toolchain],
       { env: { NODE_ENV: "production" }, encoding: "utf8", timeout: 35_000, maxBuffer: 4_000_000, signal }, (error, stdout) => error
@@ -131,10 +145,12 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
     const contract = result.contracts.find(contract => contract.id === target.id);
     if (!contract || keccak256(contract.runtimeCode) !== contract.runtimeCodeHash) return invalid();
   }
-  if (withChildren && (!Array.isArray(result.children) || result.children.length !== constructorChildren.length || constructorChildren.some(child => {
+  if ((withChildren || opening) && (!Array.isArray(result.children) || result.children.length !== constructorChildren.length || constructorChildren.some(child => {
     const actual = result.children!.find(candidate => candidate.id === child.id);
     return !actual || actual.parent !== child.parent || actual.nonce !== child.nonce || actual.address !== child.address || keccak256(actual.runtimeCode) !== actual.runtimeCodeHash;
   }))) return invalid();
+  if (openingState && canonicalBrowserSha256V2("programmable.custom-ai-opening-state.v1", result.openingState)
+    !== canonicalBrowserSha256V2("programmable.custom-ai-opening-state.v1", openingState)) return invalid();
   if (production.route === "plan-v1" && (!Array.isArray(result.constructionGas) || result.constructionGas.length!==targets.length
     || targets.some(target=>result.constructionGas!.filter(gas=>gas.targetId===target.id&&/^[0-9]{1,12}$/u.test(gas.maximumGasUsed)
       &&BigInt(gas.maximumGasUsed)>0n&&BigInt(gas.maximumGasUsed)<=200_000_000n).length!==1))) return invalid();

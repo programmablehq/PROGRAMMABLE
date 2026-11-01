@@ -12,6 +12,8 @@ import type { GeneralLaunchSourceSelection } from "./general-launch-source.serve
 import type { AIStore } from "./store.server";
 import { CustomAIError } from "./types";
 import type { GeneralRuntimeDependencyResolver } from "./runtime-materialization.server";
+import { deriveObservedOpeningInputs, type ObservedOpeningPreparation } from "./opening-inputs.server";
+import type { createConstructorDependencyServices } from "./dependency-witness.server";
 
 export function createGeneralPreparationService(deps: {
   store: AIStore;
@@ -19,6 +21,7 @@ export function createGeneralPreparationService(deps: {
   bridge: () => ReturnType<typeof createCustomAIBackendLaunchBridge>;
   pack?: typeof packGeneralGraph; packPlan?: typeof packGeneralRobinhoodPlan; production?: typeof readLaunchProductionContext; now?:()=>number;
   resolveObservedDependencies?: GeneralRuntimeDependencyResolver;
+  observeDependencies?: ReturnType<typeof createConstructorDependencyServices>["observe"];
 }) {
   const preparations=deps.store.projects.preparations, now=deps.now??Date.now;
   function linked(request:Request,authority:AIAuthority,account:string) {
@@ -40,7 +43,16 @@ export function createGeneralPreparationService(deps: {
         const image=source.binding.image;
         if(!image)throw new CustomAIError("launch-image","Choose the saved coin image before preparing it.",422);
         const bytes=await deps.image(current.owner,image,request.signal), exported=createGeneralPublicSource(source);
+        let opening: ObservedOpeningPreparation | undefined;
+        if(source.project.deployment?.openingPrice){
+          if(!deps.observeDependencies || !deps.resolveObservedDependencies)
+            throw new CustomAIError("launch-opening-context","Opening-price preparation is temporarily unavailable. Your design is saved.",503);
+          const observation=await deps.observeDependencies(context,request.signal);
+          opening={observation,inputs:deriveObservedOpeningInputs(context,observation,{projectHash:source.project.hash,
+            artifactHash:source.compilation.artifactHash,...source.project.deployment.openingPrice},now())};
+        }
         const packInput={source,exported,url:generalSourcePublicUri(exported.id),controller:record.account,
+          ...(opening?{opening}:{}),
           identity:record.identity,imageBytes:bytes,...(record.nativeFundingWei===undefined?{}:{nativeFundingWei:record.nativeFundingWei})};
         const dependencyArgs=deps.resolveObservedDependencies?[deps.resolveObservedDependencies] as const:[] as const;
         const packed=record.chainId===4663

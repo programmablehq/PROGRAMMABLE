@@ -11,7 +11,7 @@ import { compileContractProject } from "../lib/custom-ai/contract-project.server
 import { resolveGeneralDeploymentValues } from "../lib/custom-ai/deployment-values.server";
 import { materializeGeneralRuntime, type GeneralDeploymentPrediction } from "../lib/custom-ai/runtime-materialization.server";
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
-import { createConstructorDependencyResolver, replayNativeFeedConstructorRead } from "../lib/custom-ai/dependency-witness.server";
+import { createConstructorDependencyResolver, createConstructorDependencyServices, replayNativeFeedConstructorRead } from "../lib/custom-ai/dependency-witness.server";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
 import type { LaunchDependencyObservation } from "../lib/custom-ai/dependency-observations.server";
 import type { ObservedConstructorDependencies } from "../lib/custom-ai/dependency-witness";
@@ -101,7 +101,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed cons
     dependencies.read.id = canonicalBrowserSha256V2("programmable.custom-ai-native-feed-constructor-read.v1", read);
     await expect(materializeGeneralRuntime(input.project, input.compilation, { ...input.selected, observedDependencies: dependencies }, input.predictions)).rejects.toMatchObject({ code: "runtime-dependency" });
   });
-  it("keeps one preparation on its selected chain through observation, replay and constructor execution", async () => {
+  it.each([false,true])("keeps one observation through replay and construction (opening pre-observed=%s)", async pinned => {
     const production = structuredClone(input.project.production!), now = Date.now(), stamp = BigInt(Math.floor(now / 1000) - 2);
     const feed = production.protectionBindings!.nativeUsdFeed.address;
     const raw = { [feed]: { code: PROXY, storage: { [toHex(1, { size: 32 })]: toHex(7, { size: 32 }) } }, [IMPLEMENTATION]: { code: STORAGE } };
@@ -117,8 +117,10 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed cons
       throw Error("Unexpected read");
     };
     const providers = vi.fn(() => [rpc(), rpc()] as const);
-    const resolve = createConstructorDependencyResolver({ rpcs: providers, now: () => now });
-    const pending = resolve(production, input.predictions.find(p => p.targetId === "liquidity")!.predictedAddress);
+    const services=createConstructorDependencyServices({rpcs:providers,now:()=>now});
+    const resolve = pinned?services.resolve:createConstructorDependencyResolver({ rpcs: providers, now: () => now });
+    const observed=pinned?await services.observe(production):undefined;
+    const pending = resolve(production, input.predictions.find(p => p.targetId === "liquidity")!.predictedAddress,undefined,observed);
     production.chainId = 1;
     const dependencies = await pending;
     expect(providers.mock.calls).toEqual([[999], [999]]); expect(calls).toBe(22);

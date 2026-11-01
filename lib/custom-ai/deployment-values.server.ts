@@ -7,6 +7,7 @@ import { checkedGeneralDeploymentBlueprint, type DeploymentValue } from "./deplo
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP, parseCoinSetupPatch, type CoinSetup } from "./coin-setup";
 import { builderChain } from "./execution-routing";
 import { CustomAIError } from "./types";
+import { checkedObservedOpeningPreparation, type ObservedOpeningPreparation } from "./opening-inputs.server";
 
 type PackerValue = string | boolean | PackerValue[] | { target: string };
 const invalid = (): never => { throw new CustomAIError("launch-deployment", "The saved deployment does not match this source, wallet or coin settings. Update the design before preparing it.", 422); };
@@ -16,7 +17,7 @@ const uint = (value: string) => /^(?:0|[1-9][0-9]{0,77})$/u.test(value) && BigIn
  * output or ABI encoding here can confer launch authority. The actual source,
  * runtime, graph and admission are still checked by the existing backend. */
 export function resolveGeneralDeploymentValues(project: ContractProject, compilation: CompiledProject,
-  selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string }) {
+  selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string; opening?: ObservedOpeningPreparation }) {
   try {
     projectCompilerInput(project);
     if (!project.production || !project.deployment || selected.settings.chainId !== project.chainId) return invalid();
@@ -27,6 +28,9 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
       || compilation.verification !== "not-run" || compilation.diagnostics.some(item => item.severity === "error")
       || artifactHash !== canonicalBrowserSha256V2("programmable.custom-ai-project-artifacts.v1", body)) return invalid();
     const production = project.production, recipe = checkedGeneralDeploymentBlueprint(project.deployment, project.entrypoints, production, project.intent);
+    if (selected.opening && !recipe.openingPrice) return invalid();
+    const opening = recipe.openingPrice ? checkedObservedOpeningPreparation(production,
+      { projectHash: project.hash, artifactHash, ...recipe.openingPrice }, selected.opening) : undefined;
     const settings = applyCoinSetupPatch(EMPTY_COIN_SETUP, parseCoinSetupPatch(selected.settings));
     if (!settings.name || !settings.symbol) return invalid();
     const native = builderChain(project.chainId).currency, nativePair = settings.pairToken === native;
@@ -53,7 +57,8 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
       "funding-token": production.graphProfile?.fundingToken,
       "swap-router":production.protectionBindings?.swapRouter.address,"swap-router-runtime-hash":production.protectionBindings?.swapRouter.runtimeCodeHash,
       "native-usd-feed":production.protectionBindings?.nativeUsdFeed.address,"native-usd-feed-runtime-hash":production.protectionBindings?.nativeUsdFeed.runtimeCodeHash,
-      "sequencer-uptime-feed":production.protectionBindings?.sequencerUptimeFeed };
+      "sequencer-uptime-feed":production.protectionBindings?.sequencerUptimeFeed,
+      "opening-tick":opening?.inputs.initialTick.toString(),"opening-sqrt-price-x96":opening?.inputs.sqrtPriceX96 };
     const resolve = (value: DeploymentValue): PackerValue => {
       if (Array.isArray(value)) return value.map(resolve);
       if (typeof value === "string" || typeof value === "boolean") return value;
@@ -61,6 +66,7 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
       if ("binding" in value) {
         const literal = bindings[value.binding];
         if (typeof literal !== "string") return invalid();
+        if (value.binding === "opening-tick" || value.binding === "opening-sqrt-price-x96") return literal;
         if(value.binding==="swap-router-runtime-hash"||value.binding==="native-usd-feed-runtime-hash") {
           if(!/^0x(?!0{64}$)[a-f0-9]{64}$/u.test(literal))return invalid();return literal;
         }
@@ -140,6 +146,7 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
     const nativeValueWei = targets.reduce((sum, target) => sum + BigInt(target.deploymentValueWei) + BigInt(target.initializerValueWei), 0n).toString();
     if (constructorChildren.some(child => BigInt(child.valueWei) > targets.reduce((sum, target) => sum + BigInt(target.deploymentValueWei), 0n))) return invalid();
     return { version: recipe.version, projectHash: project.hash, artifactHash, productionId: production.id, deploymentId: recipe.id,
+      ...(opening ? { opening } : {}),
       chainId: project.chainId, controller, settings, quoteCurrency: quote, nativeValueWei, targets,
       ...(recipe.version === 2 ? { constructorChildren } : {}),
       pool: { ...recipe.pool, quoteCurrency: quote }, launchReady: false as const };

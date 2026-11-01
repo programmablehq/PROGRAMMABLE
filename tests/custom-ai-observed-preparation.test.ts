@@ -18,12 +18,16 @@ import { packGeneralRobinhoodPlan } from "../lib/custom-ai/general-plan-pack.ser
 import { createGeneralPublicSource, generalSourcePublicUri } from "../lib/custom-ai/public-launch-source.server";
 import { generalPreparationView, type GeneralPackedLaunch, type GeneralPreparation } from "../lib/custom-ai/general-preparation-store.server";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
+import { deriveObservedOpeningInputs } from "../lib/custom-ai/opening-inputs.server";
 
 const owner="pack-fixture-owner", ticket="observed-preparation-ticket-0001";
 const tables=["jobs","objects","budgets"] as const, BASIC="0x600760005260206000f3" as Hex;
 // These are synthetic dependency observations around real compiler, replay,
 // constructor and pack workers. They do not establish a live market or RPC.
-describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([999,4663] as const)("durable observed chain %s preparation",chain=>{
+describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([
+  {chain:999,opening:false,children:true},{chain:4663,opening:false,children:true},{chain:999,opening:true,children:true},
+  {chain:4663,opening:true,children:true},{chain:999,opening:true,children:false},
+] as const)("durable observed preparation $chain opening=$opening children=$children",({chain,opening,children})=>{
   let db:PGlite, store:AIStore, clock:number, completedAt:number, observation:LaunchDependencyObservation;
   let fixture:Awaited<ReturnType<typeof generalPackFixture>>, pack:GeneralPackedLaunch, record:GeneralPreparation;
   let snapshot:Record<string,Record<string,unknown>[]>;
@@ -50,7 +54,8 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([999,4663] as const)("
     original.protectionBindings!.nativeUsdFeed.runtimeCodeHash=keccak256(BASIC);
     const {id:oldId,...productionBody}=original;void oldId;
     const production=createLaunchProductionContext(productionBody);
-    fixture=await generalPackFixture(chain,false,0,true,production);
+    fixture=await generalPackFixture(chain,false,0,children,production,
+      opening?{supply:(10n**27n).toString(),targetFdvUsd:"15000"}:undefined);
     const database=new PGlite();await database.exec(CUSTOM_AI_SCHEMA);const seed=makeStore(database),source=fixture.source,binding=source.binding;
     await seed.conversations.create(owner,fixture.controller,binding.conversation);
     const key=conversationStorageId(fixture.controller,binding.conversation);
@@ -71,12 +76,15 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([999,4663] as const)("
       poolManager:{...production.poolManager,runtimeCode:BASIC},swapRouter:{...pins.swapRouter,runtimeCode:BASIC},
       nativeUsdFeed:{...pins.nativeUsdFeed,runtimeCode:BASIC,decimals:7,roundId:"1",answer:"10000000",updatedAt:stamp,answeredInRound:"1"},sequencer:null,rpcReads:[9,9]};
     observation={...body,id:canonicalBrowserSha256V2("programmable.custom-ai-dependency-observation.v1",body)};
+    if(opening)fixture.opening={observation,inputs:deriveObservedOpeningInputs(production,observation,
+      {projectHash:source.project.hash,artifactHash:source.compilation.artifactHash,...source.project.deployment!.openingPrice!})};
     clock=Date.now();
     const selected={id:binding.sourceId,account:fixture.controller,conversation:binding.conversation,studioRevision:revision,chainId:chain,
       projectHash:source.project.hash,artifactHash:source.compilation.artifactHash,intentRevision:binding.intentRevision};
     const preparation=await seed.projects.preparations.reserve(owner,ticket,selected,undefined,chain===4663?"eoa":undefined);
     record=preparation.record;fixture.source=preparation.source!;fixture.exported=createGeneralPublicSource(fixture.source);fixture.url=generalSourcePublicUri(fixture.exported.id);
-    const resolve=vi.fn(async(_production,caller)=>{
+    const resolve=vi.fn(async(_production,caller,_signal,pinned)=>{
+      if(opening)expect(pinned).toEqual(observation);
       const rpc=()=>async(method:string)=>method==="debug_traceCall"?{[pins.nativeUsdFeed.address]:{code:BASIC}}
         :{number:"0x64",hash:observation.block.hash,timestamp:toHex(BigInt(stamp))};
       const read=await replayNativeFeedConstructorRead(observation,caller,{rpcs:[rpc(),rpc()],now:Date.now});
@@ -90,6 +98,8 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([999,4663] as const)("
       throw error;
     }
     expect(resolve).toHaveBeenCalledTimes(1);expect(pack.version).toBe(3);
+    if(opening)expect(runtime(pack).openingState).toMatchObject({supply:(10n**27n).toString(),decimals:18,passes:2,
+      sqrtPriceX96:fixture.opening!.inputs.sqrtPriceX96});
     expect(observation.observedAt).toBeLessThan(record.createdAt);
     completedAt=Date.now();expect(completedAt).toBeLessThan(observation.expiresAt);
     snapshot={};for(const table of tables)snapshot[table]=(await database.query<Record<string,unknown>>(`SELECT * FROM programmable_custom_ai_v1.${table}`)).rows;
@@ -123,6 +133,16 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([999,4663] as const)("
     if(reason==="missing context")delete inner.dependencyContext;
     else if(reason==="different initializer")inner.dependencyInitializerId="hook";
     else inner.dependencyProduction={...inner.dependencyProduction!,id:`sha256:${"33".repeat(32)}`};
+    rehash(altered);
+    await expect(store.projects.preparations.completePack(owner,ticket,record.packLease.token,altered)).rejects.toMatchObject({code:"launch-preparation-storage"});
+    expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toBeNull();
+  });
+  it.skipIf(!opening).each(["wrong supply","wrong opening price","missing state","removed opening proof"])("refuses %s despite recomputed private hashes",async(reason)=>{
+    const altered=structuredClone(pack),inner=runtime(altered);
+    if(reason==="removed opening proof"){delete inner.openingState;delete inner.openingInputs;}
+    else if(reason==="missing state")delete inner.openingState;
+    else if(reason==="wrong supply")inner.openingState!.supply="1";
+    else inner.openingState!.sqrtPriceX96="1";
     rehash(altered);
     await expect(store.projects.preparations.completePack(owner,ticket,record.packLease.token,altered)).rejects.toMatchObject({code:"launch-preparation-storage"});
     expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toBeNull();

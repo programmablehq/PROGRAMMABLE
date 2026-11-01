@@ -9,21 +9,34 @@ import { createLaunchDependencyReader, type LaunchDependencyObservation } from "
 import { checkNativeFeedObservation, createNativeFeedConstructorWitness } from "./dependency-witness";
 import type { LaunchProductionContext } from "./launch-production";
 import { CustomAIError } from "./types";
+import { checkedLaunchProductionContext } from "./launch-production";
 const unavailable = () => new CustomAIError("dependency-replay", "The native price feed could not be independently replayed from its observed state. Your source is saved.", 422);
 
 /** A single preparation entry point; the host supplies its existing per-chain
  * provider factory. Observation sharing and both bounded read phases stay in
  * their own components. Nothing is fetched until a preparation requests it. */
 export function createConstructorDependencyResolver(dependencies: Parameters<typeof createLaunchDependencyReader>[0]) {
+  return createConstructorDependencyServices(dependencies).resolve;
+}
+
+/** Opening-price preparation and constructor replay share one observation cache. */
+export function createConstructorDependencyServices(dependencies: Parameters<typeof createLaunchDependencyReader>[0]) {
   const observe = createLaunchDependencyReader(dependencies);
-  return async (production: LaunchProductionContext, caller: Address, signal?: AbortSignal) => {
-    const selected = structuredClone(production);
-    const observation = await observe(selected, signal);
+  const resolve = async (production: LaunchProductionContext, caller: Address, signal?: AbortSignal, pinned?: LaunchDependencyObservation) => {
+    const selected = checkedLaunchProductionContext(structuredClone(production), production.chainId);
+    const observation = pinned ? structuredClone(pinned) : await observe(selected, signal);
     signal?.throwIfAborted();
+    if (observation.productionId !== selected.id || observation.chainId !== selected.chainId) throw unavailable();
+    checkNativeFeedObservation(observation, caller, dependencies.now());
+    const pins = selected.protectionBindings;
+    if (!pins || [[observation.poolManager, selected.poolManager], [observation.swapRouter, pins.swapRouter],
+      [observation.nativeUsdFeed, pins.nativeUsdFeed]].some(([actual, expected]) =>
+      actual.address.toLowerCase() !== expected.address.toLowerCase() || actual.runtimeCodeHash !== expected.runtimeCodeHash)) throw unavailable();
     const read = await replayNativeFeedConstructorRead(observation, caller,
       { rpcs: dependencies.rpcs(selected.chainId), now: dependencies.now }, signal);
     return { observation, read };
   };
+  return { observe, resolve };
 }
 
 /** One prestate read and one canonical-block comparison per provider. Only
