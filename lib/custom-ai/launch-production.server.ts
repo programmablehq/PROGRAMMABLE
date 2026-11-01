@@ -1,7 +1,7 @@
 import "server-only";
 import { resolveDirectNativeProfile, validateEmbeddedDirectNativeProfile } from "@/packages/launch/src/profile-direct-native-v1.mjs";
 // @ts-expect-error The canonical SDK is untyped ESM; projected fields are validated below.
-import { PROTECTED_LAUNCH_CHAIN_PINS_V1 } from "@/packages/launch/src/launch-protection-v1.mjs";
+import { PROTECTED_LAUNCH_CHAIN_PINS_V1 } from "@/packages/launch/src/launch-protection-pins-v1.mjs";
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { parseStrictJson } from "@/lib/server/projection-target/canonical-json";
 import { builderChain, type BuilderChainId } from "./execution-routing";

@@ -6,28 +6,8 @@ import { concatHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, g
   getCreate2Address, keccak256, parseAbi, parseAbiParameters, toHex } from 'viem';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
-export const PROTECTED_LAUNCH_POLICY_V1 = Object.freeze({ minimumFdvUsd: '15000', walletLimitBps: 200,
-  buyerLimitBps: 200, protectionSeconds: 300, openingTotalFeePpm: 990000, openingFeeSeconds: 30,
-  maximumAdditionalTaxExemptWallets: 6, treasury: '0xD88539d3c4C460136a733A3Fd60cf6BF269079da' });
-export const PROTECTED_LAUNCH_CHAIN_PINS_V1 = Object.freeze({
-  999: Object.freeze({manager:'0x12D4Fd9C5DeDd00ab8a0bCe2CF0167bbf94b6B1F',
-    router:'0xeD270A1Bcdc63cf1356D695e7f40961d4819d6bF',routerCodeHash:'0x0710561487244e5d288bd93fe4c055a4a33fd486a07e8b4c982124c57c6d3224',
-    feed:'0x2b25BC41D55de29F3A2e163F8Eebf63966B25b57',feedCodeHash:'0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2',maxAge:86520n}),
-  8453: Object.freeze({manager:'0x498581fF718922c3f8e6A244956aF099B2652b2b',
-    router:'0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40',routerCodeHash:'0x816c75fe7f6ccf8fe8b14825091e8dff301fe7ffd4b962f89b2981a747facc08',
-    feed:'0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70',feedCodeHash:'0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2',maxAge:3600n,
-    sequencerFeed:'0xBCF85224fc0756B9Fa45aA7892530B47e10b6433'}),
-  1: Object.freeze({ manager: '0x000000000004444c5dc75cB358380D2e3dE08A90',
-    router: '0xd92A36B0000531EF3063dEd4De20A0783308446C',
-    routerCodeHash: '0x41ccd905c8e4de29ce9536ff49233b79e3085a0987d490664e703ee1e7b1dc49',
-    feed: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
-    feedCodeHash: '0x4b79b5c8aee6da0f7b393e8b53e6265ef7320a1d16184c65bd3841b5aa3d700d', maxAge: 3600n }),
-  4663: Object.freeze({ manager: '0x8366a39CC670B4001A1121B8F6A443A643e40951',
-    router: '0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99',
-    routerCodeHash: '0xbe8e8191bb42d843c2e948a5a55772eaab864ce01e54dcd47c9d089170b302d5',
-    feed: '0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9',
-    feedCodeHash: '0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2', maxAge: 86400n }),
-});
+import { PROTECTED_LAUNCH_POLICY_V1, PROTECTED_LAUNCH_CHAIN_PINS_V1 } from './launch-protection-pins-v1.mjs';
+export { PROTECTED_LAUNCH_POLICY_V1, PROTECTED_LAUNCH_CHAIN_PINS_V1 } from './launch-protection-pins-v1.mjs';
 const names = { initializer: 'ProtectedNativeInitializerV1', token: 'ProtectedLaunchTokenV1', hook: 'ProtectedNative30HookV1',
   module: 'LaunchProtectionModuleV1', feeVault: 'EthereumNativeFeeVaultV3', openingTaxVault: 'EthereumNativeFeeVaultV3' };
 const kitUrl = new URL('../contracts/launch-protection-v1/', import.meta.url);
