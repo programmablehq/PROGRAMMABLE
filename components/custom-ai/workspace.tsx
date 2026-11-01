@@ -429,7 +429,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     return () => window.removeEventListener("resize", resize);
   }, [input]);
   useLayoutEffect(() => {
-    if (followReply.current && transcript.current) {
+    if (!messages.length && !busy && transcript.current) {
+      transcript.current.scrollTop = 0;
+      followReply.current = true;
+      setShowLatest(false);
+    } else if (followReply.current && transcript.current) {
       transcript.current.scrollTop = transcript.current.scrollHeight;
     }
   }, [messages, busy, revealing]);
