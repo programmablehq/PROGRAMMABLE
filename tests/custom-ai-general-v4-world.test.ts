@@ -56,6 +56,22 @@ describe("declared v4 world binding",()=>{
 });
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("declared generated hooks in the actual isolated v4 world",{timeout:60_000},()=>{
+ it.each([true,false])("checks afterSwap event emission during actual swaps (emits=%s)",async emits=>{
+  const design={...intent,requirements:[...intent.requirements,{id:"event",text:"After each successful swap emit SwapCounted with the callback sender and incremented public count",kind:"behavior" as const,open:null,origin:{kind:"legacy" as const}}]};
+  const raw=declaration();raw.world.hookPermissions=8384;
+  raw.contracts[1].functions.push("function swapCount() view returns(uint256)",`function afterSwap(address,${key},${params},int256,bytes) returns(bytes4,int128)`);
+  const declared={...raw,steps:raw.steps.map((step,index)=>index===5||index===6?{...step,requirementIds:["fees","event"],expect:{...step.expect,events:[
+   {contract:"hook",signature:"event SwapCounted(address indexed sender,uint256 count)",arguments:[{fixture:"v4-router"},index===5?"1":"2"]},
+  ]}}:step)};
+  const base=project(),content=base.sources["Hook.sol"].content.replace("==8320","==8384")
+   .replace("contract Hook {","contract Hook {uint256 public swapCount;event SwapCounted(address indexed sender,uint256 count);");
+  const after=`function afterSwap(address sender,Key calldata,Params calldata,int256,bytes calldata)external returns(bytes4,int128){require(msg.sender==manager);swapCount++;${emits?"emit SwapCounted(sender,swapCount);":""}return(this.afterSwap.selector,0);}`;
+  const source=createContractProject({compiler:base.compiler,entrypoints:base.entrypoints,sources:{...base.sources,"Hook.sol":{content:content.slice(0,-1)+after+"}"}}},design,999);
+  const plan=bindGeneralCheckBlueprint(createGeneralCheckBlueprint(declared,design,999,"cancun"),source);
+  const actual=await checkGeneralScenarios(source,await compileContractProject(source),plan);
+  expect(actual.passed).toBe(emits);expect(actual.launchReady).toBe(false);
+  if(!emits)expect(actual.failures[0]).toMatchObject({caseId:"buy-before-boundary",code:"event-log"});
+ });
  it.each([3000,2700])("executes actual liquidity/buy/sell/transfer and independently checks the%i-ppm implementation",async fee=>{
   const source=project(fee),compiled=await compileContractProject(source),plan=bindGeneralCheckBlueprint(createGeneralCheckBlueprint(declaration(),intent,999,"cancun"),source);
   expect(compiled.compiled).toBe(true);const report=await checkGeneralScenarios(source,compiled,plan);

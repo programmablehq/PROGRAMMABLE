@@ -810,3 +810,5 @@ These are declared local EVM examples. Synthetic feed values are not live
 oracle observations; passing them does not admit a public launch. Current
 pricing, constructor observations, graph/Plan integration and backend review
 remain separate requirements.
+
+Declared event checks use the actual EVM logs from successful state-changing calls. `expect.events` binds the emitting contract, the human-readable event signature (including `indexed`) and all arguments in ABI order. The runner verifies exact count and order for each declared emitter/signature pair and ignores unrelated logs. Missing, duplicated, wrong-emitter or wrong-argument events fail the example. Existing plans without event assertions retain their original hashes. Anonymous events and indexed arrays or tuples are not supported.

@@ -2,6 +2,7 @@ import {createRequire} from "node:module";
 import {join} from "node:path";
 import {createGeneralV4World} from "./general-v4-world.mjs";
 import {createGeneralProtectedV4World} from "./general-protected-v4-world.mjs";
+import {declaredEventsMatch} from "./declared-events.mjs";
 const requireTool=createRequire(join(process.argv[2],"package.json"));
 let input="";process.stdin.setEncoding("utf8");
 process.stdin.on("data",chunk=>{input+=chunk;if(Buffer.byteLength(input)>6_000_000)process.exit(3);});
@@ -99,6 +100,8 @@ async function check({chainId,evmVersion,contracts,plan}){
     const fees=world?.swapFees(result)??[];
     if(fees.length!==1||fees[0]!==step.expect.swapFeePpm)fail("swap-fee","The actual PoolManager swap fee did not match the independent declared expectation.");
    }
+   if(!reverted&&step.expect.events&&!declaredEventsMatch(step.expect.events,result.execResult.logs??[],deployed,value,requireTool("viem")))
+    fail("event-log","The executed event emitters, arguments, order or count did not match the independent expectations.");
    if(failures.length)break;
   }
  }catch{fail("fixture-execution","The declared fixture could not finish within its supported local execution.");}
