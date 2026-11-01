@@ -22,7 +22,7 @@ const id = "checked-general-source-0001", storageId = conversationStorageId(acco
 const intent: LaunchIntent = { version: 1, id: "marker-design", revision: "a".repeat(64), changes: [], unresolved: [],
   requirements: [{ id: "marker", text: "The marker returns one", kind: "behavior", origin: { kind: "legacy" }, open: null }] };
 const production = projectLaunchProductionContext(captured.chains["999"], 999, protection);
-const blueprint = createGeneralCheckBlueprint({ contracts: [{ id: "marker", source: "Marker.sol", contract: "Marker", role: "auxiliary", arguments: [],
+const blueprint = createGeneralCheckBlueprint({ compilerProfile: "standard-v1", contracts: [{ id: "marker", source: "Marker.sol", contract: "Marker", role: "auxiliary", arguments: [],
   functions: ["function marker() pure returns (uint256)"], allowReceive: false, allowFallback: false, surfaceRequirements: [] }], allowedCalls: [],
   steps: [{ id: "one", contract: "marker", signature: "marker()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,
     requirementIds: ["marker"], expect: { status: "success", returns: ["1"] } }] }, intent, 999, "paris", production);
