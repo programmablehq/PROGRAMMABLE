@@ -7,6 +7,10 @@
   overflow: visible;
 }
 
+.siteHeader[data-custom-ai="true"] {
+  background: var(--body-background);
+}
+
 .headerInner.headerInner {
   --navigation-inline-padding: 32px;
   grid-template-columns: minmax(44px, 1fr) auto minmax(44px, 1fr);

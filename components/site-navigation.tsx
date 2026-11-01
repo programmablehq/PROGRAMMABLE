@@ -301,6 +301,7 @@ export function SiteHeader() {
     <header
       ref={headerRef}
       className={`site-header ${styles.siteHeader}`}
+      data-custom-ai={pathname === "/launch/custom-ai" ? "true" : undefined}
       data-navigation-input={navigationInput}
       onBlur={closeOnFocusLeave}
       onPointerDownCapture={() => setNavigationInput("pointer")}
