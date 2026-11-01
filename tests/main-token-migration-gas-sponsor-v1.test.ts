@@ -816,8 +816,9 @@ describe("main token migration gas sponsor", () => {
           created_at timestamptz NOT NULL DEFAULT clock_timestamp()
         );
       `);
+      let epochSeconds = 1_800_000_005;
       const store = createMainTokenMigrationGasSponsorPostgresStoreV1(
-        new SponsorTestPool(database),
+        new SponsorTestPool(database, () => epochSeconds),
       );
       const principalBindingHash =
         deriveMainTokenMigrationSponsorPrincipalBindingV1(
@@ -864,6 +865,16 @@ describe("main token migration gas sponsor", () => {
          WHERE credential_id LIKE '%:admission:%'
       `);
       expect(rows.rows[0]?.count).toBe("68");
+
+      // Crossing the minute boundary must admit a new request. Keep the SQL
+      // clock controlled so slow CI cannot cross that boundary accidentally.
+      epochSeconds += 60;
+      await expect(store.admit({
+        releaseId: CONFIGURATION.releaseId,
+        principalBindingHash,
+        walletAddress: WALLET,
+        operation: "read",
+      })).resolves.toBeUndefined();
 
       const firstBindings = deriveMainTokenMigrationSponsorBindingsV1({
         releaseId: CONFIGURATION.releaseId,
@@ -1259,7 +1270,7 @@ function testIntent(
 }
 
 class SponsorTestPool {
-  constructor(private readonly database: PGlite) {}
+  constructor(private readonly database: PGlite, private readonly epochSeconds?: () => number) {}
 
   async assertProductionReadiness() {}
 
@@ -1277,7 +1288,12 @@ class SponsorTestPool {
     text: string,
     values: readonly unknown[] = [],
   ): Promise<ProjectionTargetPostgresQueryResultV1<Row>> {
-    const result = await this.database.query<Row>(text, [...values]);
+    const clockExpression = "extract(epoch FROM clock_timestamp())";
+    const controlledClock = this.epochSeconds && text.includes(clockExpression);
+    const result = await this.database.query<Row>(
+      controlledClock ? text.replace(clockExpression, `$${values.length + 1}::numeric`) : text,
+      controlledClock ? [...values, this.epochSeconds!()] : [...values],
+    );
     return Object.freeze({
       rows: result.rows,
       rowCount: result.affectedRows ?? result.rows.length,
