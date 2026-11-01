@@ -606,3 +606,40 @@ The same qualification reproduces the separate Base and HyperEVM source variants
 including their own hook, initializer and protection module. All three source
 closures use this exact profile; one chain's source is never substituted for
 another's. These compilation checks cover fifteen original artifact templates.
+
+## Constructor dependency configuration
+
+Production context V3 adds source-bound protection-kit configuration for the
+selected network: the distinct swap router, native USD feed, expected runtime
+hashes, feed age limit and the configured Base sequencer uptime feed address.
+The launch executor retains its own binding. Base/HyperEVM UniversalRouter
+discovery must agree with the existing canonical kit. V1 and V2 contexts remain
+readable under their original hashes.
+
+Deployment declarations can select these addresses and exact bytes32 runtime
+hashes by name. A hash is encoded as a word and cannot be parsed as an address.
+An unavailable dependency binding or a sequencer binding on another network
+stops the declaration before source generation. The existing shared discovery
+requests, single-flight cache, negative cache and refresh bounds are unchanged.
+
+These fields are pinned constructor configuration. They do not assert current
+dependency code, feed decimals, storage, fresh prices, sequencer state, review
+approval or live launch readiness. Actual constructor dependency observations
+and authenticated protection evidence remain required before general activation.
+
+## Normal source calls during construction
+
+The isolated constructor workers permit compiler-emitted `GAS` only when the
+next instruction immediately consumes it as the gas argument of `CALL` or
+`STATICCALL`. The check reads the exact executing creation bytes or the previously
+observed source runtime. Ordinary reads and writes between known source targets
+can therefore execute, while direct gas-dependent values and a callee that reads
+gas remain unresolved. Unknown calls and external state remain unsupported.
+
+Delegation, CALLCODE and SELFDESTRUCT are rejected during this execution. Every
+root and child runtime must still match at the end. The workers cache code bytes
+once and inspect instruction bytes only on GAS events. They preserve the original
+process, gas and memory bounds, two-pass observations and `launchReady:false`.
+The pinned VM's CREATE events omit `codeAddress`; source selection uses the
+executing address for those events. This is local constructor execution support,
+separate from live dependency snapshots, protection evidence and admission.
