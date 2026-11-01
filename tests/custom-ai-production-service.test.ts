@@ -45,7 +45,13 @@ describe("production context in the existing owned generation handoff", () => {
       expect(input.system).toContain(expected.id);
       expect(expected.version).toBe(3); expect(expected.protectionPolicy?.required).toBe(true);
       if (call.mock.calls.length === 1) { events.push("planning"); expect(input.schema).not.toHaveProperty("properties.generalChecks"); return plan(); }
-      if (call.mock.calls.length === 2) { events.push("declaration"); return response({generalChecks:JSON.stringify(declaration)}); }
+      if (call.mock.calls.length === 2) {
+        events.push("declaration");
+        expect(input.system).toContain("compact-v1");
+        return response({generalChecks:JSON.stringify({format:"compact-v1",allowedCalls:declaration.allowedCalls,
+          contracts:declaration.contracts.map(c=>[c.id,c.source,c.contract,c.role,c.arguments,c.functions,c.allowReceive,c.allowFallback,c.surfaceRequirements]),
+          steps:declaration.steps.map(s=>[s.id,s.contract,s.signature,s.arguments,s.from,s.afterSeconds,s.value,s.read,s.requirementIds,s.expect])})});
+      }
       events.push("generation"); expect(events).toContain("oracle-saved");
       // The complete profile appears once; fixedChecks carries only its ID.
       expect(input.system.split(expected.poolManager.runtimeCodeHash).length).toBeLessThanOrEqual(3);

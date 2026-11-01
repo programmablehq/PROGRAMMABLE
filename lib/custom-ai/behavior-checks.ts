@@ -1,6 +1,7 @@
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import type { ContractProject } from "./contract-project";
 import type { LaunchIntent } from "./launch-intent";
+import { parseAbi, type Abi } from "viem";
 import { parseV4CheckWorld,v4WorldFixtures,V4_WORLD_FIXTURES,V4_WORLD_STEP_SIGNATURES,type V4CheckWorld,type V4WorldFixture } from "./behavior-world";
 
 export const CHECK_ACCOUNTS = ["creator", "trader-a", "trader-b"] as const;
@@ -12,10 +13,11 @@ export type ContractCheckFixture = {
   value?: string;
 };
 export type ConstructorCheckChild = ContractCheckFixture & { parent: string; creation: "create"; nonce: string; value: string };
+export type ContractEventCheck = { contract: string; signature: string; arguments: CheckValue[] };
 export type ContractCheckStep = {
   id: string; contract: string; signature: string; arguments: CheckValue[]; from: CheckAccount;
   afterSeconds: number; value: string; read: boolean; requirementIds: string[];
-  expect: { status: "success" | "revert"; returns?: CheckValue[];swapFeePpm?:number };
+  expect: { status: "success" | "revert"; returns?: CheckValue[];swapFeePpm?:number;events?:ContractEventCheck[] };
 };
 export type GeneralCheckPlan = {
   version: 1 | 2; id: `sha256:${string}`; projectHash: ContractProject["hash"]; intentRevision: string;
@@ -107,13 +109,14 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
   const stepIds=new Set<string>(),observed=new Set<string>();let lastTime=0;
   const steps:ContractCheckStep[]=input.steps.map(raw=>{
     const v=object(raw,["id","contract","signature","arguments","from","afterSeconds","value","read","requirementIds","expect"]),id=identifier(v.id);
-    const expect=object(v.expect,["status"],["returns","swapFeePpm"]);
+    const expect=object(v.expect,["status"],["returns","swapFeePpm","events"]);
     if(stepIds.has(id)||typeof v.contract!=="string"||!contractIds.has(v.contract)&&!fixtureNames.includes(v.contract as V4WorldFixture)||typeof v.signature!=="string"||v.signature.length>800
       ||typeof v.from!=="string"||!CHECK_ACCOUNTS.includes(v.from as CheckAccount)||typeof v.read!=="boolean"
       ||!Number.isSafeInteger(v.afterSeconds)||(v.afterSeconds as number)<lastTime||(v.afterSeconds as number)>315_360_000
       ||typeof v.value!=="string"||!/^\d{1,30}$/.test(v.value)||v.read&&v.value!=="0"
       ||!["success","revert"].includes(String(expect.status))||v.read&&expect.status==="success"&&!Object.hasOwn(expect,"returns")
-      ||expect.status==="revert"&&(Object.hasOwn(expect,"returns")||Object.hasOwn(expect,"swapFeePpm"))
+      ||expect.status==="revert"&&(Object.hasOwn(expect,"returns")||Object.hasOwn(expect,"swapFeePpm")||Object.hasOwn(expect,"events"))
+      ||v.read&&Object.hasOwn(expect,"events")
       ||expect.swapFeePpm!==undefined&&(!world||v.contract!=="v4-router"||v.read||!Number.isInteger(expect.swapFeePpm)||(expect.swapFeePpm as number)<0||(expect.swapFeePpm as number)>1_000_000))return bad();
     stepIds.add(id);lastTime=v.afterSeconds as number;
     const requirementIds=ids(v.requirementIds);
@@ -126,10 +129,27 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
     }
     if(expect.swapFeePpm!==undefined&&v.signature!==V4_WORLD_STEP_SIGNATURES[2])return bad();
     if(world&&v.contract==="v4-router"&&v.signature===V4_WORLD_STEP_SIGNATURES[0]&&(v.arguments as unknown[])[1]!==world.sqrtPriceX96)return bad();
-    if(expect.status==="revert"||Array.isArray(expect.returns)&&expect.returns.length||expect.swapFeePpm!==undefined)for(const id of requirementIds)observed.add(id);
+    let events:ContractEventCheck[]|undefined;
+    if(Object.hasOwn(expect,"events")) {
+      if(!Array.isArray(expect.events)||!expect.events.length||expect.events.length>32)return bad();
+      events=expect.events.map(raw=>{
+        const event=object(raw,["contract","signature","arguments"]);
+        if(typeof event.contract!=="string"||!contractIds.has(event.contract)&&!fixtureNames.includes(event.contract as V4WorldFixture)
+          ||typeof event.signature!=="string"||!event.signature.startsWith("event ")||event.signature.length>800)return bad();
+        let abi:Abi;
+        try { abi=parseAbi([event.signature]); } catch { return bad(); }
+        const item=abi[0];
+        if(abi.length!==1||item.type!=="event"||item.anonymous||item.inputs.length>32||item.inputs.filter(input=>input.indexed).length>3
+          ||item.inputs.some(input=>input.indexed&&(input.type.startsWith("tuple")||input.type.includes("["))))return bad();
+        const args=values(event.arguments,contractIds,0,fixtureNames);
+        if(args.length!==item.inputs.length)return bad();
+        return {contract:event.contract,signature:event.signature,arguments:args};
+      });
+    }
+    if(expect.status==="revert"||Array.isArray(expect.returns)&&expect.returns.length||expect.swapFeePpm!==undefined||events?.length)for(const id of requirementIds)observed.add(id);
     return {id,contract:v.contract,signature:v.signature,arguments:values(v.arguments,contractIds,0,fixtureNames),from:v.from as CheckAccount,
       afterSeconds:v.afterSeconds as number,value:v.value,read:v.read,requirementIds,
-      expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds,0,fixtureNames)}:{}),...(expect.swapFeePpm!==undefined?{swapFeePpm:expect.swapFeePpm as number}:{})}};
+      expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds,0,fixtureNames)}:{}),...(expect.swapFeePpm!==undefined?{swapFeePpm:expect.swapFeePpm as number}:{}),...(events?{events}:{})}};
   });
   if(covered.size!==requirements.size||[...requirements.values()].some(rule=>rule.kind==="behavior"&&!observed.has(rule.id)))return bad();
   return {contracts,allowedCalls,steps,...(world?{world}:{}),...(constructorChildren?{constructorChildren}:{})};
