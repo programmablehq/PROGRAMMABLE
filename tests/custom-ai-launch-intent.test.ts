@@ -134,9 +134,13 @@ describe("complete launch intent and source revisions", () => {
   it("replays the real Surplus design and follow-up through the current server without provider calls", async () => {
     let index=0;
     const call=vi.fn(async(input:{schema:object})=>{
-      // Preserve the captured 2.4 transport values. Its explicit route did not
-      // exist yet; supply that versioned metadata to the new planner schema.
-      const captured={...recording.responses[index++],executionRoute:"fee-module"};
+      // Keep the recorded design and reply. New optional coin metadata was
+      // absent in 2.4, so its current schema values are explicitly null.
+      const original=recording.responses[index++];
+      const captured={...original,executionRoute:"fee-module",setupPatch:{description:null,website:null,x:null,...original.setupPatch}};
+      const properties=(input.schema as {properties?:Record<string,unknown>}).properties;
+      // Short explanatory follow-ups now use the cheaper reply-only contract.
+      if(properties&&Object.keys(properties).join() === "reply")return response({reply:original.reply});
       return response(JSON.parse(prepareSurplusSchema(input.schema).decode(JSON.stringify(captured))));
     });
     const compile=vi.fn();

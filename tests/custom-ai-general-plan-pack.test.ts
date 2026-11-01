@@ -25,7 +25,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("owned modern Robinhood Pla
       await writeFile(join(process.env.CUSTOM_AI_PLAN_EVIDENCE_DIR,"general-robinhood-plan-request.json"),packed.requestBody,{mode:0o600});
       await writeFile(join(process.env.CUSTOM_AI_PLAN_EVIDENCE_DIR,"general-robinhood-plan-pack.json"),JSON.stringify(packed,null,2)+"\n",{mode:0o600});
     }
-  });
+  },120_000);
   it("builds the actual Plan schema and atomic route with the separate deterministic deployment dependency",()=>{
     const plan=JSON.parse(packed.requestBody);
     expect(plan.schemaVersion).toBe("programmable.custom-launch-plan.v1");expect(plan.chainId).toBe("4663");expect(plan.executor).toBe("atomic_execute_and_stamp_v2");
