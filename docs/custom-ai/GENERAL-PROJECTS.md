@@ -680,3 +680,26 @@ Actual pinned-compiler cases cover a generated ERC20 using its inline library
 closure and a v4 BaseHook using the selected import aliases. These are source
 compilation checks, separate from constructor dependency observations, behavior
 evidence and launch authorization.
+
+## Bounded dependency observations
+
+`createLaunchDependencyReader` takes the existing trusted provider pair from
+its caller and captures the selected V3 protection dependencies at one recent
+common block. It verifies manager/router/feed code hashes, reads the actual
+feed decimals and round, and checks Base sequencer uptime and its one-hour
+grace period. A final canonical block comparison rejects a reorganization.
+There are no fallback prices, assumed eight-decimal feeds or stale successes.
+
+The four fixed chain slots share concurrent reads and cache successful data
+for at most ten seconds. A five-second negative cache limits outage traffic.
+One capture has a thirty-second deadline and at most twelve logical reads per
+provider (nine normally, eleven on Base). Cancelling one consumer does not
+cancel a shared observation, and an old in-flight profile cannot overwrite a
+newer one. Provider transport limits still apply beneath those bounds.
+
+This reader is an integration component, not enabled public launch behavior.
+Its result explicitly identifies two-provider observation as its authority and
+keeps `launchReady` false. It does not yet supply the proxy/storage witness
+required to execute a constructor independently, nor prove swaps, liquidity,
+fees, admission or wallet finality. The focused qualification uses synthetic
+provider responses and spends no provider credits.
