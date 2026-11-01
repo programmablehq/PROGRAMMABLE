@@ -4,10 +4,11 @@ import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { AI_CONFIG } from "./ai-config";
 import { readServerEvents } from "./events";
+import { modelResponseLimits, type ModelResponseProfile } from "./model-response";
 
 export const MODELS = AI_CONFIG.models;
 export type Model = string;
-export type ClaudeInput = { model: Model; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; signal?: AbortSignal; onText?: (text: string) => void };
+export type ClaudeInput = { model: Model; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; responseProfile?: ModelResponseProfile; signal?: AbortSignal; onText?: (text: string) => void };
 export type ClaudeResult = { text: string; inputTokens: number; outputTokens: number };
 
 export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
@@ -15,7 +16,8 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   if (!key) throw new CustomAIError("configuration", "The builder is not connected yet.", 503);
   const health = providerHealth("anthropic");
   await health.assertAvailable();
-  const timeout = AbortSignal.timeout(60_000);
+  const limits = modelResponseLimits(input.responseProfile);
+  const timeout = AbortSignal.timeout(limits.timeoutMs);
   const signal = input.signal ? AbortSignal.any([timeout, input.signal]) : timeout;
   let response: Response;
   try {
@@ -43,7 +45,7 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   if (input.onText && response.headers.get("content-type")?.includes("text/event-stream")) {
     let text = "", inputTokens = 0, outputTokens = 0, stopReason: unknown, stopped = false;
     try {
-      for await (const event of readServerEvents(response)) {
+      for await (const event of readServerEvents(response, { signal })) {
         signal.throwIfAborted();
         if (event.type === "error") {
           // A streamed request may already have consumed provider tokens. Keep its cost reservation.
@@ -62,7 +64,7 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
           const delta = event.delta as { type?: string; text?: string } | undefined;
           if (delta?.type === "text_delta") text += delta.text ?? "";
         }
-        if (text.length > 48_000) throw new CustomAIError("response", "The reply is too large. Try a smaller change.", 502);
+        if (text.length > limits.maximumCharacters) throw new CustomAIError("response", "The reply is too large. Try a smaller change.", 502);
         if (event.type === "content_block_delta" || event.type === "content_block_start") input.onText(text);
         if (event.type === "message_delta") {
           stopReason = (event.delta as { stop_reason?: string } | undefined)?.stop_reason;
@@ -83,6 +85,6 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   }
   const text = value.content.filter((block: { type: string }) => block.type === "text")
     .map((block: { text: string }) => block.text).join("");
-  if (!text || text.length > 48_000) throw new CustomAIError("response", "The builder returned an incomplete answer.", 502);
+  if (!text || text.length > limits.maximumCharacters) throw new CustomAIError("response", "The builder returned an incomplete answer.", 502);
   return { text, inputTokens: value.usage?.input_tokens ?? 0, outputTokens: value.usage?.output_tokens ?? 0 };
 }

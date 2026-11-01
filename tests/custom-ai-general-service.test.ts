@@ -11,6 +11,7 @@ import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import type {ClaudeInput,ClaudeResult} from "../lib/custom-ai/claude.server";
 import {generalProjectView} from "../lib/custom-ai/project-view";
+import { ModelResponseError } from "../lib/custom-ai/model-response";
 
 const instruction="Build a counter that anyone can increment with no owner.";
 const request:ChatRequest={id:"general-service-request-0001",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:instruction}]};
@@ -30,6 +31,18 @@ function prior():GeneralProjectDraft{
 }
 
 describe("general source generation inside the owned chat job",()=>{
+ it("retains the known cost and distinguishes an output-limited planner without retrying",async()=>{
+  const onModelCall=vi.fn(),call=vi.fn(async()=>{throw new ModelResponseError("output-limit",{inputTokens:14900,outputTokens:8000});});
+  await expect(runCustomAI(request,undefined,{call,compile:vi.fn()},{onModelCall})).rejects.toMatchObject({code:"incomplete"});
+  expect(onModelCall).toHaveBeenCalledWith(expect.objectContaining({inputTokens:14900,outputTokens:8000,completed:false,failure:"output-limit"}));
+  expect(call).toHaveBeenCalledTimes(1);
+ });
+ it("gives a complete independent declaration its bounded contract response profile",async()=>{
+  const call=vi.fn<(input:ClaudeInput)=>Promise<ClaudeResult>>(async()=>plan({action:"answer",intentRequirements:[],requirements:[],generalChecks:null}));
+  await runCustomAI(request,undefined,{call,compile:vi.fn()},{saveBlueprint:async()=>{},saveScenarios:async()=>{},saveCompilation:async()=>{}});
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(call.mock.calls[0][0]).toMatchObject({responseProfile:"contract",maxTokens:16000});
+ });
  it("keeps an existing general project on its source route even if the interpreter proposes a fee template",async()=>{
   const previous=prior(),call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated()),fee=vi.fn();
   const value=await runCustomAI(request,undefined,{call,compile:fee,compileProject:compile},{generalProject:previous,saveProject:async()=>{}});
