@@ -17,6 +17,8 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
   const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState("");
   const root=useRef<HTMLDivElement|null>(null);
+  const toggle=useRef<HTMLButtonElement|null>(null);
+  const close=()=>{setOpen(false);setEditing(undefined);toggle.current?.focus();};
   const [editing,setEditing]=useState<string>(),[title,setTitle]=useState("");
   const flushRef=useRef<Flush|null>(null);const flush=()=>flushRef.current?.()??Promise.resolve();
   const registerFlush=(save:Flush)=>{flushRef.current=save;return()=>{if(flushRef.current===save)flushRef.current=null;};};
@@ -72,7 +74,8 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   },[open,search,archived,load,cacheScope]);
   useEffect(()=>{
     if(!open)return;
-    const close=(event:KeyboardEvent)=>{if(event.key==="Escape"){setOpen(false);root.current?.querySelector<HTMLButtonElement>("button")?.focus();}};
+    root.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
+    const close=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();setOpen(false);setEditing(undefined);toggle.current?.focus();}};
     const outside=(event:PointerEvent)=>{if(event.target instanceof Element&&!event.target.closest("[data-custom-ai-library]"))setOpen(false);};
     document.addEventListener("keydown",close);document.addEventListener("pointerdown",outside);
     return()=>{document.removeEventListener("keydown",close);document.removeEventListener("pointerdown",outside);};
@@ -105,16 +108,16 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
     }catch(cause){setError(cause instanceof Error?cause.message:"The chat could not be updated.");}finally{transition.current=false;setTransitioning(false);if(!refreshed)setLoading(false);}
   }
   const panel=(locked:boolean)=><div className={styles.chatLibrary} ref={root} data-custom-ai-library="true">
-    <button type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls="custom-ai-chats" onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
+    <button ref={toggle} type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls={open?"custom-ai-chats":undefined} onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
     {open&&<section id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
-      <header><strong>Your chats</strong><button type="button" aria-label="Close chat list" onClick={()=>setOpen(false)}><X size={16}/></button></header>
+      <header><strong>Your chats</strong><button type="button" aria-label="Close chat list" onClick={close}><X size={16} aria-hidden="true"/></button></header>
       <button type="button" disabled={locked||loading||!cacheScope} onClick={()=>void newChat()}><Plus size={16} aria-hidden="true"/>New chat</button>
-      <label className={styles.librarySearch}><Search size={16} aria-hidden="true"/><span className={styles.srOnly}>Search your chats</span><input value={search} onChange={e=>filter(e.target.value,query.current.archived)} maxLength={80} placeholder="Search chats"/></label>
+      <label className={styles.librarySearch}><Search size={16} aria-hidden="true"/><span className={styles.srOnly}>Search your chats</span><input type="search" value={search} onChange={e=>filter(e.target.value,query.current.archived)} maxLength={80} placeholder="Search chats"/></label>
       <label className={styles.archiveFilter}><input type="checkbox" checked={archived} onChange={e=>filter(query.current.search,e.target.checked)}/>Show archived</label>
       <div className={styles.libraryList} aria-busy={loading}>
         {page.conversations.map(chat=><article key={chat.id} data-current={selected===chat.id}>
           {editing===chat.id?<form onSubmit={e=>{e.preventDefault();void update(chat,{title},flush);}}><label className={styles.srOnly} htmlFor="chat-title">Chat name</label><input id="chat-title" autoFocus maxLength={80} value={title} onChange={e=>setTitle(e.target.value)}/><button type="submit" disabled={!title.trim()||loading} aria-label="Save chat name"><Check size={16}/></button><button type="button" aria-label="Cancel rename" onClick={()=>setEditing(undefined)}><X size={16}/></button></form>:
-            <button type="button" className={styles.chatChoice} disabled={locked||chat.archived||loading} aria-current={selected===chat.id?"page":undefined} onClick={()=>void select(chat.id,flush)}><strong>{chat.title}</strong><small>{new Date(chat.updatedAt).toLocaleDateString()}</small></button>}
+            <button type="button" className={styles.chatChoice} disabled={locked||chat.archived||loading} aria-current={selected===chat.id?"page":undefined} onClick={()=>void select(chat.id,flush)}><strong>{chat.title}</strong>{selected===chat.id&&<span className={styles.srOnly}>Current chat</span>}<small>{new Date(chat.updatedAt).toLocaleDateString()}</small></button>}
           <div className={styles.chatItemActions}><button type="button" disabled={loading||locked} aria-label={`Rename ${chat.title}`} onClick={()=>{setEditing(chat.id);setTitle(chat.title);}}><Pencil size={14}/></button>
             <button type="button" disabled={loading||locked} aria-label={`${chat.archived?"Restore":"Archive"} ${chat.title}`} onClick={()=>void update(chat,{archived:!chat.archived},flush)}>{chat.archived?<Undo2 size={15}/>:<Archive size={15}/>}</button></div>
         </article>)}

@@ -2,6 +2,8 @@
 
 Describe your coin or hook in the [Custom AI chat](https://programmable.market/launch/custom-ai). The chat keeps the agreed rules and explains which parts can be built on your selected network.
 
+Browser agents can use the same labelled controls and saved chats. The [browser workflow guide](https://programmable.market/developers/custom-ai-browser.md) describes input, progress and recovery. Read [live capabilities](https://programmable.market/api/custom-ai/capabilities) for the current network and launch-preparation scope.
+
 The fixed fee builder supports launches on Ethereum and Robinhood. Its accepted drafts do not need a manual submission review. General contract projects use a separate source, behavior-check and Custom Launch review process. Generating or compiling a project does not make it launch-ready.
 
 The chat can fill in the name, ticker, chain, pair token and initial buy. Open **Coin details** to edit those settings. Choose an image, review the checked rules and select **Launch coin**. If a name, ticker or image is missing, the next action opens the relevant editor. The final launch action confirms that exact version. Keep an interrupted launch open so its saved wallet transaction can be checked again.

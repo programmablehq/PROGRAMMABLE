@@ -32,6 +32,9 @@ import { cachedProjectOverview, overviewFromView, type ProjectOverview } from "@
 import { GeneralProjectPreview } from "./general-preview";
 import { ProjectSource } from "./project-source";
 import { builderChain } from "@/lib/custom-ai/execution-routing";
+import { CHAT_MESSAGE_LIMIT, pastedMessageFits, workspaceState } from "@/lib/custom-ai/workspace-state";
+import { passiveRefresh } from "@/lib/custom-ai/passive-refresh";
+import { SessionLoading } from "./session-loading";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
@@ -66,8 +69,8 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
     // the SDK for an optional identity token also refreshes /users/me.
     return { Authorization: `Bearer ${access}` };
   };
-  if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>;
-  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<div className={styles.libraryEmpty}><p role="status">Restoring your wallet session…</p></div>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
+  if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <SessionLoading onReconnect={wallet.openWallet}/>;
+  if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
   return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} onConnectPrompt={connectPrompt}/>;
 }
 
@@ -89,6 +92,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [metricsRevision, setMetricsRevision] = useState(0);
   const [revealing, setRevealing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [inputError, setInputError] = useState("");
+  const [online, setOnline] = useState(true);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<Draft>();
   const [generalProject,setGeneralProject]=useState<GeneralProjectView>();
@@ -133,6 +138,13 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const transcript = useRef<HTMLDivElement>(null);
   const followReply = useRef(true);
   const [showLatest, setShowLatest] = useState(false);
+  const activity = workspaceState({ restored, switching: switchingCoin, busy, stopping, recovering: Boolean(recoveryRequest),
+    launchLocked, conflict: Boolean(conflict), saveFailed, online, phase });
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update(); window.addEventListener("online", update); window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
   const followLatest = useCallback(() => {
     if (followReply.current && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
   }, []);
@@ -345,14 +357,18 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     return () => { active = false; };
   }, [storageKey]);
   useEffect(() => {
-    if (localPreview || owner === "signed-out" || busy) return;
+    if (localPreview || owner === "signed-out") return;
     const controller = new AbortController();
-    const refresh = () => void aiRequest<AIUsage>("/usage", () => headersRef.current(), undefined, controller.signal)
-      .then(setUsage).catch(() => undefined);
+    const polling = passiveRefresh(() => aiRequest<AIUsage>("/usage", () => headersRef.current(), undefined, controller.signal)
+      .then(value => { if (!controller.signal.aborted) setUsage(value); }),
+      () => document.visibilityState === "visible" && navigator.onLine && !replyRef.current.isActive());
+    const refresh = () => { void polling.refresh().catch(() => undefined); };
     refresh();
     const timer = setInterval(refresh, 60_000);
-    return () => { clearInterval(timer); controller.abort(); };
-  }, [owner, localPreview, busy]);
+    document.addEventListener("visibilitychange", refresh); window.addEventListener("online", refresh);
+    return () => { clearInterval(timer); polling.dispose(); controller.abort();
+      document.removeEventListener("visibilitychange", refresh); window.removeEventListener("online", refresh); };
+  }, [owner, localPreview]);
 
   async function flushCurrent(forSend=false){
     if(localPreview||owner==="signed-out")return;
@@ -455,9 +471,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
 
   async function send() {
-    if (replyRef.current.isActive() || recoveryRequest || coinTransition.current || !restored || launchLocked) return;
+    if (replyRef.current.isActive() || coinTransition.current || activity.blocked) return;
     const content = input.trim();
     if (!content) { textarea.current?.focus(); return; }
+    if (input.length > CHAT_MESSAGE_LIMIT) { setInputError("Keep this message within 8,000 characters. Your text is still here."); textarea.current?.focus(); return; }
+    setInputError("");
     if(!localPreview&&owner==="signed-out"){
       try{onConnectPrompt?.(content);setError("");setNotice("Connect your wallet. Your message stays here.");}
       catch(cause){setError(cause instanceof Error?cause.message:"Your message could not be prepared.");}
@@ -524,7 +542,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
 
   return <div className={styles.workspace}>
     <div className={styles.studio}>
-    <section className={styles.conversation} aria-label="Build your coin">
+    <section className={styles.conversation} aria-label="Build your coin" data-chat-state={activity.id}>
       <WorkspaceTools name={settings.name} hasDraft={Boolean(draft||generalProject)} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
         navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)}
         canClear={Boolean(messages.length)} hasPrevious={(!navigation||conversationId===LEGACY_CONVERSATION)&&Boolean(previousCoin)}
@@ -543,7 +561,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           {usage.resumesAt > 0 && <p>Available again at {new Date(usage.resumesAt).toLocaleString()}.</p>}
         </div></details>}
       </WorkspaceTools>
-      <div ref={transcript} className={styles.transcript} role="log" aria-label="Conversation"
+      <div ref={transcript} className={styles.transcript} role="log" aria-label="Conversation" aria-busy={busy}
         aria-live="polite" aria-relevant="additions" onScroll={event => {
           const element = event.currentTarget;
           followReply.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72;
@@ -573,10 +591,10 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       {showLatest && messages.length > 0 && <button type="button" className={styles.jumpToLatest} onClick={() => {
         followReply.current = true; followLatest(); setShowLatest(false);
       }}>Latest message<ArrowDown size={14} aria-hidden="true" /></button>}
-      <span className={busy ? styles.progress : styles.srOnly} role="status">
-        {busy ? stopping ? "Confirming your stop request…" : ({ thinking: "Considering your request…", reading: "Checking current information…", building: "Building your rules…", checking: "Checking your rules…", repairing: "Refining your rules…", reconnecting: "Reconnecting to your saved reply…" }[phase.phase]) : notice}
+      <span id="custom-ai-state" className={activity.blocked || notice ? styles.progress : styles.srOnly} role="status" aria-atomic="true">
+        {activity.blocked ? activity.message : notice || activity.message}
       </span>
-      {notice && <p className={styles.notice}>{notice}</p>}
+      {notice && activity.blocked && notice !== activity.message && <p className={styles.notice}>{notice}</p>}
       {conflict && <div className={styles.saveActions}>
         <button type="button" disabled={busy} onClick={() => resolveConflict(false)}>Keep this device’s draft</button>
         <button type="button" disabled={busy} onClick={() => resolveConflict(true)}>Use online draft</button>
@@ -596,11 +614,18 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         <span>Editing: {(intent?.requirements ?? draft?.composable?.spec.requirements)?.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
         <button type="button" aria-label="Edit the whole design instead" disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked} onClick={() => {setEditTarget(undefined);textarea.current?.focus();}}><X size={16} aria-hidden="true" /></button>
       </div>}
-      <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send(); }}>
+      {inputError && <p id="custom-ai-input-error" className={styles.error} role="alert">{inputError}</p>}
+      <form className={styles.composer} aria-label="Message Custom AI" onSubmit={event => { event.preventDefault(); void send(); }}>
         <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
-        <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={8000} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
-          aria-describedby={[error ? "custom-ai-error" : "custom-ai-help", editTarget ? "custom-ai-edit-scope" : ""].filter(Boolean).join(" ")}
-          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => setInput(event.target.value)}
+        <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
+          aria-invalid={Boolean(inputError)} aria-describedby={["custom-ai-help", "custom-ai-state", error && "custom-ai-error", inputError && "custom-ai-input-error", editTarget && "custom-ai-edit-scope"].filter(Boolean).join(" ")}
+          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setInput(event.target.value); setInputError(""); }}
+          onPaste={event => {
+            const element = event.currentTarget;
+            if (!pastedMessageFits(input, event.clipboardData.getData("text/plain"), element.selectionStart, element.selectionEnd)) {
+              event.preventDefault(); setInputError("That paste would exceed 8,000 characters. Shorten it and paste again; your current message is unchanged.");
+            }
+          }}
           onKeyDown={event => {
             if(event.key === "Escape" && editTarget && !busy && !recoveryRequest && !switchingCoin && restored && !launchLocked) {event.preventDefault();setEditTarget(undefined);return;}
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -613,10 +638,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
             void replyRef.current.stop();
           }}>
           <Square size={15} strokeWidth={1.75} aria-hidden="true" />
-        </button> : <button type="submit" className={styles.send} disabled={!restored || Boolean(recoveryRequest) || switchingCoin || launchLocked} data-empty={!input.trim()} aria-label="Send message">
+        </button> : <button type="submit" className={styles.send} disabled={activity.blocked} data-empty={!input.trim()} aria-label="Send message" aria-describedby="custom-ai-state">
           <ArrowUp size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>}
       </form>
+      {input.length >= 7_000 && <p className={styles.inputLimit}>{input.length.toLocaleString("en-US")} / 8,000 characters</p>}
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. {editTarget && "Escape returns to the whole design and keeps your message. "}Messages are processed by the configured AI provider.</p>
     </section>
 

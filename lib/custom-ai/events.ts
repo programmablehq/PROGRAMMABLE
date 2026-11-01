@@ -1,12 +1,20 @@
 /** Bounded SSE reader shared by the browser and provider adapter. */
-export async function* readServerEvents(response: Response, options: { allowDoneMarker?: boolean } = {}): AsyncGenerator<Record<string, unknown>> {
+export async function* readServerEvents(response: Response, options: { allowDoneMarker?: boolean; signal?: AbortSignal; idleTimeoutMs?: number } = {}): AsyncGenerator<Record<string, unknown>> {
   const reader = response.body?.getReader();
   if (!reader) throw Error("The response stream is missing.");
   const decoder = new TextDecoder();
   let buffer = "";
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const abort = () => { cleanup(); reject(options.signal?.reason ?? new DOMException("Aborted", "AbortError")); };
+        const cleanup = () => { clearTimeout(timer); options.signal?.removeEventListener("abort", abort); };
+        options.signal?.addEventListener("abort", abort, { once: true });
+        if (options.signal?.aborted) { cleanup(); abort(); return; }
+        if (options.idleTimeoutMs) timer = setTimeout(() => { cleanup(); reject(new Error("The response stream stopped sending updates.")); }, options.idleTimeoutMs);
+        reader.read().then(result => { cleanup(); resolve(result); }, error => { cleanup(); reject(error); });
+      });
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
       buffer = buffer.replaceAll("\r\n", "\n");
       let boundary: number;
@@ -24,5 +32,5 @@ export async function* readServerEvents(response: Response, options: { allowDone
       if (buffer.length > 1_000_000) throw Error("The response event is too large.");
       if (done) break;
     }
-  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  } finally { void reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }

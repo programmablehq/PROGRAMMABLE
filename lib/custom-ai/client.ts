@@ -6,24 +6,71 @@ export class AIRequestError extends Error {
   constructor(message: string, readonly status: number, readonly retryAfterMs = 0,
     readonly code = "", readonly requestState?: "failed") { super(message); }
 }
+
+const requestTimeout = (path: string) => /^\/(launch|general-launch|trade)(?:\?|$)/.test(path) ? 130_000
+  : /^\/(readiness|preview|quote|tokens)(?:\?|$)/.test(path) ? 70_000 : 30_000;
+
+/** Includes credentials and response consumption, even if a transport ignores abort. */
+async function boundedRequest<T>(signal: AbortSignal | undefined, timeoutMs: number, work: (signal: AbortSignal, resetTimeout: (ms: number) => void) => Promise<T>): Promise<T> {
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", abort, { once: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const resetTimeout = (ms: number) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new AIRequestError(
+      "The connection took too long. Your saved work is kept. Reconnect or try again.", 408, 0, "timeout")), ms);
+  };
+  resetTimeout(timeoutMs);
+  let rejectAbort: (() => void) | undefined;
+  try {
+    const interrupted = new Promise<never>((_, reject) => {
+      rejectAbort = () => reject(controller.signal.reason);
+      controller.signal.addEventListener("abort", rejectAbort, { once: true });
+    });
+    return await Promise.race([work(controller.signal, resetTimeout), interrupted]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+    if (rejectAbort) controller.signal.removeEventListener("abort", rejectAbort);
+    controller.abort();
+  }
+}
+
+function retryAfter(response: Response) {
+  const value = response.headers.get("retry-after");
+  if (value === null) return 0;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
+}
+
+async function responseValue(response: Response) {
+  const invalid = Symbol("invalid-json");
+  const value = await response.json().catch(() => invalid);
+  if (!response.ok) {
+    const fallback = response.status === 401 ? "Reconnect your wallet to continue. Your saved work is kept."
+      : response.status === 429 ? "Too many requests right now. Wait a moment before trying again."
+      : "The service could not finish this request. Your saved work is kept. Try again shortly.";
+    throw new AIRequestError(typeof value?.error === "string" ? value.error : fallback, response.status,
+      retryAfter(response), typeof value?.code === "string" ? value.code : "response", value?.requestState);
+  }
+  if (value === invalid) throw new AIRequestError("The service returned an unreadable response. Your saved work is kept. Try loading it again.", 502, 0, "response");
+  return value;
+}
 export async function aiRequest<T>(path: string, headers: AISessionHeaders, body?: unknown, signal?: AbortSignal): Promise<T> {
-  signal?.throwIfAborted();
+  return boundedRequest(signal, requestTimeout(path), async requestSignal => {
   const credentials = await headers();
-  signal?.throwIfAborted();
+  requestSignal.throwIfAborted();
   const response = await fetch(`/api/custom-ai${path}`, {
     method: body === undefined ? "GET" : "POST", cache: "no-store", credentials: "same-origin",
     headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...credentials },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: requestSignal,
   });
-  const value = await response.json().catch(error => { if (response.ok) throw error; return null; });
-  if (!response.ok) {
-    const retry = response.headers.get("retry-after");
-    const seconds = retry === null ? 0 : Number(retry);
-    const retryAfterMs = Number.isFinite(seconds) ? seconds * 1000 : Math.max(0, Date.parse(retry!) - Date.now());
-    throw new AIRequestError(value?.error || "The request could not finish. Try again shortly.", response.status,
-      Number.isFinite(retryAfterMs) ? Math.max(0, retryAfterMs) : 0, value?.code, value?.requestState);
-  }
-  return value as T;
+  requestSignal.throwIfAborted();
+  return await responseValue(response) as T;
+  });
 }
 
 type SavedReply = { id?: string; state: string; request?: ChatRequest; payloadHash?: string; result?: ChatResult; errorCode?: string; phase?: ChatPhase; heartbeatAt?: number };
@@ -69,37 +116,37 @@ export async function resumeAIChat(input: ChatRequest, headers: AISessionHeaders
 
 export async function sendAIChat(input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,
   onProgress?: (event: ChatProgress) => void): Promise<ChatResult> {
-  signal.throwIfAborted();
-  const credentials = await headers();
-  signal.throwIfAborted();
   const readStored = () => readReply(input,headers,signal);
-  let result: ChatResult | SavedReply = { state: "running" };
-  let response: Response | undefined;
+  let result: ChatResult | SavedReply;
   try {
-    response = await fetch("/api/custom-ai", { method: "POST", cache: "no-store", credentials: "same-origin", signal,
+    result = await boundedRequest(signal, 30_000, async (requestSignal, resetTimeout) => {
+    const credentials = await headers();
+    requestSignal.throwIfAborted();
+    const response = await fetch("/api/custom-ai", { method: "POST", cache: "no-store", credentials: "same-origin", signal: requestSignal,
       headers: { ...credentials, "Content-Type": "application/json", Accept: "text/event-stream" }, body: JSON.stringify(input) });
-  } catch {
-    signal.throwIfAborted();
-    result = await readStored();
-  }
-  if (response?.ok && response.headers.get("content-type")?.includes("text/event-stream")) {
-    try {
-      for await (const event of readServerEvents(response)) {
+    requestSignal.throwIfAborted();
+    resetTimeout(450_000);
+    if (response.ok && response.headers.get("content-type")?.includes("text/event-stream")) {
+      for await (const event of readServerEvents(response, { signal: requestSignal, idleTimeoutMs: 45_000 })) {
         if (event.type === "phase" || event.type === "reply") onProgress?.(event as ChatProgress);
         else if (event.type === "result") return event.result as ChatResult;
         else if (event.type === "error") throw new AIRequestError(String(event.error), Number(event.status), 0, String(event.code), event.requestState === "failed" ? "failed" : undefined);
       }
-    } catch (error) {
-      signal.throwIfAborted();
-      if (error instanceof AIRequestError && error.requestState === "failed") throw error;
+      throw new Error("The response stream ended before its result.");
     }
+    const value = await responseValue(response);
+    if (!value || typeof value !== "object" || typeof value.reply !== "string" && typeof value.state !== "string") {
+      throw new AIRequestError("The saved reply could not be read. Reconnect to check its result.", 502, 0, "response");
+    }
+    return value as ChatResult | SavedReply;
+    });
+  } catch (error) {
+    signal.throwIfAborted();
+    if (error instanceof AIRequestError && (error.requestState === "failed"
+      || error.status >= 400 && error.status < 500 && error.code !== "timeout"
+      || error.code !== "timeout" && error.code !== "response")) throw error;
     // Recover the same saved request. Never regenerate after an unknown outcome.
     result = await readStored();
-  } else if (response) {
-    const value = await response.json();
-    if (!response.ok) throw new AIRequestError(value.error || "The reply could not finish.", response.status,
-      Math.max(0, Number(response.headers.get("retry-after")) || 0) * 1000, value.code, value.requestState);
-    result = value;
   }
   return "state" in result ? followSavedReply(result,input,headers,signal,onProgress) : result;
 }

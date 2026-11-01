@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import styles from "./workspace.module.css";
 
@@ -14,6 +14,13 @@ export function WorkspaceTools({ name, hasDraft, disabled, canClear, hasPrevious
     tools.current.open = false;
     tools.current.querySelector("summary")?.focus();
   }
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      if (tools.current?.open && event.target instanceof Node && !tools.current.contains(event.target)) tools.current.open = false;
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, []);
   return <header className={styles.chatToolbar}>
     <div className={styles.chatIdentity}>
       <span>{hasDraft ? "Editing your coin" : "Coin builder"}</span>
