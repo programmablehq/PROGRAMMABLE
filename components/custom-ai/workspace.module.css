@@ -252,7 +252,10 @@
 @media (max-width:1100px) {
   .libraryPanel, .libraryEmpty .libraryPanel { position:fixed; inset-inline:16px; top:auto; bottom:16px; width:auto; max-height:min(70dvh,560px); overflow-y:auto; }
 }
-@media (max-width:420px) {
-  .toolbarActions { flex-wrap:wrap; }
+@media (max-width:560px) {
+  .chatIdentity { flex:1 1 100%; }
+  .toolbarActions { width:100%; flex-wrap:wrap; }
+  .libraryToggle { min-height:44px; }
+  .empty { align-content:start; }
   .newCoin { white-space:nowrap; }
 }
