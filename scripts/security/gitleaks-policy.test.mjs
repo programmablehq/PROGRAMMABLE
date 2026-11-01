@@ -523,3 +523,17 @@ test("Custom AI funded evidence permits only the exact public token address line
     assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
   }
 });
+
+test("Custom AI discovery permits exact public funding runtime hashes with credential boundaries", t => {
+  const path = "tests/fixtures/custom-ai-launch-discovery.json";
+  const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  const lines = source.split("\n").filter(line => line.trimStart().startsWith('"fundingTokenRuntimeCodeHash":'));
+  assert.equal(lines.length, 2);
+  for (const line of lines) {
+    assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+    assertFiles(scan(t, { [path]: line.replace(/0x[0-9a-f]{64}/, `0x${material}`) }, { raw: true }), [path]);
+    assertFiles(scan(t, { [path]: line.replace('"fundingTokenRuntimeCodeHash":', '"apiKey":') }, { raw: true }), [path]);
+    assertFiles(scan(t, { [path]: `${line} "apiKey": "${material}"` }, { raw: true }), [path], 2);
+    assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+  }
+});
