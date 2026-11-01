@@ -60,6 +60,18 @@ database or indexer. Unknown worker paths, toolchain changes, selectors,
 configuration and workflows retain complete verification. Mixed changes keep
 every affected lane, and the credential gate always runs.
 
+The named general behavior workers and their event verifier use that same
+Interface lane. The trusted classifier can also recognize an exact addition
+of the event helper to `customAIWorkerFiles`, provided that helper changes in
+the same range and every other configuration byte is unchanged. Removals,
+duplicate or relocated entries, other configuration edits, missing Git history
+and unknown helpers retain the full check. This does not change required gates
+or allow a modified classifier to approve its own coverage.
+The Interface runner independently checks the same Git diff before accepting
+that trace-only exception. It still installs the isolated compiler, follows the
+worker's actual consumers into the related tests, runs the Custom AI browser
+suite and builds the website. Other global inputs keep the complete suite.
+
 ## Contracts
 
 `Contracts build` bootstraps pinned dependencies, checks variants/format/lint,

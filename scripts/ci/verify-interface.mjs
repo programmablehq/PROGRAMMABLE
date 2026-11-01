@@ -2,12 +2,16 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { changedPaths, interfacePlan, relatedInputs } from "./interface-plan.mjs";
+import { isCustomAITracingOnlyChange } from "./classify-verify-paths.mjs";
 
 const mode = process.argv[2];
 if (!["quality", "browser-build", "plan", "guidance"].includes(mode)) throw Error("Unknown interface verification mode");
 const paths = process.env.PROGRAMMABLE_VERIFY_FULL_INTERFACE === "true" ? null : changedPaths();
 const maintenance = process.env.PROGRAMMABLE_VERIFY_MAINTENANCE === "true";
-const plan = interfacePlan(maintenance ? [] : paths);
+const customAITracingOnly = paths && isCustomAITracingOnlyChange(paths, {
+  baseSha: process.env.PROGRAMMABLE_CI_BASE_SHA, headSha: process.env.PROGRAMMABLE_CI_HEAD_SHA,
+});
+const plan = interfacePlan(maintenance ? [] : paths, { customAITracingOnly });
 if (mode === "plan") { console.log(JSON.stringify({ paths, ...plan }, null, 2)); process.exit(0); }
 const run = (command, args) => execFileSync(command, args, { stdio: "inherit" });
 const npm = name => run("npm", ["run", name]);

@@ -14,6 +14,26 @@ export const GENERAL_CONSTRUCTOR_WORKERS = Object.freeze([
 export function isGeneralConstructorWorker(path) {
   return GENERAL_CONSTRUCTOR_WORKERS.includes(path);
 }
+export const GENERAL_BEHAVIOR_WORKERS = Object.freeze([
+  "scripts/custom-ai/general-behavior-worker.mjs",
+  "scripts/custom-ai/general-behavior-v2-worker.mjs",
+  "scripts/custom-ai/declared-events.mjs",
+]);
+
+/** Only a new trace entry for this bounded worker helper may be ignored by the
+ * global configuration lane. Every other byte and every mixed path still counts. */
+export function isCustomAITracingOnlyChange(paths, { baseSha, headSha, readChange = readGitChange } = {}) {
+  if (!Array.isArray(paths) || !paths.includes("next.config.ts") || new Set(paths).size !== paths.length
+    || !/^[a-f0-9]{40}$/u.test(baseSha ?? "") || !/^[a-f0-9]{40}$/u.test(headSha ?? "") || baseSha === headSha) return false;
+  try {
+    const [before, after] = readChange("next.config.ts", { baseSha, headSha });
+    const helper = "scripts/custom-ai/declared-events.mjs", line = `  "./${helper}",\n`;
+    const marker = "const customAIWorkerFiles = [\n", start = after.indexOf(marker), end = after.indexOf("\n];", start);
+    const offset = after.indexOf(line);
+    return paths.includes(helper) && start >= 0 && end > start && offset > start && offset < end
+      && !before.includes(line) && offset === after.lastIndexOf(line) && after.replace(line, "") === before;
+  } catch { return false; }
+}
 
 const EMPTY_SCOPE = Object.freeze({
   contracts: false,
@@ -380,7 +400,7 @@ function markAll(scope) {
 
 export function classifyVerifyPaths(
   paths,
-  { forceAll = false, customV2Release = false, toolingOnlyDependency = false } = {},
+  { forceAll = false, customV2Release = false, toolingOnlyDependency = false, customAITracingOnly = false } = {},
 ) {
   const scope = { ...EMPTY_SCOPE };
   if (typeof customV2Release !== "boolean") {
@@ -465,10 +485,11 @@ export function classifyVerifyPaths(
       continue;
     }
 
-    // Constructor-worker behavior is covered by the pinned real-EVM tests,
+    // Isolated Custom AI workers are covered by the pinned real-EVM tests,
     // exact pack/receipt consumers and Custom AI browser/build lane. Unchanged
     // platform contracts, database and indexer have no input edge from here.
-    if (isGeneralConstructorWorker(path)) {
+    if (isGeneralConstructorWorker(path) || GENERAL_BEHAVIOR_WORKERS.includes(path)
+      || path === "next.config.ts" && customAITracingOnly === true) {
       scope.interface = true;
       continue;
     }
@@ -599,7 +620,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         .filter(Boolean);
   const toolingOnlyDependency = !forceAll && !customV2Release && isToolingOnlyDependencyChange(paths,
     { baseSha: process.env.BASE_SHA, headSha: process.env.HEAD_SHA });
-  const scope = classifyVerifyPaths(paths, { forceAll, customV2Release, toolingOnlyDependency });
+  const customAITracingOnly = !forceAll && !customV2Release && isCustomAITracingOnlyChange(paths,
+    { baseSha: process.env.BASE_SHA, headSha: process.env.HEAD_SHA });
+  const scope = classifyVerifyPaths(paths, { forceAll, customV2Release, toolingOnlyDependency, customAITracingOnly });
   printGithubOutputs({ ...scope,
     interface_presentation_candidate: !forceAll && !customV2Release && isInterfacePresentationCandidate(paths, scope),
     interface_presentation_only: !forceAll && !customV2Release
