@@ -25,7 +25,7 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
   const nativeFundingWei=input.nativeFundingWei;
   const base=generalSourcePackInputs(input,"plan"),{source,production,recipe,values,identity,exported,settings,image}=base;
   controller=structuredClone(controller);
-  if(source.project.chainId!==4663 || production.route!=="plan-v1" || !production.manifestDigest || production.version!==2
+  if(source.project.chainId!==4663 || production.route!=="plan-v1" || !production.manifestDigest || ![2,3].includes(production.version)
     || getAddress(controller.address)!==base.controller || controller.kind!=="eoa" || Object.keys(controller).sort().join()!=="address,kind")
     return invalid("This Plan needs the selected Robinhood controller and its current wallet kind. Keep contract-wallet authority explicit.");
   if(BigInt(identity.deadline)<=BigInt(identity.validAfter)||BigInt(identity.deadline)-BigInt(identity.validAfter)>3600n)return invalid();

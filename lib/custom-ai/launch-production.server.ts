@@ -1,5 +1,7 @@
 import "server-only";
 import { resolveDirectNativeProfile, validateEmbeddedDirectNativeProfile } from "@/packages/launch/src/profile-direct-native-v1.mjs";
+// @ts-expect-error The canonical SDK is untyped ESM; projected fields are validated below.
+import { PROTECTED_LAUNCH_CHAIN_PINS_V1 } from "@/packages/launch/src/launch-protection-v1.mjs";
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { parseStrictJson } from "@/lib/server/projection-target/canonical-json";
 import { builderChain, type BuilderChainId } from "./execution-routing";
@@ -37,7 +39,11 @@ function protectionFields(chainId: BuilderChainId, status: ProtectionStatus | un
   if (!status) return { version: 1 as const, protections: legacy };
   const required = status.required || chainId === 8453 || chainId === 999;
   if (legacy && !same(legacy, status.protections)) throw unavailable();
-  return { version: 2 as const, protections: required ? status.protections : null,
+  const pins=PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
+  return { version: 3 as const, protections: required ? status.protections : null,
+    protectionBindings: required ? { source:"canonical-protection-kit-v1" as const,poolManagerAddress:pins.manager as `0x${string}`,
+      swapRouter:binding(pins.router,pins.routerCodeHash),nativeUsdFeed:binding(pins.feed,pins.feedCodeHash),
+      nativeUsdFeedMaxAgeSeconds:Number(pins.maxAge),sequencerUptimeFeed:chainId===8453?PROTECTED_LAUNCH_CHAIN_PINS_V1[8453].sequencerFeed as `0x${string}`:null } : null,
     protectionPolicy: { policyVersion: "programmable.launch-protection.v1" as const, required, appliesTo: "custom-contract" as const,
       evidenceAuthority: "authenticated-original-source-and-graph-review" as const,
       componentRoles: required ? [...PROTECTED_COMPONENT_ROLES] : [], openingTaxRecipient: required ? status.openingTaxRecipient : null } };
@@ -107,6 +113,10 @@ export function projectLaunchProductionContext(value: unknown, chainId: BuilderC
       || policy.platformFeeBps !== Number(object(profile.programmableTradeFeePolicy).rateBps)
       || policy.treasury !== object(object(profile.programmableTradeFeePolicy).defaultCollection).recipient
       || policy.exemptionScope !== "additional-opening-fee-only")) throw Error();
+    if(policy&&protection) {
+      const pins=PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
+      if(!same(object(policy.universalRouter),binding(pins.router,pins.routerCodeHash)))throw Error();
+    }
     const legacyProtections = policy ? { openingFeePpm: policy.initialBuyFeePpm as number, openingSeconds: policy.openingFeeSeconds as number,
       buyerLimitBps: policy.cumulativeBuyerLimitBps as number, recipientLimitBps: policy.cumulativeRecipientLimitBps as number,
       protectionSeconds: policy.protectionSeconds as number, maximumAdditionalTaxExemptWallets: policy.maximumAdditionalTaxExemptWallets as number,

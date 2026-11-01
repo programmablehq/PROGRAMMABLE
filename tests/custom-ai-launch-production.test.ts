@@ -74,7 +74,7 @@ describe("bounded shared chain discovery", () => {
     const read = createLaunchProductionDiscovery({ fetch: fetcher as typeof fetch, now: () => time });
     const first = await Promise.all(Array.from({ length: 20 }, () => read(999)));
     expect(fetcher).toHaveBeenCalledTimes(2); first[0].tradeFee.ratePpm = 1;
-    expect(first[0].version).toBe(2); expect(first[0].protectionPolicy?.required).toBe(true);
+    expect(first[0].version).toBe(3); expect(first[0].protectionPolicy?.required).toBe(true);
     expect((await read(999)).tradeFee.ratePpm).toBe(3000);
     await Promise.all(chains.map(chain => read(chain))); expect(fetcher).toHaveBeenCalledTimes(5);
     expect(fetcher.mock.calls.filter(([url]) => policyUrl(url))).toHaveLength(1);
@@ -138,7 +138,7 @@ describe("versioned global protection policy before generation", () => {
   it.each(chains)("binds active review obligations on chain %i without weakening old saved contexts", chain => {
     const previous = projectLaunchProductionContext(fixture(chain), chain);
     const current = projectLaunchProductionContext(fixture(chain), chain, protection);
-    expect(current).toMatchObject({ version: 2, protections: { openingFeePpm: 990000 }, protectionPolicy: { required: true,
+    expect(current).toMatchObject({ version: 3, protections: { openingFeePpm: 990000 }, protectionPolicy: { required: true,
       appliesTo: "custom-contract", componentRoles: PROTECTED_COMPONENT_ROLES, evidenceAuthority: "authenticated-original-source-and-graph-review" } });
     expect(current.id).not.toBe(previous.id); expect(previous.id).toBe(v1Ids[chain]);
     expect(checkedLaunchProductionContext(JSON.parse(JSON.stringify(previous)), chain)).toEqual(previous);
