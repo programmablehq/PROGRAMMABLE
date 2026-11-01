@@ -68,7 +68,6 @@ describe("Robinhood API launch website handoff", () => {
     );
     expect(launchEntrySource).toContain('data-launch-model-entry="developer-launch"');
     expect(apiKeysSource).not.toContain("DeveloperRobinhoodLaunch");
-    expect(apiKeysSource).toContain('searchParams.get("launchId")');
     expect(apiKeysSource).toContain('searchParams.get("start") === "custom"');
     expect(apiKeysSource).toContain("<DeveloperLaunchWorkspace");
     expect(developerApiKeysInitialSection({ start: "custom", chainId: "4663" })).toBe("history");

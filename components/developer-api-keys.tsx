@@ -3,6 +3,7 @@
 import { Disclosure } from "@/components/disclosure";
 import { StudioAtmosphere } from "@/components/module-studio/studio-atmosphere";
 import { DOCUMENTATION } from "@/lib/documentation";
+import { developerLaunchDestination } from "@/lib/developer-api-key-route";
 
 import { useSearchParams } from "next/navigation";
 import {
@@ -157,8 +158,6 @@ const schemaVersionV2 = "programmable.custom-launch-api.v2";
 const moduleScopes = ["modules:submit", "modules:read"] as const;
 export type ApiKeyPurpose = "all" | "custom-launches" | "module-contributions";
 const schemaVersion = "programmable.custom-launch-api.v1";
-const launchRequestIdPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const apiKeySecretPattern =
   /^pm_live_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{43}$/u;
 const idempotencyKeyPattern = /^[A-Za-z0-9._:-]{16,128}$/u;
@@ -935,8 +934,8 @@ export function DeveloperApiKeysView({
   const [activeSection, setActiveSection] = useState<ActiveSection>(
     initialSection,
   );
-  const [initialLaunchId, setInitialLaunchId] = useState<string | null>(null);
-  const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | "8453" | "999" | null>("4663");
+  const [initialLaunchId, setInitialLaunchId] = useState<string | null>(() => developerLaunchDestination(new URLSearchParams(navigationQuery)).launchId);
+  const [initialLaunchChainId, setInitialLaunchChainId] = useState<"4663" | "8453" | "999" | null>(() => developerLaunchDestination(new URLSearchParams(navigationQuery)).chainId);
   const [refreshingKeys, setRefreshingKeys] = useState(false);
   const [keyPage, setKeyPage] = useState(1);
   const [walletSessionTimedOut, setWalletSessionTimedOut] = useState(false);
@@ -1133,15 +1132,13 @@ export function DeveloperApiKeysView({
 
   useEffect(() => {
     const searchParams = new URLSearchParams(navigationQuery ?? window.location.search);
-    const candidate = searchParams.get("launchId");
-    const chainId = searchParams.get("chainId");
-    const launchId = candidate && launchRequestIdPattern.test(candidate) ? candidate : null;
+    const { launchId, chainId } = developerLaunchDestination(searchParams);
     const section = launchId || searchParams.get("view") === "history"
       || searchParams.get("start") === "custom" ? "history" : "keys";
     const update = window.setTimeout(() => {
       setActiveSection(section);
       setInitialLaunchId(launchId);
-      setInitialLaunchChainId(chainId === "999" ? "999" : chainId === "8453" ? "8453" : chainId === "1" ? null : "4663");
+      setInitialLaunchChainId(chainId);
       if (section === "keys" && searchParams.get("guide") === "custom-hook") {
         window.requestAnimationFrame(() => {
           const guide = guideRef.current;

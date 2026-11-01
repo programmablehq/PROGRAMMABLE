@@ -1648,6 +1648,15 @@ describe("developer launch history same-origin bridge", () => {
     expect(await response.json()).toEqual(resource);
   });
 
+  it.each(["8453", "999"])("retains the exact chain %s V3 wallet link from the owner resource", async chainId => {
+    const resource = { ...launchV3(), chainId, walletHandoffUrl: `https://programmable.market/developers/api-keys?launchId=${V3_LAUNCH_ID}&chainId=${chainId}`,
+      expiresAt: "2026-08-24T12:15:00.000Z", secondsRemaining: 600 };
+    fetchBackend.mockResolvedValueOnce(backendJson(resource));
+    const response = await bridge().get(new Request(`https://programmable.market/api/developer/custom-launches/${V3_LAUNCH_ID}?walletAddress=${WALLET}&version=v3&chainId=${chainId}`), V3_LAUNCH_ID);
+    expect(response.status).toBe(200); expect(await response.json()).toEqual(resource);
+    expect((fetchBackend.mock.calls[0][0] as URL).pathname).toBe(`/v4/chains/${chainId}/wallet-admin/custom-launches/${V3_LAUNCH_ID}`);
+  });
+
   it("fails closed on a cross-origin V3 wallet handoff", async () => {
     fetchBackend.mockResolvedValueOnce(new Response(JSON.stringify({
       ...launchV3Native(),
