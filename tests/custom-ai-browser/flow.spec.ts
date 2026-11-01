@@ -60,7 +60,7 @@ test("stopping clears streamed presentation and retains the unsent request",asyn
   await box.fill("Build the saved fee schedule");await box.press("Enter");await expect(page.getByText("Unfinished reply",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Stop response"}).click();
   await expect(box).toHaveValue("Build the saved fee schedule");await expect(page.getByText("Unfinished reply",{exact:true})).toHaveCount(0);
-  await expect(page.getByRole("paragraph").filter({hasText:/^Stopped\. Your last draft is unchanged\.$/})).toBeVisible();
+  await expect(page.getByRole("status").filter({hasText:/^Stopped\. Your last draft is unchanged\.$/})).toBeVisible();
   expect(posts).toBe(1);
 });
 test("keeps ten requested rules and four open choices through reload and a coin switch",async({page},testInfo)=>{
@@ -150,6 +150,7 @@ test("new coin is separate from clearing messages and restores the unsent edit",
   await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
   await expect(box).toHaveValue("");
   await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toHaveCount(0);
+  await page.getByText("Options", { exact: true }).click();
   await page.getByRole("button", { name: "Restore previous coin", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
   await expect(box).toHaveValue("Only change the fee after five minutes");
@@ -288,4 +289,33 @@ test("reports a blocked clipboard and displays unsafe markup as text", async ({ 
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   await expect(page.getByText(reply, { exact: true })).toBeVisible();
+});
+
+
+test("rejects an oversized paste without truncating the current message", async ({page}) => {
+  await page.goto("/launch/custom-ai");
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await expect(box).toBeEditable(); await box.fill("Keep this complete idea");
+  await box.evaluate(element=>{
+    const clipboardData=new DataTransfer(); clipboardData.setData("text/plain","A".repeat(8001));
+    element.dispatchEvent(new ClipboardEvent("paste",{bubbles:true,cancelable:true,clipboardData}));
+  });
+  await expect(box).toHaveValue("Keep this complete idea");
+  await expect(box).toHaveAttribute("aria-invalid","true");
+  await expect(page.getByRole("alert").filter({hasText:"That paste would exceed 8,000 characters"})).toBeVisible();
+  await box.fill("A shorter complete idea"); await expect(box).toHaveAttribute("aria-invalid","false");
+});
+
+test("keeps offline input editable while preventing a new generation", async ({page,context}) => {
+  let requests=0; await page.route("**/api/custom-ai",route=>{requests++;return route.fulfill({json:{reply:"Unexpected request"}});});
+  await page.goto("/launch/custom-ai");
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"}); await expect(box).toBeEditable();
+  try {
+    await context.setOffline(true); await box.fill("Keep this idea while offline");
+    await expect(page.getByRole("status").filter({hasText:"You’re offline"})).toBeVisible();
+    await expect(page.getByRole("button",{name:"Send message"})).toBeDisabled();
+    await box.press("Enter"); expect(requests).toBe(0); await expect(box).toHaveValue("Keep this idea while offline");
+  } finally { await context.setOffline(false); }
+  await expect(page.getByRole("button",{name:"Send message"})).toBeEnabled();
+  await expect(box).toHaveValue("Keep this idea while offline");
 });

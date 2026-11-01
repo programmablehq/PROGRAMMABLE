@@ -431,6 +431,7 @@ export function buildProgrammableLlmsIndex(): string {
     "",
     `- [Agent guide](${PROGRAMMABLE_AGENT_ENTRY.guideUrl}): credentials, launch workflows, wallet authority and recovery.`,
     `- [Agent discovery](${PROGRAMMABLE_AGENT_ENTRY.discoveryUrl}): machine-readable workflow links. The primary Robinhood create workflow is customLaunchPlan.`,
+    "- [Custom AI browser guide](https://programmable.market/developers/custom-ai-browser.md): accessible chat controls, saved-draft recovery and the separate wallet launch step. Check [live chat capabilities](https://programmable.market/api/custom-ai/capabilities) before choosing a chain or behavior.",
     "- [Custom Launch quickstart](https://programmable.market/docs/developers/custom-launch-quickstart): the current path for a new Robinhood token, hook or application, including a shared token and hook contract.",
     `- [Custom Launch Plan capabilities](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.capabilities}), [manifest](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.manifest}), [agent setup](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.setup}) and [guide](${PROGRAMMABLE_AGENT_ENTRY.workflows.customLaunchPlan.guide}): check live create availability and bind the manifest before packing.`,
     "- [Module Mode](https://programmable.market/docs/launch/module-mode): coin configuration, optional modules and management.",

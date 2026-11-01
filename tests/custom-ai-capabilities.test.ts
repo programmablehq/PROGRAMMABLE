@@ -18,6 +18,8 @@ describe("Custom AI capability discovery", () => {
     const response=GET(), body=await response.json();
     expect(body.chains).toEqual([1,4663]);
     expect(body.chainScope).toBe("fixed-fee-launches");
+    expect(body.browser).toEqual({ url: "https://programmable.market/launch/custom-ai", guide: "https://programmable.market/developers/custom-ai-browser.md",
+      authentication: "wallet-session", messageLimit: 8000, recovery: "read-saved-request", stateAttribute: "data-chat-state" });
     expect(body.sourceProjects).toMatchObject({ chains: [1,4663,8453,999], state: "source-draft", requiresSession: true });
     expect(body.capabilities.find((value:{id:string})=>value.id==="arbitrary-hooks").state).toBe("source-draft");
     expect(body.capabilities.find((value:{id:string})=>value.id==="external-events").state).toBe("design-only");

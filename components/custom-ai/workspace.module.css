@@ -46,7 +46,7 @@
 .send:hover { background: #fff8ed; color: #22201c; }
 .workspace button:disabled { opacity: .4; cursor: default; }
 .workspace button:focus-visible, .workspace summary:focus-visible, .workspace pre:focus-visible { outline: 2px solid #ede7dc; outline-offset: 4px; border-radius: 4px; }
-.notice, .error { margin: 0 0 12px; font-size: 13px; line-height: 1.5; }
+.notice, .error { margin: 0 0 12px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .notice { color: #b8b4ad; }
 .saveActions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -6px 0 12px; }
 .saveActions button { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #ede7dc; font: inherit; font-size: 13px; text-align: start; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
@@ -181,7 +181,8 @@
 .usage summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; }
 .usage > div { position: absolute; inset-inline-end: 0; top: 100%; z-index: 8; width: min(270px, 70vw); padding: 12px 16px; border: 1px solid #44413b; border-radius: 12px; background: #22211e; box-shadow: 0 6px 20px #0006; }
 .usage p { line-height: 1.6; margin: 0 0 8px; }
-.progress { display: block; margin: 8px 0; color: #c7c2ba; font-size: 13px; line-height: 1.5; }
+.progress { display: block; margin: 8px 0; color: #c7c2ba; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.inputLimit { margin: 6px 4px 0; text-align: end; color: #b8b4ad; font-size: 12px; font-variant-numeric: tabular-nums; }
 .ruleReview { margin-top: 24px; padding-top: 18px; border-top: 1px solid #44413b; color: #c7c2ba; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .ruleReview h3 { margin: 0 0 10px; color: #f4f1eb; font-size: 15px; font-weight: 500; }
 .ruleReview ul { padding-inline-start: 18px; margin: 12px 0; }
@@ -247,7 +248,7 @@
 .chatChoice small { opacity:.55; font-size:11px; }
 .chatItemActions { display:flex; flex-shrink:0; }
 .libraryList form { display:flex; min-width:0; flex:1; align-items:center; gap:4px; }
-.libraryEmpty { display:flex; align-items:center; justify-content:center; gap:16px; min-height:260px; }
+.libraryEmpty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; min-height:260px; text-align:center; }
 .libraryEmpty .libraryPanel { right:auto; left:0; }
 
 @media (max-width:1100px) {
@@ -261,4 +262,11 @@
   .toolsPanel .toolsClose { display:flex; align-items:center; justify-content:center; gap:6px; margin-inline-start:auto; text-decoration:none; }
   .empty { align-content:start; }
   .newCoin { white-space:nowrap; }
+}
+@media (max-width:420px) {
+  .chatToolbar { padding-inline:0; }
+  .toolbarActions { flex-wrap:nowrap; gap:6px; }
+  .toolbarActions > * { flex:1 1 0; min-width:0; }
+  .newCoin, .tools > summary, .libraryToggle { justify-content:center; min-width:0; width:100%; padding-inline:6px; font-size:12px; }
+  .newCoin > svg { display:none; }
 }

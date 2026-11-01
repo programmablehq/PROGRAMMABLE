@@ -31,8 +31,13 @@ if (mode === "browser-build") {
   if (plan.customAI) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.custom-ai.config.ts"]);
   npm("build");
 } else {
-  if (plan.customAICompiler) {
+  // Browser/client dependency tracing also selects the owned-source fixture,
+  // which compiles one contract using the default pinned toolchain directory.
+  // Provision that dependency without enabling unrelated compiler suites.
+  if (plan.customAICompiler || plan.customAI) {
     run("node", ["scripts/custom-ai/install-toolchain.mjs"]);
+  }
+  if (plan.customAICompiler) {
     process.env.CUSTOM_AI_COMPILER_DIR = resolve("scripts/custom-ai/toolchain");
   }
   if (plan.full || plan.verificationTools) npm("test:ci-scope");

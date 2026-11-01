@@ -222,7 +222,7 @@ test("separate chats keep unsent text through switches and reload; names and arc
  await page.reload();await expect(box).toHaveValue("Keep this original unsent idea");
  await page.getByRole("button",{name:"Chats",exact:true}).click();const original=[...f.chats.values()].find(c=>c.id===LEGACY_CONVERSATION)!;
  await page.getByRole("button",{name:`Rename ${original.title}`,exact:true}).click();await page.getByRole("textbox",{name:"Chat name"}).fill("London rain");await page.getByRole("button",{name:"Save chat name"}).click();
- await page.getByRole("textbox",{name:"Search your chats"}).fill("London");await expect(page.getByRole("button",{name:/London rain/}).first()).toBeVisible();
+ await page.getByRole("searchbox",{name:"Search your chats"}).fill("London");await expect(page.getByRole("button",{name:/London rain/}).first()).toBeVisible();
  await page.getByRole("button",{name:"Archive London rain",exact:true}).click();
  await expect.poll(()=>[...f.chats.values()].find(c=>c.id===LEGACY_CONVERSATION)?.archived).toBe(true);
  await page.getByRole("checkbox",{name:"Show archived"}).check();await expect(page.getByRole("button",{name:"Restore London rain",exact:true})).toBeVisible();
@@ -265,9 +265,9 @@ test("renaming a chat refreshes the latest search instead of the search at submi
  let release!:()=>void,started=false;const gate=new Promise<void>(resolve=>{release=resolve;});f.control.beforeUpdate=async()=>{started=true;await gate;};
  try{
   await page.getByRole("button",{name:"Save chat name",exact:true}).click();await expect.poll(()=>started).toBe(true);
-  await page.getByRole("textbox",{name:"Search your chats"}).fill("London");await expect.poll(()=>f.control.listQueries.at(-1)?.q).toBe("London");
+  await page.getByRole("searchbox",{name:"Search your chats"}).fill("London");await expect.poll(()=>f.control.listQueries.at(-1)?.q).toBe("London");
   release();await expect(page.getByRole("button",{name:/^London rain/})).toBeVisible();
-  await expect(page.getByRole("textbox",{name:"Search your chats"})).toHaveValue("London");expect(f.control.listQueries.at(-1)?.q).toBe("London");expect(f.calls).toHaveLength(0);
+  await expect(page.getByRole("searchbox",{name:"Search your chats"})).toHaveValue("London");expect(f.control.listQueries.at(-1)?.q).toBe("London");expect(f.calls).toHaveLength(0);
  }finally{release();}
 });
 test("archiving the current chat cannot select an archived replacement",async({page})=>{
