@@ -31,6 +31,16 @@ function prior():GeneralProjectDraft{
 }
 
 describe("general source generation inside the owned chat job",()=>{
+ it("binds all canonical general rules without treating a redundant fee subset as source coverage",async()=>{
+  const call=vi.fn().mockResolvedValueOnce(plan({implementedRequirementIds:["old-fee-rule"],requirements:["Redundant prose"]}))
+   .mockResolvedValueOnce(generated());
+  const save=vi.fn(async()=>{}),compiler=vi.fn(compile);
+  const value=await runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:compiler},{saveProject:save});
+  expect(value.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","no-owner"]);
+  expect(value.generalProject?.intentRevision).toBe(value.intent?.revision);
+  expect(value.generalProject?.compiled).toBe(false);expect(value.generalProject?.launchReady).toBe(false);
+  expect(save).toHaveBeenCalledOnce();expect(compiler).toHaveBeenCalledOnce();expect(call).toHaveBeenCalledTimes(2);
+ });
  it("retains the known cost and distinguishes an output-limited planner without retrying",async()=>{
   const onModelCall=vi.fn(),call=vi.fn(async()=>{throw new ModelResponseError("output-limit",{inputTokens:14900,outputTokens:8000});});
   await expect(runCustomAI(request,undefined,{call,compile:vi.fn()},{onModelCall})).rejects.toMatchObject({code:"incomplete"});
