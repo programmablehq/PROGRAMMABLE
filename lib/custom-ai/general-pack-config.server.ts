@@ -8,10 +8,11 @@ import { createGeneralPublicSource, checkedGeneralPublicSource, generalSourcePub
 import { resolveGeneralDeploymentValues } from "./deployment-values.server";
 import { generalLaunchDetailIssue } from "./general-details";
 import { CustomAIError } from "./types";
+import type { ObservedOpeningPreparation } from "./opening-inputs.server";
 
 export type GeneralPackIdentity = { nonce: `0x${string}`; sourceLineageNonce: string; validAfter: string; deadline: string; checkedAt: string };
 export type GeneralPackInput = { source: OwnedGeneralLaunchSource; exported: GeneralPublicSource; url: string;
-  controller: Address; nativeFundingWei?: string; imageBytes: Uint8Array; identity: GeneralPackIdentity };
+  controller: Address; nativeFundingWei?: string; imageBytes: Uint8Array; identity: GeneralPackIdentity; opening?: ObservedOpeningPreparation };
 const invalid = (message = "This saved source needs a complete production deployment before it can be prepared."): never => {
   throw new CustomAIError("launch-pack", message, 422);
 };
@@ -28,6 +29,7 @@ export function generalSourcePackInputs(input: GeneralPackInput, presentation: "
   const controller = getAddress(input.controller);
   if (controller.toLowerCase() !== source.binding.account.toLowerCase()) return invalid();
   const values = resolveGeneralDeploymentValues(project, compilation, { controller, settings,
+    ...(input.opening ? { opening: input.opening } : {}),
     ...(input.nativeFundingWei === undefined ? {} : { nativeFundingWei: input.nativeFundingWei }) });
   if (!recipe?.fees || !recipe.liquidityModel) return invalid("Save the source's fee selection and liquidity design before preparing it.");
   // EIP-3009 and ERC20 funding need their own explicit signed authorization.

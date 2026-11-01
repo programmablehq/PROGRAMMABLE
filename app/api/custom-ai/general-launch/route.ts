@@ -10,14 +10,14 @@ import { readOwnedGeneralPackImage } from "@/lib/custom-ai/general-pack-image.se
 import { productionAIStore } from "@/lib/custom-ai/store.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
 import { CustomAIError } from "@/lib/custom-ai/types";
-import { createProductionConstructorDependencyResolver } from "@/lib/custom-ai/dependency-rpc.server";
+import { createProductionConstructorDependencyServices } from "@/lib/custom-ai/dependency-rpc.server";
 
 export const runtime="nodejs";
 export const maxDuration=120;
 const backendBridge=()=>createCustomAIBackendLaunchBridge({backendBaseUrl:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL!,
   websiteToken:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN!,assertionKey:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2!,fetchBackend:fetch});
 const currentStatus=createGeneralLaunchStatusReader({bridge:backendBridge});
-const resolveObservedDependencies=createProductionConstructorDependencyResolver();
+const {resolve:resolveObservedDependencies,observe:observeDependencies}=createProductionConstructorDependencyServices();
 const enabled=()=>{
   if(process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED!=="true")throw new CustomAIError("unavailable","General launch preparation is not available here yet.",404);
 };
@@ -54,7 +54,7 @@ export async function POST(request:Request) {
     await store.consume(authority.owner,"general-launch-control",120);
     const input=parseGeneralPreparationAction(await readPreviewBody(request));
     const service=createGeneralPreparationService({store,image:(owner,image,signal)=>readOwnedGeneralPackImage(store,owner,image,signal),
-      bridge:backendBridge,resolveObservedDependencies});
+      bridge:backendBridge,resolveObservedDependencies,observeDependencies});
     const preparation=input.action==="prepare"?await service.prepare(request,authority,input):await service.exchange(request,authority,input.id,input.action);
     return Response.json({preparation},{headers:aiHeaders});
   }catch(error){return aiError(error);}

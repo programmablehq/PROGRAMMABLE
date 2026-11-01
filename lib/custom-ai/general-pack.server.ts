@@ -82,6 +82,7 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
               handling = (async () => {
                 const runtime = await materializeGeneralRuntime(plan.source.project, plan.source.compilation,
                   { controller: plan.values.controller, settings: plan.values.settings,
+                    ...(plan.values.opening ? { opening: plan.values.opening } : {}),
                     ...(resolveObservedDependencies ? { resolveObservedDependencies } : {}),
                     ...(nativeFundingWei === undefined ? {} : { nativeFundingWei }) },
                   message.prediction.predictions as GeneralDeploymentPrediction[], combined);

@@ -2,7 +2,7 @@ import "server-only";
 import { productionMainnetRpcPair } from "@/lib/onchain/website-rpc-providers.server";
 import { readBoundedUtf8BodyV1, discardBodyV1 } from "@/lib/server/custom-launch/bounded-utf8-body-v1";
 import type { TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
-import { createConstructorDependencyResolver } from "./dependency-witness.server";
+import { createConstructorDependencyServices } from "./dependency-witness.server";
 import type { LaunchProductionContext } from "./launch-production";
 import { CustomAIError } from "./types";
 
@@ -110,5 +110,9 @@ export function createProductionDependencyRpcs(options: { env?: Environment; fet
 }
 
 export function createProductionConstructorDependencyResolver(options: Parameters<typeof createProductionDependencyRpcs>[0] = {}) {
-  return createConstructorDependencyResolver({ rpcs: createProductionDependencyRpcs(options), now: options.now ?? Date.now });
+  return createProductionConstructorDependencyServices(options).resolve;
+}
+
+export function createProductionConstructorDependencyServices(options: Parameters<typeof createProductionDependencyRpcs>[0] = {}) {
+  return createConstructorDependencyServices({ rpcs: createProductionDependencyRpcs(options), now: options.now ?? Date.now });
 }

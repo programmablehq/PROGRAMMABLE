@@ -12,6 +12,7 @@ import { CustomAIError } from "./types";
 import { generalLaunchDetailIssue } from "./general-details";
 import type { CoinSetup } from "./coin-setup";
 import { constructorDependencyState } from "./dependency-witness";
+import { checkedObservedOpeningPreparation } from "./opening-inputs.server";
 
 export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
@@ -29,6 +30,7 @@ export type GeneralPreparation = {
   controllerKind?: "eoa"; manifestDigest?: `sha256:${string}`;
   coin?: {name:string;symbol:string};
   editor?: {settings:CoinSetup;imageId:string};
+  openingPrice?: {supply:string;targetFdvUsd:string};
   packState: "packing" | "failed" | "complete";
   packLease: { token: string; until: number; slot: number; startedAt?: number };
   packCode?: string; packHash?: `sha256:${string}`; requestSha256?: `sha256:${string}`; requestHash?: `sha256:${string}`;
@@ -68,6 +70,7 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation, comple
       !== canonicalBrowserSha256V2("programmable.custom-ai-pack-identity.v1", record.identity)
     || typeof pack.requestBody !== "string" || Buffer.byteLength(pack.requestBody) > (record.chainId===4663?16_777_216:8_388_608)
     || fileSha256V2(Buffer.from(pack.requestBody)) !== pack.requestSha256) throw corrupt();
+  if(record.openingPrice && pack.version!==3)throw corrupt();
   const construction=pack.route==="plan-v1"?pack.runtimeMaterialization:pack.constructorMaterialization;
   if(pack.version===1&&(pack.route==="plan-v1"?construction?.version!==1:construction!==undefined))throw corrupt();
   if(pack.version>=2) {
@@ -76,7 +79,7 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation, comple
       ||runtime.projectHash!==pack.projectHash||runtime.artifactHash!==pack.artifactHash||runtime.productionId!==pack.productionId
       ||runtime.chainId!==pack.chainId||typeof runtime.controller!=="string"||runtime.controller.toLowerCase()!==record.account.toLowerCase()
       ||runtime.passes!==2||!Array.isArray(runtime.failures)||runtime.failures.length||!Array.isArray(runtime.contracts)||!Array.isArray(runtime.targets)
-      ||!Array.isArray(runtime.children)||!runtime.children.length||!Array.isArray(runtime.constructorChildren)||runtime.children.length!==runtime.constructorChildren.length
+      ||!Array.isArray(runtime.children)||pack.version===2&&!runtime.children.length||!Array.isArray(runtime.constructorChildren)||runtime.children.length!==runtime.constructorChildren.length
       ||runtime.targets.length+runtime.children.length>16||runtime.contracts.length!==runtime.targets.length
       ||runtime.targets.some(target=>!target||typeof target.id!=="string"||typeof target.address!=="string"||!/^0x[a-f0-9]{40}$/iu.test(target.address)))throw corrupt();
     const {hash:runtimeHash,...runtimeBody}=runtime;
@@ -90,10 +93,20 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation, comple
         || context.observation.observedAt>record.packLease.until) throw corrupt();
       // A shared observation can predate this lease. It must still be fresh
       // when completed; later reads preserve the already accepted bytes.
-      const checkedAt=completedAt??Math.max(startedAt,context.observation.observedAt);
+      const checkedAt=completedAt??Math.max(startedAt,context.observation.observedAt,runtime.openingInputs?.preparedAt??0);
       if (checkedAt<startedAt || checkedAt>=record.packLease.until) throw corrupt();
       try { constructorDependencyState(context,production,initializer.address,checkedAt); }
       catch { throw corrupt(); }
+      if (record.openingPrice || runtime.openingInputs || runtime.openingState) {
+        try {
+          const inputs=runtime.openingInputs,state=runtime.openingState;
+          if (!record.openingPrice || !inputs || inputs.supply!==record.openingPrice.supply || inputs.targetFdvUsd!==record.openingPrice.targetFdvUsd
+            || !state || state.passes!==2 || state.decimals!==18 || state.supply!==inputs.supply || state.sqrtPriceX96!==inputs.sqrtPriceX96
+            || !runtime.targets.some(target=>target.address===state.token) || !runtime.targets.some(target=>target.address===state.hook)) throw corrupt();
+          checkedObservedOpeningPreparation(production,{projectHash:pack.projectHash,artifactHash:pack.artifactHash,
+            supply:inputs.supply,targetFdvUsd:inputs.targetFdvUsd},{observation:context.observation,inputs},checkedAt);
+        } catch { throw corrupt(); }
+      }
     }
     const addresses=new Map(runtime.targets.map(target=>[target.id,target.address])),ids=new Set(addresses.keys()),nonces=new Map<string,bigint>();
     if(ids.size!==runtime.targets.length||new Set(runtime.children.map(child=>child.id)).size!==runtime.children.length)throw corrupt();
@@ -231,6 +244,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
             deadline:String(seconds+1800),checkedAt:new Date(time).toISOString()},idempotencyKey:`custom-ai-${randomUUID()}`,
           ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),coin:{name:source.binding.settings.name,symbol:source.binding.settings.symbol},
           editor:{settings:structuredClone(source.binding.settings),imageId:source.binding.image!.id},
+          ...(source.project.deployment?.openingPrice?{openingPrice:structuredClone(source.project.deployment.openingPrice)}:{}),
           createdAt:time,updatedAt:time,packState:"packing",packLease:await capacity(db,owner)};
         if(source.project.chainId===4663){record.controllerKind=controllerKind;record.manifestDigest=production.manifestDigest!;}
         await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,$2,$3,$4)",[owner,KIND,id,JSON.stringify(record)]);
