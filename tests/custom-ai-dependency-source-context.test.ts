@@ -80,7 +80,7 @@ contract /* separation */ C {
     expect(result.project.sources).toEqual(previous.sources);
     expect(result.project.hash).toBe(previous.hash);
     expect(call).toHaveBeenCalledTimes(1);
-    expect(compile).toHaveBeenCalledWith(result.project, undefined);
+    expect(compile).toHaveBeenCalledWith(result.project, expect.any(AbortSignal));
     expect(saveProject).toHaveBeenCalledWith(result.project);
     expect(result.launchReady).toBe(false);
   });
