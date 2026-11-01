@@ -742,3 +742,18 @@ the compiler is never changed as an automatic retry. Other new projects retain
 Thin-wrapper compilation checks cover each selected chain's actual original
 initializer. These checks establish source compatibility only; constructor
 observations, full behavior, backend review and public activation remain separate.
+
+## Observed constructor runtime
+
+The isolated constructor materializer can consume a server-produced dependency
+observation and matching feed replay for the exact predicted initializer.
+Manager/router code is bound to the production pins. Only the declared feed
+selector may enter the external state, using read-only calls between witnessed
+accounts and explicit storage slots. Unknown reads, writes, context changes,
+different callers and mismatched outputs still fail.
+
+This produces `observed-constructor-runtime-v3` with the original observation
+and replay in its hash. Existing V1/V2 inputs retain their previous behavior.
+The generic graph/Plan packers do not yet supply this dependency input or admit
+this new receipt into public preparations. Source-bound opening pricing and
+backend admission remain required; general launch activation stays disabled.

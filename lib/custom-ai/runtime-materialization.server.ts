@@ -10,24 +10,25 @@ import { resolveGeneralDeploymentValues } from "./deployment-values.server";
 import type { CoinSetup } from "./coin-setup";
 import { CustomAIError } from "./types";
 import { ROBINHOOD_PLAN_DEPLOYER } from "./plan-deployer";
+import { constructorDependencyState, type ObservedConstructorDependencies } from "./dependency-witness";
 
 export type GeneralDeploymentPrediction = { targetId: string; predictedAddress: Address; effectiveSalt: Hex; resolvedConstructorArguments: Hex };
 type RuntimeResult = { status: "materialized" | "needs-context"; passes: number; gasUsed: string; failures: { target: string; code: string }[];
   contracts: { id: string; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[];
   children?: { id: string; parent: string; nonce: string; address: Address; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[];
   constructionGas?: {targetId:string;maximumGasUsed:string}[] };
-const invalid = (): never => { throw new CustomAIError("runtime-context", "The saved constructor inputs or deployment addresses changed. Refresh this preparation.", 409); };
+const invalid = (): never => { throw new CustomAIError("runtime-context", "The launch details changed. Refresh this preparation. Your design is saved.", 409); };
 export class GeneralRuntimeContextIncomplete extends CustomAIError {
   readonly findings: readonly Readonly<{ target: string; code: string }>[];
   constructor(findings: RuntimeResult["failures"]) {
-    super("runtime-dependency", "The constructors need additional network context or a deterministic runtime before this design can be prepared. Your source is saved.", 422);
+    super("runtime-dependency", "This contract needs additional network information before launch preparation. Your design is saved.", 422);
     this.findings = Object.freeze(findings.slice(0, 16).map(finding => Object.freeze({ target: finding.target, code: finding.code })));
   }
 }
 
 export async function materializeGeneralRuntime(project: ContractProject, compilation: CompiledProject,
   selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string;
-    planDeployer?: typeof ROBINHOOD_PLAN_DEPLOYER }, predictions: GeneralDeploymentPrediction[], signal?: AbortSignal) {
+    planDeployer?: typeof ROBINHOOD_PLAN_DEPLOYER; observedDependencies?: ObservedConstructorDependencies }, predictions: GeneralDeploymentPrediction[], signal?: AbortSignal) {
   signal?.throwIfAborted();
   const values = resolveGeneralDeploymentValues(project, compilation, selected);
   const production = project.production!;
@@ -77,15 +78,25 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
   });
   const withChildren = project.deployment?.version === 2;
   if (withChildren !== Boolean(constructorChildren.length)) return invalid();
+  const initializerId = values.targets.find(target => target.role === "liquidity")?.id;
+  const initializer = initializerId ? byId.get(initializerId)?.predictedAddress : undefined;
+  let observedDependencies: ReturnType<typeof constructorDependencyState> | undefined;
+  if (selected.observedDependencies) {
+    if (!withChildren || !initializer) return invalid();
+    try { observedDependencies = constructorDependencyState(selected.observedDependencies, production, initializer, Date.now()); }
+    catch { return invalid(); }
+  }
   // Snapshot the complete bounded input before waiting for any worker. A later
   // caller mutation cannot change source or constructor data behind the receipt.
   const payload = JSON.stringify({ chainId: project.chainId, evmVersion: project.compiler.evmVersion, controller: values.controller, deployer, targets,
+    ...(observedDependencies ? { dependencies: { accounts: observedDependencies.accounts, call: observedDependencies.call } } : {}),
     ...(production.route === "plan-v1" ? {includeConstructionGas:true}:{}), ...(withChildren ? { constructorChildren } : {}) });
   if (Buffer.byteLength(payload) > 6_000_000) return invalid();
   const sourceBinding = { chainId: values.chainId, projectHash: project.hash, artifactHash: compilation.artifactHash, productionId: values.productionId, deploymentId: values.deploymentId,
     settingsHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-settings.v1", values.settings),
     initializationHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-initialization.v1", values.targets.map(target => ({ id: target.id, initializer: target.initializer, value: target.initializerValueWei }))),
     controller: values.controller, deployer,
+    ...(observedDependencies ? { dependencyContext: observedDependencies.context } : {}),
     ...(production.route === "plan-v1" ? {deployerRuntimeCodeHash:selected.planDeployer!.runtimeCodeHash}:{}),
     targets: targets.map(target => ({ id: target.id, address: target.address, salt: target.salt,
       initCodeHash: keccak256(target.initCode), value: target.value })),
@@ -93,12 +104,12 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
       source: child.source, contract: child.contract, constructorArguments: child.constructorArguments, initCodeHash: keccak256(child.initCode), value: child.value })) } : {}) };
   let toolchain: string;
   try { toolchain = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain")); }
-  catch { throw new CustomAIError("runtime-worker", "The isolated constructor preparation is unavailable. Your saved source is kept.", 503); }
+  catch { throw new CustomAIError("runtime-worker", "Launch preparation is temporarily unavailable. Your design is saved.", 503); }
   const worker = join(process.cwd(), withChildren ? "scripts/custom-ai/general-runtime-v2-worker.mjs" : "scripts/custom-ai/general-runtime-worker.mjs");
   const output = await new Promise<string>((resolve, reject) => {
     const child = execFile(process.execPath, ["--permission", `--allow-fs-read=${toolchain}`, `--allow-fs-read=${worker}`, "--max-old-space-size=384", worker, toolchain],
       { env: { NODE_ENV: "production" }, encoding: "utf8", timeout: 35_000, maxBuffer: 4_000_000, signal }, (error, stdout) => error
-        ? reject(new CustomAIError("runtime-worker", "The isolated constructor preparation did not finish. Your saved source is kept.", 503)) : resolve(stdout));
+        ? reject(new CustomAIError("runtime-worker", "Launch preparation did not finish. Your design is saved.", 503)) : resolve(stdout));
     child.stdin?.on("error", () => undefined); child.stdin?.end(payload);
   });
   signal?.throwIfAborted();
@@ -116,7 +127,9 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
   if (production.route === "plan-v1" && (!Array.isArray(result.constructionGas) || result.constructionGas.length!==targets.length
     || targets.some(target=>result.constructionGas!.filter(gas=>gas.targetId===target.id&&/^[0-9]{1,12}$/u.test(gas.maximumGasUsed)
       &&BigInt(gas.maximumGasUsed)>0n&&BigInt(gas.maximumGasUsed)<=200_000_000n).length!==1))) return invalid();
-  const body = { ...(withChildren ? { version: 2 as const, scope: "isolated-constructor-runtime-v2" as const } : { version: 1 as const, scope: "isolated-constructor-runtime-v1" as const }),
+  if (observedDependencies && observedDependencies.context.observation.expiresAt <= Date.now()) return invalid();
+  const body = { ...(observedDependencies ? { version: 3 as const, scope: "observed-constructor-runtime-v3" as const }
+    : withChildren ? { version: 2 as const, scope: "isolated-constructor-runtime-v2" as const } : { version: 1 as const, scope: "isolated-constructor-runtime-v1" as const }),
     ...sourceBinding, ...result, launchReady: false as const };
   return { ...body, hash: canonicalBrowserSha256V2(`programmable.custom-ai-runtime-materialization.v${body.version}`, body) };
 }

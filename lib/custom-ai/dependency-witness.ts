@@ -1,6 +1,7 @@
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { keccak256, toHex, type Address, type Hex } from "viem";
 import type { LaunchDependencyObservation } from "./dependency-observations.server";
+import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 
 export type DependencyWitnessAccount = { address: Address; runtimeCode: Hex; runtimeCodeHash: Hex; storage: { slot: Hex; value: Hex }[] };
 export type NativeFeedConstructorWitness = {
@@ -10,6 +11,12 @@ export type NativeFeedConstructorWitness = {
   call: { from: Address; to: Address; data: "0x313ce567"; value: "0" };
   expectedOutput: Hex; accounts: DependencyWitnessAccount[]; expiresAt: number; launchReady: false;
 };
+export type NativeFeedConstructorRead = {
+  version: 1; witness: NativeFeedConstructorWitness;
+  replay: { status: "replayed"; passes: 2; output: string; gasUsed: string };
+  launchReady: false; id: `sha256:${string}`;
+};
+export type ObservedConstructorDependencies = { observation: LaunchDependencyObservation; read: NativeFeedConstructorRead };
 const invalid = (): never => { throw new TypeError("The native feed state witness is incomplete or inconsistent."); };
 const address = /^0x(?!0{40}$)[a-f0-9]{40}$/iu, word = /^0x[a-f0-9]{64}$/iu;
 const object = (value: unknown): Record<string, unknown> => {
@@ -85,4 +92,43 @@ export function createNativeFeedConstructorWitness(observation: LaunchDependency
     call: { from: caller.toLowerCase() as Address, to: feed.address, data: "0x313ce567" as const, value: "0" as const },
     expectedOutput: toHex(observation.nativeUsdFeed.decimals, { size: 32 }), accounts, expiresAt: observation.expiresAt, launchReady: false as const };
   return { ...witness, id: canonicalBrowserSha256V2("programmable.custom-ai-native-feed-witness.v1", witness) };
+}
+
+/** Validate the server-produced observation and replay against this exact
+ * production profile and predicted initializer before the constructor worker.
+ * This is integrity checking for an owned preparation, not public admission. */
+export function constructorDependencyState(value: ObservedConstructorDependencies, production: LaunchProductionContext,
+  caller: Address, now: number) {
+  production = checkedLaunchProductionContext(production, production.chainId);
+  const context = structuredClone(value), { observation, read } = context;
+  if (production.version !== 3 || !production.protectionBindings || observation.productionId !== production.id
+    || observation.chainId !== production.chainId || read.version !== 1 || read.launchReady !== false) return invalid();
+  checkNativeFeedObservation(observation, caller, now);
+  const { id, ...body } = read;
+  if (canonicalBrowserSha256V2("programmable.custom-ai-native-feed-constructor-read.v1", body) !== id
+    || read.replay.status !== "replayed" || read.replay.passes !== 2 || read.replay.output !== read.witness.expectedOutput
+    || !/^[0-9]{1,7}$/u.test(read.replay.gasUsed) || BigInt(read.replay.gasUsed) > 4_000_000n) return invalid();
+  const raw = Object.fromEntries(read.witness.accounts.map(account => [account.address, {
+    code: account.runtimeCode, storage: Object.fromEntries(account.storage.map(slot => [slot.slot, slot.value])),
+  }]));
+  const rebuilt = createNativeFeedConstructorWitness(observation, caller, raw, raw, now);
+  if (rebuilt.id !== read.witness.id) return invalid();
+  const pins = production.protectionBindings;
+  const fixed = [
+    [observation.poolManager, production.poolManager], [observation.swapRouter, pins.swapRouter],
+    [observation.nativeUsdFeed, pins.nativeUsdFeed],
+  ] as const;
+  for (const [observed, expected] of fixed) {
+    if (observed.address.toLowerCase() !== expected.address.toLowerCase() || observed.runtimeCodeHash !== expected.runtimeCodeHash
+      || keccak256(observed.runtimeCode) !== expected.runtimeCodeHash) return invalid();
+  }
+  if (production.chainId === 8453 ? !observation.sequencer || observation.sequencer.address.toLowerCase() !== pins.sequencerUptimeFeed?.toLowerCase()
+    : observation.sequencer !== null) return invalid();
+  const accounts = new Map(read.witness.accounts.map(account => [account.address.toLowerCase(), account]));
+  for (const known of [observation.poolManager, observation.swapRouter, ...(observation.sequencer ? [observation.sequencer] : [])]) {
+    const key = known.address.toLowerCase(), existing = accounts.get(key);
+    if (keccak256(known.runtimeCode) !== known.runtimeCodeHash || existing && existing.runtimeCode !== known.runtimeCode) return invalid();
+    if (!existing) accounts.set(key, { address: key as Address, runtimeCode: known.runtimeCode, runtimeCodeHash: known.runtimeCodeHash, storage: [] });
+  }
+  return { accounts: [...accounts.values()], call: { ...read.witness.call, output: read.witness.expectedOutput }, context };
 }
