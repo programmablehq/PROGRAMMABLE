@@ -699,7 +699,28 @@ newer one. Provider transport limits still apply beneath those bounds.
 
 This reader is an integration component, not enabled public launch behavior.
 Its result explicitly identifies two-provider observation as its authority and
-keeps `launchReady` false. It does not yet supply the proxy/storage witness
-required to execute a constructor independently, nor prove swaps, liquidity,
-fees, admission or wallet finality. The focused qualification uses synthetic
-provider responses and spends no provider credits.
+keeps `launchReady` false. Its focused qualification uses synthetic provider
+responses and spends no provider credits.
+
+`replayNativeFeedConstructorRead` can additionally capture one prestate trace
+per provider for the fixed feed's `decimals()` call and the exact proposed
+constructor address. It intersects matching code and explicitly observed
+storage, then executes those bytes in an isolated VM twice. Additional unused
+tracer accounts are excluded; provider `codeHash` fields must match their code.
+Missing storage is never treated as an observed zero. A final shared-block
+comparison and expiration check bind the result to the original observation.
+
+The replay permits read-only proxy delegation only between witnessed code
+accounts. Writes, unknown code/storage, ambient time/balance reads and direct
+gas-dependent values fail. The worker has no network access, a bounded input,
+memory and gas limit; the parent has a thirty-second deadline and at most two
+additional reads per provider. The result remains a two-provider observation,
+not a cryptographic state proof or public launch admission.
+
+An Ethereum qualification using the existing Alchemy and QuickNode accounts
+passed the complete observation and isolated feed replay with eleven reads
+per provider. The initial trace-adapter mismatch was reproduced from saved
+public state and corrected before the single fresh qualification. This does
+not change the production provider roles. Wiring that replay into complete
+constructor preparation and proving swaps, liquidity, fees and finality remain
+separate work; general launch activation remains disabled.
