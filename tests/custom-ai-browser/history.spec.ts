@@ -215,7 +215,9 @@ test("four-chain source settings retain native currency and never load a foreign
  expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);expect(f.calls).toHaveLength(0);
 });
 test("metadata-only edits survive online save and reload without changing the chain",async({page})=>{
- const f=await fixture(page);await page.goto(origin);
+ const f=await fixture(page);
+ f.studios.set(`alice:0x${"a".repeat(40)}:${LEGACY_CONVERSATION}`,{revision:1,state:{settings:{...EMPTY_COIN_SETUP,chainId:8453},messages:[]}});
+ await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
  await page.locator("summary").filter({hasText:"Coin details"}).click();
  const metadata={description:"A coin with a transparent fee schedule for its holders.",website:"https://example.com/coin",x:"https://x.com/example_coin"};
