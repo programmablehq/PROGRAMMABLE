@@ -92,7 +92,7 @@ test("constructor worker changes retain real-EVM, browser and pack-consumer cove
     "lib/custom-ai/general-plan-pack.server.ts", "tests/custom-ai-runtime-materialization.test.ts",
     "tests/custom-ai-constructor-children-runtime.test.ts", "tests/custom-ai-runtime-forwarded-gas.test.ts",
     "tests/custom-ai-general-plan-pack.test.ts", ...GENERAL_CONSTRUCTOR_WORKERS];
-  for (const worker of GENERAL_CONSTRUCTOR_WORKERS) {
+  for (const worker of GENERAL_CONSTRUCTOR_WORKERS.filter(path => !path.endsWith("/dependency-call-worker.mjs"))) {
     const plan = interfacePlan([worker]);
     assert.equal(plan.full, false);
     assert.equal(plan.customAI, true);
@@ -102,6 +102,16 @@ test("constructor worker changes retain real-EVM, browser and pack-consumer cove
     const selected = relatedInputs([worker], files);
     for (const required of files.filter(file => !file.startsWith("scripts/"))) assert.ok(selected.includes(required), required);
   }
+});
+
+test("dependency replay worker keeps its actual VM reader coverage", () => {
+  const worker = "scripts/custom-ai/dependency-call-worker.mjs";
+  const plan = interfacePlan([worker]);
+  assert.equal(plan.customAI, true);
+  assert.equal(plan.customAICompiler, true);
+  const files = [worker, "lib/custom-ai/dependency-witness.server.ts", "tests/custom-ai-dependency-witness.test.ts"];
+  const selected = relatedInputs([worker], files);
+  for (const file of files) assert.ok(selected.includes(file), file);
 });
 
 test("Custom AI interactions use their own browser suite while shared wallet changes retain coverage", () => {

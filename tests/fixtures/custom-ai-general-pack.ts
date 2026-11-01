@@ -54,7 +54,7 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
       deploymentValue:"0",initializerValue:"0",hookPermissions:null});
     contracts.push({id:`aux${index}`,source:"Project.sol",contract:`Aux${index}`,role:"auxiliary",arguments:[],functions:[],allowReceive:false,allowFallback:false,surfaceRequirements:["surface"]});
   }
-  const blueprint = createGeneralCheckBlueprint({ contracts, allowedCalls: [], deployment: declaration,...(children?{constructorChildren:children}:{}), steps: [
+  const blueprint = createGeneralCheckBlueprint({ compilerProfile: "standard-v1", contracts, allowedCalls: [], deployment: declaration,...(children?{constructorChildren:children}:{}), steps: [
     { id: "marker", contract: "hook", signature: "arbitraryProjectMethod()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,
       requirementIds: ["marker"], expect: { status: "success", returns: ["42"] } },
     ...(withChildren?[

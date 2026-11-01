@@ -11,7 +11,7 @@ process.stdin.on("end", async () => {
 
 /** V2 admits only predeclared, source-bound CREATE children. Unknown creation,
  * delegate calls and external state remain unsupported rather than fabricated. */
-async function materialize({ chainId, evmVersion, controller, deployer, targets, constructorChildren, includeConstructionGas = false }) {
+async function materialize({ chainId, evmVersion, controller, deployer, targets, constructorChildren, dependencies, includeConstructionGas = false }) {
   const { createVM } = requireTool("@ethereumjs/vm"), { createCustomCommon, Mainnet, Hardfork } = requireTool("@ethereumjs/common");
   const { createBlock } = requireTool("@ethereumjs/block"), { createAddressFromString, createAccount, hexToBytes, bytesToHex } = requireTool("@ethereumjs/util");
   const { keccak256 } = requireTool("viem");
@@ -23,6 +23,30 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
     rootForChild.set(child.id, rootIds.has(child.parent) ? child.parent : rootForChild.get(child.parent)); allIds.add(child.id);
   }
   const creationCode=new Map([...targets,...constructorChildren].map(target=>[target.id,hexToBytes(target.initCode)]));
+  const dependencyCode = new Map(), dependencyStorage = new Map();
+  if (dependencies !== undefined) {
+    if (!dependencies || !Array.isArray(dependencies.accounts) || !dependencies.accounts.length || dependencies.accounts.length > 11
+      || !dependencies.call || dependencies.call.data !== "0x313ce567" || dependencies.call.value !== "0"
+      || !/^0x[a-f0-9]{64}$/.test(dependencies.call.output)
+      || !targets.some(target => target.address.toLowerCase() === dependencies.call.from)
+      || !/^0x[a-f0-9]{40}$/.test(dependencies.call.to)) throw Error();
+    let bytes = 0, slots = 0;
+    for (const account of dependencies.accounts) {
+      if (!/^0x(?!0{40})[a-f0-9]{40}$/.test(account.address) || dependencyCode.has(account.address)
+        || [...targets, ...constructorChildren].some(target => target.address.toLowerCase() === account.address)
+        || [controller.toLowerCase(), deployer.toLowerCase()].includes(account.address)
+        || !/^0x(?:[a-f0-9]{2})+$/.test(account.runtimeCode) || account.runtimeCode.length > 49_154
+        || keccak256(account.runtimeCode) !== account.runtimeCodeHash || !Array.isArray(account.storage)) throw Error();
+      const code = hexToBytes(account.runtimeCode), storage = new Map(); bytes += code.length;
+      for (const entry of account.storage) {
+        if (!/^0x[a-f0-9]{64}$/.test(entry.slot) || !/^0x[a-f0-9]{64}$/.test(entry.value) || storage.has(entry.slot)) throw Error();
+        storage.set(entry.slot, entry.value); slots++;
+      }
+      if (bytes > 262_144 || slots > 64) throw Error();
+      dependencyCode.set(account.address, code); dependencyStorage.set(account.address, storage);
+    }
+    if (!dependencyCode.has(dependencies.call.to)) throw Error();
+  }
   const common = createCustomCommon({ chainId }, Mainnet, { hardfork: evmVersion === "cancun" ? Hardfork.Cancun : Hardfork.Paris });
   const failures = [], observations = [], constructionGas = new Map(); let totalGas = 0n;
   const ambientOpcodes=new Set(["BLOCKHASH","BLOBHASH","BLOBBASEFEE","TIMESTAMP","NUMBER","COINBASE","PREVRANDAO","DIFFICULTY","BASEFEE","GASPRICE","GASLIMIT","GAS","ORIGIN","BALANCE","SELFBALANCE"]);
@@ -48,8 +72,13 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
   }
   for (let pass = 0; pass < 2; pass++) {
     const vm = await createVM({ common }), deployed = new Set(), deployedCode = new Map(), frames = [], observedChildren = new Map(), nextChild = new Map();
-    let current, forbidden = false;
+    let current, forbidden = false, dependencyCalls = 0;
     for (const address of new Set([controller, deployer])) await vm.stateManager.putAccount(createAddressFromString(address), createAccount({ balance: 10n ** BigInt(24 + pass) }));
+    for (const [raw, code] of dependencyCode) {
+      const address = createAddressFromString(raw);
+      await vm.stateManager.putAccount(address, createAccount({})); await vm.stateManager.putCode(address, code);
+      for (const [slot, value] of dependencyStorage.get(raw)) await vm.stateManager.putStorage(address, hexToBytes(slot), hexToBytes(value));
+    }
     vm.evm.events?.on("beforeMessage", message => {
       if (message.depth === 0) { frames.push({ kind: "create", target: current }); return; }
       const parent = frames.at(-1);
@@ -62,13 +91,26 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
         nextChild.set(parent.target.id, (nextChild.get(parent.target.id) ?? 0) + 1);
         frames.push({ kind: "create", target: expected }); return;
       }
-      frames.push({ kind: "call" });
       const address = message.to?.toString().toLowerCase();
+      const codeAddress = message.codeAddress?.toString().toLowerCase() ?? address;
+      const directDependency = dependencies && !parent?.external && address === dependencies.call.to
+        && message.caller.toString().toLowerCase() === dependencies.call.from && bytesToHex(message.data) === dependencies.call.data;
+      if (directDependency || parent?.external) {
+        const allowed = message.isStatic && message.value === 0n && dependencyCode.has(address) && dependencyCode.has(codeAddress);
+        frames.push({ kind: "call", external: true, checkOutput: Boolean(directDependency) });
+        if (!allowed || message.depth > 32) { forbidden = true; fail(current.id, "unobserved-dependency-call"); }
+        if (directDependency) dependencyCalls++;
+        return;
+      }
+      frames.push({ kind: "call" });
       if (!message.delegatecall && address && (BigInt(address) > 0n && BigInt(address) <= 10n || deployed.has(address))) return;
       forbidden = true; fail(current.id, "constructor-needs-chain-state");
     });
     vm.evm.events?.on("afterMessage", result => {
       const frame = frames.pop();
+      if (frame?.checkOutput && (result.execResult.exceptionError || bytesToHex(result.execResult.returnValue) !== dependencies.call.output)) {
+        forbidden = true; fail(current.id, "dependency-call-output-mismatch");
+      }
       if (frame?.kind !== "create" || rootIds.has(frame.target.id)) return;
       const child = frame.target;
       if (result.execResult.exceptionError || result.createdAddress?.toString().toLowerCase() !== child.address.toLowerCase() || observedChildren.has(child.id)) {
@@ -84,16 +126,21 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
       const name=step.opcode.name;let forwardsGas=false;
       if(name==="GAS") {
         const frame=frames.at(-1),address=(step.codeAddress??step.address).toString().toLowerCase();
-        const code=frame?.kind==="create"?creationCode.get(frame.target.id):deployedCode.get(address);
-        forwardsGas=code?.[step.pc]===0x5a&&(code[step.pc+1]===0xf1||code[step.pc+1]===0xfa);
+        const code=frame?.kind==="create"?creationCode.get(frame.target.id):deployedCode.get(address)??dependencyCode.get(address);
+        forwardsGas=code?.[step.pc]===0x5a&&(code[step.pc+1]===0xf1||code[step.pc+1]===0xfa||frame?.external&&code[step.pc+1]===0xf4);
       }
-      if(unsupportedOpcodes.has(name)) { forbidden=true;fail(current.id,"unbound-constructor-execution"); }
+      const external = frames.at(-1)?.external;
+      if(unsupportedOpcodes.has(name) && !(name === "DELEGATECALL" && external)) { forbidden=true;fail(current.id,"unbound-constructor-execution"); }
+      if (external && (["SSTORE", "TSTORE", "TLOAD", "CREATE", "CREATE2"].includes(name)
+        || name === "SLOAD" && !dependencyStorage.get(step.address.toString().toLowerCase())?.has(`0x${step.stack.at(-1).toString(16).padStart(64, "0")}`))) {
+        forbidden = true; fail(current.id, "unobserved-dependency-state");
+      }
       if (ambientOpcodes.has(name)&&!forwardsGas) {
         forbidden = true; fail(current.id, "constructor-needs-chain-state");
       }
       if (codeOpcodes.has(name)) {
         const address = `0x${(step.stack.at(-1) & ((1n << 160n) - 1n)).toString(16).padStart(40, "0")}`;
-        if (!deployed.has(address)) { forbidden = true; fail(current.id, "constructor-needs-chain-state"); }
+        if (!deployed.has(address) && !dependencyCode.has(address)) { forbidden = true; fail(current.id, "constructor-needs-chain-state"); }
       }
     });
     const runtimes = [];
@@ -118,6 +165,7 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
       runtimes.push(actual); deployed.add(target.address.toLowerCase());deployedCode.set(target.address.toLowerCase(),hexToBytes(actual.runtimeCode));
     }
     if (!failures.length) {
+      if (dependencies && dependencyCalls === 0) fail("graph", "dependency-call-missing");
       for(const target of targets) {
         if(bytesToHex(await vm.stateManager.getCode(createAddressFromString(target.address)))!==runtimes.find(runtime=>runtime.id===target.id)?.runtimeCode) {
           fail(target.id,"constructor-source-state-changed");break;

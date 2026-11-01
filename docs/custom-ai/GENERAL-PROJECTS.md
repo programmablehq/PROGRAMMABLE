@@ -680,3 +680,95 @@ Actual pinned-compiler cases cover a generated ERC20 using its inline library
 closure and a v4 BaseHook using the selected import aliases. These are source
 compilation checks, separate from constructor dependency observations, behavior
 evidence and launch authorization.
+
+## Bounded dependency observations
+
+`createLaunchDependencyReader` takes the existing trusted provider pair from
+its caller and captures the selected V3 protection dependencies at one recent
+common block. It verifies manager/router/feed code hashes, reads the actual
+feed decimals and round, and checks Base sequencer uptime and its one-hour
+grace period. A final canonical block comparison rejects a reorganization.
+There are no fallback prices, assumed eight-decimal feeds or stale successes.
+
+The four fixed chain slots share concurrent reads and cache successful data
+for at most ten seconds. A five-second negative cache limits outage traffic.
+One capture has a thirty-second deadline and at most twelve logical reads per
+provider (nine normally, eleven on Base). Cancelling one consumer does not
+cancel a shared observation, and an old in-flight profile cannot overwrite a
+newer one. Provider transport limits still apply beneath those bounds.
+
+This reader is an integration component, not enabled public launch behavior.
+Its result explicitly identifies two-provider observation as its authority and
+keeps `launchReady` false. Its focused qualification uses synthetic provider
+responses and spends no provider credits.
+
+`replayNativeFeedConstructorRead` can additionally capture one prestate trace
+per provider for the fixed feed's `decimals()` call and the exact proposed
+constructor address. It intersects matching code and explicitly observed
+storage, then executes those bytes in an isolated VM twice. Additional unused
+tracer accounts are excluded; provider `codeHash` fields must match their code.
+Missing storage is never treated as an observed zero. A final shared-block
+comparison and expiration check bind the result to the original observation.
+
+The replay permits read-only proxy delegation only between witnessed code
+accounts. Writes, unknown code/storage, ambient time/balance reads and direct
+gas-dependent values fail. The worker has no network access, a bounded input,
+memory and gas limit; the parent has a thirty-second deadline and at most two
+additional reads per provider. The result remains a two-provider observation,
+not a cryptographic state proof or public launch admission.
+
+An Ethereum qualification using the existing Alchemy and QuickNode accounts
+passed the complete observation and isolated feed replay with eleven reads
+per provider. The initial trace-adapter mismatch was reproduced from saved
+public state and corrected before the single fresh qualification. This does
+not change the production provider roles. Wiring that replay into complete
+constructor preparation and proving swaps, liquidity, fees and finality remain
+separate work; general launch activation remains disabled.
+
+## Original protection contract imports
+
+The generation route supplies the selected chain's original protection source
+package alongside its shared libraries. Ethereum and Robinhood use their joint
+package; Base and HyperEVM use their own fixed packages. Only actually imported
+files and their transitive dependencies enter the compiled project. A caller's
+earlier edits to any of those paths remain editable and are not overwritten.
+
+New projects with required production protection choose the existing
+`viair-200-v1` compiler profile before scenario planning and generation, including
+its fixed import aliases. Saved or explicitly declared profiles stay unchanged;
+the compiler is never changed as an automatic retry. Other new projects retain
+`standard-v1`. The complete original source stays bound to the resulting project.
+
+Thin-wrapper compilation checks cover each selected chain's actual original
+initializer. These checks establish source compatibility only; constructor
+observations, full behavior, backend review and public activation remain separate.
+
+## Observed constructor runtime
+
+The isolated constructor materializer can consume a server-produced dependency
+observation and matching feed replay for the exact predicted initializer.
+Manager/router code is bound to the production pins. Only the declared feed
+selector may enter the external state, using read-only calls between witnessed
+accounts and explicit storage slots. Unknown reads, writes, context changes,
+different callers and mismatched outputs still fail.
+
+This produces `observed-constructor-runtime-v3` with the original observation
+and replay in its hash. Existing V1/V2 inputs retain their previous behavior.
+The generic graph/Plan packers do not yet supply this dependency input or admit
+this new receipt into public preparations. The materializer snapshots the
+source, compiler output and predicted addresses before awaiting a resolver.
+Source-bound opening pricing, independent behavior-fixture support and backend
+admission remain required; general launch activation stays disabled.
+
+The server-only production dependency transport resolves the existing chain's
+provider roles lazily. Ethereum uses the commitment-bound dRPC/QuickNode pair;
+Robinhood and Base use their configured dRPC/Alchemy pairs. HyperEVM uses its
+configured dRPC reader and configured Alchemy or public Hyperliquid witness.
+Missing or mismatched configuration stops preparation instead of choosing an
+unrelated provider. This factory is not yet a public preparation consumer.
+It accepts only the fixed code, block and feed observation protocol, including
+the bounded native-feed prestate trace. It disables redirects and automatic
+retries, caps responses at 512 KiB, limits each endpoint to four concurrent and
+sixteen starts per second, and pauses exhausted providers for thirty seconds.
+The observation and replay layers retain their smaller per-preparation read
+budgets. No URL, provider credential or RPC method comes from generated code.

@@ -9,7 +9,7 @@ import { CustomAIError, type ChatMessage, type ChatProgress } from "./types";
 import type { LaunchIntent } from "./launch-intent";
 import { builderChain, selectExecutionRoute, type BuilderChainId } from "./execution-routing";
 import { createContractProject, projectCompilerInput, type ContractProject } from "./contract-project";
-import { createProjectCompiler, projectCompilerProfile, VIAIR_200_REMAPPINGS } from "./compiler-profile";
+import { createProjectCompiler, newProjectCompilerProfile, projectCompilerProfile, VIAIR_200_REMAPPINGS } from "./compiler-profile";
 import { compileContractProject, type CompiledProject } from "./contract-project.server";
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
@@ -64,7 +64,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     }
   }
   // Validate dependency names and byte limits before spending a model call.
-  const compiler = blueprint?.compiler ?? createProjectCompiler(input.previous ? projectCompilerProfile(input.previous.compiler) : "standard-v1", input.evmVersion);
+  const compiler = blueprint?.compiler ?? createProjectCompiler(input.previous ? projectCompilerProfile(input.previous.compiler) : newProjectCompilerProfile(production), input.evmVersion);
   const suppliedDependencies = input.dependencySources ?? {};
   const validationSources = Object.keys(suppliedDependencies).length ? suppliedDependencies : { "Validation.sol": { content: "pragma solidity 0.8.26; contract Validation {}" } };
   createContractProject({ compiler, sources: validationSources,
