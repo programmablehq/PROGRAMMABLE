@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { bindCandidateIntent, migrateLaunchIntent, parseIntentRequirements, reviseLaunchIntent } from "../lib/custom-ai/launch-intent.server";
+import { bindCandidateIntent, migrateLaunchIntent, normalizeLaunchIntentQuestions, parseIntentRequirements, reviseLaunchIntent } from "../lib/custom-ai/launch-intent.server";
 import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "../lib/custom-ai/launch-intent";
 import { runCustomAI } from "../lib/custom-ai/service.server";
 import type { ChatRequest, Draft } from "../lib/custom-ai/types";
@@ -31,11 +31,13 @@ describe("complete launch intent and source revisions", () => {
     expect(intent.requirements[0].origin).toEqual({ kind: "message", requestId: request.id, messageIndex: 0, quote: texts[0] });
   });
   it("does not compile the six-rule executable subset or spend another model call", async () => {
-    const call = vi.fn(async () => plan()), compile = vi.fn();
+    const call = vi.fn(async () => plan({reply:"The question is closed and the build has started."})), compile = vi.fn();
     const result = await runCustomAI(request, undefined, { call, compile });
     expect(result.intent?.requirements).toHaveLength(10);
     expect(result.unresolved).toEqual([...questions, ...texts.slice(6)]);
     expect(result.change).toBe("blocked");
+    expect(result.reply).toContain("before I can build");
+    expect(result.reply).not.toContain("build has started");
     expect(result.draft).toBeUndefined();
     expect(compile).not.toHaveBeenCalled(); expect(call).toHaveBeenCalledTimes(1);
   });
@@ -95,6 +97,35 @@ describe("complete launch intent and source revisions", () => {
       edits:[{requirementId:"rule-6",operation:"replace",instruction}],request:nextRequest});
     expect(accepted.problems).toEqual([]);expect(accepted.intent.unresolved).toEqual(questions.slice(1));
     expect(accepted.intent.requirements[6]).toMatchObject({id:"rule-6",text:"Use the signed London rain feed",open:null});
+  });
+  it("resolves an answered question from its latest-user quote without a duplicate edit envelope",()=>{
+    const previous=initial(),instruction="Use the signed London rain feed for this question.";
+    const changed=proposed.map(rule=>rule.id==="rule-6"?{...rule,open:null,instruction}:rule);
+    const nextRequest={...request,id:"intent-answer-0001",messages:[{role:"user" as const,content:instruction}]};
+    const result=reviseLaunchIntent({previous,proposed:changed,unresolved:questions.slice(1),edits:[],request:nextRequest});
+    expect(result.problems).toEqual([]);expect(result.intent.unresolved).toEqual(questions.slice(1));
+    expect(result.intent.requirements[6]).toMatchObject({id:"rule-6",text:previous.requirements[6].text,open:null,origin:{kind:"message",quote:instruction}});
+    expect(result.intent.changes).toHaveLength(1);expect(result.intent.requirements.slice(0,6)).toEqual(previous.requirements.slice(0,6));
+    const scoped=reviseLaunchIntent({previous,proposed:changed,unresolved:questions.slice(1),edits:[],request:nextRequest,
+      target:{sourceHash:"a".repeat(64),requirementId:"rule-0"}});
+    expect(scoped.intent.unresolved).toContain(questions[0]);
+    const unquoted=reviseLaunchIntent({previous,proposed:changed,unresolved:questions.slice(1),edits:[],
+      request:{...nextRequest,messages:[{role:"assistant",content:instruction},{role:"user",content:"okay"}]}});
+    expect(unquoted.intent.unresolved).toContain(questions[0]);
+  });
+  it("gives legacy unowned questions stable identities so a quoted answer can resolve them",()=>{
+    const saved=initial(),legacy={...saved,requirements:saved.requirements.slice(0,6)};
+    const normalized=normalizeLaunchIntentQuestions(legacy);
+    expect(normalized.requirements.slice(0,6)).toEqual(legacy.requirements);
+    expect(normalized.requirements).toHaveLength(10);expect(normalizeLaunchIntentQuestions(normalized)).toEqual(normalized);
+    const question=normalized.requirements.find(rule=>rule.open===questions[0])!;
+    const instruction="Use the signed London rain feed.";
+    const next=normalized.requirements.map(rule=>({...rule,instruction:rule.id===question.id?instruction:"",
+      ...(rule.id===question.id?{text:"Use the signed London rain feed",open:null}:{})}));
+    const result=reviseLaunchIntent({previous:normalized,proposed:next,unresolved:questions.slice(1),edits:[],
+      request:{...request,messages:[{role:"user",content:instruction}]}});
+    expect(result.problems).toEqual([]);expect(result.intent.unresolved).toEqual(questions.slice(1));
+    expect(result.intent.requirements.find(rule=>rule.id===question.id)?.text).toBe("Use the signed London rain feed");
   });
   it("keeps other requirements and rejects additions during a selected edit", () => {
     const previous=initial(),instruction="Change the opening fee to 8% and add this rule.";
