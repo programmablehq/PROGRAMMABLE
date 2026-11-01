@@ -17,10 +17,22 @@ describe("Custom AI capability discovery", () => {
     const fetcher=vi.spyOn(globalThis,"fetch");
     const response=GET(), body=await response.json();
     expect(body.chains).toEqual([1,4663]);
+    expect(body.chainScope).toBe("fixed-fee-launches");
+    expect(body.sourceProjects).toMatchObject({ chains: [1,4663,8453,999], state: "source-draft", requiresSession: true });
+    expect(body.capabilities.find((value:{id:string})=>value.id==="arbitrary-hooks").state).toBe("source-draft");
     expect(body.capabilities.find((value:{id:string})=>value.id==="external-events").state).toBe("design-only");
     expect(body.capabilities.find((value:{id:string})=>value.id==="fee-programs").state).toBe("requires-live-check");
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(fetcher).not.toHaveBeenCalled();fetcher.mockRestore();
+  });
+  it("does not equate an enabled general endpoint with an approved launch", async () => {
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_GENERAL_LAUNCH_ENABLED", "false");
+    expect((await GET().json()).sourceProjects.launchPreparation).toBe("not-enabled");
+    vi.stubEnv("CUSTOM_AI_GENERAL_LAUNCH_ENABLED", "true");
+    const body=await GET().json();
+    expect(body.sourceProjects.launchPreparation).toBe("requires-current-review-and-preparation");
+    expect(body.sourceProjects.state).toBe("source-draft");
   });
 });
 
