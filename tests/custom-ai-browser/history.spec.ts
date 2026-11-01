@@ -242,6 +242,16 @@ test("retrying a lost create response opens the same chat without making another
  await expect.poll(()=>[...f.studios.entries()].some(([key,saved])=>key.endsWith(created.id)&&saved.state.input==="This is the retried chat")).toBe(true);
  expect(f.chats.size).toBe(2);expect(f.calls).toHaveLength(0);
 });
+test("opening the recovered chat clears the pending create before the next new coin",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ f.control.lostCreates=1;await page.getByRole("button",{name:"New coin",exact:true}).click();
+ const library=page.getByRole("region",{name:"Your saved chats"});await expect(library.getByRole("alert")).toBeVisible();
+ await library.getByRole("button",{name:/^New coin/}).click();
+ await box.fill("Work in the recovered chat");
+ await page.getByRole("button",{name:"New coin",exact:true}).click();await expect(box).toHaveValue("");
+ expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
+});
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Keep this original unsent idea");
