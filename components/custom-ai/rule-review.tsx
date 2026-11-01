@@ -31,7 +31,9 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
   const editable = ready && draft?.composable && intent?.revision === draft.intent?.revision ? onEditRule : undefined;
   return <section className={styles.ruleReview} aria-label="Rules for this coin">
     <h3>{pendingChange && draft ? "Change not applied" : intent && intentHasOpenParts(intent) ? "Open choices" : pendingChange ? "Change not applied" : "Rules for this coin"}</h3>
-    {pendingChange && !draft && intent ? <p>Your complete idea is saved. Resolve the open choices in the chat to continue.</p> : pendingChange && <>
+    {pendingChange && !draft && intent ? <p>{intentHasOpenParts(intent)
+      ? "Your complete idea is saved. Resolve the open choices in the chat to continue."
+      : "Your complete idea is saved. The latest change has not been applied yet."}</p> : pendingChange && <>
       <p>Your latest request has not been applied. {draft ? "The previous rules are shown below." : "Finish the rules in the chat before creating your coin."}</p>
       <p className={styles.pendingRequest}>{pendingChange}</p>
       {draft && <button type="button" className={styles.textButton} disabled={disabled} onClick={onKeepRules}>Keep previous rules</button>}
