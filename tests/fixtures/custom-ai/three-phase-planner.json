@@ -1,0 +1,245 @@
+{
+  "reply": "I'm building Rule Check (RULE) on Ethereum with ETH as the pair and a 0.01 ETH initial buy. Buys and sells pay 4% total from launch through second 299, 2% from second 300 through 599, and 0.5% from second 600 onward. The 0.5% platform fee is included in each total. This is a draft build only, and the checks cover the fee schedule, not the full contract.",
+  "executionRoute": "fee-module",
+  "intentRequirements": [
+    {
+      "id": "coin-identity",
+      "text": "Coin is Rule Check with ticker RULE on Ethereum, paired with ETH, with a 0.01 ETH initial buy.",
+      "kind": "constraint",
+      "instruction": "Create a checked draft named Rule Check (RULE) on Ethereum, paired with ETH, with a 0.01 ETH initial buy.",
+      "open": null
+    },
+    {
+      "id": "fee-launch-phase",
+      "text": "Total fee on buys and sells is 4% from launch through second 299.",
+      "kind": "behavior",
+      "instruction": "Total fees on both buys and sells must be exactly 4% from launch through second 299",
+      "open": null
+    },
+    {
+      "id": "fee-middle-phase",
+      "text": "Total fee on buys and sells is 2% from second 300 through second 599.",
+      "kind": "behavior",
+      "instruction": "exactly 2% from second 300 through second 599",
+      "open": null
+    },
+    {
+      "id": "fee-final-phase",
+      "text": "Total fee on buys and sells is 0.5% from second 600 onward.",
+      "kind": "behavior",
+      "instruction": "exactly 0.5% from second 600 onward",
+      "open": null
+    },
+    {
+      "id": "fee-includes-platform",
+      "text": "Each fee total includes the 0.5% platform fee.",
+      "kind": "constraint",
+      "instruction": "Each total includes the platform fee.",
+      "open": null
+    },
+    {
+      "id": "no-oracle",
+      "text": "No oracle.",
+      "kind": "constraint",
+      "instruction": "No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers.",
+      "open": null
+    },
+    {
+      "id": "no-rewards",
+      "text": "No rewards program.",
+      "kind": "constraint",
+      "instruction": "No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers.",
+      "open": null
+    },
+    {
+      "id": "no-transfer-tax",
+      "text": "No transfer tax.",
+      "kind": "constraint",
+      "instruction": "No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers.",
+      "open": null
+    },
+    {
+      "id": "no-buybacks",
+      "text": "No buybacks.",
+      "kind": "constraint",
+      "instruction": "No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers.",
+      "open": null
+    },
+    {
+      "id": "no-liquidity-program",
+      "text": "No liquidity program.",
+      "kind": "constraint",
+      "instruction": "No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers.",
+      "open": null
+    },
+    {
+      "id": "no-owner-powers",
+      "text": "No extra owner powers.",
+      "kind": "constraint",
+      "instruction": "No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers.",
+      "open": null
+    },
+    {
+      "id": "draft-only",
+      "text": "Build and check the draft only. Do not launch it.",
+      "kind": "constraint",
+      "instruction": "Build and check the draft only; do not launch it.",
+      "open": null
+    }
+  ],
+  "action": "build",
+  "memory": "Rule Check (RULE) on Ethereum, ETH pair, initial buy 0.01 ETH. Total fee on buys and sells: 4% from launch through second 299, 2% from second 300 through 599, 0.5% from second 600 onward. Each total includes the 0.5% platform fee. No oracle, rewards, transfer tax, buybacks, liquidity program or extra owner powers. Draft build and checks only, no launch.",
+  "requirements": [
+    "The coin is named Rule Check with ticker RULE on Ethereum, paired with ETH, with a 0.01 ETH initial buy.",
+    "Buys and sells pay a total fee of 4% from launch through second 299.",
+    "Buys and sells pay a total fee of 2% from second 300 through second 599.",
+    "Buys and sells pay a total fee of 0.5% from second 600 onward.",
+    "Each total fee includes the 0.5% platform fee.",
+    "There is no oracle, rewards program, transfer tax, buyback, liquidity program or extra owner power.",
+    "The draft is built and checked only. It is not launched."
+  ],
+  "feeChecks": [
+    {
+      "afterSeconds": 0,
+      "buy": true,
+      "totalFeeBps": 400,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 0,
+      "buy": false,
+      "totalFeeBps": 400,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 299,
+      "buy": true,
+      "totalFeeBps": 400,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 299,
+      "buy": false,
+      "totalFeeBps": 400,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 300,
+      "buy": true,
+      "totalFeeBps": 200,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 300,
+      "buy": false,
+      "totalFeeBps": 200,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 301,
+      "buy": true,
+      "totalFeeBps": 200,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 301,
+      "buy": false,
+      "totalFeeBps": 200,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 599,
+      "buy": true,
+      "totalFeeBps": 200,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 599,
+      "buy": false,
+      "totalFeeBps": 200,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 600,
+      "buy": true,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 600,
+      "buy": false,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 601,
+      "buy": true,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 601,
+      "buy": false,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 3600,
+      "buy": true,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 3600,
+      "buy": false,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 86400,
+      "buy": true,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    },
+    {
+      "afterSeconds": 86400,
+      "buy": false,
+      "totalFeeBps": 50,
+      "feedValue": null,
+      "feedFresh": null
+    }
+  ],
+  "setupPatch": {
+    "name": "Rule Check",
+    "symbol": "RULE",
+    "chainId": 1,
+    "pairToken": "ETH",
+    "initialBuy": "0.01",
+    "description": null,
+    "website": null,
+    "x": null
+  },
+  "lookups": [],
+  "program": null,
+  "eventRule": null,
+  "composable": null,
+  "ruleEdits": [],
+  "generalChecks": null
+}

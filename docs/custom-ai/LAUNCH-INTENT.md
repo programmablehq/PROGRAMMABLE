@@ -6,8 +6,25 @@ Each requirement has a stable id, plain text, a behavior/constraint/decision kin
 
 The planner returns all requirements. Replacing or removing a saved requirement uses an explicit edit with a quote from the latest user message. A selected rule restricts edits to its id. Missing or unauthorized edits retain the previous requirement in the next design and block code generation. A question retains the same canonical design and revision.
 
+New planner responses name their executable subset in `implementedRequirementIds`.
+The server resolves those IDs to the intent's canonical text instead of comparing
+two independently paraphrased lists. Unknown and duplicate IDs are rejected;
+omitted rules still prevent complete coverage. Composed rule declarations use the
+same IDs and retain their executable phases unchanged. Historical planner
+envelopes keep their original strict text checks rather than gaining inferred
+coverage. Fixed platform guarantees and the no-broadcast draft workflow count
+as implemented only when that selected workflow actually enforces them.
+
+Generation snapshots the intent, source, compiler settings and callbacks before
+inference. Persistence and compilation receive separate copies of the generated
+project, so a later mutation cannot change the revision behind its saved context.
+
 The server seals each design revision with SHA-256 and its parent revision. After the existing compiler and validators succeed, `CandidateRevision` binds the intent revision, exact source and artifact hashes, route, requirement ids and previous candidate revision. This is a source binding, not proof of arbitrary-code semantics, funded execution, deployment or public availability. Existing readiness and release checks still apply.
 
 The API loads intent from account-owned job results, never from a browser-provided context object. Studio restore reads the latest context separately from an older checked draft when needed and coalesces a shared job id into one read. The UI and local cache retain open requirements across reload and previous-coin restoration. Keeping the previous rules restores that draft's bound intent.
 
-These changes do not implement the general Custom Contract adapter or private multi-chat history. Those remain separate parts of the product plan. The selected chain, pair, wallet and current availability continue to be checked by the launch preparation path; the stored intent is not a current chain-readiness snapshot.
+General contract preparation and private chat history have separate storage and
+admission boundaries, described in `GENERAL-PROJECTS.md` and `CONVERSATIONS.md`.
+The selected chain, pair, wallet and current availability continue to be checked
+by the launch preparation path; the stored intent is not a current chain-readiness
+snapshot.

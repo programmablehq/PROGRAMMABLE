@@ -14,8 +14,11 @@
 .editScope button { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: #c7c2ba; cursor: pointer; }
 .editScope button:hover { background: #242320; }
 .ruleReview .ruleEditList { padding: 0; list-style: none; }
-.ruleEditList li { display: flex; align-items: center; gap: 12px; padding-block: 8px; border-bottom: 1px solid #343431; }
-.ruleEditList span { flex: 1; }
+.ruleEditList li { display: flex; align-items: flex-start; gap: 12px; padding-block: 12px; border-bottom: 1px solid #343431; }
+.ruleBody { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ruleLabels { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; color: #c7c2ba; }
+.ruleLabels small { font-size: 12px; }
+.ruleReview .ruleQuestion { margin: 6px 0 0; }
 .ruleEditList button { min-width: 44px; min-height: 44px; padding: 4px; background: transparent; color: #ede7dc; border: 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .message { width: fit-content; max-width: 100%; margin-block: 0 28px; }
 .message:last-child { margin-bottom: 0; }

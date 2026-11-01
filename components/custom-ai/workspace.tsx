@@ -588,16 +588,17 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         const request=retry.current;if(!request)return;recovered.current=undefined;setRecoveryRequest(request);
       }}>Reconnect to saved reply</button>}
 
-      {editTarget && <div className={styles.editScope} role="status">
+      {editTarget && <div className={styles.editScope} role="status" id="custom-ai-edit-scope">
         <span>Editing: {(generalProject?intent?.requirements:draft?.composable?.spec.requirements)?.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
-        <button type="button" aria-label="Edit the whole design instead" disabled={busy || launchLocked} onClick={() => setEditTarget(undefined)}><X size={16} aria-hidden="true" /></button>
+        <button type="button" aria-label="Edit the whole design instead" disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked} onClick={() => {setEditTarget(undefined);textarea.current?.focus();}}><X size={16} aria-hidden="true" /></button>
       </div>}
       <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send(); }}>
-        <label htmlFor="custom-ai-message" className={styles.srOnly}>Describe your coin or ask a question</label>
+        <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
         <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={8000} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
-          aria-describedby={error ? "custom-ai-error" : "custom-ai-help"}
-          placeholder="Describe your idea…" rows={1} onChange={event => setInput(event.target.value)}
+          aria-describedby={[error ? "custom-ai-error" : "custom-ai-help", editTarget ? "custom-ai-edit-scope" : ""].filter(Boolean).join(" ")}
+          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => setInput(event.target.value)}
           onKeyDown={event => {
+            if(event.key === "Escape" && editTarget && !busy && !recoveryRequest && !switchingCoin && restored && !launchLocked) {event.preventDefault();setEditTarget(undefined);return;}
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault(); void send();
             }
@@ -612,7 +613,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           <ArrowUp size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>}
       </form>
-      <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. Messages are processed by the configured AI provider.</p>
+      <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. {editTarget && "Escape returns to the whole design and keeps your message. "}Messages are processed by the configured AI provider.</p>
     </section>
 
     {!restored?<aside className={styles.coinPanel} aria-label="Coin preview and details" aria-busy="true"><p role="status">Loading your coin…</p></aside>:generalProject||!builderChain(settings.chainId).feeCore?<GeneralProjectPreview key={previewRevision} project={generalProject} intent={intent} draftId={draftId} account={owner} conversationId={conversationId}

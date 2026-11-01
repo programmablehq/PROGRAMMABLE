@@ -67,7 +67,9 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   const texts=["Start at 10%","Fall over ten minutes","Then stay at 1%","No transfer tax","No later minting","No creator liquidity withdrawal",
     "Use London rain","Send fees to liquidity","Buy back on a trigger","Cap the initial wallet buy"];
   const questions=["Which weather feed?","What execution limit?","Which trigger?","What wallet cap?"];
-  const intent={version:1,id:"intent-browser-0001",revision:"b".repeat(64),unresolved:questions,changes:[],
+  const origin={kind:"legacy"};
+  const intent={version:1,id:"intent-browser-0001",revision:"b".repeat(64),parentRevision:"a".repeat(64),unresolved:questions,
+    changes:[{requirementId:"rule-0",operation:"replace",origin},{requirementId:"rule-9",operation:"add",origin},{requirementId:"removed-rule",operation:"remove",origin}],
     requirements:texts.map((text,index)=>({id:`rule-${index}`,text,kind:index>=3&&index<=5?"constraint":"behavior",
       origin:{kind:"message",requestId:"intent-browser-0001",messageIndex:0,quote:text},open:index<6?null:questions[index-6]}))};
   let calls=0;
@@ -78,7 +80,11 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   const requested=page.locator("details").filter({has:page.locator("summary",{hasText:"Requested rules (10)"})});
   await expect(requested).toBeVisible();
   for(const text of texts)await expect(requested.getByText(text,{exact:true})).toBeVisible();
-  for(const question of questions)await expect(requested.getByText(`Open: ${question}`,{exact:true})).toBeVisible();
+  for(const question of questions)await expect(requested.getByText(question,{exact:true})).toBeVisible();
+  await expect(requested.getByText("Updated",{exact:true})).toHaveCount(1);
+  await expect(requested.getByText("Added",{exact:true})).toHaveCount(1);
+  await expect(requested.getByText("Open choice",{exact:true})).toHaveCount(4);
+  await expect(requested.getByText("1 rule removed in this revision.",{exact:true})).toBeVisible();
   await page.screenshot({path:testInfo.outputPath("complete-intent.png"),fullPage:true});
   await expect(page.getByText("Checked draft",{exact:true})).toHaveCount(0);
   await box.fill("Only adjust the weather rule later.");await page.reload();
@@ -180,9 +186,14 @@ test("a selected rule is sent with the exact saved source and survives a failed 
     else await route.fulfill({status:503,json:{error:"Please retry later.",requestState:"failed"}});
   });
   await page.goto("/launch/custom-ai");
-  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  const box=page.locator("#custom-ai-message");
   await box.fill("Build these rules");await box.press("Enter");
   await page.getByText("Edit a rule",{exact:true}).click();
+  await page.getByRole("button",{name:"Edit rule: 10% declines to 1% over ten minutes",exact:true}).click();
+  await expect(page.getByRole("textbox",{name:"Describe your change to this rule"})).toBeFocused();
+  await box.fill("Start at 8% instead.");await box.press("Escape");
+  await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeFocused();
+  await expect(box).toHaveValue("Start at 8% instead.");expect(requests).toHaveLength(1);
   await page.getByRole("button",{name:"Edit rule: 10% declines to 1% over ten minutes",exact:true}).click();
   await expect(box).toBeFocused();
   await expect(page.getByText("Editing: 10% declines to 1% over ten minutes",{exact:true})).toBeVisible();
