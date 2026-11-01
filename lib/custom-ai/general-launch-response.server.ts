@@ -11,6 +11,14 @@ const codes = (value: unknown,maximum=256): string[] => {
   return [...new Set(value as string[])];
 };
 const id = (value: unknown) => typeof value==="string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(value);
+function reviewIdentity(value:Record<string,unknown>,record:GeneralPreparation) {
+  if(value.manualReview===undefined)return {};
+  const review=object(value.manualReview);
+  if(!review||review.schemaVersion!=="programmable.custom-launch-manual-review.v1"||!id(review.reviewId)
+    ||review.chainId!==String(record.chainId)||typeof review.controller!=="string"||review.controller.toLowerCase()!==record.account.toLowerCase()
+    ||!record.reviewSubjectHash||review.subjectHash!==record.reviewSubjectHash)return invalid();
+  return {reviewId:String(review.reviewId),reviewSubjectHash:record.reviewSubjectHash};
+}
 
 /** Same V3 response facts used by the canonical SDK. This projection carries
  * the backend's disposition/status and never turns it into launch readiness. */
@@ -36,7 +44,7 @@ export function projectGeneralGraphReply(operation: GeneralExchangeOperation,rep
     || value.launchProfileHash!==record.launchProfileHash || value.launchIntentHash!==record.launchIntentHash
     || !statuses.includes(String(value.status)) || !reply.location
     || new URL(reply.location,"https://api.programmable.market").pathname.split("/").at(-1)!==value.launchId)return invalid();
-  return {httpStatus:reply.httpStatus,resourceId:String(value.launchId),backendState:String(value.status)};
+  return {httpStatus:reply.httpStatus,resourceId:String(value.launchId),backendState:String(value.status),...reviewIdentity(value,record)};
 }
 
 /** Modern Robinhood responses retain their own Plan/raw-body/manifest domains.
@@ -63,5 +71,5 @@ export function projectGeneralPlanReply(operation:GeneralExchangeOperation,reply
     ||!window||window.validAfter!==record.identity.validAfter||window.deadline!==record.identity.deadline
     ||canonicalBrowserSha256V2("programmable.custom-launch-plan.v1",plan)!==record.requestHash||!statuses.includes(String(value.status))
     ||!reply.location||new URL(reply.location,"https://api.programmable.market").pathname.split("/").at(-1)!==value.planId)return invalid();
-  return {httpStatus:reply.httpStatus,resourceId:String(value.planId),backendState:String(value.status)};
+  return {httpStatus:reply.httpStatus,resourceId:String(value.planId),backendState:String(value.status),...reviewIdentity(value,record)};
 }

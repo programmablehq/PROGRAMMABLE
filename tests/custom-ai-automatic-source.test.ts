@@ -4,7 +4,7 @@ vi.mock("server-only",()=>({}));
 import {generalPackFixture} from "./fixtures/custom-ai-general-pack";
 import {packGeneralGraph} from "../lib/custom-ai/general-pack.server";
 import {packGeneralRobinhoodPlan} from "../lib/custom-ai/general-plan-pack.server";
-import {createAutomaticSourceReceipt} from "../lib/custom-ai/automatic-source.server";
+import {createAutomaticSourceReceipt,generalReviewSubjectHash} from "../lib/custom-ai/automatic-source.server";
 import {canonicalBrowserSha256V2} from "../lib/custom-launch/browser-authority-v2";
 import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
 
@@ -23,7 +23,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("private automatic source r
   }
  },120_000);
  const input=(chain:number=1)=>({source:fixtures.get(chain)!.source,sourceGeneratedAt,requestBody:requests.get(chain)!,
-  review:{reviewId:id,subjectHash:digest,chainId:String(chain),controller:fixtures.get(chain)!.controller},verifierRevision:digest});
+  review:{reviewId:id,subjectHash:generalReviewSubjectHash(chain,JSON.parse(requests.get(chain)!)),chainId:String(chain),controller:fixtures.get(chain)!.controller},verifierRevision:digest});
  it.each([1,4663])("binds the real packed compiler input on %s without resetting the source clock",chain=>{
   const i=input(chain),r=createAutomaticSourceReceipt(i,now);
   expect(r.sourceGeneratedAt).toBe(sourceGeneratedAt);

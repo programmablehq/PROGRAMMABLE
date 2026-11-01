@@ -1,11 +1,12 @@
 import { aiRequest, type AISessionHeaders } from "./client";
 import type { BuilderChainId } from "./execution-routing";
 import { parseCoinSetupPatch, type CoinSetup } from "./coin-setup";
+import { readAutomaticReview,readAutomaticTransport,type AutomaticReviewView } from "./automatic-review";
 
 export type GeneralExchangeView = {
   state: "sending" | "unknown" | "rejected" | "completed";
   httpStatus?: number; code?: string; disposition?: string; findingCodes?: string[];
-  resourceId?: string; backendState?: string;
+  resourceId?: string; backendState?: string;reviewId?:string;reviewSubjectHash?:`sha256:${string}`;
 };
 /** Owner-only journal facts. These are neither a live lifecycle query nor
  * authorization to sign, broadcast, or call a wallet. */
@@ -30,13 +31,15 @@ export type GeneralLaunchStatus = {
   requestHash: `sha256:${string}`; rawRequestSha256: `sha256:${string}` | null;
   status: string; errorCode: string | null; createdAt: string; updatedAt: string; checkedAt: string;
   deadline: string | null; launchReady: false;
+  automatic?:AutomaticReviewView;
 };
 export type GeneralStatusBinding = { account: string; chainId: BuilderChainId; resourceId: string;
-  requestHash: string; rawRequestSha256?: string; deadline: string };
+  requestHash: string; rawRequestSha256?: string; deadline: string;reviewId?:string;reviewSubjectHash?:string };
 export type GeneralLaunchState = {
   preparation: GeneralPreparationView | null;
   phase: "loading" | "idle" | "warming" | "preparing" | "submitting" | "checking";
   error: string; loaded: boolean; unconfirmedId?: string; currentStatus?: GeneralLaunchStatus; statusError?: string;
+  automatic?:AutomaticReviewView;
   previousSubmission?: GeneralPreparationView;
 };
 const identifier = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9-]{16,64}$/u.test(v);
@@ -50,25 +53,33 @@ export function readGeneralLaunchStatus(value: unknown, binding: GeneralStatusBi
   const bad = (): never => { throw Error("The current launch status could not be matched to the original submission."); };
   if (!object(value) || !exactKeys(value, ["status"]) || !object(value.status)) return bad();
   const v = value.status;
+  const automatic=v.automatic===undefined?undefined:readAutomaticReview(v.automatic,binding.reviewId);
+  const transport=automatic?.transport?readAutomaticTransport(automatic.transport,{reviewId:binding.reviewId,
+    subjectHash:binding.reviewSubjectHash,account:binding.account,chainId:binding.chainId,resourceId:binding.resourceId,
+    originalRequestHash:binding.requestHash}):undefined;
+  if(transport&&(!binding.reviewId||!binding.reviewSubjectHash))return bad();
+  const expected={requestHash:transport?.requestHash??binding.requestHash,deadline:transport?.deadline??binding.deadline,
+    rawRequestSha256:transport?.rawRequestSha256??binding.rawRequestSha256};
   const date = (item: unknown): item is string => typeof item === "string" && Number.isFinite(Date.parse(item)) && new Date(item).toISOString() === item;
   if (!exactKeys(v, ["schemaVersion", "kind", "chainId", "resourceId", "controller", "requestHash", "rawRequestSha256", "status", "errorCode",
-    "createdAt", "updatedAt", "checkedAt", "deadline", "launchReady"]) || v.schemaVersion !== "programmable.wallet-launch-status.v1"
+    "createdAt", "updatedAt", "checkedAt", "deadline", "launchReady", "automatic"]) || v.schemaVersion !== "programmable.wallet-launch-status.v1"
     || v.kind !== (binding.chainId === 4663 ? "plan-v1" : "graph-v3") || v.chainId !== String(binding.chainId) || !uuid(v.resourceId) || v.resourceId !== binding.resourceId
     || typeof v.controller !== "string" || !/^0x[a-f0-9]{40}$/iu.test(v.controller) || v.controller.toLowerCase() !== binding.account.toLowerCase()
-    || !hash(v.requestHash) || v.requestHash !== binding.requestHash || typeof v.deadline !== "string" || !/^(?:0|[1-9][0-9]{0,19})$/u.test(v.deadline)
-    || BigInt(v.deadline) >= 2n ** 64n || v.deadline !== binding.deadline || v.launchReady !== false
-    || (binding.chainId === 4663 ? !hash(v.rawRequestSha256) || binding.rawRequestSha256 !== undefined && v.rawRequestSha256 !== binding.rawRequestSha256 : v.rawRequestSha256 !== null)
+    || !hash(v.requestHash) || v.requestHash !== expected.requestHash || typeof v.deadline !== "string" || !/^(?:0|[1-9][0-9]{0,19})$/u.test(v.deadline)
+    || BigInt(v.deadline) >= 2n ** 64n || v.deadline !== expected.deadline || v.launchReady !== false
+    || (binding.chainId === 4663 ? !hash(v.rawRequestSha256) || expected.rawRequestSha256 !== undefined && v.rawRequestSha256 !== expected.rawRequestSha256 : v.rawRequestSha256 !== null)
     || typeof v.status !== "string" || !/^[a-z][a-z0-9_]{0,63}$/u.test(v.status)
     || v.errorCode !== null && (typeof v.errorCode !== "string" || !/^[A-Za-z0-9_.:-]{1,128}$/u.test(v.errorCode))
     || !date(v.createdAt) || !date(v.updatedAt) || !date(v.checkedAt) || Date.parse(v.updatedAt) < Date.parse(v.createdAt)) return bad();
   return structuredClone(v) as GeneralLaunchStatus;
 }
 function exchange(value: unknown): GeneralExchangeView {
-  if (!object(value) || !exactKeys(value, ["state", "httpStatus", "code", "disposition", "findingCodes", "resourceId", "backendState"])
+  if (!object(value) || !exactKeys(value, ["state", "httpStatus", "code", "disposition", "findingCodes", "resourceId", "backendState", "reviewId", "reviewSubjectHash"])
     || !["sending", "unknown", "rejected", "completed"].includes(String(value.state))
     || value.httpStatus !== undefined && (!Number.isInteger(value.httpStatus) || Number(value.httpStatus) < 100 || Number(value.httpStatus) > 599)
     || ["code", "disposition", "backendState"].some(key => value[key] !== undefined && !text(value[key]))
     || value.resourceId !== undefined && !uuid(value.resourceId)
+    || value.reviewId !== undefined && !uuid(value.reviewId) || value.reviewSubjectHash !== undefined && !hash(value.reviewSubjectHash)
     || value.findingCodes !== undefined && (!Array.isArray(value.findingCodes) || value.findingCodes.length > 256
       || value.findingCodes.some(code => !text(code) || !/^[A-Z][A-Z0-9_]{0,127}$/u.test(code)))) return invalid();
   return structuredClone(value) as GeneralExchangeView;
@@ -135,7 +146,7 @@ export function createGeneralLaunchClient(options: {
     if (patch.preparation !== undefined && (!patch.preparation || patch.preparation.id !== state.preparation?.id
       || patch.preparation.requestHash !== state.preparation?.requestHash || patch.preparation.submission?.state !== "completed"
       || patch.preparation.submission.resourceId !== state.preparation?.submission?.resourceId)) {
-      patch = { ...patch, currentStatus: undefined, statusError: "" };
+      patch = { ...patch, currentStatus: undefined, automatic:undefined, statusError: "" };
     }
     signal.throwIfAborted(); state = { ...state, ...patch }; options.update(state);
   }
@@ -154,7 +165,7 @@ export function createGeneralLaunchClient(options: {
     finally { active = false; if (!signal.aborted) update({ phase: "idle" }); }
   }
   async function create(preparation: GeneralPreparationView) {
-    if (preparation.submission?.state === "completed") return;
+    if (preparation.submission?.state === "completed") {await check(preparation);return;}
     if (preparation.submission?.state === "sending") { await read(preparation.id); return; }
     update({ phase: "submitting", unconfirmedId: preparation.id });
     try {
@@ -162,11 +173,20 @@ export function createGeneralLaunchClient(options: {
       signal.throwIfAborted();
       const saved = readGeneralPreparation(value, account, preparation.id); if (!saved) return invalid();
       update({ preparation: saved, ...(saved.submission?.state === "completed" ? { unconfirmedId: undefined } : {}) });
+      if(saved.submission?.state==="completed")await check(saved);
     } catch (error) {
       // No retry and no second ticket after a lost or rejected create reply.
       if (!signal.aborted) await read(preparation.id).catch(() => undefined);
       throw error;
     }
+  }
+  async function check(preparation:GeneralPreparationView) {
+    if(!preparation.submission?.reviewId)return;
+    const value=await request("/general-launch",options.headers,{action:"check",id:preparation.id},signal);
+    signal.throwIfAborted();
+    if(!object(value)||!exactKeys(value,["automatic"]))return invalid();
+    update({automatic:readAutomaticReview(value.automatic,preparation.submission.reviewId)});
+    await currentStatus();
   }
   async function currentStatus() {
     const original = state.preparation, resourceId = original?.submission?.state === "completed" ? original.submission.resourceId : undefined;
@@ -177,8 +197,10 @@ export function createGeneralLaunchClient(options: {
     try {
       const value = await request(`/general-launch?${new URLSearchParams({ id: original.id, view: "status" })}`, options.headers, undefined, signal);
       signal.throwIfAborted(); if (!stillSelected()) return;
-      update({ currentStatus: readGeneralLaunchStatus(value, { account, chainId: original.chainId, resourceId,
-        requestHash: original.requestHash, deadline: String(original.expiresAt / 1000) }), statusError: "" });
+      const current=readGeneralLaunchStatus(value, { account, chainId: original.chainId, resourceId,
+        requestHash: original.requestHash, deadline: String(original.expiresAt / 1000),reviewId:original.submission?.reviewId,
+        reviewSubjectHash:original.submission?.reviewSubjectHash });
+      update({ currentStatus:current,...(current.automatic?{automatic:current.automatic}:{}),statusError: "" });
     } catch (error) {
       if (!signal.aborted && stillSelected()) update({ statusError: error instanceof Error ? error.message : "The current status could not be checked. Your submission is saved." });
     } finally { statusActive = false; }
@@ -221,6 +243,7 @@ export function createGeneralLaunchClient(options: {
     // The server revalidates and reuses the exact package on the explicit send.
     prepare: (select: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => action("warming", () => prepare(select,false)),
     submit: (select: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => action("preparing", () => prepare(select,true)),
+    check:()=>action("checking",async()=>{if(state.preparation)await check(state.preparation);}),
     recover: () => action("checking", async () => {
       const id = state.unconfirmedId ?? state.preparation?.id;
       if (!id) throw Error("Check the saved submission first.");

@@ -25,22 +25,22 @@ export function useGeneralLaunch({ enabled, account, scope, headers }: { enabled
     ? JSON.stringify([state.preparation.id, state.preparation.requestHash, state.preparation.submission.resourceId]) : undefined;
   useEffect(() => {
     if (!enabled || !submissionKey) return;
-    const until = Date.now() + 120_000; let attempts = 0;
+    const until = Date.now() + 120_000; let attempts = 0,cancelled=false,timer:ReturnType<typeof setTimeout>;
     const tick = () => {
       const view = latest.current;
-      if (Date.now() >= until || attempts >= 12 || view.statusError || view.currentStatus &&
-        ["completed", "confirmed", "final", "finalized", "source_verified", "indexed", "publicly_visible", "failed", "rejected", "expired", "cancelled"].includes(view.currentStatus.status)) {
-        clearInterval(timer); return;
-      }
+      if(cancelled||Date.now()>=until||attempts>=20||view.currentStatus&&
+        ["authorized","launch_ready","wallet_action_ready","reserved","completed", "confirmed", "final", "finalized", "source_verified", "indexed", "publicly_visible", "failed", "rejected", "expired", "cancelled"].includes(view.currentStatus.status))return;
       attempts++;
-      if (client.current?.key === key) void client.current.current.observeStatus();
+      if(client.current?.key===key)void client.current.current.observeStatus().finally(()=>{
+        if(!cancelled)timer=setTimeout(tick,attempts<10?2000:5000);
+      });
     };
-    const timer = setInterval(tick, 10_000); tick();
-    return () => clearInterval(timer);
+    tick();
+    return () => {cancelled=true;clearTimeout(timer);};
   }, [enabled, key, submissionKey]);
   const current = () => client.current?.key === key ? client.current.current : undefined;
   return { ...state, busy: state.phase !== "idle", locked: state.phase === "preparing" || state.phase === "submitting",
     prepare: (input: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => current()?.prepare(input),
     submit: (input: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => current()?.submit(input),
-    recover: () => current()?.recover(), refresh: () => current()?.refresh(), refreshStatus: () => current()?.refreshStatus() };
+    recover: () => current()?.recover(),check:()=>current()?.check(), refresh: () => current()?.refresh(), refreshStatus: () => current()?.refreshStatus() };
 }

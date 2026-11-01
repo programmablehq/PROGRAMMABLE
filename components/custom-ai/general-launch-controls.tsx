@@ -15,7 +15,7 @@ import styles from "./workspace.module.css";
 const GeneralLaunchWallet = lazy(() => import("./general-launch-wallet"));
 
 function currentStatusMessage(status: string): string {
-  if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return "Your submission is waiting for review.";
+  if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return "Checking the saved source and preparing your launch.";
   if (["action_required", "needs_changes", "changes_requested"].includes(status)) return "Your submission needs an update. Open its details to continue.";
   if (["authorized", "launch_ready", "wallet_action_ready", "awaiting_wallet_signature", "reserved"].includes(status)) return "Your submission has wallet steps to review.";
   if (["submitted", "broadcast", "confirming", "finality_pending"].includes(status)) return "Waiting for the transaction to confirm.";
@@ -71,13 +71,15 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   const detailLabel = detail ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image", description: "Add description", website: "Add project link", x: "Add X link" }[detail.field] : "";
   const checking = saved?.submission?.state === "sending";
   const label = !launch.loaded ? "Check saved submission" : uncertain ? checking ? "Check submission" : "Recover submission"
-    : detail ? detailLabel : "Submit for review";
+    : detail ? detailLabel : "Prepare launch";
   const busyLabel = launch.phase === "warming" ? "Preparing launch…" : launch.phase === "preparing" ? "Preparing submission…" : launch.phase === "submitting" ? "Submitting…" : "Checking saved submission…";
   let status = launch.phase !== "idle" ? busyLabel : !launch.loaded ? "Your saved submission has not been checked yet."
     : uncertain ? "The original submission is saved. Check its result before starting another one."
-    : accepted ? launch.currentStatus ? currentStatusMessage(launch.currentStatus.status) : "Submission received. Open it to see its review and wallet steps."
+    : accepted ? launch.automatic?.state==="changes_required"?"This source needs the correction shown below. Update it in the chat."
+      :launch.automatic?.state==="interrupted"?"The automatic check stopped. Continue with the same saved source."
+        :launch.currentStatus ? currentStatusMessage(launch.currentStatus.status) : "Your source is saved. Preparing the launch."
     : detail ? detail.message : !complete ? "Finish the saved contract design in the chat before submitting it."
-    : "Submit this saved design for launch review.";
+    : "Ready to check this source and prepare your launch.";
   if (saved && (uncertain || href) && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;
 
   async function proceed() {
@@ -115,6 +117,9 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()} />
     </Suspense>}
     {href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}
+    {accepted&&["interrupted","not_started"].includes(launch.automatic?.state??"")&&<button type="button" className={styles.createButton}
+      disabled={launch.busy||disabled} onClick={()=>{void launch.check();}}>Continue check<ArrowRight size={16} aria-hidden="true" /></button>}
+    {accepted&&launch.automatic?.state==="changes_required"&&launch.automatic.findings.map(finding=><p className={styles.error} key={finding.code} role="status">{finding.message}</p>)}
     {launch.statusError && <p className={styles.note} role="status">The current status could not be refreshed. Your saved submission is still available.</p>}
     {launch.error && <p className={styles.error} role="alert">{launch.error}</p>}
   </section>;

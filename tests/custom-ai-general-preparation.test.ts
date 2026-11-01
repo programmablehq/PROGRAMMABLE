@@ -19,6 +19,8 @@ import {createCustomAIBackendLaunchBridge} from "../lib/custom-ai/backend-launch
 import {authorizeCustomAI} from "../lib/custom-ai/auth.server";
 import {parseGeneralPreparationAction} from "../lib/custom-ai/general-preparation-input";
 import {CustomAIError} from "../lib/custom-ai/types";
+import {createGeneralAutomaticService} from "../lib/custom-ai/general-automatic.server";
+import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
 
 const owner="pack-fixture-owner", ticket="general-prepare-ticket-0001", nextTicket="general-prepare-ticket-0002";
 const launchId="20000000-0000-4000-8000-000000000001",requestId="30000000-0000-4000-8000-000000000001";
@@ -71,6 +73,8 @@ beforeAll(async()=>{
   await seed.projects.save(owner,sourceId,reserved.lease!,fixture.source.project);
   await seed.projects.complete(owner,sourceId,reserved.lease!,fixture.source.compilation);
   await seed.projects.saveScenarios(owner,sourceId,reserved.lease!,fixture.source.scenarios);
+  await seed.projects.saveSourceAudit(owner,sourceId,reserved.lease!,await auditGeneralSource(fixture.source.project,undefined,{
+    call:async()=>({text:JSON.stringify({reviewedRequirementIds:fixture.source.project.intent.requirements.map(rule=>rule.id),findings:[]}),inputTokens:1,outputTokens:1})}));
   const view=generalProjectView({version:1,reply:"Source checked",summary:"Marker",project:fixture.source.project,compilation:fixture.source.compilation,
     scenarios:fixture.source.scenarios,blueprintId:fixture.source.blueprint.id,selection:selectExecutionRoute(fixture.source.project.intent,1),requirementCoverage:"proposed",launchReady:false});
   await seed.finish(owner,sourceId,reserved.lease!,{reply:"Source checked",generalProject:view,intent:fixture.source.project.intent,change:"applied"});
@@ -96,6 +100,37 @@ beforeEach(async()=>{
 afterEach(async()=>{await database?.close();vi.restoreAllMocks();vi.unstubAllEnvs();vi.clearAllMocks();});
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch preparation",()=>{
+  it("binds the actual saved source once, runs automatic review and reuses its recorded result",async()=>{
+    const saved=await stage(),claim=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
+    const value={...resource(saved),manualReview:{schemaVersion:"programmable.custom-launch-manual-review.v1",reviewId:launchId,
+      subjectHash:saved.reviewSubjectHash,chainId:"1",controller:saved.account}};
+    await store.projects.preparations.finishExchange(owner,ticket,"create",claim.lease!,{state:"completed",reply:value,
+      summary:projectGeneralGraphReply("create",{httpStatus:202,value,location:`/v1/launches/${launchId}`},saved)});
+    const verifier=`sha256:${"d".repeat(64)}`;let done=false,sourceClock=0;
+    const fetchBackend=vi.fn<typeof fetch>(async(input,init)=>{
+      const url=String(input),state=done?"approved":"not_started";
+      if(init?.method==="GET")return Response.json({schemaVersion:"programmable.automatic-launch-status.v1",reviewId:launchId,state,
+        manualReviewRequired:false,launchReady:false,findings:[],timing:done?{sourceGeneratedAt:sourceClock,startedAt:sourceClock,
+          finishedAt:sourceClock+1,sourceToDecisionMs:1,decisionWithinTarget:true}:null,
+        configuration:{productionHash:record.productionId,verifierRevision:verifier}});
+      if(url.endsWith("/source-context")){
+        const body=JSON.parse(Buffer.from(init!.body as Uint8Array).toString());sourceClock=body.receipt.sourceGeneratedAt;
+        expect(body.receipt.sourceAudit.status).toBe("passed");expect(body.receipt.projectHash).toBe(fixture.source.project.hash);
+        expect(body.receipt.intent.requirements).toHaveLength(fixture.source.project.intent.requirements.length);
+        return Response.json({schemaVersion:"programmable.automatic-source-bound.v1",reviewId:launchId,bound:true});
+      }
+      done=true;
+      return Response.json({schemaVersion:"programmable.automatic-launch-status.v1",reviewId:launchId,state:"approved",manualReviewRequired:false,
+        launchReady:false,findings:[],timing:{sourceGeneratedAt:sourceClock,startedAt:sourceClock,finishedAt:sourceClock+1,sourceToDecisionMs:1,decisionWithinTarget:true}});
+    });
+    const bridge=()=>createCustomAIBackendLaunchBridge({backendBaseUrl:"https://api.test/",websiteToken:"w".repeat(43),assertionKey:"k".repeat(43),fetchBackend,now:()=>new Date(clock)});
+    const service=createGeneralAutomaticService({store,bridge,now:()=>clock}),c=await request();
+    expect((await service.check(c.req,c.authority,ticket)).state).toBe("approved");
+    expect(fetchBackend.mock.calls.map(([,init])=>init?.method)).toEqual(["GET","POST","POST"]);
+    expect((await service.check(c.req,c.authority,ticket)).state).toBe("approved");
+    expect(fetchBackend.mock.calls.map(([,init])=>init?.method)).toEqual(["GET","POST","POST","GET"]);
+    expect((await store.projects.preparations.read(owner,ticket))?.requestHash).toBe(saved.requestHash);
+  });
   it("deduplicates concurrent clicks and changed browser IDs without allocating another nonce or CPU budget",async()=>{
     const [a,b]=await Promise.all([store.projects.preparations.reserve(owner,ticket,selected()),store.projects.preparations.reserve(owner,nextTicket,selected())]);
     for(const result of [a,b]){expect(result.record.id).toBe(ticket);expect(result.record.identity).toEqual(record.identity);expect(result.lease).toBeNull();}

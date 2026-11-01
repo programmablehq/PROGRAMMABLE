@@ -5,10 +5,12 @@ import type { createCustomAIBackendLaunchBridge } from "./backend-launch.server"
 import type { GeneralPreparation } from "./general-preparation-store.server";
 import { readGeneralLaunchStatus, type GeneralLaunchStatus } from "./general-preparation";
 import { CustomAIError } from "./types";
+import type { createGeneralAutomaticService } from "./general-automatic.server";
 
 /** Only compact, request-bound facts are shared, for two seconds at most. Each
  * caller still proves its own current Request/session and linked wallet. */
-export function createGeneralLaunchStatusReader(deps: { bridge: () => Pick<ReturnType<typeof createCustomAIBackendLaunchBridge>, "status">; now?: () => number }) {
+export function createGeneralLaunchStatusReader(deps: { bridge: () => Pick<ReturnType<typeof createCustomAIBackendLaunchBridge>, "status">;
+  automatic?:ReturnType<typeof createGeneralAutomaticService>["read"];now?: () => number }) {
   const now = deps.now ?? Date.now;
   const cacheClock = deps.now ?? (() => performance.now());
   const cache = new Map<string, { until: number; value?: GeneralLaunchStatus; pending?: Promise<GeneralLaunchStatus> }>();
@@ -32,10 +34,15 @@ export function createGeneralLaunchStatusReader(deps: { bridge: () => Pick<Retur
       entry = { until: 0 }; cache.set(key, entry);
       const cell = entry;
       cell.pending = (async () => {
-        const reply = await deps.bridge().status(request, authority, { chainId: saved.chainId, account, resourceId });
+        const automatic=deps.automatic&&saved.submission?.reviewId?await deps.automatic(request,authority,saved):undefined;
+        // The transport proof and current status share one database snapshot.
+        // Avoid racing a second status read against signing-window renewal.
+        const reply=automatic?.transport?{httpStatus:200,location:null,value:automatic.transport.currentStatus}:
+          await deps.bridge().status(request,authority,{chainId:saved.chainId,account,resourceId});
         let value: GeneralLaunchStatus;
-        try { value = readGeneralLaunchStatus({ status: reply.value }, { account, chainId: saved.chainId, resourceId, requestHash: saved.requestHash!,
-          ...(saved.chainId === 4663 ? { rawRequestSha256: saved.requestSha256! } : {}), deadline: saved.identity.deadline }); }
+        try { value = readGeneralLaunchStatus({ status: {...reply.value as object,...(automatic?{automatic}:{})} }, { account, chainId: saved.chainId, resourceId, requestHash: saved.requestHash!,
+          ...(saved.chainId === 4663 ? { rawRequestSha256: saved.requestSha256! } : {}), deadline: saved.identity.deadline,
+          reviewId:saved.submission?.reviewId,reviewSubjectHash:saved.submission?.reviewSubjectHash }); }
         catch { throw new CustomAIError("launch-status-binding", "The current launch status could not be confirmed. Your submission is saved.", 503); }
         if (reply.httpStatus !== 200 || reply.location !== null || Math.abs(now() - Date.parse(value.checkedAt)) > 30_000)
           throw new CustomAIError("launch-status-binding", "The current launch status could not be confirmed. Your submission is saved.", 503);
