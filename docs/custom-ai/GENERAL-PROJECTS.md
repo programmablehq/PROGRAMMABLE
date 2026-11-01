@@ -755,5 +755,7 @@ different callers and mismatched outputs still fail.
 This produces `observed-constructor-runtime-v3` with the original observation
 and replay in its hash. Existing V1/V2 inputs retain their previous behavior.
 The generic graph/Plan packers do not yet supply this dependency input or admit
-this new receipt into public preparations. Source-bound opening pricing and
-backend admission remain required; general launch activation stays disabled.
+this new receipt into public preparations. The materializer snapshots the
+source, compiler output and predicted addresses before awaiting a resolver.
+Source-bound opening pricing, independent behavior-fixture support and backend
+admission remain required; general launch activation stays disabled.

@@ -125,4 +125,17 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed cons
     const result = await materializeGeneralRuntime(input.project, input.compilation, { ...input.selected, observedDependencies: dependencies }, input.predictions);
     expect(result.version).toBe(3); expect(result.dependencyContext?.observation.chainId).toBe(999);
   });
+  it("binds source and predicted addresses before awaiting the dependency resolver", async () => {
+    const project = structuredClone(input.project), compilation = structuredClone(input.compilation), predictions = structuredClone(input.predictions);
+    const originalHash = project.hash, originalAddress = predictions[0].predictedAddress;
+    const resolveObservedDependencies = vi.fn(async () => {
+      project.sources["Project.sol"].content = "contract Changed {}";
+      predictions[0].predictedAddress = `0x${"21".repeat(20)}`;
+      await Promise.resolve();
+      return input.dependencies;
+    });
+    const result = await materializeGeneralRuntime(project, compilation, { ...input.selected, resolveObservedDependencies }, predictions);
+    expect(resolveObservedDependencies).toHaveBeenCalledTimes(1);
+    expect(result.projectHash).toBe(originalHash); expect(result.targets[0].address).toBe(originalAddress);
+  });
 });

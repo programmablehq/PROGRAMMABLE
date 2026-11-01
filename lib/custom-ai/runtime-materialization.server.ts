@@ -11,8 +11,10 @@ import type { CoinSetup } from "./coin-setup";
 import { CustomAIError } from "./types";
 import { ROBINHOOD_PLAN_DEPLOYER } from "./plan-deployer";
 import { constructorDependencyState, type ObservedConstructorDependencies } from "./dependency-witness";
+import type { LaunchProductionContext } from "./launch-production";
 
 export type GeneralDeploymentPrediction = { targetId: string; predictedAddress: Address; effectiveSalt: Hex; resolvedConstructorArguments: Hex };
+export type GeneralRuntimeDependencyResolver = (production: LaunchProductionContext, caller: Address, signal?: AbortSignal) => Promise<ObservedConstructorDependencies>;
 type RuntimeResult = { status: "materialized" | "needs-context"; passes: number; gasUsed: string; failures: { target: string; code: string }[];
   contracts: { id: string; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[];
   children?: { id: string; parent: string; nonce: string; address: Address; runtimeCode: Hex; runtimeCodeHash: Hex; runtimeImmutables: { immutableId: string; abiType: "bytes32"; literal: Hex }[] }[];
@@ -28,8 +30,14 @@ export class GeneralRuntimeContextIncomplete extends CustomAIError {
 
 export async function materializeGeneralRuntime(project: ContractProject, compilation: CompiledProject,
   selected: { controller: Address; settings: CoinSetup; nativeFundingWei?: string;
-    planDeployer?: typeof ROBINHOOD_PLAN_DEPLOYER; observedDependencies?: ObservedConstructorDependencies }, predictions: GeneralDeploymentPrediction[], signal?: AbortSignal) {
+    planDeployer?: typeof ROBINHOOD_PLAN_DEPLOYER; observedDependencies?: ObservedConstructorDependencies;
+    resolveObservedDependencies?: GeneralRuntimeDependencyResolver }, predictions: GeneralDeploymentPrediction[], signal?: AbortSignal) {
   signal?.throwIfAborted();
+  project = structuredClone(project); compilation = structuredClone(compilation); predictions = structuredClone(predictions);
+  selected = { ...selected, settings: structuredClone(selected.settings),
+    ...(selected.planDeployer ? { planDeployer: structuredClone(selected.planDeployer) } : {}),
+    ...(selected.observedDependencies ? { observedDependencies: structuredClone(selected.observedDependencies) } : {}) };
+  if (selected.observedDependencies && selected.resolveObservedDependencies) return invalid();
   const values = resolveGeneralDeploymentValues(project, compilation, selected);
   const production = project.production!;
   // The Atomic executor calls an external deployment proxy. Its own address
@@ -81,9 +89,12 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
   const initializerId = values.targets.find(target => target.role === "liquidity")?.id;
   const initializer = initializerId ? byId.get(initializerId)?.predictedAddress : undefined;
   let observedDependencies: ReturnType<typeof constructorDependencyState> | undefined;
-  if (selected.observedDependencies) {
+  const resolvedDependencies = selected.observedDependencies ?? (withChildren && production.protectionBindings && initializer && selected.resolveObservedDependencies
+    ? await selected.resolveObservedDependencies(structuredClone(production), initializer, signal) : undefined);
+  signal?.throwIfAborted();
+  if (resolvedDependencies) {
     if (!withChildren || !initializer) return invalid();
-    try { observedDependencies = constructorDependencyState(selected.observedDependencies, production, initializer, Date.now()); }
+    try { observedDependencies = constructorDependencyState(resolvedDependencies, production, initializer, Date.now()); }
     catch { return invalid(); }
   }
   // Snapshot the complete bounded input before waiting for any worker. A later
@@ -96,7 +107,7 @@ export async function materializeGeneralRuntime(project: ContractProject, compil
     settingsHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-settings.v1", values.settings),
     initializationHash: canonicalBrowserSha256V2("programmable.custom-ai-runtime-initialization.v1", values.targets.map(target => ({ id: target.id, initializer: target.initializer, value: target.initializerValueWei }))),
     controller: values.controller, deployer,
-    ...(observedDependencies ? { dependencyContext: observedDependencies.context } : {}),
+    ...(observedDependencies ? { dependencyContext: observedDependencies.context, dependencyProduction: production, dependencyInitializerId: initializerId! } : {}),
     ...(production.route === "plan-v1" ? {deployerRuntimeCodeHash:selected.planDeployer!.runtimeCodeHash}:{}),
     targets: targets.map(target => ({ id: target.id, address: target.address, salt: target.salt,
       initCodeHash: keccak256(target.initCode), value: target.value })),
