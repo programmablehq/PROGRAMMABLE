@@ -13,6 +13,8 @@ describe("validated platform policy guidance",()=>{
     expect(guidance).toContain("300 seconds");expect(guidance).toContain("99% for 30 seconds");
     expect(guidance).toContain("2% recipient cap measures cumulative token inflows");
     expect(guidance).toContain("including wallet-to-wallet transfers");expect(guidance).toContain("Tax-exempt wallets remain subject");
+    expect(guidance).toContain("use an empty additionalTaxExemptWallets list");
+    expect(guidance).toContain("protocol addresses are not user-added exemptions");
     expect(guidance).toContain("If a user explicitly requests a conflicting rule");
   });
   it("does not invent this policy for an unprotected or legacy context",()=>{
