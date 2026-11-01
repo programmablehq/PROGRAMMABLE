@@ -41,7 +41,7 @@ Interface still selects full application coverage before sharing results.
 Do not repeat successful checks locally and then run the same full suite again
 for every small edit. Visual wording and CSS do not need source-string tests.
 
-The two exact general-constructor workers use the Interface lane: the pinned
+The exact general-constructor and dependency-replay workers use the Interface lane: the pinned
 EVM toolchain, related constructor and pack tests, Custom AI browser tests and
 the production build. Their source does not change the platform Solidity,
 database or indexer. Unknown worker paths, toolchain changes, selectors,

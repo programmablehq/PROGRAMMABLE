@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 export const GENERAL_CONSTRUCTOR_WORKERS = Object.freeze([
   "scripts/custom-ai/general-runtime-worker.mjs",
   "scripts/custom-ai/general-runtime-v2-worker.mjs",
+  "scripts/custom-ai/dependency-call-worker.mjs",
 ]);
 export function isGeneralConstructorWorker(path) {
   return GENERAL_CONSTRUCTOR_WORKERS.includes(path);
