@@ -1,10 +1,14 @@
 # Custom AI
 
-Describe your coin's fee rules in the [Custom AI chat](https://programmable.market/launch/custom-ai), review the result and confirm the launch in your wallet. Ethereum and Robinhood are supported. Accepted drafts do not need a manual submission review.
+Describe your coin or hook in the [Custom AI chat](https://programmable.market/launch/custom-ai). The chat keeps the agreed rules and explains which parts can be built on your selected network.
+
+The fixed fee builder supports launches on Ethereum and Robinhood. Its accepted drafts do not need a manual submission review. General contract projects use a separate source, behavior-check and Custom Launch review process. Generating or compiling a project does not make it launch-ready.
 
 The chat can fill in the name, ticker, chain, pair token and initial buy. Open **Coin details** to edit those settings. Choose an image, review the checked rules and select **Launch coin**. If a name, ticker or image is missing, the next action opens the relevant editor. The final launch action confirms that exact version. Keep an interrupted launch open so its saved wallet transaction can be checked again.
 
 ## Fixed rules
+
+These rules apply to the fixed fee builder. General contract projects follow the Custom Launch policy for their selected network.
 
 Every coin has 1 billion tokens with no later mint, burn, transfer tax, blacklist, pause or upgrade authority. Its pre-buy value starts at $15,000, with tick rounding up to $15,091.50. The initial buy must be worth at least 0.01 ETH; network fees are separate. There is no maximum purchase or holding limit.
 
@@ -26,7 +30,15 @@ Reloading a running reply reconnects to the saved request. It does not start ano
 
 The chat can look up public sources, indexed markets and basic onchain contract information. It includes source links; research does not establish that a contract is safe.
 
-Event rules require a connected, named data feed. Optional funded programs support fixed distributions, proportional staking rewards and buybacks with a fixed batch cap and minimum exchange rate. These new launch paths remain unavailable until enabled on the selected network; the chat says when a design is only prepared for testing. Execution is permissionless and its timing is not guaranteed. The combined builder can prepare versioned time and event rules with locked-liquidity allocations. This path remains unavailable for public launches until its network deployment, data service and execution service have matching acceptance evidence. Arbitrary reward code is unsupported.
+## General contract projects
+
+You can develop contract source for Ethereum, Robinhood, Base and HyperEVM in the same chat. The project keeps its source files, compiler settings, requirements and declared behavior checks together. An edit retains existing files unless the response explicitly replaces their contents. The builder can use the supplied OpenZeppelin and Uniswap v4 libraries without downloading packages during your request.
+
+A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. General contract launch preparation in the chat remains unavailable until its full review and network integration is enabled. The fixed fee builder's launch button does not launch a general contract project.
+
+For an existing Custom Launch submission, continue through its original [API workflow](../developers/custom-launch.md). Its review decision and current wallet preparation determine the next step.
+
+The fee builder's event rules require a connected, named data feed. Its optional funded programs support fixed distributions, proportional staking rewards and buybacks with a fixed batch cap and minimum exchange rate. These new launch paths remain unavailable until enabled on the selected network; the chat says when a design is only prepared for testing. Execution is permissionless and its timing is not guaranteed. The combined builder can prepare versioned time and event rules with locked-liquidity allocations. This path remains unavailable for public launches until its network deployment, data service and execution service have matching acceptance evidence. These program templates do not execute arbitrary reward code.
 
 Pair tokens must be compatible ERC20 tokens on the selected chain with a supported price reference. External tokens can have their own admin rights. Robinhood WETH is upgradeable and its bridge can burn balances; these rights are shown before launch.
 

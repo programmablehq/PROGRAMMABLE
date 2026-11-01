@@ -50,14 +50,21 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
     const bindings: Record<string, unknown> = { "pool-manager": production.poolManager.address,
       "launch-executor": production.executor.address, "fee-recipient": production.tradeFee.recipient,
       "graph-factory": production.graphProfile?.graphFactory, "permit-authority": production.graphProfile?.permitAuthority,
-      "funding-token": production.graphProfile?.fundingToken };
+      "funding-token": production.graphProfile?.fundingToken,
+      "swap-router":production.protectionBindings?.swapRouter.address,"swap-router-runtime-hash":production.protectionBindings?.swapRouter.runtimeCodeHash,
+      "native-usd-feed":production.protectionBindings?.nativeUsdFeed.address,"native-usd-feed-runtime-hash":production.protectionBindings?.nativeUsdFeed.runtimeCodeHash,
+      "sequencer-uptime-feed":production.protectionBindings?.sequencerUptimeFeed };
     const resolve = (value: DeploymentValue): PackerValue => {
       if (Array.isArray(value)) return value.map(resolve);
       if (typeof value === "string" || typeof value === "boolean") return value;
       if ("target" in value) return { target: value.target };
       if ("binding" in value) {
-        const address = bindings[value.binding];
-        if (typeof address !== "string") return invalid(); return getAddress(address);
+        const literal = bindings[value.binding];
+        if (typeof literal !== "string") return invalid();
+        if(value.binding==="swap-router-runtime-hash"||value.binding==="native-usd-feed-runtime-hash") {
+          if(!/^0x(?!0{64}$)[a-f0-9]{64}$/u.test(literal))return invalid();return literal;
+        }
+        return getAddress(literal);
       }
       switch (value.input) {
         case "controller": return controller;

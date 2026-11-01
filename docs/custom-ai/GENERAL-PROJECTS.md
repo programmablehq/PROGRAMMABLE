@@ -606,3 +606,77 @@ The same qualification reproduces the separate Base and HyperEVM source variants
 including their own hook, initializer and protection module. All three source
 closures use this exact profile; one chain's source is never substituted for
 another's. These compilation checks cover fifteen original artifact templates.
+
+## Constructor dependency configuration
+
+Production context V3 adds source-bound protection-kit configuration for the
+selected network: the distinct swap router, native USD feed, expected runtime
+hashes, feed age limit and the configured Base sequencer uptime feed address.
+The launch executor retains its own binding. Base/HyperEVM UniversalRouter
+discovery must agree with the existing canonical kit. V1 and V2 contexts remain
+readable under their original hashes.
+
+Deployment declarations can select these addresses and exact bytes32 runtime
+hashes by name. A hash is encoded as a word and cannot be parsed as an address.
+An unavailable dependency binding or a sequencer binding on another network
+stops the declaration before source generation. The existing shared discovery
+requests, single-flight cache, negative cache and refresh bounds are unchanged.
+
+These fields are pinned constructor configuration. They do not assert current
+dependency code, feed decimals, storage, fresh prices, sequencer state, review
+approval or live launch readiness. Actual constructor dependency observations
+and authenticated protection evidence remain required before general activation.
+
+## Normal source calls during construction
+
+The isolated constructor workers permit compiler-emitted `GAS` only when the
+next instruction immediately consumes it as the gas argument of `CALL` or
+`STATICCALL`. The check reads the exact executing creation bytes or the previously
+observed source runtime. Ordinary reads and writes between known source targets
+can therefore execute, while direct gas-dependent values and a callee that reads
+gas remain unresolved. Unknown calls and external state remain unsupported.
+
+Delegation, CALLCODE and SELFDESTRUCT are rejected during this execution. Every
+root and child runtime must still match at the end. The workers cache code bytes
+once and inspect instruction bytes only on GAS events. They preserve the original
+process, gas and memory bounds, two-pass observations and `launchReady:false`.
+The pinned VM's CREATE events omit `codeAddress`; source selection uses the
+executing address for those events. This is local constructor execution support,
+separate from live dependency snapshots, protection evidence and admission.
+
+## Large dependency context
+
+The general builder keeps complete immutable dependency files in the saved
+project and compiler input. When those files exceed 64,000 characters, its model
+view removes comments and normalizes whitespace outside string literals. Every
+source path, declaration and executable body remains present. URLs, escaped
+quotes and comment markers inside strings remain literal source.
+
+This reduces the three original protection source packages from about 249,000
+characters to about 107,000 characters without raising the 160,000-character
+context limit. Small dependency views and editable project files retain their
+original text. The view records the hash of the original complete dependency
+map; an in-flight caller mutation cannot replace what is later saved or compiled.
+Compaction supplies context only and makes no claim about runtime behavior,
+review approval or public launch availability.
+
+## Shared inline libraries and source changes
+
+The signed-in general builder receives the exact OpenZeppelin and Uniswap v4
+library sources shared by the published protection packages. They remain local,
+versioned inputs. The compiler receives only libraries actually imported by the
+project, plus their transitive imports. Import resolution uses the selected
+compiler profile and never reads the host filesystem or downloads a package.
+Unused libraries do not consume the project's source-file allowance.
+
+For an edit, existing files are copied from the saved project before changed
+files are applied. Omitting a helper file from the model's response preserves
+that file. An explicitly returned file replaces its earlier contents; duplicate
+paths and attempts to replace fixed dependencies fail. Existing user-edited
+library copies remain editable source and are not overwritten by the canonical
+library catalog. File deletion is not inferred from omission.
+
+Actual pinned-compiler cases cover a generated ERC20 using its inline library
+closure and a v4 BaseHook using the selected import aliases. These are source
+compilation checks, separate from constructor dependency observations, behavior
+evidence and launch authorization.

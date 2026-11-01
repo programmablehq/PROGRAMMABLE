@@ -186,7 +186,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         // Preserve the conversation/studio lock order before taking a launch
         // lock. A background pack cannot freeze chat editing for its duration.
         const source=await sources.read(db,owner,selection), account=getAddress(source.binding.account), production=source.project.production;
-        if (!production || production.version!==2) throw conflict();
+        if (!production || ![2,3].includes(production.version)) throw conflict();
         if(source.project.chainId===4663 ? controllerKind!=="eoa" || !production.manifestDigest : controllerKind!==undefined)throw conflict();
         const issue=generalLaunchDetailIssue(source.binding.settings,Boolean(source.binding.image));
         if(issue)throw new CustomAIError("launch-details",issue.message,422);

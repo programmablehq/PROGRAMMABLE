@@ -43,7 +43,7 @@ describe("production context in the existing owned generation handoff", () => {
     const load = vi.fn(async () => { events.push("discovery"); return expected; });
     const call = vi.fn(async (input: ClaudeInput) => {
       expect(input.system).toContain(expected.id);
-      expect(expected.version).toBe(2); expect(expected.protectionPolicy?.required).toBe(true);
+      expect(expected.version).toBe(3); expect(expected.protectionPolicy?.required).toBe(true);
       if (call.mock.calls.length === 1) { events.push("declaration"); return plan(); }
       events.push("generation"); expect(events).toContain("oracle-saved");
       // The complete profile appears once; fixedChecks carries only its ID.

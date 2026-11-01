@@ -18,9 +18,12 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
   if (![1,4663,8453,999].includes(chainId) || !["paris","cancun"].includes(evmVersion) || !Array.isArray(targets) || !targets.length || targets.length > 16) throw Error();
   const common = createCustomCommon({ chainId }, Mainnet, { hardfork: evmVersion === "cancun" ? Hardfork.Cancun : Hardfork.Paris });
   const failures = [], observations = [], constructionGas = new Map(); let totalGas = 0n;
+  const ambientOpcodes=new Set(["BLOCKHASH","BLOBHASH","BLOBBASEFEE","TIMESTAMP","NUMBER","COINBASE","PREVRANDAO","DIFFICULTY","BASEFEE","GASPRICE","GASLIMIT","GAS","ORIGIN","BALANCE","SELFBALANCE"]);
+  const unsupportedOpcodes=new Set(["SELFDESTRUCT","CALLCODE","DELEGATECALL"]),codeOpcodes=new Set(["EXTCODESIZE","EXTCODECOPY","EXTCODEHASH"]);
   const fail = (target, code) => { if (failures.length < 16 && !failures.some(f => f.target === target && f.code === code)) failures.push({ target, code }); };
   for (let pass = 0; pass < 2; pass++) {
-    const vm = await createVM({ common }), deployed = new Set(); let current = "setup", forbidden = false;
+    const vm = await createVM({ common }), deployed = new Set(), deployedCode = new Map();
+    let current = "setup", constructing, constructingCode, forbidden = false;
     for (const address of new Set([controller, deployer])) await vm.stateManager.putAccount(createAddressFromString(address), createAccount({ balance: 10n ** BigInt(24 + pass) }));
     vm.evm.events?.on("beforeMessage", message => {
       if (message.depth === 0) return;
@@ -31,20 +34,30 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
     });
     vm.evm.events?.on("step", step => {
       const name = step.opcode.name;
+      // The compiler forwards remaining gas immediately into a normal call.
+      // Any other use of gasleft still reads unbound execution context.
+      let forwardsGas=false;
+      if(name==="GAS") {
+        // CREATE step events do not supply codeAddress in the pinned VM.
+        const address=(step.codeAddress??step.address).toString().toLowerCase();
+        const code=address===constructing?.address.toLowerCase()?constructingCode:deployedCode.get(address);
+        forwardsGas=code?.[step.pc]===0x5a&&(code[step.pc+1]===0xf1||code[step.pc+1]===0xfa);
+      }
+      if (unsupportedOpcodes.has(name)) { forbidden = true; fail(current,"unbound-constructor-execution"); }
       // Two sampled blocks cannot prove independence from arbitrary future
       // context. Refuse actual reads of unbound environment, including origin
       // (which need not equal a smart-account controller) and ambient balances.
-      if (["BLOCKHASH","BLOBHASH","BLOBBASEFEE","TIMESTAMP","NUMBER","COINBASE","PREVRANDAO","DIFFICULTY","BASEFEE","GASPRICE","GASLIMIT","GAS","ORIGIN","BALANCE","SELFBALANCE"].includes(name)) {
+      if (ambientOpcodes.has(name) && !forwardsGas) {
         forbidden = true; fail(current, "constructor-needs-chain-state");
       }
-      if (["EXTCODESIZE","EXTCODECOPY","EXTCODEHASH"].includes(name)) {
+      if (codeOpcodes.has(name)) {
         const address = `0x${(step.stack.at(-1) & ((1n << 160n) - 1n)).toString(16).padStart(40,"0")}`;
         if (!deployed.has(address)) { forbidden = true; fail(current, "constructor-needs-chain-state"); }
       }
     });
     const runtimes = [];
     for (const target of targets) {
-      current = target.id; forbidden = false;
+      current = target.id; constructing = target; constructingCode = hexToBytes(target.initCode); forbidden = false;
       const address = createAddressFromString(target.address);
       // Changing a counterfactual address's synthetic balance also exposes an
       // immutable depending on ambient pre-deployment funds in these probes.
@@ -84,6 +97,12 @@ async function materialize({ chainId, evmVersion, controller, deployer, targets,
       runtimes.push({ id: target.id, runtimeCode: bytesToHex(actual), runtimeCodeHash: keccak256(actual),
         runtimeImmutables: words.sort((a,b) => Number(a.immutableId) - Number(b.immutableId)) });
       deployed.add(target.address.toLowerCase());
+      deployedCode.set(target.address.toLowerCase(),Uint8Array.from(actual));
+    }
+    if (!failures.length) for (const target of targets) {
+      if (bytesToHex(await vm.stateManager.getCode(createAddressFromString(target.address))) !== runtimes.find(runtime=>runtime.id===target.id)?.runtimeCode) {
+        fail(target.id,"constructor-source-state-changed"); break;
+      }
     }
     observations.push(runtimes); if (failures.length) break;
   }

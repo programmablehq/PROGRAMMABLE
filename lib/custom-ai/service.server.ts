@@ -73,6 +73,7 @@ type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compi
 export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec?: RuleSpecV2; owner?: string; draft?: Draft; generalProject?: GeneralProjectDraft; generalProjectView?: GeneralProjectView; loadGeneralProject?:()=>Promise<GeneralProjectDraft>; memory?: string; onProgress?: (event: ChatProgress) => void; onModelCall?:(call:ModelCallMetric)=>void;
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
   loadProductionContext?:(chainId:BuilderChainId,signal?:AbortSignal)=>Promise<LaunchProductionContext>;
+  loadSourceLibraries?:(previous?:ContractProject)=>ContractProject["sources"];
   saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void> };
 
 function parseAnswer(text: string): Record<string, unknown> {
@@ -244,7 +245,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       }catch{return {reply:"Your complete design is saved. Its independent contract examples need a complete supported declaration before source generation can continue.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Independent contract examples"]};}
       await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
     }
-    const generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
+    const generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
+      availableDependencySources:context.loadSourceLibraries?.(previous?.project),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
     await context.saveCompilation?.(generated.compilation);
     if(blueprint&&generated.compilation.compiled){
       generated.scenarios=await (dependencies.checkProject??checkGeneralScenarios)(generated.project,generated.compilation,bindGeneralCheckBlueprint(blueprint,generated.project),signal);

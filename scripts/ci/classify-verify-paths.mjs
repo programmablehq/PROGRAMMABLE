@@ -4,6 +4,16 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+// Keep this selector self-contained: CI runs a copy from the trusted base
+// commit in a temporary directory, before evaluating changed source files.
+export const GENERAL_CONSTRUCTOR_WORKERS = Object.freeze([
+  "scripts/custom-ai/general-runtime-worker.mjs",
+  "scripts/custom-ai/general-runtime-v2-worker.mjs",
+]);
+export function isGeneralConstructorWorker(path) {
+  return GENERAL_CONSTRUCTOR_WORKERS.includes(path);
+}
+
 const EMPTY_SCOPE = Object.freeze({
   contracts: false,
   custom_v2: false,
@@ -363,6 +373,14 @@ export function classifyVerifyPaths(
       continue;
     }
     if (OWNER_PUBLICATION_PATHS.has(path)) {
+      scope.interface = true;
+      continue;
+    }
+
+    // Constructor-worker behavior is covered by the pinned real-EVM tests,
+    // exact pack/receipt consumers and Custom AI browser/build lane. Unchanged
+    // platform contracts, database and indexer have no input edge from here.
+    if (isGeneralConstructorWorker(path)) {
       scope.interface = true;
       continue;
     }
