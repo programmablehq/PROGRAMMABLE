@@ -8,7 +8,8 @@ import { partialReply } from "./conversation";
 import { CustomAIError, type ChatMessage, type ChatProgress } from "./types";
 import type { LaunchIntent } from "./launch-intent";
 import { builderChain, selectExecutionRoute, type BuilderChainId } from "./execution-routing";
-import { createContractProject, projectCompilerInput, GENERAL_PROJECT_COMPILER, type ContractProject } from "./contract-project";
+import { createContractProject, projectCompilerInput, type ContractProject } from "./contract-project";
+import { createProjectCompiler, projectCompilerProfile, VIAIR_200_REMAPPINGS } from "./compiler-profile";
 import { compileContractProject, type CompiledProject } from "./contract-project.server";
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
@@ -61,7 +62,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     }
   }
   // Validate dependency names and byte limits before spending a model call.
-  const compiler = { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion: input.evmVersion };
+  const compiler = blueprint?.compiler ?? createProjectCompiler(input.previous ? projectCompilerProfile(input.previous.compiler) : "standard-v1", input.evmVersion);
   const dependencySources = input.dependencySources ?? {};
   const validationSources = Object.keys(dependencySources).length ? dependencySources : { "Validation.sol": { content: "pragma solidity 0.8.26; contract Validation {}" } };
   createContractProject({ compiler, sources: validationSources,
@@ -75,6 +76,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     unchangedDependencies: Object.keys(input.previous.sources).filter(path => dependencySources[path]?.content === input.previous!.sources[path].content),
   } : null;
   const context = JSON.stringify({ intent: modelDesignContext({ intent }, false).intent, dependencySources, previous,
+    ...(compiler.viaIR?{compilerImportAliases:VIAIR_200_REMAPPINGS}:{}),
     ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production}:{}) });
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });

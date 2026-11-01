@@ -3,8 +3,9 @@ import { builderChain, type BuilderChainId } from "./execution-routing";
 import { intentHasOpenParts, type LaunchIntent } from "./launch-intent";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 import { checkedGeneralDeploymentBlueprint, type GeneralDeploymentBlueprint } from "./deployment-blueprint";
+import { GENERAL_PROJECT_COMPILER, approvedProjectCompiler, createProjectCompiler, projectCompilerProfile, VIAIR_200_REMAPPINGS, type ProjectCompiler } from "./compiler-profile";
 
-export const GENERAL_PROJECT_COMPILER = "0.8.26+commit.8a97fa7a";
+export { GENERAL_PROJECT_COMPILER };
 export const GENERAL_PROJECT_LIMITS = { files: 48, sourceBytes: 384_000, fileBytes: 96_000, entrypoints: 16 } as const;
 export type ProjectEntrypoint = { source: string; contract: string; role: "token" | "hook" | "liquidity" | "auxiliary" };
 export type ContractProject = {
@@ -12,7 +13,7 @@ export type ContractProject = {
   hash: `sha256:${string}`;
   chainId: BuilderChainId;
   intent: LaunchIntent;
-  compiler: { version: typeof GENERAL_PROJECT_COMPILER; optimizerRuns: 1000; viaIR: false; evmVersion: "paris" | "cancun" };
+  compiler: ProjectCompiler;
   sources: Record<string, { content: string }>;
   entrypoints: ProjectEntrypoint[];
   production?: LaunchProductionContext;
@@ -40,8 +41,7 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
     || !intent.requirements.length || intent.requirements.length > 64) throw new TypeError("Resolve the complete saved design before compiling its contract.");
   const input = object(value); exact(input, ["compiler", "sources", "entrypoints"]);
   const compiler = object(input.compiler); exact(compiler, ["version", "optimizerRuns", "viaIR", "evmVersion"]);
-  if (compiler.version !== GENERAL_PROJECT_COMPILER || compiler.optimizerRuns !== 1000 || compiler.viaIR !== false
-    || !["paris", "cancun"].includes(String(compiler.evmVersion))) fail();
+  if (!approvedProjectCompiler(compiler)) fail();
   const rawSources = object(input.sources), names = Object.keys(rawSources).sort();
   if (!names.length || names.length > GENERAL_PROJECT_LIMITS.files) fail();
   const sources: ContractProject["sources"] = Object.create(null);
@@ -64,8 +64,8 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
   }).sort((a, b) => a.source < b.source ? -1 : a.source > b.source ? 1 : a.contract < b.contract ? -1 : a.contract > b.contract ? 1 : 0);
   if (new Set(entrypoints.map(entry => `${entry.source}:${entry.contract}`)).size !== entrypoints.length) fail();
   if (deployment && !production) fail();
-  const body: Omit<ContractProject, "hash"> = { version: 1 as const, chainId, intent, compiler: { version: GENERAL_PROJECT_COMPILER,
-    optimizerRuns: 1000 as const, viaIR: false as const, evmVersion: compiler.evmVersion as "paris" | "cancun" }, sources, entrypoints,
+  const body: Omit<ContractProject, "hash"> = { version: 1 as const, chainId, intent,
+    compiler: createProjectCompiler(projectCompilerProfile(compiler), compiler.evmVersion), sources, entrypoints,
     ...(production ? { production: checkedLaunchProductionContext(production, chainId) } : {}),
     ...(deployment ? { deployment: checkedGeneralDeploymentBlueprint(deployment, entrypoints, production!, intent) } : {}) };
   const hash = canonicalBrowserSha256V2("programmable.custom-ai-project.v1", body);
@@ -79,5 +79,6 @@ export function projectCompilerInput(project: ContractProject) {
   if (checked.hash !== project.hash) throw new TypeError("The contract project changed after it was saved.");
   return { language: "Solidity", sources: checked.sources, settings: { optimizer: { enabled: true, runs: checked.compiler.optimizerRuns },
     viaIR: checked.compiler.viaIR, evmVersion: checked.compiler.evmVersion, metadata: { bytecodeHash: "none", appendCBOR: false },
+    ...(checked.compiler.viaIR ? { remappings: [...VIAIR_200_REMAPPINGS] } : {}),
     outputSelection: { "*": { "*": ["abi", "metadata", "evm.bytecode", "evm.deployedBytecode", "storageLayout"] } } } };
 }

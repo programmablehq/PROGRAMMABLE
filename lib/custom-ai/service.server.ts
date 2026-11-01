@@ -240,7 +240,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       }
       try{
         if(typeof declaration!=="string"||declaration.length>96_000)throw Error();
-        blueprint=createGeneralCheckBlueprint(JSON.parse(declaration),intent,coin.chainId,evmVersion,selectedProduction);
+        blueprint=createGeneralCheckBlueprint(JSON.parse(declaration),intent,coin.chainId,evmVersion,selectedProduction,previous?.project.compiler);
       }catch{return {reply:"Your complete design is saved. Its independent contract examples need a complete supported declaration before source generation can continue.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Independent contract examples"]};}
       await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
     }

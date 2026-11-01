@@ -8,7 +8,7 @@ Ethereum uses the existing V3 custom-launch API. Robinhood uses Custom Launch Pl
 
 ## Reproducible source package
 
-`createContractProject` binds all inline source files, named entrypoints, the complete saved intent, chain and compiler settings to one canonical hash. The package pins solc `0.8.26+commit.8a97fa7a`, optimizer 1000, no viaIR, disabled CBOR metadata and an explicit Paris or Cancun target. Source names are relative Solidity identities; source URLs, shell commands, compiler options outside this contract and host paths are rejected. Dependencies must be supplied as inline source content.
+`createContractProject` binds all inline source files, named entrypoints, the complete saved intent, chain and compiler settings to one canonical hash. The package pins solc `0.8.26+commit.8a97fa7a`, disabled CBOR metadata and an explicit Paris or Cancun target. Its default `standard-v1` profile uses optimizer1000 without IR. The closed `viair-200-v1` profile uses optimizer200 with IR and the original protection kit's fixed inline import aliases. Source names are relative Solidity identities; source URLs, shell commands, compiler options outside these profiles and host paths are rejected. Dependencies must be supplied as inline source content.
 
 The package supports 48 files, 384,000 source bytes in total, 96,000 bytes per file and 16 concrete entrypoints. It preserves constructors and ABI types for subsequent exact graph preparation. It does not invent constructor arguments, link external libraries or choose a wallet budget.
 
@@ -581,5 +581,24 @@ Compact browser status does not include source or constructor receipts.
 
 This is local, unpublished source and execution-fixture support. It does not prove
 the production protection kit, a live dependency, protected admission, liquidity,
-fee claims, finality or Explore indexing. The existing protection kit's compiler
-preset and authenticated dependency evidence remain separate required work.
+fee claims, finality or Explore indexing. The existing protection kit's authenticated
+dependency evidence remains separate required work. Its compiler preset is
+qualified below.
+
+## Preserving the original compiler profile
+
+The independent pre-source blueprint selects one approved profile before source
+generation. An omitted hint preserves the previous saved project's choice, or
+uses `standard-v1` for a new project. Source generation and cached project
+metadata retain that exact pair of optimizer and IR settings. A later explicit
+build keeps its prior profile; changing the compiler after source hashing cannot
+inherit the saved project's identity. Unknown flags, optimizer/IR combinations,
+compiler binaries and caller-selected remappings remain rejected.
+
+The protection-kit profile only maps its fixed import aliases to inline paths.
+It cannot resolve absent files on the host or fetch packages. Local qualification
+compiles the original 41-file, 249159-byte source closure and reproduces the
+creation bytecode, runtime template and immutable ranges of all five original
+artifacts exactly. The existing 35-second, 384-MB and output-size compiler bounds
+are unchanged. This is source reproduction, separate from constructor dependency
+state, authenticated protection evidence, backend admission and live operation.
