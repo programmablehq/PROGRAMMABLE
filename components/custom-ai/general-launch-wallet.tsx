@@ -189,7 +189,7 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
         : review ? <><p className={styles.note}>Transaction value: <strong>{generalWalletValue(review.kind === "graph" ? review.value.router.walletAction.valueWei : review.value.valueWei, subject.chainId)}</strong>.
           {review.kind === "plan" ? <> Estimated gas: {generalWalletValue(review.value.maxGasCostWei, subject.chainId)}.</> : <> Gas is shown in your wallet.</>}</p>
           <button type="button" className={styles.createButton} disabled={Boolean(busy) || disabled} onClick={() => { void run("Confirm in your wallet…", send); }}>Confirm launch in wallet</button></>
-          : <button type="button" className={styles.textButton} disabled={Boolean(busy) || disabled} onClick={() => { void run("Loading wallet step…", prepare); }}>Continue launch here</button>}
+          : <button type="button" className={styles.createButton} disabled={Boolean(busy) || disabled} onClick={() => { void run("Loading wallet step…", prepare); }}>Continue launch here</button>}
     </>}
     {busy && <p className={styles.note} role="status">{busy}</p>}
     {trackingError && <p className={styles.note} role="status">{trackingError}</p>}
