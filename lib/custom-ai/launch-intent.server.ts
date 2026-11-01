@@ -56,6 +56,26 @@ export function migrateLaunchIntent(input: {
     unresolved: input.unresolved ?? [], changes: [] });
 }
 
+/** Older saved replies sometimes kept a question outside its owning rule.
+ * Give that question a stable editable identity; never silently discard it or
+ * leave it permanently impossible to resolve through the normal protocol. */
+export function normalizeLaunchIntentQuestions(previous:LaunchIntent):LaunchIntent {
+  const orphaned=[...new Set(previous.unresolved)].filter(question=>!previous.requirements.some(rule=>rule.open===question));
+  if(!orphaned.length)return previous;
+  if(previous.requirements.length+orphaned.length>MAX_INTENT_REQUIREMENTS||orphaned.some(q=>!boundedText(q,600)))
+    throw new CustomAIError("intent","The saved open questions need to be consolidated before this build.",422);
+  const ids=new Set(previous.requirements.map(rule=>rule.id));
+  const additions=orphaned.map(question=>{
+    let id=`legacy-open-${digest(question).slice(0,32)}`,n=0;
+    while(ids.has(id))id=`legacy-open-${digest([question,++n]).slice(0,32)}`;
+    ids.add(id);
+    return {id,text:question,kind:"decision" as const,open:question,origin:{kind:"legacy" as const}};
+  });
+  const {revision:parentRevision,...base}=previous;
+  return seal({...base,parentRevision,requirements:[...previous.requirements,...additions],
+    changes:additions.map(rule=>({requirementId:rule.id,operation:"add" as const,origin:rule.origin}))});
+}
+
 /** Missing or unauthorized edits preserve the old requirement in the returned
  * design. A partial proposal cannot become the next turn's smaller authority. */
 export function reviseLaunchIntent(input: {
@@ -85,6 +105,16 @@ export function reviseLaunchIntent(input: {
         changes.push({ requirementId: id, operation: "replace", origin: source });
         continue;
       }
+    }
+    // Bind an explicit latest-user answer once. Only an existing open choice
+    // can be replaced this way; closed rules still require normal ruleEdits.
+    if (!edit && (!target || target.requirementId === id) && rule.open !== null && next?.open === null
+      && next.kind === rule.kind && next.instruction.trim() && request.messages.at(-1)?.role==="user"
+      && request.messages.at(-1)!.content.includes(next.instruction)) {
+      const source=origin(request,next.instruction,true);
+      requirements.push({...rule,text:next.text,open:null,origin:source});
+      changes.push({requirementId:id,operation:"replace",origin:source});
+      continue;
     }
     requirements.push(rule);
     if (!next || next.text !== rule.text || next.kind !== rule.kind || next.open !== rule.open) problems.push(rule.text);

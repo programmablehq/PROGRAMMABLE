@@ -9,6 +9,7 @@ vi.mock("../lib/server/creator-article/wallet-principal.server", () => ({
 import { authorizeCustomAI, requireFreshCustomAIAuthority, type AIAuthority } from "../lib/custom-ai/auth.server";
 import { createCustomAIBackendLaunchBridge } from "../lib/custom-ai/backend-launch.server";
 import { createWalletLaunchBffAssertionV1, walletLaunchMutationTargetV1 } from "../lib/server/custom-launch/wallet-launch-bff-assertion-v1";
+import type { AutomaticSourceReceipt } from "../lib/custom-ai/automatic-source.server";
 
 const wallet = `0x${"11".repeat(20)}` as const, other = `0x${"22".repeat(20)}` as const;
 const subject = "did:privy:fresh-owner", websiteToken = "w".repeat(43), assertionKey = "k".repeat(43);
@@ -31,6 +32,40 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("body-bound session launch producer", () => {
+  it("binds automatic source and check commands to the current request without exposing a wallet permit",async()=>{
+    const req=request(),authority=await authorizeCustomAI(req),hash=`sha256:${"1".repeat(64)}` as const;
+    const receipt:AutomaticSourceReceipt={schemaVersion:"programmable.automatic-source-context.v1",reviewId:id,subjectHash:hash,chainId:"8453",controller:wallet,
+      sourceGeneratedAt:now.getTime()-90_000,artifactHash:hash,intentHash:hash,productionHash:hash,verifierRevision:hash,
+      intent:{version:1,id:"gqa",revision:"a".repeat(64),requirements:[],changes:[],unresolved:[]},compilationUnits:[{id:"gqa",inputHash:hash}],
+      projectHash:hash,sourceAudit:{version:1,projectHash:hash,intentHash:hash,productionId:hash,model:"test",checkedAt:now.getTime(),reviewedRequirementIds:[],findings:[],status:"passed",launchReady:false,hash}};
+    const f=bridge(vi.fn().mockResolvedValue(reply({schemaVersion:"programmable.automatic-source-bound.v1",reviewId:id,bound:true},200)));
+    await f.service.automaticReview(req,authority,{account:wallet,reviewId:id,operation:"bind-source",receipt});
+    const [url,init]=f.fetchBackend.mock.calls[0] as [URL,RequestInit];
+    expect(url.pathname).toBe(`/v1/wallet-admin/custom-ai/launch-reviews/${id}/source-context`);
+    const bytes=Buffer.from(init.body as Uint8Array),headers=new Headers(init.headers);
+    expect(JSON.parse(bytes.toString())).toEqual({receipt});expect(init.method).toBe("POST");expect(init.redirect).toBe("error");
+    const bodySha=`sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+    const expected=createHmac("sha256",assertionKey).update("programmable.custom-launch-api.wallet-bff-assertion.v2\0")
+      .update(["POST",url.pathname,subject,wallet,now.toISOString(),nonce,bodySha].join("\0")).digest("hex");
+    expect(headers.get("x-programmable-bff-assertion-signature")).toBe(`hmac-sha256:${expected}`);
+    const checking={schemaVersion:"programmable.automatic-launch-status.v1",reviewId:id,state:"checking",manualReviewRequired:false,launchReady:false,findings:[],timing:null};
+    const g=bridge(vi.fn().mockResolvedValue(reply(checking,202)));
+    expect((await g.service.automaticReview(req,authority,{account:wallet,reviewId:id,operation:"check"})).value).toEqual(checking);
+    expect(Buffer.from(g.fetchBackend.mock.calls[0][1].body).toString()).toBe('{"action":"check"}');
+  });
+  it("automatic status reads never send a check command and cannot use a copied owner or false ready reply",async()=>{
+    const req=new Request("https://site.test/api/custom-ai/general-launch"),authority=await authorizeCustomAI(req);
+    const status={schemaVersion:"programmable.automatic-launch-status.v1",reviewId:id,state:"approved",manualReviewRequired:false,launchReady:false};
+    const f=bridge(vi.fn().mockResolvedValue(reply(status,200)));
+    await f.service.automaticReview(req,authority,{account:wallet,reviewId:id,operation:"status"});
+    const [,init]=f.fetchBackend.mock.calls[0] as [URL,RequestInit];expect(init.method).toBe("GET");expect(init.body).toBeUndefined();
+    const bad=bridge(vi.fn().mockResolvedValue(reply({...status,launchReady:true},200)));
+    await expect(bad.service.automaticReview(req,authority,{account:wallet,reviewId:id,operation:"status"})).rejects.toMatchObject({code:"launch-transport"});
+    const unused=bridge();
+    await expect(unused.service.automaticReview(req,{...authority} as AIAuthority,{account:wallet,reviewId:id,operation:"status"})).rejects.toMatchObject({code:"session_changed"});
+    await expect(unused.service.automaticReview(req,authority,{account:other,reviewId:id,operation:"status"})).rejects.toMatchObject({code:"wallet"});
+    expect(unused.fetchBackend).not.toHaveBeenCalled();
+  });
   it.each([1,4663,8453,999] as const)("reads only one small V2-signed status response on %s",async chainId=>{
     const req=new Request("https://site.test/api/custom-ai/general-launch?id=saved-ticket-0001&view=status"),authority=await authorizeCustomAI(req);
     const f=bridge(vi.fn().mockResolvedValue(reply({schemaVersion:"programmable.wallet-launch-status.v1"},200)));

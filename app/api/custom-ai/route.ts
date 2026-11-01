@@ -106,6 +106,7 @@ export async function POST(request: Request) {
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
             saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent});},
             saveScenarios:async(report:import("@/lib/custom-ai/behavior-checks.server").GeneralScenarioReport)=>{await store.projects.saveScenarios(authority.owner,input.id,reserved.lease!,report);},
+            saveSourceAudit:async(audit:import("@/lib/custom-ai/source-audit.server").GeneralSourceAudit)=>{await store.projects.saveSourceAudit(authority.owner,input.id,reserved.lease!,audit);},
           }:{}),
         });
         const result = authority.kind === "preview" ? await budget(input, run) : await run();
