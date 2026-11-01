@@ -759,3 +759,16 @@ this new receipt into public preparations. The materializer snapshots the
 source, compiler output and predicted addresses before awaiting a resolver.
 Source-bound opening pricing, independent behavior-fixture support and backend
 admission remain required; general launch activation stays disabled.
+
+The server-only production dependency transport resolves the existing chain's
+provider roles lazily. Ethereum uses the commitment-bound dRPC/QuickNode pair;
+Robinhood and Base use their configured dRPC/Alchemy pairs. HyperEVM uses its
+configured dRPC reader and configured Alchemy or public Hyperliquid witness.
+Missing or mismatched configuration stops preparation instead of choosing an
+unrelated provider. This factory is not yet a public preparation consumer.
+It accepts only the fixed code, block and feed observation protocol, including
+the bounded native-feed prestate trace. It disables redirects and automatic
+retries, caps responses at 512 KiB, limits each endpoint to four concurrent and
+sixteen starts per second, and pauses exhausted providers for thirty seconds.
+The observation and replay layers retain their smaller per-preparation read
+budgets. No URL, provider credential or RPC method comes from generated code.
