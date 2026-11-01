@@ -126,7 +126,15 @@ test('status polling stops after twelve reads and does not catch up after laptop
  // completion. Real-time drift must not start a second interval mid-response.
  const start=new Date('2030-01-01T12:00:00Z');await page.clock.install({time:start});await page.clock.pauseAt(new Date(start.getTime()+1000));const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Submit for review',exact:true}).click();
  await expect(page.getByText('Your submission is waiting for review.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
- for(let count=2;count<=12;count++){await page.clock.runFor(10000);await expect.poll(()=>f.statusReads).toBe(count);}
+ for(let count=2;count<=12;count++){
+  // A request reaching the route does not mean the browser has consumed it.
+  // Alternate non-terminal states and await the rendered response before the
+  // next clock tick, so a still-active read cannot consume a polling attempt.
+  f.currentStatus=count%2===0?'wallet_action_ready':'pending_review';
+  await page.clock.runFor(10000);
+  await expect(page.getByText(count%2===0?'Your submission has wallet steps to review.':'Your submission is waiting for review.',{exact:true})).toBeVisible();
+  expect(f.statusReads).toBe(count);
+ }
  await page.clock.fastForward(3600000);expect(f.statusReads).toBe(12);expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
 });
 test('a terminal stored status stops background reads and keeps its original link',async({page})=>{
