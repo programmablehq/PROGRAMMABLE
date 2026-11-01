@@ -4,6 +4,7 @@ import { buildGeneralContract } from "../lib/custom-ai/general-builder.server";
 import { createContractProject, GENERAL_PROJECT_COMPILER, type ContractProject } from "../lib/custom-ai/contract-project";
 import { compileContractProject, type CompiledProject } from "../lib/custom-ai/contract-project.server";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
+import type { ClaudeInput } from "../lib/custom-ai/claude.server";
 
 const intent: LaunchIntent = { version: 1, id: "general-builder-fixture", revision: "a".repeat(64), unresolved: [], changes: [], requirements: [
   { id: "counter", text: "Keep a counter", kind: "behavior", open: null, origin: { kind: "legacy" } },
@@ -29,6 +30,34 @@ describe("general project generation inside the owned AI job", () => {
     expect(result.project.intent).toEqual(intent); expect(result.project.chainId).toBe(999);
     expect(result.project.sources["GeneralHook.sol"].content).toBe(source);
     expect(result.compilation.compiled).toBe(false); expect(result.requirementCoverage).toBe("proposed"); expect(result.launchReady).toBe(false);
+  });
+  it("keeps inference bound to its original intent when the caller edits during the model request", async () => {
+    const input = request(), originalSave = input.saveProject, replacementSave = vi.fn(async () => undefined);
+    const call = vi.fn(async (_input: ClaudeInput) => {
+      input.intent.requirements[1].text = "Add an administrator";
+      input.intent.revision = "c".repeat(64);
+      input.messages[0].content = "An unrelated newer request";
+      input.saveProject = replacementSave;
+      await Promise.resolve();
+      return response();
+    });
+    const result = await buildGeneralContract(input, undefined, { call, compile: incompleteBuild });
+    expect(result.project.intent).toEqual(intent);
+    expect(originalSave).toHaveBeenCalledTimes(1); expect(replacementSave).not.toHaveBeenCalled();
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call.mock.calls[0][0].messages[0].content).toBe("Build the counter without an owner.");
+  });
+  it("does not let persistence or compilation mutate the original generated project", async () => {
+    const input = request(), compile = vi.fn(async (project: ContractProject) => {
+      const result = await incompleteBuild(project);
+      project.sources["GeneralHook.sol"].content = "Compiler-local mutation";
+      return result;
+    });
+    input.saveProject.mockImplementation(async project => { project.sources["GeneralHook.sol"].content = "Storage-local mutation"; });
+    const result = await buildGeneralContract(input, undefined, { call: async () => response(), compile });
+    expect(result.project.sources["GeneralHook.sol"].content).toBe(source);
+    expect(result.compilation.projectHash).toBe(result.project.hash);
+    expect(compile).toHaveBeenCalledTimes(1);
   });
   it("does not compile or repair a proposal missing the negative constraint", async () => {
     const data = answer(); data.requirementIds = ["counter"];
