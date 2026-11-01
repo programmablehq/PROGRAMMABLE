@@ -11,7 +11,7 @@ import { parseChatRequest } from "../lib/custom-ai/types";
 
 const input = { model: "claude-haiku-5.5", system: "Keep the complete design.", messages: [{ role: "user" as const, content: "Explain this rule." }], schema: { type: "object" }, maxTokens: 200 };
 function useSurplus() { vi.stubEnv("CUSTOM_AI_PROVIDER", "surplus");vi.stubEnv("SURPLUS_API_KEY", "inf_test-only-not-a-real-key"); }
-afterEach(() => { vi.unstubAllEnvs();vi.unstubAllGlobals();vi.restoreAllMocks(); });
+afterEach(() => { vi.clearAllTimers();vi.useRealTimers();vi.unstubAllEnvs();vi.unstubAllGlobals();vi.restoreAllMocks(); });
 describe("Surplus model routing", () => {
   it("keeps provider selection explicit and pins it in new job profiles", () => {
     useSurplus();
@@ -54,6 +54,20 @@ describe("Surplus model routing", () => {
     const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
     expect(body).toMatchObject({stream:true,stream_options:{include_usage:true},max_tokens:200});
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("accepts a complete contract reply after the old two-minute cutoff without a second request",async()=>{
+    useSurplus();vi.useFakeTimers();
+    vi.spyOn(AbortSignal,"timeout").mockImplementation(ms=>{
+      const controller=new AbortController();setTimeout(()=>controller.abort(new DOMException("Deadline elapsed","TimeoutError")),ms);return controller.signal;
+    });
+    const fetcher=vi.fn((_url:string,options:RequestInit)=>new Promise<Response>((resolve,reject)=>{
+      const abort=()=>reject(options.signal?.reason);options.signal?.addEventListener("abort",abort,{once:true});
+      setTimeout(()=>{options.signal?.removeEventListener("abort",abort);resolve(new Response('data: {"choices":[{"index":0,"delta":{"content":"{}"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',{headers:{"content-type":"text/event-stream"}}));},130_000);
+    }));
+    vi.stubGlobal("fetch",fetcher);
+    const result=callSurplus({...input,responseProfile:"contract"});
+    await vi.advanceTimersByTimeAsync(130_001);
+    await expect(result).resolves.toMatchObject({text:"{}"});expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("records a real contract deadline with known partial usage and cancels the stream without retrying",async()=>{
     useSurplus();const deadline=new AbortController(),cancel=vi.fn(),onText=vi.fn();
