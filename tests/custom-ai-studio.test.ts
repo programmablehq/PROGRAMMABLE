@@ -6,7 +6,9 @@ vi.mock("../lib/custom-ai/auth.server", () => ({ authorizeCustomAI: auth }));
 vi.mock("../lib/custom-ai/store.server", () => ({ productionAIStore: () => store }));
 import { GET, POST } from "../app/api/custom-ai/studio/route";
 import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
-import { CustomAIError } from "../lib/custom-ai/types";
+import { CustomAIError, type Draft } from "../lib/custom-ai/types";
+import { migrateLaunchIntent } from "../lib/custom-ai/launch-intent.server";
+import { intentMatchesCandidate } from "../lib/custom-ai/launch-intent";
 const account="0x1000000000000000000000000000000000000001";
 const request = (state: unknown, revision=0) => new Request("https://programmable.market/api/custom-ai/studio", {
   method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({account,revision,state})
@@ -18,6 +20,31 @@ beforeEach(() => {
   store.saveObject.mockResolvedValue(1);
 });
 describe("private studio drafts", () => {
+  it("restores editable legacy rules from the owned checked source without a write or regeneration", async () => {
+    const sourceHash="a".repeat(64),draftId="legacy-fee-draft-01";
+    const draft:Draft={source:"saved unchanged source",sourceHash,compiled:true,diagnostics:[],verification:{status:"passed",sourceHash,
+      requirements:["Charge 10% until second599.","Charge 0.5% from second600."],checks:[],cases:0}};
+    store.readObject.mockImplementation(async (_owner,kind)=>kind==="studio"?{revision:3,value:{...state,draftId,contextId:draftId}}:null);
+    store.read.mockResolvedValue({result:{draft}});
+    const get=()=>GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`));
+    const first=await(await get()).json(),second=await(await get()).json();
+    expect(first.intent).toEqual(migrateLaunchIntent({draft,requestId:draftId}));
+    expect(second.intent).toEqual(first.intent);expect(first.draft).toEqual(draft);
+    expect(intentMatchesCandidate(first.intent,draft)).toBe(true);
+    expect(first.intent.requirements.every((rule:{origin:{sourceHash:string}})=>rule.origin.sourceHash===sourceHash)).toBe(true);
+    expect(store.saveObject).not.toHaveBeenCalled();expect(store.consume).not.toHaveBeenCalled();
+    expect(store.read.mock.calls).toEqual([["alice",draftId],["alice",draftId]]);
+  });
+  it("retains open legacy work separately from an earlier checked fee source", async () => {
+    const draft={source:"saved unchanged source",sourceHash:"a".repeat(64),verification:{requirements:["Keep the fee."]}};
+    store.readObject.mockImplementation(async (_owner,kind)=>kind==="studio"?{revision:3,value:{...state,draftId:"old-draft",contextId:"new-design",pendingChange:"Add weather"}}:null);
+    store.read.mockImplementation(async (_owner,id)=>id==="old-draft"?{result:{draft}}:{result:{ruleSpec:{requirements:[{id:"fee",text:"Keep the fee."},{id:"rain",text:"Use London rain."}]},unresolved:["Choose a feed"]}});
+    const value=await(await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`))).json();
+    expect(value.intent.unresolved).toEqual(["Choose a feed"]);
+    expect(value.intent.requirements.map((rule:{text:string})=>rule.text)).toContain("Use London rain.");
+    expect(intentMatchesCandidate(value.intent,draft)).toBe(false);
+    expect(value.state.pendingChange).toBe("Add weather");expect(value.draft).toEqual(draft);
+  });
   it("restores a compact general source result without reading its complete source", async () => {
     const generalProject={projectHash:"sha256:"+"a".repeat(64),compiled:true,launchReady:false};
     store.readObject.mockResolvedValue({revision:2,value:{...state,draftId:"general-source-0001"}});
