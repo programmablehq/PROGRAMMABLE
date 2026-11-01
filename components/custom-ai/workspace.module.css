@@ -171,6 +171,7 @@
 .tools[open] > summary > svg { transform: rotate(180deg); }
 .toolsPanel { position: absolute; inset-inline-end: 0; top: calc(100% + 8px); z-index: 12; width: min(300px, calc(100vw - 64px)); max-height: min(560px, 70dvh); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid #44413b; border-radius: 14px; background: #22211e; box-shadow: 0 8px 24px #0006; }
 .toolsPanel button, .textButton { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #e2ddd4; font: inherit; font-size: 13px; cursor: pointer; text-align: start; text-decoration: underline; text-underline-offset: 4px; }
+.toolsPanel .toolsClose { display:none; }
 .contextActions > button { display: block; }
 .contextActions p, .toolSection p { margin: 4px 0 12px; color: #b8b4ad; font-size: 12px; line-height: 1.6; }
 .toolSection { padding-block: 8px; border-top: 1px solid #44413b; color: #d0cbc2; font-size: 13px; }
@@ -256,6 +257,8 @@
   .chatIdentity { flex:1 1 100%; }
   .toolbarActions { width:100%; flex-wrap:wrap; }
   .libraryToggle { min-height:44px; }
+  .toolsPanel { position:fixed; inset-inline:16px; top:auto; bottom:16px; width:auto; max-height:min(70dvh,560px); }
+  .toolsPanel .toolsClose { display:flex; align-items:center; justify-content:center; gap:6px; margin-inline-start:auto; text-decoration:none; }
   .empty { align-content:start; }
   .newCoin { white-space:nowrap; }
 }
