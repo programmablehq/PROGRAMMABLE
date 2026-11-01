@@ -1,0 +1,22 @@
+// Builds fixed local fixtures; never accepts submitted compiler or filesystem inputs.
+import {readFile,writeFile,realpath} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {join} from 'node:path';
+import {PROTECTED_LAUNCH_CHAIN_PINS_V1} from '../../packages/launch/src/launch-protection-v1.mjs';
+const sha=value=>createHash('sha256').update(value).digest('hex');
+const root=fileURLToPath(new URL('../../',import.meta.url)),dir=fileURLToPath(new URL('./',import.meta.url));
+const toolchain=await realpath(process.env.CUSTOM_AI_COMPILER_DIR??join(dir,'toolchain'));
+const solc=createRequire(join(toolchain,'package.json'))('solc');
+if(solc.version()!=='0.8.26+commit.8a97fa7a.Emscripten.clang')throw Error('Wrong protected fixture compiler');
+const [closureBytes,source,pinsSource]=await Promise.all([readFile(join(root,'contracts/spec/custom-ai/verification-bundle/standard-input.json')),readFile(join(dir,'GeneralProtectedV4Fixture.sol'),'utf8'),readFile(join(root,'packages/launch/src/launch-protection-v1.mjs'))]);
+const closure=JSON.parse(closureBytes),names=['GeneralProtectedV4Fixture','GeneralProtectedUsdFeedFixture'];
+const output=JSON.parse(solc.compile(JSON.stringify({language:'Solidity',sources:{...closure.sources,'GeneralProtectedV4Fixture.sol':{content:source}},settings:{optimizer:{enabled:true,runs:1000},viaIR:false,evmVersion:'cancun',remappings:closure.settings.remappings,metadata:{bytecodeHash:'none',appendCBOR:false},outputSelection:{'GeneralProtectedV4Fixture.sol':Object.fromEntries(names.map(name=>[name,['abi','evm.bytecode.object','evm.deployedBytecode.object','evm.deployedBytecode.immutableReferences']]))}}})));
+if(output.errors?.some(error=>error.severity==='error'))throw Error(output.errors.filter(error=>error.severity==='error').map(error=>error.formattedMessage).join('\n'));
+const contracts=Object.fromEntries(names.map(name=>{const a=output.contracts['GeneralProtectedV4Fixture.sol'][name];return[name,{abi:a.abi,creationBytecode:'0x'+a.evm.bytecode.object,runtimeTemplate:'0x'+a.evm.deployedBytecode.object,immutableReferences:a.evm.deployedBytecode.immutableReferences}];}));
+const pins=Object.fromEntries(Object.entries(PROTECTED_LAUNCH_CHAIN_PINS_V1).map(([chain,p])=>[chain,{manager:p.manager,router:p.router,feed:p.feed,...(p.sequencerFeed?{sequencer:p.sequencerFeed}:{})}]));
+const payload={version:'general-protected-v4-fixture-v1',compiler:solc.version(),sourceSha256:sha(source),dependencyClosureSha256:sha(closureBytes),pinsSourceSha256:sha(pinsSource),pins,contracts};
+const result={...payload,hash:sha(JSON.stringify(payload))},serialized=JSON.stringify(result)+'\n',destination=join(dir,'general-protected-v4-fixture.json');
+if(process.argv.includes('--check')){if(await readFile(destination,'utf8')!==serialized)throw Error('Protected fixture must reproduce from its exact fixed inputs');}else await writeFile(destination,serialized);
+console.log(JSON.stringify({version:result.version,hash:result.hash}));
