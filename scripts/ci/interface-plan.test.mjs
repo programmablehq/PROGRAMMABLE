@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { interfacePlan, relatedInputs } from "./interface-plan.mjs";
+import { GENERAL_CONSTRUCTOR_WORKERS } from "./classify-verify-paths.mjs";
 
 test("coin metadata does not run unrelated wallet, migration, CLI or activation checks", () => {
   const plan = interfacePlan(["lib/server/codex-token-metadata.ts", "lib/coin-metadata.ts"]);
@@ -83,6 +84,23 @@ test("compiler changes require the isolated EVM toolchain in CI", () => {
   for (const path of ["lib/custom-ai/rule-compiler.server.ts", "scripts/custom-ai/compile-worker.mjs",
     "tests/custom-ai-rule-compiler.test.ts", "lib/custom-ai/composable-code.json"]) {
     assert.equal(interfacePlan([path]).customAICompiler, true, path);
+  }
+});
+
+test("constructor worker changes retain real-EVM, browser and pack-consumer coverage", () => {
+  const files = ["lib/custom-ai/runtime-materialization.server.ts", "lib/custom-ai/general-pack.server.ts",
+    "lib/custom-ai/general-plan-pack.server.ts", "tests/custom-ai-runtime-materialization.test.ts",
+    "tests/custom-ai-constructor-children-runtime.test.ts", "tests/custom-ai-runtime-forwarded-gas.test.ts",
+    "tests/custom-ai-general-plan-pack.test.ts", ...GENERAL_CONSTRUCTOR_WORKERS];
+  for (const worker of GENERAL_CONSTRUCTOR_WORKERS) {
+    const plan = interfacePlan([worker]);
+    assert.equal(plan.full, false);
+    assert.equal(plan.customAI, true);
+    assert.equal(plan.customAICompiler, true);
+    assert.equal(plan.wallet, true);
+    assert.deepEqual(plan.browser, []);
+    const selected = relatedInputs([worker], files);
+    for (const required of files.filter(file => !file.startsWith("scripts/"))) assert.ok(selected.includes(required), required);
   }
 });
 

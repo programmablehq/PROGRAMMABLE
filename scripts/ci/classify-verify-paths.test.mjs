@@ -13,6 +13,7 @@ import {
   ROBINHOOD_V413_RUNTIME_BACKEND_EVIDENCE_PATHS,
   ROBINHOOD_V414_RUNTIME_BACKEND_EVIDENCE_PATHS,
   ROBINHOOD_V41_CLI_COORDINATE_PATH,
+  GENERAL_CONSTRUCTOR_WORKERS,
 } from "./classify-verify-paths.mjs";
 
 const none = {
@@ -357,6 +358,20 @@ test("runs all lanes for dependency, workflow, and unknown surfaces", () => {
       classifyVerifyPaths([path]),
       classifyVerifyPaths([], { forceAll: true }),
     );
+  }
+});
+
+test("isolated constructor workers select their interface execution lane without unrelated platform forks", () => {
+  for (const worker of GENERAL_CONSTRUCTOR_WORKERS) {
+    assert.deepEqual(classifyVerifyPaths([worker]), { ...none, interface: true });
+    const mixed = classifyVerifyPaths([worker, "contracts/src/Changed.sol"]);
+    assert.equal(mixed.contracts, true);
+    assert.equal(mixed.interface, true);
+    for (const other of ["package-lock.json", "config/changed.json", ".github/workflows/verify.yml",
+      "scripts/ci/classify-verify-paths.mjs", "scripts/custom-ai/general-runtime-v3-worker.mjs",
+      `${worker}.backup`, "scripts/custom-ai/install-toolchain.mjs"]) {
+      assert.deepEqual(classifyVerifyPaths([worker, other]), classifyVerifyPaths([], { forceAll: true }), other);
+    }
   }
 });
 
