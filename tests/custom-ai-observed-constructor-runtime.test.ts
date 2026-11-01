@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from "viem";
 import captured from "./fixtures/custom-ai-launch-discovery.json";
@@ -73,7 +73,14 @@ contract Liquidity {uint8 public immutable precision;constructor(Feed feed){prec
 }
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed constructor dependencies", () => {
   let input: Awaited<ReturnType<typeof fixture>>;
-  beforeAll(async () => { input = await fixture(); }, 90_000);
+  beforeAll(async () => {
+    // Synthetic observations must not age while a slow runner compiles or
+    // executes the real workers. Timeouts still use real timers.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    input = await fixture();
+  }, 90_000);
+  beforeEach(() => { vi.setSystemTime(input.dependencies.observation.observedAt); });
+  afterAll(() => { vi.useRealTimers(); });
   it("executes the actual supplied proxy and binds its precision into the initializer runtime", async () => {
     const result = await materializeGeneralRuntime(input.project, input.compilation, { ...input.selected, observedDependencies: input.dependencies }, input.predictions);
     expect(result).toMatchObject({ version: 3, scope: "observed-constructor-runtime-v3", status: "materialized", passes: 2, launchReady: false });
@@ -82,6 +89,11 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed cons
   });
   it("still refuses the source when no real dependency context is supplied", async () => {
     await expect(materializeGeneralRuntime(input.project, input.compilation, input.selected, input.predictions)).rejects.toMatchObject({ code: "runtime-dependency" });
+  });
+  it("refuses the same observation when the controlled clock reaches expiry", async () => {
+    vi.setSystemTime(input.dependencies.observation.expiresAt);
+    await expect(materializeGeneralRuntime(input.project,input.compilation,
+      {...input.selected,observedDependencies:input.dependencies},input.predictions)).rejects.toMatchObject({code:"runtime-context"});
   });
   it("refuses a context rebound to a different initializer even after hash recomputation", async () => {
     const dependencies = structuredClone(input.dependencies);
