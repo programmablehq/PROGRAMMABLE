@@ -9,6 +9,7 @@ import type { AISessionHeaders } from "@/lib/custom-ai/client";
 import { CoinDetails, type CoinDetailsControls } from "./coin-details";
 import { GeneralLaunchControls } from "./general-launch-controls";
 import { ProjectSource } from "./project-source";
+import { RequestedRules } from "./requested-rules";
 import styles from "./workspace.module.css";
 
 export function GeneralProjectPreview({project,intent,draftId,account,conversationId,headers,disabled,settings,onChange,chatRevision,localPreview,cacheKey,imageReceipt,onImageReceipt,onEditRule,generalLaunchEnabled=false,pendingChange,flush,onLaunchLocked,children}:{
@@ -27,9 +28,7 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
       localPreview={localPreview} cacheKey={cacheKey} imageReceipt={imageReceipt} onImageReceipt={onImageReceipt} onImage={()=>undefined} controlsRef={editor} onImageBusy={setImageBusy}
       stage={!project?"Contract design":project.scenarios?.passed===false?"Contract checks failed":project.compiled?"Source compiled":"Source needs changes"} description={project?.summary} feeCore={false}/>
     {intent&&<section className={styles.ruleReview} aria-label="Requested contract rules"><h3>Rules for this coin</h3>
-      <ul className={styles.ruleEditList}>{intent.requirements.map(rule=><li key={rule.id}><span>{rule.text}</span>
-        {rule.open&&<p>Open: {rule.open}</p>}<button type="button" className={styles.textButton} disabled={disabled||launchBusy||!matches} aria-label={`Edit rule: ${rule.text}`} onClick={()=>onEditRule(rule.id)}>Edit</button>
-      </li>)}</ul>
+      <RequestedRules rules={intent.requirements} changes={intent.parentRevision?intent.changes:[]} disabled={disabled||launchBusy||!matches} onEditRule={onEditRule}/>
       {intent.unresolved.filter(question=>!intent.requirements.some(rule=>rule.open===question)).map(question=><p key={question}>Open: {question}</p>)}
     </section>}
     {!enabled&&<p className={`${styles.note} ${styles.preparationStatus}`} role="status">{!project?"Describe your contract in the chat to build its source on this network.":!matches?"The design or network changed. Ask the chat to update the saved source.":project.scenarios?.passed?"Source compiled and declared examples passed. Launch review and preparation are still pending.":project.scenarios?.passed===false?"A declared contract check failed. Ask the chat to fix this saved source.":project.compiled?"Source compiled. Contract checks and launch preparation are still pending.":"The source has build diagnostics. Ask the chat to fix this source."}</p>}

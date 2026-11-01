@@ -2,6 +2,7 @@ import type { Draft } from "@/lib/custom-ai/types";
 import { summarizeRules } from "@/lib/custom-ai/rule-summary";
 import styles from "./workspace.module.css";
 import { intentHasOpenParts, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
+import { RequestedRules } from "./requested-rules";
 
 const percent = (bps: number) => `${bps / 100}%`;
 function timeLabel(seconds: number) {
@@ -27,6 +28,7 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
   const ready = verified?.status === "passed" && verified.sourceHash === draft?.sourceHash && draft?.validation?.status === "passed";
   const times = [...new Set(verified?.checks.map(check => check.afterSeconds))].sort((a, b) => a - b);
   const summary = ready && draft?.composable ? summarizeRules(draft.composable.spec, quoteLabel,draft.composable.feeds) : null;
+  const editable = ready && draft?.composable && intent?.revision === draft.intent?.revision ? onEditRule : undefined;
   return <section className={styles.ruleReview} aria-label="Rules for this coin">
     <h3>{pendingChange && draft ? "Change not applied" : intent && intentHasOpenParts(intent) ? "Open choices" : pendingChange ? "Change not applied" : "Rules for this coin"}</h3>
     {pendingChange && !draft && intent ? <p>Your complete idea is saved. Resolve the open choices in the chat to continue.</p> : pendingChange && <>
@@ -36,10 +38,7 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
     </>}
     {intent && <details open={intentHasOpenParts(intent)}>
       <summary>Requested rules ({intent.requirements.length})</summary>
-      <ul>{intent.requirements.map(rule => <li key={rule.id}>
-        <span>{rule.text}</span>
-        {rule.open && <p>Open: {rule.open}</p>}
-      </li>)}</ul>
+      <RequestedRules rules={intent.requirements} changes={intent.parentRevision ? intent.changes : []} disabled={disabled} onEditRule={editable}/>
       {intent.unresolved.filter(question => !intent.requirements.some(rule => rule.open === question)).map(question => <p key={question}>Open: {question}</p>)}
       <p className={styles.note}>These are your requested rules. Source checks and launch preparation are separate.</p>
     </details>}
@@ -58,11 +57,9 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
         {" "}Execution is permissionless; its timing is not guaranteed.
         {!draft.program.available && " This program is prepared for testing; public launch is not enabled yet."}</p>}
       {!summary && !intent && <ul>{verified.requirements.map((rule, index) => <li key={index}>{rule}</li>)}</ul>}
-      {draft?.composable && onEditRule && <details>
+      {!intent && draft?.composable && onEditRule && <details>
         <summary>Edit a rule</summary>
-        <ul className={styles.ruleEditList}>{draft.composable.spec.requirements.map(rule => <li key={rule.id}>
-          <span>{rule.text}</span><button type="button" disabled={disabled} onClick={() => onEditRule(rule.id)} aria-label={`Edit rule: ${rule.text}`}>Edit</button>
-        </li>)}</ul>
+        <RequestedRules rules={draft.composable.spec.requirements} disabled={disabled} onEditRule={onEditRule}/>
       </details>}
       <details><summary>Checked fee examples</summary>
         <p>Total fees include the 0.5% platform fee. These examples were checked for buys and sells on both supported networks.</p>
