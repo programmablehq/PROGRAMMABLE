@@ -97,11 +97,11 @@ const GUIDANCE_LINE_PATTERNS = [
   /^      robinhoodGuide: "https:\/\/programmable\.market(\/developers\/[A-Za-z0-9][A-Za-z0-9/_-]*\.md)",\n/gmu,
 ];
 
-function readGitChange(file, { baseSha, headSha }) {
+function readGitChange(file, { baseSha, headSha }, allowUnchanged = false) {
   const git = (args) => execFileSync("git", args, { maxBuffer: 4 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
   const text = (buffer) => new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buffer);
   const status = text(git(["diff", "--no-renames", "--name-status", "-z", baseSha, headSha, "--", file]));
-  if (status !== `M\0${file}\0`) throw new Error("Guidance paths must be modified existing files.");
+  if (status !== `M\0${file}\0` && !(allowUnchanged && status === "")) throw new Error("Guidance paths must be modified existing files.");
   return [baseSha, headSha].map((sha) => {
     const entry = text(git(["ls-tree", "-z", sha, "--", file]));
     if (!new RegExp(`^100644 blob [a-f0-9]{40}\\t${file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\x00$`, "u").test(entry)) {
@@ -109,6 +109,86 @@ function readGitChange(file, { baseSha, headSha }) {
     }
     return text(git(["show", `${sha}:${file}`]));
   });
+}
+
+const TOOLING_ROOTS = new Set(["eslint", "eslint-config-next", "vitest", "@playwright/test", "typescript"]);
+const canonical = (value) => JSON.stringify(value && typeof value === "object"
+  ? Array.isArray(value) ? value.map(item => JSON.parse(canonical(item)))
+    : Object.fromEntries(Object.keys(value).sort().map(key => [key, JSON.parse(canonical(value[key]))]))
+  : value);
+
+function dependencyClosure(lock, names) {
+  const packages = lock.packages;
+  if (lock.lockfileVersion !== 3 || !packages?.[""]) throw new Error("Complete npm v3 lock required");
+  const found = new Set();
+  function visit(from, name, optional = false) {
+    let parent = from;
+    for (;;) {
+      const target = `${parent ? parent + "/" : ""}node_modules/${name}`;
+      const entry = packages[target];
+      if (entry) {
+        if (entry.link) throw new Error("Linked dependencies require full verification");
+        if (found.has(target)) return;
+        found.add(target);
+        for (const dep of Object.keys(entry.dependencies ?? {})) visit(target, dep);
+        for (const dep of Object.keys(entry.optionalDependencies ?? {})) visit(target, dep, true);
+        // Installed peers can affect a consumer even when npm marks them dev.
+        for (const dep of Object.keys(entry.peerDependencies ?? {})) visit(target, dep, true);
+        return;
+      }
+      if (!parent) break;
+      parent = parent.includes("/") ? parent.slice(0, parent.lastIndexOf("/")) : "";
+    }
+    if (!optional) throw new Error("Unresolved dependency");
+  }
+  for (const name of names) visit("", name);
+  return found;
+}
+
+/** Prove a tool update changes no installed production dependency or compiler input. */
+export function isToolingOnlyDependencyChange(paths, { baseSha, headSha,
+  readChange = (file, range) => readGitChange(file, range, true) } = {}) {
+  if (!/^[a-f0-9]{40}$/u.test(baseSha ?? "") || !/^[a-f0-9]{40}$/u.test(headSha ?? "") || baseSha === headSha
+    || !Array.isArray(paths) || !paths.length || new Set(paths).size !== paths.length || !paths.includes("package-lock.json")
+    || paths.some(path => !["package.json", "package-lock.json"].includes(path))) return false;
+  try {
+    const [beforePackage, afterPackage] = readChange("package.json", { baseSha, headSha }).map(JSON.parse);
+    const [before, after] = readChange("package-lock.json", { baseSha, headSha }).map(JSON.parse);
+    const withoutPackages = ({ packages, ...rest }) => rest;
+    if (canonical(withoutPackages(before)) !== canonical(withoutPackages(after))) return false;
+    const withoutDev = ({ devDependencies, overrides, ...rest }) => rest;
+    if (canonical(withoutDev(beforePackage)) !== canonical(withoutDev(afterPackage))) return false;
+    const devNames = new Set([...Object.keys(beforePackage.devDependencies ?? {}), ...Object.keys(afterPackage.devDependencies ?? {})]);
+    if ([...devNames].some(name => beforePackage.devDependencies?.[name] !== afterPackage.devDependencies?.[name]
+      && (!TOOLING_ROOTS.has(name) || !beforePackage.devDependencies?.[name] || !afterPackage.devDependencies?.[name]))) return false;
+    const root = lock => ({ ...lock.packages[""], devDependencies: {} });
+    if (canonical(root(before)) !== canonical(root(after))) return false;
+    const runtimeNames = Object.keys({ ...beforePackage.dependencies, ...beforePackage.optionalDependencies, ...beforePackage.peerDependencies });
+    const oldRuntime = dependencyClosure(before, runtimeNames), newRuntime = dependencyClosure(after, runtimeNames);
+    if (canonical([...oldRuntime].sort()) !== canonical([...newRuntime].sort())) return false;
+    for (const path of oldRuntime) if (canonical(before.packages[path]) !== canonical(after.packages[path])) return false;
+    const oldTools = dependencyClosure(before, [...TOOLING_ROOTS].filter(name => beforePackage.devDependencies?.[name]));
+    const newTools = dependencyClosure(after, [...TOOLING_ROOTS].filter(name => afterPackage.devDependencies?.[name]));
+    const changed = [...new Set([...Object.keys(before.packages), ...Object.keys(after.packages)])]
+      .filter(path => path && canonical(before.packages[path] ?? null) !== canonical(after.packages[path] ?? null));
+    if (!changed.length) return false;
+    const changedNames = new Set();
+    for (const path of changed) {
+      if ((!oldTools.has(path) && !newTools.has(path)) || oldRuntime.has(path) || newRuntime.has(path)) return false;
+      for (const entry of [before.packages[path], after.packages[path]].filter(Boolean)) {
+        if (entry.dev !== true || entry.link || entry.hasInstallScript || !entry.version
+          || !/^https:\/\/registry\.npmjs\.org\/[^?#]+\.tgz$/u.test(entry.resolved ?? "") || !/^sha512-/u.test(entry.integrity ?? "")) return false;
+      }
+      changedNames.add(path.slice(path.lastIndexOf("node_modules/") + "node_modules/".length));
+    }
+    for (const key of new Set([...Object.keys(beforePackage.overrides ?? {}), ...Object.keys(afterPackage.overrides ?? {})])) {
+      const a = beforePackage.overrides?.[key], b = afterPackage.overrides?.[key];
+      if (canonical(a ?? null) === canonical(b ?? null)) continue;
+      const name = key.replace(/(?<!^)@[^/]*$/u, "");
+      if (!changedNames.has(name) || [a, b].some(value => value !== undefined && (typeof value !== "string" || !/^\d+\.\d+\.\d+$/u.test(value)))) return false;
+    }
+    return true;
+  } catch { return false; }
 }
 
 function isPresentationPath(file) {
@@ -300,7 +380,7 @@ function markAll(scope) {
 
 export function classifyVerifyPaths(
   paths,
-  { forceAll = false, customV2Release = false } = {},
+  { forceAll = false, customV2Release = false, toolingOnlyDependency = false } = {},
 ) {
   const scope = { ...EMPTY_SCOPE };
   if (typeof customV2Release !== "boolean") {
@@ -309,6 +389,13 @@ export function classifyVerifyPaths(
   if (forceAll) {
     markAll(scope);
     return scope;
+  }
+
+  if (!customV2Release && toolingOnlyDependency === true && paths.length > 0
+    && paths.every(path => ["package.json", "package-lock.json"].includes(path))) {
+    // Preserve all JavaScript/application/database/CLI validation. Proven
+    // tooling-only changes cannot alter the pinned Solidity or indexer trees.
+    return { ...scope, interface: true, dependencies: true, database: true, custom_v2: true, read_model: true };
   }
 
   // A manual Generic V2 production release verifies the complete, current
@@ -495,7 +582,7 @@ function printGithubOutputs(scope) {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const forceAll = process.argv[2] === "--all";
   const customV2Release = process.argv[2] === "--custom-v2-release";
   if ((forceAll || customV2Release) && process.argv.length !== 3) {
@@ -510,7 +597,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
         .split("\n")
         .map((path) => path.trim())
         .filter(Boolean);
-  const scope = classifyVerifyPaths(paths, { forceAll, customV2Release });
+  const toolingOnlyDependency = !forceAll && !customV2Release && isToolingOnlyDependencyChange(paths,
+    { baseSha: process.env.BASE_SHA, headSha: process.env.HEAD_SHA });
+  const scope = classifyVerifyPaths(paths, { forceAll, customV2Release, toolingOnlyDependency });
   printGithubOutputs({ ...scope,
     interface_presentation_candidate: !forceAll && !customV2Release && isInterfacePresentationCandidate(paths, scope),
     interface_presentation_only: !forceAll && !customV2Release

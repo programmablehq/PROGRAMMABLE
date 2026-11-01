@@ -38,6 +38,18 @@ run links the reused run in its summary.
 
 The production build and bundle credential checks remain. Custom V2 plus
 Interface still selects full application coverage before sharing results.
+
+For changes limited to `package.json` and `package-lock.json`, the trusted-base
+classifier can prove that only installed ESLint, Vitest, Playwright or
+TypeScript dependency trees changed. It resolves the complete production
+dependency graph, including installed peers, and rejects changed production
+entries, new dependency shadows, lifecycle scripts, unpinned sources and
+unrelated compiler or configuration changes. These updates retain the full
+application, CLI, database, Custom V2 and read-model checks. Unchanged pinned
+Solidity and independent indexer trees do not rerun their contract/fork jobs.
+Missing Git objects, unfamiliar dependency layouts and mixed changes retain
+the complete gate. A change to the classifier itself still uses its trusted
+predecessor and therefore cannot select its own reduced coverage.
 Do not repeat successful checks locally and then run the same full suite again
 for every small edit. Visual wording and CSS do not need source-string tests.
 
