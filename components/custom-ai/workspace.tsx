@@ -9,6 +9,7 @@ import { useWallet } from "@/components/wallet-provider";
 import { AIRequestError, aiRequest, sameAIRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ImageReceipt, StoredStudio, StudioState } from "@/lib/custom-ai/studio";
 import { loadStudio, restoreStudio, saveStudio, studioBase, studioSnapshot, StudioConflictError, type StudioBase } from "@/lib/custom-ai/studio-sync";
+import { createLatestSaveQueue } from "@/lib/custom-ai/latest-save-queue";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { conversationWindow } from "@/lib/custom-ai/conversation";
 import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
@@ -128,7 +129,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [saveFailed, setSaveFailed] = useState(false);
   const [conflict, setConflict] = useState<{ server: StoredStudio | null } | null>(null);
   const [previewRevision, setPreviewRevision] = useState(0);
-  const saveQueue = useRef(Promise.resolve());
+  const saveQueue = useRef(createLatestSaveQueue());
   const cacheKeys=cacheScope?scopedCacheKeys(cacheScope,owner,conversationId):undefined;
   const storageKey = cacheKeys?.studio ?? `programmable.custom-ai.studio.v1:${owner}${conversationId&&conversationId!==LEGACY_CONVERSATION?`:chat:${conversationId}`:""}`;
   const legacyStorageKey=cacheKeys?.legacyStudio;
@@ -293,6 +294,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   }, [storageKey, owner, restored, messages, input, editTarget, settings, draft, generalProject,sourceRecovery,intent, draftId, contextId, pendingChange, imageReceipt, saveRevision]);
 
   useEffect(() => {
+    saveQueue.current.invalidate();
     if (!restored || localPreview || busy || switchingCoin || !remote.current.ready || remote.current.blocked) return;
     try { parseCoinSetupPatch(settings); } catch { return; }
     const state: StudioState = { settings, messages, draftId,sourceId, contextId, pendingChange, image: imageReceipt,input,editTarget };
@@ -301,7 +303,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     const signal = lifetime.current!.signal;
     const epoch = saveEpoch.current;
     const timer = setTimeout(() => {
-      saveQueue.current = saveQueue.current.then(async () => {
+      void saveQueue.current.enqueue(async () => {
         if (signal.aborted || epoch !== saveEpoch.current || remote.current.blocked || snapshot === remote.current.saved) return;
         try {
           const saved = await saveStudio({ account: owner, conversationId,headers: () => headersRef.current(), state,
@@ -373,7 +375,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   async function flushCurrent(forSend=false){
     if(localPreview||owner==="signed-out")return;
     if(!remote.current.ready||remote.current.blocked)throw Error("Save or resolve this chat before opening another one.");
-    await saveQueue.current;saveEpoch.current++;
+    saveQueue.current.invalidate();await saveQueue.current.idle();saveEpoch.current++;
     const active=!forSend&&replyRef.current.isActive()&&retry.current?retryBase.current:undefined;
     const state:StudioState={settings,messages:active?.messages??messages,draftId,sourceId,contextId,pendingChange:active?active.pendingChange:pendingChange,image:imageReceipt,
       input:active&&retry.current?.intent!=="compile"?retry.current?.messages.at(-1)?.content??input:input,editTarget};

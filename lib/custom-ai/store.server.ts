@@ -95,7 +95,9 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       }
       // Expired jobs are never silently dispatched a second time. Their full
       // reservation remains charged because an upstream call may have run.
-      await db.query("UPDATE programmable_custom_ai_v1.jobs SET state='failed',error_code='interrupted',updated_at=now() WHERE state='running' AND created_at < now()-interval '10 minutes'");
+      // This reservation needs only this owner's concurrency slot. Keep the
+      // indexed owner scope instead of scanning every account under the lock.
+      await db.query("UPDATE programmable_custom_ai_v1.jobs SET state='failed',error_code='interrupted',updated_at=now() WHERE owner=$1 AND state='running' AND created_at < now()-interval '10 minutes'", [owner]);
       const active = (await db.query("SELECT count(*)::integer AS n FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND state='running'", [owner])).rows[0];
       if (Number(active.n) >= limits.concurrent) throw new CustomAIError("busy", "Your previous reply is still being prepared.", 429);
       await bindConversationJob(db,owner,request);

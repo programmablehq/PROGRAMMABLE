@@ -15,6 +15,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   const entryConversation=useRef(initialConversationId);
   const [selected,setSelected]=useState<string>(),[page,setPage]=useState<ConversationPage>({conversations:[]}),[open,setOpen]=useState(false);
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
+  const pendingCreate=useRef<string>(undefined);
   const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState("");
   const root=useRef<HTMLDivElement|null>(null);
   const toggle=useRef<HTMLButtonElement|null>(null);
@@ -87,8 +88,12 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   async function newChat(){
     if(transition.current)return;transition.current=true;setTransitioning(true);
     setLoading(true);setError("");try{
-      await flush();const result=await aiRequest<ConversationItem>("/conversations",scopedHeaders,{account,action:"create",id:crypto.randomUUID()});
-      await writeDraftCache(key.current,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);
+      // A lost response can still have created the chat. Reuse that identity
+      // until both the server result and local selection are saved.
+      await flush();pendingCreate.current??=crypto.randomUUID();
+      const result=await aiRequest<ConversationItem>("/conversations",scopedHeaders,{account,action:"create",id:pendingCreate.current});
+      if(result.id!==pendingCreate.current)throw Error("The new chat could not be confirmed. Try opening it again.");
+      await writeDraftCache(key.current,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);pendingCreate.current=undefined;
     }catch(cause){setOpen(true);setError(cause instanceof Error?cause.message:"A new chat could not be opened.");}finally{transition.current=false;setTransitioning(false);setLoading(false);}
   }
   async function update(chat:ConversationItem,patch:{title?:string;archived?:boolean},flush:Flush){

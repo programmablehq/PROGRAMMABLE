@@ -46,7 +46,9 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    const input = await readPreviewBody(request) as { account: string; conversationId?: string; revision: number; state: StudioState };
+    // A saved history also contains unsent text and metadata. Its UTF-8 size
+    // can exceed the single-message limit while all character limits hold.
+    const input = await readPreviewBody(request, 256_000) as { account: string; conversationId?: string; revision: number; state: StudioState };
     if(!input||typeof input!=="object")throw new CustomAIError("input","Choose a saved draft.");
     const { store, owner, id, account, chatId } = await context(request, input.account,input.conversationId);
     await store.consume(owner, "studio", 600);
