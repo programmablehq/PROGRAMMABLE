@@ -37,11 +37,28 @@ describe("general source generation inside the owned chat job",()=>{
   expect(onModelCall).toHaveBeenCalledWith(expect.objectContaining({inputTokens:14900,outputTokens:8000,completed:false,failure:"output-limit"}));
   expect(call).toHaveBeenCalledTimes(1);
  });
- it("gives a complete independent declaration its bounded contract response profile",async()=>{
+ it("keeps an ordinary answer out of the independent declaration step",async()=>{
   const call=vi.fn<(input:ClaudeInput)=>Promise<ClaudeResult>>(async()=>plan({action:"answer",intentRequirements:[],requirements:[],generalChecks:null}));
   await runCustomAI(request,undefined,{call,compile:vi.fn()},{saveBlueprint:async()=>{},saveScenarios:async()=>{},saveCompilation:async()=>{}});
   expect(call).toHaveBeenCalledTimes(1);
   expect(call.mock.calls[0][0]).toMatchObject({responseProfile:"contract",maxTokens:16000});
+  expect(call.mock.calls[0][0].schema).not.toHaveProperty("properties.generalChecks");
+ });
+ it("preserves every agreed rule when the separate declaration hits its response limit without retrying or generating source",async()=>{
+  const call=vi.fn<(input:ClaudeInput)=>Promise<ClaudeResult>>()
+   .mockResolvedValueOnce(plan())
+   .mockRejectedValueOnce(new ModelResponseError("output-limit",{inputTokens:2000,outputTokens:16000}));
+  const save=vi.fn(),compiler=vi.fn(),onModelCall=vi.fn();
+  const value=await runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:compiler},{
+   saveProject:save,saveBlueprint:async()=>{},saveCompilation:async()=>{},saveScenarios:async()=>{},onModelCall,
+  });
+  expect(value.change).toBe("blocked");expect(value.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","no-owner"]);
+  expect(value.unresolved).toContain("Contract checks could not be prepared");expect(call).toHaveBeenCalledTimes(2);
+  expect(call.mock.calls[0][0].schema).not.toHaveProperty("properties.generalChecks");
+  expect(call.mock.calls[1][0]).toMatchObject({responseProfile:"contract",maxTokens:16000,model:"claude-sonnet-5-5"});
+  expect(call.mock.calls[1][0].messages).toHaveLength(1);
+  expect(onModelCall).toHaveBeenLastCalledWith(expect.objectContaining({completed:false,failure:"output-limit",outputTokens:16000}));
+  expect(save).not.toHaveBeenCalled();expect(compiler).not.toHaveBeenCalled();
  });
  it("keeps an existing general project on its source route even if the interpreter proposes a fee template",async()=>{
   const previous=prior(),call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated()),fee=vi.fn();
