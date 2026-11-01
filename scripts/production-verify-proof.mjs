@@ -544,10 +544,35 @@ function validateVerifyJobs(response, run) {
       throw new Error(`Production Verify ${group} worker results disagree.`);
     }
   }
-  return parseTimestamp(
-    jobsByName.get(VERIFY_PROOF_JOB_NAME).completed_at,
-    "proof completion",
-  );
+  // The job envelope also includes runner cleanup and can carry a different
+  // clock from its steps. Bind age to successful creation, attestation and
+  // preservation of this exact proof, not that unrelated envelope timestamp.
+  const proofJob = jobsByName.get(VERIFY_PROOF_JOB_NAME);
+  const requiredSteps = [
+    "Create exact production Verify proof",
+    "Attest exact production Verify proof",
+    "Preserve immutable production Verify proof",
+    "Record exact production Verify proof",
+  ];
+  if (!Array.isArray(proofJob.steps)) {
+    throw new Error("Production Verify proof steps are missing.");
+  }
+  let previousNumber = 0, completedAt = 0;
+  for (const name of requiredSteps) {
+    const matches = proofJob.steps.filter((step) => isObject(step) && step.name === name);
+    const step = matches[0];
+    if (matches.length !== 1 || step.status !== "completed" || step.conclusion !== "success"
+      || !Number.isSafeInteger(step.number) || step.number <= previousNumber) {
+      throw new Error("Production Verify proof steps are incomplete or mismatched.");
+    }
+    const startedAt = parseTimestamp(step.started_at, `${name} start`);
+    const finishedAt = parseTimestamp(step.completed_at, `${name} completion`);
+    if (startedAt < completedAt || finishedAt < startedAt) {
+      throw new Error("Production Verify proof step chronology is invalid.");
+    }
+    previousNumber = step.number; completedAt = finishedAt;
+  }
+  return completedAt;
 }
 
 function validateVerifyArtifact(response, run) {
