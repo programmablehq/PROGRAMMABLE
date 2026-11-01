@@ -17,6 +17,8 @@ import {
   ROBINHOOD_V414_RUNTIME_BACKEND_EVIDENCE_PATHS,
   ROBINHOOD_V41_CLI_COORDINATE_PATH,
   GENERAL_CONSTRUCTOR_WORKERS,
+  GENERAL_BEHAVIOR_WORKERS,
+  isCustomAITracingOnlyChange,
   isToolingOnlyDependencyChange,
 } from "./classify-verify-paths.mjs";
 
@@ -456,6 +458,41 @@ test("isolated constructor workers select their interface execution lane without
       assert.deepEqual(classifyVerifyPaths([worker, other]), classifyVerifyPaths([], { forceAll: true }), other);
     }
   }
+});
+
+test("known behavior workers keep complete interface coverage and mixed changes retain their own gates", () => {
+  for (const worker of GENERAL_BEHAVIOR_WORKERS) {
+    assert.deepEqual(classifyVerifyPaths([worker]), { ...none, interface: true });
+    for (const unknown of ["scripts/custom-ai/general-behavior-v3-worker.mjs", `${worker}.backup`,
+      "scripts/custom-ai/install-toolchain.mjs", "scripts/ci/classify-verify-paths.mjs", "next.config.ts", "package-lock.json"])
+      assert.deepEqual(classifyVerifyPaths([worker, unknown]), classifyVerifyPaths([], { forceAll: true }));
+    assert.equal(classifyVerifyPaths([worker, "contracts/src/Changed.sol"]).contracts, true);
+    assert.equal(classifyVerifyPaths([worker, "indexer/src/index.ts"]).indexer, true);
+    assert.equal(classifyVerifyPaths([worker, "supabase/migrations/001.sql"]).database, true);
+  }
+});
+
+test("only an exact worker-helper trace addition can narrow a global configuration change", () => {
+  const helper = "scripts/custom-ai/declared-events.mjs", paths = [helper, "next.config.ts"];
+  const before = 'const customAIWorkerFiles = [\n  "./scripts/custom-ai/*-worker.mjs",\n];\nexport default {reactStrictMode:true};\n';
+  const line = `  "./${helper}",\n`, after = before.replace("\n];", `\n${line}];`);
+  const range = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
+  const qualify = (old, changed, files = paths) => isCustomAITracingOnlyChange(files, { ...range, readChange: () => [old, changed] });
+  assert.equal(qualify(before, after), true);
+  assert.deepEqual(classifyVerifyPaths(paths, { customAITracingOnly: qualify(before, after) }), { ...none, interface: true });
+  for (const [old, changed, files] of [
+    [before, after.replace("true", "false"), paths],
+    [after, before, paths],
+    [before, after + line, paths],
+    [before, before + line, paths],
+    [before, before.replace("};", `};\n${line}`), paths],
+    [before, after.replace(helper, "another-helper.mjs"), paths],
+    [before, after, ["next.config.ts"]],
+  ]) assert.equal(qualify(old, changed, files), false);
+  assert.equal(isCustomAITracingOnlyChange(paths, { ...range, readChange: () => { throw Error("missing Git history"); } }), false);
+  assert.equal(isCustomAITracingOnlyChange(paths, { ...range, headSha: range.baseSha, readChange: () => [before, after] }), false);
+  assert.deepEqual(classifyVerifyPaths([...paths, "config/changed.json"], { customAITracingOnly: true }), classifyVerifyPaths([], { forceAll: true }));
+  assert.deepEqual(classifyVerifyPaths(paths, { forceAll: true, customAITracingOnly: true }), classifyVerifyPaths([], { forceAll: true }));
 });
 
 test("routes database and indexer changes through interface integration coverage", () => {
