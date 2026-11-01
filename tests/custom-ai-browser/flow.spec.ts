@@ -178,6 +178,34 @@ test("starter ideas fill the composer without spending a request", async ({page}
   await expect(page.getByRole("button",{name:"Launch coin"})).toBeDisabled();
   expect(calls).toBe(0);
 });
+test("checked fee drafts expose source-bound rule editing and retain it after an interrupted reply", async ({page}) => {
+  const requirements = ["Charge 3% on buys and sells", "No owner minting"];
+  const intent = { version: 1, id: "legacy-fee", revision: "b".repeat(64), unresolved: [], changes: [],
+    requirements: requirements.map((text, i) => ({ id: `legacy-rule-${i}`, text, kind: "behavior", open: null, origin: { kind: "legacy", sourceHash: hash } })) };
+  const requests: Record<string, unknown>[] = [];
+  await page.route("**/api/custom-ai", async route => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) return route.fulfill({ json: { reply: "The fee rules are checked.", change: "applied", intent,
+      draft: { ...draft, verification: { ...draft.verification, requirements } } } });
+    return route.fulfill({ status: 503, json: { error: "Please retry later.", requestState: "failed" } });
+  });
+  await page.goto("/launch/custom-ai");
+  const box = page.locator("#custom-ai-message");
+  await box.fill("Build a 3% fee coin with no owner minting"); await box.press("Enter");
+  await page.getByText("Requested rules (2)", { exact: true }).click();
+  await page.getByRole("button", { name: "Edit rule: Charge 3% on buys and sells", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Describe your change to this rule" })).toBeFocused();
+  await expect(page.getByText("Editing: Charge 3% on buys and sells", { exact: true })).toBeVisible();
+  await box.fill("Change just this fee to 2%"); await box.press("Enter");
+  await expect(page.getByRole("alert").filter({ hasText: "Please retry later." })).toBeVisible();
+  expect(requests[1].editTarget).toEqual({ sourceHash: hash, requirementId: "legacy-rule-0" });
+  await page.reload();
+  await expect(box).toHaveValue("Change just this fee to 2%");
+  await expect(page.getByText("Editing: Charge 3% on buys and sells", { exact: true })).toBeVisible();
+  await box.press("Escape");
+  await expect(page.getByRole("textbox", { name: "Describe your coin or ask a question" })).toBeFocused();
+  await expect(box).toHaveValue("Change just this fee to 2%"); expect(requests).toHaveLength(2);
+});
 test("a selected rule is sent with the exact saved source and survives a failed reply",async({page})=>{
   const requests:Record<string,unknown>[]=[];
   await page.route("**/api/custom-ai",async route=>{

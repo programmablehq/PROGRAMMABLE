@@ -589,7 +589,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       }}>Reconnect to saved reply</button>}
 
       {editTarget && <div className={styles.editScope} role="status" id="custom-ai-edit-scope">
-        <span>Editing: {(generalProject?intent?.requirements:draft?.composable?.spec.requirements)?.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
+        <span>Editing: {(intent?.requirements ?? draft?.composable?.spec.requirements)?.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
         <button type="button" aria-label="Edit the whole design instead" disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked} onClick={() => {setEditTarget(undefined);textarea.current?.focus();}}><X size={16} aria-hidden="true" /></button>
       </div>}
       <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send(); }}>

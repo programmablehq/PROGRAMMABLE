@@ -1,7 +1,7 @@
 import type { Draft } from "@/lib/custom-ai/types";
 import { summarizeRules } from "@/lib/custom-ai/rule-summary";
 import styles from "./workspace.module.css";
-import { intentHasOpenParts, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
+import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 import { RequestedRules } from "./requested-rules";
 
 const percent = (bps: number) => `${bps / 100}%`;
@@ -28,7 +28,7 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
   const ready = verified?.status === "passed" && verified.sourceHash === draft?.sourceHash && draft?.validation?.status === "passed";
   const times = [...new Set(verified?.checks.map(check => check.afterSeconds))].sort((a, b) => a - b);
   const summary = ready && draft?.composable ? summarizeRules(draft.composable.spec, quoteLabel,draft.composable.feeds) : null;
-  const editable = ready && draft?.composable && intent?.revision === draft.intent?.revision ? onEditRule : undefined;
+  const editable = ready && draft && intent && intentMatchesCandidate(intent, draft) ? onEditRule : undefined;
   return <section className={styles.ruleReview} aria-label="Rules for this coin">
     <h3>{pendingChange && draft ? "Change not applied" : intent && intentHasOpenParts(intent) ? "Open choices" : pendingChange ? "Change not applied" : "Rules for this coin"}</h3>
     {pendingChange && !draft && intent ? <p>{intentHasOpenParts(intent)
