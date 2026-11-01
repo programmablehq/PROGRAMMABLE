@@ -77,6 +77,15 @@ describe("source retention and inline library resolution", () => {
 });
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("canonical library use in the real pinned compiler", () => {
+  it("keeps malformed generated source for compiler diagnostics and repair", async () => {
+    const request = input(), content = 'pragma solidity 0.8.26; contract C { string value = "unfinished';
+    const result = await buildGeneralContract({ ...request, availableDependencySources: canonicalGeneralLibraries() }, undefined,
+      { call: async () => answer(content), compile: compileContractProject });
+    expect(result.compilation.compiled).toBe(false);
+    expect(result.compilation.diagnostics.some(diagnostic => diagnostic.severity === "error")).toBe(true);
+    expect(result.project.sources["C.sol"].content).toBe(content);
+    expect(request.saveProject).toHaveBeenCalledWith(result.project);
+  }, 50_000);
   it("builds a generated token from the exact inline ERC20 closure in one generation", async () => {
     const content = 'pragma solidity 0.8.26; import {ERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol"; contract C is ERC20 { constructor() ERC20("Example", "EX") {} }';
     const call = vi.fn(async () => answer(content));

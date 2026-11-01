@@ -3,7 +3,12 @@ import { VIAIR_200_REMAPPINGS, type ProjectCompiler } from "./compiler-profile";
 import type { ContractProject } from "./contract-project";
 
 function imports(source: string): string[] {
-  const tokens = compactDependencyCode(source).match(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[A-Za-z_$][A-Za-z0-9_$]*|[^\s]/gu) ?? [];
+  let code: string;
+  try { code = compactDependencyCode(source); }
+  // A malformed model-generated file must still be saved and handed to the
+  // compiler, so the user can repair that exact source without another build.
+  catch { return []; }
+  const tokens = code.match(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[A-Za-z_$][A-Za-z0-9_$]*|[^\s]/gu) ?? [];
   const paths: string[] = [];
   let importing = false;
   for (const token of tokens) {
@@ -11,7 +16,7 @@ function imports(source: string): string[] {
     else if (token === ";") importing = false;
     else if (importing && (token[0] === '"' || token[0] === "'")) {
       const path = token.slice(1, -1);
-      if (path.includes("\\")) throw new TypeError("Use an exact inline library import path.");
+      if (path.includes("\\")) { importing = false; continue; }
       paths.push(path); importing = false;
     }
   }
