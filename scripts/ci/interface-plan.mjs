@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve, relative } from "node:path";
-import { isGeneralConstructorWorker } from "./classify-verify-paths.mjs";
+import { isGeneralConstructorWorker, GENERAL_BEHAVIOR_WORKERS } from "./classify-verify-paths.mjs";
 
 const root = process.cwd();
 export const interfaceVerificationPaths = new Set([
@@ -33,12 +33,12 @@ export function changedPaths(env = process.env) {
   } catch { return null; }
 }
 
-export function interfacePlan(paths) {
-  const full = !paths || paths.some(path => !interfaceVerificationPaths.has(path) && (globalInput.test(path)
+export function interfacePlan(paths, { customAITracingOnly = false } = {}) {
+  const full = !paths || paths.some(path => !(path === "next.config.ts" && customAITracingOnly === true) && !interfaceVerificationPaths.has(path) && (globalInput.test(path)
     || (!sourceInput.test(path) && !/^(?:docs\/|scripts\/|packages\/|contracts\/|config\/|ops\/|supabase\/|indexer\/|AGENTS\.md|README\.md)/u.test(path))));
   const any = (pattern) => full || paths.some(path => pattern.test(path));
   const customAI = any(/^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/(?:client|readiness|studio|conversation|coin-setup|events|wallet|launch|transaction|trade|recovery|reconcile)|tests\/custom-ai-browser\/|playwright\.custom-ai\.config)/u)
-    || Boolean(paths?.some(isGeneralConstructorWorker));
+    || Boolean(paths?.some(path => isGeneralConstructorWorker(path) || GENERAL_BEHAVIOR_WORKERS.includes(path)));
   // Custom AI has its own browser flow. A filename containing "launch" must
   // not select unrelated Module Mode suites; shared wallet inputs still do.
   const separateCustomAI = /^(?:components\/custom-ai\/|app\/(?:launch|api)\/custom-ai\/|lib\/custom-ai\/|docs\/custom-ai\/|tests\/custom-ai(?:-browser\/|-))/u;

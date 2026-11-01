@@ -67,6 +67,10 @@ the same range and every other configuration byte is unchanged. Removals,
 duplicate or relocated entries, other configuration edits, missing Git history
 and unknown helpers retain the full check. This does not change required gates
 or allow a modified classifier to approve its own coverage.
+The Interface runner independently checks the same Git diff before accepting
+that trace-only exception. It still installs the isolated compiler, follows the
+worker's actual consumers into the related tests, runs the Custom AI browser
+suite and builds the website. Other global inputs keep the complete suite.
 
 ## Contracts
 

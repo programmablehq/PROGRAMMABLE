@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { interfacePlan, relatedInputs } from "./interface-plan.mjs";
-import { GENERAL_CONSTRUCTOR_WORKERS } from "./classify-verify-paths.mjs";
+import { GENERAL_CONSTRUCTOR_WORKERS, GENERAL_BEHAVIOR_WORKERS } from "./classify-verify-paths.mjs";
 
 test("coin metadata does not run unrelated wallet, migration, CLI or activation checks", () => {
   const plan = interfacePlan(["lib/server/codex-token-metadata.ts", "lib/coin-metadata.ts"]);
@@ -122,6 +122,28 @@ test("dependency replay worker keeps its actual VM reader coverage", () => {
   const files = [worker, "lib/custom-ai/dependency-witness.server.ts", "tests/custom-ai-dependency-witness.test.ts"];
   const selected = relatedInputs([worker], files);
   for (const file of files) assert.ok(selected.includes(file), file);
+});
+
+test("behavior workers retain their actual EVM consumers and Custom AI browser coverage", () => {
+  const files = [...GENERAL_BEHAVIOR_WORKERS, "lib/custom-ai/behavior-checks.server.ts",
+    "tests/custom-ai-event-checks.test.ts", "tests/custom-ai-general-v4-world.test.ts",
+    "tests/custom-ai-protected-world.test.ts", "tests/custom-ai-general-launch-source.test.ts"];
+  for (const worker of GENERAL_BEHAVIOR_WORKERS) {
+    const plan = interfacePlan([worker]);
+    assert.equal(plan.full, false);assert.equal(plan.customAI, true);assert.equal(plan.customAICompiler, true);assert.equal(plan.wallet, true);
+    assert.deepEqual(plan.browser, []);assert.equal(plan.migration, false);assert.equal(plan.moduleTools, false);assert.equal(plan.activation, false);
+    const selected = relatedInputs([worker], files);
+    for (const required of files.filter(file => !file.startsWith("scripts/"))) assert.ok(selected.includes(required), `${worker}: ${required}`);
+  }
+});
+
+test("an independently qualified trace addition retains targeted AI checks and rejects mixed global inputs", () => {
+  const paths = ["next.config.ts", "scripts/custom-ai/declared-events.mjs", "lib/custom-ai/behavior-checks.server.ts"];
+  assert.equal(interfacePlan(paths).full, true);
+  const plan = interfacePlan(paths, { customAITracingOnly: true });
+  assert.equal(plan.full, false);assert.equal(plan.customAI, true);assert.equal(plan.customAICompiler, true);assert.deepEqual(plan.browser, []);
+  assert.equal(interfacePlan([...paths, "package-lock.json"], { customAITracingOnly: true }).full, true);
+  assert.equal(interfacePlan(null, { customAITracingOnly: true }).full, true);
 });
 
 test("Custom AI interactions use their own browser suite while shared wallet changes retain coverage", () => {
