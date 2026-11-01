@@ -335,6 +335,17 @@ words and their hashes in separate private objects. An edited or archived chat
 cannot publish a stale package. Unsent input alone can change without replacing
 the checked coin design.
 
+Observed constructor inputs use a V3 private pack on both graph and Plan routes.
+The pack keeps the selected production context, exact initializer, two-provider
+observation and independently replayed feed read beside the constructor result.
+The shared observation may be up to ten seconds old; the caller-specific replay
+still runs against that exact block on both providers. Completion rejects an
+expired observation. Later recovery validates the saved proof at its original
+packing time and reuses the original request, rather than fetching a new price
+or interpreting an old request with new constructor inputs. These private
+receipts are excluded from ordinary chat and preparation responses. This source
+integration does not enable general launch intake or establish a funded launch.
+
 The normal explicit `create` action makes one signed backend POST to the existing
 durable review/lifecycle intake. An optional `preflight` is a separate diagnostic
 action and creates no second frontend approval authority. A first submission

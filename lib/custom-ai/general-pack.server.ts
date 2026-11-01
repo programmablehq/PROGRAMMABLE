@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { generalGraphPackConfig, type GeneralPackInput } from "./general-pack-config.server";
-import { materializeGeneralRuntime, type GeneralDeploymentPrediction } from "./runtime-materialization.server";
+import { materializeGeneralRuntime, type GeneralDeploymentPrediction, type GeneralRuntimeDependencyResolver } from "./runtime-materialization.server";
 import { CustomAIError } from "./types";
 
 type MaterializedTarget = { targetId: string; applicantSalt: `0x${string}`;
@@ -27,7 +27,7 @@ export class GeneralPackRejected extends CustomAIError {
 /** One bounded, local canonical pack. The caller must durably reserve identity
  * first, persist these exact bytes before transport, and revalidate ownership
  * and current production context. This function never submits or signs. */
-export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSignal) {
+export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSignal, resolveObservedDependencies?: GeneralRuntimeDependencyResolver) {
   signal?.throwIfAborted();
   const nativeFundingWei = input.nativeFundingWei;
   const plan = generalGraphPackConfig(input);
@@ -82,6 +82,7 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
               handling = (async () => {
                 const runtime = await materializeGeneralRuntime(plan.source.project, plan.source.compilation,
                   { controller: plan.values.controller, settings: plan.values.settings,
+                    ...(resolveObservedDependencies ? { resolveObservedDependencies } : {}),
                     ...(nativeFundingWei === undefined ? {} : { nativeFundingWei }) },
                   message.prediction.predictions as GeneralDeploymentPrediction[], combined);
                 construction = runtime;
@@ -113,18 +114,18 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
         !== canonicalBrowserSha256V2("programmable.custom-ai-exact-launch-profile.v1", production.graphProfile)) throw workerError();
     const finalTargets = new Map(completed.runtimeMaterialization.targets.map(target => [target.targetId, target]));
     if (!construction || construction.contracts.some(contract => finalTargets.get(contract.id)?.runtimeCodeHash !== contract.runtimeCodeHash)
-      || plan.source.project.deployment?.version === 2 && (construction.version !== 2 || !construction.children?.length)) throw workerError();
+      || plan.source.project.deployment?.version === 2 && (construction.version < 2 || !construction.children?.length)) throw workerError();
     const reproducibleConfig = { ...plan.config, targets: plan.config.targets.map(target => {
       const actual = finalTargets.get(target.targetId);
       if (!actual) throw workerError();
       return { ...target, applicantSalt: actual.applicantSalt, runtimeImmutables: actual.runtimeImmutables };
     }) };
-    const body = { version: construction.version === 2 ? 2 as const : 1 as const, route: "graph-v3" as const, chainId: plan.source.project.chainId,
+    const body = { version: construction.version, route: "graph-v3" as const, chainId: plan.source.project.chainId,
       bindingHash: plan.bindingHash, projectHash: plan.source.project.hash, artifactHash: plan.source.compilation.artifactHash,
       productionId: plan.productionId, publicSourceId: plan.publicSourceId, identity: plan.identity,
       requestBody, requestSha256, receipt: completed.receipt, reproducibleConfig,
       runtimeMaterialization: completed.runtimeMaterialization,
-      ...(construction.version === 2 ? { constructorMaterialization: construction } : {}), launchReady: false as const };
+      ...(construction.version >= 2 ? { constructorMaterialization: construction } : {}), launchReady: false as const };
     return { ...body, hash: canonicalBrowserSha256V2(`programmable.custom-ai-general-graph-pack.v${body.version}`, body) };
   } finally { await rm(directory, { recursive: true, force: true }); }
 }

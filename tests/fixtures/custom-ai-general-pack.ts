@@ -15,13 +15,15 @@ import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../../lib/custom-ai/coin-
 import { createGeneralPublicSource, generalSourcePublicUri } from "../../lib/custom-ai/public-launch-source.server";
 import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
 import type { GeneralPackInput } from "../../lib/custom-ai/general-pack-config.server";
+import type { LaunchProductionContext } from "../../lib/custom-ai/launch-production";
 
 /** Actual compiler + isolated declared examples, never an LP, fee, protected
  * review or mainnet acceptance fixture. It intentionally lacks those proofs. */
-export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false, extraTargets = 0, withChildren = false): Promise<GeneralPackInput> {
+export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false, extraTargets = 0, withChildren = false, productionOverride?: LaunchProductionContext): Promise<GeneralPackInput> {
   if(!Number.isSafeInteger(extraTargets)||extraTargets<0||extraTargets>(withChildren?10:13))throw Error("Bounded fixture target count exceeded");
   const owner = "pack-fixture-owner", controller = `0x${"11".repeat(20)}` as const, conversation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", id = "general-pack-source-00001";
-  const production = projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain, protection);
+  const production = productionOverride ?? projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain, protection);
+  const evmVersion=productionOverride?"cancun":"paris";
   const intent: LaunchIntent = { version: 1, id: "pack-fixture", revision: "a".repeat(64), changes: [], unresolved: [], requirements: [
     { id: "marker", text: "The declared public marker returns42", kind: "behavior", open: null, origin: { kind: "legacy" } },
     { id: "surface", text: "Only the declared public interfaces exist", kind: "constraint", open: null, origin: { kind: "legacy" } },
@@ -35,7 +37,7 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
   const declaration = { targets: [
     { id: "token", source: "Project.sol", contract: "Token", constructorArguments: [{ input: "name" }, { input: "symbol" }, { input: "controller" }], initializer: null, deploymentValue: "0", initializerValue: "0", hookPermissions: null },
     { id: "hook", source: "Project.sol", contract: "Hook", constructorArguments: [{ binding: "pool-manager" },...(withChildren?[{input:"controller"}]:[])], initializer: null, deploymentValue: "0", initializerValue: "0", hookPermissions: 8192 },
-    { id: "initializer", source: "Project.sol", contract: "Initializer", constructorArguments: [], initializer: { function: "initialize", arguments: [] }, deploymentValue: "0", initializerValue: { input: "funding" }, hookPermissions: null },
+    { id: "initializer", source: "Project.sol", contract: "Initializer", constructorArguments: productionOverride?[{binding:"native-usd-feed"}]:[], initializer: { function: "initialize", arguments: [] }, deploymentValue: "0", initializerValue: { input: "funding" }, hookPermissions: null },
   ], pool: { token: "token", hook: "hook", initializer: "initializer", platformFeeBinding: "hook", fee: 0, tickSpacing: 60 },
   fees: { buyPpm: 30000, sellPpm: 0 }, liquidityModel: "external-concentrated-liquidity",...(childDeclaration?{constructorChildren:childDeclaration}:{}) };
   const contracts = [
@@ -43,7 +45,7 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
       functions: ["function name() view returns(string)", "function symbol() view returns(string)", "function controller() view returns(address)", ...(unstable ? ["function start() view returns(uint256)"] : [])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
     { id: "hook", source: "Project.sol", contract: "Hook", role: "hook", arguments: [{ account: "creator" },...(withChildren?[{account:"creator"}]:[])],
       functions: ["function poolManager() view returns(address)", "function beforeInitialize(address,(address,address,uint24,int24,address),uint160) view returns(bytes4)", "function arbitraryProjectMethod() pure returns(uint256)",...(withChildren?["function vault() view returns(address)","function module() view returns(address)","function opening() view returns(address)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
-    { id: "initializer", source: "Project.sol", contract: "Initializer", role: "liquidity", arguments: [], functions: ["function initialize() payable"], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
+    { id: "initializer", source: "Project.sol", contract: "Initializer", role: "liquidity", arguments: productionOverride?[{fixture:"native-usd-feed"}]:[], functions: ["function initialize() payable",...(productionOverride?["function precision() view returns(uint8)"]:[])], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] },
   ];
   const children=withChildren?childDeclaration!.map(child=>({id:child.id,source:child.source,contract:child.contract,role:"auxiliary",parent:child.parent,
     creation:child.creation,nonce:child.nonce,value:child.value,arguments:child.id==="module"?[{contract:"vault"}]:[{contract:"hook"},{account:"creator"}],
@@ -54,7 +56,8 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
       deploymentValue:"0",initializerValue:"0",hookPermissions:null});
     contracts.push({id:`aux${index}`,source:"Project.sol",contract:`Aux${index}`,role:"auxiliary",arguments:[],functions:[],allowReceive:false,allowFallback:false,surfaceRequirements:["surface"]});
   }
-  const blueprint = createGeneralCheckBlueprint({ compilerProfile: "standard-v1", contracts, allowedCalls: [], deployment: declaration,...(children?{constructorChildren:children}:{}), steps: [
+  const blueprint = createGeneralCheckBlueprint({ compilerProfile: "standard-v1", contracts, allowedCalls: [], deployment: declaration,...(children?{constructorChildren:children}:{}),
+    ...(productionOverride?{world:{kind:"v4-protected-native-token-v1",token:"token",hook:"hook",initializer:"initializer",hookPermissions:8192,fee:0,tickSpacing:60,sqrtPriceX96:(1n<<96n).toString(),nativeUsdAnswer:(10n**BigInt(chain===999?18:8)).toString()}}:{}),steps: [
     { id: "marker", contract: "hook", signature: "arbitraryProjectMethod()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,
       requirementIds: ["marker"], expect: { status: "success", returns: ["42"] } },
     ...(withChildren?[
@@ -65,7 +68,7 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
       ]),
       {id:"module-vault",contract:"module",signature:"vault()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:true,requirementIds:["children"],expect:{status:"success",returns:[{contract:"vault"}]}},
     ]:[]),
-  ] }, intent, chain, "paris", production);
+  ] }, intent, chain, evmVersion, production);
   const content = `pragma solidity 0.8.26;
 contract Token { string public name; string public symbol; address public immutable controller;
 ${unstable ? "uint256 public immutable start;" : ""}
@@ -76,9 +79,10 @@ constructor(address manager_${withChildren?",address owner_":""}) {poolManager=m
 struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }
 function beforeInitialize(address,PoolKey calldata,uint160) external view returns(bytes4) { require(msg.sender==poolManager);return this.beforeInitialize.selector; }
 function arbitraryProjectMethod() external pure returns(uint256) {return 42;} }
-contract Initializer { function initialize() external payable {} }
+${productionOverride?"interface Feed {function decimals() external view returns(uint8);}":""}
+contract Initializer { ${productionOverride?"uint8 public immutable precision; constructor(Feed feed){precision=feed.decimals();}":""} function initialize() external payable {} }
 `+Array.from({length:extraTargets},(_,index)=>`contract Aux${index} {}\n`).join("");
-  const project = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion: "paris" },
+  const project = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion },
     sources: { "Project.sol": { content } }, entrypoints: blueprint.entrypoints }, intent, chain, production, blueprint.deployment);
   const compilation = await compileContractProject(project);
   if (!compilation.compiled) throw Error("Pack fixture did not compile");
