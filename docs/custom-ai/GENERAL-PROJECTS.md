@@ -659,3 +659,24 @@ original text. The view records the hash of the original complete dependency
 map; an in-flight caller mutation cannot replace what is later saved or compiled.
 Compaction supplies context only and makes no claim about runtime behavior,
 review approval or public launch availability.
+
+## Shared inline libraries and source changes
+
+The signed-in general builder receives the exact OpenZeppelin and Uniswap v4
+library sources shared by the published protection packages. They remain local,
+versioned inputs. The compiler receives only libraries actually imported by the
+project, plus their transitive imports. Import resolution uses the selected
+compiler profile and never reads the host filesystem or downloads a package.
+Unused libraries do not consume the project's source-file allowance.
+
+For an edit, existing files are copied from the saved project before changed
+files are applied. Omitting a helper file from the model's response preserves
+that file. An explicitly returned file replaces its earlier contents; duplicate
+paths and attempts to replace fixed dependencies fail. Existing user-edited
+library copies remain editable source and are not overwritten by the canonical
+library catalog. File deletion is not inferred from omission.
+
+Actual pinned-compiler cases cover a generated ERC20 using its inline library
+closure and a v4 BaseHook using the selected import aliases. These are source
+compilation checks, separate from constructor dependency observations, behavior
+evidence and launch authorization.
