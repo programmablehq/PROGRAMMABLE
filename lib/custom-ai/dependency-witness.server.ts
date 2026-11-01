@@ -5,10 +5,26 @@ import { join } from "node:path";
 import { toHex, type Address } from "viem";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { agreedTradeRpcV1, tradeBlockV1, type TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
-import type { LaunchDependencyObservation } from "./dependency-observations.server";
+import { createLaunchDependencyReader, type LaunchDependencyObservation } from "./dependency-observations.server";
 import { checkNativeFeedObservation, createNativeFeedConstructorWitness } from "./dependency-witness";
+import type { LaunchProductionContext } from "./launch-production";
 import { CustomAIError } from "./types";
 const unavailable = () => new CustomAIError("dependency-replay", "The native price feed could not be independently replayed from its observed state. Your source is saved.", 422);
+
+/** A single preparation entry point; the host supplies its existing per-chain
+ * provider factory. Observation sharing and both bounded read phases stay in
+ * their own components. Nothing is fetched until a preparation requests it. */
+export function createConstructorDependencyResolver(dependencies: Parameters<typeof createLaunchDependencyReader>[0]) {
+  const observe = createLaunchDependencyReader(dependencies);
+  return async (production: LaunchProductionContext, caller: Address, signal?: AbortSignal) => {
+    const selected = structuredClone(production);
+    const observation = await observe(selected, signal, { fresh: true });
+    signal?.throwIfAborted();
+    const read = await replayNativeFeedConstructorRead(observation, caller,
+      { rpcs: dependencies.rpcs(selected.chainId), now: dependencies.now }, signal);
+    return { observation, read };
+  };
+}
 
 /** One prestate read and one canonical-block comparison per provider. Only
  * the caller's fixed feed decimals selector is traced; provider instructions,

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from "viem";
+import { encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from "viem";
 import captured from "./fixtures/custom-ai-launch-discovery.json";
 import protection from "./fixtures/custom-ai-launch-protection.json";
 import { projectLaunchProductionContext } from "../lib/custom-ai/launch-production.server";
@@ -11,7 +11,7 @@ import { compileContractProject } from "../lib/custom-ai/contract-project.server
 import { resolveGeneralDeploymentValues } from "../lib/custom-ai/deployment-values.server";
 import { materializeGeneralRuntime, type GeneralDeploymentPrediction } from "../lib/custom-ai/runtime-materialization.server";
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
-import { replayNativeFeedConstructorRead } from "../lib/custom-ai/dependency-witness.server";
+import { createConstructorDependencyResolver, replayNativeFeedConstructorRead } from "../lib/custom-ai/dependency-witness.server";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
 import type { LaunchDependencyObservation } from "../lib/custom-ai/dependency-observations.server";
 import type { ObservedConstructorDependencies } from "../lib/custom-ai/dependency-witness";
@@ -100,5 +100,29 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed cons
     const { id: ignoredRead, ...read } = dependencies.read; void ignoredRead;
     dependencies.read.id = canonicalBrowserSha256V2("programmable.custom-ai-native-feed-constructor-read.v1", read);
     await expect(materializeGeneralRuntime(input.project, input.compilation, { ...input.selected, observedDependencies: dependencies }, input.predictions)).rejects.toMatchObject({ code: "runtime-dependency" });
+  });
+  it("keeps one preparation on its selected chain through observation, replay and constructor execution", async () => {
+    const production = structuredClone(input.project.production!), now = Date.now(), stamp = BigInt(Math.floor(now / 1000) - 2);
+    const feed = production.protectionBindings!.nativeUsdFeed.address;
+    const raw = { [feed]: { code: PROXY, storage: { [toHex(1, { size: 32 })]: toHex(7, { size: 32 }) } }, [IMPLEMENTATION]: { code: STORAGE } };
+    let calls = 0;
+    const rpc = () => async (method: string, params: readonly unknown[]) => {
+      calls++;
+      if (method === "eth_chainId") return "0x3e7";
+      if (method === "eth_getBlockByNumber") return { number: params[0] === "latest" ? "0x64" : params[0], timestamp: toHex(stamp), hash: `0x${"12".repeat(32)}` };
+      if (method === "eth_getCode") return params[0] === feed ? PROXY : BASIC;
+      if (method === "debug_traceCall") return raw;
+      if (method === "eth_call" && (params[0] as { data: string }).data === "0x313ce567") return toHex(7, { size: 32 });
+      if (method === "eth_call") return encodeAbiParameters([{ type: "uint80" }, { type: "int256" }, { type: "uint256" }, { type: "uint256" }, { type: "uint80" }], [1n, 1n, stamp - 1n, stamp - 1n, 1n]);
+      throw Error("Unexpected read");
+    };
+    const providers = vi.fn(() => [rpc(), rpc()] as const);
+    const resolve = createConstructorDependencyResolver({ rpcs: providers, now: () => now });
+    const pending = resolve(production, input.predictions.find(p => p.targetId === "liquidity")!.predictedAddress);
+    production.chainId = 1;
+    const dependencies = await pending;
+    expect(providers.mock.calls).toEqual([[999], [999]]); expect(calls).toBe(22);
+    const result = await materializeGeneralRuntime(input.project, input.compilation, { ...input.selected, observedDependencies: dependencies }, input.predictions);
+    expect(result.version).toBe(3); expect(result.dependencyContext?.observation.chainId).toBe(999);
   });
 });
