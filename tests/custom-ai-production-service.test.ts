@@ -38,13 +38,14 @@ function context(): AIContext {
 }
 
 describe("production context in the existing owned generation handoff", () => {
-  it.each([1, 4663, 8453, 999] as const)("binds chain %i before the independent declaration and code with two model calls", async chain => {
+  it.each([1, 4663, 8453, 999] as const)("binds chain %i before the separate independent declaration and source", async chain => {
     const expected = production(chain), events: string[] = [], saved: ContractProject[] = [];
     const load = vi.fn(async () => { events.push("discovery"); return expected; });
     const call = vi.fn(async (input: ClaudeInput) => {
       expect(input.system).toContain(expected.id);
       expect(expected.version).toBe(3); expect(expected.protectionPolicy?.required).toBe(true);
-      if (call.mock.calls.length === 1) { events.push("declaration"); return plan(); }
+      if (call.mock.calls.length === 1) { events.push("planning"); expect(input.schema).not.toHaveProperty("properties.generalChecks"); return plan(); }
+      if (call.mock.calls.length === 2) { events.push("declaration"); return response({generalChecks:JSON.stringify(declaration)}); }
       events.push("generation"); expect(events).toContain("oracle-saved");
       // The complete profile appears once; fixedChecks carries only its ID.
       expect(input.system.split(expected.poolManager.runtimeCodeHash).length).toBeLessThanOrEqual(3);
@@ -54,9 +55,9 @@ describe("production context in the existing owned generation handoff", () => {
       { call, compile: vi.fn(), compileProject: compile }, { ...context(), loadProductionContext: load,
         saveBlueprint: async blueprint => { expect(blueprint.production).toEqual(expected); events.push("oracle-saved"); },
         saveProject: async source => { saved.push(source); events.push("source-saved"); } });
-    expect(events).toEqual(["discovery", "declaration", "oracle-saved", "generation", "source-saved"]);
+    expect(events).toEqual(["discovery", "planning", "declaration", "oracle-saved", "generation", "source-saved"]);
     expect(saved[0].production).toEqual(expected); expect(saved[0].intent.requirements).toHaveLength(2);
-    expect(load).toHaveBeenCalledTimes(1); expect(call).toHaveBeenCalledTimes(2); expect(result.generalProject?.launchReady).toBe(false);
+    expect(load).toHaveBeenCalledTimes(1); expect(call).toHaveBeenCalledTimes(3); expect(result.generalProject?.launchReady).toBe(false);
     expect(result.generalProject).not.toHaveProperty("production");
   });
   it("rejects a loader that returns another chain before inference", async () => {

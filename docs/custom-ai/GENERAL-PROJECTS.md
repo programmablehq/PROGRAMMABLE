@@ -77,7 +77,7 @@ This implementation state does not establish a public general-contract launch. I
 
 The project store can save the complete intent and blueprint under the current owned job lease before source exists. The receipt is immutable, tied to the request payload, and cannot be added after source has already been saved. Source roles, network and compiler target must match it. Scenario reports require that original receipt and the exact saved compiled artifacts; repeating the same report is idempotent. Cancellation and expired leases reject late writes. These operations use the existing object and job tables.
 
-The owned chat route now supplies the blueprint and report callbacks. The interpreter declares examples in its first response; the job saves them before the generator runs. Ordinary builds still use two model calls. If an explicit source inspection exposed old implementation code to the interpreter, one separate source-blind declaration is required before generation. Missing or invalid examples preserve a blocked complete design and do not spend generation work.
+The owned chat route supplies the blueprint and report callbacks. A compact interpreter response records the complete intent and open decisions. A separate source-blind declaration uses the build model to define the ABI, deployment graph and observable examples against that final intent and network. The job saves the immutable declaration before source generation. This keeps the large check declaration out of ordinary conversation responses. Missing, incomplete or invalid examples preserve the complete design and do not spend source generation work.
 
 Compiled projects run the actual isolated checks and save their exact reports. Compact owner projections carry only the report summary. Failed declared cases stay a separate source proposal and preserve the working draft. A worker outage keeps source, artifacts and the original blueprint. Explicit recovery copies those bindings into a new owned job, reuses existing compilation, and runs only the unfinished checks. It uses no inference, provider-health dependency, RPC or wallet action. A deterministic failed example requires a source edit.
 
@@ -188,9 +188,9 @@ observation. The V2 local qualification retrieves all four chain configurations
 with five public GETs, including exactly one shared policy read; it does not
 establish source review approval, wallet execution or publication.
 
-Ordinary unchanged-network builds retain two model calls. If a setup patch
-changes the network in that turn, the new network gets a separate source-blind
-declaration before generation. A discovery outage still permits explanations;
+General builds use separate intent, check-declaration and source-generation calls.
+Answers and unresolved choices use only the intent call. A network change is
+resolved before the source-blind declaration. A discovery outage still permits explanations;
 source generation pauses with the complete saved intent. Brief greetings skip
 discovery. The local exact packers below consume the saved deployment declaration. Public
 intake activation, UI integration and launch execution remain unpublished.
