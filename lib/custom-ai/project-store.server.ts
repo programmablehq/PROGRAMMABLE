@@ -21,6 +21,8 @@ export type ProjectCheckpoint = {
   version: 1;
   requestId: string;
   payloadHash: string;
+  /** First successful source save. Older checkpoints may not have a timestamp. */
+  sourceGeneratedAt?: number;
   project: ContractProject;
   compilation?: CompiledProject;
   overview?: ProjectOverview;
@@ -86,7 +88,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       }
       const declared=await savedBlueprint(db,owner,id);
       if(declared)try{bindGeneralCheckBlueprint(declared.blueprint,project);}catch{throw conflict();}
-      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, project, overview: projectOverview(id, project,undefined,declared?{blueprintId:declared.blueprint.id}:undefined),
+      const value: ProjectCheckpoint = { version: 1, requestId: id, payloadHash, sourceGeneratedAt:now(), project, overview: projectOverview(id, project,undefined,declared?{blueprintId:declared.blueprint.id}:undefined),
         ...(declared?{blueprintId:declared.blueprint.id}:{}) };
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,$2,$3,$4)`, [owner, kind, id, JSON.stringify(value)]);
@@ -203,7 +205,21 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       return row ? checkedGeneralPublicSource(row.value as GeneralPublicSource, `sha256:${id}`) : null;
     });
   }
-  return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch, publishForLaunch, readPublicSource,
+  /** Original source-checkpoint time, not this request's clock or the last
+   * compilation/update. Legacy source never receives an invented timestamp. */
+  async function readSourceCreatedAt(owner:string,id:string,projectHash:string):Promise<number|null> {
+    return transaction(async db=>{
+      const row=(await db.query(`SELECT o.value->'sourceGeneratedAt' AS source_generated_at
+        FROM programmable_custom_ai_v1.objects o
+        JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id AND j.payload_hash=o.value->>'payloadHash'
+        WHERE o.owner=$1 AND o.kind=$2 AND o.id=$3 AND o.value#>>'{project,hash}'=$4`,[owner,kind,id,projectHash])).rows[0];
+      if(!row||row.source_generated_at===null)return null;
+      const value=Number(row.source_generated_at);
+      if(!Number.isSafeInteger(value)||value<0)throw new CustomAIError("source-timing","The saved source timing could not be read.",503);
+      return value;
+    });
+  }
+  return { save, complete, overview, saveBlueprint, saveScenarios, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
     preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
       publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),

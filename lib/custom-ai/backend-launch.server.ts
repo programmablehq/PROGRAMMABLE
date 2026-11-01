@@ -7,6 +7,7 @@ import { CustomAIError } from "./types";
 import { createWalletLaunchBffAssertionV1, walletLaunchMutationTargetV1, type WalletLaunchMutationV1 } from
   "@/lib/server/custom-launch/wallet-launch-bff-assertion-v1";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "@/lib/server/custom-launch/wallet-admin-bff-assertion-v2";
+import type { AutomaticSourceReceipt } from "./automatic-source.server";
 
 /** A private transport response only. Its HTTP status is never a source,
  * review, permit, wallet execution, finality or public-availability verdict. */
@@ -64,6 +65,42 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
     throw new TypeError("Custom AI launch backend configuration is invalid");
   const key = requireWalletAdminBffAssertionKeyV2(input.assertionKey, input.websiteToken);
   return Object.freeze({
+    async automaticReview(request:Request,authority:AIAuthority,candidate:Readonly<{
+      account:`0x${string}`;reviewId:string;
+    } & ({operation:"bind-source";receipt:AutomaticSourceReceipt}|{operation:"check"|"status"})>):Promise<BackendLaunchReply> {
+      const method=candidate.operation==="status"?"GET":"POST";
+      if(request.method!==method)throw new CustomAIError("launch-method","Use the explicit launch action to run automatic checks.",405);
+      const current=requireFreshCustomAIAuthority(request,authority),account=getAddress(candidate.account);
+      if(!current.principal.wallets.some(wallet=>getAddress(wallet)===account))
+        throw new CustomAIError("wallet","Select the wallet that owns this saved submission.",403);
+      if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(candidate.reviewId))throw unavailable();
+      if(candidate.operation==="bind-source"&&(candidate.receipt.reviewId!==candidate.reviewId
+        ||candidate.receipt.controller.toLowerCase()!==account.toLowerCase()))throw unavailable();
+      const target=`/v1/wallet-admin/custom-ai/launch-reviews/${candidate.reviewId}${candidate.operation==="bind-source"?"/source-context":""}`;
+      const bytes=Buffer.from(candidate.operation==="status"?"":JSON.stringify(candidate.operation==="bind-source"?{receipt:candidate.receipt}:{action:"check"}));
+      if(bytes.byteLength>262_144)throw new CustomAIError("automatic-source-size","This saved design is too large for automatic review.",413);
+      const assertion=createWalletAdminBffAssertionV2({method,requestTarget:target,privyUserId:current.principal.privyUserId,
+        walletAddress:account,issuedAt:(input.now?.()??new Date()).toISOString(),nonce:input.nonce?.()??randomBytes(16).toString("base64url"),
+        bodyBytes:bytes,assertionKey:key});
+      try {
+        const response=await input.fetchBackend(new URL(target,base),{method,cache:"no-store",redirect:"error",
+          signal:AbortSignal.any([request.signal,AbortSignal.timeout(Math.min(candidate.operation==="check"?65_000:10_000,timeoutMs))]),
+          headers:{Accept:"application/json",Authorization:`Bearer ${input.websiteToken}`,"Content-Type":"application/json",
+            "X-Programmable-Privy-User-Id":current.principal.privyUserId,"X-Programmable-Wallet-Address":account.toLowerCase(),...assertion},
+          ...(method==="POST"?{body:bytes}:{})});
+        if(response.status>=300&&response.status<400){await response.body?.cancel().catch(()=>undefined);throw unavailable();}
+        const value=await boundedReply(response,48_000),object=record(value);
+        if(!response.ok){const error=record(object?.error);throw new BackendLaunchRejected(response.status,
+          typeof error?.code==="string"&&/^[A-Z][A-Z0-9_]{1,127}$/u.test(error.code)?error.code:null,[]);}
+        if(object?.reviewId!==candidate.reviewId||response.headers.get("location")!==null)throw unavailable();
+        if(candidate.operation==="bind-source"){
+          if(object.schemaVersion!=="programmable.automatic-source-bound.v1"||object.bound!==true||response.status!==200)throw unavailable();
+        }else if(object.schemaVersion!=="programmable.automatic-launch-status.v1"||object.manualReviewRequired!==false||object.launchReady!==false
+          ||!["not_started","checking","approved","changes_required","interrupted"].includes(String(object.state))
+          ||![200,202].includes(response.status))throw unavailable();
+        return {httpStatus:response.status,value,location:null};
+      }catch(error){if(error instanceof CustomAIError)throw error;throw unavailable();}
+    },
     async status(request: Request, authority: AIAuthority, candidate: Readonly<{
       chainId: BuilderChainId; account: `0x${string}`; resourceId: string;
     }>): Promise<BackendLaunchReply> {

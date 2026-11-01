@@ -58,6 +58,19 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("keeps the original server source time across later compilation and rejects another owner or source",async()=>{
+    const attempt=await reserve(),source=project();
+    const first=await store.projects.save("alice",id,attempt.lease!,source);
+    const created=first.sourceGeneratedAt!;
+    expect(created).toBeGreaterThan(0);
+    expect(await store.projects.readSourceCreatedAt("alice",id,source.hash)).toBe(created);
+    expect(await store.projects.readSourceCreatedAt("bob",id,source.hash)).toBeNull();
+    expect(await store.projects.readSourceCreatedAt("alice",id,`sha256:${"f".repeat(64)}`)).toBeNull();
+    await store.projects.complete("alice",id,attempt.lease!,compilation(source));
+    expect(await store.projects.readSourceCreatedAt("alice",id,source.hash)).toBe(created);
+    await database.query("UPDATE programmable_custom_ai_v1.objects SET value=value-'sourceGeneratedAt' WHERE owner='alice' AND kind='contract-project' AND id=$1",[id]);
+    expect(await store.projects.readSourceCreatedAt("alice",id,source.hash)).toBeNull();
+  });
   it("saves the complete design and immutable oracle before source, bound to the running job",async()=>{
     const attempt=await reserve(),source=project(),declared=blueprint(source);
     await store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:declared});
