@@ -10,6 +10,7 @@ import { CustomAIError, type ChatMessage } from "@/lib/custom-ai/types";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import type { ImageReceipt, StudioState } from "@/lib/custom-ai/studio";
 import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
+import { migrateLaunchIntent } from "@/lib/custom-ai/launch-intent.server";
 
 export const runtime = "nodejs";
 async function context(request: Request, accountValue: unknown, conversationValue: unknown) {
@@ -37,7 +38,10 @@ export async function GET(request: Request) {
     const sourceRecovery = sourceId ? await store.projects.overview(owner, sourceId) : null;
     return Response.json({ revision: saved.revision, state: saved.value, ...(active?.request&&active.state!=="failed"?{activeRequest:active.request}:{}), draft: job?.result?.draft,
       generalProject: job?.result?.generalProject, ...(sourceRecovery ? { sourceRecovery } : {}),
-      intent: latest?.result?.intent ?? job?.result?.intent }, { headers: aiHeaders });
+      intent: latest?.result?.intent ?? job?.result?.intent ?? migrateLaunchIntent({
+        draft: job?.result?.draft, ruleSpec: latest?.result?.ruleSpec ?? job?.result?.ruleSpec,
+        unresolved: latest?.result?.unresolved ?? job?.result?.unresolved, requestId: saved.value.contextId ?? saved.value.draftId,
+      }) }, { headers: aiHeaders });
   } catch (error) { return aiError(error); }
 }
 export async function POST(request: Request) {
