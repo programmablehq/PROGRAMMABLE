@@ -1,5 +1,5 @@
 "use client";
-import { lazy, Suspense, useEffect, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowRight } from "lucide-react";
 import type { AISessionHeaders } from "@/lib/custom-ai/client";
 import type { CoinSetup } from "@/lib/custom-ai/coin-setup";
@@ -37,23 +37,42 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   const [controller, setController] = useState({ key: controllerKey, kind: "" });
   const controllerKind = controller.key === controllerKey ? controller.kind : "";
   useEffect(() => { onLaunchLocked(launch.locked); return () => onLaunchLocked(false); }, [launch.locked, onLaunchLocked]);
-  if (!enabled) return null;
   const saved = launch.preparation, sameSource = saved && saved.conversationId === conversationId && saved.sourceId === draftId
     && saved.projectHash === project?.projectHash && saved.artifactHash === project?.artifactHash && saved.chainId === settings.chainId
     && sameGeneralEditor(saved, settings, imageId) && !pendingChange;
   const uncertain = Boolean(launch.unconfirmedId || saved?.submission && saved.submission.state !== "completed");
   const href = saved ? generalSubmissionUrl(saved) : undefined, accepted = Boolean(sameSource && href);
+  const history = href && !accepted ? saved : !href ? launch.previousSubmission : undefined;
+  const historyHref = history ? generalSubmissionUrl(history) : undefined;
   let walletSubject: GeneralWalletSubject | undefined;
   try { if (accepted && saved && launch.currentStatus) walletSubject = generalWalletSubject(saved, launch.currentStatus); }
   catch { /* Keep the original submission link. A mismatched status cannot open a wallet step. */ }
   const complete = project?.compiled && project.scenarios?.passed && project.chainId === settings.chainId
     && intent && project.intentRevision === intent.revision && !intentHasOpenParts(intent) && !pendingChange;
   const detail = generalLaunchDetailIssue(settings, Boolean(imageId));
+  const warmed = useRef<string | undefined>(undefined);
+  const warmKey = JSON.stringify([scope, account.toLowerCase(), conversationId, draftId, project?.projectHash,
+    project?.artifactHash, intent?.revision, settings, imageId, controllerKind]);
+  useEffect(() => {
+    if (!enabled || !launch.loaded || launch.busy || uncertain || accepted || disabled || detail || !complete
+      || !project || !intent || !draftId || !conversationId || warmed.current === warmKey
+      || settings.chainId === 4663 && controllerKind !== "eoa") return;
+    warmed.current = warmKey;
+    void launch.prepare(async signal => {
+      const studio = await flush(); signal.throwIfAborted();
+      if (!studio || studio.revision < 1) throw Error("Save this design before preparing its launch.");
+      return { selection: { id: draftId, account, conversation: conversationId, studioRevision: studio.revision,
+        chainId: settings.chainId, projectHash: project.projectHash, artifactHash: project.artifactHash, intentRevision: intent.revision },
+        ...(settings.chainId === 4663 ? { controllerKind: "eoa" as const } : {}) };
+    });
+  }, [enabled, launch, uncertain, accepted, disabled, detail, complete, project, intent, draftId, conversationId,
+    warmKey, flush, account, settings.chainId, controllerKind]);
+  if (!enabled) return null;
   const detailLabel = detail ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image", description: "Add description", website: "Add project link", x: "Add X link" }[detail.field] : "";
   const checking = saved?.submission?.state === "sending";
   const label = !launch.loaded ? "Check saved submission" : uncertain ? checking ? "Check submission" : "Recover submission"
     : detail ? detailLabel : "Submit for review";
-  const busyLabel = launch.phase === "preparing" ? "Preparing submission…" : launch.phase === "submitting" ? "Submitting…" : "Checking saved submission…";
+  const busyLabel = launch.phase === "warming" ? "Preparing launch…" : launch.phase === "preparing" ? "Preparing submission…" : launch.phase === "submitting" ? "Submitting…" : "Checking saved submission…";
   let status = launch.phase !== "idle" ? busyLabel : !launch.loaded ? "Your saved submission has not been checked yet."
     : uncertain ? "The original submission is saved. Check its result before starting another one."
     : accepted ? launch.currentStatus ? currentStatusMessage(launch.currentStatus.status) : "Submission received. Open it to see its review and wallet steps."
@@ -88,7 +107,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         disabled={launch.busy || disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
     {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
-    {href && !accepted && <a className={styles.textButton} href={href}>Open {saved?.coin?.name ?? "previous"} submission</a>}
+    {historyHref && <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>}
     {walletSubject && <Suspense fallback={<p className={styles.note} role="status">Loading launch controls…</p>}>
       <GeneralLaunchWallet key={JSON.stringify([scope, account.toLowerCase(), walletSubject.chainId, walletSubject.resourceId, walletSubject.requestHash])}
         subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()} />

@@ -14,6 +14,7 @@ import { compileContractProject, type CompiledProject } from "./contract-project
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
+import { launchProductionGuidance } from "./production-guidance";
 import { dependencySourceContext } from "./dependency-source-context";
 import { resolveInlineLibraries } from "./inline-libraries";
 import { AI_CONFIG } from "./ai-config";
@@ -116,6 +117,7 @@ Generate a complete general Custom Contract source project for the saved design,
 The selected route is ${JSON.stringify(chain)}. It uses the existing Custom Launch review and source admission.
 ${production?"The saved production context supplies the selected chain's exact source-admission profile, PoolManager, execution binding and mandatory fee/protection rules. Implement these together with every agreed user rule. Never substitute local fixtures, a different chain or the old fixed fee core. A policy conflict requires clarification, never removing a saved rule. Discovery is configuration, not approval or proof of live dependency behavior.":"No production context was supplied for this local source build. Do not invent network addresses or claim this project can be submitted."}
 The fee module's 0.5% component, 15% cap, immutable-only fee interface, token supply and LP template are not this general project's contract policy.
+${launchProductionGuidance(production)}
 Preserve every saved behavior, decision and negative constraint. Do not add owner powers, hidden recipients, taxes, minting or withdrawals that were not explicitly agreed.
 Solidity cannot fetch HTTP. Do not invent external feeds, dependency interfaces, deployed addresses, fresh observations, funded keepers or financial allocations.
 Return reply first, summary, sourceFiles, entrypoints and all complete requirementIds. IDs only record proposed coverage; they do not certify behavior.

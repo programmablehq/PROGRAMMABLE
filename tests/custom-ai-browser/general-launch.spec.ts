@@ -14,7 +14,7 @@ test('Plan source verification remains confirmed and stops automatic status read
  await page.getByLabel('Launch wallet type').selectOption('eoa');await page.getByRole('button',{name:'Submit for review',exact:true}).click();
  await expect(page.getByText('Your launch transactions are confirmed.',{exact:false})).toBeVisible();
  expect(f.statusReads).toBe(1);await page.clock.runFor(150000);expect(f.statusReads).toBe(1);
- expect(f.posts.map(value=>value.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
+ expect(f.posts.map(value=>value.action)).toEqual(['prepare','prepare','create']);expect(f.errors).toEqual([]);
 });
 async function fixture(page:Page){
  const control={saved:null as GeneralPreparationView|null,posts:[] as {action:string;id:string;selection?:Record<string,unknown>}[],saves:[] as {settings:CoinSetup;image:{id:string}}[],reads:0,statusReads:0,currentStatus:"pending_review",statusFailure:false,lostCreate:false,beforePrepare:undefined as undefined|(()=>Promise<void>),beforeRead:undefined as undefined|(()=>Promise<void>),beforeStatus:undefined as undefined|(()=>Promise<void>),errors:[] as string[]};
@@ -57,9 +57,9 @@ for(const chainId of [1,4663,8453,999])test(`one explicit submission on chain ${
  await expect(button).toBeEnabled();await expect(region.getByText('Submitting publishes this contract’s source.',{exact:false})).toBeVisible();
  await button.evaluate(element=>{(element as HTMLButtonElement).click();(element as HTMLButtonElement).click();});
  await expect(region.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
- expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.saves).toHaveLength(1);
+ expect(f.posts.map(body=>body.action)).toEqual(['prepare','prepare','create']);expect(f.saves).toHaveLength(2);
  await page.reload();await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
- expect(f.posts).toHaveLength(2);expect(f.errors).toEqual([]);await expect(page.getByLabel('Chat editing')).toHaveText('Available');
+ expect(f.posts).toHaveLength(3);expect(f.errors).toEqual([]);await expect(page.getByLabel('Chat editing')).toHaveText('Available');
 });
 
 test('the first missing detail opens and focuses its editor without any POST',async({page})=>{
@@ -73,27 +73,28 @@ test('unknown create recovers the original coin after the current draft changes'
  await page.getByRole('button',{name:'Change sample coin'}).click();await expect(page.getByText(/Saved submission: Original coin on Ethereum/)).toBeVisible();
  await page.getByRole('button',{name:'Recover submission',exact:true}).click();
  await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();
- expect(f.posts.map(body=>body.action)).toEqual(['prepare','create','create']);expect(f.posts[2]).toEqual(f.posts[1]);expect(f.saves).toHaveLength(1);expect(f.errors).toEqual([]);
+ const submissions=f.posts.filter(body=>body.action==='create');expect(submissions).toHaveLength(2);
+ expect(submissions[1]).toEqual(submissions[0]);expect(f.errors).toEqual([]);
 });
 test('a wallet switch cancels an in-flight preparation before create',async({page})=>{
- const f=await fixture(page);let release:()=>void=()=>{};f.beforePrepare=()=>new Promise<void>(resolve=>{release=resolve;});await page.goto(origin);
- await page.getByRole('button',{name:'Submit for review',exact:true}).click();await expect.poll(()=>f.posts.length).toBe(1);
+ const f=await fixture(page);let release:()=>void=()=>{};f.beforePrepare=()=>f.posts.length===1?new Promise<void>(resolve=>{release=resolve;}):Promise.resolve();await page.goto(origin);
+ await expect.poll(()=>f.posts.length).toBe(1);
  await page.getByRole('button',{name:'Switch sample wallet'}).click();release();
  await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();
- expect(f.posts.map(body=>body.action)).toEqual(['prepare']);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toHaveCount(0);expect(f.errors).toEqual([]);
+ expect(f.posts.filter(body=>body.action==='create')).toEqual([]);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toHaveCount(0);expect(f.errors).toEqual([]);
 });
 test('completed submission details stay distinct when the coin is edited',async({page})=>{
  const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Submit for review',exact:true}).click();
  await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();await page.getByRole('button',{name:'Change sample coin'}).click();
  await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();
- await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
+ await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();expect(f.posts.filter(body=>body.action==='create')).toHaveLength(1);
 });
 test('Robinhood wallet declarations are cleared on a wallet or private scope change',async({page})=>{
  const f=await fixture(page);await page.goto(origin+'/?chain=4663');
  const choice=page.getByLabel('Launch wallet type'),button=page.getByRole('button',{name:'Submit for review',exact:true});
  await choice.selectOption('eoa');await expect(button).toBeEnabled();
  await page.getByRole('button',{name:'Switch sample wallet'}).click();
- await expect(choice).toHaveValue('');await expect(button).toBeDisabled();expect(f.posts).toEqual([]);
+ await expect(choice).toHaveValue('');await expect(button).toBeDisabled();expect(f.posts.map(body=>body.action)).toEqual(['prepare']);
 });
 test('disabled intake does no journal reads and exposes no submit control',async({page})=>{
  const f=await fixture(page);await page.goto(origin+'/?disabled=1');await expect(page.getByRole('heading',{name:'Original coin',exact:true})).toBeVisible();
@@ -104,22 +105,23 @@ test('a slow read of the saved journal does not lock chat or coin editing',async
  await page.goto(origin);await expect.poll(()=>f.reads).toBe(1);
  await expect(page.getByLabel('Chat editing')).toHaveText('Available');
  await page.locator('summary').filter({hasText:'Coin details'}).click();await expect(page.getByRole('textbox',{name:'Name',exact:true})).toBeEnabled();
- release();await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();expect(f.posts).toEqual([]);
+ release();await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();
+ await expect.poll(()=>f.posts.map(body=>body.action)).toEqual(['prepare']);
 });
 test('current status updates the original accepted submission without repeating prepare or create',async({page})=>{
  const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Submit for review',exact:true}).click();
  await expect(page.getByText('Your submission is waiting for review.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
  f.currentStatus='wallet_action_ready';await page.getByRole('button',{name:'Check current status'}).click();
- await expect(page.getByText('Your submission has wallet steps to review.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);
+ await expect(page.getByText('Your submission has wallet steps to review.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','prepare','create']);
  await expect(page.getByLabel('Chat editing')).toHaveText('Available');expect(f.errors).toEqual([]);
 });
 test('a failed current-status read preserves the accepted link and can be checked explicitly',async({page})=>{
  await page.clock.install({time:new Date()});const f=await fixture(page);f.statusFailure=true;await page.goto(origin);await page.getByRole('button',{name:'Submit for review',exact:true}).click();
  await expect(page.getByText('The current status could not be refreshed. Your saved submission is still available.',{exact:true})).toBeVisible();
- await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
+ await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(3);
  await page.clock.fastForward(60000);expect(f.statusReads).toBe(1);
  f.statusFailure=false;await page.getByRole('button',{name:'Check current status'}).click();await expect(page.getByText('Your submission is waiting for review.',{exact:true})).toBeVisible();
- expect(f.posts).toHaveLength(2);expect(f.errors).toEqual([]);
+ expect(f.posts).toHaveLength(3);expect(f.errors).toEqual([]);
 });
 test('status polling stops after twelve reads and does not catch up after laptop sleep',async({page})=>{
  // Keep the clock paused between explicit ticks, including asynchronous HTTP
@@ -135,12 +137,12 @@ test('status polling stops after twelve reads and does not catch up after laptop
   await expect(page.getByText(count%2===0?'Your submission has wallet steps to review.':'Your submission is waiting for review.',{exact:true})).toBeVisible();
   expect(f.statusReads).toBe(count);
  }
- await page.clock.fastForward(3600000);expect(f.statusReads).toBe(12);expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
+ await page.clock.fastForward(3600000);expect(f.statusReads).toBe(12);expect(f.posts.map(body=>body.action)).toEqual(['prepare','prepare','create']);expect(f.errors).toEqual([]);
 });
 test('a terminal stored status stops background reads and keeps its original link',async({page})=>{
  await page.clock.install({time:new Date()});const f=await fixture(page);f.currentStatus='expired';await page.goto(origin);await page.getByRole('button',{name:'Submit for review',exact:true}).click();
  await expect(page.getByText('This submission expired. Open its details to continue.',{exact:true})).toBeVisible();
- await page.clock.fastForward(3600000);expect(f.statusReads).toBe(1);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
+ await page.clock.fastForward(3600000);expect(f.statusReads).toBe(1);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(3);
 });
 test('a late status from the previous wallet cannot appear in the newly selected wallet',async({page})=>{
  const f=await fixture(page);let release:()=>void=()=>{};f.beforeStatus=()=>new Promise<void>(resolve=>{release=resolve;});
@@ -148,12 +150,12 @@ test('a late status from the previous wallet cannot appear in the newly selected
  await page.getByRole('button',{name:'Switch sample wallet'}).click();release();
  await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();
  await expect(page.getByRole('link',{name:'Open submission',exact:true})).toHaveCount(0);
- await expect(page.getByText('Your submission is waiting for review.',{exact:true})).toHaveCount(0);expect(f.posts).toHaveLength(2);expect(f.errors).toEqual([]);
+ await expect(page.getByText('Your submission is waiting for review.',{exact:true})).toHaveCount(0);expect(f.posts.filter(body=>body.action==='create')).toHaveLength(1);expect(f.errors).toEqual([]);
 });
 
 for(const width of [360,1440])test(`submission controls render and remain keyboard accessible at ${width}px`,async({page},testInfo)=>{
  const f=await fixture(page);await page.setViewportSize({width,height:1000});await page.goto(origin);
  const button=page.getByRole('button',{name:'Submit for review',exact:true});await expect(button).toBeEnabled();await button.focus();await expect(button).toBeFocused();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:testInfo.outputPath(`general-launch-${width}.png`),fullPage:true});expect(f.errors).toEqual([]);expect(f.posts).toEqual([]);
+ await page.screenshot({path:testInfo.outputPath(`general-launch-${width}.png`),fullPage:true});expect(f.errors).toEqual([]);expect(f.posts.map(body=>body.action)).toEqual(['prepare']);
 });

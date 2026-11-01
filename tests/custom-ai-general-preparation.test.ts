@@ -103,9 +103,11 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     expect((await database.query<{used:number}>("SELECT used FROM programmable_custom_ai_v1.budgets WHERE subject=$1",[`operation:general-pack:${owner}`])).rows[0].used).toBe(1);
     await expect(store.projects.preparations.reserve(owner,ticket,selected(),"1")).rejects.toMatchObject({code:"launch-preparation-changed"});
   });
-  it("publishes sanitized source and exact final bytes atomically, while normal status reads stay compact",async()=>{
+  it("keeps prepared source private until explicit exchange, while normal status reads stay compact",async()=>{
     expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toBeNull();
     const saved=await stage();expect(saved.packState).toBe("complete");expect(saved.requestSha256).toBe(pack.requestSha256);
+    expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toBeNull();
+    await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
     expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toEqual(fixture.exported);
     const publicText=JSON.stringify(await store.projects.readPublicSource(pack.publicSourceId.slice(7)));
     expect(publicText).not.toContain("Private preparation conversation");expect(publicText).not.toContain(owner);

@@ -40,6 +40,7 @@ export function useGeneralLaunch({ enabled, account, scope, headers }: { enabled
   }, [enabled, key, submissionKey]);
   const current = () => client.current?.key === key ? client.current.current : undefined;
   return { ...state, busy: state.phase !== "idle", locked: state.phase === "preparing" || state.phase === "submitting",
+    prepare: (input: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => current()?.prepare(input),
     submit: (input: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => current()?.submit(input),
     recover: () => current()?.recover(), refresh: () => current()?.refresh(), refreshStatus: () => current()?.refreshStatus() };
 }

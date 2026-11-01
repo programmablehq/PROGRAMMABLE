@@ -117,10 +117,11 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([
   afterAll(()=>{vi.useRealTimers();});
   it("accepts a still-fresh shared observation and preserves its exact request after expiry and reload",async()=>{
     const saved=await store.projects.preparations.completePack(owner,ticket,record.packLease.token,pack);
-    expect(saved.packState).toBe("complete");expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toEqual(fixture.exported);
+    expect(saved.packState).toBe("complete");expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toBeNull();
     const compact=JSON.stringify(generalPreparationView(saved,clock));
     for(const field of ["dependencyContext","requestBody","constructorMaterialization","runtimeMaterialization"])expect(compact).not.toContain(field);
     const first=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);expect(first.pack).toEqual(pack);
+    expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toEqual(fixture.exported);
     await store.projects.preparations.finishExchange(owner,ticket,"create",first.lease!,{state:"unknown",summary:{code:"RESPONSE_UNCONFIRMED"}});
     clock+=3*60*60*1000;store=makeStore(db);
     const again=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);

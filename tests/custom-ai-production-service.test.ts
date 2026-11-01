@@ -43,6 +43,8 @@ describe("production context in the existing owned generation handoff", () => {
     const load = vi.fn(async () => { events.push("discovery"); return expected; });
     const call = vi.fn(async (input: ClaudeInput) => {
       expect(input.system).toContain(expected.id);
+      expect(input.system).toContain("recipient cap measures cumulative token inflows");
+      expect(input.system).toContain("Selling or transferring tokens out does not restore");
       expect(expected.version).toBe(3); expect(expected.protectionPolicy?.required).toBe(true);
       if (call.mock.calls.length === 1) { events.push("planning"); expect(input.schema).not.toHaveProperty("properties.generalChecks"); return plan(); }
       if (call.mock.calls.length === 2) {

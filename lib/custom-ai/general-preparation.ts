@@ -35,8 +35,9 @@ export type GeneralStatusBinding = { account: string; chainId: BuilderChainId; r
   requestHash: string; rawRequestSha256?: string; deadline: string };
 export type GeneralLaunchState = {
   preparation: GeneralPreparationView | null;
-  phase: "loading" | "idle" | "preparing" | "submitting" | "checking";
+  phase: "loading" | "idle" | "warming" | "preparing" | "submitting" | "checking";
   error: string; loaded: boolean; unconfirmedId?: string; currentStatus?: GeneralLaunchStatus; statusError?: string;
+  previousSubmission?: GeneralPreparationView;
 };
 const identifier = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9-]{16,64}$/u.test(v);
 const hash = (v: unknown): v is `sha256:${string}` => typeof v === "string" && /^sha256:[a-f0-9]{64}$/u.test(v);
@@ -127,6 +128,10 @@ export function createGeneralLaunchClient(options: {
   const { account, signal } = options, request = options.request ?? aiRequest, now = options.now ?? Date.now;
   let state: GeneralLaunchState = { preparation: null, phase: "loading", error: "", loaded: false }, active = false, statusActive = false;
   function update(patch: Partial<GeneralLaunchState>) {
+    if (patch.preparation === null) patch = { ...patch, previousSubmission: undefined };
+    else if (patch.preparation && state.preparation?.submission?.state === "completed"
+      && patch.preparation.submission?.state !== "completed")
+      patch = { ...patch, previousSubmission: structuredClone(state.preparation) };
     if (patch.preparation !== undefined && (!patch.preparation || patch.preparation.id !== state.preparation?.id
       || patch.preparation.requestHash !== state.preparation?.requestHash || patch.preparation.submission?.state !== "completed"
       || patch.preparation.submission.resourceId !== state.preparation?.submission?.resourceId)) {
@@ -178,11 +183,7 @@ export function createGeneralLaunchClient(options: {
       if (!signal.aborted && stillSelected()) update({ statusError: error instanceof Error ? error.message : "The current status could not be checked. Your submission is saved." });
     } finally { statusActive = false; }
   }
-  return {
-    observeStatus: async () => { if (!active) await currentStatus(); },
-    refreshStatus: () => action("checking", currentStatus),
-    refresh: () => action("checking", async () => { await read(state.unconfirmedId); }),
-    submit: (select: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => action("preparing", async () => {
+  async function prepare(select: (signal: AbortSignal) => Promise<GeneralPrepareInput>, submit: boolean) {
       if (!state.loaded) throw Error("Check the saved submission before preparing another one.");
       if (state.unconfirmedId || state.preparation?.submission && state.preparation.submission.state !== "completed")
         throw Error("Recover the original submission before preparing another one.");
@@ -210,8 +211,16 @@ export function createGeneralLaunchClient(options: {
       if (preparation.packState !== "complete") throw Error(preparation.packState === "packing"
         ? "Preparation is still saved. Check it again shortly."
         : "Preparation stopped. Your source is saved. Try preparing this design again.");
-      signal.throwIfAborted(); await create(preparation);
-    }),
+      signal.throwIfAborted(); if (submit) await create(preparation);
+  }
+  return {
+    observeStatus: async () => { if (!active) await currentStatus(); },
+    refreshStatus: () => action("checking", currentStatus),
+    refresh: () => action("checking", async () => { await read(state.unconfirmedId); }),
+    // Preparing has no publication, backend submission or wallet side effect.
+    // The server revalidates and reuses the exact package on the explicit send.
+    prepare: (select: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => action("warming", () => prepare(select,false)),
+    submit: (select: (signal: AbortSignal) => Promise<GeneralPrepareInput>) => action("preparing", () => prepare(select,true)),
     recover: () => action("checking", async () => {
       const id = state.unconfirmedId ?? state.preparation?.id;
       if (!id) throw Error("Check the saved submission first.");
