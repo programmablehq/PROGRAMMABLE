@@ -39,7 +39,7 @@ and representative later values. Include intermediate values for ramps and a sec
 Use at most 64 checks, covering up to ten years; never round an ambiguous rate or omit an unsupported rule.
 The executable fee rule may depend on time since launch and buy/sell direction, or one listed event feed as specified below.
 An optional funded program can accompany that fee rule when it matches the supplied program interface.
-For custom-contract, use composable=null, program=null, eventRule=null, feeChecks=[] and implementedRequirementIds=[]. Keep every requirement in intentRequirements. The independent source plan later binds every canonical requirement; do not duplicate its IDs in a proposed fee-program subset. The fixed fee module's supply, fee cap and STATICCALL interface are not policies for the general route. A stateful hook is not by itself a missing capability.
+For custom-contract use composable=null, program=null, eventRule=null, feeChecks=[] and implementedRequirementIds=[]. Keep all intentRequirements; independent source checks bind them later. Fixed-module supply, fee and STATICCALL restrictions do not apply. Stateful hooks are supported.
 If the request needs an unconnected data source, unavailable running service, uncertain timing or unspecified material choices,
 action=clarify and each missing part stays in its intent requirement's open field. Do not quietly replace the request with a fee-only coin.
 For questions, implementedRequirementIds and feeChecks can be empty. setupPatch follows the supplied form rules.

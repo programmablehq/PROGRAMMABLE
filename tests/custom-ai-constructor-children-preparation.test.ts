@@ -56,11 +56,12 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([8453, 4663] as const)
   it("persists the complete receipt and replays the same original bytes after an unknown submission and reload", async () => {
     const saved = await store.projects.preparations.completePack(owner, ticket, record.packLease.token, pack);
     expect(saved.packState).toBe("complete");
-    expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toEqual(fixture.exported);
+    expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toBeNull();
     const compact = JSON.stringify(generalPreparationView(saved, clock));
     for (const field of ["constructorMaterialization", "constructorChildren", "requestBody", "idempotencyKey"]) expect(compact).not.toContain(field);
     const first = await store.projects.preparations.claimExchange(owner, ticket, "create", record.productionId);
     expect(first.pack).toEqual(pack);
+    expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toEqual(fixture.exported);
     await store.projects.preparations.finishExchange(owner, ticket, "create", first.lease!, { state: "unknown", summary: { code: "RESPONSE_UNCONFIRMED" } });
     clock += 3 * 60 * 60 * 1000; store = makeStore(db);
     const again = await store.projects.preparations.claimExchange(owner, ticket, "create", record.productionId);

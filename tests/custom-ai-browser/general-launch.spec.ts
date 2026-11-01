@@ -105,7 +105,8 @@ test('a slow read of the saved journal does not lock chat or coin editing',async
  await page.goto(origin);await expect.poll(()=>f.reads).toBe(1);
  await expect(page.getByLabel('Chat editing')).toHaveText('Available');
  await page.locator('summary').filter({hasText:'Coin details'}).click();await expect(page.getByRole('textbox',{name:'Name',exact:true})).toBeEnabled();
- release();await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();expect(f.posts.map(body=>body.action)).toEqual(['prepare']);
+ release();await expect(page.getByRole('button',{name:'Submit for review',exact:true})).toBeEnabled();
+ await expect.poll(()=>f.posts.map(body=>body.action)).toEqual(['prepare']);
 });
 test('current status updates the original accepted submission without repeating prepare or create',async({page})=>{
  const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Submit for review',exact:true}).click();
