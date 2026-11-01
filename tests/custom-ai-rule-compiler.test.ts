@@ -42,6 +42,17 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("composed rule EVM evidence
     expect(result.diagnostics).toEqual([]);
     expect(BigInt(result.validation!.maxGas!)).toBeLessThan(100000n);
   }, 90000);
+  it("checks a conditional ramp at its own end in the actual EVM",async()=>{
+    const spec=normalizeRuleSpec({version:2,requirements:[{id:"ramp",text:"End the ramp at second 20, then hold until 60"}],creatorShareBps:10000,actions:[],
+      phases:[{id:"early",startsAtSeconds:0,endsAtSeconds:60,requirementIds:["ramp"],fee:{kind:"conditional",
+        when:{kind:"feed",feedId:feed.id,operator:"gte",value:"1"},
+        then:{kind:"ramp",fromBuyBps:1000,toBuyBps:100,fromSellBps:100,toSellBps:500,durationSeconds:20},
+        otherwise:{kind:"fixed",buyBps:100,sellBps:100}}},
+        {id:"later",startsAtSeconds:60,endsAtSeconds:null,requirementIds:["ramp"],fee:{kind:"fixed",buyBps:100,sellBps:100}}]});
+    const result=await compileRuleSpec(spec,1,[feed]);
+    expect(result.diagnostics).toEqual([]);expect(result.validation?.status).toBe("passed");
+    for(const time of [19,20,21])expect(result.verification?.checks.some(row=>row.afterSeconds===time)).toBe(true);
+  },90000);
   it("rejects modified source instead of authorizing an arbitrary external call", async () => {
     const spec = normalizeRuleSpec(fixture), binding = { spec, specHash: "untrusted", chainId: 1 as const, feeds: [feed] };
     const source = composableModuleSource(spec, [feed]).replace("staticcall{gas:18000}", "staticcall{gas:19000}");
