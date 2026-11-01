@@ -643,3 +643,19 @@ process, gas and memory bounds, two-pass observations and `launchReady:false`.
 The pinned VM's CREATE events omit `codeAddress`; source selection uses the
 executing address for those events. This is local constructor execution support,
 separate from live dependency snapshots, protection evidence and admission.
+
+## Large dependency context
+
+The general builder keeps complete immutable dependency files in the saved
+project and compiler input. When those files exceed 64,000 characters, its model
+view removes comments and normalizes whitespace outside string literals. Every
+source path, declaration and executable body remains present. URLs, escaped
+quotes and comment markers inside strings remain literal source.
+
+This reduces the three original protection source packages from about 249,000
+characters to about 107,000 characters without raising the 160,000-character
+context limit. Small dependency views and editable project files retain their
+original text. The view records the hash of the original complete dependency
+map; an in-flight caller mutation cannot replace what is later saved or compiled.
+Compaction supplies context only and makes no claim about runtime behavior,
+review approval or public launch availability.

@@ -14,6 +14,7 @@ import { compileContractProject, type CompiledProject } from "./contract-project
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
+import { dependencySourceContext } from "./dependency-source-context";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -63,10 +64,14 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   }
   // Validate dependency names and byte limits before spending a model call.
   const compiler = blueprint?.compiler ?? createProjectCompiler(input.previous ? projectCompilerProfile(input.previous.compiler) : "standard-v1", input.evmVersion);
-  const dependencySources = input.dependencySources ?? {};
-  const validationSources = Object.keys(dependencySources).length ? dependencySources : { "Validation.sol": { content: "pragma solidity 0.8.26; contract Validation {}" } };
+  const suppliedDependencies = input.dependencySources ?? {};
+  const validationSources = Object.keys(suppliedDependencies).length ? suppliedDependencies : { "Validation.sol": { content: "pragma solidity 0.8.26; contract Validation {}" } };
   createContractProject({ compiler, sources: validationSources,
     entrypoints: [{ source: Object.keys(validationSources)[0], contract: "DependencyValidation", role: "auxiliary" }] }, intent, chainId);
+  // Keep a snapshot across the model call. Neither a caller mutation nor the
+  // compact model view may alter the exact sources later saved and compiled.
+  const dependencyContext = dependencySourceContext(suppliedDependencies);
+  const dependencySources = dependencyContext.complete;
   const previous = input.previous ? { hash: input.previous.hash, chainId: input.previous.chainId, intentRevision: input.previous.intent.revision,
     compiler: input.previous.compiler, entrypoints: input.previous.entrypoints,
     ...(input.previous.deployment?{deployment:input.previous.deployment}:{}),
@@ -75,7 +80,8 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     sources: Object.fromEntries(Object.entries(input.previous.sources).filter(([path, source]) => dependencySources[path]?.content !== source.content)),
     unchangedDependencies: Object.keys(input.previous.sources).filter(path => dependencySources[path]?.content === input.previous!.sources[path].content),
   } : null;
-  const context = JSON.stringify({ intent: modelDesignContext({ intent }, false).intent, dependencySources, previous,
+  const context = JSON.stringify({ intent: modelDesignContext({ intent }, false).intent,
+    dependencySources: dependencyContext.modelSources, dependencySourceView: dependencyContext.view, previous,
     ...(compiler.viaIR?{compilerImportAliases:VIAIR_200_REMAPPINGS}:{}),
     ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production}:{}) });
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
@@ -94,6 +100,7 @@ Return reply first, summary, sourceFiles, entrypoints and all complete requireme
 Each sourceFiles item has path and complete Solidity content. Use relative .sol paths and inline imports whose exact source is either in sourceFiles or supplied below. No shell commands, package installs, remote imports, JavaScript or host files.
 The compiler is pinned to ${JSON.stringify(compiler)}, with metadata bytecodeHash none and appendCBOR false. Do not return compiler configuration or dependency download instructions.
 Supplied dependency files are immutable input. Never replace or repeat their paths in sourceFiles.
+Large immutable libraries may be shown without comments and with normalized whitespace. All executable source and string literals remain present; the complete original files are saved and compiled. This view never changes editable project files or grants dependency behavior verification.
 Constructors may have explicitly typed arguments for later graph preparation. Never silently substitute argument values or assume constructor execution has happened.
 When fixedChecks declares deployment, implement its complete constructor and initializer interfaces as well as its test interfaces. It is the production declaration; local fixture arguments and funded test accounts are separate. Preserve its symbolic parameter bindings and all previous behavior. A local adapter is never a production initializer.
 Isolated runtime materialization supplies the selected chain, exact constructor args, deployer and predicted addresses. It does not invent transaction origin, live block/time/randomness/gas conditions, ambient balances or unknown dependency code. Prefer a declared initialization step to start a launch timer. If the saved design explicitly needs unavailable constructor context, preserve that requirement and explain the missing capability; do not silently move or remove it.
