@@ -63,14 +63,18 @@ describe("source-bound approved compiler profiles", () => {
 });
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("actual canonical protection source compilation", { timeout: 50_000 }, () => {
-  it("reproduces all five original artifact templates inside the unchanged isolated compiler bounds", async () => {
-    const root = join(process.cwd(), "packages/launch/contracts/launch-protection-v1");
+  it.each([
+    ["Ethereum and Robinhood", "launch-protection-v1", 4663, "ProtectedNative30HookV1", "ProtectedNativeInitializerV1", "LaunchProtectionModuleV1"],
+    ["Base", "base-launch-protection-v1", 8453, "BaseProtectedNative30HookV1", "BaseProtectedNativeInitializerV1", "BaseLaunchProtectionModuleV1"],
+    ["HyperEVM", "hyperevm-launch-protection-v1", 999, "HyperEvmProtectedNative30HookV1", "HyperEvmProtectedNativeInitializerV1", "HyperEvmLaunchProtectionModuleV1"],
+  ] as const)("reproduces all five original %s artifact templates inside the unchanged isolated compiler bounds", async (_label, kit, chain, hook, initializer, module) => {
+    const root = join(process.cwd(), "packages/launch/contracts", kit);
     const standard = JSON.parse(await readFile(join(root, "standard-json.json"), "utf8"));
-    const names = ["ProtectedLaunchTokenV1", "ProtectedNative30HookV1", "ProtectedNativeInitializerV1", "EthereumNativeFeeVaultV3", "LaunchProtectionModuleV1"];
+    const names = ["ProtectedLaunchTokenV1", hook, initializer, "EthereumNativeFeeVaultV3", module];
     const originals = await Promise.all(names.map(async name => JSON.parse(await readFile(join(root, `${name}.artifact.json`), "utf8"))));
     const entries = originals.map((artifact, index) => ({ source: artifact.sourcePath, contract: artifact.contractName, role: ["token", "hook", "liquidity", "auxiliary", "auxiliary"][index] }));
     expect(standard.settings.remappings).toEqual(VIAIR_200_REMAPPINGS);
-    const saved = createContractProject({ compiler: createProjectCompiler("viair-200-v1", "cancun"), sources: standard.sources, entrypoints: entries }, intent, 4663);
+    const saved = createContractProject({ compiler: createProjectCompiler("viair-200-v1", "cancun"), sources: standard.sources, entrypoints: entries }, intent, chain);
     const result = await compileContractProject(saved); expect(result.compiled).toBe(true); expect(result.contracts).toHaveLength(5);
     for (const original of originals) {
       const actual = result.contracts.find(contract => contract.source === original.sourcePath && contract.contract === original.contractName)!;

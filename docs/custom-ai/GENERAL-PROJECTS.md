@@ -602,3 +602,7 @@ creation bytecode, runtime template and immutable ranges of all five original
 artifacts exactly. The existing 35-second, 384-MB and output-size compiler bounds
 are unchanged. This is source reproduction, separate from constructor dependency
 state, authenticated protection evidence, backend admission and live operation.
+The same qualification reproduces the separate Base and HyperEVM source variants,
+including their own hook, initializer and protection module. All three source
+closures use this exact profile; one chain's source is never substituted for
+another's. These compilation checks cover fifteen original artifact templates.
