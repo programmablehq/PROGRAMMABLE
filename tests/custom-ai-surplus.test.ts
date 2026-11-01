@@ -48,6 +48,37 @@ describe("Surplus model routing", () => {
     useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:"partial"},finish_reason:"length"}]}));vi.stubGlobal("fetch",fetcher);
     await expect(callSurplus(input)).rejects.toMatchObject({code:"incomplete"});expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("retains known token counts and the output-limit reason for a failed paid call", async () => {
+    useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:"partial"},finish_reason:"length"}],usage:{prompt_tokens:14900,completion_tokens:8000}}));
+    vi.stubGlobal("fetch",fetcher);
+    await expect(callSurplus(input)).rejects.toMatchObject({code:"incomplete",failure:"output-limit",usage:{inputTokens:14900,outputTokens:8000}});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("reports absent or invalid usage as unknown instead of a zero-cost completed record",async()=>{
+    useSurplus();vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content:'{"reply":"OK"}'},finish_reason:"stop"}],usage:{prompt_tokens:-1,completion_tokens:"unknown"}})));
+    await expect(callSurplus(input)).resolves.toEqual({text:'{"reply":"OK"}',inputTokens:null,outputTokens:null});
+  });
+  it("accepts a complete contract declaration beyond the ordinary answer limit only in its bounded profile",async()=>{
+    useSurplus();const content=JSON.stringify({reply:"x".repeat(60_000)});
+    vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content},finish_reason:"stop"}]})));
+    await expect(callSurplus(input)).rejects.toMatchObject({failure:"response-too-large"});
+    await expect(callSurplus({...input,responseProfile:"contract"})).resolves.toMatchObject({text:content});
+    const oversized=JSON.stringify({reply:"x".repeat(128_000)});
+    vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content:oversized},finish_reason:"stop"}]})));
+    await expect(callSurplus({...input,responseProfile:"contract"})).rejects.toMatchObject({failure:"response-too-large"});
+  });
+  it("does not confuse a missing stream terminator with an exhausted token budget",async()=>{
+    useSurplus();const data='data: {"choices":[{"index":0,"delta":{"content":"{}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":4}}\n\n';
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(data,{headers:{"content-type":"text/event-stream"}})));
+    await expect(callSurplus({...input,onText:vi.fn()})).rejects.toMatchObject({failure:"missing-end",usage:{inputTokens:3,outputTokens:4}});
+  });
+  it("cancels a silent provider stream when its request is aborted",async()=>{
+    useSurplus();const cancel=vi.fn(),controller=new AbortController();
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(new ReadableStream({cancel}),{headers:{"content-type":"text/event-stream"}})));
+    const call=callSurplus({...input,signal:controller.signal,onText:vi.fn()});
+    await vi.waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));controller.abort();
+    await expect(call).rejects.toMatchObject({code:"connection"});expect(cancel).toHaveBeenCalledTimes(1);
+  });
   it("treats an error envelope in HTTP 200 as a failure", async () => {
     useSurplus();vi.stubEnv("SURPLUS_API_KEY", "inf_http-200-error-test");
     vi.stubGlobal("fetch",vi.fn(async()=>Response.json({error:{code:"insufficient_balance",message:"credit balance low"}})));

@@ -42,7 +42,7 @@ The chat can look up public sources, indexed markets and basic onchain contract 
 
 You can develop contract source for Ethereum, Robinhood, Base and HyperEVM in the same chat. The project keeps its source files, compiler settings, requirements and declared behavior checks together. An edit retains existing files unless the response explicitly replaces their contents. The builder can use the supplied OpenZeppelin and Uniswap v4 libraries without downloading packages during your request.
 
-A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. General contract launch preparation in the chat remains unavailable until its full review and network integration is enabled. The fixed fee builder's launch button does not launch a general contract project.
+A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. When [live capabilities](https://programmable.market/api/custom-ai/capabilities) report general launch preparation enabled, use **Submit for review** to prepare and submit the exact saved source on the selected network. The review result and available wallet steps stay in the chat. Use **Continue launch here** to inspect those steps, or **Open submission** for the full record. If preparation is unavailable on the selected network, the project remains a saved source draft.
 
 For an existing Custom Launch submission, continue through its original [API workflow](../developers/custom-launch.md). Its review decision and current wallet preparation determine the next step.
 

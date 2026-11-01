@@ -1,0 +1,15 @@
+{
+  "name": "@programmable/minimatch-compat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Legacy callable minimatch interface backed by the patched upstream engine.",
+  "main": "index.cjs",
+  "files": ["index.cjs", "index.mjs", "README.md"],
+  "exports": {
+    "import": "./index.mjs",
+    "require": "./index.cjs"
+  },
+  "dependencies": {
+    "@programmable/minimatch-engine": "npm:minimatch@11.0.3"
+  }
+}

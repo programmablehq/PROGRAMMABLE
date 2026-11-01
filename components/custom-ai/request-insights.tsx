@@ -11,6 +11,7 @@ export function RequestInsights({headers,refreshKey=0}:{headers:AISessionHeaders
   const loading=view.open&&result?.key!==requestKey;
   const metrics=result?.metrics;
   const error=result?.key===requestKey?result.error:undefined;
+  const latestFailure=metrics?.latest?.calls.findLast(call=>call.failure)?.failure;
   const headersRef=useRef(headers);
   useEffect(()=>{headersRef.current=headers;},[headers]);
   useEffect(()=>{
@@ -29,6 +30,7 @@ export function RequestInsights({headers,refreshKey=0}:{headers:AISessionHeaders
       {metrics&&<>
         <p>{metrics.count} recent requests · {metrics.completed} completed · {metrics.failed} interrupted</p>
         {metrics.latest&&<p>Last request: {(metrics.latest.durationMs/1000).toFixed(1)} seconds · {metrics.latest.calls.length} model calls</p>}
+        {latestFailure&&<p>{latestFailure==="output-limit"?"The answer reached its response limit.":latestFailure==="response-too-large"?"The answer exceeded the supported size.":latestFailure==="refused"?"The model could not answer this request.":"The complete answer did not arrive."}</p>}
         {metrics.medianDurationMs!==null&&<p>Typical completed request: {(metrics.medianDurationMs/1000).toFixed(1)} seconds</p>}
         <p>{(metrics.knownInputTokens+metrics.knownOutputTokens).toLocaleString()} reported tokens</p>
         {metrics.incompleteTokenRecords>0&&<p>Usage is incomplete for {metrics.incompleteTokenRecords} requests.</p>}

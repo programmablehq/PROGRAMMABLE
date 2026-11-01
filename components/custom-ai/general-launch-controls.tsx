@@ -83,7 +83,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
       </select>
       {controllerKind === "smart" && <span>Smart account preparation for this design is not available yet.</span>}
     </label>}
-    {accepted ? <a className={styles.createButton} href={href}>Open submission<ArrowRight size={16} aria-hidden="true" /></a>
+    {accepted ? <a className={walletSubject ? styles.textButton : styles.createButton} href={href}>Open submission<ArrowRight size={16} aria-hidden="true" /></a>
       : <button type="button" className={styles.createButton} onClick={() => { void proceed(); }}
         disabled={launch.busy || disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}

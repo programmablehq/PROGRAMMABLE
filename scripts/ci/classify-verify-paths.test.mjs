@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import yaml from "js-yaml";
 import {
@@ -14,7 +17,87 @@ import {
   ROBINHOOD_V414_RUNTIME_BACKEND_EVIDENCE_PATHS,
   ROBINHOOD_V41_CLI_COORDINATE_PATH,
   GENERAL_CONSTRUCTOR_WORKERS,
+  isToolingOnlyDependencyChange,
 } from "./classify-verify-paths.mjs";
+
+function toolingFixture() {
+  const artifact = (version, dependencies = {}, dev = true) => ({ version, dependencies,
+    resolved: `https://registry.npmjs.org/example/-/example-${version}.tgz`, integrity: "sha512-proof", ...(dev ? { dev } : {}) });
+  const project = { name: "example", dependencies: { runtime: "1.0.0" }, devDependencies: { vitest: "4.1.11" }, scripts: { test: "vitest run" } };
+  const lock = { name: "example", lockfileVersion: 3, packages: {
+    "": structuredClone(project),
+    "node_modules/runtime": artifact("1.0.0", { leaf: "1.0.0" }, false),
+    "node_modules/leaf": artifact("1.0.0", {}, false),
+    "node_modules/vitest": artifact("4.1.11", { tiny: "1.0.0" }),
+    "node_modules/tiny": artifact("1.0.0"),
+  } };
+  const before = { project, lock }, after = structuredClone(before);
+  after.project.devDependencies.vitest = "4.1.12";
+  after.lock.packages[""].devDependencies.vitest = "4.1.12";
+  after.lock.packages["node_modules/vitest"] = artifact("4.1.12", { tiny: "1.0.0" });
+  return { before, after, artifact, check(paths = ["package.json", "package-lock.json"]) {
+    return isToolingOnlyDependencyChange(paths, { baseSha: "a".repeat(40), headSha: "b".repeat(40),
+      readChange: file => [before, after].map(state => JSON.stringify(file === "package.json" ? state.project : state.lock)) });
+  } };
+}
+
+test("a proven tooling update retains JavaScript gates without platform contract or indexer runs", () => {
+  const f = toolingFixture(); assert.equal(f.check(), true);
+  const scope = classifyVerifyPaths(["package.json", "package-lock.json"], { toolingOnlyDependency: true });
+  for (const key of ["interface", "dependencies", "custom_v2", "database", "read_model"]) assert.equal(scope[key], true, key);
+  assert.equal(scope.contracts, false); assert.equal(scope.indexer, false);
+  assert.equal(classifyVerifyPaths(["package-lock.json"]).contracts, true);
+  assert.equal(classifyVerifyPaths(["package-lock.json"], { forceAll: true, toolingOnlyDependency: true }).contracts, true);
+  assert.equal(classifyVerifyPaths(["package-lock.json", "contracts/src/Hook.sol"], { toolingOnlyDependency: true }).contracts, true);
+});
+
+test("a transitive lock-only tooling patch is eligible", () => {
+  const f = toolingFixture();
+  Object.assign(f.after.project.devDependencies, f.before.project.devDependencies);
+  Object.assign(f.after.lock.packages[""].devDependencies, f.before.project.devDependencies);
+  f.after.lock.packages["node_modules/vitest"] = structuredClone(f.before.lock.packages["node_modules/vitest"]);
+  f.after.lock.packages["node_modules/tiny"] = f.artifact("1.0.1");
+  assert.equal(f.check(["package-lock.json"]), true);
+});
+
+test("runtime shadows and misleading development flags never narrow verification", () => {
+  const shadow = toolingFixture();
+  shadow.after.lock.packages["node_modules/runtime/node_modules/leaf"] = shadow.artifact("1.0.1");
+  assert.equal(shadow.check(), false);
+  const flags = toolingFixture(); flags.after.lock.packages["node_modules/runtime"].dev = true;
+  assert.equal(flags.check(), false);
+});
+
+test("compiler, script, unpinned install and unrelated dependency changes keep full verification", () => {
+  const cases = [
+    f => { f.after.project.scripts.test = "node replacement.mjs"; },
+    f => { f.after.project.devDependencies.solc = "0.8.30"; },
+    f => { f.after.lock.packages["node_modules/tiny"].hasInstallScript = true; },
+    f => { f.after.lock.packages["node_modules/tiny"].resolved = "https://example.com/a.tgz"; },
+    f => { delete f.after.lock.packages["node_modules/tiny"].integrity; },
+    f => { f.after.project.overrides = { runtime: "2.0.0" }; },
+  ];
+  for (const mutate of cases) { const f = toolingFixture(); mutate(f); assert.equal(f.check(), false); }
+  assert.equal(toolingFixture().check(["package-lock.json", "scripts/other.mjs"]), false);
+});
+
+test("trusted Git bytes classify a lock-only update with an unchanged package manifest", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "programmable-dependency-scope-"));
+  const f = toolingFixture();
+  const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  try {
+    git("init", "-q"); git("config", "user.name", "Scope test"); git("config", "user.email", "scope@example.invalid");
+    writeFileSync(join(cwd, "package.json"), JSON.stringify(f.before.project));
+    writeFileSync(join(cwd, "package-lock.json"), JSON.stringify(f.before.lock));
+    git("add", "."); git("commit", "-qm", "before"); const baseSha = git("rev-parse", "HEAD");
+    f.before.lock.packages["node_modules/tiny"] = f.artifact("1.0.1");
+    writeFileSync(join(cwd, "package-lock.json"), JSON.stringify(f.before.lock));
+    git("add", "."); git("commit", "-qm", "after"); const headSha = git("rev-parse", "HEAD");
+    const source = new URL("./classify-verify-paths.mjs", import.meta.url).href;
+    const code = `import {isToolingOnlyDependencyChange as check} from ${JSON.stringify(source)};console.log(check(['package-lock.json'],${JSON.stringify({ baseSha, headSha })}));`;
+    assert.equal(execFileSync(process.execPath, ["--input-type=module", "-e", code], { cwd, encoding: "utf8" }).trim(), "true");
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
 
 const none = {
   contracts: false,

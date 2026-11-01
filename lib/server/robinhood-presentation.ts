@@ -267,7 +267,7 @@ async function readCachedModuleMetadata(tokens: readonly RobinhoodLaunch[]): Pro
   return metadata;
 }
 
-export async function readRobinhoodMarkets(tokens: readonly MarketToken[], universe?: readonly MarketToken[]): Promise<Map<string, RobinhoodCoinMarket>> {
+export async function readRobinhoodMarkets(tokens: readonly MarketToken[], universe?: readonly Pick<MarketToken, "tokenAddress" | "poolId">[]): Promise<Map<string, RobinhoodCoinMarket>> {
   if (tokens.length === 0) return new Map();
   if (tokens.length > MAX_MARKET_TOKENS || tokens.some((token) => !ADDRESS.test(token.tokenAddress) || (token.poolId !== null && !HASH.test(token.poolId)))) {
     throw new Error("Invalid market request");

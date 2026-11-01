@@ -16,6 +16,7 @@ import type { GeneralScenarioReport } from "./behavior-checks.server";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 import { dependencySourceContext } from "./dependency-source-context";
 import { resolveInlineLibraries } from "./inline-libraries";
+import { AI_CONFIG } from "./ai-config";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -107,7 +108,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production}:{}) });
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });
-  const response = await call({ model: configuredProvider().models.build, signal, effort: "high", maxTokens: 8000,
+  const response = await call({ model: configuredProvider().models.build, signal, effort: "high", maxTokens: AI_CONFIG.maximumContractTokens,responseProfile:"contract",
     schema: generalProjectResponseSchema, messages: input.messages,
     onText: text => { const reply = partialReply(text); if (reply !== undefined) input.onProgress?.({ type: "reply", text: reply }); },
     system: `${GENERAL_CONTRACT_VOICE}
