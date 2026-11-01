@@ -27,7 +27,7 @@ import { feedCatalog, prepareEventFeed } from "./feed.server";
 import { eventModuleSource } from "../../scripts/custom-ai/event-module.mjs";
 import programCode from "./program-manifest.json";
 import type { ModelCallMetric } from "./request-metrics";
-import { intentRequirementSchema, launchIntentPlanningRules, intentHasOpenParts, MAX_INTENT_REQUIREMENTS, type LaunchIntent } from "./launch-intent";
+import { intentRequirementSchema, launchIntentPlanningRules, intentHasOpenParts, intentMatchesCandidate, MAX_INTENT_REQUIREMENTS, type LaunchIntent } from "./launch-intent";
 import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, parseIntentRequirements, reviseLaunchIntent } from "./launch-intent.server";
 import { bindIntentImplementation } from "./intent-coverage.server";
 import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
@@ -124,8 +124,10 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const previousProjectView=context.generalProject?generalProjectView(context.generalProject):context.generalProjectView;
   const generalOnly=!builderChain(request.coin?.chainId??1).feeCore||Boolean(previousProjectView);
   if(previousProjectView&&!previousIntent)throw new CustomAIError("project-context","Your complete saved design could not be loaded. Reload before continuing.",409);
+  const editableRequirements = previousProjectView ? previousIntent?.requirements : previousSpec?.requirements
+    ?? (context.draft && intentMatchesCandidate(previousIntent, context.draft) ? previousIntent?.requirements : undefined);
   if (request.editTarget && (request.editTarget.sourceHash !== (previousProjectView?.projectHash.slice(7)??context.draft?.sourceHash)
-    || !(previousProjectView?previousIntent?.requirements:previousSpec?.requirements)?.some(rule => rule.id === request.editTarget!.requirementId))) {
+    || !editableRequirements?.some(rule => rule.id === request.editTarget!.requirementId))) {
     throw new CustomAIError("edit", "That rule has changed. Select it again from the current draft.", 409);
   }
   const availableTools = new Set(capabilities.map(tool => tool.ref.id));

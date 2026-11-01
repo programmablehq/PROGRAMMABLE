@@ -20,7 +20,7 @@ The current builder creates immutable fee rules and schedules, including differe
 
 Edits use the saved contract and show whether the requested change was applied. Checked fee examples show the expected buy and sell fees over time. **New coin** starts a separate saved design; its previous conversation and unsent message remain in **Chats**. Under **Options**, **Clear messages** clears the conversation view while retaining the current coin and its rules. Options also contains saved versions, request details and remaining generation credits. Known provider outages preserve your design; a rejected provider request returns your generation allowance. A lost connection checks the saved request instead of generating it again.
 
-Composed and general designs support editing individual saved rules. Select
+Checked fee drafts, composed designs and general projects support editing individual saved rules. Select
 **Edit** beside a rule and describe the change in the chat. The composer shows
 which rule you selected. Press **Escape** or clear the selection to return to the
 whole design without losing your unsent message. Added and updated labels refer
