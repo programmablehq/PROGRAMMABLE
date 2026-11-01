@@ -11,12 +11,14 @@ import { projectGeneralGraphReply, projectGeneralPlanReply } from "./general-lau
 import type { GeneralLaunchSourceSelection } from "./general-launch-source.server";
 import type { AIStore } from "./store.server";
 import { CustomAIError } from "./types";
+import type { GeneralRuntimeDependencyResolver } from "./runtime-materialization.server";
 
 export function createGeneralPreparationService(deps: {
   store: AIStore;
   image: (owner:string,image:NonNullable<Awaited<ReturnType<AIStore["projects"]["readForLaunch"]>>["binding"]["image"]>,signal:AbortSignal)=>Promise<Uint8Array>;
   bridge: () => ReturnType<typeof createCustomAIBackendLaunchBridge>;
   pack?: typeof packGeneralGraph; packPlan?: typeof packGeneralRobinhoodPlan; production?: typeof readLaunchProductionContext; now?:()=>number;
+  resolveObservedDependencies?: GeneralRuntimeDependencyResolver;
 }) {
   const preparations=deps.store.projects.preparations, now=deps.now??Date.now;
   function linked(request:Request,authority:AIAuthority,account:string) {
@@ -40,9 +42,10 @@ export function createGeneralPreparationService(deps: {
         const bytes=await deps.image(current.owner,image,request.signal), exported=createGeneralPublicSource(source);
         const packInput={source,exported,url:generalSourcePublicUri(exported.id),controller:record.account,
           identity:record.identity,imageBytes:bytes,...(record.nativeFundingWei===undefined?{}:{nativeFundingWei:record.nativeFundingWei})};
+        const dependencyArgs=deps.resolveObservedDependencies?[deps.resolveObservedDependencies] as const:[] as const;
         const packed=record.chainId===4663
-          ? await (deps.packPlan??packGeneralRobinhoodPlan)(packInput,{address:record.account,kind:record.controllerKind!},request.signal)
-          : await (deps.pack??packGeneralGraph)(packInput,request.signal);
+          ? await (deps.packPlan??packGeneralRobinhoodPlan)(packInput,{address:record.account,kind:record.controllerKind!},request.signal,...dependencyArgs)
+          : await (deps.pack??packGeneralGraph)(packInput,request.signal,...dependencyArgs);
         linked(request,authority,record.account);
         return generalPreparationView(await preparations.completePack(current.owner,record.id,lease,packed),now());
       } catch(error) {

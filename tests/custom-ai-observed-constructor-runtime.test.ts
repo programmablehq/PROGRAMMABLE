@@ -124,6 +124,11 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("source-bound observed cons
     expect(providers.mock.calls).toEqual([[999], [999]]); expect(calls).toBe(22);
     const result = await materializeGeneralRuntime(input.project, input.compilation, { ...input.selected, observedDependencies: dependencies }, input.predictions);
     expect(result.version).toBe(3); expect(result.dependencyContext?.observation.chainId).toBe(999);
+    const next=await resolve(input.project.production!,input.predictions.find(p=>p.targetId==="liquidity")!.predictedAddress);
+    // Reuse only the still-fresh, source-bound block observation. Each caller's
+    // feed trace and canonical-block comparison still run on both providers.
+    expect(next.observation.id).toBe(dependencies.observation.id);
+    expect(calls).toBe(26);expect(providers.mock.calls).toEqual([[999],[999],[999]]);
   });
   it("binds source and predicted addresses before awaiting the dependency resolver", async () => {
     const project = structuredClone(input.project), compilation = structuredClone(input.compilation), predictions = structuredClone(input.predictions);

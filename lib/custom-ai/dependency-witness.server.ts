@@ -18,7 +18,7 @@ export function createConstructorDependencyResolver(dependencies: Parameters<typ
   const observe = createLaunchDependencyReader(dependencies);
   return async (production: LaunchProductionContext, caller: Address, signal?: AbortSignal) => {
     const selected = structuredClone(production);
-    const observation = await observe(selected, signal, { fresh: true });
+    const observation = await observe(selected, signal);
     signal?.throwIfAborted();
     const read = await replayNativeFeedConstructorRead(observation, caller,
       { rpcs: dependencies.rpcs(selected.chainId), now: dependencies.now }, signal);

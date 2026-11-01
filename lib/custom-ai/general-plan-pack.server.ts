@@ -4,7 +4,7 @@ import { concatHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, g
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2, fileSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import type { CustomLaunchPlanV1, LaunchActionV1, LaunchControllerV1, LaunchEffectV1 } from "@/lib/custom-launch/launch-plan-v1";
 import { generalSourcePackInputs, type GeneralPackInput } from "./general-pack-config.server";
-import { materializeGeneralRuntime, type GeneralDeploymentPrediction } from "./runtime-materialization.server";
+import { materializeGeneralRuntime, type GeneralDeploymentPrediction, type GeneralRuntimeDependencyResolver } from "./runtime-materialization.server";
 import { ROBINHOOD_PLAN_DEPLOYER } from "./plan-deployer";
 import { CustomAIError } from "./types";
 
@@ -20,7 +20,7 @@ type Prediction=GeneralDeploymentPrediction & {initCode:Hex;applicantSalt:Hex};
  * constructor worker. No V4 graph conversion, live observation or admission.
  * The caller supplies a declared controller kind; it is not inferred from an
  * address. Contract wallets require their own current authority snapshot. */
-export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller:LaunchControllerV1,signal?:AbortSignal) {
+export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller:LaunchControllerV1,signal?:AbortSignal,resolveObservedDependencies?:GeneralRuntimeDependencyResolver) {
   signal?.throwIfAborted();
   const nativeFundingWei=input.nativeFundingWei;
   const base=generalSourcePackInputs(input,"plan"),{source,production,recipe,values,identity,exported,settings,image}=base;
@@ -59,6 +59,7 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
     predicted.set(target.id,found);
   }
   const runtime=await materializeGeneralRuntime(source.project,source.compilation,{controller:base.controller,settings:values.settings,
+    ...(resolveObservedDependencies?{resolveObservedDependencies}:{}),
     ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),planDeployer:ROBINHOOD_PLAN_DEPLOYER},[...predicted.values()],stop);
   stop.throwIfAborted();
   const childInputs=runtime.constructorChildren??[],childRuntimes=runtime.children??[];

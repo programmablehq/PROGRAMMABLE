@@ -11,6 +11,7 @@ import { createGeneralPublicSource, type OwnedGeneralLaunchSource } from "./publ
 import { CustomAIError } from "./types";
 import { generalLaunchDetailIssue } from "./general-details";
 import type { CoinSetup } from "./coin-setup";
+import { constructorDependencyState } from "./dependency-witness";
 
 export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
@@ -29,7 +30,7 @@ export type GeneralPreparation = {
   coin?: {name:string;symbol:string};
   editor?: {settings:CoinSetup;imageId:string};
   packState: "packing" | "failed" | "complete";
-  packLease: { token: string; until: number; slot: number };
+  packLease: { token: string; until: number; slot: number; startedAt?: number };
   packCode?: string; packHash?: `sha256:${string}`; requestSha256?: `sha256:${string}`; requestHash?: `sha256:${string}`;
   publicSourceId?: `sha256:${string}`; launchProfileHash?: string; launchIntentHash?: string;
   preflight?: GeneralExchange; submission?: GeneralExchange;
@@ -56,9 +57,9 @@ function validRecord(value: unknown, id: string): GeneralPreparation {
     || !["packing","failed","complete"].includes(v.packState)) throw corrupt();
   return v;
 }
-function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation) {
+function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation, completedAt?: number) {
   const { hash, ...body } = pack;
-  if (Buffer.byteLength(JSON.stringify(pack)) > 24_000_000 || ![1,2].includes(pack.version)
+  if (Buffer.byteLength(JSON.stringify(pack)) > 24_000_000 || ![1,2,3].includes(pack.version)
     || pack.route !== (record.chainId===4663?"plan-v1":"graph-v3") || pack.chainId !== record.chainId || pack.bindingHash !== record.bindingHash
     || pack.productionId !== record.productionId || pack.launchReady !== false
     || pack.projectHash !== record.selection.projectHash || pack.artifactHash !== record.selection.artifactHash
@@ -69,9 +70,9 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation) {
     || fileSha256V2(Buffer.from(pack.requestBody)) !== pack.requestSha256) throw corrupt();
   const construction=pack.route==="plan-v1"?pack.runtimeMaterialization:pack.constructorMaterialization;
   if(pack.version===1&&(pack.route==="plan-v1"?construction?.version!==1:construction!==undefined))throw corrupt();
-  if(pack.version===2) {
+  if(pack.version>=2) {
     const runtime=construction;
-    if(!runtime||runtime.version!==2||runtime.scope!=="isolated-constructor-runtime-v2"||runtime.status!=="materialized"||runtime.launchReady!==false
+    if(!runtime||runtime.version!==pack.version||runtime.scope!==(pack.version===3?"observed-constructor-runtime-v3":"isolated-constructor-runtime-v2")||runtime.status!=="materialized"||runtime.launchReady!==false
       ||runtime.projectHash!==pack.projectHash||runtime.artifactHash!==pack.artifactHash||runtime.productionId!==pack.productionId
       ||runtime.chainId!==pack.chainId||typeof runtime.controller!=="string"||runtime.controller.toLowerCase()!==record.account.toLowerCase()
       ||runtime.passes!==2||!Array.isArray(runtime.failures)||runtime.failures.length||!Array.isArray(runtime.contracts)||!Array.isArray(runtime.targets)
@@ -79,7 +80,21 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation) {
       ||runtime.targets.length+runtime.children.length>16||runtime.contracts.length!==runtime.targets.length
       ||runtime.targets.some(target=>!target||typeof target.id!=="string"||typeof target.address!=="string"||!/^0x[a-f0-9]{40}$/iu.test(target.address)))throw corrupt();
     const {hash:runtimeHash,...runtimeBody}=runtime;
-    if(canonicalBrowserSha256V2("programmable.custom-ai-runtime-materialization.v2",runtimeBody)!==runtimeHash)throw corrupt();
+    if(canonicalBrowserSha256V2(`programmable.custom-ai-runtime-materialization.v${runtime.version}`,runtimeBody)!==runtimeHash)throw corrupt();
+    if (pack.version === 3) {
+      const context=runtime.dependencyContext, production=runtime.dependencyProduction;
+      const initializer=runtime.targets.find(target=>target.id===runtime.dependencyInitializerId);
+      const startedAt=record.packLease.startedAt;
+      if (!context || !production || !initializer || production.id!==record.productionId || production.chainId!==record.chainId
+        || typeof startedAt!=="number" || !Number.isSafeInteger(startedAt) || startedAt<record.createdAt || startedAt>=record.packLease.until
+        || context.observation.observedAt>record.packLease.until) throw corrupt();
+      // A shared observation can predate this lease. It must still be fresh
+      // when completed; later reads preserve the already accepted bytes.
+      const checkedAt=completedAt??Math.max(startedAt,context.observation.observedAt);
+      if (checkedAt<startedAt || checkedAt>=record.packLease.until) throw corrupt();
+      try { constructorDependencyState(context,production,initializer.address,checkedAt); }
+      catch { throw corrupt(); }
+    }
     const addresses=new Map(runtime.targets.map(target=>[target.id,target.address])),ids=new Set(addresses.keys()),nonces=new Map<string,bigint>();
     if(ids.size!==runtime.targets.length||new Set(runtime.children.map(child=>child.id)).size!==runtime.children.length)throw corrupt();
     for(const child of runtime.constructorChildren) {
@@ -145,7 +160,8 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
     if (slot === undefined) throw busy();
     await charge(db,`operation:general-pack:${owner}`,6);
     await charge(db,"operation:general-pack:global",60);
-    const lease = { token: randomUUID(), until: now()+PACK_LEASE_MS, slot };
+    const startedAt=now();
+    const lease = { token: randomUUID(), startedAt, until: startedAt+PACK_LEASE_MS, slot };
     await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
       VALUES('system','general-pack-slot',$1,$2) ON CONFLICT(owner,kind,id)
       DO UPDATE SET value=$2,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`, [slotId(slot),JSON.stringify(lease)]);
@@ -231,7 +247,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         if(record.packState==="complete"){if(record.packHash!==pack.hash)throw conflict();return record;}
         if(record.packState!=="packing" || record.packLease.token!==lease || record.packLease.until<=now())throw conflict();
         withinWindow(record);
-        const identity=exactPack(pack,record), exported=createGeneralPublicSource(source);
+        const identity=exactPack(pack,record,now()), exported=createGeneralPublicSource(source);
         if(pack.publicSourceId!==exported.id)throw conflict();
         // Publish the sanitized export and save the final exact bytes together,
         // only after the explicitly selected owned source still matches.
