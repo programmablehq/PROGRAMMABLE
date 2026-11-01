@@ -23,13 +23,29 @@ for (const width of [1440, 390, 320]) {
         const height = () => content.getBoundingClientRect().height;
         const click = () => button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
         const wait = (duration: number) => new Promise(resolve => setTimeout(resolve, duration));
+        const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        const settle = async () => {
+          // Rendering can start later than a timeout on a loaded CI runner.
+          // Observe the actual animation and its cleanup before final heights.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            await frame();
+            const animations = content.getAnimations({ subtree: true });
+            if (!animations.length) { await frame(); return; }
+            await Promise.all(animations.map(animation => animation.finished.catch(error => {
+              if (error?.name !== "AbortError") throw error;
+            })));
+          }
+          await frame();
+          if (content.getAnimations({ subtree: true }).some(animation => animation.playState === "running" || animation.pending))
+            throw new Error("Disclosure animation did not settle");
+        };
         const closed = height(); click(); await wait(50); const opening = height();
-        click(); await wait(0); const reversed = height(); await wait(180); const reclosed = height();
-        click(); await wait(220); const opened = height();
+        click(); await wait(0); const reversed = height(); await settle(); const reclosed = height();
+        click(); await settle(); const opened = height();
         click(); await wait(35); const closing = height();
         const input = content.querySelector<HTMLElement>("input, textarea, select")!; input.focus();
         const closingFocusable = document.activeElement === input;
-        await wait(180);
+        await settle();
         return { closed, opening, reversed, reclosed, opened, closing, final: height(), closingFocusable };
       }, { trigger, panel });
       expect(heights.opening).toBeGreaterThan(heights.closed + 1);
