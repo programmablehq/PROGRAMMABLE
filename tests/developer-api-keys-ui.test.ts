@@ -26,6 +26,7 @@ import {
   type ApiKeySummary,
 } from "../components/developer-api-keys";
 import { buildAgentInstructions } from "../lib/agent-connection";
+import { developerLaunchDestination } from "../lib/developer-api-key-route";
 import { BuilderIdeaPrompt, BuilderSetupSteps } from "../components/module-contribution-entry";
 import {
   launchPollingRetryAfterMs,
@@ -1650,11 +1651,9 @@ describe("developer launch history interface", () => {
   });
 
   it("opens an exact launch deep link and focuses its current record", () => {
-    expect(apiKeysSource).toContain('searchParams.get("launchId")');
-    expect(apiKeysSource).toContain('searchParams.get("chainId")');
-    expect(apiKeysSource).toContain(
-      'setInitialLaunchChainId(chainId === "999" ? "999" : chainId === "8453" ? "8453" : chainId === "1" ? null : "4663")',
-    );
+    const launchId = "60000000-0000-4000-8000-000000000006";
+    expect(developerLaunchDestination(new URLSearchParams({ launchId, chainId: "999" }))).toEqual({ launchId, chainId: "999" });
+    expect(developerLaunchDestination(new URLSearchParams({ launchId }))).toEqual({ launchId, chainId: null });
     expect(apiKeysSource).toContain(
       "initialLaunchChainId={initialLaunchChainId}",
     );
@@ -1923,7 +1922,7 @@ describe("developer launch history interface", () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(boundary.indexOf("assertCustomLaunchWalletActionV1(")).toBeGreaterThan(-1);
-    expect(boundary.indexOf("sendBrowserWalletAction(checked)")).toBeGreaterThan(
+    expect(boundary.search(/sendBrowserWalletAction\(checked(?:,|\))/u)).toBeGreaterThan(
       boundary.indexOf("assertCustomLaunchWalletActionV1("),
     );
   });

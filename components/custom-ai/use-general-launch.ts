@@ -29,7 +29,7 @@ export function useGeneralLaunch({ enabled, account, scope, headers }: { enabled
     const tick = () => {
       const view = latest.current;
       if (Date.now() >= until || attempts >= 12 || view.statusError || view.currentStatus &&
-        ["completed", "confirmed", "final", "finalized", "failed", "rejected", "expired", "cancelled"].includes(view.currentStatus.status)) {
+        ["completed", "confirmed", "final", "finalized", "source_verified", "indexed", "publicly_visible", "failed", "rejected", "expired", "cancelled"].includes(view.currentStatus.status)) {
         clearInterval(timer); return;
       }
       attempts++;

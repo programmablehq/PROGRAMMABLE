@@ -1,6 +1,7 @@
 import {createServer} from "node:http";
 import {build} from "esbuild";
 import {readFileSync} from "node:fs";
+import {walletFixturePlugin} from "./general-wallet-server.mjs";
 
 /** A local rendering host for the actual preview and controls. All mutations
  * are intercepted by the owning test; no model, chain or provider is used. */
@@ -25,7 +26,7 @@ export async function createGeneralLaunchServer(){
     <GeneralProjectPreview project={project} intent={intent} draftId="source-general-client-0001" account={account} conversationId={conversation} headers={headers} disabled={false} settings={settings} onChange={patch=>setSettings(s=>({...s,...patch}))} chatRevision={0} localPreview={false} cacheKey={'general-fixture:'+account} imageReceipt={receipt} onImageReceipt={setReceipt} onEditRule={()=>{}} generalLaunchEnabled={!parameters.has('disabled')} flush={flush} onLaunchLocked={setLocked}/>
    </main></>;
  }createRoot(document.getElementById('root')).render(<App/>);
- `,loader:"tsx",resolveDir:root},bundle:true,format:"esm",platform:"browser",write:false,outdir:"/fixture-output",jsx:"automatic",define:{"process.env.NODE_ENV":'"production"',"process.env":"{}"},plugins:[{name:"local-preview-image",setup(p){
+ `,loader:"tsx",resolveDir:root},bundle:true,format:"esm",platform:"browser",write:false,outdir:"/fixture-output",jsx:"automatic",define:{"process.env.NODE_ENV":'"production"',"process.env":"{}"},plugins:[walletFixturePlugin(root),{name:"local-preview-image",setup(p){
   p.onResolve({filter:/^next\/image$/},()=>({path:"image",namespace:"fixture"}));
   p.onLoad({filter:/.*/,namespace:"fixture"},()=>({loader:"tsx",resolveDir:root,contents:"import React from'react';export default function Image({fill,priority,unoptimized,...props}){return <img {...props}/>;}"}));
  }}]});

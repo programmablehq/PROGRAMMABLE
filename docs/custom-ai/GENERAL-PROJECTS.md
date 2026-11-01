@@ -1,6 +1,6 @@
 # General Custom AI projects
 
-This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan packing is also qualified locally with the existing independent backend parser/compiler. The shared owned journal and response bindings are locally integrated. Protected component evidence, UI/status/handoff integration, backend activation and wallet execution remain unfinished. The existing fee core and its financial restrictions remain its own route.
+This source package and service handoff are local work for the general Custom Contract route. They have not been published in the product. Private studio/preview, versions, source recovery and independent declared-scenario checks are integrated locally, including the pinned v4 world described below. The private backend session consumers for all four chains and the Website signed-request producer are qualified locally, with intake disabled. Canonical graph packing and durable graph preparation are integrated locally. Modern Robinhood Plan packing is also qualified locally with the existing independent backend parser/compiler. The shared owned journal, response bindings, inline submission, compact current status and canonical wallet controls are locally integrated. Backend intake and compact status source changes have been merged, without runtime activation. Protected component evidence, backend activation and an actual provider-backed wallet lifecycle remain unfinished. The existing fee core and its financial restrictions remain its own route.
 
 `execution-routing.ts` selects from saved complete intent, a proposed template coverage and the chosen network. Missing template requirements select `custom-contract`; they are never silently removed. Open choices and missing feed or worker capabilities stay with the selection. The selection is hashed with its chain and intent revision and always has `launchReady: false`. A proposed coverage is interpretation data, not semantic verification.
 
@@ -418,7 +418,7 @@ protected component review, nested-child/dependency behavior, liquidity, fees,
 funding, issuer acceptance, a wallet action or availability. The modern Plan pack
 uses the shared owned journal with a separately declared controller kind and
 Plan-specific response bindings. Current status is locally connected to the
-canonical owned reader. The inline wallet handoff remains unfinished.
+canonical owned reader. The inline wallet handoff uses the existing canonical wallet boundary and is qualified locally with synthetic delivery.
 Every local receipt retains `launchReady:false`.
 
 ## Explicit Chat submission controls
@@ -449,9 +449,10 @@ that ticket, without flushing a newer design or preparing different bytes.
 Following an already running pack uses bounded five-second journal reads for at
 most 130 seconds. Reload never resumes a mutation automatically.
 
-An accepted response links to the existing on-site launch workspace. Its status
-is the last accepted response and is never presented as current lifecycle
-readiness or an executed launch. Local renderer coverage includes all four
+An accepted response keeps the existing on-site launch workspace link and offers
+inline wallet controls after reading current owned status. The original create
+reply alone is never presented as current lifecycle readiness or execution.
+Local renderer coverage includes all four
 chains, reload, ownership changes, original-ticket recovery, missing-field
 focus, changed coin details and keyboard use at 360 and 1440 pixels. Native
 acceptance, public lifecycle integration, protected source execution, source
@@ -484,6 +485,60 @@ sleeping and reopening a tab does not produce a burst of catch-up requests. An
 explicit status check can read the same ticket again. Read-only activity leaves
 chat and coin editing available. A failed status read preserves the accepted
 submission and its original on-site continuation link.
+
+## Explicit inline wallet controls
+
+Mounting the wallet panel reads only local recovery records. Full owned source
+details, approved-launch preparation, network switching, cost estimates and
+wallet actions run only after explicit user actions. The original resource ID,
+controller, request hash, network and Plan raw-byte hash/deadline must match
+before the existing canonical codecs can review any wallet step. A full-source
+reply is never used as a replacement for those bindings.
+
+Ethereum, Base and HyperEVM reuse the existing V3 full-resource parser, bound
+project metadata reader and exact Router codec. The same details and complete
+wallet review are refreshed before confirmation. The final scope, current
+session and expiration guards run inside the existing exclusive wallet lock,
+after network and fee preparation. Robinhood reuses the existing Plan codec,
+release/admission verification, exact cost review and durable step journal. A
+private-session change cancels its outstanding review and final send boundary.
+
+The Graph flow also stores a versioned digest-only original-attempt journal for
+networks 1, 8453 and 999, directly before the wallet send. It stores request and
+action hashes, controller, destination, value, calldata hash, time and any
+observed transaction hash. It does not store calldata or chat content. Unknown
+sends never expire automatically; the older launch workspace also checks this
+journal, so its shorter generic wallet lease cannot enable a duplicate Chat
+send. Only an explicit wallet rejection or trusted local no-send failure can
+remove an unknown attempt. Storage failure before the request prevents sending.
+Storage failure after broadcast retains the unresolved record and still returns
+the observed hash for immediate display and independent tracking.
+
+Manual Graph recovery uses only connected-provider reads of the expected
+network and original transaction. Hash, controller, destination, calldata hash,
+value and supplied transaction chain must match before the original record
+adopts the hash. Pasted text does not authorize a send. A generic terminal status
+does not clear a recovery record or establish finality. Reconciliation uses the
+owned full finalized resource, original request/metadata and onchain launch ID,
+current chain-specific two-provider checkpoint and exact transaction hash. The
+same exclusive account/network lock protects adopting and releasing that
+record. It can also release only the exact original generic wallet lease, so a
+confirmed unknown send does not leave an extra five-minute delay. An unrelated
+lease is retained. A different known transaction cannot replace the original. The journal accepts at most 256 original
+attempt records per controller/network and refuses ambiguous or corrupt data.
+
+Plan receipt tracking submits the original step/hash to the existing proof
+endpoint once per explicit action. It does not send another transaction.
+Confirmation can be refreshed manually; no unbounded full-source or wallet
+discovery loop is mounted inside the Chat. The compact status loop retains its
+twelve-read/two-minute bound. The fallback workspace remains available for
+funding modes or lifecycle actions not yet represented inline.
+
+Local browser cases cover one explicit send and reload on all four networks,
+unknown-send recovery with original transaction matching, explicit rejection,
+changed request bindings and private-session changes during reads or a pending
+wallet receipt. They use synthetic wallet/provider delivery and do not establish
+mainnet execution, protected-source admission, finality or public availability.
 
 The new backend projection does not enter the legacy full-resource reader,
 which can resume pending work. Graph metadata is selected from an indexed owned

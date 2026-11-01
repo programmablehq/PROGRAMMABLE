@@ -1,23 +1,25 @@
 "use client";
-import { useEffect, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useState, type RefObject } from "react";
 import { ArrowRight } from "lucide-react";
 import type { AISessionHeaders } from "@/lib/custom-ai/client";
 import type { CoinSetup } from "@/lib/custom-ai/coin-setup";
 import { builderChain } from "@/lib/custom-ai/execution-routing";
 import { generalLaunchDetailIssue } from "@/lib/custom-ai/general-details";
 import { generalSubmissionUrl, sameGeneralEditor } from "@/lib/custom-ai/general-preparation";
+import { generalWalletSubject, type GeneralWalletSubject } from "@/lib/custom-ai/general-wallet";
 import { intentHasOpenParts, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 import type { GeneralProjectView } from "@/lib/custom-ai/project-view";
 import type { CoinDetailsControls } from "./coin-details";
 import { useGeneralLaunch } from "./use-general-launch";
 import styles from "./workspace.module.css";
+const GeneralLaunchWallet = lazy(() => import("./general-launch-wallet"));
 
 function currentStatusMessage(status: string): string {
   if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return "Your submission is waiting for review.";
   if (["action_required", "needs_changes", "changes_requested"].includes(status)) return "Your submission needs an update. Open its details to continue.";
   if (["authorized", "launch_ready", "wallet_action_ready", "awaiting_wallet_signature", "reserved"].includes(status)) return "Your submission has wallet steps to review.";
   if (["submitted", "broadcast", "confirming", "finality_pending"].includes(status)) return "Waiting for the transaction to confirm.";
-  if (["completed", "confirmed", "final", "finalized"].includes(status)) return "Your submission is complete. Open its details.";
+  if (["completed", "confirmed", "final", "finalized", "source_verified", "indexed", "publicly_visible"].includes(status)) return "Your launch transactions are confirmed. Open the submission for source verification and Explore status.";
   if (status === "expired") return "This submission expired. Open its details to continue.";
   if (["failed", "rejected", "cancelled"].includes(status)) return "Open this submission to see its next step.";
   return "Your launch preparation is in progress.";
@@ -41,6 +43,9 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     && sameGeneralEditor(saved, settings, imageId) && !pendingChange;
   const uncertain = Boolean(launch.unconfirmedId || saved?.submission && saved.submission.state !== "completed");
   const href = saved ? generalSubmissionUrl(saved) : undefined, accepted = Boolean(sameSource && href);
+  let walletSubject: GeneralWalletSubject | undefined;
+  try { if (accepted && saved && launch.currentStatus) walletSubject = generalWalletSubject(saved, launch.currentStatus); }
+  catch { /* Keep the original submission link. A mismatched status cannot open a wallet step. */ }
   const complete = project?.compiled && project.scenarios?.passed && project.chainId === settings.chainId
     && intent && project.intentRevision === intent.revision && !intentHasOpenParts(intent) && !pendingChange;
   const detail = generalLaunchDetailIssue(settings, Boolean(imageId));
@@ -84,6 +89,10 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
     {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
     {href && !accepted && <a className={styles.textButton} href={href}>Open {saved?.coin?.name ?? "previous"} submission</a>}
+    {walletSubject && <Suspense fallback={<p className={styles.note} role="status">Loading launch controls…</p>}>
+      <GeneralLaunchWallet key={JSON.stringify([scope, account.toLowerCase(), walletSubject.chainId, walletSubject.resourceId, walletSubject.requestHash])}
+        subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()} />
+    </Suspense>}
     {href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}
     {launch.statusError && <p className={styles.note} role="status">The current status could not be refreshed. Your saved submission is still available.</p>}
     {launch.error && <p className={styles.error} role="alert">{launch.error}</p>}

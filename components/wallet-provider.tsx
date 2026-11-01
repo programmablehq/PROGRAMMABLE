@@ -7,6 +7,7 @@ import { readHyperEvmWalletFees } from "@/lib/hyperevm-wallet-gas";
 import type { LaunchPlanTradeWalletInputV1, LaunchPlanTradeWalletReviewV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import type { LaunchStep } from "@/lib/custom-ai/launch-session";
+import { executeGeneralGraphWalletSend, recoverGeneralGraphWalletSend, withGeneralWalletJournalLock, type GeneralGraphWalletBoundary, type GeneralGraphWalletRecovery } from "@/lib/custom-ai/general-wallet-execution";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import Image from "next/image";
 import Link from "next/link";
@@ -225,7 +226,9 @@ type WalletContextValue = {
   }>) => Promise<Hex>;
   sendCustomLaunchWalletAction: (
     input: CustomLaunchWalletActionV1,
+    boundary?: GeneralGraphWalletBoundary,
   ) => Promise<Hex>;
+  recoverGeneralGraphWalletAction: (input: GeneralGraphWalletRecovery) => Promise<Hex>;
   sendLaunchPlanTradeWalletAction: (input: LaunchPlanTradeWalletInputV1) => Promise<LaunchPlanTradeWalletReviewV1 | Hex>;
   sendEvmCustomSwapWalletAction: (input: EvmCustomSwapPreparation | EvmFeeClaimPreparation) => Promise<Hex>;
   sendCustomV4SwapWalletAction: (input: CustomV4SwapWalletInput) => Promise<CustomV4SwapWalletReview | Hex>;
@@ -1115,6 +1118,7 @@ function DeferredWalletProvider({
       sendCustomLaunchWalletAction: async () => {
         throw new Error("Wallet sign-in is still loading");
       },
+      recoverGeneralGraphWalletAction: async () => { throw new Error("Wallet sign-in is still loading"); },
       sendLaunchPlanTradeWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
       sendEvmCustomSwapWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
       sendCustomV4SwapWalletAction: async () => { throw Object.assign(new Error("Connect your trading wallet before continuing"), { walletRequestAttempted: false }); },
@@ -3107,7 +3111,7 @@ function PrivyWalletBridge({
     to: `0x${string}`;
     data: `0x${string}`;
     value: `0x${string}`;
-  }>) => {
+  }>, graphBoundary?: GeneralGraphWalletBoundary | true) => {
     if (!connectedWallet || !wallet) {
       throw new Error("Connect your wallet before continuing");
     }
@@ -3151,17 +3155,23 @@ function PrivyWalletBridge({
           sessionSubject,
           account: wallet.account,
           chainId: input.chainId,
-          requestSubject: JSON.stringify(["browser-wallet-action-v1", input]),
+          requestSubject: graphBoundary && graphBoundary !== true ? JSON.stringify(["custom-ai-graph-wallet-action-v1", graphBoundary.context.actionHash])
+            : JSON.stringify(["browser-wallet-action-v1", input]),
           assertCurrentSession,
           execute: async () => {
             let fees: Awaited<ReturnType<typeof readHyperEvmWalletFees>> | undefined;
-            if (input.chainId === "999") {
-              const provider=await getWalletProviderOnChain({ wallet:connectedWallet,chainId:999,assertCurrentSession,networkName:"HyperEVM" });
-              await enableHyperEvmLargeTransactionsV1({account:wallet.account,request:payload=>provider.request(payload)});
-              fees = await readHyperEvmWalletFees({account:wallet.account,request:payload=>provider.request(payload)});
+            try {
+              if (input.chainId === "999") {
+                const provider=await getWalletProviderOnChain({ wallet:connectedWallet,chainId:999,assertCurrentSession,networkName:"HyperEVM" });
+                await enableHyperEvmLargeTransactionsV1({account:wallet.account,request:payload=>provider.request(payload)});
+                fees = await readHyperEvmWalletFees({account:wallet.account,request:payload=>provider.request(payload)});
+              }
               assertCurrentSession();
+            } catch (error) {
+              throw new WalletRequestNotSubmittedError(error instanceof Error ? error.message : "Wallet preparation is unavailable.");
             }
-            return execute(fees);
+            return graphBoundary ? executeGeneralGraphWalletSend({ action: input,
+              ...(graphBoundary === true ? {} : { boundary: graphBoundary }), assertCurrent: assertCurrentSession, send: () => execute(fees) }) : execute(fees);
           },
         });
       if (isEmbeddedWallet) {
@@ -3241,13 +3251,34 @@ function PrivyWalletBridge({
 
   const sendCustomLaunchWalletAction = useCallback(async (
     input: CustomLaunchWalletActionV1,
+    boundary?: GeneralGraphWalletBoundary,
   ) => {
     if (!wallet) {
       throw new Error("Connect your wallet before continuing");
     }
     const checked = assertCustomLaunchWalletActionV1(input, wallet.account);
-    return sendBrowserWalletAction(checked);
+    return sendBrowserWalletAction(checked, boundary ?? true);
   }, [sendBrowserWalletAction, wallet]);
+
+  const recoverGeneralGraphWalletAction = useCallback(async (input: GeneralGraphWalletRecovery): Promise<Hex> => {
+    if (!connectedWallet || !wallet || !user?.id || input.attempt.controller !== wallet.account.toLowerCase()) throw new Error("Connect the original launch wallet before recovery.");
+    const sessionSubject = user.id, controller = wallet.account, expected = input.attempt.chainId;
+    if (!["1", "8453", "999"].includes(expected)) throw new Error("The recovery network is invalid.");
+    const assertCurrent = () => {
+      const current = walletRequestSessionRef.current;
+      if (!current.authenticated || current.privyUserId !== sessionSubject || current.account?.toLowerCase() !== controller.toLowerCase()) throw new Error("The wallet session changed.");
+      input.assertCurrent();
+    };
+    assertCurrent();
+    const chain = expected === "999" ? hyperEvm : expected === "8453" ? base : mainnet;
+    const provider = await getWalletProviderOnChain({ wallet: connectedWallet, chainId: chain.id, networkName: chain.name, assertCurrentSession: assertCurrent });
+    assertCurrent();
+    // Same exclusive key as runWithBrowserWalletRequestLock. Recovery reads do
+    // not acquire or clear its broadcast lease, and can never send a transaction.
+    return withGeneralWalletJournalLock(controller, expected, async () => {
+      return recoverGeneralGraphWalletSend({ ...input, assertCurrent, request: payload => provider.request({ method: payload.method, ...(payload.params ? { params: [...payload.params] } : {}) }) });
+    });
+  }, [connectedWallet, user, wallet]);
 
   const sendLaunchPlanTradeWalletAction = useCallback(async (input: LaunchPlanTradeWalletInputV1) => {
     let walletRequestAttempted = false;
@@ -3358,10 +3389,12 @@ function PrivyWalletBridge({
   }, [connectedWallet, user, wallet]);
 
   const sendUniversalLaunchWalletAction = useCallback(async (input: UniversalLaunchWalletInputV1) => {
+    input.signal?.throwIfAborted();
     if (!connectedWallet || !wallet || !user?.id) throw new Error("Connect your controller wallet before continuing");
     const sessionSubject = user.id;
     const controller = wallet.account;
     const assertCurrentSession = () => {
+      input.signal?.throwIfAborted();
       const current = walletRequestSessionRef.current;
       if (!current.authenticated || current.privyUserId !== sessionSubject || current.account?.toLowerCase() !== controller.toLowerCase()) {
         throw new Error("The wallet session changed. Refresh the wallet review.");
@@ -3728,6 +3761,7 @@ function PrivyWalletBridge({
       signMainTokenMigrationPermit,
       sendBrowserWalletAction,
       sendCustomLaunchWalletAction,
+      recoverGeneralGraphWalletAction,
       sendCustomLaunchWalletActionV4,
       sendUniversalLaunchWalletAction,
       sendLaunchPlanTradeWalletAction,
@@ -3770,6 +3804,7 @@ function PrivyWalletBridge({
       reauthorizeGithub,
       sendBrowserWalletAction,
       sendCustomLaunchWalletAction,
+      recoverGeneralGraphWalletAction,
       sendCustomLaunchWalletActionV4,
       sendUniversalLaunchWalletAction,
       sendLaunchPlanTradeWalletAction,
@@ -3898,6 +3933,7 @@ function UnconfiguredWalletProvider({ children }: { children: ReactNode }) {
       sendCustomLaunchWalletAction: async () => {
         throw new Error("Wallet sign-in is unavailable");
       },
+      recoverGeneralGraphWalletAction: async () => { throw new Error("Wallet sign-in is unavailable"); },
       sendLaunchPlanTradeWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
       sendEvmCustomSwapWalletAction: async () => { throw new Error("Connect your trading wallet before continuing"); },
       sendCustomV4SwapWalletAction: async () => { throw Object.assign(new Error("Connect your trading wallet before continuing"), { walletRequestAttempted: false }); },

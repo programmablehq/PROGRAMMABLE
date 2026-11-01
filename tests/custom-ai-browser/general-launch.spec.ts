@@ -8,6 +8,14 @@ import type {CoinSetup} from "../../lib/custom-ai/coin-setup";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createGeneralLaunchServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing local renderer");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
+
+test('Plan source verification remains confirmed and stops automatic status reads',async({page})=>{
+ const f=await fixture(page);f.currentStatus='source_verified';await page.clock.install();await page.goto(origin+'/?chain=4663');
+ await page.getByLabel('Launch wallet type').selectOption('eoa');await page.getByRole('button',{name:'Submit for review',exact:true}).click();
+ await expect(page.getByText('Your launch transactions are confirmed.',{exact:false})).toBeVisible();
+ expect(f.statusReads).toBe(1);await page.clock.runFor(150000);expect(f.statusReads).toBe(1);
+ expect(f.posts.map(value=>value.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
+});
 async function fixture(page:Page){
  const control={saved:null as GeneralPreparationView|null,posts:[] as {action:string;id:string;selection?:Record<string,unknown>}[],saves:[] as {settings:CoinSetup;image:{id:string}}[],reads:0,statusReads:0,currentStatus:"pending_review",statusFailure:false,lostCreate:false,beforePrepare:undefined as undefined|(()=>Promise<void>),beforeRead:undefined as undefined|(()=>Promise<void>),beforeStatus:undefined as undefined|(()=>Promise<void>),errors:[] as string[]};
  page.on('pageerror',error=>control.errors.push(error.message));
