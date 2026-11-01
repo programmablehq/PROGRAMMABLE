@@ -1,6 +1,7 @@
 import "server-only";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { bindGeneralCheckBlueprint } from "./check-blueprint";
+import { generalCheckCaseCount } from "./behavior-checks";
 import { GENERAL_PROJECT_COMPILER, projectCompilerInput } from "./contract-project";
 import { cachedLaunchIntent, intentHasOpenParts } from "./launch-intent";
 import { CustomAIError, type ChatRequest, type ChatResult } from "./types";
@@ -67,11 +68,11 @@ export function checkedGeneralLaunchSource(owner: string, selected: GeneralLaunc
     || artifactHash !== selected.artifactHash || canonicalBrowserSha256V2("programmable.custom-ai-project-artifacts.v1", artifact) !== artifactHash
     || compilation.contracts.length !== project.entrypoints.length || project.entrypoints.some(entry =>
       compilation.contracts.filter(contract => contract.source === entry.source && contract.contract === entry.contract && contract.role === entry.role).length !== 1)
-    || scenarios.version !== 1 || scenarios.scope !== "isolated-declared-scenarios-v1" || scenarios.launchReady !== false || scenarios.failures.length !== 0
+    || scenarios.version !== plan.version || scenarios.scope !== `isolated-declared-scenarios-v${plan.version}` || scenarios.launchReady !== false || scenarios.failures.length !== 0
     || scenarios.projectHash !== project.hash || scenarios.artifactHash !== artifactHash || scenarios.planHash !== plan.id
-    || scenarios.cases !== plan.contracts.length * 2 + plan.steps.length
+    || scenarios.cases !== generalCheckCaseCount(plan)
     || JSON.stringify(scenarios.requirementIds) !== JSON.stringify(project.intent.requirements.map(rule => rule.id).sort())
-    || canonicalBrowserSha256V2("programmable.general-scenario-report.v1", report) !== scenarioHash
+    || canonicalBrowserSha256V2(`programmable.general-scenario-report.v${plan.version}`, report) !== scenarioHash
     || view?.projectHash !== project.hash || view.artifactHash !== artifactHash || view.intentRevision !== currentIntent.revision) return checks();
   const binding = { version: 1 as const, ownerHash: canonicalBrowserSha256V2("programmable.custom-ai-launch-owner.v1", owner),
     account: selected.account.toLowerCase(), conversation: selected.conversation.toLowerCase(), contextId: studio.contextId,

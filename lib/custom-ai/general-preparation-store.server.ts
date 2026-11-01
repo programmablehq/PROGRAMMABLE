@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
-import { getAddress, type Address } from "viem";
+import { getAddress, getContractAddress, keccak256, type Address } from "viem";
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2, fileSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import type { AIConnection } from "./store.server";
 import type { GeneralLaunchSourceSelection } from "./general-launch-source.server";
@@ -58,15 +58,39 @@ function validRecord(value: unknown, id: string): GeneralPreparation {
 }
 function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation) {
   const { hash, ...body } = pack;
-  if (Buffer.byteLength(JSON.stringify(pack)) > 24_000_000 || pack.version !== 1
+  if (Buffer.byteLength(JSON.stringify(pack)) > 24_000_000 || ![1,2].includes(pack.version)
     || pack.route !== (record.chainId===4663?"plan-v1":"graph-v3") || pack.chainId !== record.chainId || pack.bindingHash !== record.bindingHash
     || pack.productionId !== record.productionId || pack.launchReady !== false
     || pack.projectHash !== record.selection.projectHash || pack.artifactHash !== record.selection.artifactHash
-    || canonicalBrowserSha256V2(pack.route==="plan-v1"?"programmable.custom-ai-general-plan-pack.v1":"programmable.custom-ai-general-graph-pack.v1", body) !== hash
+    || canonicalBrowserSha256V2(`programmable.custom-ai-general-${pack.route==="plan-v1"?"plan":"graph"}-pack.v${pack.version}`, body) !== hash
     || canonicalBrowserSha256V2("programmable.custom-ai-pack-identity.v1", pack.identity)
       !== canonicalBrowserSha256V2("programmable.custom-ai-pack-identity.v1", record.identity)
     || typeof pack.requestBody !== "string" || Buffer.byteLength(pack.requestBody) > (record.chainId===4663?16_777_216:8_388_608)
     || fileSha256V2(Buffer.from(pack.requestBody)) !== pack.requestSha256) throw corrupt();
+  const construction=pack.route==="plan-v1"?pack.runtimeMaterialization:pack.constructorMaterialization;
+  if(pack.version===1&&(pack.route==="plan-v1"?construction?.version!==1:construction!==undefined))throw corrupt();
+  if(pack.version===2) {
+    const runtime=construction;
+    if(!runtime||runtime.version!==2||runtime.scope!=="isolated-constructor-runtime-v2"||runtime.status!=="materialized"||runtime.launchReady!==false
+      ||runtime.projectHash!==pack.projectHash||runtime.artifactHash!==pack.artifactHash||runtime.productionId!==pack.productionId
+      ||runtime.chainId!==pack.chainId||typeof runtime.controller!=="string"||runtime.controller.toLowerCase()!==record.account.toLowerCase()
+      ||runtime.passes!==2||!Array.isArray(runtime.failures)||runtime.failures.length||!Array.isArray(runtime.contracts)||!Array.isArray(runtime.targets)
+      ||!Array.isArray(runtime.children)||!runtime.children.length||!Array.isArray(runtime.constructorChildren)||runtime.children.length!==runtime.constructorChildren.length
+      ||runtime.targets.length+runtime.children.length>16||runtime.contracts.length!==runtime.targets.length
+      ||runtime.targets.some(target=>!target||typeof target.id!=="string"||typeof target.address!=="string"||!/^0x[a-f0-9]{40}$/iu.test(target.address)))throw corrupt();
+    const {hash:runtimeHash,...runtimeBody}=runtime;
+    if(canonicalBrowserSha256V2("programmable.custom-ai-runtime-materialization.v2",runtimeBody)!==runtimeHash)throw corrupt();
+    const addresses=new Map(runtime.targets.map(target=>[target.id,target.address])),ids=new Set(addresses.keys()),nonces=new Map<string,bigint>();
+    if(ids.size!==runtime.targets.length||new Set(runtime.children.map(child=>child.id)).size!==runtime.children.length)throw corrupt();
+    for(const child of runtime.constructorChildren) {
+      const parent=addresses.get(child.parent),actual=runtime.children.find(observed=>observed.id===child.id);
+      if(!parent||ids.has(child.id)||typeof child.nonce!=="string"||!/^[1-9][0-9]?$/.test(child.nonce)||BigInt(child.nonce)!==(nonces.get(child.parent)??1n)
+        ||getContractAddress({from:parent,nonce:BigInt(child.nonce)})!==child.address||!actual||actual.address!==child.address||actual.parent!==child.parent||actual.nonce!==child.nonce
+        ||typeof actual.runtimeCode!=="string"||!/^0x(?:[a-f0-9]{2})+$/u.test(actual.runtimeCode)||keccak256(actual.runtimeCode)!==actual.runtimeCodeHash)throw corrupt();
+      ids.add(child.id);addresses.set(child.id,child.address);nonces.set(child.parent,BigInt(child.nonce)+1n);
+    }
+    if(pack.route==="plan-v1"&&pack.receipt.runtimeMaterializationHash!==runtime.hash)throw corrupt();
+  }
   const request = JSON.parse(pack.requestBody);
   if(pack.route==="plan-v1") {
     const requestHash=canonicalBrowserSha256V2("programmable.custom-launch-plan.v1",request);

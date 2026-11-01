@@ -61,22 +61,32 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
   const runtime=await materializeGeneralRuntime(source.project,source.compilation,{controller:base.controller,settings:values.settings,
     ...(nativeFundingWei===undefined?{}:{nativeFundingWei}),planDeployer:ROBINHOOD_PLAN_DEPLOYER},[...predicted.values()],stop);
   stop.throwIfAborted();
+  const childInputs=runtime.constructorChildren??[],childRuntimes=runtime.children??[];
+  const instances=[...values.targets.map(target=>({id:target.id,source:target.source,contract:target.contract,
+    address:predicted.get(target.id)!.predictedAddress,constructorArguments:predicted.get(target.id)!.resolvedConstructorArguments,
+    runtime:runtime.contracts.find(contract=>contract.id===target.id)!})),...childInputs.map(child=>({id:child.id,source:child.source,contract:child.contract,
+    address:child.address,constructorArguments:child.constructorArguments,runtime:childRuntimes.find(contract=>contract.id===child.id)!}))];
+  if(instances.some(instance=>!instance.runtime))return invalid();
+  const childRoot=new Map<string,string>();
+  for(const child of childInputs)childRoot.set(child.id,predicted.has(child.parent)?child.parent:childRoot.get(child.parent)??invalid());
   const compilationBytes=base.files.find(file=>file.path==="input.json")!.bytes;
   const verificationBundle={schemaVersion:"programmable.exact-source-verification-bundle.v2",compilationUnits:[{
     compilationUnitId:"project",compilerVersion:source.compilation.compiler.replace(/\.Emscripten\.clang$/u,""),
     standardJsonInputBase64:Buffer.from(compilationBytes).toString("base64"),standardJsonInputSha256:fileSha256V2(compilationBytes),
-  }],components:values.targets.map(target=>{
-    const artifact=source.compilation.contracts.find(c=>c.source===target.source&&c.contract===target.contract)!,actual=runtime.contracts.find(c=>c.id===target.id)!;
+  }],components:instances.map(target=>{
+    const artifact=source.compilation.contracts.find(c=>c.source===target.source&&c.contract===target.contract)!,actual=target.runtime;
     return {targetId:target.id,compilationUnitId:"project",sourcePath:target.source,contractName:target.contract,
-      constructorArguments:predicted.get(target.id)!.resolvedConstructorArguments,runtimeMaterialization:{
+      constructorArguments:target.constructorArguments,runtimeMaterialization:{
         immutableReferences:Object.entries(artifact.immutableReferences).sort(([a],[b])=>BigInt(a)<BigInt(b)?-1:1)
           .map(([immutableId,ranges])=>({immutableId,ranges:[...ranges].sort((a,b)=>a.start-b.start)})),
         runtimeImmutables:actual.runtimeImmutables,
         deployedRuntimeCodeBase64:Buffer.from(actual.runtimeCode.slice(2),"hex").toString("base64"),deployedRuntimeCodeHash:actual.runtimeCodeHash,
       }};
   }).sort((a,b)=>a.targetId<b.targetId?-1:a.targetId>b.targetId?1:0)};
-  const effects:LaunchEffectV1[]=runtime.contracts.map(c=>({effectId:`${c.id}-runtime`,kind:"runtime",criticality:"critical",
-    target:{componentId:c.id},runtimeCodeHash:c.runtimeCodeHash}));
+  const effects:LaunchEffectV1[]=instances.map(c=>({effectId:`${c.id}-runtime`,kind:"runtime",criticality:"critical",
+    target:{componentId:c.id},runtimeCodeHash:c.runtime.runtimeCodeHash}));
+  for(const child of childInputs)effects.push({effectId:`${child.id}-created`,kind:"child",criticality:"critical",componentId:child.id,
+    derivation:{kind:"create",parent:{componentId:child.parent},nonce:child.nonce},runtimeCodeHash:childRuntimes.find(c=>c.id===child.id)!.runtimeCodeHash});
   const deploymentGas=new Map(values.targets.map(target=>{
     const observed=runtime.constructionGas!.find(gas=>gas.targetId===target.id)!;
     // A bounded planning allowance, not a live transaction gas estimate. The
@@ -94,7 +104,8 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
     return {actionId:`deploy-${target.id}`,kind:"deployCreate2",componentId:target.id,factory:{address:ROBINHOOD_PLAN_DEPLOYER.address},
       salt:prediction.effectiveSalt,initCode:prediction.initCode,execution:{target:{address:ROBINHOOD_PLAN_DEPLOYER.address},
         data:concatHex([prediction.effectiveSalt,prediction.initCode]),value:target.deploymentValueWei,gasLimit:deploymentGas.get(target.id)!.toString()},
-      dependsOn:index?[`deploy-${values.targets[index-1].id}`]:[],authority:{kind:"controller"},preconditions:[],postconditions:[`${target.id}-runtime`]};
+      dependsOn:index?[`deploy-${values.targets[index-1].id}`]:[],authority:{kind:"controller"},preconditions:[],postconditions:[`${target.id}-runtime`,
+        ...childInputs.filter(child=>childRoot.get(child.id)===target.id).flatMap(child=>[`${child.id}-runtime`,`${child.id}-created`])]};
   });
   for(const target of values.targets) {
     if(!target.initializer)continue;
@@ -115,8 +126,8 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
     &&c.contract===values.targets.find(t=>t.id===recipe.pool.hook)!.contract)!;
   const plan:CustomLaunchPlanV1={schemaVersion:"programmable.custom-launch-plan.v1",chainId:"4663",manifestDigest:production.manifestDigest,
     controller,executor:"atomic_execute_and_stamp_v2",admissionPolicy:"programmable.custom-launch-policy.provenance.v1",verificationBundle,
-    components:values.targets.map(target=>({componentId:target.id,artifactId:target.id,expectedAddress:predicted.get(target.id)!.predictedAddress,
-      runtimeCodeHash:runtime.contracts.find(c=>c.id===target.id)!.runtimeCodeHash})),actions,
+    components:instances.map(target=>({componentId:target.id,artifactId:target.id,expectedAddress:target.address,
+      runtimeCodeHash:target.runtime.runtimeCodeHash})),actions,
     markets:[{marketId,kind:"uniswap_v4",poolManager:production.poolManager.address,
       currency0:tokenFirst?{componentId:recipe.pool.token}:{address:values.quoteCurrency},
       currency1:tokenFirst?{address:values.quoteCurrency}:{componentId:recipe.pool.token},fee:recipe.pool.fee,tickSpacing:recipe.pool.tickSpacing,hooks:{componentId:recipe.pool.hook}}],
@@ -133,12 +144,12 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
   const requestBody=canonicalBrowserJsonV2(plan);
   if(Buffer.byteLength(requestBody)>16_777_216 || values.quoteCurrency!==zeroAddress)return invalid();
   const requestSha256=fileSha256V2(Buffer.from(requestBody)),planHash=canonicalBrowserSha256V2("programmable.custom-launch-plan.v1",plan);
-  const body={version:1 as const,route:"plan-v1" as const,chainId:4663 as const,bindingHash:source.bindingHash,projectHash:source.project.hash,
+  const body={version:runtime.version,route:"plan-v1" as const,chainId:4663 as const,bindingHash:source.bindingHash,projectHash:source.project.hash,
     artifactHash:source.compilation.artifactHash,productionId:production.id,publicSourceId:exported.id,identity,requestBody,requestSha256,planHash,
     receipt:{schemaVersion:"programmable.custom-ai-plan-pack-receipt.v1",manifestDigest:production.manifestDigest,requestSha256,planHash,
       deployer:ROBINHOOD_PLAN_DEPLOYER,runtimeMaterializationHash:runtime.hash,componentCount:plan.components.length,actionCount:actions.length},
     reproducibleConfig:{version:1,controller,identity,deployer:ROBINHOOD_PLAN_DEPLOYER,sourceId:exported.id,
       targets:[...predicted.values()].map(({targetId,effectiveSalt,predictedAddress,resolvedConstructorArguments})=>({targetId,effectiveSalt,predictedAddress,resolvedConstructorArguments}))},
     runtimeMaterialization:runtime,launchReady:false as const};
-  return {...body,hash:canonicalBrowserSha256V2("programmable.custom-ai-general-plan-pack.v1",body)};
+  return {...body,hash:canonicalBrowserSha256V2(`programmable.custom-ai-general-plan-pack.v${body.version}`,body)};
 }

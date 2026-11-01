@@ -13,6 +13,7 @@ import { projectOverview, type ProjectOverview } from "./project-overview";
 import { bindGeneralCheckBlueprint, checkedGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import type { LaunchIntent } from "./launch-intent";
 import type { GeneralScenarioReport } from "./behavior-checks.server";
+import { generalCheckCaseCount } from "./behavior-checks";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 import { createGeneralPreparationStore } from "./general-preparation-store.server";
 
@@ -96,8 +97,8 @@ export function createProjectStore(transaction: Transaction, now: () => number =
     report=structuredClone(report);
     const {hash,...body}=report;
     const keys="artifactHash,cases,failures,gasUsed,hash,launchReady,passed,planHash,projectHash,requirementIds,scope,version";
-    if(Object.keys(report).sort().join()!==keys||report.version!==1||report.scope!=="isolated-declared-scenarios-v1"||report.launchReady!==false
-      ||hash!==canonicalBrowserSha256V2("programmable.general-scenario-report.v1",body)||Buffer.byteLength(JSON.stringify(report))>96_000
+    if(Object.keys(report).sort().join()!==keys||![1,2].includes(report.version)||report.scope!==`isolated-declared-scenarios-v${report.version}`||report.launchReady!==false
+      ||hash!==canonicalBrowserSha256V2(`programmable.general-scenario-report.v${report.version}`,body)||Buffer.byteLength(JSON.stringify(report))>96_000
       ||typeof report.passed!=="boolean"||!Number.isSafeInteger(report.cases)||report.cases<0||report.cases>300
       ||typeof report.gasUsed!=="string"||!/^\d{1,20}$/.test(report.gasUsed)||!Array.isArray(report.failures)||report.failures.length>32
       ||report.passed!==(report.failures.length===0)||report.failures.some(item=>!item||typeof item.caseId!=="string"||item.caseId.length>100
@@ -108,7 +109,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       if(!previous?.compilation?.compiled||!declared||previous.blueprintId!==declared.blueprint.id
         ||previous.project.hash!==report.projectHash||previous.compilation.artifactHash!==report.artifactHash)throw conflict();
       const plan=bindGeneralCheckBlueprint(declared.blueprint,previous.project);
-      if(plan.id!==report.planHash||report.passed&&report.cases!==plan.contracts.length*2+plan.steps.length
+      if(plan.id!==report.planHash||plan.version!==report.version||report.passed&&report.cases!==generalCheckCaseCount(plan)
         ||JSON.stringify(report.requirementIds)!==JSON.stringify(previous.project.intent.requirements.map(rule=>rule.id).sort()))throw conflict();
       if(previous.scenarios){if(previous.scenarios.hash!==hash)throw conflict();return previous;}
       const value:ProjectCheckpoint={...previous,scenarios:report,overview:projectOverview(id,previous.project,previous.compilation,{blueprintId:declared.blueprint.id,scenarios:report})};

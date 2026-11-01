@@ -9,18 +9,22 @@ export type CheckValue = string | boolean | CheckValue[] | { account: CheckAccou
 export type ContractCheckFixture = {
   id: string; source: string; contract: string; arguments: CheckValue[];
   functions: string[]; allowReceive: boolean; allowFallback: boolean; surfaceRequirements: string[];
+  value?: string;
 };
+export type ConstructorCheckChild = ContractCheckFixture & { parent: string; creation: "create"; nonce: string; value: string };
 export type ContractCheckStep = {
   id: string; contract: string; signature: string; arguments: CheckValue[]; from: CheckAccount;
   afterSeconds: number; value: string; read: boolean; requirementIds: string[];
   expect: { status: "success" | "revert"; returns?: CheckValue[];swapFeePpm?:number };
 };
 export type GeneralCheckPlan = {
-  version: 1; id: `sha256:${string}`; projectHash: ContractProject["hash"]; intentRevision: string;
+  version: 1 | 2; id: `sha256:${string}`; projectHash: ContractProject["hash"]; intentRevision: string;
   contracts: ContractCheckFixture[]; allowedCalls: CheckValue[]; steps: ContractCheckStep[];
   world?:V4CheckWorld;
+  constructorChildren?: ConstructorCheckChild[];
 };
-export type GeneralCheckScenarios = Pick<GeneralCheckPlan, "contracts" | "allowedCalls" | "steps"|"world">;
+export type GeneralCheckScenarios = Pick<GeneralCheckPlan, "contracts" | "allowedCalls" | "steps"|"world"|"constructorChildren">;
+export const generalCheckCaseCount = (plan: GeneralCheckScenarios) => 2 * (plan.contracts.length + (plan.constructorChildren?.length ?? 0)) + plan.steps.length;
 const bad=():never=>{throw new TypeError("Use a bounded declared check plan for the complete saved design.");};
 const object=(value:unknown,keys:string[],optional:string[]=[])=>{
   if(!value||typeof value!=="object"||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return bad();
@@ -49,25 +53,48 @@ function values(value:unknown,contracts:ReadonlySet<string>,depth=0,world=false)
  * These references never grant ownership, review approval or launch authority. */
 export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent,entrypoints:ContractProject["entrypoints"]):GeneralCheckScenarios {
   if(new TextEncoder().encode(JSON.stringify(value)).length>96_000)return bad();
-  const input=object(value,["contracts","allowedCalls","steps"],["world"]),requirements=new Map(intent.requirements.map(rule=>[rule.id,rule]));
-  if(!Array.isArray(input.contracts)||input.contracts.length!==entrypoints.length||input.contracts.length>16
+  const input=object(value,["contracts","allowedCalls","steps"],["world","constructorChildren"]),requirements=new Map(intent.requirements.map(rule=>[rule.id,rule]));
+  if(!Array.isArray(input.contracts)||!input.contracts.length||input.contracts.length>16
     ||!Array.isArray(input.steps)||!input.steps.length||input.steps.length>256)return bad();
   const covered=new Set<string>(),contractIds=new Set<string>(),entries=new Set<string>();
   const ids=(value:unknown,constraint=false):string[]=>{
     if(!Array.isArray(value)||value.length>64||new Set(value).size!==value.length)return bad();
     return value.map(id=>{if(typeof id!=="string"||!requirements.has(id)||constraint&&requirements.get(id)!.kind!=="constraint")return bad();covered.add(id);return id;});
   };
-  const contracts:ContractCheckFixture[]=input.contracts.map(raw=>{
-    const v=object(raw,["id","source","contract","arguments","functions","allowReceive","allowFallback","surfaceRequirements"]),id=identifier(v.id);
+  const fixture = (raw: unknown, available: ReadonlySet<string>, repeated = false): ContractCheckFixture => {
+    const v=object(raw,["id","source","contract","arguments","functions","allowReceive","allowFallback","surfaceRequirements"],["value"]),id=identifier(v.id);
     if(contractIds.has(id)||V4_WORLD_FIXTURES.includes(id as V4WorldFixture)||typeof v.source!=="string"||typeof v.contract!=="string"
-      ||!entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract)||entries.has(`${v.source}:${v.contract}`)
+      ||!entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract)||!repeated&&entries.has(`${v.source}:${v.contract}`)
       ||typeof v.allowReceive!=="boolean"||typeof v.allowFallback!=="boolean"||!Array.isArray(v.functions)||v.functions.length>128
-      ||v.functions.some(fn=>typeof fn!=="string"||!fn.startsWith("function ")||fn.length>800)||new Set(v.functions).size!==v.functions.length)return bad();
-    const args=values(v.arguments,contractIds,0,input.world!==undefined);contractIds.add(id);entries.add(`${v.source}:${v.contract}`);
+      ||v.functions.some(fn=>typeof fn!=="string"||!fn.startsWith("function ")||fn.length>800)||new Set(v.functions).size!==v.functions.length
+      ||v.value!==undefined&&(input.constructorChildren===undefined||typeof v.value!=="string"||!/^(?:0|[1-9][0-9]{0,29})$/.test(v.value)))return bad();
+    const args=values(v.arguments,available,0,input.world!==undefined);contractIds.add(id);entries.add(`${v.source}:${v.contract}`);
     return {id,source:v.source,contract:v.contract,arguments:args,functions:v.functions as string[],allowReceive:v.allowReceive,
-      allowFallback:v.allowFallback,surfaceRequirements:ids(v.surfaceRequirements,true)};
-  });
+      allowFallback:v.allowFallback,surfaceRequirements:ids(v.surfaceRequirements,true),...(v.value!==undefined?{value:v.value as string}:{})};
+  };
+  const contracts:ContractCheckFixture[]=input.contracts.map(raw=>fixture(raw,contractIds));
+  let constructorChildren: ConstructorCheckChild[] | undefined;
+  if(input.constructorChildren!==undefined) {
+    if(!Array.isArray(input.constructorChildren)||!input.constructorChildren.length||input.constructorChildren.length+contracts.length>16)return bad();
+    const rootIndex=new Map(contracts.map((item,index)=>[item.id,index])), childRoots=new Map<string,number>(),nextNonce=new Map<string,bigint>();
+    let previousRoot=-1;
+    constructorChildren=input.constructorChildren.map(raw=>{
+      const v=object(raw,["id","source","contract","arguments","functions","allowReceive","allowFallback","surfaceRequirements","parent","creation","nonce","value"]);
+      if(typeof v.parent!=="string"||!contractIds.has(v.parent)||v.creation!=="create"||typeof v.nonce!=="string"||!/^[1-9][0-9]?$/.test(v.nonce)
+        ||BigInt(v.nonce)!==(nextNonce.get(v.parent)??1n)||typeof v.value!=="string"||!/^(?:0|[1-9][0-9]{0,29})$/.test(v.value)
+        ||!entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract&&entry.role==="auxiliary"))return bad();
+      const root=rootIndex.get(v.parent)??childRoots.get(v.parent);
+      if(root===undefined||root<previousRoot)return bad();
+      const available=new Set([...contracts.slice(0,root+1).map(item=>item.id),...childRoots.keys()]);
+      const {parent,creation,nonce,value,...fields}=v;void parent;void creation;void nonce;void value;
+      const child=fixture(fields,available,true);
+      previousRoot=root;childRoots.set(child.id,root);nextNonce.set(v.parent,BigInt(v.nonce)+1n);
+      return {...child,parent:v.parent,creation:"create" as const,nonce:v.nonce,value:v.value};
+    });
+  }
+  if(entries.size!==entrypoints.length)return bad();
   const world=input.world!==undefined?parseV4CheckWorld(input.world,contractIds):undefined;
+  if(world&&contracts.some(contract=>contract.id===world.hook&&contract.value!==undefined&&contract.value!=="0"))return bad();
   if(world&&(!entrypoints.some(entry=>entry.role==="token"&&contracts.find(item=>item.id===world.token)?.source===entry.source&&contracts.find(item=>item.id===world.token)?.contract===entry.contract)
     ||!entrypoints.some(entry=>entry.role==="hook"&&contracts.find(item=>item.id===world.hook)?.source===entry.source&&contracts.find(item=>item.id===world.hook)?.contract===entry.contract)))return bad();
   const allowedCalls=values(input.allowedCalls,contractIds,0,Boolean(world));
@@ -99,12 +126,12 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
       expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds,0,Boolean(world))}:{}),...(expect.swapFeePpm!==undefined?{swapFeePpm:expect.swapFeePpm as number}:{})}};
   });
   if(covered.size!==requirements.size||[...requirements.values()].some(rule=>rule.kind==="behavior"&&!observed.has(rule.id)))return bad();
-  return {contracts,allowedCalls,steps,...(world?{world}:{})};
+  return {contracts,allowedCalls,steps,...(world?{world}:{}),...(constructorChildren?{constructorChildren}:{})};
 }
 
 export function createGeneralCheckPlan(value:unknown,project:ContractProject):GeneralCheckPlan {
   const scenarios=normalizeGeneralCheckScenarios(value,project.intent,project.entrypoints);
   if(scenarios.world&&project.compiler.evmVersion!=="cancun")return bad();
-  const body={version:1 as const,projectHash:project.hash,intentRevision:project.intent.revision,...scenarios};
-  return {...body,id:canonicalBrowserSha256V2("programmable.general-declared-checks.v1",body)};
+  const body={version:scenarios.constructorChildren?2 as const:1 as const,projectHash:project.hash,intentRevision:project.intent.revision,...scenarios};
+  return {...body,id:canonicalBrowserSha256V2(`programmable.general-declared-checks.v${body.version}`,body)};
 }

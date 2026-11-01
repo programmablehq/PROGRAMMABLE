@@ -55,6 +55,7 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
     signal?.throwIfAborted();
     const worker = join(process.cwd(), "scripts/custom-ai/general-pack-worker.mjs"), stopped = new AbortController();
     const combined = signal ? AbortSignal.any([signal, stopped.signal]) : stopped.signal;
+    let construction: Awaited<ReturnType<typeof materializeGeneralRuntime>> | undefined;
     const completed = await new Promise<PackComplete>((resolve, reject) => {
       let buffer = "", runtimeCalls = 0, frame: PackComplete | undefined, failure: unknown, handling: Promise<void> | undefined;
       const fail = (error: unknown) => { failure ??= error; stopped.abort(); };
@@ -83,6 +84,7 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
                   { controller: plan.values.controller, settings: plan.values.settings,
                     ...(nativeFundingWei === undefined ? {} : { nativeFundingWei }) },
                   message.prediction.predictions as GeneralDeploymentPrediction[], combined);
+                construction = runtime;
                 if (!failure && !combined.aborted) child.stdin?.write(`${JSON.stringify({ type: "runtime-result", materialization: {
                   targets: runtime.contracts.map(contract => ({ targetId: contract.id, runtimeImmutables: contract.runtimeImmutables, runtimeCodeHash: contract.runtimeCodeHash })) } })}\n`);
               })();
@@ -110,16 +112,19 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
       || canonicalBrowserSha256V2("programmable.custom-ai-exact-launch-profile.v1", request.launchProfile)
         !== canonicalBrowserSha256V2("programmable.custom-ai-exact-launch-profile.v1", production.graphProfile)) throw workerError();
     const finalTargets = new Map(completed.runtimeMaterialization.targets.map(target => [target.targetId, target]));
+    if (!construction || construction.contracts.some(contract => finalTargets.get(contract.id)?.runtimeCodeHash !== contract.runtimeCodeHash)
+      || plan.source.project.deployment?.version === 2 && (construction.version !== 2 || !construction.children?.length)) throw workerError();
     const reproducibleConfig = { ...plan.config, targets: plan.config.targets.map(target => {
       const actual = finalTargets.get(target.targetId);
       if (!actual) throw workerError();
       return { ...target, applicantSalt: actual.applicantSalt, runtimeImmutables: actual.runtimeImmutables };
     }) };
-    const body = { version: 1 as const, route: "graph-v3" as const, chainId: plan.source.project.chainId,
+    const body = { version: construction.version === 2 ? 2 as const : 1 as const, route: "graph-v3" as const, chainId: plan.source.project.chainId,
       bindingHash: plan.bindingHash, projectHash: plan.source.project.hash, artifactHash: plan.source.compilation.artifactHash,
       productionId: plan.productionId, publicSourceId: plan.publicSourceId, identity: plan.identity,
       requestBody, requestSha256, receipt: completed.receipt, reproducibleConfig,
-      runtimeMaterialization: completed.runtimeMaterialization, launchReady: false as const };
-    return { ...body, hash: canonicalBrowserSha256V2("programmable.custom-ai-general-graph-pack.v1", body) };
+      runtimeMaterialization: completed.runtimeMaterialization,
+      ...(construction.version === 2 ? { constructorMaterialization: construction } : {}), launchReady: false as const };
+    return { ...body, hash: canonicalBrowserSha256V2(`programmable.custom-ai-general-graph-pack.v${body.version}`, body) };
   } finally { await rm(directory, { recursive: true, force: true }); }
 }

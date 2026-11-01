@@ -67,7 +67,8 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
         case "funding": return fundingValue();
       }
     };
-    const placeholders = new Map(recipe.targets.map((target, index) => [target.id, `0x${(0x1000 + index).toString(16).padStart(40, "0")}` as Address]));
+    const childDefinitions = recipe.version === 2 ? recipe.constructorChildren : [];
+    const placeholders = new Map([...recipe.targets, ...childDefinitions].map((target, index) => [target.id, `0x${(0x1000 + index).toString(16).padStart(40, "0")}` as Address]));
     function abiValue(param: AbiParameter, value: PackerValue): unknown {
       const array = /^(.*)\[([0-9]*)\]$/u.exec(param.type);
       if (array) {
@@ -119,9 +120,21 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
       return { id: target.id, source: target.source, contract: target.contract, role: target.role, constructorArguments, initializer,
         deploymentValueWei, initializerValueWei, hookPermissions: target.hookPermissions };
     });
+    const constructorChildren = childDefinitions.map(child => {
+      const matches = compilation.contracts.filter(contract => contract.source === child.source && contract.contract === child.contract && contract.role === child.role);
+      if (matches.length !== 1) return invalid(); const artifact = matches[0], constructors = artifact.abi.filter(item => item.type === "constructor");
+      if (constructors.length > 1) return invalid();
+      const constructorArguments = child.constructorArguments.map(resolve); check(constructors[0]?.inputs ?? [], constructorArguments);
+      const valueWei = typeof child.value === "string" ? child.value : fundingValue();
+      if (!uint(valueWei) || BigInt(valueWei) > 0n && constructors[0]?.stateMutability !== "payable") return invalid();
+      return { id: child.id, source: child.source, contract: child.contract, role: child.role, parent: child.parent, creation: child.creation,
+        nonce: child.nonce, constructorArguments, valueWei };
+    });
     const nativeValueWei = targets.reduce((sum, target) => sum + BigInt(target.deploymentValueWei) + BigInt(target.initializerValueWei), 0n).toString();
-    return { version: 1 as const, projectHash: project.hash, artifactHash, productionId: production.id, deploymentId: recipe.id,
+    if (constructorChildren.some(child => BigInt(child.valueWei) > targets.reduce((sum, target) => sum + BigInt(target.deploymentValueWei), 0n))) return invalid();
+    return { version: recipe.version, projectHash: project.hash, artifactHash, productionId: production.id, deploymentId: recipe.id,
       chainId: project.chainId, controller, settings, quoteCurrency: quote, nativeValueWei, targets,
+      ...(recipe.version === 2 ? { constructorChildren } : {}),
       pool: { ...recipe.pool, quoteCurrency: quote }, launchReady: false as const };
   } catch (error) {
     if (error instanceof CustomAIError) throw error;

@@ -8,7 +8,7 @@ export const scenarioOverview=(report:GeneralScenarioReport):ScenarioOverview=>(
 export function cachedScenarioOverview(value:unknown):ScenarioOverview|undefined{
   if(!value||typeof value!=="object"||Array.isArray(value))return;
   const v=value as ScenarioOverview;
-  if(v.scope!=="isolated-declared-scenarios-v1"||!/^sha256:[a-f0-9]{64}$/.test(v.hash)||!/^sha256:[a-f0-9]{64}$/.test(v.planHash)
+  if(!["isolated-declared-scenarios-v1","isolated-declared-scenarios-v2"].includes(v.scope)||!/^sha256:[a-f0-9]{64}$/.test(v.hash)||!/^sha256:[a-f0-9]{64}$/.test(v.planHash)
     ||typeof v.passed!=="boolean"||!Number.isSafeInteger(v.cases)||v.cases<0||v.cases>300||!Array.isArray(v.failures)||v.failures.length>8
     ||v.passed!==(v.failures.length===0)||v.failures.some(item=>!item||typeof item.caseId!=="string"||item.caseId.length>100
       ||typeof item.code!=="string"||item.code.length>100||typeof item.message!=="string"||item.message.length>500))return;

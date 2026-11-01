@@ -89,7 +89,7 @@ Passing primitive scenarios remains separate from trusted v4/world fixtures, sub
 
 The worker checks the complete declared public interface, constructors, callers, success/revert expectations and exact ABI return values. Calls outside declared targets, delegated execution and unbound child deployments fail the supported fixture. The actual-source mutation cases include wrong fees, an extra admin function, an admin-only condition hidden inside an otherwise matching interface, and a payment sent to a hidden recipient while its getter reports the expected recipient.
 
-The report is scoped to `isolated-declared-scenarios-v1`. It always keeps `launchReady: false`. Declared scenario coverage is not proof of every branch, live pool behavior, a fresh external feed, chain compatibility, review approval or a funded launch. The local owned-job integration is described above. Trusted v4/graph fixtures and the existing backend admission/preparation remain integration work.
+The report is scoped to `isolated-declared-scenarios-v1`, or V2 for the explicitly declared constructor children described below. It always keeps `launchReady: false`. Declared scenario coverage is not proof of every branch, live pool behavior, a fresh external feed, chain compatibility, review approval or a funded launch. The local owned-job integration is described above. Trusted v4/graph fixtures and the existing backend admission/preparation remain integration work.
 
 ## Trusted v4 fixture foundation
 
@@ -546,3 +546,40 @@ row. The existing Plan SECURITY DEFINER reader still constructs its internal
 JSON, while only scalar projected fields cross the database driver. No database
 permission or schema change is introduced. This local integration is unpublished
 and depends on the reviewed backend successor before activation.
+
+## Declared constructor children
+
+Deployment blueprint V2 declares each constructor-created auxiliary instance
+separately from direct targets. A child records its source artifact, parent,
+consecutive CREATE nonce, exact constructor arguments and forwarded native value.
+Two instances may share one compiled artifact. Parent and earlier-child references
+remain explicit. Undeclared creation, a missing child, changed arguments, an
+unexpected value or CREATE2 child construction fails this supported path.
+
+Independent scenario V2 declares the same instances before source generation.
+Its separate worker checks every agreed public interface, observes each actual
+CREATE and binds the original argument bytes, value, parent and nonce. Scenario
+steps call those observed addresses, including nested children. It never deploys
+a replacement child to make an example pass, and constructor-only permission
+cannot authorize creation during a later method call. V1 plans and receipts keep
+their original representation and worker.
+
+Constructor runtime V2 executes the original source twice at canonical predicted
+addresses. It checks each root and child runtime against its compiled immutable
+ranges and verifies exact derived child addresses. Parent execution gas already
+includes nested construction; children do not add another wallet action or native
+funding charge. The same fixed VM, process, memory and byte limits apply.
+
+Robinhood Plan packing includes every instance in source verification, component
+bindings and critical runtime/CREATE effects, while retaining only the original
+direct deployment actions. Graph V3 retains its canonical SDK wire and complete
+inline Standard JSON; full child observations stay in the owned private pack.
+The versioned private pack and nested runtime receipt are saved with the original
+preparation identity. Reload and an unknown submission replay the same bytes and
+idempotency key. Corrupt, incomplete and downgraded receipts stop before transport.
+Compact browser status does not include source or constructor receipts.
+
+This is local, unpublished source and execution-fixture support. It does not prove
+the production protection kit, a live dependency, protected admission, liquidity,
+fee claims, finality or Explore indexing. The existing protection kit's compiler
+preset and authenticated dependency evidence remain separate required work.

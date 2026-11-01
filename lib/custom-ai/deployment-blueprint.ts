@@ -2,6 +2,7 @@ import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-
 import type { ProjectEntrypoint } from "./contract-project";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 import type { LaunchIntent } from "./launch-intent";
+import { constructorChildPlanningRules, declareConstructorChildren, type ConstructorChild } from "./constructor-children";
 
 export const DEPLOYMENT_INPUTS = ["controller", "name", "symbol", "quote", "funding"] as const;
 export const DEPLOYMENT_BINDINGS = ["pool-manager", "launch-executor", "graph-factory", "permit-authority", "fee-recipient", "funding-token"] as const;
@@ -14,13 +15,14 @@ export type GeneralDeploymentTarget = ProjectEntrypoint & {
   deploymentValue: DeploymentNativeValue; initializerValue: DeploymentNativeValue;
   hookPermissions: number | null;
 };
-export type GeneralDeploymentBlueprint = {
-  version: 1; id: `sha256:${string}`; productionId: LaunchProductionContext["id"];
+type DeploymentBlueprintBody = {
+  id: `sha256:${string}`; productionId: LaunchProductionContext["id"];
   targets: GeneralDeploymentTarget[];
   pool: { token: string; hook: string; initializer: string; platformFeeBinding: string; fee: number; tickSpacing: number };
   fees?: { buyPpm: number; sellPpm: number };
   liquidityModel?: "external-concentrated-liquidity" | "launch-seeded-concentrated-liquidity" | "hook-inventory-custom-accounting";
 };
+export type GeneralDeploymentBlueprint = DeploymentBlueprintBody & ({ version: 1 } | { version: 2; constructorChildren: ConstructorChild[] });
 type ObjectValue = Record<string, unknown>;
 const invalid = (): never => { throw new TypeError("Declare a complete deployment graph separately from the local test fixtures."); };
 const object = (value: unknown, keys: string): ObjectValue => {
@@ -42,10 +44,10 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
   production = checkedLaunchProductionContext(production, production.chainId);
   if (!value || typeof value !== "object" || Array.isArray(value)) return invalid();
   const fields = Object.keys(value);
-  const hasFees = fields.includes("fees"), hasLiquidity = fields.includes("liquidityModel");
+  const hasFees = fields.includes("fees"), hasLiquidity = fields.includes("liquidityModel"), hasChildren = fields.includes("constructorChildren");
   if (hasFees !== hasLiquidity) return invalid();
-  const raw = object(value, hasFees ? "targets,pool,fees,liquidityModel" : "targets,pool");
-  if (!Array.isArray(raw.targets) || raw.targets.length < 3 || raw.targets.length > 16 || raw.targets.length !== entries.length
+  const raw = object(value, (hasFees ? "targets,pool,fees,liquidityModel" : "targets,pool") + (hasChildren ? ",constructorChildren" : ""));
+  if (!Array.isArray(raw.targets) || raw.targets.length < 3 || raw.targets.length > 16 || !hasChildren && raw.targets.length !== entries.length
     || new TextEncoder().encode(JSON.stringify(value)).length > 64_000) return invalid();
   const all = new Set(raw.targets.map(target => identifier(object(target,
     "id,source,contract,constructorArguments,initializer,deploymentValue,initializerValue,hookPermissions").id)));
@@ -101,6 +103,9 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
     seen.add(id);
     return { ...entry, id, constructorArguments, initializer, deploymentValue, initializerValue, hookPermissions: t.hookPermissions as number | null };
   });
+  const constructorChildren = hasChildren ? declareConstructorChildren(raw.constructorChildren, entries, targets.map(target => target.id), values) : undefined;
+  for (const child of constructorChildren ?? []) used.add(`${child.source}:${child.contract}`);
+  if (used.size !== entries.length) return invalid();
   const p = object(raw.pool, "token,hook,initializer,platformFeeBinding,fee,tickSpacing");
   const pool = { token: identifier(p.token), hook: identifier(p.hook), initializer: identifier(p.initializer),
     platformFeeBinding: identifier(p.platformFeeBinding), fee: Number(p.fee), tickSpacing: Number(p.tickSpacing) };
@@ -119,15 +124,15 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
     liquidityModel = raw.liquidityModel as GeneralDeploymentBlueprint["liquidityModel"];
     if (liquidityModel === "hook-inventory-custom-accounting" && !(Number(target(pool.hook)?.hookPermissions) & 12)) return invalid();
   }
-  const body = { version: 1 as const, productionId: production.id, targets, pool, ...(fees ? { fees, liquidityModel } : {}) };
-  return structuredClone({ ...body, id: canonicalBrowserSha256V2("programmable.custom-ai-deployment-blueprint.v1", body) });
+  const body = { ...(constructorChildren ? { version: 2 as const, constructorChildren } : { version: 1 as const }), productionId: production.id, targets, pool, ...(fees ? { fees, liquidityModel } : {}) };
+  return structuredClone({ ...body, id: canonicalBrowserSha256V2(`programmable.custom-ai-deployment-blueprint.v${body.version}`, body) });
 }
 
 export function checkedGeneralDeploymentBlueprint(value: GeneralDeploymentBlueprint, entries: ProjectEntrypoint[], production: LaunchProductionContext, intent: LaunchIntent) {
-  if (!value || value.version !== 1 || value.productionId !== production.id) return invalid();
+  if (!value || ![1, 2].includes(value.version) || value.productionId !== production.id) return invalid();
   const result = createGeneralDeploymentBlueprint(deploymentBlueprintInput(value), entries, production, intent);
   const { id, ...body } = value;
-  if (result.id !== id || id !== canonicalBrowserSha256V2("programmable.custom-ai-deployment-blueprint.v1", body)) return invalid();
+  if (result.id !== id || result.version !== value.version || id !== canonicalBrowserSha256V2(`programmable.custom-ai-deployment-blueprint.v${value.version}`, body)) return invalid();
   return result;
 }
 
@@ -135,11 +140,14 @@ export function deploymentBlueprintInput(value: GeneralDeploymentBlueprint) {
   return { targets: value.targets.map(target => ({ id: target.id, source: target.source, contract: target.contract,
     constructorArguments: target.constructorArguments, initializer: target.initializer, deploymentValue: target.deploymentValue,
     initializerValue: target.initializerValue, hookPermissions: target.hookPermissions })), pool: value.pool,
-    ...(value.fees ? { fees: value.fees, liquidityModel: value.liquidityModel } : {}) };
+    ...(value.fees ? { fees: value.fees, liquidityModel: value.liquidityModel } : {}),
+    ...(value.version === 2 ? { constructorChildren: value.constructorChildren.map(child => ({ id: child.id, source: child.source, contract: child.contract,
+      parent: child.parent, creation: child.creation, nonce: child.nonce, constructorArguments: child.constructorArguments, value: child.value })) } : {}) };
 }
 
-export const generalDeploymentPlanningRules = `A launchable general token/hook design also declares deployment inside generalChecks, separately from the local examples. Its object has exactly targets, pool, fees and liquidityModel.
-targets is an ordered array, one per source entrypoint, with {id,source,contract,constructorArguments,initializer,deploymentValue,initializerValue,hookPermissions}. The role comes from the declared source entrypoint. Constructor target refs point only to earlier targets. initializer is null or {function:unambiguousPublicFunctionName,arguments:[...]}; its target refs may point forward. Values are strings, booleans, nested arrays, {target:id}, {input:'controller'|'name'|'symbol'|'quote'|'funding'}, or {binding:'pool-manager'|'launch-executor'|'graph-factory'|'permit-authority'|'fee-recipient'|'funding-token'}. Literal external addresses require explicit saved design provenance. Never use fixture, account, pool, v4-router or test-trader refs in a production deployment.
+export const generalDeploymentPlanningRules = `A launchable general token/hook design also declares deployment inside generalChecks, separately from the local examples. Its object has targets, pool, fees and liquidityModel, and constructorChildren only for actual constructor-created auxiliary instances.
+targets is an ordered array of direct roots with {id,source,contract,constructorArguments,initializer,deploymentValue,initializerValue,hookPermissions}. Without constructorChildren there is exactly one target per source entrypoint. With children every entrypoint must be used by a root or declared child. The role comes from the source entrypoint. Constructor target refs point only to earlier direct roots. initializer is null or {function:unambiguousPublicFunctionName,arguments:[...]}; its target refs may point forward to other roots. Values are strings, booleans, nested arrays, {target:id}, {input:'controller'|'name'|'symbol'|'quote'|'funding'}, or {binding:'pool-manager'|'launch-executor'|'graph-factory'|'permit-authority'|'fee-recipient'|'funding-token'}. Literal external addresses require explicit saved design provenance. Never use fixture, account, pool, v4-router or test-trader refs in a production deployment.
 Native deploymentValue/initializerValue is either '0' or {input:'funding'}. The saved wallet funding amount may be consumed once in the entire graph, never multiplied. initializerValue must be '0' when initializer is null. hookPermissions is the exact integer bit mask for a hook, otherwise null.
 pool has exactly {token,hook,initializer,platformFeeBinding,fee,tickSpacing}. It selects one token, one hook, a real source liquidity initializer with a declared initializer call, and the source component binding the platform fee. The initializer must implement the actual PoolManager settlement/funding path, never call the synthetic v4-router. A recipe is a declaration; actual ABI, source/runtime, canonical packing and backend admission still follow. For Robinhood do not invent graph-factory, permit-authority or funding-token roots that its Plan context does not expose.
-fees has {buyPpm,sellPpm}, integer applicant-selected source rates in the canonical profile's 0..100000 ppm range. Derive them from the complete agreed design and selected policy; do not silently choose zero or claim variable fees are constant. The selected chain's platform/opening fee rules still apply independently. Preserve or clarify a concrete conflict. liquidityModel is launch-seeded-concentrated-liquidity for a coin whose declared source seeds liquidity, external-concentrated-liquidity only when external liquidity is explicitly intended, or hook-inventory-custom-accounting for an agreed inventory/delta mechanism. The inventory model needs a declared swap-return-delta permission. These are declarations, never execution evidence.`;
+fees has {buyPpm,sellPpm}, integer applicant-selected source rates in the canonical profile's 0..100000 ppm range. Derive them from the complete agreed design and selected policy; do not silently choose zero or claim variable fees are constant. The selected chain's platform/opening fee rules still apply independently. Preserve or clarify a concrete conflict. liquidityModel is launch-seeded-concentrated-liquidity for a coin whose declared source seeds liquidity, external-concentrated-liquidity only when external liquidity is explicitly intended, or hook-inventory-custom-accounting for an agreed inventory/delta mechanism. The inventory model needs a declared swap-return-delta permission. These are declarations, never execution evidence.
+${constructorChildPlanningRules}`;
