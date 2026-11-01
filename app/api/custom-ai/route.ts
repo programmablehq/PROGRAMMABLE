@@ -6,7 +6,7 @@ import { executionProfile, getCapabilities } from "@/lib/custom-ai/capabilities/
 import { createPreviewBudget, readPreviewBody } from "@/lib/custom-ai/access.server";
 import { runCustomAI, type AIContext } from "@/lib/custom-ai/service.server";
 import { readLaunchProductionContext } from "@/lib/custom-ai/launch-production.server";
-import { canonicalGeneralLibraries } from "@/lib/custom-ai/canonical-dependencies.server";
+import { canonicalGeneralSourceCatalog } from "@/lib/custom-ai/canonical-dependencies.server";
 import { CustomAIError, parseChatRequest, type ChatProgress, type ChatResult } from "@/lib/custom-ai/types";
 import { authorizeCustomAI } from "@/lib/custom-ai/auth.server";
 import { productionAIStore } from "@/lib/custom-ai/store.server";
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
           : runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
           ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
             loadProductionContext:readLaunchProductionContext,
-            loadSourceLibraries:canonicalGeneralLibraries,
+            loadSourceLibraries:canonicalGeneralSourceCatalog,
             saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
             saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent});},

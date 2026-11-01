@@ -724,3 +724,21 @@ public state and corrected before the single fresh qualification. This does
 not change the production provider roles. Wiring that replay into complete
 constructor preparation and proving swaps, liquidity, fees and finality remain
 separate work; general launch activation remains disabled.
+
+## Original protection contract imports
+
+The generation route supplies the selected chain's original protection source
+package alongside its shared libraries. Ethereum and Robinhood use their joint
+package; Base and HyperEVM use their own fixed packages. Only actually imported
+files and their transitive dependencies enter the compiled project. A caller's
+earlier edits to any of those paths remain editable and are not overwritten.
+
+New projects with required production protection choose the existing
+`viair-200-v1` compiler profile before scenario planning and generation, including
+its fixed import aliases. Saved or explicitly declared profiles stay unchanged;
+the compiler is never changed as an automatic retry. Other new projects retain
+`standard-v1`. The complete original source stays bound to the resulting project.
+
+Thin-wrapper compilation checks cover each selected chain's actual original
+initializer. These checks establish source compatibility only; constructor
+observations, full behavior, backend review and public activation remain separate.

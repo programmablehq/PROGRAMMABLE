@@ -2,6 +2,9 @@
  * import callback, compiler binary or host dependency is accepted. */
 export const GENERAL_PROJECT_COMPILER = "0.8.26+commit.8a97fa7a";
 export type ProjectCompilerProfile = "standard-v1" | "viair-200-v1";
+export function newProjectCompilerProfile(production?: { protectionPolicy?: { required: boolean } }): ProjectCompilerProfile {
+  return production?.protectionPolicy?.required ? "viair-200-v1" : "standard-v1";
+}
 export type ProjectCompiler = { version: typeof GENERAL_PROJECT_COMPILER; evmVersion: "paris" | "cancun" } &
   ({ optimizerRuns: 1000; viaIR: false } | { optimizerRuns: 200; viaIR: true });
 export function approvedProjectCompiler(value: unknown): value is ProjectCompiler {
