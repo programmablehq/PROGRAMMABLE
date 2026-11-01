@@ -1,5 +1,5 @@
 import "server-only";
-import type { RuleSpecV2 } from "./rule-spec";
+import type { FeeExpression, RuleSpecV2 } from "./rule-spec";
 import { normalizeRuleSpec } from "./rule-spec";
 import { composableModuleSource, ruleSpecHash } from "../../scripts/custom-ai/composable-module.mjs";
 import { evaluateRuleSpec, type FeedSnapshot } from "./rule-evaluator";
@@ -10,15 +10,25 @@ export type RuleFeedBinding = { id: string; address: `0x${string}`; runtimeHash:
 export type BoundRuleSpec = { spec: RuleSpecV2; specHash: string; chainId: 1 | 4663; feeds: RuleFeedBinding[] };
 export function ruleExpectations(spec: RuleSpecV2, feeds: RuleFeedBinding[]): FeeExpectation[] {
   const times = new Set([0]);
+  const boundary = (time: number) => { if (time > 0) times.add(time - 1); times.add(time); times.add(time + 1); };
   for (const phase of spec.phases) {
-    if (phase.startsAtSeconds) { times.add(phase.startsAtSeconds - 1); times.add(phase.startsAtSeconds); times.add(phase.startsAtSeconds + 1); }
-    if (phase.fee.kind === "ramp") times.add(phase.startsAtSeconds + Math.floor(phase.fee.durationSeconds / 2));
+    if (phase.startsAtSeconds) boundary(phase.startsAtSeconds);
+    if (phase.endsAtSeconds !== null) boundary(phase.endsAtSeconds);
+    const ramp = (fee: FeeExpression) => {
+      if (fee.kind === "conditional") { ramp(fee.then); ramp(fee.otherwise); }
+      if (fee.kind !== "ramp") return;
+      const end = phase.startsAtSeconds + fee.durationSeconds;
+      const midpoint = phase.startsAtSeconds + Math.floor(fee.durationSeconds / 2);
+      if (phase.endsAtSeconds === null || midpoint < phase.endsAtSeconds) times.add(midpoint);
+      if (phase.endsAtSeconds === null || end <= phase.endsAtSeconds) boundary(end);
+    };
+    ramp(phase.fee);
   }
-  for (const action of spec.actions) if (action.startsAtSeconds) {
-    times.add(action.startsAtSeconds - 1); times.add(action.startsAtSeconds); times.add(action.startsAtSeconds + 1);
-  }
+  for (const action of spec.actions) if (action.startsAtSeconds) boundary(action.startsAtSeconds);
   const rows: FeeExpectation[] = [];
-  for (const time of times) for (const buy of [true, false]) for (const variant of [0, 1, 2]) {
+  // Without an external feed all three variants are the same execution.
+  const variants = feeds.length ? [0, 1, 2] : [0];
+  for (const time of [...times].sort((a,b)=>a-b)) for (const buy of [true, false]) for (const variant of variants) {
     const now = 1_800_000_000 + time;
     const snapshots: FeedSnapshot[] = feeds.map(f => ({ feedId: f.id, sequence: "1", transitionSequence: "1", value: variant === 0 ? f.minimum : f.maximum,
       previousValue: f.minimum, changedAt: now, observedAt: now, validUntil: now + f.maxAge, fresh: variant !== 2, sourceVersion: f.sourceVersion }));

@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { PGlite } from "@electric-sql/pglite";
 import { keccak256, toHex, type Hex } from "viem";
@@ -47,6 +47,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([
     value.hash=canonicalBrowserSha256V2(`programmable.custom-ai-general-${value.route==="plan-v1"?"plan":"graph"}-pack.v${value.version}`,body);
   }
   beforeAll(async()=>{
+    // Synthetic observations use a controlled clock while real compiler/VM
+    // workers run. Production expiry limits and worker timeouts stay intact.
+    vi.useFakeTimers({toFake:["Date"]});
     clock=Date.now();
     const original=projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains],chain,protection);
     original.poolManager.runtimeCodeHash=keccak256(BASIC);
@@ -106,11 +109,12 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([
     await database.close();
   },120_000);
   beforeEach(async()=>{
-    clock=completedAt;db=new PGlite();await db.exec(CUSTOM_AI_SCHEMA);
+    clock=completedAt;vi.setSystemTime(clock);db=new PGlite();await db.exec(CUSTOM_AI_SCHEMA);
     for(const table of tables)await db.query(`INSERT INTO programmable_custom_ai_v1.${table} SELECT * FROM jsonb_populate_recordset(NULL::programmable_custom_ai_v1.${table},$1::jsonb)`,[JSON.stringify(snapshot[table])]);
     store=makeStore(db);
   });
   afterEach(async()=>{await db?.close();});
+  afterAll(()=>{vi.useRealTimers();});
   it("accepts a still-fresh shared observation and preserves its exact request after expiry and reload",async()=>{
     const saved=await store.projects.preparations.completePack(owner,ticket,record.packLease.token,pack);
     expect(saved.packState).toBe("complete");expect(await store.projects.readPublicSource(pack.publicSourceId.slice(7))).toEqual(fixture.exported);
