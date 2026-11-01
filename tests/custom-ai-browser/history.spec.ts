@@ -13,7 +13,7 @@ import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
 import { overviewFromView } from "../../lib/custom-ai/project-overview";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
-test.afterAll(async()=>{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
+test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
 function generalFixture(revision=1,compiled=true){
  const intent:LaunchIntent={version:1,id:"general-browser-design",revision:(revision===1?"c":"d").repeat(64),...(revision>1?{parentRevision:"c".repeat(64)}:{}),
   requirements:[{id:"counter",text:revision===1?"Anyone can increment the counter":"Anyone can increment and read the counter",kind:"behavior",open:null,origin:{kind:"legacy"}}],unresolved:[],changes:[]};

@@ -6,6 +6,8 @@ export async function createHistoryServer(){
  const assets=new Map([
   ["/brand/networks/hyperevm.png","image/png"],
   ["/brand/networks/robinhood-feather-white.svg","image/svg+xml"],
+  ["/brand/atmosphere/programmable-floral-foreground-v1.avif","image/avif"],
+  ["/brand/atmosphere/programmable-floral-foreground-mobile-v1.avif","image/avif"],
  ].map(([path,type])=>[path,{type,body:readFileSync(root+"/public"+path)}]));
  const bundled=await build({stdin:{contents:`
  import React,{createContext,useContext,useState} from 'react';import{createRoot}from'react-dom/client';
@@ -13,7 +15,8 @@ export async function createHistoryServer(){
  import'./app/globals.css';import'./app/interface.css';import'./app/programmable-experience.css';import'./app/webde-final-ui.css';import'./app/surfaces.css';
  createRoot(document.getElementById('root')).render(<FixtureProvider><main style={{maxWidth:1200,margin:'auto',padding:20}}><CustomAIWorkspace/></main></FixtureProvider>);
  `,loader:"tsx",resolveDir:root},bundle:true,format:"esm",platform:"browser",write:false,outdir:"/fixture-output",jsx:"automatic",define:{"process.env.NODE_ENV":'"production"',"process.env":"{}"},plugins:[{name:"history-boundaries",setup(p){
- p.onResolve({filter:/^(fixture-wallet|@\/components\/wallet-provider)$/},()=>({path:"wallet",namespace:"fixture"}));
+ p.onResolve({filter:/^(?:fixture-wallet)$|(?:^|\/)wallet-provider$/},()=>({path:"wallet",namespace:"fixture"}));
+ p.onResolve({filter:/^\/brand\//},a=>({path:a.path,external:true}));
  p.onResolve({filter:/^@privy-io\/react-auth$/},()=>({path:"privy",namespace:"fixture"}));
  p.onResolve({filter:/^next\/(image|link)$/},a=>({path:a.path,namespace:"fixture"}));
  p.onLoad({filter:/.*/,namespace:"fixture"},a=>({loader:"tsx",resolveDir:root,contents:a.path==="privy"?"import{useWallet}from'fixture-wallet';export const usePrivy=()=>({user:null});":a.path==="wallet"?`
