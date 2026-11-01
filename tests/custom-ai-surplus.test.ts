@@ -11,7 +11,7 @@ import { parseChatRequest } from "../lib/custom-ai/types";
 
 const input = { model: "claude-haiku-5.5", system: "Keep the complete design.", messages: [{ role: "user" as const, content: "Explain this rule." }], schema: { type: "object" }, maxTokens: 200 };
 function useSurplus() { vi.stubEnv("CUSTOM_AI_PROVIDER", "surplus");vi.stubEnv("SURPLUS_API_KEY", "inf_test-only-not-a-real-key"); }
-afterEach(() => { vi.unstubAllEnvs();vi.unstubAllGlobals();vi.restoreAllMocks(); });
+afterEach(() => { vi.clearAllTimers();vi.useRealTimers();vi.unstubAllEnvs();vi.unstubAllGlobals();vi.restoreAllMocks(); });
 describe("Surplus model routing", () => {
   it("keeps provider selection explicit and pins it in new job profiles", () => {
     useSurplus();
@@ -43,6 +43,44 @@ describe("Surplus model routing", () => {
     expect(onText).toHaveBeenCalledWith('{"reply":"OK"}');
     vi.stubGlobal("fetch",vi.fn(async()=>new Response(data,{headers:{"content-type":"text/event-stream"}})));
     await expect(callSurplus({...input,onText})).rejects.toMatchObject({code:"incomplete"});
+  });
+  it("streams internal contract declarations even without a visible text callback",async()=>{
+    useSurplus();
+    const events=[{choices:[{index:0,delta:{content:'{"reply":"Complete checks"}'},finish_reason:null}]},
+      {choices:[{index:0,delta:{},finish_reason:"stop"}],usage:{prompt_tokens:12,completion_tokens:6}}];
+    const fetcher=vi.fn(async()=>new Response(events.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")+"data: [DONE]\n\n",{headers:{"content-type":"text/event-stream"}}));
+    vi.stubGlobal("fetch",fetcher);
+    await expect(callSurplus({...input,responseProfile:"contract"})).resolves.toEqual({text:'{"reply":"Complete checks"}',inputTokens:12,outputTokens:6});
+    const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(body).toMatchObject({stream:true,stream_options:{include_usage:true},max_tokens:200});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("accepts a complete contract reply after the old two-minute cutoff without a second request",async()=>{
+    useSurplus();vi.useFakeTimers();
+    vi.spyOn(AbortSignal,"timeout").mockImplementation(ms=>{
+      const controller=new AbortController();setTimeout(()=>controller.abort(new DOMException("Deadline elapsed","TimeoutError")),ms);return controller.signal;
+    });
+    const fetcher=vi.fn((_url:string,options:RequestInit)=>new Promise<Response>((resolve,reject)=>{
+      const abort=()=>reject(options.signal?.reason);options.signal?.addEventListener("abort",abort,{once:true});
+      setTimeout(()=>{options.signal?.removeEventListener("abort",abort);resolve(new Response('data: {"choices":[{"index":0,"delta":{"content":"{}"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',{headers:{"content-type":"text/event-stream"}}));},130_000);
+    }));
+    vi.stubGlobal("fetch",fetcher);
+    const result=callSurplus({...input,responseProfile:"contract"});
+    await vi.advanceTimersByTimeAsync(130_001);
+    await expect(result).resolves.toMatchObject({text:"{}"});expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("records a real contract deadline with known partial usage and cancels the stream without retrying",async()=>{
+    useSurplus();const deadline=new AbortController(),cancel=vi.fn(),onText=vi.fn();
+    vi.spyOn(AbortSignal,"timeout").mockReturnValue(deadline.signal);
+    const fetcher=vi.fn(async()=>new Response(new ReadableStream({start(controller){
+      controller.enqueue(new TextEncoder().encode('data: {"choices":[{"index":0,"delta":{"content":"partial"}}],"usage":{"prompt_tokens":12,"completion_tokens":3}}\n\n'));
+    },cancel}),{headers:{"content-type":"text/event-stream"}}));
+    vi.stubGlobal("fetch",fetcher);
+    const result=callSurplus({...input,responseProfile:"contract",onText});
+    const rejected=expect(result).rejects.toMatchObject({code:"incomplete",failure:"timeout",usage:{inputTokens:12,outputTokens:3}});
+    await vi.waitFor(()=>expect(onText).toHaveBeenCalledWith("partial"));
+    deadline.abort(new DOMException("Deadline elapsed","TimeoutError"));
+    await rejected;expect(cancel).toHaveBeenCalledTimes(1);expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("rejects a truncated or refused response without repeating the paid request", async () => {
     useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:"partial"},finish_reason:"length"}]}));vi.stubGlobal("fetch",fetcher);

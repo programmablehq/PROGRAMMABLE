@@ -59,16 +59,21 @@ export async function rejectEnvelopeError(value: { error?: unknown }) {
 export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   const format = prepareSurplusSchema(input.schema);
   const limits = modelResponseLimits(input.responseProfile);
-  const signal = AbortSignal.any([AbortSignal.timeout(limits.timeoutMs), ...(input.signal ? [input.signal] : [])]);
+  const deadline = AbortSignal.timeout(limits.timeoutMs);
+  const signal = AbortSignal.any([deadline, ...(input.signal ? [input.signal] : [])]);
+  const timedOut = () => deadline.aborted && !input.signal?.aborted;
+  let text = "", inputTokens: number | null = null, outputTokens: number | null = null, finish: unknown;
+  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0]) => new ModelResponseError(failure, { inputTokens, outputTokens });
+  // Long declarations need the same streamed transport as generated source,
+  // including internal calls that have no visible text callback.
+  const stream = Boolean(input.onText) || input.responseProfile === "contract";
   const response = await surplusRequest("/chat/completions", {
-    model: input.model, max_tokens: input.maxTokens, stream: Boolean(input.onText),
-    ...(input.onText ? { stream_options: { include_usage: true } } : {}),
+    model: input.model, max_tokens: input.maxTokens, stream,
+    ...(stream ? { stream_options: { include_usage: true } } : {}),
     messages: [{ role: "system", content: input.system }, ...input.messages],
     response_format: { type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },
     reasoning_effort: input.effort ?? "medium",
-  }, signal, limits.timeoutMs);
-  let text = "", inputTokens: number | null = null, outputTokens: number | null = null, finish: unknown;
-  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0]) => new ModelResponseError(failure, { inputTokens, outputTokens });
+  }, signal, limits.timeoutMs).catch(error => { if (timedOut()) throw incomplete("timeout"); throw error; });
   if (response.headers.get("content-type")?.includes("text/event-stream")) {
     let done = false;
     try {
@@ -90,12 +95,13 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
         input.onText?.(text);
       }
     } catch (error) {
+      if (timedOut()) throw incomplete("timeout");
       if (error instanceof CustomAIError) throw error;
       throw new CustomAIError("connection", "The reply was interrupted. Your draft is still saved.", 503);
     }
     if (!done) throw incomplete(finish === "length" || finish === "max_tokens" ? "output-limit" : "missing-end");
   } else {
-    const value = await boundedProviderJSON(response); await rejectEnvelopeError(value);
+    const value = await boundedProviderJSON(response).catch(error => { if (timedOut()) throw incomplete("timeout"); throw error; }); await rejectEnvelopeError(value);
     const choice = value.choices?.[0]; finish = choice?.finish_reason;
     text = typeof choice?.message?.content === "string" ? choice.message.content : "";
     inputTokens = reportedTokenCount(value.usage?.prompt_tokens); outputTokens = reportedTokenCount(value.usage?.completion_tokens);
