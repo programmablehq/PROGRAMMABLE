@@ -148,7 +148,9 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
     try{production=checkedLaunchProductionContext(await context.loadProductionContext(initialChain,signal),initialChain);}
     catch(error){signal?.throwIfAborted();if(!(error instanceof CustomAIError)||error.code!=="launch-context")throw error;}
   }
-  const currentPlanSchema = { ...planSchema, properties: { ...planSchema.properties,lookups: { type: "array", maxItems: AI_CONFIG.maximumLookups,
+  const currentPlanSchema = { ...planSchema, properties: { ...planSchema.properties,
+    intentMode: { type: "string", enum: previousIntent && !request.editTarget ? ["preserve", "revise"] : ["revise"] },
+    lookups: { type: "array", maxItems: AI_CONFIG.maximumLookups,
     items: { anyOf: capabilities.map(tool => ({ type: "object", properties: { kind: { const: tool.ref.id }, input: tool.inputSchema }, required: ["kind", "input"], additionalProperties: false })) } },
     ...(generalOnly?{executionRoute:{type:"string",enum:["custom-contract"]},program:{type:"null"},eventRule:{type:"null"},composable:{type:"null"},feeChecks:{type:"array",items:{type:"null"},maxItems:0},implementedRequirementIds:{type:"array",items:{type:"string"},maxItems:0}}:{}) } };
   const systemFor=(source:boolean)=>`${GENERAL_CONTRACT_VOICE}\n\nExecution routes: fixed fee/composed modules use ONLY the following foundation. General Custom Contracts use their existing chain-specific source admission and review, not the fee module's restrictions. Select the complete route before generating source.

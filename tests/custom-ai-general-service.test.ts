@@ -58,6 +58,7 @@ it("builds the complete saved design when a casual request explicitly preserves 
   {call,compile:vi.fn(),compileProject:compiler},{intent:previous.project.intent,saveProject:save});
  expect(value.intent).toEqual(previous.project.intent);expect(value.generalProject?.intentRevision).toBe(previous.project.intent.revision);
  expect(save).toHaveBeenCalledOnce();expect(compiler).toHaveBeenCalledOnce();expect(call).toHaveBeenCalledTimes(2);
+ expect(call.mock.calls[0][0].schema.properties.intentMode.enum).toEqual(["preserve","revise"]);
  expect(call.mock.calls[1][0].system).toContain("counter");expect(call.mock.calls[1][0].system).toContain("no-owner");
 });
 
@@ -74,6 +75,7 @@ it.each([
 it("cannot invent a saved design for an empty preserve request",async()=>{
  const call=vi.fn().mockResolvedValue(plan({intentMode:"preserve",intentRequirements:[],ruleEdits:[]}));
  await expect(runCustomAI(request,undefined,{call,compile:vi.fn()},{saveProject:vi.fn()})).rejects.toMatchObject({code:"intent"});
+ expect(call.mock.calls[0][0].schema.properties.intentMode.enum).toEqual(["revise"]);
 });
 
 describe("general source generation inside the owned chat job",()=>{
