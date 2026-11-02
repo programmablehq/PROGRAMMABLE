@@ -159,3 +159,14 @@ for(const width of [360,1440])test(`submission controls render and remain keyboa
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:testInfo.outputPath(`general-launch-${width}.png`),fullPage:true});expect(f.errors).toEqual([]);expect(f.posts.map(body=>body.action)).toEqual(['prepare']);
 });
+
+test('background preparation keeps keyboard focus and cannot submit before it completes',async({page})=>{
+ const f=await fixture(page);let release:()=>void=()=>{};
+ f.beforePrepare=()=>new Promise<void>(resolve=>{release=resolve;});await page.goto(origin);
+ await expect.poll(()=>f.posts.length).toBe(1);
+ const button=page.getByRole('region',{name:'Launch submission'}).getByRole('button').first();
+ await button.focus();await expect(button).toBeFocused();await expect(button).toHaveAttribute('aria-disabled','true');
+ await button.press('Enter');expect(f.posts.map(body=>body.action)).toEqual(['prepare']);
+ release();await expect(button).toHaveText('Submit for review');await expect(button).toBeFocused();
+ expect(f.posts.map(body=>body.action)).toEqual(['prepare']);expect(f.errors).toEqual([]);
+});

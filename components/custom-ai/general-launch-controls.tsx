@@ -81,6 +81,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   if (saved && (uncertain || href) && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;
 
   async function proceed() {
+    if (launch.busy || disabled) return;
     if (!launch.loaded || checking) { await launch.refresh(); return; }
     if (uncertain) { await launch.recover(); return; }
     if (detail) { editor.current?.focus(detail.field); return; }
@@ -104,7 +105,8 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     </label>}
     {accepted ? <a className={walletSubject ? styles.textButton : styles.createButton} href={href}>Open submission<ArrowRight size={16} aria-hidden="true" /></a>
       : <button type="button" className={styles.createButton} onClick={() => { void proceed(); }}
-        disabled={launch.busy || disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
+        aria-disabled={launch.busy || disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}
+        disabled={disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
     {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
     {historyHref && <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>}
