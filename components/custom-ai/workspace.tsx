@@ -218,6 +218,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         }
       }
       if (cancelled) return;
+      setBuildIssue(undefined);
       if (typeof raw === "string" && raw.length < 400_000) {
         const saved = JSON.parse(raw);
         if (saved.version === 1 && Array.isArray(saved.messages) && saved.messages.length <= 48
@@ -256,6 +257,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
             if (cancelled) return;
             hasServerCopy=Boolean(server);
             const restored = restoreStudio(local, previousBase, server);
+            if(server?.state.contextId === (restored.keepLocal ? local?.contextId : server?.state.contextId))setBuildIssue(server?.buildIssue);
             if (server && !restored.keepLocal) {
               setMessages(server.state.messages); setSettings(server.state.settings);
               setDraftId(server.state.draftId); setDraft(server.draft); setImageReceipt(server.state.image);
@@ -345,6 +347,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       setMessages(server?.state.messages ?? []); setSettings(server?.state.settings ?? EMPTY_COIN_SETUP);
       setDraftId(server?.state.draftId); setDraft(server?.draft); setImageReceipt(server?.state.image); retry.current = null;
       setGeneralProject(server?.generalProject);setSourceRecovery(server?.sourceRecovery);
+      setBuildIssue(server?.buildIssue);
       setIntent(server?.intent ?? server?.draft?.intent);
       setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
       setContextId(server?.state.contextId); setPendingChange(server?.state.pendingChange);
@@ -406,6 +409,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     setPreviousCoin(previous);
     await writeDraftCache(`${storageKey}:image`, null);
     setMessages([]); setSettings(EMPTY_COIN_SETUP); setDraft(undefined);setGeneralProject(undefined);setSourceRecovery(undefined); setIntent(undefined); setDraftId(undefined);
+    setBuildIssue(undefined);
     setContextId(undefined); setPendingChange(undefined); setImageReceipt(undefined); retry.current = null;
     setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
     setEditTarget(undefined);
@@ -421,6 +425,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     await writeDraftCache(`${storageKey}:image`, previousCoin.imageBlob ?? null);
     setMessages(previousCoin.messages); setSettings(previousCoin.settings); setDraft(previousCoin.draft);
     setGeneralProject(previousCoin.generalProject);setSourceRecovery(previousCoin.sourceRecovery);
+    setBuildIssue(undefined);
     setIntent(previousCoin.intent ?? previousCoin.draft?.intent);
     setDraftId(previousCoin.draftId); setContextId(previousCoin.contextId); setPendingChange(previousCoin.pendingChange);
     setImageReceipt(previousCoin.image); retry.current = previousCoin.request ?? null; setInput(previousCoin.input ?? ""); setError("");
@@ -439,6 +444,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     const state=version.state;
     setMessages(state.messages);setSettings(state.settings);setDraft(version.draft);setDraftId(state.draftId);
     setGeneralProject(version.generalProject);setSourceRecovery(undefined);
+    setBuildIssue(undefined);
     setIntent(version.intent ?? version.draft?.intent);
     setContextId(state.contextId);setPendingChange(state.pendingChange);setImageReceipt(state.image);
     retry.current=null;setInput("");setError("");setNotice("Saved rules restored.");setPreviewRevision(v=>v+1);
@@ -482,9 +488,12 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     },true);
   },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
 
-  async function send() {
+  async function send(contentOverride?:string) {
     if (replyRef.current.isActive() || coinTransition.current || activity.blocked) return;
-    const content = input.trim();
+    if(contentOverride!==undefined&&input.trim()){
+      setNotice("Send or clear your draft message before continuing the saved build.");textarea.current?.focus();return;
+    }
+    const content = (contentOverride??input).trim();
     if (!content) { textarea.current?.focus(); return; }
     if (input.length > CHAT_MESSAGE_LIMIT) { setInputError("Keep this message within 8,000 characters. Your text is still here."); textarea.current?.focus(); return; }
     setInputError("");
@@ -623,6 +632,12 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       {error&&canReconnect&&!busy&&<button type="button" className={styles.textButton} onClick={()=>{
         const request=retry.current;if(!request)return;recovered.current=undefined;setRecoveryRequest(request);
       }}>Reconnect to saved reply</button>}
+      {buildIssue&&!busy&&<section className={styles.buildRecovery} aria-label="Continue saved build">
+        <p>Your rules are saved. Continue this build from its saved work.</p>
+        <button type="button" className={styles.textButton} disabled={activity.blocked||Boolean(input.trim())}
+          onClick={()=>void send("Build and verify the current saved design. Keep every saved rule unchanged. Do not launch, send a transaction or prepare a wallet request.")}>Continue building</button>
+        {input.trim()&&<small>Send or clear your draft message first.</small>}
+      </section>}
 
       {editTarget && <div className={styles.editScope} role="status" id="custom-ai-edit-scope">
         <span>Editing: {(intent?.requirements ?? draft?.composable?.spec.requirements)?.find(rule => rule.id === editTarget.requirementId)?.text ?? "Selected rule"}</span>
@@ -631,7 +646,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       {inputError && <p id="custom-ai-input-error" className={styles.error} role="alert">{inputError}</p>}
       <form className={styles.composer} aria-label="Message Custom AI" onSubmit={event => { event.preventDefault(); void send(); }}>
         <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
-        <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
+        <textarea ref={textarea} id="custom-ai-message" name="message" autoComplete="off" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
           aria-invalid={Boolean(inputError)} aria-describedby={["custom-ai-help", "custom-ai-state", error && "custom-ai-error", inputError && "custom-ai-input-error", editTarget && "custom-ai-edit-scope"].filter(Boolean).join(" ")}
           placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setLaunchCommand(undefined); setInput(event.target.value); setInputError(""); }}
           onPaste={event => {

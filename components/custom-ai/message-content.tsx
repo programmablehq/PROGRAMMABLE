@@ -2,7 +2,7 @@ import { messageBlocks } from "@/lib/custom-ai/message-display";
 import { CopyButton } from "./copy-button";
 import styles from "./workspace.module.css";
 
-export function MessageContent({ content }: { content: string }) {
+export const MessageContent = memo(function MessageContent({ content }: { content: string }) {
   return <div className={styles.messageText}>
     {messageBlocks(content).map((block, index) => block.kind === "text"
       ? <span key={index}>{block.text}</span>
@@ -11,4 +11,5 @@ export function MessageContent({ content }: { content: string }) {
           <pre tabIndex={0}><code>{block.text}</code></pre>
         </div>)}
   </div>;
-}
+});
+import { memo } from "react";

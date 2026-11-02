@@ -60,6 +60,15 @@ describe("private studio drafts", () => {
     expect(intentMatchesCandidate(value.intent,draft)).toBe(false);
     expect(value.state.pendingChange).toBe("Add weather");expect(value.draft).toEqual(draft);
   });
+  it("restores the latest saved build issue without rereading source or restarting work", async () => {
+    const buildIssue={stage:"scenarios",code:"invalid-declaration"};
+    store.readObject.mockImplementation(async (_owner,kind)=>kind==="studio"?{revision:3,value:{...state,contextId:"latest-build-0001"}}:null);
+    store.read.mockResolvedValue({result:{buildIssue}});
+    const value=await (await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`))).json();
+    expect(value.buildIssue).toEqual(buildIssue);
+    expect(store.read.mock.calls).toEqual([["alice","latest-build-0001"]]);
+    expect(store.saveObject).not.toHaveBeenCalled();expect(store.consume).not.toHaveBeenCalled();expect(store.projects.overview).not.toHaveBeenCalled();
+  });
   it("restores a compact general source result without reading its complete source", async () => {
     const generalProject={projectHash:"sha256:"+"a".repeat(64),compiled:true,launchReady:false};
     store.readObject.mockResolvedValue({revision:2,value:{...state,draftId:"general-source-0001"}});

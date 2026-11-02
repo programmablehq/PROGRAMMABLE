@@ -5,6 +5,7 @@ import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
 import type {CheckDiagnostic} from "../lib/custom-ai/check-diagnostic";
+import {checkContextHash} from "../lib/custom-ai/check-diagnostic";
 
 const intent:LaunchIntent={version:1,id:"counter-design",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
   {id:"counter",kind:"behavior",text:"Anyone can increment from zero by one",open:null,origin:{kind:"legacy"}},
@@ -150,6 +151,49 @@ describe("bounded independent check declaration",()=>{
     expect(checked.scenarios.steps).toHaveLength(3);
     expect(call).toHaveBeenCalledTimes(4);
     expect(call.mock.calls.slice(1).reduce((sum,[request])=>sum+request.maxTokens,0)).toBe(12000);
+  });
+  it("validates collected steps when the model finishes with an empty terminal page",async()=>{
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps),complete:false}))
+      .mockResolvedValueOnce(response({steps:[],complete:true}));
+    const result=await declareGeneralChecks(input,call);
+    expect(result.scenarios.steps.map(step=>step.id)).toEqual(["zero","increment","one"]);
+    expect(result.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
+    expect(call).toHaveBeenCalledTimes(3);
+  });
+  it("does not let an empty terminal page hide a missing constraint",async()=>{
+    const partial=structuredClone(declaration);partial.contracts[0][8]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps),complete:false}))
+      .mockResolvedValueOnce(response({steps:[],complete:true}))
+      .mockResolvedValueOnce(response({generalChecks:JSON.stringify({...partial,steps})}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({reason:"correction-rejected"});
+    expect(call).toHaveBeenCalledTimes(4);
+    expect(call.mock.calls[3][0].system).toContain("missing-requirements:no-owner");
+  });
+  it.each([true,false])("rejects an empty initial page with complete=%s",async complete=>{
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
+      .mockResolvedValueOnce(response({steps:[],complete}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"invalid-declaration"});
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+  it("does not turn an empty unfinished page into a valid completed plan",async()=>{
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps),complete:false}))
+      .mockResolvedValueOnce(response({steps:[],complete:false}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"invalid-declaration"});
+    expect(call).toHaveBeenCalledTimes(3);
+  });
+  it("recovers a matching rejected terminal page without repeating paid model calls",async()=>{
+    const rejected:CheckDiagnostic={version:1,contextHash:checkContextHash(input),
+      failures:[{stage:"scenarios",message:"Invalid native check stage: scenario count.",declaration:null,response:'{"steps":[],"complete":true}'}],
+      progress:{interface:JSON.stringify(declaration),steps}};
+    const call=vi.fn();
+    expect((await declareGeneralChecks({...input,rejected},call)).scenarios.steps).toHaveLength(3);
+    expect(call).not.toHaveBeenCalled();
+    const other=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    expect((await declareGeneralChecks({...input,chainId:999,rejected},other)).chainId).toBe(999);
+    expect(other.mock.calls[0][0].task).toBe("interface");
   });
   it("uses the existing single correction if the final collected pages still fail validation",async()=>{
     const partial=structuredClone(declaration);partial.contracts[0][8]=[];
