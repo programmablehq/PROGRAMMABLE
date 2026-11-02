@@ -83,7 +83,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("original source in the dec
   if(chain===8453){
    const withoutSwap=structuredClone(input.raw);withoutSwap.steps[0].contract="hook";
    expect(()=>createGeneralCheckBlueprint(withoutSwap,intent,chain,"cancun")).toThrow("not-a-direct-hook-call");
-   const wrongFee=structuredClone(input.raw);wrongFee.steps[0].expect={status:"success",swapFeePpm:3000};
+   const wrongFee=structuredClone(input.raw);Object.assign(wrongFee.steps[0].expect,{swapFeePpm:3000});
    expect(()=>createGeneralCheckBlueprint(wrongFee,intent,chain,"cancun")).toThrow("fixed-pool-lp-fee");
   }
   const pending=checkGeneralScenarios(input.project,input.compilation,input.plan);

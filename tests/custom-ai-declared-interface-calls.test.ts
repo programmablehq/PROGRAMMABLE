@@ -21,4 +21,11 @@ describe("independently declared call types",()=>{
   expect(()=>validateDeclaredInterfaceCalls(p)).not.toThrow();p.steps[0].arguments[1]=["false","-1","4295128740"];
   expect(()=>validateDeclaredInterfaceCalls(p)).toThrow("argument 1");
  });
+ it("rejects missing protected child call targets before paying for source",()=>{
+  const p=plan();p.world={kind:"v4-protected-native-token-v1",token:"token",hook:"main",initializer:"initializer",hookPermissions:8396,fee:0,tickSpacing:60,sqrtPriceX96:"79228162514264337593543950336",nativeUsdAnswer:"300000000000"};
+  p.constructorChildren=[{...p.contracts[0],id:"fee-vault",parent:"main",creation:"create",nonce:"1",value:"0"}];
+  expect(()=>validateDeclaredInterfaceCalls(p)).toThrow("child call targets missing from allowedCalls: fee-vault");
+  p.allowedCalls=[{contract:"fee-vault"}];
+  expect(()=>validateDeclaredInterfaceCalls(p)).not.toThrow();
+ });
 });
