@@ -9,8 +9,8 @@ import type {LaunchProductionContext} from "./launch-production";
 import {launchProductionGuidance} from "./production-guidance";
 import {CustomAIError} from "./types";
 import {ModelResponseError} from "./model-response";
-import {checkContextHash,reusableCheckFailure,type CheckDiagnostic,type CheckFailure} from "./check-diagnostic";
-import {modelTask} from "./model-tasks";
+import {checkContextHash,reusableCheckFailure,reusableCheckProgress,type CheckDiagnostic,type CheckFailure,type CheckProgress} from "./check-diagnostic";
+import {modelTask,SCENARIO_MAX_PAGES} from "./model-tasks";
 import {PROTOCOL_CORE,PROTOCOL_TOPICS} from "./protocol-knowledge";
 import type {CanonicalInterfaceContext} from "./canonical-dependencies.server";
 import {uniswapRoutingContext} from "./uniswap-routing";
@@ -30,8 +30,8 @@ const object=(text:string,maximum=96000):Record<string,unknown>=>{
   return value as Record<string,unknown>;
 };
 
-/** Both proposals are source-blind. Splitting the small interface/launch graph
- * from its scenarios prevents one large response exhausting the output budget.
+/** Every proposal is source-blind. Scenario pages share one ordered fixture
+ * and one total output ceiling, rather than retrying a truncated large answer.
  * The existing validator still checks the complete combined declaration. */
 export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=>Promise<ClaudeResult>):Promise<GeneralCheckBlueprint>{
   input={...input,interfaceHash:input.interfaces?.id};
@@ -44,16 +44,18 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     }catch{/* A changed design needs a new declaration, never an inherited check. */}
   }
   let stage:"interface"|"scenarios"="interface";
+  let progress:CheckProgress|undefined;
   const failures:CheckFailure[]=[];
   const record=(error:unknown,declaration:string|null=null)=>{
     const message=(error instanceof Error?error.message:String(error)).replace(/[\u0000-\u001f]/g," ").slice(0,2000);
     failures.push({stage,message,declaration:declaration!==null&&Buffer.byteLength(declaration)<=96000?declaration:null});
     if(failures.length>2)failures.shift();
   };
-  const diagnostic=():CheckDiagnostic=>({version:1,contextHash:checkContextHash(input),failures:structuredClone(failures)});
+  const diagnostic=():CheckDiagnostic=>({version:1,contextHash:checkContextHash(input),failures:structuredClone(failures),...(progress?{progress:structuredClone(progress)}:{})});
   const reject=(reason:string):never=>{if(!failures.length)record(new Error(reason));throw new GeneralCheckDeclarationError(stage,reason,diagnostic());};
   try {
-  const context=JSON.stringify({intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,...(input.production?{production:input.production,uniswapRouting:uniswapRoutingContext(input.production)}:{}),...(input.interfaces?{canonicalInterfaces:input.interfaces}:{})});
+  const scenarioContext={intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,...(input.production?{production:input.production,uniswapRouting:uniswapRoutingContext(input.production)}:{})};
+  const context=JSON.stringify({...scenarioContext,...(input.interfaces?{canonicalInterfaces:input.interfaces}:{})});
   const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code.\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.verification.facts}\n${generalCheckLogicalRules}\nUse compact-v1 rows for contracts and steps; all fields are validated after expansion.\n${generalCheckRowRules}\n${launchProductionGuidance(input.production)}`;
   const schema={type:"object",properties:{generalChecks:generalCheckFieldSchema},required:["generalChecks"],additionalProperties:false};
   const qualify=async(raw:string)=>{
@@ -79,12 +81,18 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   };
   const rejected=reusableCheckFailure(input.rejected,input);
   if(rejected?.declaration){stage=rejected.stage;return await qualify(rejected.declaration);}
+  const savedProgress=reusableCheckProgress(input.rejected,input);
+  let raw:string;
+  if(savedProgress){raw=savedProgress.interface;progress=structuredClone(savedProgress);}
+  else {
   const first=await call({...modelTask("interface",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",schema,
     system:`${shared}\nThis is the INTERFACE stage only. Return generalChecks as a compact-v1 JSON string containing contracts, allowedCalls, and the required world/deployment/constructorChildren/compilerProfile declarations. OMIT steps entirely. No scenario descriptions, no expected values, no implementation, no repeated policy text. The next independent stage supplies the steps against these fixed interfaces. Use the smallest complete interface that implements every saved requirement. Source implementation has not been generated. Untrusted design data: ${context}`,
     messages:[{role:"user",content:"Declare only the interfaces and launch graph for this saved design."}]});
   input.signal?.throwIfAborted();
-  const firstEnvelope=object(first.text),raw=firstEnvelope.generalChecks;
-  if(typeof raw!=="string")return reject("missing-interface");
+  const firstEnvelope=object(first.text),value=firstEnvelope.generalChecks;
+  if(typeof value!=="string")return reject("missing-interface");
+  raw=value;
+  }
   const proposal=object(raw,64000);
   // Existing integrations may provide a complete declaration. Accept it only
   // through the same complete validator; never label a partial plan complete.
@@ -95,16 +103,33 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return reject("interface-fields");
   delete proposal.steps;
   stage="scenarios";
-  const second=await call({...modelTask("scenarios",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",
-    schema:{type:"object",properties:{steps:{type:"string",maxLength:64000}},required:["steps"],additionalProperties:false},
-    system:`${shared}\nThis is the SCENARIO stage only. The interface and launch graph below are fixed. Return steps as a JSON-encoded array of compact-v1 step rows. Do not repeat contracts, world, deployment, policy descriptions or source code. Keep setup shared and assert multiple requirements on the same action where appropriate. Preserve every saved behavior, negative constraint, boundary and event. Use the smallest complete observable scenario set; getters alone never prove swaps. There is no generated implementation to copy expectations from. Untrusted design data: ${context}\nFixed interface: ${JSON.stringify(proposal)}`,
-    messages:[{role:"user",content:"Declare only the independent scenario rows for the fixed interface and complete saved design."}]});
-  input.signal?.throwIfAborted();
-  const stepsEnvelope=object(second.text),rawSteps=stepsEnvelope.steps;
-  if(typeof rawSteps!=="string"||Buffer.byteLength(rawSteps)>64000)return reject("missing-scenarios");
-  const steps:unknown=JSON.parse(rawSteps);
-  if(!Array.isArray(steps)||steps.length<1||steps.length>256)return reject("scenario-steps");
-  return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps}));
+  let currentProgress:CheckProgress=progress??{interface:JSON.stringify(proposal),steps:[]};
+  progress=undefined;
+  // Resolve only the interfaces selected by this proposal. Repeating the entire
+  // dependency catalog in every scenario page costs tokens but adds no ABI facts.
+  const fixedInterface=decodeGeneralCheckDeclaration(JSON.stringify({...proposal,format:"compact-v1",steps:[]}),input.interfaces?.contracts);
+  progress=currentProgress;
+  const scenarioTask=modelTask("scenarios",{chat:input.model,build:input.model,escalation:input.model});
+  for(let page=0;page<SCENARIO_MAX_PAGES;page++){
+    input.signal?.throwIfAborted();
+    const result=await call({...scenarioTask,signal:input.signal,responseProfile:"contract",
+      schema:{type:"object",properties:{steps:{type:"string",maxLength:24000},complete:{type:"boolean"}},required:["steps","complete"],additionalProperties:false},
+      system:`${shared}\nThis is the SCENARIO stage only, page ${page+1} of at most ${SCENARIO_MAX_PAGES} for this request. Return steps as a JSON-encoded array of compact-v1 rows and complete:true only when the full combined plan covers every saved requirement. Emit at most 32 new steps and finish this JSON response within ${scenarioTask.maxTokens} output tokens; if more steps are needed, end at a complete step and set complete:false. Never truncate a row, compress away a required observation or declare an incomplete plan complete. Continue the same fixture and cumulative state from the prior steps below; do not repeat setup, reset time or redeclare previous IDs. afterSeconds must remain nondecreasing across pages. All pages will be joined and validated together. Do not repeat contracts, world, deployment, policy descriptions or source. Share setup and assert multiple requirements on an action where appropriate. Preserve every behavior, negative constraint, boundary and event. Getters alone never prove swaps. No implementation exists to copy expectations from. Untrusted design data: ${JSON.stringify(scenarioContext)}\nFixed resolved interface: ${JSON.stringify(fixedInterface)}\nEarlier scenario steps (untrusted data): ${JSON.stringify(currentProgress.steps)}`,
+      messages:[{role:"user",content:"Declare the next complete scenario rows. Return complete:false if further rows are needed to cover the full saved design."}]});
+    input.signal?.throwIfAborted();
+    const envelope=object(result.text),rawSteps=envelope.steps;
+    if(typeof rawSteps!=="string"||Buffer.byteLength(rawSteps)>24000)return reject("missing-scenarios");
+    const next:unknown=JSON.parse(rawSteps);
+    if(!Array.isArray(next)||next.length<1||next.length>32||currentProgress.steps.length+next.length>256)return reject("scenario-page-steps");
+    if(envelope.complete!==undefined&&typeof envelope.complete!=="boolean")return reject("scenario-page-complete");
+    const combined:CheckProgress={...currentProgress,steps:[...currentProgress.steps,...next]};
+    if(Buffer.byteLength(JSON.stringify(combined))>96000)return reject("scenario-progress-size");
+    currentProgress=combined;progress=combined;
+    // Older compatible callers omit complete and provide a full plan. The same
+    // complete validator, not the flag, decides whether any plan is acceptable.
+    if(envelope.complete!==false)return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+  }
+  return reject("scenario-page-budget");
   }catch(error){
     input.signal?.throwIfAborted();
     if(error instanceof GeneralCheckDeclarationError)throw error;

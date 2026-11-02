@@ -63,12 +63,14 @@ describe("owned general contract checkpoints", () => {
   it("keeps rejected declarations private and bound to the active owner, lease and job payload",async()=>{
     const attempt=await reserve(),p=project();
     const diagnostic:CheckDiagnostic={version:1,contextHash:checkContextHash({...p,evmVersion:"paris"}),
-      failures:[{stage:"scenarios",message:"missing-requirements:no-mint",declaration:'{"contracts":[]}'}]};
+      failures:[{stage:"scenarios",message:"missing-requirements:no-mint",declaration:'{"contracts":[]}'}],
+      progress:{interface:'{"contracts":[],"allowedCalls":[]}',steps:[["private-scenario-page"]]}};
     await expect(store.projects.saveCheckDiagnostic("alice",id,"wrong-lease",diagnostic)).rejects.toBeDefined();
     await store.projects.saveCheckDiagnostic("alice",id,attempt.lease!,diagnostic);
     expect(await store.projects.readCheckDiagnostic("alice",id)).toEqual(diagnostic);
     expect(await store.projects.readCheckDiagnostic("bob",id)).toBeUndefined();
     expect(JSON.stringify(await store.read("alice",id))).not.toContain("missing-requirements");
+    expect(JSON.stringify(await store.read("alice",id))).not.toContain("private-scenario-page");
     await database.query("UPDATE programmable_custom_ai_v1.jobs SET payload_hash='changed' WHERE owner='alice' AND id=$1",[id]);
     expect(await store.projects.readCheckDiagnostic("alice",id)).toBeUndefined();
   });

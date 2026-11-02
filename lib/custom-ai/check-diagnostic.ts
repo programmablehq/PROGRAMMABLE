@@ -7,7 +7,8 @@ import type { LaunchProductionContext } from "./launch-production";
 export type CheckContext = { intent: LaunchIntent; chainId: BuilderChainId; evmVersion: "paris" | "cancun";
   production?: LaunchProductionContext; previousCompiler?: ContractProject["compiler"];interfaceHash?:string };
 export type CheckFailure = { stage: "interface" | "scenarios"; message: string; declaration: string | null };
-export type CheckDiagnostic = { version: 1; contextHash: `sha256:${string}`; failures: CheckFailure[] };
+export type CheckProgress = { interface: string; steps: unknown[] };
+export type CheckDiagnostic = { version: 1; contextHash: `sha256:${string}`; failures: CheckFailure[]; progress?: CheckProgress };
 export const checkContextHash = (input: CheckContext) => canonicalBrowserSha256V2("programmable.check-declaration-context.v1", {
   intent: input.intent, chainId: input.chainId, evmVersion: input.evmVersion,
   production: input.production ?? null, previousCompiler: input.previousCompiler ?? null,interfaceHash:input.interfaceHash??null,
@@ -18,14 +19,26 @@ export const checkContextHash = (input: CheckContext) => canonicalBrowserSha256V
  * but cannot confer a successful blueprint or follow a changed design. */
 export function checkedCheckDiagnostic(value: unknown): CheckDiagnostic {
   const v = value as CheckDiagnostic;
-  if (!v || Object.keys(v).sort().join() !== "contextHash,failures,version" || v.version !== 1
+  if (!v || Object.keys(v).some(key=>!["version","contextHash","failures","progress"].includes(key)) || v.version !== 1
     || !/^sha256:[a-f0-9]{64}$/.test(v.contextHash) || !Array.isArray(v.failures) || v.failures.length < 1 || v.failures.length > 2
     || v.failures.some(f => !f || Object.keys(f).sort().join() !== "declaration,message,stage"
       || !["interface", "scenarios"].includes(f.stage) || typeof f.message !== "string" || f.message.length > 2000
       || f.declaration !== null && (typeof f.declaration !== "string" || new TextEncoder().encode(f.declaration).length > 96_000))) {
     throw new TypeError("Invalid private declaration diagnostic.");
   }
+  if(v.progress!==undefined&&(!v.progress||Object.keys(v.progress).sort().join()!=="interface,steps"
+    ||typeof v.progress.interface!=="string"||new TextEncoder().encode(v.progress.interface).length>64_000
+    ||!Array.isArray(v.progress.steps)||v.progress.steps.length>256
+    ||new TextEncoder().encode(JSON.stringify(v.progress)).length>96_000))throw new TypeError("Invalid private declaration progress.");
   return structuredClone(v);
+}
+
+/** Partial source-blind work is reusable input only, never successful evidence. */
+export function reusableCheckProgress(value: unknown, input: CheckContext): CheckProgress | undefined {
+  try {
+    const saved=checkedCheckDiagnostic(value);
+    return saved.contextHash===checkContextHash(input)?saved.progress:undefined;
+  }catch{return undefined;}
 }
 
 export function reusableCheckFailure(value: unknown, input: CheckContext): CheckFailure | undefined {

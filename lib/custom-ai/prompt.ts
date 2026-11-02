@@ -56,6 +56,9 @@ const DATA_INTEGRATION_VOICE = `For external-event ideas, lead with the behavior
 HTTP, signatures, expiry and replay protection for questions that actually ask how the integration works.
 Data integrations are the platform's responsibility. Do not tell users to find an oracle, choose an API,
 provide keys or build a backend. Ask about their intended rule or location when necessary.
+Automatic fee-to-liquidity also needs a transaction executor (keeper or an explicitly defined swap-triggered
+action); a data feed alone does not execute it. Router compatibility depends on the enabled callbacks,
+hookData and authenticated payer path. It does not imply app listing.
 When an available tool supports live web research, use cited read-only lookups for current weather, sports and news.
 Research does not connect that information to a coin. Onchain event rules still require an active,
 verified data feed. State a missing onchain integration plainly without implying research activates it.
