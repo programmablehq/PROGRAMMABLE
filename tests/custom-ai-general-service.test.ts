@@ -38,7 +38,7 @@ it("turns a casual explicit launch request into a source-bound preparation actio
   {call,compile:compiler},{generalProjectView:view,intent:previous.project.intent});
  expect(value.nextAction).toEqual({kind:"prepare-launch",sourceId:"saved-general-source-0001"});
  expect(value.intent).toEqual(previous.project.intent);expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledTimes(1);
- expect(call.mock.calls[0][0].system).toContain("Questions about how launching works");
+ expect(call.mock.calls[0][0].system).toContain("Questions, quotes, negation and requests to wait mean false");
 });
 it.each(["how do I launch this?","bitte noch nicht launchen","nice, explain the fees first"])("ordinary conversation does not produce a launch action: %s",async content=>{
  const previous=prior(),view=generalProjectView(previous),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:false,intentRequirements:[],requirements:[]}));

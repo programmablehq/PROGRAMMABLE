@@ -66,9 +66,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("general scenarios in the a
   expect(await store.projects.overview("alice",request.id)).toMatchObject({blueprintId:value.generalProject?.blueprintId,scenarios:{passed:increment===1}});
  });
  it("keeps an incomplete oracle as a blocked complete design without spending generation or compiler work",async()=>{
-  const attempt=await store.reserve("alice",request),call=vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(response({generalChecks:JSON.stringify({...declaration(),steps:[]})})),compiler=vi.fn(),checks=vi.fn();
+  const attempt=await store.reserve("alice",request),call=vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(response({generalChecks:JSON.stringify({...declaration(),steps:[]})})).mockResolvedValueOnce(response({steps:JSON.stringify([])})),compiler=vi.fn(),checks=vi.fn();
   const value=await runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:compiler,checkProject:checks},context(attempt.lease!));
-  expect(value.change).toBe("blocked");expect(value.intent?.requirements).toHaveLength(2);expect(call).toHaveBeenCalledTimes(2);expect(compiler).not.toHaveBeenCalled();expect(checks).not.toHaveBeenCalled();
+  expect(value.change).toBe("blocked");expect(value.intent?.requirements).toHaveLength(2);expect(call).toHaveBeenCalledTimes(3);expect(call.mock.calls[2][0].system).toContain("SCENARIO stage only");expect(compiler).not.toHaveBeenCalled();expect(checks).not.toHaveBeenCalled();
   expect(await store.projects.readBlueprint("alice",request.id)).toBeNull();expect(await store.projects.read("alice",request.id)).toBeNull();
  });
  it("does not spend source generation after the plan's owning lease was stopped",async()=>{
