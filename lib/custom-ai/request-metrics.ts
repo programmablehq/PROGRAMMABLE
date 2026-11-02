@@ -1,9 +1,10 @@
 export type ModelCallMetric={model:string;task?:import("./model-tasks").ModelTask;durationMs:number;inputTokens:number|null;outputTokens:number|null;completed:boolean;
   failure?:"output-limit"|"missing-end"|"empty-response"|"response-too-large"|"refused"|"timeout"|"invalid-schema"};
 export type RequestMetrics={startedAt:number;durationMs:number;state:"completed"|"failed";calls:ModelCallMetric[];tokenAccountingComplete:boolean};
+const MAX_RECORDED_CALLS=16;
 export function requestMetrics(startedAt:number,calls:ModelCallMetric[],completed:boolean,now=Date.now()):RequestMetrics {
-  return {startedAt,durationMs:Math.max(0,now-startedAt),state:completed?"completed":"failed",calls:calls.slice(0,8),
-    tokenAccountingComplete:calls.length<=8&&calls.every(c=>c.completed&&c.inputTokens!==null&&c.outputTokens!==null)};
+  return {startedAt,durationMs:Math.max(0,now-startedAt),state:completed?"completed":"failed",calls:calls.slice(0,MAX_RECORDED_CALLS),
+    tokenAccountingComplete:calls.length<=MAX_RECORDED_CALLS&&calls.every(c=>c.completed&&c.inputTokens!==null&&c.outputTokens!==null)};
 }
 export function summarizeRequestMetrics(rows:RequestMetrics[]){
   const recent=rows.slice(0,100),durations=recent.filter(r=>r.state==="completed").map(r=>r.durationMs).sort((a,b)=>a-b);
