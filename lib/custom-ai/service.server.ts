@@ -279,9 +279,14 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     if (plan.lookups.length) throw new CustomAIError("lookup", "That question needs a narrower lookup. Your draft is still saved.", 502);
   }
   const update = coinUpdate(interpreted, request);
-  const edits = plan.action === "answer" ? [] : parseRuleEdits(interpreted.ruleEdits, request.messages.at(-1)!.content);
-  const revised = plan.action === "answer" ? undefined : reviseLaunchIntent({ previous: previousIntent,
-    proposed: declaredIntent(interpreted), unresolved: plan.unresolved, edits, request, target: request.editTarget });
+  const proposed=declaredIntent(interpreted);
+  // A design-only confirmation may answer without generating code. Its
+  // explicit revision still goes through the same quote and edit validator.
+  const revising=plan.action!=="answer"||interpreted.intentMode==="revise"
+    &&(proposed.length>0||Array.isArray(interpreted.ruleEdits)&&interpreted.ruleEdits.length>0);
+  const edits = revising ? parseRuleEdits(interpreted.ruleEdits, request.messages.at(-1)!.content) : [];
+  const revised = revising ? reviseLaunchIntent({ previous: previousIntent,
+    proposed, unresolved: plan.unresolved, edits, request, target: request.editTarget }) : undefined;
   const intent = revised?.intent ?? previousIntent;
   const coin = applyCoinSetupPatch(request.coin ?? EMPTY_COIN_SETUP, update.setupPatch ?? {});
   const implementationGaps = plan.action === "build" && intent && plan.executionRoute !== "custom-contract" ? intentImplementationGaps(intent,
@@ -293,10 +298,10 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   if (plan.action === "build" && (open.length || intent && intentHasOpenParts(intent))) return { reply: "Your complete design is saved. The open items below still need resolving before I can build the source.", ...update, ruleSpec: previousSpec ?? plan.composable,
     intent, memory: plan.memory, change: "blocked", unresolved: open, ...(researched ? { chargedAs: "research", sources } : {}) };
   if (plan.action !== "build") return { reply: plan.reply, ...update, memory: plan.memory,
-    ...launchAction(request.draftId,plan.action==="answer"&&Boolean(previousProjectView?.compiled&&previousProjectView.scenarios?.passed||context.draft?.compiled&&context.draft.validation?.status==="passed")),
+    ...launchAction(request.draftId,plan.action==="answer"&&intent?.revision===previousIntent?.revision&&Boolean(previousProjectView?.compiled&&previousProjectView.scenarios?.passed||context.draft?.compiled&&context.draft.validation?.status==="passed")),
     ...(intent ? { intent } : {}),
     ...(previousSpec ? { ruleSpec: previousSpec } : {}),
-    change: plan.action === "clarify" ? "blocked" : "unchanged", ...(open.length ? { unresolved: open } : {}),
+    change: plan.action === "clarify" || revised&&open.length ? "blocked" : revised&&intent?.revision!==previousIntent?.revision ? "applied" : "unchanged", ...(open.length ? { unresolved: open } : {}),
     ...(researched ? { chargedAs: "research", sources } : {}) };
   if(selection?.route==="custom-contract"){
     if(!intent||!selection||!context.saveProject)return {reply:"Your complete design is saved. Contract source generation needs its durable project connection before it can continue.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract project storage"]};
