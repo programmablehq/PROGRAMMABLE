@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { ChevronDown, ImagePlus, LoaderCircle, X } from "lucide-react";
 import { isAddress, parseEther } from "viem";
 import { prepareTokenImage, TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
@@ -22,6 +22,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   controlsRef?:Ref<CoinDetailsControls>;stage:string;summary?:string;description?:string;imageURI?:string;feeCore?:boolean;
 }) {
   const [detailsOpen,setDetailsOpen]=useState(false);
+  const [focusRequest,setFocusRequest]=useState<{field:"name"|"symbol"|"description"|"website"|"x"}>();
   const fileInput = useRef<HTMLInputElement>(null);
   const imageRequest = useRef(0);
   const [image, setImage] = useState<{ blob: Blob; url: string }>();
@@ -95,7 +96,8 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   }
   const imageURL=imageURI??imageReceipt?.url??image?.url;
   useEffect(()=>{onImage(image);},[image,onImage]);
-  useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);if(field==="description"||field==="website"||field==="x")setPresentationTouched(current=>({...current,[field]:true}));requestAnimationFrame(()=>document.getElementById(`custom-ai-${field}`)?.focus());}}),[]);
+  useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);setFocusRequest({field});if(field==="description"||field==="website"||field==="x")setPresentationTouched(current=>({...current,[field]:true}));}}),[]);
+  useLayoutEffect(()=>{if(detailsOpen&&focusRequest)document.getElementById(`custom-ai-${focusRequest.field}`)?.focus();},[detailsOpen,focusRequest]);
   const presentationError = (field: "description" | "website" | "x") => presentationTouched[field] ? coinPresentationIssue(settings, field) : "";
   return <>
     <section className={styles.coinPreview} aria-label="Coin preview">
