@@ -27,7 +27,7 @@ export type GeneralCheckPlan = {
 };
 export type GeneralCheckScenarios = Pick<GeneralCheckPlan, "contracts" | "allowedCalls" | "steps"|"world"|"constructorChildren">;
 export const generalCheckCaseCount = (plan: GeneralCheckScenarios) => 2 * (plan.contracts.length + (plan.constructorChildren?.length ?? 0)) + plan.steps.length;
-const bad=():never=>{throw new TypeError("Use a bounded declared check plan for the complete saved design.");};
+const bad=(reason="invalid-shape"):never=>{throw new TypeError(`Use a bounded declared check plan for the complete saved design. Validation: ${reason}.`);};
 const object=(value:unknown,keys:string[],optional:string[]=[])=>{
   if(!value||typeof value!=="object"||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return bad();
   const record=value as Record<string,unknown>;
@@ -62,8 +62,10 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
     ||!Array.isArray(input.steps)||!input.steps.length||input.steps.length>256)return bad();
   const covered=new Set<string>(),contractIds=new Set<string>(),entries=new Set<string>();
   const ids=(value:unknown,constraint=false):string[]=>{
-    if(!Array.isArray(value)||value.length>64||new Set(value).size!==value.length)return bad();
-    return value.map(id=>{if(typeof id!=="string"||!requirements.has(id)||constraint&&requirements.get(id)!.kind!=="constraint")return bad();covered.add(id);return id;});
+    if(!Array.isArray(value)||value.length>64||new Set(value).size!==value.length)return bad("invalid-or-duplicate-requirement-ids");
+    return value.map(id=>{if(typeof id!=="string"||!requirements.has(id))return bad("unknown-requirement-id");
+      if(constraint&&requirements.get(id)!.kind!=="constraint")return bad("surface-requirements-only-accept-constraints-use-a-step-for-other-rules");
+      covered.add(id);return id;});
   };
   const fixture = (raw: unknown, available: ReadonlySet<string>, repeated = false): ContractCheckFixture => {
     const v=object(raw,["id","source","contract","arguments","functions","allowReceive","allowFallback","surfaceRequirements"],["value"]),id=identifier(v.id);
@@ -117,7 +119,7 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
       ||!["success","revert"].includes(String(expect.status))||v.read&&expect.status==="success"&&!Object.hasOwn(expect,"returns")
       ||expect.status==="revert"&&(Object.hasOwn(expect,"returns")||Object.hasOwn(expect,"swapFeePpm")||Object.hasOwn(expect,"events"))
       ||v.read&&Object.hasOwn(expect,"events")
-      ||expect.swapFeePpm!==undefined&&(!world||v.contract!=="v4-router"||v.read||!Number.isInteger(expect.swapFeePpm)||(expect.swapFeePpm as number)<0||(expect.swapFeePpm as number)>1_000_000))return bad();
+      ||expect.swapFeePpm!==undefined&&(!world||v.contract!=="v4-router"||v.read||!Number.isInteger(expect.swapFeePpm)||(expect.swapFeePpm as number)<0||(expect.swapFeePpm as number)>1_000_000))return bad("invalid-step-fields-read-result-fee-or-nondecreasing-time");
     stepIds.add(id);lastTime=v.afterSeconds as number;
     const requirementIds=ids(v.requirementIds);
     if(world&&fixtureNames.includes(v.contract as V4WorldFixture)) {
@@ -151,7 +153,10 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
       afterSeconds:v.afterSeconds as number,value:v.value,read:v.read,requirementIds,
       expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds,0,fixtureNames)}:{}),...(expect.swapFeePpm!==undefined?{swapFeePpm:expect.swapFeePpm as number}:{}),...(events?{events}:{})}};
   });
-  if(covered.size!==requirements.size||[...requirements.values()].some(rule=>rule.kind==="behavior"&&!observed.has(rule.id)))return bad();
+  const missing=[...requirements.keys()].filter(id=>!covered.has(id));
+  if(missing.length)return bad(`missing-requirements:${missing.join(",")}`);
+  const unobserved=[...requirements.values()].filter(rule=>rule.kind==="behavior"&&!observed.has(rule.id)).map(rule=>rule.id);
+  if(unobserved.length)return bad(`behavior-needs-a-return-event-fee-or-revert-observation:${unobserved.join(",")}`);
   return {contracts,allowedCalls,steps,...(world?{world}:{}),...(constructorChildren?{constructorChildren}:{})};
 }
 
