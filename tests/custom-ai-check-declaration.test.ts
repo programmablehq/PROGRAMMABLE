@@ -174,4 +174,12 @@ describe("bounded independent check declaration",()=>{
     expect(call.mock.calls[1][0].system).not.toContain("UnusedDependency");
     expect(call.mock.calls[1][0].system).toContain("function increment()");
   });
+  it("does not preserve an unresolved canonical interface as reusable progress",async()=>{
+    const bad=structuredClone(declaration);bad.contracts[0][5]={canonical:"UnknownInterface",additional:[]} as never;
+    const call=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(bad)}));
+    const error=await declareGeneralChecks(input,call).catch(error=>error);
+    expect(error).toMatchObject({reason:"invalid-declaration"});
+    expect(error.diagnostic).not.toHaveProperty("progress");
+    expect(call).toHaveBeenCalledTimes(1);
+  });
 });

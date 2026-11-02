@@ -104,10 +104,11 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   delete proposal.steps;
   stage="scenarios";
   let currentProgress:CheckProgress=progress??{interface:JSON.stringify(proposal),steps:[]};
-  progress=currentProgress;
+  progress=undefined;
   // Resolve only the interfaces selected by this proposal. Repeating the entire
   // dependency catalog in every scenario page costs tokens but adds no ABI facts.
   const fixedInterface=decodeGeneralCheckDeclaration(JSON.stringify({...proposal,format:"compact-v1",steps:[]}),input.interfaces?.contracts);
+  progress=currentProgress;
   const scenarioTask=modelTask("scenarios",{chat:input.model,build:input.model,escalation:input.model});
   for(let page=0;page<SCENARIO_MAX_PAGES;page++){
     input.signal?.throwIfAborted();
