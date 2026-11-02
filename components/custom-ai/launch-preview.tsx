@@ -15,7 +15,7 @@ import { designReadiness, type LaunchPreparation } from "@/lib/custom-ai/readine
 import { RuleReview } from "./rule-review";
 import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 
-export function CustomAILaunchPreview({ draft, intent, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule, children }: {
+export function CustomAILaunchPreview({ draft, intent, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule, children,launchCommand }: {
   draft?: Draft; intent?: LaunchIntent; disabled: boolean; settings: CoinSetup; chatRevision: number; onChange: (patch: CoinSetupPatch) => void;
   draftId?: string; headers: AISessionHeaders; localPreview: boolean;
   cacheKey: string;
@@ -24,6 +24,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   pendingChange?: string; onKeepRules: () => void; onStartAnother: () => void;
   onEditRule: (requirementId: string) => void;
   children?:ReactNode;
+  launchCommand?:{id:string;sourceId:string};
 }) {
   const account = useWallet().wallet?.account;
   const [preparation, setPreparation] = useState<LaunchPreparation>();
@@ -31,6 +32,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   useEffect(() => { headersRef.current = headers; }, [headers]);
   const preparationKey = JSON.stringify([editingSettings, account, imageReceipt?.id, draft?.sourceHash]);
   const editor=useRef<CoinDetailsControls>(null);
+  const launchButton=useRef<HTMLButtonElement>(null),handledCommand=useRef<string|undefined>(undefined);
   const [image,setImage]=useState<CoinEditorImage>();
   const [imageBusy,setImageBusy]=useState(false);
   const reviewedSourceHash = !pendingChange && draft?.compiled && draft.validation?.status === "passed"
@@ -67,6 +69,10 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   const missingField = readiness.missingFields?.[0];
   const missingLabel = missingField ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image" }[missingField] : undefined;
   function addMissingDetail() { if(missingField)editor.current?.focus(missingField); }
+  useEffect(()=>{
+    if(!launchCommand||handledCommand.current===launchCommand.id||launchCommand.sourceId!==draftId||disabled||launch.busy)return;
+    handledCommand.current=launchCommand.id;launchButton.current?.scrollIntoView({block:"nearest"});launchButton.current?.focus();
+  },[launchCommand,draftId,disabled,launch.busy]);
 
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled||launch.locked||launch.busy}
@@ -79,7 +85,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
         onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
       {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
-      <button type="button" className={styles.createButton} disabled={disabled || imageBusy || launch.busy
+      <button ref={launchButton} type="button" className={styles.createButton} disabled={disabled || imageBusy || launch.busy
         || !missingField && (localPreview || !bound && readiness.state !== "design-ready")}
         onClick={() => { if (!bound && missingField) addMissingDetail(); else if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>
         {!bound && missingLabel ? missingLabel : bound?.state === "confirmed" ? "Create another coin" : launch.label}<ArrowRight size={16} aria-hidden="true" /></button>

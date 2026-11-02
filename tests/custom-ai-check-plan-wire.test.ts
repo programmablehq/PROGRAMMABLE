@@ -32,6 +32,11 @@ describe("lossless compact contract check transport",()=>{
     expect(compactBytes).toBeLessThan(JSON.stringify({generalChecks:JSON.stringify(canonical)}).length*0.7);
     expect(decodeGeneralCheckDeclaration(JSON.stringify(compact))).toEqual(canonical);
   });
+  it("preserves canonical object rows without accepting extra fields",()=>{
+    const {canonical,compact}=fixture();
+    expect(decodeGeneralCheckDeclaration(JSON.stringify({...compact,contracts:canonical.contracts,steps:canonical.steps}))).toEqual(canonical);
+    expect(()=>decodeGeneralCheckDeclaration(JSON.stringify({...compact,contracts:[{...canonical.contracts[0],unknown:true}]}))).toThrow();
+  });
   it("preserves constructor child identities and explicit funding without adding defaults",()=>{
     const {compact}=fixture();
     const child=["child","Child.sol","Child","auxiliary",[{contract:"main"}],[],false,false,["surface"],"main","create","1","0"];

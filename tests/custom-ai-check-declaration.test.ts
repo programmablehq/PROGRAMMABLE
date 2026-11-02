@@ -47,7 +47,19 @@ describe("bounded independent check declaration",()=>{
   });
   it("does not retry a truncated proposal or generate source from it",async()=>{
     const call=vi.fn().mockRejectedValue(new ModelResponseError("output-limit",{inputTokens:2,outputTokens:8000}));
-    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({failure:"output-limit"});expect(call).toHaveBeenCalledTimes(1);
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"interface",reason:"output-limit"});expect(call).toHaveBeenCalledTimes(1);
+  });
+  it("accepts canonical interface objects and compact steps without losing semantic checks",async()=>{
+    const [id,source,contract,role,args,functions,allowReceive,allowFallback,surfaceRequirements]=declaration.contracts[0];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify({contracts:[{id,source,contract,role,arguments:args,functions,allowReceive,allowFallback,surfaceRequirements}],allowedCalls:[]})}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps)}));
+    const checked=await declareGeneralChecks(input,call);
+    expect(checked.scenarios.steps).toHaveLength(3);expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
+  });
+  it("reports which stage rejected an invalid declaration without including model source",async()=>{
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)})).mockResolvedValueOnce(response({steps:'invalid json'}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"invalid-json"});
+    expect(call).toHaveBeenCalledTimes(2);
   });
   it("rejects a combined plan that loses the negative constraint",async()=>{
     const partial=structuredClone(declaration);partial.contracts[0][8]=[];

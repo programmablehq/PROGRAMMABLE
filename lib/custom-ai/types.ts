@@ -68,6 +68,8 @@ export type Draft = {
   };
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  nextAction?: {kind:"prepare-launch";sourceId:string};
+  buildIssue?: {stage:"interface"|"scenarios";code:string};
   generalProject?: import("./project-view").GeneralProjectView;
   selection?: import("./execution-routing").RouteSelection;
   intent?: import("./launch-intent").LaunchIntent;

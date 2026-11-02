@@ -11,7 +11,7 @@ let server: Server, origin: string;
 const hash = `0x${"aa".repeat(32)}`;
 test.beforeAll(async () => { server = await createGeneralWalletServer(); server.listen(0, "127.0.0.1"); await once(server, "listening"); const address = server.address(); if (!address || typeof address === "string") throw Error("No renderer"); origin = `http://127.0.0.1:${address.port}`; });
 test.afterAll(async () => { if (server) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); });
-async function fixture(page: Page, chainId = 1) {
+async function fixture(page: Page, chainId = 1, automatic = false) {
   const graph = chainId === 4663 ? undefined : structuredClone(fixtures.fixtures[String(chainId) as "1" | "8453" | "999"]), plan = chainId === 4663 ? recordFixture() : undefined;
   const subject = graph?.subject ?? { chainId, controller: plan!.plan.controller.address, resourceId: plan!.planId, requestHash: plan!.planHash,
     rawRequestSha256: plan!.rawRequestSha256, deadline: plan!.plan.budgets.deadline };
@@ -38,8 +38,13 @@ async function fixture(page: Page, chainId = 1) {
   });
   await page.route("**/fixture-status", route => route.fulfill({ json: {} }));
   await page.route("https://**", route => { control.errors.push("Unexpected external request: " + new URL(route.request().url()).origin); return route.abort(); });
-  await page.goto(origin + `/?chain=${chainId}`); return control;
+  await page.goto(origin + `/?chain=${chainId}${automatic?'&automatic=1':''}`); return control;
 }
+test("a chat command prepares the wallet review once without signing or repeating its detail read",async({page})=>{
+  const f=await fixture(page,8453,true);
+  await expect(page.getByRole("button",{name:"Confirm launch in wallet"})).toBeVisible();
+  expect(f.reads).toBe(1);expect(f.wallet).toEqual([]);expect(f.proofs).toEqual([]);expect(f.errors).toEqual([]);
+});
 for (const chainId of [1, 4663, 8453, 999]) test(`chain ${chainId}: no work on mount, explicit review/send once, original receipt survives reload`, async ({ page }) => {
   const f = await fixture(page, chainId), region = page.getByRole("region", { name: "Wallet step" });
   await expect(region.getByRole("button", { name: "Continue launch here" })).toBeVisible();

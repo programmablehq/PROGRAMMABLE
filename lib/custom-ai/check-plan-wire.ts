@@ -16,6 +16,13 @@ export function decodeGeneralCheckDeclaration(value: unknown): unknown {
   const rows = (value: unknown, fields: readonly string[], optionalValue = false) => {
     if (!Array.isArray(value)) return invalid();
     return value.map(row => {
+      // Some providers return canonical objects even when the prompt asks
+      // for compact rows. Preserve them losslessly; the full semantic
+      // validator still checks every field and rejects additional fields.
+      if(row&&typeof row==="object"&&!Array.isArray(row)){
+        if(fields.some(field=>!Object.hasOwn(row,field))||Object.keys(row).some(field=>!fields.includes(field)&&!(optionalValue&&field==="value")))return invalid();
+        return structuredClone(row);
+      }
       if (!Array.isArray(row) || row.length !== fields.length && !(optionalValue && row.length === fields.length + 1)) return invalid();
       const object = Object.fromEntries(fields.map((field, index) => [field, row[index]]));
       if (optionalValue && row.length > fields.length && row.at(-1) !== null) object.value = row.at(-1);

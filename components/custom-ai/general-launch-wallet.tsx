@@ -19,13 +19,15 @@ import styles from "./workspace.module.css";
 
 type Recovery = { graph?: GraphWalletAttempt[]; plan?: LaunchSendAttemptV1 | null; error?: string };
 type Review = { kind: "graph"; value: GeneralGraphWalletReview } | { kind: "plan"; value: UniversalLaunchWalletReviewV1 };
-export default function GeneralLaunchWallet({ subject, name, headers, disabled, onStatus }: {
+export default function GeneralLaunchWallet({ subject, name, headers, disabled, onStatus, prepareCommand }: {
   subject: GeneralWalletSubject; name: string; headers: AISessionHeaders; disabled: boolean; onStatus(): unknown;
+  prepareCommand?:string;
 }) {
   const wallet = useWallet(), lifetime = useRef<AbortController | null>(null), inFlight = useRef(false), recoveryId = useId();
   const [resource, setResource] = useState<GeneralWalletResource>(), [review, setReview] = useState<Review>();
   const [recovery, setRecovery] = useState<Recovery>({}), [receipt, setReceipt] = useState<{ hash: Hex; stepId?: string; final?: boolean }>();
   const [busy, setBusy] = useState(""), [error, setError] = useState(""), [trackingError, setTrackingError] = useState(""), [recoveryHash, setRecoveryHash] = useState("");
+  const handledCommand=useRef<string|undefined>(undefined),automaticPrepare=useRef<()=>void>(()=>undefined);
   useLayoutEffect(() => { const active = new AbortController(); lifetime.current = active; return () => { active.abort(); lifetime.current = null; }; }, []);
   function assertCurrent() {
     const signal = lifetime.current?.signal;
@@ -110,8 +112,8 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
     catch (caught) { if (lifetime.current && !lifetime.current.signal.aborted) setError(caught instanceof Error ? caught.message : "The wallet step could not finish. Your submission is saved."); }
     finally { inFlight.current = false; if (lifetime.current && !lifetime.current.signal.aborted) { setBusy(""); syncRecovery(); } }
   }
-  async function prepare() {
-    setReview(undefined); const fresh = await load();
+  async function prepare(prefetched?:GeneralWalletResource) {
+    setReview(undefined); const fresh = prefetched ?? await load();
     if (fresh.kind === "graph" ? fresh.launch.status === "finalized" : fresh.plan.steps.length > 0
       && fresh.plan.steps.every(step => step.status === "final") && ["final", "source_verified", "indexed", "publicly_visible"].includes(fresh.plan.status)) return;
     const currentReview = fresh.kind === "graph" ? fresh.launch.manualReview : fresh.plan.manualReview;
@@ -170,6 +172,16 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
     const observed = { hash: recovered, ...(planAttempt ? { stepId: planAttempt.stepId } : {}) };
     setReceipt(observed); syncRecovery(); await track(observed);
   }
+
+  useLayoutEffect(()=>{automaticPrepare.current=()=>{void run("Preparing wallet step…",async()=>{
+    const fresh=await load(),current=fresh.kind==="graph"?fresh.launch.manualReview:fresh.plan.manualReview;
+    if(current&&customLaunchReviewNeedsStart(current)){await startGeneralWalletLaunch(subject,headers,lifetime.current!.signal);assertCurrent();await onStatus();await prepare();}
+    else await prepare(fresh);
+  });};});
+  useEffect(()=>{
+    if(!prepareCommand||handledCommand.current===prepareCommand||disabled||ownAttempt||otherPending||recovery.error||finalized)return;
+    handledCommand.current=prepareCommand;automaticPrepare.current();
+  },[prepareCommand,disabled,ownAttempt,otherPending,recovery.error,finalized]);
 
   return <section className={styles.generalWallet} aria-label="Wallet step" aria-busy={Boolean(busy)}>
     <p className={styles.note}>{name} · {builderChain(subject.chainId).name}</p>
