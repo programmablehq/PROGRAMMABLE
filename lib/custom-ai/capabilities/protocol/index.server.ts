@@ -2,7 +2,7 @@ import "server-only";
 import { defineTool } from "../definition.server";
 import { PROTOCOL_TOPICS, PROTOCOL_KNOWLEDGE_VERSION, type ProtocolTopic } from "../../protocol-knowledge";
 
-export default defineTool("protocol", "Read reviewed local Uniswap v4 design knowledge: callback permissions, router compatibility, accounting, external data, creative composition or verification limits. No network or model call. This explains mechanics, not current deployment availability.", async (input, context) => {
+export default defineTool("protocol", `Read reviewed local Uniswap v4 design knowledge ${PROTOCOL_KNOWLEDGE_VERSION}: callback permissions, router compatibility, accounting, external data, creative composition or verification limits. No network or model call. This explains mechanics, not current deployment availability.`, async (input, context) => {
   context.signal?.throwIfAborted();
   const { topic } = input as { topic: ProtocolTopic }, entry = PROTOCOL_TOPICS[topic];
   return { status: "reviewed-protocol-knowledge", facts: { version: PROTOCOL_KNOWLEDGE_VERSION, topic, ...entry,
