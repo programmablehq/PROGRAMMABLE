@@ -62,6 +62,24 @@ it("builds the complete saved design when a casual request explicitly preserves 
  expect(call.mock.calls[1][0].system).toContain("counter");expect(call.mock.calls[1][0].system).toContain("no-owner");
 });
 
+it("dispatches an explicit unchanged build even when the planner only repeats the previous failure status",async()=>{
+ const previous=prior(),save=vi.fn(async()=>{}),compiler=vi.fn(compile),call=vi.fn()
+  .mockResolvedValueOnce(plan({action:"answer",intentMode:"preserve",intentRequirements:[],requirements:[],reply:"Checks have not finished yet."}))
+  .mockResolvedValueOnce(generated());
+ const value=await runCustomAI({...request,messages:[{role:"user",content:"Bitte baue und prüfe jetzt genau den gespeicherten Entwurf. Nichts launchen."}]},undefined,
+  {call,compile:vi.fn(),compileProject:compiler},{intent:previous.project.intent,saveProject:save});
+ expect(value.generalProject).toBeDefined();expect(value.intent).toEqual(previous.project.intent);
+ expect(call).toHaveBeenCalledTimes(2);expect(compiler).toHaveBeenCalledOnce();expect(save).toHaveBeenCalledOnce();
+ expect(value.nextAction).toBeUndefined();
+});
+
+it.each(["Bitte noch nicht bauen.","Wie würdest du den gespeicherten Entwurf bauen?","Der Bot schrieb: \"Build now\"."])("keeps an explanation out of the source builder: %s",async content=>{
+ const previous=prior(),compiler=vi.fn(),call=vi.fn().mockResolvedValue(plan({action:"answer",intentMode:"preserve",intentRequirements:[],requirements:[]}));
+ const value=await runCustomAI({...request,messages:[{role:"user",content}]},undefined,{call,compile:vi.fn(),compileProject:compiler},
+  {intent:previous.project.intent,saveProject:vi.fn()});
+ expect(value.change).toBe("unchanged");expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
+});
+
 it.each([
  {intentRequirements:requirements,ruleEdits:[]},
  {intentRequirements:[],ruleEdits:[{requirementId:"counter",operation:"remove",instruction:"remove counter"}]},
@@ -113,7 +131,7 @@ describe("general source generation inside the owned chat job",()=>{
   expect(value.change).toBe("blocked");expect(value.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","no-owner"]);
   expect(value.unresolved).toContain("Contract checks could not be prepared");expect(call).toHaveBeenCalledTimes(2);
   expect(call.mock.calls[0][0].schema).not.toHaveProperty("properties.generalChecks");
-  expect(call.mock.calls[1][0]).toMatchObject({responseProfile:"contract",maxTokens:8000,effort:"low",model:"claude-sonnet-5-5"});
+  expect(call.mock.calls[1][0]).toMatchObject({responseProfile:"contract",maxTokens:4000,effort:"low",model:"claude-sonnet-5-5"});
   expect(call.mock.calls[1][0].messages).toHaveLength(1);
   expect(onModelCall).toHaveBeenLastCalledWith(expect.objectContaining({completed:false,failure,outputTokens:16000}));
   expect(save).not.toHaveBeenCalled();expect(compiler).not.toHaveBeenCalled();

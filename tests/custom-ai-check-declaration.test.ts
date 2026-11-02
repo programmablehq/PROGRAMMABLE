@@ -28,7 +28,7 @@ describe("bounded independent check declaration",()=>{
     expect(checked.scenarios.steps).toHaveLength(3);
     expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
     expect(call).toHaveBeenCalledTimes(2);
-    expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:8000});
+    expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:4000});
     expect(call.mock.calls[1][0]).toMatchObject({effort:"low",maxTokens:4000});
     expect(call.mock.calls[1][0].system).toContain("Counter.sol");
     expect(call.mock.calls.every(([request])=>!request.system.includes("pragma solidity"))).toBe(true);
@@ -181,5 +181,22 @@ describe("bounded independent check declaration",()=>{
     expect(error).toMatchObject({reason:"invalid-declaration"});
     expect(error.diagnostic).not.toHaveProperty("progress");
     expect(call).toHaveBeenCalledTimes(1);
+  });
+  it("separates the contract graph from its complete public ABI under the same interface ceiling",async()=>{
+    const graph=structuredClone(declaration);graph.contracts[0][5]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(graph),interfacesPending:true}))
+      .mockResolvedValueOnce(response({interfaces:JSON.stringify({main:declaration.contracts[0][5]})}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps),complete:true}));
+    const checked=await declareGeneralChecks(input,call);
+    expect(checked.scenarios.contracts[0].functions).toEqual(declaration.contracts[0][5]);
+    expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","scenarios"]);
+    expect(call.mock.calls.slice(0,2).reduce((sum,[request])=>sum+request.maxTokens,0)).toBe(8000);
+  });
+  it("rejects a public interface response that substitutes a different contract",async()=>{
+    const graph=structuredClone(declaration);graph.contracts[0][5]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(graph),interfacesPending:true}))
+      .mockResolvedValueOnce(response({interfaces:JSON.stringify({other:declaration.contracts[0][5]})}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"interface",reason:"public-interface-identities"});
+    expect(call).toHaveBeenCalledTimes(2);
   });
 });

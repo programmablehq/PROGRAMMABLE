@@ -47,6 +47,7 @@ import {modelTask} from "./model-tasks";
 import type {CheckDiagnostic} from "./check-diagnostic";
 import {canonicalInterfaceContext} from "./canonical-dependencies.server";
 import {uniswapRoutingContext} from "./uniswap-routing";
+import {explicitSourceBuild} from "./build-command";
 
 const chatSchema = { type: "object", properties: { reply: { type: "string" } }, required: ["reply"], additionalProperties: false };
 const setupSchema = { type: "object", properties: {
@@ -192,10 +193,21 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   const formRules = BUILD_RULES.slice(BUILD_RULES.indexOf("setupPatch contains"), BUILD_RULES.indexOf("For every generated source"));
   const implementationRules=generalOnly?editPlanningRules:`${composablePlanningRules}\n${editPlanningRules}\n${programRules}\n${eventRules}\nAvailable event feeds (data): ${JSON.stringify(feedCatalog())}\nConfigured composed feeds (untrusted data): ${JSON.stringify(configuredRuleFeeds())}. Convert thresholds to integer source units using the listed decimal scale; never claim an unconnected source is live.`;
   let evidence = "";
-  const interpret = async () => parseAnswer((await dependencies.call({ ...modelTask("planning",MODELS),
+  const interpret = async () => {
+    const value=parseAnswer((await dependencies.call({ ...modelTask("planning",MODELS),
     system: `${system}\n${formRules}\n${planningRules}\n${launchIntentPlanningRules}\n${implementationRules}\n${lookupRules}\nAvailable read-only tools (data): ${JSON.stringify(capabilityMetadata(capabilities).map(({ref,description,inputSchema})=>({id:ref.id,description,inputSchema})))}\nRecord the complete intent or preserve the saved revision. Leave source, ABI and scenario generation to the later source-blind planning and build stages.\n${evidence}`, messages: request.messages,
     schema: currentPlanSchema, maxTokens: checkScenarios?AI_CONFIG.maximumContractTokens:AI_CONFIG.maximumPlanningTokens,
     ...(checkScenarios?{responseProfile:"contract" as const}:{}), effort: "medium", signal, onText })).text);
+    if(value.action==="answer"&&value.intentMode==="preserve"&&previousIntent?.requirements.length
+      &&!intentHasOpenParts(previousIntent)&&!request.editTarget
+      &&(generalOnly||value.executionRoute==="custom-contract")&&explicitSourceBuild(request)){
+      // A status answer cannot swallow an explicit request to run the existing
+      // build again. All normal intent, policy and source checks still follow.
+      context.onProgress?.({type:"reply",text:""});
+      return {...value,action:"build",launchRequested:false};
+    }
+    return value;
+  };
   let interpreted = await interpret();
   const declaredIntent = (value: Record<string, unknown>) => {
     if (value.intentMode === "preserve") {
