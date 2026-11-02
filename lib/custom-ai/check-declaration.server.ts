@@ -22,6 +22,7 @@ import {generalDeploymentPlanningRules} from "./deployment-blueprint";
 import {uniswapRoutingContext} from "./uniswap-routing";
 import {graphSchemaForConstraints,interfaceSchemaForGraph,nativeFullDeclaration,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeStageInstructions,nativeDeployment,nativeDeploymentInstructions,scenarioSchemaForInterface} from "./check-stage-wire";
 import {mechanismKnowledge} from "./mechanism-knowledge";
+import {prepareSurplusSchema} from "./surplus-schema.server";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
@@ -209,9 +210,22 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   // proves coverage, and the same complete validator still decides acceptance.
   const lastFailure=savedProgress&&input.rejected?.failures.at(-1);
   if(currentProgress.steps.length&&lastFailure?.stage==="scenarios"&&lastFailure.response){
-    let terminal=false;
-    try{terminal=emptyCompletedPage(object(lastFailure.response));}catch{/* Not a terminal page. */}
-    if(terminal)return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+    let recovered:Record<string,unknown>|undefined;
+    try{recovered=object(prepareSurplusSchema(scenarioSchemaForInterface(fixedInterface as Record<string,unknown>),true).decode(lastFailure.response));}
+    catch{/* Incomplete or invalid pages remain untrusted; resume the saved prefix. */}
+    if(recovered){
+      if(emptyCompletedPage(recovered))return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+      // A semantic rejection already includes this page in its complete
+      // declaration. Only a transport rejection can have an unappended page.
+      if(lastFailure.declaration===null){
+        const next=resolveOpeningFixtureValue(nativeScenarioRows(recovered.steps),opening.inputs) as unknown[];
+        const combined={...currentProgress,steps:[...currentProgress.steps,...next]};
+        if(combined.steps.length<=256&&Buffer.byteLength(JSON.stringify(combined))<=96000){
+          currentProgress=combined;progress=combined;
+          if(recovered.complete===true)return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+        }
+      }
+    }
   }
   const scenarioTask=modelTask("scenarios",{chat:input.model,build:input.model,escalation:input.model});
   for(let page=0;page<SCENARIO_MAX_PAGES;page++){

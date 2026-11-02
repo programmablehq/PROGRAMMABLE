@@ -3,6 +3,18 @@ import { resumeAIChat, sameAIRequest, sendAIChat } from "../lib/custom-ai/client
 afterEach(() => {vi.unstubAllGlobals();vi.useRealTimers();});
 const input = { id: "saved-request-0000001", intent: "chat" as const, messages: [{ role: "user" as const, content: "Build my coin" }] };
 describe("saved request recovery", () => {
+  it("restores an unstarted cached message without a reconnect loop or automatic POST",async()=>{
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValue(Response.json({code:"missing",error:"This draft could not be found."},{status:404}));
+    vi.stubGlobal("fetch",fetcher);
+    await expect(resumeAIChat(input,async()=>({}),new AbortController().signal)).rejects.toMatchObject({code:"missing",requestState:"failed"});
+    expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][1]?.method).toBe("GET");
+  });
+  it("keeps an uncertain recovery failure resumable",async()=>{
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValue(Response.json({code:"unavailable",error:"Temporarily unavailable"},{status:503}));
+    vi.stubGlobal("fetch",fetcher);
+    await expect(resumeAIChat(input,async()=>({}),new AbortController().signal)).rejects.toMatchObject({code:"unavailable",requestState:undefined});
+    expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][1]?.method).toBe("GET");
+  });
   it("reads the stored result after a cut stream without another paid POST", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response('data: {"type":"reply","text":"Partial"}\n\n', { headers: {"Content-Type":"text/event-stream"} }))
       .mockResolvedValueOnce(Response.json({ id:input.id,request:input,state: "completed", result: { reply: "Complete" } }));
