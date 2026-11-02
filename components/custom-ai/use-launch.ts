@@ -12,6 +12,7 @@ import type { ImageReceipt } from "@/lib/custom-ai/studio";
 export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinSetup; draftId?: string; reviewedSourceHash?: string; image?: Blob; imageReceipt?: ImageReceipt; headers: AISessionHeaders; localPreview: boolean }) {
   const wallet = useWallet();
   const [saved, setSaved] = useState<StoredLaunchSession | null>(null);
+  const [loadedAccount, setLoadedAccount] = useState<string>();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const current = useRef(saved);
   const operation = useRef(false);
@@ -45,7 +46,7 @@ export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinS
       if (cancelled) return;
       try { const local = readLocalLaunch(account); if (local && !isFinishedLaunchDismissed(local)) { setSaved(local); current.current = local; } }
       catch { setError("Your saved launch could not be read. Keep this browser's data for recovery."); }
-    });
+    }).finally(() => { if (!cancelled) setLoadedAccount(account); });
     return () => { cancelled = true; };
   }, [account, input.localPreview]);
 
@@ -71,8 +72,8 @@ export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinS
     return () => clearInterval(timer);
   }, [saved?.session.state, input.localPreview, refresh]);
 
-  async function proceed() {
-    continueFlow.current = true;
+  async function advance(openWallet: boolean) {
+    continueFlow.current = openWallet;
     if (operation.current || input.localPreview) return;
     if (!account) { wallet.openWallet(); return; }
     operation.current = true; setBusy(true); setError("");
@@ -110,7 +111,7 @@ export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinS
       // the wallet to authorize that replacement.
       if (previousStep && step?.id !== previousStep.id && value.session.quoteNotice) { continueFlow.current = false; return; }
       if (justCreated && value.session.quoteNotice) { continueFlow.current = false; return; }
-      if (value.session.state === "ready" && step?.state === "prepared") {
+      if (openWallet && value.session.state === "ready" && step?.state === "prepared") {
         await wallet.sendCustomAIWalletStep(value.session.id, step);
         const local = readLocalLaunch(account);
         if (local) remember(local);
@@ -119,6 +120,8 @@ export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinS
     } catch (cause) { continueFlow.current = false; setError(cause instanceof Error ? cause.message : "The launch could not continue. Your progress is saved."); }
     finally { operation.current = false; setBusy(false); }
   }
+  const proceed = () => advance(true);
+  const prepare = () => advance(false);
   useEffect(() => {
     if (!continueFlow.current || operation.current || busy || saved?.session.state !== "ready") return;
     const step = saved.session.steps.at(-1);
@@ -135,7 +138,7 @@ export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinS
     try { dismissFinishedLaunch(saved);current.current=null;setSaved(null);receipt.current=undefined;setError("");return true; }
     catch {setError("The completed launch could not be saved. Keep this tab open.");return false;}
   }
-  return { proceed, startAnother, busy, error, label, locked: Boolean(pending), saved,
+  return { proceed, prepare, startAnother, loaded: input.localPreview || !account || loadedAccount === account, busy, error, label, locked: Boolean(pending), saved,
     message: saved?.session.state === "confirmed" ? "Your coin is live."
       : saved?.session.state === "waiting" ? step?.kind === "launch" ? "Your launch is confirming." : "Waiting for the transaction to confirm."
       : saved?.session.state === "failed" ? step?.failureReason === "replaced" ? "This wallet request was replaced. Your earlier steps are saved." : "The transaction reverted. Your earlier steps are saved." : "" };

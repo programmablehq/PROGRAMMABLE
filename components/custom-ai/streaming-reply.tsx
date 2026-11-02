@@ -26,6 +26,6 @@ export function StreamingReply({ text, onAdvance }: { text: string; onAdvance: (
   useLayoutEffect(() => { onAdvance(); }, [visible, onAdvance]);
   return <div className={styles.message} data-role="assistant">
     <div className={`${styles.messageText} ${styles.revealing}`} aria-hidden="true">{visible}</div>
-    <CopyButton label="Copy current reply" value={visible} />
+    <CopyButton compact label="Copy current reply" value={visible} />
   </div>;
 }

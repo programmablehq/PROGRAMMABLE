@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { setupQuoteAddress, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import type { Draft } from "@/lib/custom-ai/types";
@@ -68,11 +68,14 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   const summary = draft?.validation?.status === "passed" ? draft.hookSummary : undefined;
   const missingField = readiness.missingFields?.[0];
   const missingLabel = missingField ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image" }[missingField] : undefined;
-  function addMissingDetail() { if(missingField)editor.current?.focus(missingField); }
+  const addMissingDetail=useCallback(()=>{if(missingField)editor.current?.focus(missingField);},[missingField]);
   useEffect(()=>{
-    if(!launchCommand||handledCommand.current===launchCommand.id||launchCommand.sourceId!==draftId||disabled||launch.busy)return;
-    handledCommand.current=launchCommand.id;launchButton.current?.scrollIntoView({block:"nearest"});launchButton.current?.focus();
-  },[launchCommand,draftId,disabled,launch.busy]);
+    if(!launchCommand||handledCommand.current===launchCommand.id||launchCommand.sourceId!==draftId||disabled||imageBusy||launch.busy||!launch.loaded)return;
+    handledCommand.current=launchCommand.id;
+    launchButton.current?.scrollIntoView({block:"nearest"});launchButton.current?.focus();
+    if(missingField){addMissingDetail();return;}
+    if(!localPreview&&reviewedSourceHash&&readiness.state==="design-ready"&&!bound)void launch.prepare();
+  },[launchCommand,draftId,disabled,imageBusy,launch,missingField,addMissingDetail,localPreview,reviewedSourceHash,readiness.state,bound]);
 
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled||launch.locked||launch.busy}
