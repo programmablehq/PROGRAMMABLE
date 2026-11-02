@@ -63,7 +63,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   const signal = AbortSignal.any([deadline, ...(input.signal ? [input.signal] : [])]);
   const timedOut = () => deadline.aborted && !input.signal?.aborted;
   let text = "", inputTokens: number | null = null, outputTokens: number | null = null, finish: unknown;
-  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0]) => new ModelResponseError(failure, { inputTokens, outputTokens });
+  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0]) => new ModelResponseError(failure, { inputTokens, outputTokens },input.captureIncompleteDeclaration?text:undefined);
   // Long declarations need the same streamed transport as generated source,
   // including internal calls that have no visible text callback.
   const stream = Boolean(input.onText) || input.responseProfile === "contract";

@@ -182,6 +182,14 @@ describe("bounded independent check declaration",()=>{
     expect(error.diagnostic).not.toHaveProperty("progress");
     expect(call).toHaveBeenCalledTimes(1);
   });
+  it("retains a bounded private partial-output diagnosis without treating it as a reusable declaration",async()=>{
+    const call=vi.fn().mockRejectedValue(new ModelResponseError("output-limit",{inputTokens:100,outputTokens:4000},'{"generalChecks":"private-truncated-graph'));
+    const error=await declareGeneralChecks(input,call).catch(error=>error);
+    expect(error.message).not.toContain("private-truncated-graph");
+    expect(error.diagnostic.failures[0]).toMatchObject({declaration:null,message:expect.stringContaining("private-truncated-graph")});
+    expect(call.mock.calls[0][0].captureIncompleteDeclaration).toBe(true);
+    expect(call).toHaveBeenCalledOnce();
+  });
   it("separates the contract graph from its complete public ABI under the same interface ceiling",async()=>{
     const graph=structuredClone(declaration);graph.contracts[0][5]=[];
     const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(graph),interfacesPending:true}))
@@ -191,6 +199,9 @@ describe("bounded independent check declaration",()=>{
     expect(checked.scenarios.contracts[0].functions).toEqual(declaration.contracts[0][5]);
     expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","scenarios"]);
     expect(call.mock.calls.slice(0,2).reduce((sum,[request])=>sum+request.maxTokens,0)).toBe(8000);
+    expect(call.mock.calls[0][0].system).not.toContain("Canonical steps are ordered");
+    expect(call.mock.calls[1][0].system).not.toContain("Canonical steps are ordered");
+    expect(call.mock.calls[2][0].system).toContain("Canonical steps are ordered");
   });
   it("rejects a public interface response that substitutes a different contract",async()=>{
     const graph=structuredClone(declaration);graph.contracts[0][5]=[];

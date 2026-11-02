@@ -92,6 +92,16 @@ describe("Surplus model routing", () => {
     await expect(callSurplus(input)).rejects.toMatchObject({code:"incomplete",failure:"output-limit",usage:{inputTokens:14900,outputTokens:8000}});
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("captures incomplete declaration output only on explicit opt-in and never enumerates it",async()=>{
+    useSurplus();const text='{"generalChecks":"unfinished-private-declaration';
+    vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content:text},finish_reason:"length"}]})));
+    const ordinary=await callSurplus(input).catch(error=>error);
+    expect(ordinary.partialDeclaration).toBeUndefined();
+    const captured=await callSurplus({...input,captureIncompleteDeclaration:true}).catch(error=>error);
+    expect(captured.partialDeclaration).toBe(text);
+    expect(JSON.stringify(captured)).not.toContain("unfinished-private-declaration");
+    expect(captured.message).not.toContain("unfinished-private-declaration");
+  });
   it("reports absent or invalid usage as unknown instead of a zero-cost completed record",async()=>{
     useSurplus();vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content:'{"reply":"OK"}'},finish_reason:"stop"}],usage:{prompt_tokens:-1,completion_tokens:"unknown"}})));
     await expect(callSurplus(input)).resolves.toEqual({text:'{"reply":"OK"}',inputTokens:null,outputTokens:null});

@@ -8,7 +8,7 @@ import { modelResponseLimits, reportedTokenCount, type ModelResponseProfile } fr
 
 export const MODELS = AI_CONFIG.models;
 export type Model = string;
-export type ClaudeInput = { model: Model; task?: import("./model-tasks").ModelTask; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; responseProfile?: ModelResponseProfile; signal?: AbortSignal; onText?: (text: string) => void };
+export type ClaudeInput = { model: Model; task?: import("./model-tasks").ModelTask; system: string; messages: ChatMessage[]; schema: object; maxTokens: number; effort?: "low" | "medium" | "high"; responseProfile?: ModelResponseProfile; signal?: AbortSignal; onText?: (text: string) => void; captureIncompleteDeclaration?: boolean };
 export type ClaudeResult = { text: string; inputTokens: number | null; outputTokens: number | null };
 
 export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
