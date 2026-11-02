@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import {Actions,URVersion,V4Planner} from "@uniswap/v4-sdk";
 import {
   CommandType,
   RoutePlanner,
   UniversalRouterVersion,
 } from "@uniswap/universal-router-sdk";
 import {
-  decodeFunctionData,
   encodeFunctionData,
   getAddress,
   type Address,
@@ -81,32 +81,20 @@ function swapCalldata(overrides: {
   safetyRecipient?: Address;
   includeSafetySweep?: boolean;
 } = {}) {
-  const direct = buildClassicSwapTransaction({
-    deployment,
-    poolKey: createClassicPoolKey(TOKEN, deployment),
-    side: "buy",
-    amountIn: overrides.amountIn ?? 1_000n,
-    quotedAmountOut: 2_000n,
-    slippageBps: 100,
-    now: 1_000n,
-    deadline: overrides.deadline ?? 1_300n,
-  }).data;
-  const decoded = decodeFunctionData({
-    abi: classicUniversalRouterAbi,
-    data: direct,
-  });
-  if (decoded.functionName !== "execute") {
-    throw new Error("Expected Universal Router calldata");
-  }
+  const amountIn=overrides.amountIn??1000n;
+  const v4=new V4Planner();
+  v4.addAction(Actions.SWAP_EXACT_IN_SINGLE,[{poolKey:createClassicPoolKey(TOKEN,deployment),zeroForOne:true,
+    amountIn,amountOutMinimum:1980n,minHopPriceX36:0n,hookData:"0x"}],URVersion.V2_1_2);
+  v4.addAction(Actions.SETTLE_ALL,[NATIVE_ETH,amountIn],URVersion.V2_1_2);
+  v4.addAction(Actions.TAKE_ALL,[TOKEN,1980n],URVersion.V2_1_2);
   const planner = new RoutePlanner();
-  planner.commands = decoded.args[0];
-  planner.inputs = [...decoded.args[1]];
+  planner.addCommand(CommandType.V4_SWAP,[v4.finalize()],false,UniversalRouterVersion.V2_1_2);
   if (overrides.includeSafetySweep !== false) {
     planner.addCommand(
       CommandType.SWEEP,
       [NATIVE_ETH, overrides.safetyRecipient ?? OWNER, 0],
       false,
-      UniversalRouterVersion.V2_0,
+      UniversalRouterVersion.V2_1_2,
     );
   }
   return encodeFunctionData({
@@ -115,7 +103,7 @@ function swapCalldata(overrides: {
     args: [
       planner.commands as `0x${string}`,
       planner.inputs as `0x${string}`[],
-      decoded.args[2],
+      overrides.deadline ?? 1_300n,
     ],
   });
 }
@@ -269,7 +257,7 @@ describe("official Uniswap Trading API adapter", () => {
     );
     const quoteHeaders = new Headers(quoteInit?.headers);
     expect(quoteHeaders.get("x-api-key")).toBe(API_KEY);
-    expect(quoteHeaders.get("x-universal-router-version")).toBe("2.0");
+    expect(quoteHeaders.get("x-universal-router-version")).toBe("2.1.2");
     const quoteBody = JSON.parse(String(quoteInit?.body));
     expect(quoteBody).toEqual({
       type: "EXACT_INPUT",
@@ -292,6 +280,7 @@ describe("official Uniswap Trading API adapter", () => {
     expect(swapUrl).toBe(
       "https://trade-api.gateway.uniswap.org/v1/swap",
     );
+    expect(new Headers(swapInit?.headers).get("x-universal-router-version")).toBe("2.1.2");
     const swapBody = JSON.parse(String(swapInit?.body));
     expect(swapBody).toMatchObject({
       refreshGasPrice: true,
@@ -334,6 +323,17 @@ describe("official Uniswap Trading API adapter", () => {
   });
 
   it.each([
+    {
+      name: "a retired 2.0 router target",
+      quote: quoteResponse(),
+      swap: swapResponse({to:getAddress("0x66a9893cc07d91d95644aedd05d03f95e1dba8af")}),
+    },
+    {
+      name: "old 2.0 calldata at the new router",
+      quote: quoteResponse(),
+      swap: swapResponse({data:buildClassicSwapTransaction({deployment,poolKey:createClassicPoolKey(TOKEN,deployment),side:"buy",amountIn:1000n,
+        quotedAmountOut:2000n,slippageBps:100,now:1000n,deadline:1300n}).data}),
+    },
     {
       name: "a route through another hook",
       quote: quoteResponse({ hook: OTHER_HOOK }),

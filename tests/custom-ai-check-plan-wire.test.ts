@@ -37,6 +37,17 @@ describe("lossless compact contract check transport",()=>{
     expect(decodeGeneralCheckDeclaration(JSON.stringify({...compact,contracts:canonical.contracts,steps:canonical.steps}))).toEqual(canonical);
     expect(()=>decodeGeneralCheckDeclaration(JSON.stringify({...compact,contracts:[{...canonical.contracts[0],unknown:true}]}))).toThrow();
   });
+  it("expands only the selected pinned interface without weakening the complete checks",()=>{
+    const {canonical,compact}=fixture(),known=[{contract:"PinnedCounter",functions:[canonical.contracts[0].functions[0]]}];
+    compact.contracts[0][5]={canonical:"PinnedCounter",additional:[canonical.contracts[0].functions[1]]} as never;
+    const decoded=decodeGeneralCheckDeclaration(JSON.stringify(compact),known);
+    expect(decoded).toEqual(canonical);
+    expect(createGeneralCheckBlueprint(decoded,intent,999,"cancun")).toEqual(createGeneralCheckBlueprint(canonical,intent,999,"cancun"));
+    expect(()=>decodeGeneralCheckDeclaration(JSON.stringify(compact),[])).toThrow("canonical-interface-not-in-this-chain-catalog");
+    expect(()=>decodeGeneralCheckDeclaration(JSON.stringify(compact),[...known,...known])).toThrow();
+    compact.contracts[0][8]=[];
+    expect(()=>createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(JSON.stringify(compact),known),intent,999,"cancun")).toThrow("missing-requirements:surface");
+  });
   it("preserves constructor child identities and explicit funding without adding defaults",()=>{
     const {compact}=fixture();
     const child=["child","Child.sol","Child","auxiliary",[{contract:"main"}],[],false,false,["surface"],"main","create","1","0"];

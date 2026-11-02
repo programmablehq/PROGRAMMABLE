@@ -3,12 +3,13 @@ import catalog from "./catalog-search/index.server";
 import web from "./web-search/index.server";
 import contract from "./contract-read/index.server";
 import searchHooks from "./search-hooks/index.server";
+import protocol from "./protocol/index.server";
 import type { CapabilityContext, CapabilityRef, ToolCapability } from "./types";
 import { AI_CONFIG, type ExecutionProfile } from "../ai-config";
 import { CustomAIError } from "../types";
 import { configuredProvider } from "../provider-config.server";
 
-const registry: readonly ToolCapability[] = [catalog, web, contract, searchHooks];
+const registry: readonly ToolCapability[] = [catalog, web, contract, searchHooks, protocol];
 export function getCapabilities(context: CapabilityContext, entries = registry) {
   const ids = new Set<string>();
   for (const entry of entries) {

@@ -11,6 +11,7 @@ import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import { bindGeneralCheckBlueprint, createGeneralCheckBlueprint } from "../lib/custom-ai/check-blueprint";
 import type { GeneralScenarioReport } from "../lib/custom-ai/behavior-checks.server";
 import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
+import {checkContextHash,type CheckDiagnostic} from "../lib/custom-ai/check-diagnostic";
 
 let database: PGlite, store: AIStore;
 const id = "00000000-0000-4000-8000-000000000001";
@@ -59,6 +60,18 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("keeps rejected declarations private and bound to the active owner, lease and job payload",async()=>{
+    const attempt=await reserve(),p=project();
+    const diagnostic:CheckDiagnostic={version:1,contextHash:checkContextHash({...p,evmVersion:"paris"}),
+      failures:[{stage:"scenarios",message:"missing-requirements:no-mint",declaration:'{"contracts":[]}'}]};
+    await expect(store.projects.saveCheckDiagnostic("alice",id,"wrong-lease",diagnostic)).rejects.toBeDefined();
+    await store.projects.saveCheckDiagnostic("alice",id,attempt.lease!,diagnostic);
+    expect(await store.projects.readCheckDiagnostic("alice",id)).toEqual(diagnostic);
+    expect(await store.projects.readCheckDiagnostic("bob",id)).toBeUndefined();
+    expect(JSON.stringify(await store.read("alice",id))).not.toContain("missing-requirements");
+    await database.query("UPDATE programmable_custom_ai_v1.jobs SET payload_hash='changed' WHERE owner='alice' AND id=$1",[id]);
+    expect(await store.projects.readCheckDiagnostic("alice",id)).toBeUndefined();
+  });
   it("a compile retry inherits the original source time instead of creating a fresh speed claim",async()=>{
     const first=await reserve(),p=project();const saved=await store.projects.save("alice",id,first.lease!,p);
     await store.cancel("alice",id);

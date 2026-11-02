@@ -19,6 +19,9 @@ import { dependencySourceContext } from "./dependency-source-context";
 import { resolveInlineLibraries } from "./inline-libraries";
 import { AI_CONFIG } from "./ai-config";
 import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.server";
+import {modelTask} from "./model-tasks";
+import {PROTOCOL_CORE,PROTOCOL_TOPICS} from "./protocol-knowledge";
+import {uniswapRoutingContext} from "./uniswap-routing";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -109,13 +112,13 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   const context = JSON.stringify({ intent: modelDesignContext({ intent }, false).intent,
     dependencySources: dependencyContext.modelSources, dependencySourceView: dependencyContext.view, previous,
     ...(compiler.viaIR?{compilerImportAliases:VIAIR_200_REMAPPINGS}:{}),
-    ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production}:{}) });
+    ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production,uniswapRouting:uniswapRoutingContext(production)}:{}) });
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });
-  const response = await call({ model: configuredProvider().models.build, signal, effort: "high", maxTokens: AI_CONFIG.maximumContractTokens,responseProfile:"contract",
+  const response = await call({ ...modelTask("source",configuredProvider().models), signal, maxTokens: AI_CONFIG.maximumContractTokens,responseProfile:"contract",
     schema: generalProjectResponseSchema, messages: input.messages,
     onText: text => { const reply = partialReply(text); if (reply !== undefined) input.onProgress?.({ type: "reply", text: reply }); },
-    system: `${GENERAL_CONTRACT_VOICE}
+    system: `${GENERAL_CONTRACT_VOICE}\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.callbacks.facts}\n${PROTOCOL_TOPICS.routing.facts}
 Generate a complete general Custom Contract source project for the saved design, not a fixed fee module.
 The selected route is ${JSON.stringify(chain)}. It uses the existing Custom Launch review and source admission.
 ${production?"The saved production context supplies the selected chain's exact source-admission profile, PoolManager, execution binding and mandatory fee/protection rules. Implement these together with every agreed user rule. Never substitute local fixtures, a different chain or the old fixed fee core. A policy conflict requires clarification, never removing a saved rule. Discovery is configuration, not approval or proof of live dependency behavior.":"No production context was supplied for this local source build. Do not invent network addresses or claim this project can be submitted."}

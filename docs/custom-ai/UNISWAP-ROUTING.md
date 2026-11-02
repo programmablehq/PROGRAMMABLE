@@ -1,0 +1,15 @@
+# Uniswap routing boundaries
+
+Reviewed 2 November 2026. There are three separate routing contexts.
+
+- **Hosted Uniswap Trading API:** API requests pin version `2.1.2`. The Ethereum target is `0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85`. The SDK decoder must use `V2_1_2`, including `minHopPriceX36`; successful decoding with the old default is insufficient. Both quote and swap requests use the same version. Hook, pool, amount, recipient, deadline, sweep and destination checks remain enforced.
+- **Pinned Programmable launch routers:** Existing production discovery supplies exact addresses and runtime hashes. Ethereum's current protected route uses the 2.0 ABI family; Robinhood, Base and HyperEVM use the 2.1 ABI family. A compatible ABI name is not a claim about an exact newer deployment version. The generation context supplies these bindings separately from the launch executor. Do not repoint immutable hooks to the hosted API's current router.
+- **Local behavior fixtures:** The isolated `v4-router` implements controlled test operations at fixed addresses. It is not the production Universal Router bytecode. A successful local swap cannot prove that a real router will supply the same identity, hook data or settlement behavior.
+
+The automatic backend's existing fork-swap implementation uses actual pinned Universal Router calls for native/token exact-input buys and sells. It distinguishes the 2.0 tuple from the 2.1 tuple, checks runtime hashes and covers forwarded recipients. Backend deployment and chat activation remain separate acceptance steps. That probe does not establish arbitrary hook data, other quote assets, cross-chain swaps or every exact-output strategy.
+
+The chat receives `uniswapRoutingContext` during planning, declaration, source generation and source review. Missing or unrecognized bindings stay explicit. Creative rules must retain their requirements when they need an additional adapter. Hosted API routing through a custom pool and the Uniswap frontend's inclusion of a custom hook must be confirmed independently.
+
+The audit found the hosted API still requested 2.0 in the standalone classic buy adapter and 2.1.1 in optional Any Quote discovery. Uniswap retired both headers on 21 October 2026. The request headers, mainnet destination and decoder were updated together; direct-route deployments and wallet permissions were not changed. Repository callers do not currently connect the standalone adapter to the public trade route, and production Any Quote defaults to pool-index discovery. These findings therefore do not establish a site-wide trading outage. Optional Any Quote API discovery consumes pool descriptions, not returned API calldata, and retains its independent onchain validation.
+
+Sources: [Uniswap router sunset notice](https://developers.uniswap.org/docs/changelog/active-notifications/sunset-of-universal-router-2-0-and-2-1-1), [supported chains and parser compatibility](https://developers.uniswap.org/docs/trading/swapping-api/supported-chains), [hook routing limitations](https://developers.uniswap.org/docs/protocols/v4/concepts/hooks).

@@ -4,6 +4,7 @@ import {declareGeneralChecks} from "../lib/custom-ai/check-declaration.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
+import type {CheckDiagnostic} from "../lib/custom-ai/check-diagnostic";
 
 const intent:LaunchIntent={version:1,id:"counter-design",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
   {id:"counter",kind:"behavior",text:"Anyone can increment from zero by one",open:null,origin:{kind:"legacy"}},
@@ -93,6 +94,29 @@ describe("bounded independent check declaration",()=>{
       .mockRejectedValueOnce(new ModelResponseError("timeout",{inputTokens:2,outputTokens:8000}));
     await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"timeout"});
     expect(call).toHaveBeenCalledTimes(3);
+  });
+  it("retains exact private validator feedback and repairs the same rejected plan with only one new call",async()=>{
+    const invalid=structuredClone(declaration);invalid.contracts[0][8]=[];
+    const failed=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(invalid)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps)}))
+      .mockResolvedValueOnce(response({generalChecks:JSON.stringify({...invalid,steps})}));
+    const error=await declareGeneralChecks(input,failed).catch(error=>error);
+    expect(error).toMatchObject({reason:"correction-rejected",diagnostic:{version:1}});
+    const rejected=error.diagnostic as CheckDiagnostic;
+    expect(rejected.failures).toHaveLength(2);
+    expect(rejected.failures[1].message).toContain("missing-requirements:no-owner");
+    const repair=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    const result=await declareGeneralChecks({...input,rejected},repair);
+    expect(repair).toHaveBeenCalledTimes(1);
+    expect(repair.mock.calls[0][0]).toMatchObject({task:"declaration-correction"});
+    expect(result.intentRevision).toBe(intent.revision);
+    expect(result.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
+    const other=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    await declareGeneralChecks({...input,chainId:999,rejected},other);
+    expect(other.mock.calls[0][0]).toMatchObject({task:"interface"});
+    const changed=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    await declareGeneralChecks({...input,intent:{...intent,revision:"b".repeat(64)},rejected},changed);
+    expect(changed.mock.calls[0][0]).toMatchObject({task:"interface"});
   });
   it("stops before the second call when the owner cancels",async()=>{
     const controller=new AbortController(),call=vi.fn(async()=>{controller.abort();return response({generalChecks:JSON.stringify(declaration)});});

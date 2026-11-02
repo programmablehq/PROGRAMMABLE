@@ -17,6 +17,7 @@ import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.
 import { generalCheckCaseCount } from "./behavior-checks";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 import { createGeneralPreparationStore } from "./general-preparation-store.server";
+import { checkedCheckDiagnostic, type CheckDiagnostic } from "./check-diagnostic";
 
 export type ProjectCheckpoint = {
   version: 1;
@@ -74,6 +75,24 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,$2,$3,$4)`,[owner,blueprintKind,id,JSON.stringify(value)]);
       return value;
+    });
+  }
+  async function saveCheckDiagnostic(owner:string,id:string,lease:string,input:CheckDiagnostic){
+    const diagnostic=checkedCheckDiagnostic(input);
+    return transaction(async db=>{
+      const payloadHash=await active(db,owner,id,lease);
+      // This private kind has no public read endpoint or source-publication path.
+      await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
+        VALUES($1,'check-diagnostic',$2,$3) ON CONFLICT DO NOTHING`,[owner,id,JSON.stringify({payloadHash,diagnostic})]);
+    });
+  }
+  async function readCheckDiagnostic(owner:string,id:string):Promise<CheckDiagnostic|undefined>{
+    return transaction(async db=>{
+      const row=(await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
+        JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id AND j.payload_hash=o.value->>'payloadHash'
+        WHERE o.owner=$1 AND o.id=$2 AND o.kind='check-diagnostic'`,[owner,id])).rows[0];
+      if(!row)return undefined;
+      return checkedCheckDiagnostic((row.value as {diagnostic:unknown}).diagnostic);
     });
   }
   async function save(owner: string, id: string, lease: string, project: ContractProject, originalSourceId?:string) {
@@ -239,7 +258,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       return value;
     });
   }
-  return { save, complete, overview, saveBlueprint, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
+  return { save, complete, overview, saveBlueprint, saveCheckDiagnostic, readCheckDiagnostic, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
     preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
       publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),

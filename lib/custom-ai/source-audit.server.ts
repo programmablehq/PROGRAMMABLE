@@ -8,6 +8,8 @@ import type {ClaudeInput,ClaudeResult} from "./claude.server";
 import {CustomAIError} from "./types";
 import {canonicalGeneralSourceCatalog} from "./canonical-dependencies.server";
 import {dependencySourceContext} from "./dependency-source-context";
+import {modelTask} from "./model-tasks";
+import {uniswapRoutingContext} from "./uniswap-routing";
 
 export type SourceAuditFinding={code:string;requirementId:string|null;message:string};
 export type GeneralSourceAudit={version:1;projectHash:`sha256:${string}`;intentHash:`sha256:${string}`;
@@ -27,7 +29,7 @@ export function sourceAuditModelContext(project:ContractProject) {
   const dependencies=Object.fromEntries(Object.entries(project.sources).filter(([path,source])=>known[path]?.content===source.content));
   const compact=dependencySourceContext(dependencies);
   return {chainId:project.chainId,intent:project.intent,compiler:project.compiler,entrypoints:project.entrypoints,
-    deployment:project.deployment??null,production:project.production??null,dependencyView:compact.view,
+    deployment:project.deployment??null,production:project.production??null,uniswapRouting:uniswapRoutingContext(project.production),dependencyView:compact.view,
     sources:{...compact.modelSources,...Object.fromEntries(Object.entries(project.sources).filter(([path])=>!dependencies[path]))}};
 }
 
@@ -40,7 +42,7 @@ export async function auditGeneralSource(project:ContractProject,signal?:AbortSi
   const context=JSON.stringify(sourceAuditModelContext(project));
   if(Buffer.byteLength(context)>1_000_000)return invalid();
   const bounded=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(45_000)]);
-  const response=await deps.call({model,effort:"low",maxTokens:3500,signal:bounded,schema:responseSchema,
+  const response=await deps.call({...modelTask("source-audit",provider.models),signal:bounded,schema:responseSchema,
     system:`You independently review generated Solidity before its launch checks. You did not write the source.
 Inspect every saved requirement and all supplied source, including external calls, access control, callbacks and value flows.
 Exact canonical dependency code may have comments and whitespace compacted; every executable token remains. Edited and generated source is supplied in full. The saved project and compiler still use the original bytes.
