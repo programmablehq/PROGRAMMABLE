@@ -51,6 +51,31 @@ it("never prepares a launch when the source still lacks its successful behavior 
   {generalProject:previous});expect(value.nextAction).toBeUndefined();
 });
 
+it("builds the complete saved design when a casual request explicitly preserves it",async()=>{
+ const previous=prior(),save=vi.fn(async()=>{}),compiler=vi.fn(compile),call=vi.fn()
+  .mockResolvedValueOnce(plan({intentMode:"preserve",intentRequirements:[],requirements:[]})).mockResolvedValueOnce(generated());
+ const value=await runCustomAI({...request,messages:[{role:"user",content:"okay, bau genau den gespeicherten entwurf fertig, alles bleibt gleich"}]},undefined,
+  {call,compile:vi.fn(),compileProject:compiler},{intent:previous.project.intent,saveProject:save});
+ expect(value.intent).toEqual(previous.project.intent);expect(value.generalProject?.intentRevision).toBe(previous.project.intent.revision);
+ expect(save).toHaveBeenCalledOnce();expect(compiler).toHaveBeenCalledOnce();expect(call).toHaveBeenCalledTimes(2);
+ expect(call.mock.calls[1][0].system).toContain("counter");expect(call.mock.calls[1][0].system).toContain("no-owner");
+});
+
+it.each([
+ {intentRequirements:requirements,ruleEdits:[]},
+ {intentRequirements:[],ruleEdits:[{requirementId:"counter",operation:"remove",instruction:"remove counter"}]},
+])("never hides additions or removals inside an unchanged build: %j",async patch=>{
+ const previous=prior(),compiler=vi.fn(),call=vi.fn().mockResolvedValue(plan({intentMode:"preserve",...patch}));
+ await expect(runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:compiler},
+  {intent:previous.project.intent,saveProject:vi.fn()})).rejects.toMatchObject({code:"intent"});
+ expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
+});
+
+it("cannot invent a saved design for an empty preserve request",async()=>{
+ const call=vi.fn().mockResolvedValue(plan({intentMode:"preserve",intentRequirements:[],ruleEdits:[]}));
+ await expect(runCustomAI(request,undefined,{call,compile:vi.fn()},{saveProject:vi.fn()})).rejects.toMatchObject({code:"intent"});
+});
+
 describe("general source generation inside the owned chat job",()=>{
  it("binds all canonical general rules without treating a redundant fee subset as source coverage",async()=>{
   const call=vi.fn().mockResolvedValueOnce(plan({implementedRequirementIds:["old-fee-rule"],requirements:["Redundant prose"]}))

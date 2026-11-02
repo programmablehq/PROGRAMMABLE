@@ -18,6 +18,8 @@ A direct request such as “okay, launch this coin” can produce a source-bound
 
 ## Context changes
 
+The planner declares `intentMode: preserve` for an unchanged saved design and leaves its rule/edit arrays empty. The server supplies the complete saved revision. New rules, edits and answers to open choices use `revise` and the complete existing validation path; a preserve response cannot smuggle in additions or removals.
+
 - **New coin** saves the current coin, unsent message and selected rule before clearing them. It never copies rules into the new coin.
 - **Clear messages** only clears the visible conversation and composer. The current coin, saved rules and unresolved change remain in context. Its label and explanation must say so before activation.
 - **Restore previous coin** restores the unsent message and selected rule as well as the coin. Switching is serialized so a double click cannot overwrite the saved coin with an empty draft.

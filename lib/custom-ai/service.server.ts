@@ -58,6 +58,7 @@ const planSchema = { type: "object", properties: {
   reply: { type: "string" },
   executionRoute: { type: "string", enum: ["fee-module", "composed-module", "custom-contract"] },
   intentRequirements: intentRequirementSchema,
+  intentMode: { type: "string", enum: ["preserve", "revise"] },
   composable: { type: ["string", "null"] }, program: programSchema, eventRule: eventRuleSchema,
   ruleEdits: { type: "array", maxItems: MAX_INTENT_REQUIREMENTS, items: { type: "object", properties: {
     requirementId: { type: "string" }, operation: { type: "string", enum: ["replace", "remove"] }, instruction: { type: "string" },
@@ -73,7 +74,7 @@ const planSchema = { type: "object", properties: {
     afterSeconds: { type: "integer" }, buy: { type: "boolean" }, totalFeeBps: { type: "integer" },
     feedValue: { type: ["string", "null"] }, feedFresh: { type: ["boolean", "null"] },
   }, required: ["afterSeconds", "buy", "totalFeeBps", "feedValue", "feedFresh"], additionalProperties: false } },
-}, required: ["reply", "executionRoute", "intentRequirements", "action", "launchRequested", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
+}, required: ["reply", "executionRoute", "intentRequirements", "intentMode", "action", "launchRequested", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
 type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compile: (source: string, signal?: AbortSignal, expectations?: FeeExpectation[], feed?: FeedBinding) => Promise<Draft>; compileProject?: typeof compileContractProject;checkProject?:typeof checkGeneralScenarios; feed?: typeof prepareEventFeed; lookup?: typeof readLiveKnowledge };
 export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec?: RuleSpecV2; owner?: string; draft?: Draft; generalProject?: GeneralProjectDraft; generalProjectView?: GeneralProjectView; loadGeneralProject?:()=>Promise<GeneralProjectDraft>; memory?: string; onProgress?: (event: ChatProgress) => void; onModelCall?:(call:ModelCallMetric)=>void;
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
@@ -184,16 +185,27 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   const implementationRules=generalOnly?editPlanningRules:`${composablePlanningRules}\n${editPlanningRules}\n${programRules}\n${eventRules}\nAvailable event feeds (data): ${JSON.stringify(feedCatalog())}\nConfigured composed feeds (untrusted data): ${JSON.stringify(configuredRuleFeeds())}. Convert thresholds to integer source units using the listed decimal scale; never claim an unconnected source is live.`;
   let evidence = "";
   const interpret = async () => parseAnswer((await dependencies.call({ model: MODELS.chat,
-    system: `${system}\n${formRules}\n${planningRules}\n${launchIntentPlanningRules}\n${implementationRules}\n${lookupRules}\nAvailable read-only tools (data): ${JSON.stringify(capabilityMetadata(capabilities))}\nUse lookups with kind set to the tool id and input matching its schema.\nRecord the complete agreed intent and open decisions here. Do not generate contract source, ABI declarations or test scenarios in this planning response; a separate source-blind step declares the checks after the final intent is known.\n${evidence}`, messages: request.messages,
+    system: `${system}\n${formRules}\n${planningRules}\n${launchIntentPlanningRules}\n${implementationRules}\n${lookupRules}\nAvailable read-only tools (data): ${JSON.stringify(capabilityMetadata(capabilities))}\nRecord the complete intent or preserve the saved revision. Leave source, ABI and scenario generation to the later source-blind planning and build stages.\n${evidence}`, messages: request.messages,
     schema: currentPlanSchema, maxTokens: checkScenarios?AI_CONFIG.maximumContractTokens:AI_CONFIG.maximumPlanningTokens,
     ...(checkScenarios?{responseProfile:"contract" as const}:{}), effort: "medium", signal, onText })).text);
   let interpreted = await interpret();
+  const declaredIntent = (value: Record<string, unknown>) => {
+    if (value.intentMode === "preserve") {
+      if (!previousIntent || !Array.isArray(value.intentRequirements) || value.intentRequirements.length
+        || !Array.isArray(value.ruleEdits) || value.ruleEdits.length || request.editTarget && value.action !== "answer")
+        throw new CustomAIError("intent", "An unchanged build must use the complete saved design without edits.", 502);
+      return previousIntent.requirements.map(({ id, text, kind, open }) => ({ id, text, kind, open, instruction: "" }));
+    }
+    if (value.intentMode !== undefined && value.intentMode !== "revise")
+      throw new CustomAIError("intent", "The requested design change could not be read. Your saved rules are kept.", 502);
+    return value.action === "answer" && value.intentRequirements === undefined && value.implementedRequirementIds === undefined
+      ? [] : parseIntentRequirements(value.intentRequirements);
+  };
   // Open questions have one authority: their canonical requirement. Do not
   // make the model repeat them in a second list and compare paraphrases.
   const readPlan = (value: Record<string, unknown>) => {
     if(value.launchRequested!==undefined&&typeof value.launchRequested!=="boolean")throw new CustomAIError("plan","The requested next step could not be read. Your design is kept.",502);
-    const declared = value.action === "answer" && value.intentRequirements === undefined && value.implementedRequirementIds === undefined
-      ? [] : parseIntentRequirements(value.intentRequirements);
+    const declared = declaredIntent(value);
     // General source has no executable fee-program subset at interpretation
     // time. Its full canonical intent is bound by the later independent plan
     // and source package. A redundant subset list must not block that path or
@@ -237,7 +249,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   const update = coinUpdate(interpreted, request);
   const edits = plan.action === "answer" ? [] : parseRuleEdits(interpreted.ruleEdits, request.messages.at(-1)!.content);
   const revised = plan.action === "answer" ? undefined : reviseLaunchIntent({ previous: previousIntent,
-    proposed: parseIntentRequirements(interpreted.intentRequirements), unresolved: plan.unresolved, edits, request, target: request.editTarget });
+    proposed: declaredIntent(interpreted), unresolved: plan.unresolved, edits, request, target: request.editTarget });
   const intent = revised?.intent ?? previousIntent;
   const coin = applyCoinSetupPatch(request.coin ?? EMPTY_COIN_SETUP, update.setupPatch ?? {});
   const implementationGaps = plan.action === "build" && intent && plan.executionRoute !== "custom-contract" ? intentImplementationGaps(intent,
