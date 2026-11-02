@@ -10,6 +10,14 @@ import { conversationStorageId } from "../lib/custom-ai/conversation.server";
 const account=`0x${"1".repeat(40)}`;
 beforeEach(()=>{vi.clearAllMocks();authorize.mockResolvedValue({kind:"account",owner:"owner-a",principal:{wallets:[account]}});store.consume.mockResolvedValue(undefined);});
 describe("private saved versions and request measurements",()=>{
+  it("retains a complete multi-stage build's usage without increasing inference",()=>{
+    const calls=Array.from({length:9},()=>({model:"test",durationMs:1,inputTokens:10,outputTokens:5,completed:true}));
+    const record=requestMetrics(1,calls,true,10);
+    expect(record.calls).toHaveLength(9);expect(record.tokenAccountingComplete).toBe(true);
+    expect(summarizeRequestMetrics([record]).knownInputTokens).toBe(90);
+    const bounded=requestMetrics(1,[...calls,...calls],true,10);
+    expect(bounded.calls).toHaveLength(16);expect(bounded.tokenAccountingComplete).toBe(false);
+  });
   it("restores an exact general source version as compact metadata without claiming behavior verification",async()=>{
     const projectHash="sha256:"+"c".repeat(64),chat="00000000-0000-4000-8000-000000000002";
     const generalProject={projectHash,compiled:true,verification:"not-run",launchReady:false};

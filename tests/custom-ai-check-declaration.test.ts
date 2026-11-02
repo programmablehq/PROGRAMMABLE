@@ -28,7 +28,7 @@ describe("bounded independent check declaration",()=>{
     expect(checked.scenarios.steps).toHaveLength(3);
     expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
     expect(call).toHaveBeenCalledTimes(2);
-    expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:4000});
+    expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:6000});
     expect(call.mock.calls[1][0]).toMatchObject({effort:"low",maxTokens:4000});
     expect(call.mock.calls[1][0].system).toContain("Counter.sol");
     expect(call.mock.calls.every(([request])=>!request.system.includes("pragma solidity"))).toBe(true);
@@ -69,9 +69,19 @@ describe("bounded independent check declaration",()=>{
     const checked=await declareGeneralChecks(input,call);
     expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
     expect(checked.intentRevision).toBe(intent.revision);expect(call).toHaveBeenCalledTimes(3);
-    expect(call.mock.calls[2][0]).toMatchObject({maxTokens:16000,responseProfile:"contract"});
+    expect(call.mock.calls[2][0]).toMatchObject({maxTokens:8000,responseProfile:"contract"});
     expect(call.mock.calls[2][0].system).toContain("missing-requirements:no-owner");
     expect(call.mock.calls[2][0].system).toContain("There is still no generated implementation");
+  });
+  it("applies a bounded field correction and revalidates the entire original plan",async()=>{
+    const partial=structuredClone(declaration);partial.contracts[0][8]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps)}))
+      .mockResolvedValueOnce(response({changes:[{path:"/contracts/main/surfaceRequirements",valueJson:'["no-owner"]'}]}));
+    const result=await declareGeneralChecks(input,call);
+    expect(result.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
+    expect(result.intentRevision).toBe(intent.revision);expect(call).toHaveBeenCalledTimes(3);
+    expect(call.mock.calls[2][0]).toMatchObject({structuredTransport:"json-object",maxTokens:8000});
   });
   it("stops after one rejected correction and never weakens negative-constraint coverage",async()=>{
     const partial=structuredClone(declaration);partial.contracts[0][8]=[];
@@ -133,14 +143,22 @@ describe("bounded independent check declaration",()=>{
     expect(call.mock.calls.slice(1).every(([request])=>request.maxTokens===4000)).toBe(true);
     expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
   });
-  it("stops at the original total scenario output ceiling and saves reusable partial work",async()=>{
+  it("accepts a complete validated plan at the page ceiling even when the model flag stays false",async()=>{
     const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}));
-    for(let i=0;i<3;i++)call.mockResolvedValueOnce(response({steps:JSON.stringify([[`read-${i}`,"main","count()",[],"trader-a",i,"0",true,["counter"],{status:"success",returns:["0"]}]]),complete:false}));
-    const error=await declareGeneralChecks(input,call).catch(error=>error);
-    expect(error).toMatchObject({stage:"scenarios",reason:"scenario-page-budget",diagnostic:{progress:{steps:expect.any(Array)}}});
-    expect(error.diagnostic.progress.steps).toHaveLength(3);
+    for(const step of steps)call.mockResolvedValueOnce(response({steps:JSON.stringify([step]),complete:false}));
+    const checked=await declareGeneralChecks(input,call);
+    expect(checked.scenarios.steps).toHaveLength(3);
     expect(call).toHaveBeenCalledTimes(4);
     expect(call.mock.calls.slice(1).reduce((sum,[request])=>sum+request.maxTokens,0)).toBe(12000);
+  });
+  it("uses the existing single correction if the final collected pages still fail validation",async()=>{
+    const partial=structuredClone(declaration);partial.contracts[0][8]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)}));
+    for(const step of steps)call.mockResolvedValueOnce(response({steps:JSON.stringify([step]),complete:false}));
+    call.mockResolvedValueOnce(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    const checked=await declareGeneralChecks(input,call);
+    expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
+    expect(call).toHaveBeenCalledTimes(5);expect(call.mock.calls[4][0].system).toContain("missing-requirements:no-owner");
   });
   it("reuses a completed interface and earlier pages after a provider interruption",async()=>{
     const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
@@ -190,7 +208,7 @@ describe("bounded independent check declaration",()=>{
     expect(call.mock.calls[0][0].captureIncompleteDeclaration).toBe(true);
     expect(call).toHaveBeenCalledOnce();
   });
-  it("separates the contract graph from its complete public ABI under the same interface ceiling",async()=>{
+  it("separates the contract graph from its complete public ABI with separate bounded stage budgets",async()=>{
     const graph=structuredClone(declaration);graph.contracts[0][5]=[];
     const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(graph),interfacesPending:true}))
       .mockResolvedValueOnce(response({interfaces:JSON.stringify({main:declaration.contracts[0][5]})}))
@@ -198,7 +216,7 @@ describe("bounded independent check declaration",()=>{
     const checked=await declareGeneralChecks(input,call);
     expect(checked.scenarios.contracts[0].functions).toEqual(declaration.contracts[0][5]);
     expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","scenarios"]);
-    expect(call.mock.calls.slice(0,2).reduce((sum,[request])=>sum+request.maxTokens,0)).toBe(8000);
+    expect(call.mock.calls.slice(0,2).reduce((sum,[request])=>sum+request.maxTokens,0)).toBe(10000);
     expect(call.mock.calls[0][0].system).not.toContain("Canonical steps are ordered");
     expect(call.mock.calls[1][0].system).not.toContain("Canonical steps are ordered");
     expect(call.mock.calls[2][0].system).toContain("Canonical steps are ordered");

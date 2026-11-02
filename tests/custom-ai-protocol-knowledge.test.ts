@@ -14,9 +14,25 @@ describe("protocol knowledge and model routing",()=>{
       const context=canonicalInterfaceContext(chain),sources=canonicalGeneralSourceCatalog(undefined,chain);
       expect(context.contracts).toHaveLength(5);
       expect(context.contracts.every(contract=>sources[contract.source])).toBe(true);
+      expect(context.construction).toHaveLength(5);
+      for(const item of context.construction){
+        expect(sources[item.source].content).toContain(item.constructorSource);
+        expect(item.constructorSource.length).toBeLessThan(24001);
+        for(const declaration of item.callbackDeclarations)expect(sources[item.source].content).toContain(declaration);
+      }
       const snapshot=structuredClone(context);context.contracts.length=0;
       expect(canonicalInterfaceContext(chain)).toEqual(snapshot);
     }
+  });
+  it("supplies actual pinned constructor creation and override constraints before generation",()=>{
+    const context=canonicalInterfaceContext(8453),hook=context.construction.find(item=>item.contract==="BaseProtectedNative30HookV1")!;
+    expect(hook.constructorSource).toContain("feeVault = new EthereumNativeFeeVaultV3");
+    expect(hook.structSources.some(item=>item.includes("address creatorFeeRecipient;")&&item.includes("address module;"))).toBe(true);
+    expect(hook.constructorSource).toContain("protection = new BaseLaunchProtectionModuleV1");
+    expect(hook.constructorSource).toContain("openingTaxVault = new EthereumNativeFeeVaultV3");
+    expect(hook.callbackDeclarations.some(item=>item.includes("_afterSwap"))).toBe(true);
+    expect(hook.initializationSources.some(item=>item.includes("permissions.beforeSwapReturnDelta = true"))).toBe(true);
+    expect(context.construction.find(item=>item.contract==="BaseProtectedNativeInitializerV1")?.initializationSources.some(item=>item.includes("msg.sender != graphFactory"))).toBe(true);
   });
   it.each([1,4663,8453,999] as const)("provides every protocol topic on %i without external requests",async chainId=>{
     const fetcher=vi.spyOn(globalThis,"fetch");
@@ -32,8 +48,8 @@ describe("protocol knowledge and model routing",()=>{
   });
   it("keeps all task choices inside one configured provider's roles",()=>{
     const models={chat:"provider/planner",build:"provider/builder",escalation:"provider/repair"};
-    expect(modelTask("planning",models)).toMatchObject({model:models.chat});
-    expect(modelTask("declaration-correction",models)).toMatchObject({model:models.build,maxTokens:16000});
+    expect(modelTask("planning",models)).toMatchObject({model:models.chat,structuredTransport:"json-object"});
+    expect(modelTask("declaration-correction",models)).toMatchObject({model:models.build,maxTokens:8000});
     expect(modelTask("source-audit",models)).toMatchObject({model:models.build,maxTokens:3500});
   });
 });

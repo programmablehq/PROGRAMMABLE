@@ -67,6 +67,13 @@ describe("a production deployment declared before source", () => {
     const requested = { ...intent, requirements: [{ ...intent.requirements[0], text: `Use manager ${address}` }] };
     expect(createGeneralDeploymentBlueprint(value, entries, production(999), requested).targets[1].constructorArguments).toEqual([address]);
   });
+  it("accepts zero sentinels and pinned protocol recipients without admitting invented wallets",()=>{
+    const value=raw(),recipient=production(999).tradeFee.recipient;
+    (value.targets[1].constructorArguments as unknown[])=[zeroAddress,recipient];
+    expect(declare(value).targets[1].constructorArguments).toEqual([zeroAddress,recipient]);
+    (value.targets[1].constructorArguments as unknown[])=[`0x${"22".repeat(20)}`];
+    expect(()=>declare(value)).toThrow();
+  });
   it("never multiplies native funding and enforces callback permission dependencies", () => {
     const twice = raw(); twice.targets[0].deploymentValue = { input: "funding" } as never;
     expect(() => declare(twice)).toThrow();
@@ -104,6 +111,7 @@ describe("a production deployment declared before source", () => {
     const p = production(999), recipe = declare();
     const contracts = entries.map((entry, index) => ({ ...entry, id: ["token", "hook", "liquidity"][index], arguments: [], functions: [], allowReceive: false, allowFallback: false, surfaceRequirements: ["surface"] }));
     contracts[1].functions = ["function manager() view returns (address)"] as never;
+    contracts[2].functions = ["function initialize(address,address,uint256) payable"] as never;
     const blueprint = createGeneralCheckBlueprint({ contracts, allowedCalls: [], deployment: raw(), steps: [{ id: "manager", contract: "hook", signature: "manager()", arguments: [],
       from: "creator", afterSeconds: 0, value: "0", read: true, requirementIds: [], expect: { status: "success", returns: [p.poolManager.address] } }] }, intent, 999, "cancun", p);
     expect(blueprint.deployment?.id).toBe(recipe.id); expect(() => bindGeneralCheckBlueprint(blueprint, project())).not.toThrow();

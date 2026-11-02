@@ -76,7 +76,10 @@ export function createGeneralDeploymentBlueprint(value: unknown, entries: Projec
         if (new TextEncoder().encode(item).length > 4096 || /[\u0000-\u001f\u007f]/u.test(item)) return invalid();
         // Literal external addresses need explicit design provenance. Known
         // platform roots use binding refs; wallet/form inputs use input refs.
-        if (/^0x[0-9a-f]{40}$/iu.test(item) && !intent.requirements.some(rule => rule.text.toLowerCase().includes(item.toLowerCase()))) return invalid();
+        const protocolRecipient=[production.tradeFee.recipient,production.protectionPolicy?.openingTaxRecipient]
+          .some(recipient=>recipient?.toLowerCase()===item.toLowerCase());
+        if (/^0x[0-9a-f]{40}$/iu.test(item) && !/^0x0{40}$/iu.test(item) && !protocolRecipient
+          && !intent.requirements.some(rule => rule.text.toLowerCase().includes(item.toLowerCase()))) return invalid();
         return item;
       }
       if (!item || typeof item !== "object" || ![Object.prototype, null].includes(Object.getPrototypeOf(item)) || Object.keys(item).length !== 1) return invalid();

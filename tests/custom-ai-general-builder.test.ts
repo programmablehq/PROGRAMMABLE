@@ -6,6 +6,7 @@ import { compileContractProject, type CompiledProject } from "../lib/custom-ai/c
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import type { ClaudeInput } from "../lib/custom-ai/claude.server";
 import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
+import {createGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 
 const intent: LaunchIntent = { version: 1, id: "general-builder-fixture", revision: "a".repeat(64), unresolved: [], changes: [], requirements: [
   { id: "counter", text: "Keep a counter", kind: "behavior", open: null, origin: { kind: "legacy" } },
@@ -22,6 +23,24 @@ const incompleteBuild = async (project: ContractProject): Promise<CompiledProjec
   compiler: GENERAL_PROJECT_COMPILER, compiled: false, diagnostics: [{ severity: "error", message: "Fixture needs repair" }], contracts: [], verification: "not-run", launchReady: false });
 
 describe("general project generation inside the owned AI job", () => {
+  it("binds source to frozen entrypoints instead of asking the model to repeat them",async()=>{
+    const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"GeneralHook.sol",contract:"GeneralHook",role:"hook",arguments:[],
+      functions:["function increment()","function counter() view returns(uint256)"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-admin"]},
+      {id:"helper",source:"Helper.sol",contract:"Helper",role:"auxiliary",arguments:[],functions:[],allowReceive:false,allowFallback:false,surfaceRequirements:[]}],allowedCalls:[],
+      steps:[{id:"increment",contract:"main",signature:"increment()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:false,requirementIds:[],expect:{status:"success"}},
+        {id:"read",contract:"main",signature:"counter()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:true,requirementIds:["counter"],expect:{status:"success",returns:["1"]}}]},intent,999,"paris");
+    const {reply,summary,sourceFiles}=answer(),call=vi.fn(async()=>({text:JSON.stringify({reply,summary,sourceFiles}),inputTokens:1,outputTokens:1}));
+    const availableDependencySources={"Helper.sol":{content:"pragma solidity 0.8.26; contract Helper {}"}};
+    const result=await buildGeneralContract({...request(),blueprint,availableDependencySources},undefined,{call,compile:incompleteBuild});
+    expect(result.project.entrypoints).toEqual(blueprint.entrypoints);
+    expect(result.project.sources["Helper.sol"]).toEqual(availableDependencySources["Helper.sol"]);
+    expect(result.project.intent).toEqual(intent);
+    expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].schema).toMatchObject({required:["reply","summary","sourceFiles"]});
+    const renamed=vi.fn(async()=>({text:JSON.stringify({reply,summary,sourceFiles:[{path:"Renamed.sol",content:source.replace("GeneralHook","Renamed")}]}),inputTokens:1,outputTokens:1}));
+    const compile=vi.fn(incompleteBuild);
+    await expect(buildGeneralContract({...request(),blueprint,availableDependencySources},undefined,{call:renamed,compile})).rejects.toThrow();
+    expect(compile).not.toHaveBeenCalled();
+  });
   it("starts independent source audit beside compilation after saving the source",async()=>{
     const events:string[]=[];let release!:()=>void;const waiting=new Promise<void>(resolve=>{release=resolve;});
     const input=request();input.saveProject.mockImplementation(async()=>{events.push("saved");});
