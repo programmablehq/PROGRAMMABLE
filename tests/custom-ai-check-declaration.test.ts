@@ -61,10 +61,38 @@ describe("bounded independent check declaration",()=>{
     await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"invalid-json"});
     expect(call).toHaveBeenCalledTimes(2);
   });
-  it("rejects a combined plan that loses the negative constraint",async()=>{
+  it("corrects an invalid declaration once without changing the saved intent",async()=>{
     const partial=structuredClone(declaration);partial.contracts[0][8]=[];
-    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)})).mockResolvedValueOnce(response({steps:JSON.stringify(steps)}));
-    await expect(declareGeneralChecks(input,call)).rejects.toThrow();
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)})).mockResolvedValueOnce(response({steps:JSON.stringify(steps)}))
+      .mockResolvedValueOnce(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    const checked=await declareGeneralChecks(input,call);
+    expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
+    expect(checked.intentRevision).toBe(intent.revision);expect(call).toHaveBeenCalledTimes(3);
+    expect(call.mock.calls[2][0]).toMatchObject({maxTokens:16000,responseProfile:"contract"});
+    expect(call.mock.calls[2][0].system).toContain("missing-requirements:no-owner");
+    expect(call.mock.calls[2][0].system).toContain("There is still no generated implementation");
+  });
+  it("stops after one rejected correction and never weakens negative-constraint coverage",async()=>{
+    const partial=structuredClone(declaration);partial.contracts[0][8]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)})).mockResolvedValueOnce(response({steps:JSON.stringify(steps)}))
+      .mockResolvedValueOnce(response({generalChecks:JSON.stringify({...partial,steps})}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"correction-rejected"});
+    expect(call).toHaveBeenCalledTimes(3);
+  });
+  it("identifies a behavior incorrectly used as a surface constraint",async()=>{
+    const partial=structuredClone(declaration);partial.contracts[0][8]=["counter","no-owner"];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)})).mockResolvedValueOnce(response({steps:JSON.stringify(steps)}))
+      .mockResolvedValueOnce(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    await declareGeneralChecks(input,call);
+    expect(call.mock.calls[2][0].system).toContain("surface-requirements-only-accept-constraints-use-a-step-for-other-rules");
+    expect(call).toHaveBeenCalledTimes(3);
+  });
+  it("does not retry a provider failure during the bounded correction",async()=>{
+    const partial=structuredClone(declaration);partial.contracts[0][8]=[];
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(partial)})).mockResolvedValueOnce(response({steps:JSON.stringify(steps)}))
+      .mockRejectedValueOnce(new ModelResponseError("timeout",{inputTokens:2,outputTokens:8000}));
+    await expect(declareGeneralChecks(input,call)).rejects.toMatchObject({stage:"scenarios",reason:"timeout"});
+    expect(call).toHaveBeenCalledTimes(3);
   });
   it("stops before the second call when the owner cancels",async()=>{
     const controller=new AbortController(),call=vi.fn(async()=>{controller.abort();return response({generalChecks:JSON.stringify(declaration)});});

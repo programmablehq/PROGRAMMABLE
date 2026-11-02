@@ -15,5 +15,5 @@ export function designReadiness(input: { sourceHash?: string; checked: boolean; 
     const items = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
     return { state: "needs-input", message: `Add your coin’s ${items}.`, missingFields, revision, expiresAt: 0 };
   }
-  return { state: "design-ready", message: input.connected ? "Preparing your launch…" : "Design ready. Connect your wallet to launch.", revision, expiresAt: 0 };
+  return { state: "design-ready", message: input.connected ? "Ready to launch" : "Design ready. Connect your wallet to launch.", revision, expiresAt: 0 };
 }

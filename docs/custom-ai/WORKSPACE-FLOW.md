@@ -22,6 +22,8 @@ On the fee-module route, the chat command prepares the saved launch and shows Co
 
 The planner declares `intentMode: preserve` for an unchanged saved design and leaves its rule/edit arrays empty. The server supplies the complete saved revision. New rules, edits and answers to open choices use `revise` and the complete existing validation path; a preserve response cannot smuggle in additions or removals.
 
+Before source generation, a completed but invalid independent check declaration gets at most one correction with the validator's feedback. The same saved intent and production context remain binding, and the corrected declaration must pass the same complete validator. Provider failures, cancellation and a rejected correction stop the attempt instead of starting a paid retry loop.
+
 - **New coin** saves the current coin, unsent message and selected rule before clearing them. It never copies rules into the new coin.
 - **Clear messages** only clears the visible conversation and composer. The current coin, saved rules and unresolved change remain in context. Its label and explanation must say so before activation.
 - **Restore previous coin** restores the unsent message and selected rule as well as the coin. Switching is serialized so a double click cannot overwrite the saved coin with an empty draft.

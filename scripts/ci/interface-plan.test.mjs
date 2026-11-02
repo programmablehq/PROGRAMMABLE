@@ -169,3 +169,12 @@ test("Custom AI design documentation does not select Module Mode browser flows",
   assert.deepEqual(source.browser, []);assert.equal(source.customAI, true);assert.equal(source.wallet, true);
   assert.ok(interfacePlan(["docs/custom-ai/LAUNCH-INTENT.md", "components/module-foundation-launch.tsx"]).browser.includes("module-signing"));
 });
+
+test("independent declaration changes provision the pinned contract checker", () => {
+  for (const path of ["lib/custom-ai/check-declaration.server.ts", "lib/custom-ai/check-plan-wire.ts", "lib/custom-ai/behavior-checks.ts", "tests/custom-ai-check-declaration.test.ts"]) {
+    const plan = interfacePlan([path]);
+    assert.equal(plan.customAICompiler, true, path);
+    assert.equal(plan.activation, false, path);
+    assert.deepEqual(plan.browser, [], path);
+  }
+});
