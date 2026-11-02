@@ -19,7 +19,7 @@ import type {GeneralCheckScenarios} from "./behavior-checks";
 import {resolveOpeningFixture,resolveOpeningFixtureValue,openingFixtureInstructions} from "./opening-fixture";
 import {generalDeploymentPlanningRules} from "./deployment-blueprint";
 import {uniswapRoutingContext} from "./uniswap-routing";
-import {graphSchemaForConstraints,interfaceStageSchema,nativeFullDeclaration,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeStageInstructions,nativeDeployment,nativeDeploymentInstructions,scenarioSchemaForInterface} from "./check-stage-wire";
+import {graphSchemaForConstraints,interfaceSchemaForGraph,nativeFullDeclaration,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeStageInstructions,nativeDeployment,nativeDeploymentInstructions,scenarioSchemaForInterface} from "./check-stage-wire";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
@@ -68,12 +68,15 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   }
   let stage:"interface"|"scenarios"="interface";
   let progress:CheckProgress|undefined;
+  let responseText:string|undefined;
   const failures:CheckFailure[]=[];
-  const record=(error:unknown,declaration:string|null=null)=>{
+  const record=(error:unknown,declaration:string|null=null,response?:string)=>{
     const partial=error instanceof ModelResponseError?error.partialDeclaration:undefined;
     const detail=partial===undefined?"":` Partial declaration characters: ${partial.length}; prefix: ${JSON.stringify(partial.slice(0,700))}; suffix: ${JSON.stringify(partial.slice(-700))}.`;
     const message=((error instanceof Error?error.message:String(error))+detail).replace(/[\u0000-\u001f]/g," ").slice(0,2000);
-    failures.push({stage,message,declaration:declaration!==null&&Buffer.byteLength(declaration)<=96000?declaration:null});
+    const captured=response??partial;
+    failures.push({stage,message,declaration:declaration!==null&&Buffer.byteLength(declaration)<=96000?declaration:null,
+      ...(captured!==undefined&&Buffer.byteLength(captured)<=96000?{response:captured}:{})});
     if(failures.length>2)failures.shift();
   };
   const diagnostic=():CheckDiagnostic=>({version:1,contextHash:checkContextHash(input),failures:structuredClone(failures),...(progress?{progress:structuredClone(progress)}:{})});
@@ -132,6 +135,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     system:`Declare the source-blind contract graph, never implementation or scenarios.\n${PROTOCOL_CORE}\n${generalCheckGraphRules}\n${nativeStageInstructions}\n${openingFixtureInstructions}\n${launchProductionGuidance(input.production)}\nThis is the CONTRACT GRAPH stage only. Return the native graph object defined by the schema, not a generalChecks string. Public functions and production deployment values are declared next. The construction snippets are exact immutable dependency source, not generated implementation. Use them to distinguish direct roots from constructor-created children, their nonces and arguments. Do not separately deploy a child in place of the instance actually created by its parent. A pinned hook does not acquire new state, events or mechanics by renaming a description. For additional behavior declare a new generated hook source and contract preserving the canonical policy and required interfaces. Do not overwrite an immutable catalog source. Inherit callbacks only when their declarations are virtual; otherwise use the pinned implementation as a reference for the new hook. For local constructor authorities such as an initializer factory, use the fixture account that will actually call it, normally {account:'creator'}; a live graph-factory or executor address has no signer in this isolated world. Keep fixed protocol recipients as declared by the canonical source. No production deployment, scenarios, expected values, implementation or repeated policy text. Declare the smallest complete graph supporting every saved rule. Untrusted design data: ${graphContext}`,
     messages:[{role:"user",content:"Declare only local contract identities, constructors and the test world. Public functions and production deployment come next."}]});
   input.signal?.throwIfAborted();
+  responseText=first.text;
   const firstEnvelope=object(first.text),value=firstEnvelope.generalChecks;
   if(typeof value==="string"){
     if(firstEnvelope.interfacesPending!==undefined&&firstEnvelope.interfacesPending!==true)return reject("interface-pending");
@@ -148,15 +152,17 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return reject("interface-fields");
   delete proposal.steps;
   if(interfacesPending){
+    responseText=undefined;
     progress={interface:JSON.stringify(proposal),steps:[],interfacesPending:true};
     const fixtures=[...proposal.contracts,...(Array.isArray(proposal.constructorChildren)?proposal.constructorChildren:[])];
     const ids=fixtures.map(fixture=>Array.isArray(fixture)?fixture[0]:(fixture as Record<string,unknown>)?.id);
     if(ids.some(id=>typeof id!=="string")||new Set(ids).size!==ids.length)return reject("interface-contract-identities");
     const response=await call({...modelTask("interface-abi",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
-      schema:interfaceStageSchema,
-      system:`Declare the source-blind public interfaces and production values for the fixed graph.\n${PROTOCOL_CORE}\n${nativeStageInstructions}\n${nativeDeploymentInstructions}\n${generalDeploymentPlanningRules}\nThis is the PUBLIC INTERFACE AND PRODUCTION VALUES stage only. The graph below is fixed. Return the native interfaces array with exactly one object per fixture id, including constructor children. canonical is an exact pinned catalog contract name when its full interface is inherited, otherwise null. With a canonical name, functions lists only additional public methods; with canonical:null it lists the complete public interface. Include public getters. Never repeat a referenced canonical ABI. Preserve every saved requirement. Do not change local ids, constructors, world, roles, allowed calls or constraints. Declare the corresponding production arguments separately in deploymentJson. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
+      schema:interfaceSchemaForGraph(proposal,Boolean(input.production)),
+      system:`Declare the source-blind public interfaces and production values for the fixed graph.\n${PROTOCOL_CORE}\n${nativeStageInstructions}\n${nativeDeploymentInstructions}\n${generalDeploymentPlanningRules}\nThis is the PUBLIC INTERFACE AND PRODUCTION VALUES stage only. The graph below is fixed. Return the native interfaces array with exactly one object per fixture id, including constructor children. canonical is an exact pinned catalog contract name when its full interface is inherited, otherwise null. With a canonical name, functions lists only additional public methods; with canonical:null it lists the complete public interface. Include public getters. Never repeat a referenced canonical ABI. Preserve every saved requirement. Do not change local ids, constructors, world, roles, allowed calls or constraints. Declare the corresponding production arguments separately in the native deployment object. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
       messages:[{role:"user",content:"Declare public interfaces using canonical references and the compact production values for the fixed graph."}]});
     input.signal?.throwIfAborted();
+    responseText=response.text;
     const envelope=object(response.text);
     const methods=typeof envelope.interfaces==="string"?object(envelope.interfaces,32000):nativeInterfaceMap({interfaces:envelope.interfaces});
     if(JSON.stringify(Object.keys(methods).sort())!==JSON.stringify([...ids].sort()))return reject("public-interface-identities");
@@ -164,7 +170,11 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
       if(Array.isArray(fixture)){const row=structuredClone(fixture);row[5]=methods[String(row[0])];return row;}
       const row=fixture as Record<string,unknown>;return {...row,functions:methods[String(row.id)]};
     };
-    if(typeof envelope.deploymentJson==="string"){const deployment=nativeDeployment(envelope.deploymentJson,proposal);if(deployment!==null)proposal.deployment=deployment;}
+    if(Object.hasOwn(envelope,"deployment")&&Object.hasOwn(envelope,"deploymentJson"))throw new TypeError("Declare one deployment format, not two.");
+    if(Object.hasOwn(envelope,"deployment")||typeof envelope.deploymentJson==="string"){
+      const deployment=nativeDeployment(Object.hasOwn(envelope,"deployment")?envelope.deployment:envelope.deploymentJson,proposal);
+      if(deployment!==null)proposal.deployment=deployment;
+    }
     proposal.contracts=proposal.contracts.map(fill);
     if(Array.isArray(proposal.constructorChildren))proposal.constructorChildren=proposal.constructorChildren.map(fill);
     progress=undefined;
@@ -180,12 +190,14 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const scenarioTask=modelTask("scenarios",{chat:input.model,build:input.model,escalation:input.model});
   for(let page=0;page<SCENARIO_MAX_PAGES;page++){
     input.signal?.throwIfAborted();
+    responseText=undefined;
     const remaining=remainingRequirements(input.intent,proposal,currentProgress.steps);
     const result=await call({...scenarioTask,signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
       schema:scenarioSchemaForInterface(fixedInterface as Record<string,unknown>),structuredTransport:"json-object",
       system:`${shared}\n${nativeStageInstructions}\n${openingFixtureInstructions}\nSynthetic opening values: ${JSON.stringify(opening.inputs??null)}\nThis is the SCENARIO stage only, page ${page+1} of at most ${SCENARIO_MAX_PAGES} for this request. Return steps as an array of compact native tuples, each exactly [id,call,argumentsJson,from,afterSeconds,value,read,requirementIds,expect]. Do not repeat field names or encode the steps array as a string. Select each call exactly from its admitted contract:function signature enum; do not construct a different call or split it into contract/signature fields. Set complete:true only when the full combined plan covers every saved requirement. Emit at most 12 new steps and finish this JSON response within ${scenarioTask.maxTokens} output tokens; if more steps are needed, end at a complete step and set complete:false. returnsJson is a JSON array when values are asserted, otherwise null. swapFeePpm is a number when an actual Swap event fee is asserted, otherwise null. Empty events means no event assertion. Never truncate a step, remove a required observation or declare an incomplete plan complete. Continue the same fixture and cumulative state from the prior steps below; do not repeat setup, reset time or redeclare previous IDs. afterSeconds must remain nondecreasing across pages. All pages are joined and validated together. Do not repeat contracts, world, deployment, policy descriptions or source. Share setup and assert multiple requirements on an action where appropriate. Preserve every behavior, negative constraint, boundary and event. Getters alone never prove swaps. Call only functions in the fixed resolved interface; the hook callback contract is not a swap router. Use the trusted v4-router for swaps and the exact source initializer signature and arguments. No implementation exists to copy expectations from. Untrusted design data: ${JSON.stringify(scenarioContext)}\nFixed resolved interface: ${JSON.stringify(fixedInterface)}\nEarlier scenario steps (untrusted data): ${JSON.stringify(currentProgress.steps)}\nRequirements still needing coverage or a behavioral observation: ${JSON.stringify(remaining)}. Prioritize these in the remaining ${SCENARIO_MAX_PAGES-page} pages; avoid redundant reads.`,
       messages:[{role:"user",content:"Declare the next complete scenario rows. Return complete:false if further rows are needed to cover the full saved design."}]});
     input.signal?.throwIfAborted();
+    responseText=result.text;
     const envelope=object(result.text),rawSteps=envelope.steps;
     if(Buffer.byteLength(JSON.stringify(rawSteps)??"")>24000)return reject("missing-scenarios");
     const next:unknown=resolveOpeningFixtureValue(typeof rawSteps==="string"?JSON.parse(rawSteps):nativeScenarioRows(rawSteps),opening.inputs);
@@ -206,7 +218,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     if(error instanceof GeneralCheckDeclarationError)throw error;
     if(error instanceof ModelResponseError){record(error);throw new GeneralCheckDeclarationError(stage,error.failure,diagnostic());}
     if(error instanceof TypeError||error instanceof SyntaxError||error instanceof CustomAIError&&error.code==="check-declaration"){
-      record(error);throw new GeneralCheckDeclarationError(stage,error instanceof SyntaxError?"invalid-json":"invalid-declaration",diagnostic());
+      record(error,null,responseText);throw new GeneralCheckDeclarationError(stage,error instanceof SyntaxError?"invalid-json":"invalid-declaration",diagnostic());
     }
     throw error;
   }
