@@ -31,8 +31,10 @@ export function decodeGeneralCheckDeclaration(value: unknown): unknown {
   };
 }
 
-export const generalCheckPlanningWireRules = `Use the lossless compact-v1 wire format for generalChecks. It is still one JSON-encoded string, with format:'compact-v1'. The canonical fields described above are checked AFTER expansion; encode contracts and steps as rows rather than repeating their field names.
-contracts rows are exactly [${fixtureFields.join(",")}]. A tenth item may contain the optional constructor value, or null to omit it.
+export const generalCheckRowRules = `contracts rows are exactly [${fixtureFields.join(",")}]. A tenth item may contain the optional constructor value, or null to omit it.
 constructorChildren rows, when needed, are exactly [${childFields.join(",")}].
 steps rows are exactly [${stepFields.join(",")}]. Use actual values at every position, including empty argument/requirement arrays and false/true read flags. expect remains the complete object with status and any returns, swapFeePpm or events. world, allowedCalls, compilerProfile and deployment keep their documented object/array forms.
 This encoding must retain every agreed contract, function, constructor input, example, boundary, requirement ID and event assertion. Never shorten a signature or value, drop a check, invent defaults or return source code. Return compact-v1 only.`;
+
+export const generalCheckPlanningWireRules = `Use the lossless compact-v1 wire format for generalChecks. It is still one JSON-encoded string, with format:'compact-v1'. The canonical fields described above are checked AFTER expansion; encode contracts and steps as rows rather than repeating their field names.
+${generalCheckRowRules}`;
