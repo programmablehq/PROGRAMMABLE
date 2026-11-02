@@ -36,7 +36,7 @@ Reloading a running reply reconnects to the saved request. It does not start ano
 
 **Requested rules** keeps the complete design, including exclusions and open choices. Unsupported parts remain visible. A partial implementation does not replace the full request. New and changed rules retain a reference to your message; a later question keeps the same design. When a change cannot be completed, the earlier contract remains available. **Keep previous rules** restores that contract's design. Saved requirements and source checks are different states, and neither proves public activation of an external capability.
 
-The chat can look up public sources, indexed markets and basic onchain contract information. It includes source links; research does not establish that a contract is safe.
+The chat can look up public sources, indexed markets and basic onchain contract information on Ethereum, Robinhood, Base and HyperEVM. Contract lookup stays on the selected network, compares two configured providers at the same recent block and briefly shares duplicate reads. It includes source links; research does not establish that a contract is safe.
 
 ## Fee allocations and integrations
 
@@ -54,7 +54,7 @@ Declared event checks compare the logs emitted by the actual local contract call
 
 General projects also follow the selected network's mandatory Custom Launch policy. Temporary buyer limits count cumulative buys, and temporary recipient limits count cumulative token inflows, including wallet-to-wallet transfers. Sending tokens out does not restore that allowance. Tax-exempt wallets remain capped during the launch window; their exemption applies to the additional opening surcharge. The chat includes these fixed rules when you ask for normal ERC20 transfers and explains any explicit conflict in your design.
 
-A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. When [live capabilities](https://programmable.market/api/custom-ai/capabilities) report general launch preparation enabled, use **Submit for review** to prepare and submit the exact saved source on the selected network. The review result and available wallet steps stay in the chat. Use **Continue launch here** to inspect those steps, or **Open submission** for the full record. If preparation is unavailable on the selected network, the project remains a saved source draft.
+A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. When [live capabilities](https://programmable.market/api/custom-ai/capabilities) report general launch preparation enabled, use **Launch coin** or ask the chat to launch. The platform prepares and automatically checks the exact saved source on the selected network. The result and available wallet steps stay in the chat. Use **Continue launch here** to inspect those steps, or **Open submission** for the full record. Sending a transaction still requires wallet confirmation. If preparation is unavailable on the selected network, the project remains a saved source draft.
 
 For an existing Custom Launch submission, continue through its original [API workflow](../developers/custom-launch.md). Its review decision and current wallet preparation determine the next step.
 
