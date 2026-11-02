@@ -58,7 +58,10 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     const blocks=[...text.matchAll(/(?:^|\r?\n)```json[ \t]*\r?\n([\s\S]*?)\r?\n```(?=$|\r?\n)/giu)];
     const block=blocks.length===1?blocks[0]:undefined;
     const outside=block?text.slice(0,block.index)+text.slice(block.index+block[0].length):"";
-    const normalized=fence?fence[1]:block&&!/[\{\[]|```/u.test(outside)?block[1]:text;
+    let normalized=fence?fence[1]:block&&!/[\{\[]|```/u.test(outside)?block[1]:text;
+    if((normalized.match(/```/gu)??[]).length===1&&/\r?\n```\s*$/u.test(normalized))normalized=normalized.replace(/\r?\n```\s*$/u,"");
+    const start=normalized.indexOf("{");
+    if(start>0&&normalized.trimEnd().endsWith("}")&&!/[\{\[]|```/u.test(normalized.slice(0,start)))normalized=normalized.slice(start);
     if (!validate) return normalized;
     try {
       const restored = restore(JSON.parse(normalized), original as Schema);

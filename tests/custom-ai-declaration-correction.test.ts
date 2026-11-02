@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from "vitest";
 vi.mock("server-only",()=>({}));
-import {applyDeclarationCorrection,declarationCorrectionSchema,declarationCorrectionView} from "../lib/custom-ai/declaration-correction";
+import {applyDeclarationCorrection,declarationCorrectionSchema,declarationCorrectionView,assertCorrectionRetainsObservations} from "../lib/custom-ai/declaration-correction";
 import {prepareSurplusSchema} from "../lib/custom-ai/surplus-schema.server";
 describe("bounded declaration corrections",()=>{
   it("preserves unchanged data while applying exact typed replacements",()=>{
@@ -28,5 +28,11 @@ describe("bounded declaration corrections",()=>{
     const fixed=applyDeclarationCorrection(view,{changes:[{path:"/steps/buy/value",valueJson:'"2"'}]});
     expect(declarationCorrectionView(fixed,true)).toEqual({...base,steps:[{id:"buy",value:"2"}]});
     expect(()=>declarationCorrectionView(applyDeclarationCorrection(view,{changes:[{path:"/steps/buy/id",valueJson:'"sell"'}]}),true)).toThrow();
+  });
+  it("rejects a correction that drops a required case, link or event observation",()=>{
+    const step={id:"buy",requirementIds:["count"],arguments:["1"],expect:{events:[{contract:"hook"}]}};
+    for(const after of [{steps:[]},{steps:[{...step,requirementIds:[]}]},{steps:[{...step,expect:{events:[]}}]}])
+      expect(()=>assertCorrectionRetainsObservations({steps:[step]},after,["count"])).toThrow("removed a required observation");
+    expect(()=>assertCorrectionRetainsObservations({steps:[step]},{steps:[{...step,arguments:["2"]}]},["count"])).not.toThrow();
   });
 });

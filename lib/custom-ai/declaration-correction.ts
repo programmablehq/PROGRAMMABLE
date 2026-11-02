@@ -66,3 +66,19 @@ export function applyDeclarationCorrection(base:unknown,answer:unknown):unknown{
   if(new TextEncoder().encode(JSON.stringify(result)).length>96000)return invalid();
   return result;
 }
+/** A correction can fix values or routing, but may not quietly discard the
+ * existing cases, requirement links or requested event observations. */
+export function assertCorrectionRetainsObservations(before:unknown,after:unknown,requirementIds:readonly string[]){
+  const old=(before as {steps?:unknown[]})?.steps,next=(after as {steps?:unknown[]})?.steps;
+  if(!Array.isArray(old)||!Array.isArray(next))return;
+  for(const value of old){
+    const step=value as {id?:string;requirementIds?:unknown[];expect?:{events?:unknown[]}};
+    if(typeof step?.id!=="string"||old.filter(item=>(item as {id?:string})?.id===step.id).length!==1)continue;
+    const links=(step.requirementIds??[]).filter((id):id is string=>typeof id==="string"&&requirementIds.includes(id));
+    const events=Array.isArray(step.expect?.events)?step.expect.events.length:0;
+    if(!links.length&&!events)continue;
+    const kept=next.find(item=>(item as {id?:string})?.id===step.id) as typeof step|undefined;
+    if(!kept||links.some(id=>!kept.requirementIds?.includes(id))||events>(kept.expect?.events?.length??0))
+      throw new TypeError(`Correction removed a required observation from step ${step.id}. Keep its requirement links and event assertions while fixing the invalid fields.`);
+  }
+}

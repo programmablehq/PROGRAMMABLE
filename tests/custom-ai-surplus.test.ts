@@ -52,6 +52,8 @@ describe("Surplus model routing", () => {
     const format=prepareSurplusSchema(schema,true);
     expect(format.decode('```json\n{"count":2}\n```')).toBe('{"count":2}');
     expect(format.decode('Text first\n```json\n{"count":2}\n```\nDone')).toBe('{"count":2}');
+    expect(format.decode('A prepared result follows.\n{"count":2}')).toBe('{"count":2}');
+    expect(format.decode('A prepared result follows.\n{"count":2}\n```')).toBe('{"count":2}');
     for(const text of ['{}\n```json\n{"count":2}\n```','```json\n{"count":"2"}\n```','```javascript\n{"count":2}\n```','```json\n{"count":2}'])expect(()=>format.decode(text)).toThrow();
   });
   it("requires both a complete streamed result and the terminal marker", async () => {
