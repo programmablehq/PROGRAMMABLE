@@ -47,6 +47,15 @@ export function validateDeclaredInterfaceCalls(plan:GeneralCheckScenarios,deploy
   const worldFunctions=plan.world?parseAbi(worldSignatures)
     .filter((item):item is AbiFunction=>item.type==="function"):undefined;
   const issues:string[]=[];
+  const world=plan.world;
+  const exercisesProtectedChildren=world?.kind==="v4-protected-native-token-v1"&&plan.steps.some(step=>
+    step.contract===world.initializer&&step.signature==="initialize(address,address,int24,address,uint256)"
+    ||step.contract==="v4-router"&&step.signature===V4_WORLD_STEP_SIGNATURES[2]);
+  if(exercisesProtectedChildren){
+    const declared=new Set(plan.allowedCalls.flatMap(value=>value&&typeof value==="object"&&!Array.isArray(value)&&"contract" in value?[value.contract]:[]));
+    const missing=(plan.constructorChildren??[]).filter(child=>!declared.has(child.id)).map(child=>child.id);
+    if(missing.length)issues.push(`protected-world child call targets missing from allowedCalls: ${missing.join(", ")}; explicitly include these declared contract references before source generation`);
+  }
   for(const step of plan.steps){
     const isWorld=step.contract==="v4-router"&&!interfaces.has(step.contract);
     const functions=interfaces.get(step.contract)??(isWorld?worldFunctions:undefined);

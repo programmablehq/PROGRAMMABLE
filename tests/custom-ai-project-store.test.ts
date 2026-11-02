@@ -63,7 +63,7 @@ describe("owned general contract checkpoints", () => {
   it("keeps rejected declarations private and bound to the active owner, lease and job payload",async()=>{
     const attempt=await reserve(),p=project();
     const diagnostic:CheckDiagnostic={version:1,contextHash:checkContextHash({...p,evmVersion:"paris"}),
-      failures:[{stage:"scenarios",message:"missing-requirements:no-mint",declaration:'{"contracts":[]}'}],
+      failures:[{stage:"scenarios",message:"missing-requirements:no-mint",declaration:'{"contracts":[]}',response:'{"steps":[]}'}],
       progress:{interface:'{"contracts":[],"allowedCalls":[]}',steps:[["private-scenario-page"]]}};
     await expect(store.projects.saveCheckDiagnostic("alice",id,"wrong-lease",diagnostic)).rejects.toBeDefined();
     await store.projects.saveCheckDiagnostic("alice",id,attempt.lease!,diagnostic);

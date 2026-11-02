@@ -23,6 +23,29 @@ export function graphSchemaForConstraints(ids:readonly string[]){
     constructorChildren:array(object({...scoped,role:{type:"string",enum:["auxiliary"]},parent:identifier,creation:{type:"string",enum:["create"]},nonce:string(30),value:string(30)}),16)});
 }
 export const interfaceStageSchema=object({interfaces:array(object({id:identifier,canonical:{type:["string","null"],maxLength:100},functions:array(string(2000),128)}),16),deploymentJson:string(64000)});
+const nativeFunding={type:"string",enum:["0","funding"]};
+const nativeTarget={id:identifier,argumentsJson:string(12000),initializerFunction:{type:["string","null"],maxLength:100},
+  initializerArgumentsJson:string(12000),deploymentValue:nativeFunding,initializerValue:nativeFunding,
+  hookPermissions:{type:["integer","null"],minimum:0,maximum:16383}};
+const nativeChild={id:identifier,argumentsJson:string(12000),value:string(30)};
+/** Keep the production envelope typed as well. A string containing a second
+ * schema cannot be validated by the provider adapter before expansion. */
+export function interfaceSchemaForGraph(graph:Record<string,unknown>,production:boolean){
+  const ids=(key:string)=>(graph[key] as Record<string,unknown>[]|undefined)?.map(item=>String(item.id))??[];
+  const roots=ids("contracts"),children=ids("constructorChildren");
+  const allIds=[...roots,...children];
+  const idSchema=(values:string[])=>values.length?{type:"string",enum:values}:identifier;
+  const deployment=object({format:{type:"string",enum:["fixture-refs-v2"]},
+    targets:{...array(object({...nativeTarget,id:idSchema(roots)}),16),minItems:roots.length,maxItems:roots.length},
+    constructorChildren:{...array(object({...nativeChild,id:idSchema(children)}),16),minItems:children.length,maxItems:children.length},
+    pool:object({token:idSchema(roots),hook:idSchema(roots),initializer:idSchema(roots),platformFeeBinding:idSchema(roots),
+      fee:{type:"integer",minimum:0,maximum:8388608},tickSpacing:{type:"integer",minimum:1,maximum:32767}}),
+    fees:{anyOf:[{type:"null"},object({buyPpm:{type:"integer",minimum:0,maximum:100000},sellPpm:{type:"integer",minimum:0,maximum:100000}})]},
+    liquidityModel:{type:["string","null"],enum:[null,"external-concentrated-liquidity","launch-seeded-concentrated-liquidity","hook-inventory-custom-accounting"]},
+    openingPrice:{anyOf:[{type:"null"},object({supply:string(40),targetFdvUsd:string(40)})]}});
+  return object({interfaces:{...array(object({...interfaceStageSchema.properties.interfaces.items.properties,id:idSchema(allIds)}),16),minItems:allIds.length,maxItems:allIds.length},
+    deployment:production?deployment:{type:"null"}});
+}
 const event=object({contract:identifier,signature:string(2000),argumentsJson:string(12000)});
 export const scenarioStageSchema=object({steps:array(object({id:identifier,contract:identifier,signature:string(2000),argumentsJson:string(12000),
   from:{type:"string",enum:["creator","trader-a","trader-b"]},afterSeconds:{type:"integer",minimum:0},value:string(30),read:{type:"boolean"},
@@ -40,12 +63,20 @@ export function scenarioSchemaForInterface(plan:Record<string,unknown>){
 }
 const fail=(message:string):never=>{throw new TypeError(`Invalid native check stage: ${message}.`);};
 const shape=(value:unknown,keys:string[])=>{
-  if(!value||typeof value!=="object"||Array.isArray(value)||Object.keys(value).sort().join()!==[...keys].sort().join())return fail(`expected ${keys.join(",")}`);
+  if(!value||typeof value!=="object"||Array.isArray(value)||Object.keys(value).sort().join()!==[...keys].sort().join())return fail(`expected ${keys.join(",")}; received ${value&&typeof value==="object"&&!Array.isArray(value)?Object.keys(value).join(",").slice(0,800):typeof value}`);
   return value as Record<string,unknown>;
 };
 const json=(value:unknown,max=64000)=>{
   if(typeof value!=="string"||new TextEncoder().encode(value).length>max)return fail("bounded JSON value required");
-  return JSON.parse(value) as unknown;
+  try{return JSON.parse(value) as unknown;}
+  catch(error){
+    // Some sellers escape an already encoded value once more. Remove only
+    // that syntactic layer after ordinary JSON parsing failed. Values and
+    // types remain untouched and pass the complete semantic validator later.
+    const decoded:unknown=JSON.parse('"'+value+'"');
+    if(typeof decoded!=="string"||!/^\s*[[{]/u.test(decoded))throw error;
+    return JSON.parse(decoded) as unknown;
+  }
 };
 const list=(value:unknown,max=12000)=>{const parsed=json(value,max);if(!Array.isArray(parsed))return fail("JSON array required");return parsed;};
 const strings=(value:unknown)=>{if(!Array.isArray(value)||value.some(item=>typeof item!=="string"))return fail("string array required");return value as string[];};
@@ -84,9 +115,25 @@ export function nativeGraphDeclaration(value:unknown):Record<string,unknown>{
  * funding are still explicitly declared in the production reference vocabulary.
  * Never promote local fixture addresses/accounts into production values. */
 export function nativeDeployment(value:unknown,graph:Record<string,unknown>):unknown{
-  const raw=json(value);
+  let raw=typeof value==="string"?json(value):value;
   if(raw===null)return null;
   if(!raw||typeof raw!=="object"||Array.isArray(raw))return fail("deployment object");
+  if((raw as Record<string,unknown>).format==="fixture-refs-v2"){
+    const typed=shape(raw,["format","targets","constructorChildren","pool","fees","liquidityModel","openingPrice"]);
+    if(!Array.isArray(typed.targets)||!Array.isArray(typed.constructorChildren))return fail("deployment collections");
+    const funding=(value:unknown)=>value==="0"?"0":value==="funding"?{input:"funding"}:fail("native funding must be 0 or funding");
+    const targets=typed.targets.map(value=>{
+      const target=shape(value,Object.keys(nativeTarget));
+      const args=list(target.initializerArgumentsJson);
+      if(target.initializerFunction===null&&(args.length||target.initializerValue!=="0"))return fail("absent initializer has arguments or funding");
+      return {id:target.id,arguments:list(target.argumentsJson),initializer:target.initializerFunction===null?null:{function:target.initializerFunction,arguments:args},
+        deploymentValue:funding(target.deploymentValue),initializerValue:funding(target.initializerValue),hookPermissions:target.hookPermissions};
+    });
+    if((typed.fees===null)!==(typed.liquidityModel===null))return fail("fees and liquidity model must be declared together");
+    raw={format:"fixture-refs-v1",targets,constructorChildren:typed.constructorChildren.map(value=>{
+      const child=shape(value,Object.keys(nativeChild));return {id:child.id,arguments:list(child.argumentsJson),value:child.value};}),pool:typed.pool,
+      ...(typed.fees!==null?{fees:typed.fees,liquidityModel:typed.liquidityModel}:{}),...(typed.openingPrice!==null?{openingPrice:typed.openingPrice}:{})};
+  }
   const data=raw as Record<string,unknown>;
   if(data.format!=="fixture-refs-v1")return raw;
   const keys=["format","targets","pool",...(["constructorChildren","fees","liquidityModel","openingPrice"].filter(key=>Object.hasOwn(data,key)))];
@@ -175,4 +222,4 @@ export function nativeFullDeclaration(value:unknown):Record<string,unknown>{
   return {...graph,...(deployment!==null?{deployment}:{}),steps:nativeScenarioRows(data.steps,256)};
 }
 export const nativeStageInstructions=`Return one ordinary JSON object matching the stage schema. Do not encode or escape the whole response as a string. Fixture, step and requirement IDs use lower-case letters, digits and hyphens, never camelCase. Only fields whose name ends in Json contain a JSON-encoded value. argumentsJson and allowedCallsJson encode arrays using the documented value/reference shapes. Numeric schema fields such as hookPermissions, fee, tickSpacing and afterSeconds are JSON numbers, never quoted strings. Constructor and wei amounts remain decimal strings. For no world use kind:'none', empty identity strings, zero numeric fields and '0' amount strings. For an unprotected world use initializer:'' and nativeUsdAnswer:'0'. Root constructor value:null means omitted; constructor children must supply their explicit value. Empty constructorChildren means none. compilerProfile:'preserve' omits a change to the existing/default profile. Keep every rule and exact reference; expansion is checked by the same complete validator.`;
-export const nativeDeploymentInstructions=`deploymentJson is declared only with the public interface, never in the initial graph. It is 'null' when no production context exists. Otherwise encode {format:'fixture-refs-v1',targets:[{id,arguments,initializer,deploymentValue,initializerValue,hookPermissions}],constructorChildren:[{id,arguments,value}],pool,fees,liquidityModel,openingPrice}. Omit optional fields only when not required by the documented deployment rules. The server takes each source/contract and child parent/creation/nonce from the same id in the fixed graph; do not repeat them. Every production argument and value must still be explicit using target/input/binding references, not local account/fixture values. Reuse exactly the fixed graph identities; this is lossless compression of topology, not automatic conversion of test values to production.`;
+export const nativeDeploymentInstructions=`The public interface stage returns {interfaces, deployment}. deployment is a native JSON object, never a JSON-encoded string; it is null only when no production context exists. The current schema is authoritative for field names, while the logical deployment rules below describe their meaning. Use format:'fixture-refs-v2' and every required schema field. Each target has id, argumentsJson, initializerFunction, initializerArgumentsJson, deploymentValue, initializerValue, hookPermissions. argumentsJson and initializerArgumentsJson encode only their value arrays. An absent initializer has initializerFunction:null, initializerArgumentsJson:'[]' and initializerValue:'0'. Native deploymentValue and initializerValue are the literal strings '0' or 'funding'; 'funding' expands to {input:'funding'} and may be consumed only once. Non-hook hookPermissions is null. Each child has exactly id, argumentsJson, value. The server takes source/contract and child parent/creation/nonce from the same id in the fixed graph; do not repeat them. Include fees, liquidityModel and openingPrice as native objects or null, never omit them. fees and liquidityModel must both be null or both declared. Every production argument and value stays explicit using target/input/binding references, never local account/fixture values. Reuse exactly the fixed graph identities; this is lossless compression of topology, not automatic conversion of test values to production.`;

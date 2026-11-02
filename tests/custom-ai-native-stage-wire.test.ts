@@ -1,6 +1,7 @@
 import {describe,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
-import {graphStageSchema,graphSchemaForConstraints,interfaceStageSchema,scenarioStageSchema,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeDeployment,nativeFullDeclaration,correctionStageSchema,scenarioSchemaForInterface} from "../lib/custom-ai/check-stage-wire";
+import {graphStageSchema,graphSchemaForConstraints,interfaceStageSchema,interfaceSchemaForGraph,scenarioStageSchema,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeDeployment,nativeFullDeclaration,correctionStageSchema,scenarioSchemaForInterface} from "../lib/custom-ai/check-stage-wire";
+import {checkedCheckDiagnostic,reusableCheckFailure} from "../lib/custom-ai/check-diagnostic";
 import {prepareSurplusSchema} from "../lib/custom-ai/surplus-schema.server";
 import {createGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 import {declareGeneralChecks} from "../lib/custom-ai/check-declaration.server";
@@ -48,12 +49,14 @@ describe("native independent declaration transport",()=>{
     expect(createGeneralCheckBlueprint(native,intent,8453,"cancun")).toEqual(createGeneralCheckBlueprint(canonical,intent,8453,"cancun"));
   });
   it("runs graph, public ABI and scenarios without any full-response JSON string field",async()=>{
-    const call=vi.fn().mockResolvedValueOnce(response(graph)).mockResolvedValueOnce(response(interfaces)).mockResolvedValueOnce(response({steps,complete:true}));
+    const call=vi.fn().mockResolvedValueOnce(response(graph)).mockResolvedValueOnce(response({interfaces:interfaces.interfaces,deployment:null})).mockResolvedValueOnce(response({steps,complete:true}));
     const result=await declareGeneralChecks({intent,chainId:8453,evmVersion:"cancun",model:"test-model"},call);
     expect(result.scenarios.steps).toHaveLength(2);expect(result.intentRevision).toBe(intent.revision);
     expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","scenarios"]);
     expect(call.mock.calls[0][0].schema.properties.contracts.type).toBe("array");
     expect(call.mock.calls[1][0].schema.properties.interfaces.type).toBe("array");
+    expect(call.mock.calls[1][0].schema.properties.deployment.type).toBe("null");
+    expect(call.mock.calls[1][0].schema.properties).not.toHaveProperty("deploymentJson");
     expect(call.mock.calls[2][0].schema.properties.steps.type).toBe("array");
   });
   it("reuses the completed graph after an interrupted public-interface response",async()=>{
@@ -64,6 +67,14 @@ describe("native independent declaration transport",()=>{
     const result=await declareGeneralChecks({intent,chainId:8453,evmVersion:"cancun",model:"test-model",rejected:error.diagnostic},resumed);
     expect(result.scenarios.steps).toHaveLength(2);
     expect(resumed.mock.calls.map(([request])=>request.task)).toEqual(["interface-abi","scenarios"]);
+  });
+  it("expands older compact graph rows before building the typed interface schema",async()=>{
+    const legacy={format:"compact-v1",contracts:[["main","Counter.sol","Counter","auxiliary",[],[],false,false,["surface"]]],allowedCalls:[]};
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(legacy),interfacesPending:true}))
+      .mockResolvedValueOnce(response({interfaces:interfaces.interfaces,deployment:null})).mockResolvedValueOnce(response({steps,complete:true}));
+    const result=await declareGeneralChecks({intent,chainId:8453,evmVersion:"cancun",model:"test-model"},call);
+    expect(result.scenarios.steps).toHaveLength(2);
+    expect(call.mock.calls[1][0].schema.properties.interfaces.items.properties.id.enum).toEqual(["main"]);
   });
   it("keeps complete coverage checks after native expansion",async()=>{
     const invalid=structuredClone(graph);invalid.contracts[0].surfaceRequirements=[];
@@ -85,6 +96,14 @@ describe("native independent declaration transport",()=>{
     expect(nativeScenarioRows([{...steps[1],argumentsJson:""}])).toEqual(nativeScenarioRows([steps[1]]));
     expect(()=>nativeScenarioRows([{...steps[1],signature:"balanceOf(address)",argumentsJson:""}])).toThrow();
     expect(()=>nativeScenarioRows([{...steps[1],signature:"event Counted(uint256 count)"}])).toThrow();
+    const values='[{"pool":true},["true","-1000","4295128740"],"0x"]';
+    const extraEscaped=JSON.stringify(values).slice(1,-1);
+    const restored=nativeScenarioRows([{...steps[0],argumentsJson:extraEscaped}]) as {arguments:unknown[]}[];
+    expect(restored[0].arguments).toEqual(JSON.parse(values));
+    // Syntactic repair must never coerce a quoted boolean into a real bool.
+    expect((restored[0].arguments[1] as unknown[])[0]).toBe("true");
+    const literal='["\\\"quoted\\\"","C:\\\\path"]';
+    expect((nativeScenarioRows([{...steps[0],argumentsJson:literal}]) as {arguments:unknown[]}[])[0].arguments).toEqual(JSON.parse(literal));
   });
   it("rejects calls that are absent from the agreed interface before source generation",()=>{
     const full={...graph,...interfaces,steps:[{...steps[0],signature:"inventedSwap()"},steps[1]]};
@@ -120,5 +139,32 @@ describe("native independent declaration transport",()=>{
     expect(nativeDeployment(JSON.stringify({...wire,targets:[{...wire.targets[0],source:"Counter.sol",contract:"Counter"}]}),local)).toEqual(expanded);
     expect(()=>nativeDeployment(JSON.stringify({...wire,targets:[{...wire.targets[0],id:"unknown"}]}),local)).toThrow("identity");
     expect(()=>nativeDeployment(JSON.stringify({...wire,targets:[{...wire.targets[0],source:"Other.sol"}]}),local)).toThrow();
+    const native={format:"fixture-refs-v2",targets:[{id:"main",argumentsJson:'[{"input":"controller"}]',initializerFunction:null,initializerArgumentsJson:"[]",deploymentValue:"0",initializerValue:"0",hookPermissions:null}],
+      constructorChildren:[{id:"child",argumentsJson:'[{"target":"main"}]',value:"0"}],pool:{...wire.pool,token:"main",initializer:"main"},fees:null,liquidityModel:null,openingPrice:null};
+    const envelope={interfaces:[{id:"main",canonical:null,functions:[]},{id:"child",canonical:null,functions:[]}],deployment:native};
+    const transport=prepareSurplusSchema(interfaceSchemaForGraph(local,true),true);
+    expect(JSON.parse(transport.decode(JSON.stringify(envelope)))).toEqual(envelope);
+    expect(nativeDeployment(native,local)).toEqual({...expanded,pool:native.pool});
+    const missing=structuredClone(envelope) as unknown as {deployment:{targets:Record<string,unknown>[]}};
+    delete missing.deployment.targets[0].initializerValue;
+    expect(()=>transport.decode(JSON.stringify(missing))).toThrow();
+    const retargeted=structuredClone(envelope);retargeted.deployment.targets[0].id="another";
+    expect(()=>transport.decode(JSON.stringify(retargeted))).toThrow();
+    const unfunded=structuredClone(native);unfunded.targets[0].initializerArgumentsJson='["unexpected"]';
+    expect(()=>nativeDeployment(unfunded,local)).toThrow("absent initializer");
+    const feesOnly={...native,fees:{buyPpm:0,sellPpm:0}};
+    expect(()=>nativeDeployment(feesOnly,local)).toThrow("declared together");
+  });
+  it("retains the exact rejected stage privately without treating it as a complete declaration",async()=>{
+    const rejected={interfaces:interfaces.interfaces,deployment:{format:"fixture-refs-v1",targets:[{id:"main",wrong:[]}],pool:{}}};
+    const input={intent,chainId:8453 as const,evmVersion:"cancun" as const,model:"test-model"};
+    const call=vi.fn().mockResolvedValueOnce(response(graph)).mockResolvedValueOnce(response(rejected));
+    const error=await declareGeneralChecks(input,call).catch(error=>error);
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(error.diagnostic.failures[0]).toMatchObject({declaration:null,response:JSON.stringify(rejected)});
+    expect(error.diagnostic.failures[0].message).toContain("received id,wrong");
+    expect(checkedCheckDiagnostic(error.diagnostic)).toEqual(error.diagnostic);
+    expect(reusableCheckFailure(error.diagnostic,input)).toBeUndefined();
+    expect(()=>checkedCheckDiagnostic({...error.diagnostic,failures:[{...error.diagnostic.failures[0],response:"x".repeat(96_001)}]})).toThrow();
   });
 });
