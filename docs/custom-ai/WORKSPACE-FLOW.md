@@ -2,6 +2,8 @@
 
 The conversation is the primary workspace. Coin identity and launch settings have one editor in the preview. The coin name opens the workspace menu for new coins, versions, request details and usage. Chats opens the saved conversation library. Rules remain available in a collapsed disclosure; open decisions remain visible when needed. Assistant replies have a quiet copy icon that appears on hover or keyboard focus.
 
+Rule details start collapsed even when the design has open choices. The conversation asks for the next material choice; opening the rule disclosure shows the complete saved design and remaining implementation work. This keeps the chat compact without dropping requirements or treating unfinished work as launch-ready.
+
 A direct request such as “okay, launch this coin” can produce a source-bound preparation action. Questions about launching and requests not to launch do not. The action is consumed once for that exact source; a reload or another chat cannot replay it. Missing details open their editor. A successful automatic review can prepare the wallet step, while sending the transaction remains an explicit wallet confirmation.
 
 On the fee-module route, the chat command prepares the saved launch and shows Continue in wallet. It waits for restoration of any existing launch before creating a request. It never opens a transaction confirmation automatically; the wallet button continues the prepared operation.

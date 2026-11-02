@@ -38,7 +38,7 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
       <p className={styles.pendingRequest}>{pendingChange}</p>
       {draft && <button type="button" className={styles.textButton} disabled={disabled} onClick={onKeepRules}>Keep previous rules</button>}
     </>}
-    {intent && <details open={intentHasOpenParts(intent)}>
+    {intent && <details>
       <summary>Requested rules ({intent.requirements.length})</summary>
       <RequestedRules rules={intent.requirements} changes={intent.parentRevision ? intent.changes : []} disabled={disabled} onEditRule={editable}/>
       {intent.unresolved.filter(question => !intent.requirements.some(rule => rule.open === question)).map(question => <p key={question}>Open: {question}</p>)}

@@ -35,7 +35,7 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
     <GeneralLaunchControls enabled={enabled} account={account} conversationId={conversationId} scope={cacheKey} headers={headers}
       project={project} intent={intent} draftId={draftId} settings={settings} imageId={imageReceipt?.id} disabled={disabled||imageBusy}
       pendingChange={pendingChange} editor={editor} flush={flush??(async()=>undefined)} onLaunchLocked={lock} launchCommand={launchCommand}/>
-    {intent&&<details className={`${styles.ruleReview} ${styles.coinRules}`} open={intent.unresolved.length>0}>
+    {intent&&<details className={`${styles.ruleReview} ${styles.coinRules}`}>
       <summary>Coin rules<span>{intent.requirements.length}</span></summary>
       <section aria-label="Requested contract rules">
         <RequestedRules rules={intent.requirements} changes={intent.parentRevision?intent.changes:[]} disabled={disabled||launchBusy||!matches} onEditRule={onEditRule}/>

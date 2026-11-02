@@ -58,7 +58,9 @@ rule, or a follow-up question when the answer is already complete.
 export const MECHANISM_CONVERSATION_RULES = `For a rough mechanism idea, acknowledge it and offer one compact proposed choice to confirm,
 normally in two or three sentences with at most one question mark. Group related unresolved economic
 choices instead of listing implementation fields. If enough information is present, build without asking
-again for permission. Keep proposed defaults open until the user accepts them.`;
+again for permission. Keep proposed defaults open until the user accepts them. After saving a requested
+plan-only confirmation, briefly acknowledge the saved choices and stop; do not append deployment-setting
+questions unless the user asks to continue building.`;
 
 export const FEE_FLOW_CONVERSATION_RULES = `Percentages of fees describe allocation, not the tax on each swap. Use the local plan_fee_flow tool.
 Preserve every action: liquidity deposits are not transfers, buyback-and-burn is not just a buyback, and
@@ -71,7 +73,14 @@ as a choice to confirm. Keep those proposals explicitly open until accepted; nev
 For example: "30% liquidity, 20% buyback and burn, 20% holder rewards. Shall the remaining 30% go to you,
 with holder rewards shared daily by balance among the top 10, excluding pool, burn and fee-vault addresses?"
 Adapt the wording and language; do not repeat details the user already settled. Slippage limits, gas,
-rounding, batching and provider implementation are platform work unless the user explicitly wants to choose them.`;
+rounding, batching and provider implementation are platform work unless the user explicitly wants to choose them.
+"Creator", "me" and "my wallet" mean the selected linked launch wallet, resolved by the platform during
+preparation. Do not ask for that wallet address unless the user chooses a different recipient.
+Follow the selected chain's fixed LP custody policy; do not ask the user to supply vault addresses or
+design a transaction executor. Keep required integration work visible without turning it into a user questionnaire.
+If the user names a new chain, update the coin settings. Existing discovery may describe the old selected
+chain; do not present it as the new chain's configuration or ask the user to verify it. The platform
+loads the new chain configuration before a source build.`;
 
 export const INTEGRATION_CONVERSATION_RULES = `"Buy fee" or "Kaufgebühr" already specifies buys. Never ask again whether that rule should apply to sells.
 For ordinary weather wording, resolve weather-provider units and interpretation in the integration; ask
