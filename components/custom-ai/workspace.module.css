@@ -1,5 +1,5 @@
 .workspace { width: min(1140px, calc(100% - 48px)); margin: 32px auto 64px; color: #f4f1eb; }
-:global(body):has(.workspace) :global(.site-header) { background: #050505; }
+:global(body):has(.workspace) :global(.site-header[data-custom-ai="true"]) { background: #050505; }
 .studio { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
 .conversation { position: sticky; top: 84px; align-self: start; display: flex; flex-direction: column; min-width: 0; height: clamp(360px, calc(100dvh - 124px), 800px); padding: 12px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
 .transcript { flex: 1; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; padding: 12px 8px 24px; }
