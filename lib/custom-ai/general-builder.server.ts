@@ -21,6 +21,7 @@ import { AI_CONFIG } from "./ai-config";
 import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.server";
 import {modelTask} from "./model-tasks";
 import {PROTOCOL_CORE,PROTOCOL_TOPICS} from "./protocol-knowledge";
+import {uniswapRoutingContext} from "./uniswap-routing";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -111,7 +112,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   const context = JSON.stringify({ intent: modelDesignContext({ intent }, false).intent,
     dependencySources: dependencyContext.modelSources, dependencySourceView: dependencyContext.view, previous,
     ...(compiler.viaIR?{compilerImportAliases:VIAIR_200_REMAPPINGS}:{}),
-    ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production}:{}) });
+    ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production,uniswapRouting:uniswapRoutingContext(production)}:{}) });
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });
   const response = await call({ ...modelTask("source",configuredProvider().models), signal, maxTokens: AI_CONFIG.maximumContractTokens,responseProfile:"contract",

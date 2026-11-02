@@ -13,6 +13,7 @@ import {checkContextHash,reusableCheckFailure,type CheckDiagnostic,type CheckFai
 import {modelTask} from "./model-tasks";
 import {PROTOCOL_CORE,PROTOCOL_TOPICS} from "./protocol-knowledge";
 import type {CanonicalInterfaceContext} from "./canonical-dependencies.server";
+import {uniswapRoutingContext} from "./uniswap-routing";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
@@ -52,7 +53,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const diagnostic=():CheckDiagnostic=>({version:1,contextHash:checkContextHash(input),failures:structuredClone(failures)});
   const reject=(reason:string):never=>{if(!failures.length)record(new Error(reason));throw new GeneralCheckDeclarationError(stage,reason,diagnostic());};
   try {
-  const context=JSON.stringify({intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,...(input.production?{production:input.production}:{}),...(input.interfaces?{canonicalInterfaces:input.interfaces}:{})});
+  const context=JSON.stringify({intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,...(input.production?{production:input.production,uniswapRouting:uniswapRoutingContext(input.production)}:{}),...(input.interfaces?{canonicalInterfaces:input.interfaces}:{})});
   const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code.\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.verification.facts}\n${generalCheckLogicalRules}\nUse compact-v1 rows for contracts and steps; all fields are validated after expansion.\n${generalCheckRowRules}\n${launchProductionGuidance(input.production)}`;
   const schema={type:"object",properties:{generalChecks:generalCheckFieldSchema},required:["generalChecks"],additionalProperties:false};
   const qualify=async(raw:string)=>{

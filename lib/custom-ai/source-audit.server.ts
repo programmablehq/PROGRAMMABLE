@@ -9,6 +9,7 @@ import {CustomAIError} from "./types";
 import {canonicalGeneralSourceCatalog} from "./canonical-dependencies.server";
 import {dependencySourceContext} from "./dependency-source-context";
 import {modelTask} from "./model-tasks";
+import {uniswapRoutingContext} from "./uniswap-routing";
 
 export type SourceAuditFinding={code:string;requirementId:string|null;message:string};
 export type GeneralSourceAudit={version:1;projectHash:`sha256:${string}`;intentHash:`sha256:${string}`;
@@ -28,7 +29,7 @@ export function sourceAuditModelContext(project:ContractProject) {
   const dependencies=Object.fromEntries(Object.entries(project.sources).filter(([path,source])=>known[path]?.content===source.content));
   const compact=dependencySourceContext(dependencies);
   return {chainId:project.chainId,intent:project.intent,compiler:project.compiler,entrypoints:project.entrypoints,
-    deployment:project.deployment??null,production:project.production??null,dependencyView:compact.view,
+    deployment:project.deployment??null,production:project.production??null,uniswapRouting:uniswapRoutingContext(project.production),dependencyView:compact.view,
     sources:{...compact.modelSources,...Object.fromEntries(Object.entries(project.sources).filter(([path])=>!dependencies[path]))}};
 }
 

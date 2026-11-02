@@ -2,15 +2,14 @@
  * independent so a new mechanic does not require rewriting the chat prompt. */
 export const PROTOCOL_KNOWLEDGE_VERSION = "2026-11-02.1";
 const hooks = "https://developers.uniswap.org/docs/protocols/v4/concepts/hooks";
-const trading = "https://developers.uniswap.org/docs/trading/overview";
 export const PROTOCOL_TOPICS = {
   callbacks: {
     title: "Hook lifecycle and permissions", source: hooks,
     facts: "A pool selects one hook at initialization. One hook can serve many pools: scope mutable state by PoolId unless sharing is intentional. Hook address low bits must exactly encode its callback and return-delta permissions. Use the pinned Hooks library and mined CREATE2 address. Initialize, add/remove liquidity, swap and donate have distinct callbacks. Authenticate PoolManager entry and any router-supplied user identity. beforeSwap sender is the callback caller, not automatically the trader. Never use tx.origin. Match the exact pinned IHooks ABI, selectors and return deltas; a successful compiler run does not validate callback permissions.",
   },
   routing: {
-    title: "Swap routing and hook data", source: trading,
-    facts: "Distinguish the selected Programmable production router, the isolated test router and the Uniswap Universal Router. They are different interfaces. Use the production manifest for the real router and supported hookData, payer and recipient authentication; never copy a fixture address or assume msg.sender is the buyer. Test buys and sells, native/ERC20 settlement, exact-input/output support, approvals, slippage and fee limits using the actual supported path. A compatible v4 pool is not a guarantee that Uniswap's hosted API or app will route through an arbitrary custom hook. If the idea needs extra hookData or callbacks, specify and verify the router adapter rather than promising automatic routing.",
+    title: "Swap routing and hook data", source: "https://developers.uniswap.org/docs/trading/swapping-api/supported-chains",
+    facts: "Distinguish the selected Programmable production router, the isolated test router and the hosted Uniswap API. Use the supplied uniswapRouting context and production manifest for the real router, ABI family, hookData, payer and recipient authentication; never copy a fixture address or assume msg.sender is the buyer. The hosted API requires its current supported version (2.1.2 in this knowledge revision); its retirement of older API headers does not change immutable direct-contract bindings. Never repoint a protected hook to the API default without proving compatibility. Test buys and sells, native/ERC20 settlement, exact-input/output support, approvals, slippage and fee limits using the actual supported path. A compatible v4 pool is not a guarantee that Uniswap's hosted API or app will route through an arbitrary custom hook. Extra hookData or callbacks require an explicit verified adapter.",
   },
   accounting: {
     title: "Fees, custom accounting and liquidity", source: hooks,

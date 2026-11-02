@@ -20,12 +20,13 @@ import {
   type ClassicTradeSide,
 } from "./classic";
 import { MAX_TRADE_SLIPPAGE_BPS } from "./policy";
+import {UNISWAP_TRADING_API_ROUTER_VERSION,UNISWAP_HOSTED_MAINNET_ROUTER} from "../uniswap/trading-api-router";
 
 const QUOTE_URL =
   "https://trade-api.gateway.uniswap.org/v1/quote";
 const SWAP_URL =
   "https://trade-api.gateway.uniswap.org/v1/swap";
-const UNIVERSAL_ROUTER_VERSION = "2.0";
+const UNIVERSAL_ROUTER_VERSION = UNISWAP_TRADING_API_ROUTER_VERSION;
 const UINT128_MAX = (1n << 128n) - 1n;
 const MAX_GAS_LIMIT = 30_000_000n;
 const MAX_CALLDATA_BYTES = 128 * 1024;
@@ -38,13 +39,13 @@ const ROUTER_AS_RECIPIENT =
   "0x0000000000000000000000000000000000000002" as Address;
 
 /**
- * Universal Router v2.0 currently listed for Ethereum by the official
+ * Universal Router v2.1.2 currently listed for Ethereum by the official
  * Trading API supported-chains table and selected explicitly on every API
  * request. This is intentionally separate from Programmable's direct-route
  * deployment snapshot, which uses the registry's standard router.
  */
 export const UNISWAP_API_MAINNET_UNIVERSAL_ROUTER = getAddress(
-  "0x66a9893cc07d91d95644aedd05d03f95e1dba8af",
+  UNISWAP_HOSTED_MAINNET_ROUTER,
 );
 
 type FetchLike = (
@@ -605,7 +606,7 @@ function validateUniversalRouterCalldata(
   try {
     commands = CommandParser.parseCalldata(
       data,
-      UniversalRouterVersion.V2_0,
+      UniversalRouterVersion.V2_1_2,
     ).commands;
   } catch {
     unavailable();
@@ -668,6 +669,9 @@ function validateUniversalRouterCalldata(
   const swap = param(swapParams, "swap");
   if (!isRecord(swap)) unavailable();
   assertParsedPoolKey(swap.poolKey, input);
+  // This field is present in the 2.1.x ABI. Decode it explicitly so a 2.0
+  // parser cannot silently discard the per-hop price constraint.
+  parsedInteger(swap.minHopPriceX36,(1n<<256n)-1n);
   if (
     swap.zeroForOne !== true ||
     parsedInteger(swap.amountIn) !== input.amountIn ||

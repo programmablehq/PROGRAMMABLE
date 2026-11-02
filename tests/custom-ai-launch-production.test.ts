@@ -8,6 +8,7 @@ import { createContractProject, GENERAL_PROJECT_COMPILER, projectCompilerInput }
 import { bindGeneralCheckBlueprint, createGeneralCheckBlueprint } from "../lib/custom-ai/check-blueprint";
 import type { BuilderChainId } from "../lib/custom-ai/execution-routing";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
+import {uniswapRoutingContext} from "../lib/custom-ai/uniswap-routing";
 
 const fixture = (chain: BuilderChainId): Record<string, unknown> => structuredClone(captured.chains[String(chain) as keyof typeof captured.chains]) as Record<string, unknown>;
 const json = (value: unknown) => Response.json(value);
@@ -135,6 +136,16 @@ describe("bounded shared chain discovery", () => {
 });
 
 describe("versioned global protection policy before generation", () => {
+  it.each(chains)("keeps chain %i's real router separate from the hosted API and local fixture",chain=>{
+    const production=projectLaunchProductionContext(fixture(chain),chain,protection);
+    const routing=uniswapRoutingContext(production);
+    expect(routing).toMatchObject({status:"configured-not-execution-proof",productionId:production.id,
+      swapRouter:production.protectionBindings!.swapRouter,abiFamily:chain===1?"2.0":"2.1.x",
+      hostedAPI:{version:"2.1.2",automaticHookRouting:false}});
+    expect(routing.swapRouter?.address).not.toBe(production.executor.address);
+    expect(uniswapRoutingContext()).toEqual({status:"not-observed"});
+    expect(()=>uniswapRoutingContext({...production,chainId:chain===1?999:1})).toThrow();
+  });
   it.each(chains)("binds active review obligations on chain %i without weakening old saved contexts", chain => {
     const previous = projectLaunchProductionContext(fixture(chain), chain);
     const current = projectLaunchProductionContext(fixture(chain), chain, protection);

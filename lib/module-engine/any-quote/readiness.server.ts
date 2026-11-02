@@ -17,6 +17,7 @@ import { foundationChainProfile, type FoundationChainId } from "@/lib/module-fou
 import { foundationPriceLifetime } from "@/lib/module-foundation/price-freshness";
 import { foundationMainnetRpcs } from "@/lib/server/module-foundation/rpc";
 import { foundationMainnetPoolHints } from "@/lib/server/module-foundation/pool-hints";
+import {UNISWAP_TRADING_API_ROUTER_VERSION} from "@/lib/uniswap/trading-api-router";
 
 const QUOTE_URL = "https://trade-api.gateway.uniswap.org/v1/quote";
 const ASSETS_URL = "https://api.robinhood.com/rhj/assets";
@@ -67,7 +68,7 @@ async function fetchJson(url: string, options: AnyQuoteReadinessOptionsV1, body?
     const response = await (options.fetchImpl ?? fetch)(url, {
       method: body === undefined ? "GET" : "POST", cache: "no-store", redirect: "error", signal: controller.signal,
       headers: { Accept: "application/json", ...(body === undefined ? {} : {
-        "Content-Type": "application/json", "x-api-key": options.apiKey!, "x-universal-router-version": "2.1.1",
+        "Content-Type": "application/json", "x-api-key": options.apiKey!, "x-universal-router-version": UNISWAP_TRADING_API_ROUTER_VERSION,
       }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (response.status === 404 && body !== undefined) throw new AnyQuoteErrorV1("MARKET_ROUTE_UNAVAILABLE");

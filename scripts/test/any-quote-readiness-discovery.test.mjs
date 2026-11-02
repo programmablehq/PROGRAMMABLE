@@ -900,7 +900,7 @@ test("official discovery requests native ETH and executable V4 paths and verifie
       if (url !== "https://trade-api.gateway.uniswap.org/v1/quote") return f.options.fetchImpl(url, init);
       const body = JSON.parse(init.body); requests.push(body);
       assert.equal(init.headers["x-api-key"], apiKey);
-      assert.equal(init.headers["x-universal-router-version"], "2.1.1");
+      assert.equal(init.headers["x-universal-router-version"], "2.1.2");
       assert.equal(init.redirect, "error");
       assert.deepEqual(body.protocols, ["V4"]);
       assert.equal(body.hooksOptions, "V4_HOOKS_INCLUSIVE");
