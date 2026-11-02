@@ -68,7 +68,15 @@ const shape=(value:unknown,keys:string[])=>{
 };
 const json=(value:unknown,max=64000)=>{
   if(typeof value!=="string"||new TextEncoder().encode(value).length>max)return fail("bounded JSON value required");
-  return JSON.parse(value) as unknown;
+  try{return JSON.parse(value) as unknown;}
+  catch(error){
+    // Some sellers escape an already encoded value once more. Remove only
+    // that syntactic layer after ordinary JSON parsing failed. Values and
+    // types remain untouched and pass the complete semantic validator later.
+    const decoded:unknown=JSON.parse('"'+value+'"');
+    if(typeof decoded!=="string"||!/^\s*[[{]/u.test(decoded))throw error;
+    return JSON.parse(decoded) as unknown;
+  }
 };
 const list=(value:unknown,max=12000)=>{const parsed=json(value,max);if(!Array.isArray(parsed))return fail("JSON array required");return parsed;};
 const strings=(value:unknown)=>{if(!Array.isArray(value)||value.some(item=>typeof item!=="string"))return fail("string array required");return value as string[];};

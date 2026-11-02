@@ -46,7 +46,7 @@ async function fixture(chain:1|4663|8453|999,wrongRecipient=false){
    contract("hook",2,"hook",[manager,[token,"0","60",sqrtPrice,initializer,creator,"70","70",zero,"0"],creator,router,{fixtureHash:"v4-router"},zeros])],
   constructorChildren:[child("fee-vault",3,"1",[manager,creator]),child("protection-module",4,"2",[hook,token,creator,router,{fixtureHash:"v4-router"},"70",zeros]),child("tax-vault",3,"3",[manager,treasury])],
   allowedCalls:[creator,trader,{account:"trader-b"},treasury,...["initializer","token","hook","fee-vault","protection-module","tax-vault"].map(contract=>({contract}))],
-  steps:[step("initialize","initializer","initialize(address,address,int24,address,uint256)",[hook,token,tick,creator,"1"],{value:initialBuy.toString()}),
+  steps:[step("initialize","initializer","initialize(address,address,int24,address,uint256)",[hook,token,tick,creator,"1"],{value:initialBuy.toString(),expect:{status:"success",swapFeePpm:0}}),
    view("initialized","initializer","initialized()",[],true,"launch",0),view("opening-floor","initializer","openingFdvUsd()",[],"15030","launch",0),
    step("buy","v4-router","swap((address,address,uint24,int24,address),(bool,int256,uint160),bytes)",[key,[true,(-buy).toString(),"4295128740"],"0x"],{from:"trader-a",value:buy.toString(),afterSeconds:31}),
    view("bought-tokens","token","balanceOf(address)",[trader],bought,"trade",31),
@@ -80,6 +80,12 @@ describe("protected world declaration boundaries",()=>{
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("original source in the declared protected pool",()=>{
  it.each([1,4663,8453,999] as const)("executes initialization, trades and fixed fee claims on chain %s",async chain=>{
   const input=await fixture(chain),projectHash=input.project.hash,artifactHash=input.compilation.artifactHash;
+  if(chain===8453){
+   const withoutSwap=structuredClone(input.raw);withoutSwap.steps[0].contract="hook";
+   expect(()=>createGeneralCheckBlueprint(withoutSwap,intent,chain,"cancun")).toThrow("not-a-direct-hook-call");
+   const wrongFee=structuredClone(input.raw);wrongFee.steps[0].expect={status:"success",swapFeePpm:3000};
+   expect(()=>createGeneralCheckBlueprint(wrongFee,intent,chain,"cancun")).toThrow("fixed-pool-lp-fee");
+  }
   const pending=checkGeneralScenarios(input.project,input.compilation,input.plan);
   if(chain===999){
    input.project.sources[input.project.entrypoints[0].source].content="contract ChangedAfterStart {}";

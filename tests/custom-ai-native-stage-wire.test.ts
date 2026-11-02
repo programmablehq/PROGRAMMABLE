@@ -88,6 +88,14 @@ describe("native independent declaration transport",()=>{
     expect(nativeScenarioRows([{...steps[1],argumentsJson:""}])).toEqual(nativeScenarioRows([steps[1]]));
     expect(()=>nativeScenarioRows([{...steps[1],signature:"balanceOf(address)",argumentsJson:""}])).toThrow();
     expect(()=>nativeScenarioRows([{...steps[1],signature:"event Counted(uint256 count)"}])).toThrow();
+    const values='[{"pool":true},["true","-1000","4295128740"],"0x"]';
+    const extraEscaped=JSON.stringify(values).slice(1,-1);
+    const restored=nativeScenarioRows([{...steps[0],argumentsJson:extraEscaped}]) as {arguments:unknown[]}[];
+    expect(restored[0].arguments).toEqual(JSON.parse(values));
+    // Syntactic repair must never coerce a quoted boolean into a real bool.
+    expect((restored[0].arguments[1] as unknown[])[0]).toBe("true");
+    const literal='["\\\"quoted\\\"","C:\\\\path"]';
+    expect((nativeScenarioRows([{...steps[0],argumentsJson:literal}]) as {arguments:unknown[]}[])[0].arguments).toEqual(JSON.parse(literal));
   });
   it("rejects calls that are absent from the agreed interface before source generation",()=>{
     const full={...graph,...interfaces,steps:[{...steps[0],signature:"inventedSwap()"},steps[1]]};

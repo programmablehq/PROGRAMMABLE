@@ -60,8 +60,10 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     const outside=block?text.slice(0,block.index)+text.slice(block.index+block[0].length):"";
     let normalized=fence?fence[1]:block&&!/[\{\[]|```/u.test(outside)?block[1]:text;
     if((normalized.match(/```/gu)??[]).length===1&&/\r?\n```\s*$/u.test(normalized))normalized=normalized.replace(/\r?\n```\s*$/u,"");
-    const start=normalized.indexOf("{");
-    if(start>0&&normalized.trimEnd().endsWith("}")&&!/[\{\[]|```/u.test(normalized.slice(0,start)))normalized=normalized.slice(start);
+    const start=normalized.indexOf("{"),end=normalized.lastIndexOf("}");
+    // Read one data object from a seller's text wrapper. Never interpret its
+    // tags or prose as actions, and reject competing objects/arrays or fences.
+    if(start>=0&&end>=start&&!/[{}\[\]]|```/u.test(normalized.slice(0,start)+normalized.slice(end+1)))normalized=normalized.slice(start,end+1);
     if (!validate) return normalized;
     try {
       const restored = restore(JSON.parse(normalized), original as Schema);

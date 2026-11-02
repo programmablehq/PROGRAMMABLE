@@ -54,7 +54,9 @@ describe("Surplus model routing", () => {
     expect(format.decode('Text first\n```json\n{"count":2}\n```\nDone')).toBe('{"count":2}');
     expect(format.decode('A prepared result follows.\n{"count":2}')).toBe('{"count":2}');
     expect(format.decode('A prepared result follows.\n{"count":2}\n```')).toBe('{"count":2}');
-    for(const text of ['{}\n```json\n{"count":2}\n```','```json\n{"count":"2"}\n```','```javascript\n{"count":2}\n```','```json\n{"count":2}'])expect(()=>format.decode(text)).toThrow();
+    expect(format.decode('<invoke name="emit"><parameter name="payload">{"count":2}</parameter></invoke>\n_rows')).toBe('{"count":2}');
+    for(const text of ['{}\n```json\n{"count":2}\n```','```json\n{"count":"2"}\n```','```javascript\n{"count":2}\n```','```json\n{"count":2}',
+      '<invoke>{"count":2}</invoke>{"count":3}','[]<invoke>{"count":2}</invoke>','<invoke>{"count":"2"}</invoke>'])expect(()=>format.decode(text)).toThrow();
   });
   it("requires both a complete streamed result and the terminal marker", async () => {
     useSurplus();const onText=vi.fn();
