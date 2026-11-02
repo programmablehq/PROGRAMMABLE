@@ -68,6 +68,14 @@ describe("native independent declaration transport",()=>{
     expect(result.scenarios.steps).toHaveLength(2);
     expect(resumed.mock.calls.map(([request])=>request.task)).toEqual(["interface-abi","scenarios"]);
   });
+  it("expands older compact graph rows before building the typed interface schema",async()=>{
+    const legacy={format:"compact-v1",contracts:[["main","Counter.sol","Counter","auxiliary",[],[],false,false,["surface"]]],allowedCalls:[]};
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(legacy),interfacesPending:true}))
+      .mockResolvedValueOnce(response({interfaces:interfaces.interfaces,deployment:null})).mockResolvedValueOnce(response({steps,complete:true}));
+    const result=await declareGeneralChecks({intent,chainId:8453,evmVersion:"cancun",model:"test-model"},call);
+    expect(result.scenarios.steps).toHaveLength(2);
+    expect(call.mock.calls[1][0].schema.properties.interfaces.items.properties.id.enum).toEqual(["main"]);
+  });
   it("keeps complete coverage checks after native expansion",async()=>{
     const invalid=structuredClone(graph);invalid.contracts[0].surfaceRequirements=[];
     const call=vi.fn().mockResolvedValueOnce(response(invalid)).mockResolvedValueOnce(response(interfaces)).mockResolvedValueOnce(response({steps,complete:true}))

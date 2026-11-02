@@ -151,6 +151,13 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   if(!Array.isArray(proposal.allowedCalls))return reject("interface-allowed-calls");
   if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return reject("interface-fields");
   delete proposal.steps;
+  if(interfacesPending&&proposal.format==="compact-v1"){
+    // Older saved graph stages used compact rows. Expand the same identities
+    // before constructing the new graph-scoped public-interface schema.
+    Object.assign(proposal,decodeGeneralCheckDeclaration(JSON.stringify({...proposal,steps:[]}),input.interfaces?.contracts));
+    delete proposal.format;
+    delete proposal.steps;
+  }
   if(interfacesPending){
     responseText=undefined;
     progress={interface:JSON.stringify(proposal),steps:[],interfacesPending:true};
