@@ -1,6 +1,7 @@
 import "server-only";
 import type {ClaudeInput,ClaudeResult} from "./claude.server";
-import {checkedGeneralCheckBlueprint,createGeneralCheckBlueprint,generalCheckLogicalRules,generalCheckGraphRules,type GeneralCheckBlueprint} from "./check-blueprint";
+import {checkedGeneralCheckBlueprint,createGeneralCheckBlueprint,generalCheckBlueprintInput,generalCheckLogicalRules,generalCheckGraphRules,type GeneralCheckBlueprint} from "./check-blueprint";
+import {bindCanonicalTokenMetadata} from "./deployment-metadata";
 import {decodeGeneralCheckDeclaration} from "./check-plan-wire";
 import type {ContractProject} from "./contract-project";
 import type {BuilderChainId} from "./execution-routing";
@@ -68,7 +69,10 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     try{
       const saved=checkedGeneralCheckBlueprint(input.cached,input.intent);
       if(saved.chainId===input.chainId&&saved.compiler.evmVersion===input.evmVersion
-        &&saved.production?.id===input.production?.id)return saved;
+        &&saved.production?.id===input.production?.id){
+        const raw=generalCheckBlueprintInput(saved),metadata=bindCanonicalTokenMetadata(raw.deployment);
+        return metadata.changed?createGeneralCheckBlueprint({...raw,deployment:metadata.value},input.intent,input.chainId,input.evmVersion,input.production):saved;
+      }
     }catch{/* A changed design needs a new declaration, never an inherited check. */}
   }
   let stage:"interface"|"scenarios"="interface";
@@ -95,7 +99,8 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const expandedDeclaration=(text:string)=>{
     const decoded=decodeGeneralCheckDeclaration(text,input.interfaces?.contracts) as Record<string,unknown>;
     const opening=resolveOpeningFixture(decoded,input.chainId);
-    return {...opening.proposal,steps:resolveOpeningFixtureValue(opening.proposal.steps,opening.inputs)};
+    const metadata=bindCanonicalTokenMetadata(opening.proposal.deployment);
+    return {...opening.proposal,...(metadata.changed?{deployment:metadata.value}:{}),steps:resolveOpeningFixtureValue(opening.proposal.steps,opening.inputs)};
   };
   const completeDeclaration=(text:string)=>createGeneralCheckBlueprint(expandedDeclaration(text),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
   const qualify=async(raw:string)=>{

@@ -23,6 +23,9 @@ import {modelTask} from "./model-tasks";
 import {PROTOCOL_CORE,PROTOCOL_TOPICS} from "./protocol-knowledge";
 import {uniswapRoutingContext} from "./uniswap-routing";
 import {mechanismKnowledge} from "./mechanism-knowledge";
+import {bindCanonicalTokenMetadata} from "./deployment-metadata";
+import {createGeneralDeploymentBlueprint, deploymentBlueprintInput} from "./deployment-blueprint";
+import {canonicalBrowserJsonV2} from "@/lib/custom-launch/browser-authority-v2";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -83,6 +86,32 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     // the caller's existing job; another design or network still cannot attach.
     if (input.previous.chainId !== chainId || input.previous.intent.id !== intent.id) {
       throw new CustomAIError("project-context", "Use the saved contract from this design and network.", 409);
+    }
+  }
+  const finish = async (project:ContractProject,reply:string,summary:string):Promise<GeneralProjectDraft> => {
+    if(blueprint)try{bindGeneralCheckBlueprint(blueprint,project);}catch{throw new CustomAIError("behavior-context","The generated source changed its declared contract graph. The original design and checks are kept.",502);}
+    await input.saveProject(structuredClone(project));
+    signal?.throwIfAborted();
+    input.onProgress?.({ type: "phase", phase: "checking" });
+    const controller=new AbortController(),scope=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+    let compilation:CompiledProject,sourceAudit:GeneralSourceAudit|undefined;
+    try{
+      [compilation,sourceAudit]=await Promise.all([compile(structuredClone(project),scope),input.auditSource?.(structuredClone(project),scope)]);
+      if(sourceAudit)sourceAudit=checkedGeneralSourceAudit(sourceAudit,project);
+    }catch(error){controller.abort(error);throw error;}
+    return {version:1,reply,summary,project,compilation,selection,...(blueprint?{blueprintId:blueprint.id}:{}),
+      ...(sourceAudit?{sourceAudit}:{}),requirementCoverage:"proposed",launchReady:false};
+  };
+  const metadataSource=input.previous;
+  if(metadataSource?.deployment&&production&&blueprint?.deployment
+    &&metadataSource.production?.id===production.id
+    &&canonicalBrowserJsonV2(metadataSource.intent)===canonicalBrowserJsonV2(intent)
+    &&canonicalBrowserJsonV2(metadataSource.entrypoints)===canonicalBrowserJsonV2(blueprint.entrypoints)
+    &&canonicalBrowserJsonV2(metadataSource.compiler)===canonicalBrowserJsonV2(blueprint.compiler)){
+    const metadata=bindCanonicalTokenMetadata(deploymentBlueprintInput(metadataSource.deployment));
+    if(metadata.changed&&createGeneralDeploymentBlueprint(metadata.value,metadataSource.entrypoints,production,intent).id===blueprint.deployment.id){
+      const project=createContractProject({compiler:metadataSource.compiler,sources:metadataSource.sources,entrypoints:metadataSource.entrypoints},intent,chainId,production,blueprint.deployment);
+      return finish(project,"The coin name and ticker now use your selected details. The existing contract code has been retained and checked again.","Coin metadata binding updated");
     }
   }
   // Validate dependency names and byte limits before spending a model call.
@@ -171,17 +200,5 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     sources[file.path] = { content: file.content };
   }
   const project = createContractProject({ compiler, sources: resolveInlineLibraries(sources, librarySources, compiler), entrypoints: answer.entrypoints }, intent, chainId, production, blueprint?.deployment);
-  if(blueprint)try{bindGeneralCheckBlueprint(blueprint,project);}catch{throw new CustomAIError("behavior-context","The generated source changed its declared contract graph. The original design and checks are kept.",502);}
-  await input.saveProject(structuredClone(project));
-  signal?.throwIfAborted();
-  input.onProgress?.({ type: "phase", phase: "checking" });
-  const controller=new AbortController(),scope=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
-  let compilation:CompiledProject,sourceAudit:GeneralSourceAudit|undefined;
-  try{
-    [compilation,sourceAudit]=await Promise.all([compile(structuredClone(project),scope),input.auditSource?.(structuredClone(project),scope)]);
-    if(sourceAudit)sourceAudit=checkedGeneralSourceAudit(sourceAudit,project);
-  }catch(error){controller.abort(error);throw error;}
-  return { version: 1, reply: answer.reply as string, summary: answer.summary as string, project, compilation, selection,...(blueprint?{blueprintId:blueprint.id}:{}),
-    ...(sourceAudit?{sourceAudit}:{}),
-    requirementCoverage: "proposed", launchReady: false };
+  return finish(project,answer.reply as string,answer.summary as string);
 }
