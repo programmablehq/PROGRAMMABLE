@@ -139,7 +139,7 @@ describe("versioned global protection policy before generation", () => {
   it.each(chains)("keeps chain %i's real router separate from the hosted API and local fixture",chain=>{
     const production=projectLaunchProductionContext(fixture(chain),chain,protection);
     const routing=uniswapRoutingContext(production);
-    expect(routing).toMatchObject({status:"configured-not-execution-proof",productionId:production.id,
+    expect(routing).toMatchObject({status:"configured-not-execution-proof",
       swapRouter:production.protectionBindings!.swapRouter,abiFamily:chain===1?"2.0":"2.1.x",
       hostedAPI:{version:"2.1.2",automaticHookRouting:false}});
     expect(routing.swapRouter?.address).not.toBe(production.executor.address);

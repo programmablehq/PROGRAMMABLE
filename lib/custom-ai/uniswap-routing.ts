@@ -8,12 +8,12 @@ import {UNISWAP_TRADING_API_ROUTER_VERSION} from "@/lib/uniswap/trading-api-rout
 export function uniswapRoutingContext(input?:LaunchProductionContext) {
   if(!input)return {status:"not-observed" as const};
   const context=checkedLaunchProductionContext(input,input.chainId),binding=context.protectionBindings;
-  if(!binding)return {status:"not-observed" as const,productionId:context.id};
+  if(!binding)return {status:"not-observed" as const};
   const pin=PROTECTED_LAUNCH_CHAIN_PINS_V1[context.chainId];
   if(binding.swapRouter.address.toLowerCase()!==pin.router.toLowerCase()
-    ||binding.swapRouter.runtimeCodeHash.toLowerCase()!==pin.routerCodeHash.toLowerCase())return {status:"unrecognized-binding" as const,productionId:context.id};
-  return {status:"configured-not-execution-proof" as const,productionId:context.id,chainId:context.chainId,
-    poolManager:context.poolManager,swapRouter:binding.swapRouter,
+    ||binding.swapRouter.runtimeCodeHash.toLowerCase()!==pin.routerCodeHash.toLowerCase())return {status:"unrecognized-binding" as const};
+  return {status:"configured-not-execution-proof" as const,chainId:context.chainId,
+    swapRouter:binding.swapRouter,
     abiFamily:context.chainId===1?"2.0":"2.1.x",
     entrypoint:"execute(bytes,bytes[],uint256)",
     exactInputNativePair:{commands:["V4_SWAP","SWEEP"],actions:["SWAP_EXACT_IN_SINGLE","SETTLE_ALL","TAKE_ALL"],
