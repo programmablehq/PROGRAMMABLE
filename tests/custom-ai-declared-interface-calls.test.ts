@@ -25,6 +25,8 @@ describe("independently declared call types",()=>{
  it("rejects missing protected child call targets before paying for source",()=>{
   const p=plan();p.world=parseV4CheckWorld({kind:"v4-protected-native-token-v1",token:"token",hook:"main",initializer:"initializer",hookPermissions:8396,fee:0,tickSpacing:60,sqrtPriceX96:"79228162514264337593543950336",nativeUsdAnswer:"300000000000"},new Set(["token","main","initializer"]));
   p.constructorChildren=[{...p.contracts[0],id:"fee-vault",parent:"main",creation:"create",nonce:"1",value:"0"}];
+  expect(()=>validateDeclaredInterfaceCalls(p)).not.toThrow();
+  p.steps.push({...p.steps[0],id:"initialize",contract:"initializer",signature:"initialize(address,address,int24,address,uint256)",arguments:[]});
   expect(()=>validateDeclaredInterfaceCalls(p)).toThrow("child call targets missing from allowedCalls: fee-vault");
   p.allowedCalls=[{contract:"fee-vault"}];
   expect(()=>validateDeclaredInterfaceCalls(p)).not.toThrow();
