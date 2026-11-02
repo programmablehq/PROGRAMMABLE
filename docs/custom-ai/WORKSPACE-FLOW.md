@@ -36,3 +36,5 @@ Before source generation, a completed but invalid independent check declaration 
 The desktop conversation keeps most of the width. A compact preview precedes a collapsible settings editor and saved rules. On narrow screens the preview follows the conversation in normal document order. No setting is duplicated in the Options panel. Controls use native buttons/disclosures, visible focus and labels. Streaming text is not repeatedly announced; phase changes and completed messages are.
 
 This flow describes the product interface. It does not certify a new contract, chain, feed or execution service. Capability activation continues to require its own evidence.
+
+Canonical protected-token names and tickers bind to the current coin details, not the isolated test fixtures. Rebuilding an older declaration repairs only those metadata inputs. When the intent, source, compiler and remaining deployment values are unchanged, keep the source bytes and rerun compilation, the independent source review and the declared behavior checks for the new project identity. Previously saved proof records retain their original identity.

@@ -93,13 +93,17 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
   return structuredClone({...body,id:canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body)});
 }
 
-export function checkedGeneralCheckBlueprint(value:GeneralCheckBlueprint,intent:LaunchIntent):GeneralCheckBlueprint {
-  if(!value||value.version!==1||!value.scenarios||!Array.isArray(value.entrypoints))return fail();
-  const parsed=createGeneralCheckBlueprint({contracts:value.scenarios.contracts.map(fixture=>({...fixture,
+export function generalCheckBlueprintInput(value:GeneralCheckBlueprint) {
+  return {contracts:value.scenarios.contracts.map(fixture=>({...fixture,
     role:value.entrypoints.find(entry=>entry.source===fixture.source&&entry.contract===fixture.contract)?.role})),
     allowedCalls:value.scenarios.allowedCalls,steps:value.scenarios.steps,compilerProfile:projectCompilerProfile(value.compiler),...(value.scenarios.world?{world:value.scenarios.world}:{}),
     ...(value.scenarios.constructorChildren?{constructorChildren:value.scenarios.constructorChildren.map(child=>({...child,role:"auxiliary"}))}:{}),
-    ...(value.deployment?{deployment:deploymentBlueprintInput(value.deployment)}:{})},intent,value.chainId,value.compiler?.evmVersion,value.production);
+    ...(value.deployment?{deployment:deploymentBlueprintInput(value.deployment)}:{})};
+}
+
+export function checkedGeneralCheckBlueprint(value:GeneralCheckBlueprint,intent:LaunchIntent):GeneralCheckBlueprint {
+  if(!value||value.version!==1||!value.scenarios||!Array.isArray(value.entrypoints))return fail();
+  const parsed=createGeneralCheckBlueprint(generalCheckBlueprintInput(value),intent,value.chainId,value.compiler?.evmVersion,value.production);
   // Reconstruct all fields; extra or changed metadata cannot inherit an ID.
   const {id,...body}=value;
   if(id!==parsed.id||id!==canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body))return fail();

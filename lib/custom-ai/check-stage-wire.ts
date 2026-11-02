@@ -1,9 +1,11 @@
 import {parseAbi,parseAbiItem,toFunctionSignature} from "viem";
 import {V4_WORLD_STEP_SIGNATURES} from "./behavior-world";
+import {bindCanonicalTokenMetadata} from "./deployment-metadata";
 
 /** Native stage envelopes keep the response itself structured. Only constructor
  * values and the separately documented deployment graph need JSON value text.
- * Expansion is lossless and never confers semantic approval. */
+ * Canonical token metadata binds to the selected coin details; the remaining
+ * expansion retains the supplied values and never confers semantic approval. */
 const string=(maxLength=8000)=>({type:"string",maxLength});
 const identifier={type:"string",maxLength:64,pattern:"^[a-z][a-z0-9-]{0,63}$"};
 const optionalIdentifier={type:"string",maxLength:64,pattern:"^(?:[a-z][a-z0-9-]{0,63})?$"};
@@ -164,7 +166,7 @@ export function nativeDeployment(value:unknown,graph:Record<string,unknown>):unk
   });
   const {format,constructorChildren:ignored,targets:ignoredTargets,...body}=data;
   void format;void ignored;void ignoredTargets;
-  return {...body,targets,...(instances?{constructorChildren:instances}:{})};
+  return bindCanonicalTokenMetadata({...body,targets,...(instances?{constructorChildren:instances}:{})}).value;
 }
 export function nativeInterfaceMap(value:unknown):Record<string,unknown>{
   const data=shape(value,["interfaces"]);
