@@ -106,13 +106,15 @@ export function reviseLaunchIntent(input: {
         continue;
       }
     }
-    // Bind an explicit latest-user answer once. Only an existing open choice
-    // can be replaced this way; closed rules still require normal ruleEdits.
-    if (!edit && (!target || target.requirementId === id) && rule.open !== null && next?.open === null
-      && next.kind === rule.kind && next.instruction.trim() && request.messages.at(-1)?.role==="user"
+    // An answer may resolve only part of an open choice. Preserve the stable
+    // identity and kind, and keep any remaining question instead of discarding
+    // the answered fields. Closed rules still require normal ruleEdits.
+    if (!edit && (!target || target.requirementId === id) && rule.open !== null && next
+      && (next.text!==rule.text||next.open!==rule.open)
+      && next.instruction.trim() && request.messages.at(-1)?.role==="user"
       && request.messages.at(-1)!.content.includes(next.instruction)) {
       const source=origin(request,next.instruction,true);
-      requirements.push({...rule,text:next.text,open:null,origin:source});
+      requirements.push({...rule,text:next.text,open:next.open,origin:source});
       changes.push({requirementId:id,operation:"replace",origin:source});
       continue;
     }

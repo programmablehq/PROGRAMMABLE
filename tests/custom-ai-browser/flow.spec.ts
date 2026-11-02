@@ -79,6 +79,8 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   await box.fill(`Build this: ${texts.join(". ")}`);await box.press("Enter");
   const requested=page.locator("details").filter({has:page.locator("summary",{hasText:"Requested rules (10)"})});
   await expect(requested).toBeVisible();
+  await expect(requested.getByText(texts[0],{exact:true})).not.toBeVisible();
+  await requested.locator("summary").click();
   for(const text of texts)await expect(requested.getByText(text,{exact:true})).toBeVisible();
   for(const question of questions)await expect(requested.getByText(question,{exact:true})).toBeVisible();
   await expect(requested.getByText("Updated",{exact:true})).toHaveCount(1);
@@ -89,11 +91,13 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   await expect(page.getByText("Checked draft",{exact:true})).toHaveCount(0);
   await box.fill("Only adjust the weather rule later.");await page.reload();
   await expect(box).toHaveValue("Only adjust the weather rule later.");
+  await requested.locator("summary").click();
   await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
   await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
   await expect(page.getByText("Requested rules (10)",{exact:true})).toHaveCount(0);
   await openChatMenu(page);
   await page.getByRole("button",{name:"Restore previous coin",exact:true}).click();
+  await requested.locator("summary").click();
   await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
   await expect(box).toHaveValue("Only adjust the weather rule later.");
   expect(calls).toBe(1);

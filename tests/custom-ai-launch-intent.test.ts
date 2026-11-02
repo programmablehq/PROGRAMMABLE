@@ -127,6 +127,21 @@ describe("complete launch intent and source revisions", () => {
     expect(result.problems).toEqual([]);expect(result.intent.unresolved).toEqual(questions.slice(1));
     expect(result.intent.requirements.find(rule=>rule.id===question.id)?.text).toBe("Use the signed London rain feed");
   });
+  it("retains a quoted partial answer while keeping the remaining choice open",()=>{
+    const previous=initial(),instruction="Use my creator wallet for the remaining share.";
+    const changed=proposed.map(rule=>rule.id==="rule-6"?{...rule,text:"Use the creator wallet; snapshot timing remains open",open:"Choose snapshot timing",instruction}:rule);
+    const result=reviseLaunchIntent({previous,proposed:changed,unresolved:["Choose snapshot timing",...questions.slice(1)],edits:[],request:{...request,messages:[{role:"user",content:instruction}]}});
+    expect(result.problems).toEqual([]);expect(result.intent.requirements[6]).toMatchObject({text:"Use the creator wallet; snapshot timing remains open",open:"Choose snapshot timing"});
+    expect(result.intent.unresolved).toEqual(["Choose snapshot timing",...questions.slice(1)]);
+    expect(result.intent.requirements.slice(0,6)).toEqual(previous.requirements.slice(0,6));
+  });
+  it("keeps the server-owned kind when a confirmed decision is phrased as behavior",()=>{
+    const source=initial(),previous={...source,requirements:source.requirements.map((rule,i)=>i===6?{...rule,kind:"decision" as const}:rule)};
+    const instruction="Use my creator wallet.",changed=proposed.map(rule=>rule.id==="rule-6"?{...rule,kind:"behavior" as const,text:"The remaining share goes to the creator wallet",open:null,instruction}:rule);
+    const result=reviseLaunchIntent({previous,proposed:changed,unresolved:questions.slice(1),edits:[],request:{...request,messages:[{role:"user",content:instruction}]}});
+    expect(result.problems).toEqual([]);expect(result.intent.requirements[6]).toMatchObject({kind:"decision",text:"The remaining share goes to the creator wallet",open:null});
+    expect(result.intent.unresolved).toEqual(questions.slice(1));
+  });
   it("keeps other requirements and rejects additions during a selected edit", () => {
     const previous=initial(),instruction="Change the opening fee to 8% and add this rule.";
     const next=reviseLaunchIntent({previous,proposed:[...proposed.map(rule=>rule.id==="rule-4"?{...rule,text:"Allow later minting"}:rule),

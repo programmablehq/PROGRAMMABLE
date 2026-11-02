@@ -6,6 +6,8 @@ Each requirement has a stable id, plain text, a behavior/constraint/decision kin
 
 For a new design consisting of one user message, the server can bind a missing excerpt to that exact message. This records provenance, not acceptance of a proposed default. Open choices remain open. Incorrect nonempty quotes are still rejected, and additions or edits to an existing design retain their explicit quote requirements.
 
+An explicit answer can fill part of an open choice while another part remains unresolved. The server retains the answered text and the remaining question under the original rule id and kind. A missing answer quote, another rule's edit target or a closed rule still cannot use this path. A model relabelling a decision as behavior does not change its stored kind or discard the user's answer.
+
 The planner returns all requirements. Replacing or removing a saved requirement uses an explicit edit with a quote from the latest user message. A selected rule restricts edits to its id. Missing or unauthorized edits retain the previous requirement in the next design and block code generation. A question retains the same canonical design and revision.
 
 New planner responses name their executable subset in `implementedRequirementIds`.
