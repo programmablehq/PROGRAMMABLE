@@ -47,3 +47,36 @@ test("failed, stale, canceled, missing or duplicated verification cannot be reus
   const missing = fixture(); missing.jobs.pop(); assert.equal(validateReuse(missing), false);
   const duplicate = fixture(); duplicate.jobs.push(duplicate.jobs[0]); assert.equal(validateReuse(duplicate), false);
 });
+
+function finalizing() {
+  const input = fixture();
+  input.run.status = "in_progress"; input.run.conclusion = null;
+  for (const job of input.jobs) job.status = "completed";
+  for (const name of ["Contracts build", "Contracts tests (1/2)", "Contracts tests (2/2)",
+    "Contracts static analysis", "Contracts release and forks", "Bind production Verify proof"])
+    input.jobs.push({ name, status: "completed", conclusion: "skipped", run_id: input.run.id, head_sha: input.expected.head });
+  return input;
+}
+
+test("completed exact-tree jobs remain reusable while GitHub finalizes the run summary", () => {
+  assert.equal(validateReuse(finalizing()), true);
+});
+
+test("a finalizing run needs every job, including the final aggregate, to have finished", () => {
+  for (const name of ["Verify aggregate", "Interface", "Bind production Verify proof"]) {
+    const input = finalizing(); input.jobs.find(job => job.name === name).status = "in_progress";
+    assert.equal(validateReuse(input), false, name);
+  }
+  const missing = finalizing(); missing.jobs.pop(); assert.equal(validateReuse(missing), false);
+  const extra = finalizing(); extra.jobs.push({ ...extra.jobs[0], name: "Additional unfinished control", status: "queued" });
+  assert.equal(validateReuse(extra), false);
+});
+
+test("finalization cannot make a failed or foreign job reusable", () => {
+  for (const patch of [{ conclusion: "failure" }, { run_id: 456 }, { head_sha: "f".repeat(40) }]) {
+    const input = finalizing(); Object.assign(input.jobs.at(-1), patch);
+    assert.equal(validateReuse(input), false);
+  }
+  const changed = finalizing(); changed.source.tree = "e".repeat(40);
+  assert.equal(validateReuse(changed), false);
+});

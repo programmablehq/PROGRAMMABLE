@@ -12,6 +12,20 @@ const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const checkNames = ["Change scope", "Credential leak gate", "Interface quality and tests",
   "Interface browser and build", "Interface", "Contracts", "Custom V2", "Database (PGlite)",
   "Realtime indexer", "Verify aggregate"];
+const prJobNames = [...checkNames, "Contracts build", "Contracts tests (1/2)", "Contracts tests (2/2)",
+  "Contracts static analysis", "Contracts release and forks", "Bind production Verify proof"];
+
+// GitHub can leave the run summary in progress after its final aggregate has
+// completed. Only the exact current PR job inventory qualifies in that case;
+// queued, missing, extra or failed jobs still require fresh verification.
+function completedRun(run, jobs) {
+  if (run.status === "completed") return run.conclusion === "success";
+  return run.status === "in_progress" && run.conclusion === null
+    && jobs.length === prJobNames.length
+    && prJobNames.every(name => jobs.filter(job => job.name === name).length === 1)
+    && jobs.every(job => job.status === "completed" && ["success", "skipped"].includes(job.conclusion)
+      && job.run_id === run.id && job.head_sha === run.head_sha);
+}
 
 export function eligibleScope(scope) {
   return scope.interface === "true" && ["contracts", "custom_v2", "database", "dependencies", "indexer", "read_model"]
@@ -28,7 +42,7 @@ export function validateReuse({ source, run, jobs, expected }) {
     && run.repository?.id === repositoryId && run.head_repository?.id === repositoryId
     && run.event === "pull_request" && run.path === ".github/workflows/verify.yml"
     && run.head_sha === expected.head && run.head_commit?.tree_id === expected.tree
-    && run.status === "completed" && run.conclusion === "success"
+    && completedRun(run, jobs)
     && expected.now - Date.parse(run.updated_at) >= 0
     && expected.now - Date.parse(run.updated_at) < 6 * 60 * 60 * 1000
     && checkNames.every(name => {
@@ -70,7 +84,8 @@ async function main() {
       if (pr) {
         const response = await github(`actions/workflows/verify.yml/runs?event=pull_request&head_sha=${pr.head.sha}&per_page=10`);
         const run = response.workflow_runs.sort((a, b) => b.id - a.id)[0];
-        if (run?.status === "completed" && run.conclusion === "success") {
+        if (run && (run.status === "completed" && run.conclusion === "success"
+          || run.status === "in_progress" && run.conclusion === null)) {
           const [{ jobs }, { artifacts }] = await Promise.all([
             github(`actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`),
             github(`actions/runs/${run.id}/artifacts?per_page=100`),
