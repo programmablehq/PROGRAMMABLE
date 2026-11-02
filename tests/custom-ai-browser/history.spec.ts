@@ -50,7 +50,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
    const saved=studios.get(k),chat=chats.get(k),active=chat?.activeRequest?jobs.get(chat.activeRequest):undefined;
    const draft=saved?.state.draftId?jobs.get(saved.state.draftId)?.result:undefined,context=saved?.state.contextId?jobs.get(saved.state.contextId)?.result:undefined;
    const proposal=saved?.state.sourceId?jobs.get(saved.state.sourceId)?.result?.generalProject:undefined;
-   return route.fulfill({json:saved?{...saved,draft:draft?.draft,generalProject:draft?.generalProject,intent:context?.intent??draft?.intent,...(proposal?{sourceRecovery:overviewFromView(saved!.state.sourceId!,proposal)}:{}),...(active&&active.state!=="failed"&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
+   return route.fulfill({json:saved?{...saved,draft:draft?.draft,generalProject:draft?.generalProject,intent:context?.intent??draft?.intent,buildIssue:context?.buildIssue,...(proposal?{sourceRecovery:overviewFromView(saved!.state.sourceId!,proposal)}:{}),...(active&&active.state!=="failed"&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
   }
   if(url.pathname==="/api/custom-ai"){
    if(body){calls.push(body);const scope=body.conversation,chat=chats.get(key(scope.account,scope.id,principal))!;expect(scope.revision).toBe(studios.get(key(scope.account,scope.id,principal))?.revision);chat.activeRequest=body.id;if(!chat.customTitle)chat.title=body.coin?.name||body.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;
@@ -66,6 +66,16 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
  });
  return {chats,studios,jobs,calls,control};
 }
+test("a failed declaration can resume after reopening without another automatic build",async({page})=>{
+ const f=await fixture(page),intent=generalFixture().intent;
+ f.control.respond=()=>({reply:"The saved build stopped before source generation.",intent,change:"blocked",buildIssue:{stage:"scenarios",code:"invalid-declaration"}});
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await expect(box).toBeEditable();await box.fill("Build the saved counter hook");await box.press("Enter");
+ const resume=page.getByRole("button",{name:"Continue building",exact:true});await expect(resume).toBeEnabled();
+ await box.fill("Keep this unsent change");await expect.poll(()=>[...f.studios.values()].some(s=>s.state.input==="Keep this unsent change")).toBe(true);
+ await page.reload();await expect(box).toHaveValue("Keep this unsent change");await expect(resume).toBeDisabled();expect(f.calls).toHaveLength(1);
+ await box.fill("");await resume.click();await expect.poll(()=>f.calls.length).toBe(2);expect(f.calls[1].messages.at(-1)?.content).toContain("Keep every saved rule unchanged");
+});
 test("a submitted signed-out idea survives connection in its own private chat",async({page})=>{
  const f=await fixture(page),account="0x"+"a".repeat(40),oldKey="alice:"+account+":"+LEGACY_CONVERSATION,now=new Date().toISOString();
  f.chats.set(oldKey,{id:LEGACY_CONVERSATION,account,title:"Existing private coin",archived:false,revision:1,createdAt:now,updatedAt:now});

@@ -37,6 +37,9 @@
   .message:hover .compactCopy, .message:focus-within .compactCopy { opacity: 1; }
 }
 .copyError { color: #ffc2af; font-size: 12px; line-height: 1.5; }
+.buildRecovery { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-block: 8px 12px; padding: 12px 14px; border: 1px solid #44413b; border-radius: 10px; }
+.buildRecovery p { flex: 1 1 240px; margin: 0; color: #c6c0b7; font-size: 13px; line-height: 1.5; }
+.buildRecovery small { flex-basis: 100%; color: #aaa69f; }
 .codeBlock { margin-block: 14px; overflow: hidden; border: 1px solid #44413b; border-radius: 12px; background: #171716; white-space: normal; }
 .codeToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 14px; border-bottom: 1px solid #343431; color: #aaa69f; font-size: 12px; }
 .codeBlock pre { max-width: 100%; margin: 0; padding: 14px; overflow: auto; overscroll-behavior: contain; font-size: 13px; line-height: 1.6; tab-size: 2; white-space: pre; }

@@ -2,7 +2,6 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { advanceReply } from "@/lib/custom-ai/message-display";
-import { CopyButton } from "./copy-button";
 import styles from "./workspace.module.css";
 
 export function StreamingReply({ text, onAdvance }: { text: string; onAdvance: () => void }) {
@@ -26,6 +25,5 @@ export function StreamingReply({ text, onAdvance }: { text: string; onAdvance: (
   useLayoutEffect(() => { onAdvance(); }, [visible, onAdvance]);
   return <div className={styles.message} data-role="assistant">
     <div className={`${styles.messageText} ${styles.revealing}`} aria-hidden="true">{visible}</div>
-    <CopyButton compact label="Copy current reply" value={visible} />
   </div>;
 }

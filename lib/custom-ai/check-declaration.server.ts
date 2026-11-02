@@ -35,6 +35,10 @@ const object=(text:string,maximum=96000):Record<string,unknown>=>{
   if(!value||typeof value!=="object"||Array.isArray(value))return invalid();
   return value as Record<string,unknown>;
 };
+function emptyCompletedPage(envelope:Record<string,unknown>){
+  return envelope.complete===true&&Array.isArray(envelope.steps)&&envelope.steps.length===0
+    &&Object.keys(envelope).every(key=>key==="steps"||key==="complete");
+}
 function remainingRequirements(intent:LaunchIntent,proposal:Record<string,unknown>,steps:unknown[]){
   const covered=new Set<string>(),observed=new Set<string>();
   for(const item of [...(proposal.contracts as unknown[]),...((proposal.constructorChildren??[]) as unknown[])]){
@@ -194,6 +198,15 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   // dependency catalog in every scenario page costs tokens but adds no ABI facts.
   const fixedInterface=decodeGeneralCheckDeclaration(JSON.stringify({...proposal,format:"compact-v1",steps:[]}),input.interfaces?.contracts);
   progress=currentProgress;
+  // Older runs rejected a valid terminal page before reaching the complete
+  // validator. Reuse only matching, private progress; the terminal flag never
+  // proves coverage, and the same complete validator still decides acceptance.
+  const lastFailure=savedProgress&&input.rejected?.failures.at(-1);
+  if(currentProgress.steps.length&&lastFailure?.stage==="scenarios"&&lastFailure.response){
+    let terminal=false;
+    try{terminal=emptyCompletedPage(object(lastFailure.response));}catch{/* Not a terminal page. */}
+    if(terminal)return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+  }
   const scenarioTask=modelTask("scenarios",{chat:input.model,build:input.model,escalation:input.model});
   for(let page=0;page<SCENARIO_MAX_PAGES;page++){
     input.signal?.throwIfAborted();
@@ -207,9 +220,12 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     responseText=result.text;
     const envelope=object(result.text),rawSteps=envelope.steps;
     if(Buffer.byteLength(JSON.stringify(rawSteps)??"")>24000)return reject("missing-scenarios");
+    if(envelope.complete!==undefined&&typeof envelope.complete!=="boolean")return reject("scenario-page-complete");
+    if(currentProgress.steps.length&&emptyCompletedPage(envelope)){
+      return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+    }
     const next:unknown=resolveOpeningFixtureValue(typeof rawSteps==="string"?JSON.parse(rawSteps):nativeScenarioRows(rawSteps),opening.inputs);
     if(!Array.isArray(next)||next.length<1||next.length>32||currentProgress.steps.length+next.length>256)return reject("scenario-page-steps");
-    if(envelope.complete!==undefined&&typeof envelope.complete!=="boolean")return reject("scenario-page-complete");
     const combined:CheckProgress={...currentProgress,steps:[...currentProgress.steps,...next]};
     if(Buffer.byteLength(JSON.stringify(combined))>96000)return reject("scenario-progress-size");
     currentProgress=combined;progress=combined;

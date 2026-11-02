@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     const sourceRecovery = sourceId ? await store.projects.overview(owner, sourceId) : null;
     return Response.json({ revision: saved.revision, state: saved.value, ...(active?.request&&active.state!=="failed"?{activeRequest:active.request}:{}), draft: job?.result?.draft,
       generalProject: job?.result?.generalProject, ...(sourceRecovery ? { sourceRecovery } : {}),
+      ...(latest?.result?.buildIssue ? { buildIssue: latest.result.buildIssue } : {}),
       intent: latest?.result?.intent ?? job?.result?.intent ?? migrateLaunchIntent({
         draft: job?.result?.draft, ruleSpec: latest?.result?.ruleSpec ?? job?.result?.ruleSpec,
         unresolved: latest?.result?.unresolved ?? job?.result?.unresolved, requestId: saved.value.contextId ?? saved.value.draftId,
