@@ -7,6 +7,7 @@ export function builderCapabilities(configuration: { events: boolean; programs: 
       ? "Different buy/sell fees, countdowns, ramps and schedules; total fees 0.5–15%."
       : "Fee schedules on this network use general Custom Contract source and its separate verification, review and preparation." },
     { id: "hook-research", version: 1, state: "research", description: "Search existing hooks and discuss mechanics. Finding a hook does not install or audit it." },
+    { id: "protocol-knowledge", version: 1, state: "research", description: "Local versioned v4 knowledge: callbacks, routing, accounting, external data, composition and evidence limits. Pinned contract interfaces are supplied before planning; no network lookup is needed." },
     { id: "external-events", version: 1, state: configuration.events && feeCore ? "requires-live-check" : "design-only", description: "Weather or market rules need a connected, verified feed on the selected chain." },
     { id: "fee-programs", version: 1, state: configuration.programs && feeCore ? "requires-live-check" : "design-only", description: "Fee-funded staking, distributions, buybacks and locked liquidity need a deployed program; automatic execution also needs a running, funded service." },
     { id: "arbitrary-hooks", version: 1, state: configuration.generalSources ? "source-draft" : "design-only", description: configuration.generalSources

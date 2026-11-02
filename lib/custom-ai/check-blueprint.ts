@@ -22,7 +22,7 @@ export type GeneralCheckBlueprint = {
   production?: LaunchProductionContext;
   deployment?: GeneralDeploymentBlueprint;
 };
-const fail=():never=>{throw new TypeError("Declare complete contract scenarios before generating source.");};
+const fail=(reason="invalid-blueprint"):never=>{throw new TypeError(`Declare complete contract scenarios before generating source. Validation: ${reason}.`);};
 
 export const generalCheckFieldSchema={type:["string","null"],maxLength:96_000};
 export const generalCheckLogicalRules=`Keep the declaration compact: no prose, no repeated scenarios or duplicated ABI entries. Choose the smallest complete set of observable checks that covers every agreed behavior, negative constraint and required boundary. Compactness never permits dropping a requirement or replacing a real swap with a getter.
@@ -61,24 +61,24 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
   }
   const entrypoints=entries.sort((a,b)=>a.source<b.source?-1:a.source>b.source?1:a.contract<b.contract?-1:a.contract>b.contract?1:0);
   const scenarios=normalizeGeneralCheckScenarios({contracts,allowedCalls:raw.allowedCalls,steps:raw.steps,...(raw.world!==undefined?{world:raw.world}:{}),...(raw.constructorChildren!==undefined?{constructorChildren:children}:{})},intent,entrypoints);
-  if(scenarios.world&&evmVersion!=="cancun")return fail();
+  if(scenarios.world&&evmVersion!=="cancun")return fail("v4-world-requires-cancun");
   const deployment=raw.deployment!==undefined?production?createGeneralDeploymentBlueprint(raw.deployment,entrypoints,production,intent):fail():undefined;
   if(deployment) {
     const declared=deployment.version===2?deployment.constructorChildren:[],observed=scenarios.constructorChildren??[];
-    if(declared.length!==observed.length)return fail();
+    if(declared.length!==observed.length)return fail("deployment-constructor-children-count");
     const parents=new Map(deployment.targets.map(target=>[target.id,contracts.find(fixture=>fixture.source===target.source&&fixture.contract===target.contract)?.id]));
     for(const child of declared) {
       const instance=observed.find(candidate=>candidate.parent===parents.get(child.parent)&&candidate.nonce===child.nonce);
-      if(!instance||instance.source!==child.source||instance.contract!==child.contract)return fail();
+      if(!instance||instance.source!==child.source||instance.contract!==child.contract)return fail("deployment-constructor-child-identity");
       parents.set(child.id,instance.id);
     }
   }
   if(deployment&&scenarios.world){
     const world=scenarios.world,source=(id:string)=>scenarios.contracts.find(target=>target.id===id),target=(id:string)=>deployment.targets.find(target=>target.id===id);
     const same=(example:string,deployed:string)=>source(example)?.source===target(deployed)?.source&&source(example)?.contract===target(deployed)?.contract;
-    for(const role of ["token","hook"] as const)if(!same(world[role],deployment.pool[role]))return fail();
-    if(world.kind==="v4-protected-native-token-v1"&&!same(world.initializer,deployment.pool.initializer))return fail();
-    if(deployment.pool.fee!==world.fee||deployment.pool.tickSpacing!==world.tickSpacing||target(deployment.pool.hook)?.hookPermissions!==world.hookPermissions)return fail();
+    for(const role of ["token","hook"] as const)if(!same(world[role],deployment.pool[role]))return fail(`world-deployment-${role}-identity`);
+    if(world.kind==="v4-protected-native-token-v1"&&!same(world.initializer,deployment.pool.initializer))return fail("world-deployment-initializer-identity");
+    if(deployment.pool.fee!==world.fee||deployment.pool.tickSpacing!==world.tickSpacing||target(deployment.pool.hook)?.hookPermissions!==world.hookPermissions)return fail("world-deployment-fee-spacing-or-permissions");
   }
   const compiler=createProjectCompiler(Object.hasOwn(raw,"compilerProfile")?raw.compilerProfile:previousCompiler?projectCompilerProfile(previousCompiler):newProjectCompilerProfile(production),evmVersion);
   const body={version:1 as const,intentId:intent.id,intentRevision:intent.revision,intentHash:canonicalBrowserSha256V2("programmable.general-check-intent.v1",intent),chainId,

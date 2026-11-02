@@ -31,7 +31,7 @@ const bad=(reason="invalid-shape"):never=>{throw new TypeError(`Use a bounded de
 const object=(value:unknown,keys:string[],optional:string[]=[])=>{
   if(!value||typeof value!=="object"||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return bad();
   const record=value as Record<string,unknown>;
-  if(Object.keys(record).some(key=>!keys.includes(key)&&!optional.includes(key))||keys.some(key=>!Object.hasOwn(record,key)))return bad();
+  if(Object.keys(record).some(key=>!keys.includes(key)&&!optional.includes(key))||keys.some(key=>!Object.hasOwn(record,key)))return bad(`object-fields-required:${keys.join(",")};optional:${optional.join(",")}`);
   return record;
 };
 const identifier=(value:unknown)=>{if(typeof value!=="string"||!/^[a-z][a-z0-9-]{0,63}$/.test(value))return bad();return value;};
@@ -73,12 +73,14 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
       ||!entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract)||!repeated&&entries.has(`${v.source}:${v.contract}`)
       ||typeof v.allowReceive!=="boolean"||typeof v.allowFallback!=="boolean"||!Array.isArray(v.functions)||v.functions.length>128
       ||v.functions.some(fn=>typeof fn!=="string"||!fn.startsWith("function ")||fn.length>800)||new Set(v.functions).size!==v.functions.length
-      ||v.value!==undefined&&(input.constructorChildren===undefined||typeof v.value!=="string"||!/^(?:0|[1-9][0-9]{0,29})$/.test(v.value)))return bad();
+      ||v.value!==undefined&&(input.constructorChildren===undefined||typeof v.value!=="string"||!/^(?:0|[1-9][0-9]{0,29})$/.test(v.value)))return bad(`contract:${id}:invalid-identity-interface-or-constructor-value`);
     const args=values(v.arguments,available,0,fixtureNames);contractIds.add(id);entries.add(`${v.source}:${v.contract}`);
     return {id,source:v.source,contract:v.contract,arguments:args,functions:v.functions as string[],allowReceive:v.allowReceive,
       allowFallback:v.allowFallback,surfaceRequirements:ids(v.surfaceRequirements,true),...(v.value!==undefined?{value:v.value as string}:{})};
   };
-  const contracts:ContractCheckFixture[]=input.contracts.map(raw=>fixture(raw,contractIds));
+  const contracts:ContractCheckFixture[]=input.contracts.map((raw,index)=>{
+    try{return fixture(raw,contractIds);}catch(error){if(error instanceof TypeError)return bad(`contracts[${index}]:${error.message}`);throw error;}
+  });
   let constructorChildren: ConstructorCheckChild[] | undefined;
   if(input.constructorChildren!==undefined) {
     if(!Array.isArray(input.constructorChildren)||!input.constructorChildren.length||input.constructorChildren.length+contracts.length>16)return bad();
@@ -107,9 +109,9 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
   const allowedCalls=values(input.allowedCalls,contractIds,0,fixtureNames);
   if(allowedCalls.some(item=>typeof item==="string"
     ? !/^0x[0-9a-f]{40}$/i.test(item)||!intent.requirements.some(rule=>(rule.text+(rule.origin.kind==="message"?rule.origin.quote:"")).toLowerCase().includes(item.toLowerCase()))
-    : typeof item!=="object"||Array.isArray(item)||"pool" in item||"fixtureHash" in item))return bad();
+    : typeof item!=="object"||Array.isArray(item)||"pool" in item||"fixtureHash" in item))return bad("allowedCalls:use-declared-contracts-fixtures-accounts-or-explicitly-agreed-addresses");
   const stepIds=new Set<string>(),observed=new Set<string>();let lastTime=0;
-  const steps:ContractCheckStep[]=input.steps.map(raw=>{
+  const steps:ContractCheckStep[]=input.steps.map((raw,index)=>{try{
     const v=object(raw,["id","contract","signature","arguments","from","afterSeconds","value","read","requirementIds","expect"]),id=identifier(v.id);
     const expect=object(v.expect,["status"],["returns","swapFeePpm","events"]);
     if(stepIds.has(id)||typeof v.contract!=="string"||!contractIds.has(v.contract)&&!fixtureNames.includes(v.contract as V4WorldFixture)||typeof v.signature!=="string"||v.signature.length>800
@@ -152,7 +154,7 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
     return {id,contract:v.contract,signature:v.signature,arguments:values(v.arguments,contractIds,0,fixtureNames),from:v.from as CheckAccount,
       afterSeconds:v.afterSeconds as number,value:v.value,read:v.read,requirementIds,
       expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds,0,fixtureNames)}:{}),...(expect.swapFeePpm!==undefined?{swapFeePpm:expect.swapFeePpm as number}:{}),...(events?{events}:{})}};
-  });
+  }catch(error){if(error instanceof TypeError)return bad(`steps[${index}]:${error.message}`);throw error;}});
   const missing=[...requirements.keys()].filter(id=>!covered.has(id));
   if(missing.length)return bad(`missing-requirements:${missing.join(",")}`);
   const unobserved=[...requirements.values()].filter(rule=>rule.kind==="behavior"&&!observed.has(rule.id)).map(rule=>rule.id);

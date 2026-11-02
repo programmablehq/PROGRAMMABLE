@@ -1,4 +1,4 @@
-export type ModelCallMetric={model:string;durationMs:number;inputTokens:number|null;outputTokens:number|null;completed:boolean;
+export type ModelCallMetric={model:string;task?:import("./model-tasks").ModelTask;durationMs:number;inputTokens:number|null;outputTokens:number|null;completed:boolean;
   failure?:"output-limit"|"missing-end"|"empty-response"|"response-too-large"|"refused"|"timeout"};
 export type RequestMetrics={startedAt:number;durationMs:number;state:"completed"|"failed";calls:ModelCallMetric[];tokenAccountingComplete:boolean};
 export function requestMetrics(startedAt:number,calls:ModelCallMetric[],completed:boolean,now=Date.now()):RequestMetrics {

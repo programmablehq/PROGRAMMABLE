@@ -8,6 +8,7 @@ import type {ClaudeInput,ClaudeResult} from "./claude.server";
 import {CustomAIError} from "./types";
 import {canonicalGeneralSourceCatalog} from "./canonical-dependencies.server";
 import {dependencySourceContext} from "./dependency-source-context";
+import {modelTask} from "./model-tasks";
 
 export type SourceAuditFinding={code:string;requirementId:string|null;message:string};
 export type GeneralSourceAudit={version:1;projectHash:`sha256:${string}`;intentHash:`sha256:${string}`;
@@ -40,7 +41,7 @@ export async function auditGeneralSource(project:ContractProject,signal?:AbortSi
   const context=JSON.stringify(sourceAuditModelContext(project));
   if(Buffer.byteLength(context)>1_000_000)return invalid();
   const bounded=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(45_000)]);
-  const response=await deps.call({model,effort:"low",maxTokens:3500,signal:bounded,schema:responseSchema,
+  const response=await deps.call({...modelTask("source-audit",provider.models),signal:bounded,schema:responseSchema,
     system:`You independently review generated Solidity before its launch checks. You did not write the source.
 Inspect every saved requirement and all supplied source, including external calls, access control, callbacks and value flows.
 Exact canonical dependency code may have comments and whitespace compacted; every executable token remains. Edited and generated source is supplied in full. The saved project and compiler still use the original bytes.

@@ -108,6 +108,13 @@ export async function POST(request: Request) {
               }
               return undefined;
             },
+            loadCheckDiagnostic:async()=>{
+              for(const id of new Set([input.contextId,input.draftId].filter((value):value is string=>Boolean(value)))){
+                const saved=await store.projects.readCheckDiagnostic(authority.owner,id);if(saved)return saved;
+              }
+              return undefined;
+            },
+            saveCheckDiagnostic:async(diagnostic:import("@/lib/custom-ai/check-diagnostic").CheckDiagnostic)=>{await store.projects.saveCheckDiagnostic(authority.owner,input.id,reserved.lease!,diagnostic);},
             saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
             saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent});},

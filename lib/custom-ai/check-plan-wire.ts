@@ -1,7 +1,7 @@
 const fixtureFields = ["id", "source", "contract", "role", "arguments", "functions", "allowReceive", "allowFallback", "surfaceRequirements"] as const;
 const childFields = [...fixtureFields, "parent", "creation", "nonce", "value"] as const;
 const stepFields = ["id", "contract", "signature", "arguments", "from", "afterSeconds", "value", "read", "requirementIds", "expect"] as const;
-const invalid = (): never => { throw new TypeError("Return a complete bounded contract-check declaration."); };
+const invalid = (reason="invalid-envelope"): never => { throw new TypeError(`Return a complete bounded contract-check declaration. Validation: ${reason}.`); };
 
 /** A lossless wire encoding only. The expanded declaration still passes the
  * existing independent blueprint, coverage, ABI and deployment validators. */
@@ -13,17 +13,17 @@ export function decodeGeneralCheckDeclaration(value: unknown): unknown {
   // Keep saved integrations and test fixtures using the original object form.
   if (!Object.hasOwn(record, "format")) return record;
   if (record.format !== "compact-v1") return invalid();
-  const rows = (value: unknown, fields: readonly string[], optionalValue = false) => {
-    if (!Array.isArray(value)) return invalid();
-    return value.map(row => {
+  const rows = (value: unknown, fields: readonly string[], path:string, optionalValue = false) => {
+    if (!Array.isArray(value)) return invalid(`${path}:expected-array`);
+    return value.map((row,index) => {
       // Some providers return canonical objects even when the prompt asks
       // for compact rows. Preserve them losslessly; the full semantic
       // validator still checks every field and rejects additional fields.
       if(row&&typeof row==="object"&&!Array.isArray(row)){
-        if(fields.some(field=>!Object.hasOwn(row,field))||Object.keys(row).some(field=>!fields.includes(field)&&!(optionalValue&&field==="value")))return invalid();
+        if(fields.some(field=>!Object.hasOwn(row,field))||Object.keys(row).some(field=>!fields.includes(field)&&!(optionalValue&&field==="value")))return invalid(`${path}[${index}]:expected-fields:${fields.join(",")}`);
         return structuredClone(row);
       }
-      if (!Array.isArray(row) || row.length !== fields.length && !(optionalValue && row.length === fields.length + 1)) return invalid();
+      if (!Array.isArray(row) || row.length !== fields.length && !(optionalValue && row.length === fields.length + 1)) return invalid(`${path}[${index}]:expected-${fields.length}-fields-in-order:${fields.join(",")}`);
       const object = Object.fromEntries(fields.map((field, index) => [field, row[index]]));
       if (optionalValue && row.length > fields.length && row.at(-1) !== null) object.value = row.at(-1);
       return object;
@@ -32,9 +32,9 @@ export function decodeGeneralCheckDeclaration(value: unknown): unknown {
   const { format, ...body } = record; void format;
   return {
     ...body,
-    contracts: rows(body.contracts, fixtureFields, true),
-    steps: rows(body.steps, stepFields),
-    ...(Object.hasOwn(body, "constructorChildren") ? { constructorChildren: rows(body.constructorChildren, childFields) } : {}),
+    contracts: rows(body.contracts, fixtureFields, "contracts",true),
+    steps: rows(body.steps, stepFields,"steps"),
+    ...(Object.hasOwn(body, "constructorChildren") ? { constructorChildren: rows(body.constructorChildren, childFields,"constructorChildren") } : {}),
   };
 }
 
