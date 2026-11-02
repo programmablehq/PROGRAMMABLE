@@ -61,7 +61,12 @@ export function scenarioSchemaForInterface(plan:Record<string,unknown>){
   if(!calls.length)throw new TypeError("The agreed interface declares no callable function.");
   const {contract,signature,...fields}=scenarioStageSchema.properties.steps.items.properties;void contract;void signature;
   const tuple=[fields.id,{type:"string",enum:[...new Set(calls)]},fields.argumentsJson,fields.from,fields.afterSeconds,fields.value,fields.read,fields.requirementIds,fields.expect] as const;
-  return object({steps:array({type:"array",items:tuple,minItems:9,maxItems:9,additionalItems:false},12),complete:{type:"boolean"}});
+  const admittedCall={type:"string",enum:[...new Set(calls)]};
+  // Both documented wire forms expand to the same checked scenario. Some
+  // providers switch to named fields on later pages; retaining field names
+  // must not discard a complete, otherwise identical observation.
+  const named=object({...fields,call:admittedCall});
+  return object({steps:array({anyOf:[{type:"array",items:tuple,minItems:9,maxItems:9,additionalItems:false},named]},12),complete:{type:"boolean"}});
 }
 const fail=(message:string):never=>{throw new TypeError(`Invalid native check stage: ${message}.`);};
 const shape=(value:unknown,keys:string[])=>{

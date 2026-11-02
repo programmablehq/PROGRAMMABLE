@@ -111,7 +111,16 @@ async function followSavedReply(initial: SavedReply, input: ChatRequest, headers
 /** Reload/reconnect only reads an existing owned request. It never POSTs. */
 export async function resumeAIChat(input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,
   onProgress?: (event: ChatProgress) => void): Promise<ChatResult> {
-  return followSavedReply(await readReply(input,headers,signal),input,headers,signal,onProgress);
+  try {
+    return await followSavedReply(await readReply(input,headers,signal),input,headers,signal,onProgress);
+  } catch(error) {
+    if(error instanceof AIRequestError&&error.status===404&&error.code==="missing") {
+      // A cached send can precede server reservation. Keep its text as an
+      // unsent message; reconnecting cannot recover a job that never existed.
+      throw new AIRequestError("This message was not started. Your text is kept; send it when you are ready.",404,0,"missing","failed");
+    }
+    throw error;
+  }
 }
 
 export async function sendAIChat(input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,

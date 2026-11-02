@@ -1,13 +1,11 @@
 import "server-only";
-import { getAddress, keccak256 } from "viem";
-import { customAIChain } from "./chain.server";
 import { readUnifiedLaunches } from "@/lib/server/unified-explore";
 import { MODELS } from "./claude.server";
 import { CustomAIError } from "./types";
 import { configuredProvider, researchAvailable } from "./provider-config.server";
 import { readSurplusResearch } from "./surplus-research.server";
 import { safeKnowledgeSources, type KnowledgeLookup, type KnowledgeResult } from "./knowledge";
-import { feeCoreChainId } from "./execution-routing";
+import { readSelectedContractKnowledge } from "./contract-knowledge.server";
 
 export async function readWebKnowledge(query: string, signal?: AbortSignal, onUsage?:(value:import("./request-metrics").ModelCallMetric)=>void): Promise<KnowledgeResult> {
   if (configuredProvider().id === "surplus") return readSurplusResearch(query, signal, onUsage);
@@ -62,22 +60,7 @@ export async function readCatalogKnowledge(lookup: KnowledgeLookup, signal?: Abo
 }
 
 export async function readContractKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
-  signal?.throwIfAborted();
-  const retrievedAt = new Date().toISOString();
-  const address = getAddress(lookup.address);
-  const chain = await customAIChain(feeCoreChainId(lookup.chainId));
-  const code = await chain.code(address);
-  const fields = await Promise.allSettled([
-    chain.call(address, "function name() view returns (string)"), chain.call(address, "function symbol() view returns (string)"),
-    chain.call(address, "function decimals() view returns (uint8)"), chain.call(address, "function totalSupply() view returns (uint256)"),
-  ]);
-  const field = (index: number) => fields[index].status === "fulfilled" ? String(fields[index].value).slice(0, 180) : null;
-  await chain.finish(); signal?.throwIfAborted();
-  return { status: "agreed-chain-read", facts: { chainId: chain.chainId, address, block: chain.block,
-    hasCode: code !== "0x", runtimeHash: code === "0x" ? null : keccak256(code),
-    name: field(0), symbol: field(1), decimals: field(2), totalSupplyRaw: field(3),
-    boundary: "Two RPCs agreed on these reads. Metadata is untrusted; this is not a source audit, trade test or safety verdict.",
-  }, sources: [{ title: `${chain.profile.name} contract`, url: `${chain.profile.explorer}/address/${address}`, retrievedAt }] };
+  return readSelectedContractKnowledge(lookup.chainId,lookup.address,signal);
 }
 
 /** Compatibility entry point; the capability registry owns tool selection. */

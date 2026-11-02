@@ -3,6 +3,8 @@ import type {LaunchIntent} from "./launch-intent";
 import type {RuleSpecV2} from "./rule-spec";
 import type {GeneralProjectDraft} from "./general-builder.server";
 import {generalProjectView,type GeneralProjectView} from "./project-view";
+import type {ContractProject} from "./contract-project";
+import {dependencySourceContext} from "./dependency-source-context";
 
 /** Source inspection is opt-in for checked drafts. Older drafts without a
  * verified behavior record retain their full source context. This changes
@@ -16,9 +18,13 @@ export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:Gen
     &&Array.isArray(draft.verification.checks)&&draft.verification.checks.length>0;
   return !checked||inspection;
 }
-export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView},includeSource:boolean){
+export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView;canonicalSources?:ContractProject["sources"]},includeSource:boolean){
   const {draft,intent,generalProject}=input;
   const projectView=generalProject?generalProjectView(generalProject):input.generalProjectView;
+  const original=includeSource&&generalProject?generalProject.project.sources:undefined;
+  const fixed=original?Object.fromEntries(Object.entries(original).filter(([path,source])=>input.canonicalSources?.[path]?.content===source.content)):undefined;
+  const dependencies=fixed?dependencySourceContext(fixed):undefined;
+  const sources=original?{...original,...dependencies?.modelSources}:undefined;
   return {
     memory:input.memory,ruleSpec:input.ruleSpec,editTarget:input.editTarget,
     // Full provenance and change history stay in the server-owned revision.
@@ -31,7 +37,8 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
     ...(projectView?{generalProject:{projectHash:projectView.projectHash,chainId:projectView.chainId,summary:projectView.summary,
       entrypoints:projectView.entrypoints,compiler:projectView.compiler,compiled:projectView.compiled,
       ...(projectView.blueprintId?{declaredChecks:{blueprintId:projectView.blueprintId,...(projectView.scenarios?{scope:projectView.scenarios.scope,passed:projectView.scenarios.passed,cases:projectView.scenarios.cases,failures:projectView.scenarios.failures}:{state:"pending"})}}:{}),
-      verification:"not-run",sourceIncluded:includeSource&&Boolean(generalProject),...(includeSource&&generalProject?{sources:generalProject.project.sources,
+      verification:"not-run",sourceIncluded:includeSource&&Boolean(generalProject),...(sources&&generalProject?{sources,
+        ...(dependencies&&Object.keys(fixed!).length?{dependencyView:dependencies.view}:{}),
         ...(generalProject.project.deployment?{deployment:generalProject.project.deployment}:{})}:{})}}:{}),
   };
 }

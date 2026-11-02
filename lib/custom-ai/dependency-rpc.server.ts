@@ -21,11 +21,14 @@ const reference = (v: unknown) => {
 
 /** Only the fixed observation and decimals trace protocol is allowed here.
  * No broadcasts, arbitrary tracers, logs scans or caller-selected gas budgets. */
-function allowed(method: string, params: readonly unknown[]) {
+function allowed(method: string, params: readonly unknown[], metadataOnly: boolean) {
   if (method === "eth_chainId") return params.length === 0;
   if (method === "eth_getBlockByNumber") return params.length === 2 && (params[0] === "latest" || blockNumber(params[0])) && params[1] === false;
   if (method === "eth_getCode") return params.length === 2 && address(params[0]) && reference(params[1]);
   const call = object(params[0]);
+  if (metadataOnly) return method === "eth_call" && params.length === 2 && call && keys(call, "data,gas,to")
+    && address(call.to) && call.gas === "0x186a0" && ["0x06fdde03", "0x95d89b41", "0x313ce567", "0x18160ddd"].includes(String(call.data))
+    && reference(params[1]);
   if (method === "eth_call") return params.length === 2 && call && keys(call, "data,to") && address(call.to)
     && ["0x313ce567", "0xfeaf968c"].includes(String(call.data)) && reference(params[1]);
   if (method !== "debug_traceCall" || params.length !== 3 || !call || !keys(call, "data,from,gas,to,value")
@@ -69,7 +72,7 @@ function selectedEndpoints(chain: Chain, env: Environment): readonly [string, st
 
 /** Lazy, server-owned provider selection. Reuses the existing production roles;
  * nothing is read until a selected project actually needs observations. */
-export function createProductionDependencyRpcs(options: { env?: Environment; fetcher?: typeof fetch; now?: () => number } = {}) {
+export function createProductionDependencyRpcs(options: { env?: Environment; fetcher?: typeof fetch; now?: () => number; metadataOnly?: boolean } = {}) {
   const env = { ...(options.env ?? process.env) }, fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now;
   const pairs = new Map<Chain, readonly [TradeRpcV1, TradeRpcV1]>();
   const providers = new Map<string, { active: number; starts: number[]; pausedUntil: number; read: TradeRpcV1 }>();
@@ -78,7 +81,7 @@ export function createProductionDependencyRpcs(options: { env?: Environment; fet
     const previous = providers.get(url); if (previous) return previous.read;
     const state = { active: 0, starts: [] as number[], pausedUntil: 0, read: undefined as unknown as TradeRpcV1 };
     state.read = async (method, params) => {
-      if (!Array.isArray(params) || !allowed(method, params)) throw unavailable();
+      if (!Array.isArray(params) || !allowed(method, params, options.metadataOnly === true)) throw unavailable();
       const time = now(); state.starts = state.starts.filter(start => start > time - 1_000);
       if (state.active >= 4 || state.starts.length >= 16 || state.pausedUntil > time) throw unavailable();
       state.active++; state.starts.push(time);

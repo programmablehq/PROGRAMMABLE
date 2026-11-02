@@ -45,7 +45,7 @@ const hooks = defineTool("search_hooks", "Find hooks in a verified catalog", asy
 describe("registered capability dispatch", () => {
   it.each([8453,999] as const)("only advertises connected read capabilities on chain%i",chainId=>{
     const ids=getCapabilities({...context(),chainId}).map(entry=>entry.ref.id);
-    expect(ids).toContain("catalog");expect(ids).toContain("search_hooks");expect(ids).not.toContain("contract");expect(ids).not.toContain("web");
+    expect(ids).toContain("catalog");expect(ids).toContain("search_hooks");expect(ids).toContain("contract");expect(ids).not.toContain("web");
   });
   it("adds a new search tool through registration and schema alone", async () => {
     expect(capabilityMetadata([hooks])[0].ref.id).toBe("search_hooks");

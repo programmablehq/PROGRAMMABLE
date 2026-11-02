@@ -118,8 +118,9 @@ describe("native independent declaration transport",()=>{
     expect(nativeScenarioRows([wire])).toEqual(nativeScenarioRows([steps[0]]));
     expect(JSON.parse(transport.decode(JSON.stringify({steps:[wire],complete:false})))).toEqual({steps:[wire],complete:false});
     expect(()=>transport.decode(JSON.stringify({steps:[[wire[0],"main:swapCount()",...wire.slice(2)]],complete:false}))).toThrow();
-    expect(schema.properties.steps.items.items[1].enum).toContain("v4-router:nativeBalance(address)");
-    expect(schema.properties.steps.items.items[1].enum).not.toContain("main:nativeBalance(address)");
+    const tupleSchema=schema.properties.steps.items.anyOf[0] as {items:readonly {enum?:string[]}[]};
+    expect(tupleSchema.items[1].enum).toContain("v4-router:nativeBalance(address)");
+    expect(tupleSchema.items[1].enum).not.toContain("main:nativeBalance(address)");
   });
   it("keeps a native correction subject to the same complete validation",()=>{
     const full={...graph,...interfaces,steps};
