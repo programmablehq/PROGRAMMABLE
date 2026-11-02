@@ -56,7 +56,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code.\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.verification.facts}\n${generalCheckLogicalRules}\nUse compact-v1 rows for contracts and steps; all fields are validated after expansion.\n${generalCheckRowRules}\n${launchProductionGuidance(input.production)}`;
   const schema={type:"object",properties:{generalChecks:generalCheckFieldSchema},required:["generalChecks"],additionalProperties:false};
   const qualify=async(raw:string)=>{
-    try{return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(raw),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);}
+    try{return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(raw,input.interfaces?.contracts),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);}
     catch(error){
       // A completed but mechanically invalid declaration gets one bounded
       // correction against the same independent validator. Provider failures,
@@ -72,7 +72,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
       input.signal?.throwIfAborted();
       const envelope=object(repaired.text),corrected=envelope.generalChecks;
       if(typeof corrected!=="string")return reject("missing-correction");
-      try{return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(corrected),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);}
+      try{return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(corrected,input.interfaces?.contracts),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);}
       catch(error){if(error instanceof TypeError||error instanceof SyntaxError||error instanceof CustomAIError&&error.code==="check-declaration"){record(error,corrected);return reject("correction-rejected");}throw error;}
     }
   };
