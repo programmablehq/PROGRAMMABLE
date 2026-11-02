@@ -82,15 +82,19 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const rejected=reusableCheckFailure(input.rejected,input);
   if(rejected?.declaration){stage=rejected.stage;return await qualify(rejected.declaration);}
   const savedProgress=reusableCheckProgress(input.rejected,input);
+  let interfacesPending=false;
   let raw:string;
   if(savedProgress){raw=savedProgress.interface;progress=structuredClone(savedProgress);}
   else {
-  const first=await call({...modelTask("interface",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",schema,
-    system:`${shared}\nThis is the INTERFACE stage only. Return generalChecks as a compact-v1 JSON string containing contracts, allowedCalls, and the required world/deployment/constructorChildren/compilerProfile declarations. OMIT steps entirely. No scenario descriptions, no expected values, no implementation, no repeated policy text. The next independent stage supplies the steps against these fixed interfaces. Use the smallest complete interface that implements every saved requirement. Source implementation has not been generated. Untrusted design data: ${context}`,
-    messages:[{role:"user",content:"Declare only the interfaces and launch graph for this saved design."}]});
+  const first=await call({...modelTask("interface",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",
+    schema:{...schema,properties:{...schema.properties,interfacesPending:{type:"boolean",const:true}},required:[...schema.required,"interfacesPending"]},
+    system:`${shared}\nThis is the CONTRACT GRAPH stage only. Return generalChecks as a compact-v1 JSON string containing contracts, allowedCalls, and required world/deployment/constructorChildren/compilerProfile declarations. Put [] in every functions field: a separate source-blind stage will declare the public methods. Set interfacesPending=true. OMIT steps entirely. No method ABI, scenarios, expected values, implementation or repeated policy text. Declare the smallest complete graph that supports every saved requirement. Source implementation has not been generated. Untrusted design data: ${context}`,
+    messages:[{role:"user",content:"Declare only the contract identities, constructors and launch graph. Public functions come next."}]});
   input.signal?.throwIfAborted();
   const firstEnvelope=object(first.text),value=firstEnvelope.generalChecks;
   if(typeof value!=="string")return reject("missing-interface");
+  if(firstEnvelope.interfacesPending!==undefined&&firstEnvelope.interfacesPending!==true)return reject("interface-pending");
+  interfacesPending=firstEnvelope.interfacesPending===true;
   raw=value;
   }
   const proposal=object(raw,64000);
@@ -102,6 +106,26 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   if(!Array.isArray(proposal.allowedCalls))return reject("interface-allowed-calls");
   if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return reject("interface-fields");
   delete proposal.steps;
+  if(interfacesPending){
+    const fixtures=[...proposal.contracts,...(Array.isArray(proposal.constructorChildren)?proposal.constructorChildren:[])];
+    const ids=fixtures.map(fixture=>Array.isArray(fixture)?fixture[0]:(fixture as Record<string,unknown>)?.id);
+    if(ids.some(id=>typeof id!=="string")||new Set(ids).size!==ids.length)return reject("interface-contract-identities");
+    const response=await call({...modelTask("interface-abi",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",
+      schema:{type:"object",properties:{interfaces:{type:"string",maxLength:32000}},required:["interfaces"],additionalProperties:false},
+      system:`${shared}\nThis is the PUBLIC INTERFACE stage only. The contract graph below is fixed. Return interfaces as a JSON-encoded object with exactly one key for every fixture id, including constructor children. Each value is that contract's complete functions declaration. Use {canonical:exactCatalogName,additional:[...]} for a pinned or inherited canonical interface; never repeat its known ABI. Additional contains only the new public functions, including getters. For a wholly custom contract use a complete string array. Preserve every saved requirement. Do not change ids, constructors, world, roles, deployment, allowed calls or constraints. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
+      messages:[{role:"user",content:"Declare only the public interfaces for the fixed graph, using canonical references wherever applicable."}]});
+    input.signal?.throwIfAborted();
+    const envelope=object(response.text);
+    if(typeof envelope.interfaces!=="string")return reject("missing-public-interfaces");
+    const methods=object(envelope.interfaces,32000);
+    if(JSON.stringify(Object.keys(methods).sort())!==JSON.stringify([...ids].sort()))return reject("public-interface-identities");
+    const fill=(fixture:unknown)=>{
+      if(Array.isArray(fixture)){const row=structuredClone(fixture);row[5]=methods[String(row[0])];return row;}
+      const row=fixture as Record<string,unknown>;return {...row,functions:methods[String(row.id)]};
+    };
+    proposal.contracts=proposal.contracts.map(fill);
+    if(Array.isArray(proposal.constructorChildren))proposal.constructorChildren=proposal.constructorChildren.map(fill);
+  }
   stage="scenarios";
   let currentProgress:CheckProgress=progress??{interface:JSON.stringify(proposal),steps:[]};
   progress=undefined;
