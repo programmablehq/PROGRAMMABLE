@@ -23,6 +23,8 @@ export class ModelResponseError extends CustomAIError {
       ? "The model reached its time limit. Your complete idea is still saved."
       : failure === "output-limit"
       ? "The answer reached its response limit. Your complete idea is still saved."
+      : failure === "invalid-schema"
+      ? "The model response did not match the requested format. Your complete idea is still saved."
       : "The answer was cut short. Your draft is still saved.", 502);
     this.usage = { inputTokens: reportedTokenCount(usage.inputTokens), outputTokens: reportedTokenCount(usage.outputTokens) };
     if(partialDeclaration!==undefined)Object.defineProperty(this,"partialDeclaration",{value:partialDeclaration.slice(0,96000),enumerable:false});

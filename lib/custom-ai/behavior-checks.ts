@@ -114,6 +114,7 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
   const steps:ContractCheckStep[]=input.steps.map((raw,index)=>{try{
     const v=object(raw,["id","contract","signature","arguments","from","afterSeconds","value","read","requirementIds","expect"]),id=identifier(v.id);
     const expect=object(v.expect,["status"],["returns","swapFeePpm","events"]);
+    if(expect.swapFeePpm!==undefined&&v.contract!=="v4-router")return bad("swap-fee-observations-require-a-real-swap-through-v4-router-not-a-direct-hook-call");
     if(stepIds.has(id)||typeof v.contract!=="string"||!contractIds.has(v.contract)&&!fixtureNames.includes(v.contract as V4WorldFixture)||typeof v.signature!=="string"||v.signature.length>800
       ||typeof v.from!=="string"||!CHECK_ACCOUNTS.includes(v.from as CheckAccount)||typeof v.read!=="boolean"
       ||!Number.isSafeInteger(v.afterSeconds)||(v.afterSeconds as number)<lastTime||(v.afterSeconds as number)>315_360_000
@@ -132,6 +133,8 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
           ||Object.keys(v.arguments[0]).length!==1||v.arguments[0].pool!==true)return bad();
     }
     if(expect.swapFeePpm!==undefined&&v.signature!==V4_WORLD_STEP_SIGNATURES[2])return bad();
+    if(expect.swapFeePpm!==undefined&&world&&world.fee!==0x800000&&expect.swapFeePpm!==world.fee)
+      return bad("swap-event-fee-must-match-fixed-pool-lp-fee-not-hook-tax");
     if(world&&v.contract==="v4-router"&&v.signature===V4_WORLD_STEP_SIGNATURES[0]&&(v.arguments as unknown[])[1]!==world.sqrtPriceX96)return bad();
     let events:ContractEventCheck[]|undefined;
     if(Object.hasOwn(expect,"events")) {

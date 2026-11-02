@@ -131,7 +131,7 @@ describe("general source generation inside the owned chat job",()=>{
   expect(value.change).toBe("blocked");expect(value.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","no-owner"]);
   expect(value.unresolved).toContain("Contract checks could not be prepared");expect(call).toHaveBeenCalledTimes(2);
   expect(call.mock.calls[0][0].schema).not.toHaveProperty("properties.generalChecks");
-  expect(call.mock.calls[1][0]).toMatchObject({responseProfile:"contract",maxTokens:4000,effort:"low",model:"claude-sonnet-5-5"});
+  expect(call.mock.calls[1][0]).toMatchObject({responseProfile:"contract",maxTokens:6000,effort:"low",model:"claude-sonnet-5-5"});
   expect(call.mock.calls[1][0].messages).toHaveLength(1);
   expect(onModelCall).toHaveBeenLastCalledWith(expect.objectContaining({completed:false,failure,outputTokens:16000}));
   expect(save).not.toHaveBeenCalled();expect(compiler).not.toHaveBeenCalled();

@@ -57,7 +57,8 @@ export async function rejectEnvelopeError(value: { error?: unknown }) {
 }
 
 export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
-  const format = prepareSurplusSchema(input.schema);
+  const jsonObject=input.structuredTransport==="json-object";
+  const format = prepareSurplusSchema(input.schema,jsonObject);
   const limits = modelResponseLimits(input.responseProfile);
   const deadline = AbortSignal.timeout(limits.timeoutMs);
   const signal = AbortSignal.any([deadline, ...(input.signal ? [input.signal] : [])]);
@@ -70,8 +71,8 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   const response = await surplusRequest("/chat/completions", {
     model: input.model, max_tokens: input.maxTokens, stream,
     ...(stream ? { stream_options: { include_usage: true } } : {}),
-    messages: [{ role: "system", content: input.system }, ...input.messages],
-    response_format: { type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },
+    messages: [{ role: "system", content: jsonObject?`${input.system}\nReturn exactly one JSON object matching this schema. Every field and type is validated locally; do not use markdown or omit required fields. Schema: ${JSON.stringify(input.schema)}`:input.system }, ...input.messages],
+    response_format: jsonObject?{type:"json_object"}:{ type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },
     reasoning_effort: input.effort ?? "medium",
   }, signal, limits.timeoutMs).catch(error => { if (timedOut()) throw incomplete("timeout"); throw error; });
   if (response.headers.get("content-type")?.includes("text/event-stream")) {
@@ -111,5 +112,6 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   if (finish !== "stop") throw incomplete("missing-end");
   if (!text) throw incomplete("empty-response");
   if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
-  return { text: format.decode(text), inputTokens, outputTokens };
+  try{return { text: format.decode(text), inputTokens, outputTokens };}
+  catch{throw incomplete("invalid-schema");}
 }

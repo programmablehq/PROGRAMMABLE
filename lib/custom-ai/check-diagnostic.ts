@@ -7,7 +7,7 @@ import type { LaunchProductionContext } from "./launch-production";
 export type CheckContext = { intent: LaunchIntent; chainId: BuilderChainId; evmVersion: "paris" | "cancun";
   production?: LaunchProductionContext; previousCompiler?: ContractProject["compiler"];interfaceHash?:string };
 export type CheckFailure = { stage: "interface" | "scenarios"; message: string; declaration: string | null };
-export type CheckProgress = { interface: string; steps: unknown[] };
+export type CheckProgress = { interface: string; steps: unknown[];interfacesPending?:true };
 export type CheckDiagnostic = { version: 1; contextHash: `sha256:${string}`; failures: CheckFailure[]; progress?: CheckProgress };
 export const checkContextHash = (input: CheckContext) => canonicalBrowserSha256V2("programmable.check-declaration-context.v1", {
   intent: input.intent, chainId: input.chainId, evmVersion: input.evmVersion,
@@ -26,7 +26,8 @@ export function checkedCheckDiagnostic(value: unknown): CheckDiagnostic {
       || f.declaration !== null && (typeof f.declaration !== "string" || new TextEncoder().encode(f.declaration).length > 96_000))) {
     throw new TypeError("Invalid private declaration diagnostic.");
   }
-  if(v.progress!==undefined&&(!v.progress||Object.keys(v.progress).sort().join()!=="interface,steps"
+  if(v.progress!==undefined&&(!v.progress||Object.keys(v.progress).some(key=>!["interface","steps","interfacesPending"].includes(key))
+    ||v.progress.interfacesPending!==undefined&&(v.progress.interfacesPending!==true||v.progress.steps?.length!==0)
     ||typeof v.progress.interface!=="string"||new TextEncoder().encode(v.progress.interface).length>64_000
     ||!Array.isArray(v.progress.steps)||v.progress.steps.length>256
     ||new TextEncoder().encode(JSON.stringify(v.progress)).length>96_000))throw new TypeError("Invalid private declaration progress.");

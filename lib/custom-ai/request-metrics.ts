@@ -1,5 +1,5 @@
 export type ModelCallMetric={model:string;task?:import("./model-tasks").ModelTask;durationMs:number;inputTokens:number|null;outputTokens:number|null;completed:boolean;
-  failure?:"output-limit"|"missing-end"|"empty-response"|"response-too-large"|"refused"|"timeout"};
+  failure?:"output-limit"|"missing-end"|"empty-response"|"response-too-large"|"refused"|"timeout"|"invalid-schema"};
 export type RequestMetrics={startedAt:number;durationMs:number;state:"completed"|"failed";calls:ModelCallMetric[];tokenAccountingComplete:boolean};
 export function requestMetrics(startedAt:number,calls:ModelCallMetric[],completed:boolean,now=Date.now()):RequestMetrics {
   return {startedAt,durationMs:Math.max(0,now-startedAt),state:completed?"completed":"failed",calls:calls.slice(0,8),

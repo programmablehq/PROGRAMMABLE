@@ -34,6 +34,26 @@ describe("Surplus model routing", () => {
     expect(url).toBe("https://api.surplusintelligence.ai/v1/chat/completions");
     expect(JSON.parse(String(options.body))).toMatchObject({model:input.model,max_tokens:200,response_format:{type:"json_schema",json_schema:{strict:true}}});
   });
+  it("validates JSON-object transport locally without another provider request",async()=>{
+    useSurplus();
+    const schema={type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false};
+    const fetcher=vi.fn().mockResolvedValueOnce(Response.json({choices:[{message:{content:'{"count":2}'},finish_reason:"stop"}]}))
+      .mockResolvedValueOnce(Response.json({choices:[{message:{content:'{"count":"2"}'},finish_reason:"stop"}]}));
+    vi.stubGlobal("fetch",fetcher);
+    expect(await callSurplus({...input,schema,structuredTransport:"json-object"})).toMatchObject({text:'{"count":2}'});
+    const request=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(request.response_format).toEqual({type:"json_object"});
+    expect(request.messages[0].content).toContain(JSON.stringify(schema));
+    await expect(callSurplus({...input,schema,structuredTransport:"json-object"})).rejects.toMatchObject({code:"incomplete",failure:"invalid-schema"});
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("unwraps only a complete JSON fence and still validates every field",()=>{
+    const schema={type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false};
+    const format=prepareSurplusSchema(schema,true);
+    expect(format.decode('```json\n{"count":2}\n```')).toBe('{"count":2}');
+    expect(format.decode('Text first\n```json\n{"count":2}\n```\nDone')).toBe('{"count":2}');
+    for(const text of ['{}\n```json\n{"count":2}\n```','```json\n{"count":"2"}\n```','```javascript\n{"count":2}\n```','```json\n{"count":2}'])expect(()=>format.decode(text)).toThrow();
+  });
   it("requires both a complete streamed result and the terminal marker", async () => {
     useSurplus();const onText=vi.fn();
     const events=[{choices:[{index:0,delta:{content:'{"reply":"OK"}'},finish_reason:null}]},{choices:[{index:0,delta:{},finish_reason:"stop"}],usage:{prompt_tokens:3,completion_tokens:4}}];

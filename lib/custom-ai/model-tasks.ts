@@ -3,10 +3,10 @@
 export const MODEL_TASKS = {
   conversation: { role: "chat", effort: "low", maxTokens: 800 },
   planning: { role: "chat", effort: "medium", maxTokens: 16_000 },
-  interface: { role: "build", effort: "low", maxTokens: 4000 },
+  interface: { role: "build", effort: "low", maxTokens: 6000 },
   "interface-abi": { role: "build", effort: "low", maxTokens: 4000 },
   scenarios: { role: "build", effort: "low", maxTokens: 4000 },
-  "declaration-correction": { role: "build", effort: "medium", maxTokens: 16_000 },
+  "declaration-correction": { role: "build", effort: "low", maxTokens: 8000 },
   source: { role: "build", effort: "high", maxTokens: 16_000 },
   "fee-source": { role: "build", effort: "high", maxTokens: 6000 },
   "fee-escalation": { role: "escalation", effort: "high", maxTokens: 6000 },
@@ -17,5 +17,8 @@ export const SCENARIO_MAX_PAGES = 3;
 export type ModelTask = keyof typeof MODEL_TASKS;
 export function modelTask(task: ModelTask, models: { chat: string; build: string; escalation: string }) {
   const { role, ...settings } = MODEL_TASKS[task];
-  return { task, model: models[role], ...settings };
+  // Surplus sellers reject some strict grammar compilations before inference.
+  // Keep one JSON transport and validate the unchanged schema locally instead
+  // of retrying paid requests or switching providers. Native Claude ignores it.
+  return { task, model: models[role], ...settings,structuredTransport:"json-object" as const };
 }
