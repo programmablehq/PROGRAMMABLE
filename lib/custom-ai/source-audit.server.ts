@@ -10,6 +10,7 @@ import {canonicalGeneralSourceCatalog} from "./canonical-dependencies.server";
 import {dependencySourceContext} from "./dependency-source-context";
 import {modelTask} from "./model-tasks";
 import {uniswapRoutingContext} from "./uniswap-routing";
+import {mechanismKnowledge} from "./mechanism-knowledge";
 
 export type SourceAuditFinding={code:string;requirementId:string|null;message:string};
 export type GeneralSourceAudit={version:1;projectHash:`sha256:${string}`;intentHash:`sha256:${string}`;
@@ -45,6 +46,7 @@ export async function auditGeneralSource(project:ContractProject,signal?:AbortSi
   const response=await deps.call({...modelTask("source-audit",provider.models),signal:bounded,schema:responseSchema,
     system:`You independently review generated Solidity before its launch checks. You did not write the source.
 Inspect every saved requirement and all supplied source, including external calls, access control, callbacks and value flows.
+${mechanismKnowledge(project.intent)}
 Exact canonical dependency code may have comments and whitespace compacted; every executable token remains. Edited and generated source is supplied in full. The saved project and compiler still use the original bytes.
 Report concrete missing behavior, unintended authority, drains, bypasses of the required platform protections, broken buy/sell/claim paths, or unconnected dependencies.
 Respect intentional, clearly specified token economics. Do not replace the design, invent extra product restrictions, or request optional settings already determined by the platform.

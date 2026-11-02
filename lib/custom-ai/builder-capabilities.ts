@@ -7,6 +7,7 @@ export function builderCapabilities(configuration: { events: boolean; programs: 
       ? "Different buy/sell fees, countdowns, ramps and schedules; total fees 0.5–15%."
       : "Fee schedules on this network use general Custom Contract source and its separate verification, review and preparation." },
     { id: "hook-research", version: 1, state: "research", description: "Search existing hooks and discuss mechanics. Finding a hook does not install or audit it." },
+    { id: "fee-allocation-planning", version: 1, state: "design-only", description: "Check exact fee splits locally; preserve liquidity, buyback/burn and holder-reward requirements. Execution requires the actual contracts, data and selected-chain preparation." },
     { id: "protocol-knowledge", version: 1, state: "research", description: "Local versioned v4 knowledge: callbacks, routing, accounting, external data, composition and evidence limits. Pinned contract interfaces are supplied before planning; no network lookup is needed." },
     { id: "external-events", version: 1, state: configuration.events && feeCore ? "requires-live-check" : "design-only", description: "Weather or market rules need a connected, verified feed on the selected chain." },
     { id: "fee-programs", version: 1, state: configuration.programs && feeCore ? "requires-live-check" : "design-only", description: "Fee-funded staking, distributions, buybacks and locked liquidity need a deployed program; automatic execution also needs a running, funded service." },
@@ -18,6 +19,6 @@ export function builderCapabilities(configuration: { events: boolean; programs: 
 
 export const starterIdeas = [
   { title: "A falling launch fee", prompt: "Build a coin with a 5% total buy and sell fee at launch, falling to 1% over 10 minutes." },
-  { title: "Explore a hook idea", prompt: "Help me design a hook for a coin. Let's work out its rules before building anything." },
+  { title: "Split fees", prompt: "Build a hook that puts 30% of its project fees into liquidity, uses 20% for buyback and burn, and sends 20% to top holders. Help me settle the remaining share and who qualifies, then build the complete design." },
   { title: "Find existing hooks", prompt: "Find examples of existing Uniswap v4 hooks and explain which mechanics I could use for my coin." },
 ] as const;

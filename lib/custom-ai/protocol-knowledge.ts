@@ -1,6 +1,6 @@
 /** Reviewed protocol knowledge, not current deployment discovery. Keep additions
  * independent so a new mechanic does not require rewriting the chat prompt. */
-export const PROTOCOL_KNOWLEDGE_VERSION = "2026-11-02.1";
+export const PROTOCOL_KNOWLEDGE_VERSION = "2026-11-02.2";
 const hooks = "https://developers.uniswap.org/docs/protocols/v4/concepts/hooks";
 export const PROTOCOL_TOPICS = {
   callbacks: {
@@ -22,6 +22,14 @@ export const PROTOCOL_TOPICS = {
   composition: {
     title: "Unconventional designs and composition", source: hooks,
     facts: "Translate creative language into trigger, state, actor, assets, action, limits and observable outcomes. Stateful counters, epochs, games, auctions, discounts, vesting, custom curves, vault integrations and combinations belong in general source when a fixed module cannot express every requirement. Keep a single canonical intent and all agreed constraints; never simplify an idea to a fee schedule just to fit a template. Decompose dependencies and auxiliary contracts explicitly. Ask only about an unresolved choice that changes economics or authority. Use pinned inline dependencies and inspect their actual interfaces; names, examples and a model's memory do not prove compatibility. Novel mechanics remain proposals until the corresponding behavior, router and dependency evidence exists.",
+  },
+  "fee-flows": {
+    title: "Fee allocation, liquidity and holder rewards", source: "https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees",
+    facts: "A share of fees is not a swap-tax rate. Split only collected, distributable project fees; preserve mandatory platform/protocol recipients. LP fees belong to their positions and cannot be redirected without the corresponding authority. Use the local plan_fee_flow tool for exact shares. A 30/20/20 split leaves 30 percent undecided; never normalize it to 100 percent or give the remainder away. Preserve decimal percentages and rounding dust. Implement one conserved fee balance with separate credits for each action; spending or claims cannot reuse another action's funds. Fee-to-liquidity needs the correct token/quote assets, an actual position modification, bounded price/slippage checks and the agreed position ownership. A transfer or donation alone is not an LP deposit. Buyback-and-burn needs the actual swap, its minimum output, and the agreed irreversible burn destination or supported supply-reducing burn; do not add forbidden token powers. Top holders require an explicit number, weighting, eligibility/exclusions and snapshot timing, plus a real onchain checkpoint or verifiable snapshot adapter. Balances at claim time, the current swapper and an unverified submitted list are not a holder ranking. Do not invent a snapshot publisher or silently exclude an owner. Use bounded claims or batches instead of an unbounded payout loop in each swap. Missing/stale data or a failed reward action must retain its funds and follow the agreed failure behavior. Check conservation, rounding, replay/double claims, fee recursion, unauthorized callbacks and unrelated recipients with independent observable examples.",
+  },
+  integrations: {
+    title: "API and external execution adapters", source: hooks,
+    facts: "The platform handles integration implementation. Ask the user what should happen, not for API keys, Solidity, an oracle address or a backend. Preserve the requested external mechanic when a verified adapter is absent and state the specific missing integration. Separate read-only research from a data publisher, authenticated onchain observation, and the transaction that acts on it. Bind feed identity, chain, units, timestamps, update authority, replay protection and the chosen stale/error behavior. Secrets stay in server credentials, never prompts, source or public metadata. An HTTP request from Solidity is impossible. A timer does not submit a transaction. API availability is not keeper liveness. Perpetual-related rules require the actual venue interface and accessible chain state; do not invent a universal exchange adapter. Data-reading or adapter failure must not silently delete a saved condition or repurpose funds. Offer a compact behavior-level choice when economics are undecided; implement and verify the technical details internally.",
   },
   verification: {
     title: "Behavior and evidence boundaries", source: hooks,

@@ -40,6 +40,25 @@ it("turns a casual explicit launch request into a source-bound preparation actio
  expect(value.intent).toEqual(previous.project.intent);expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledTimes(1);
  expect(call.mock.calls[0][0].system).toContain("Questions, quotes, negation and requests to wait mean false");
 });
+it("binds a first design's missing quote to its actual user message while retaining its open choices",async()=>{
+ const call=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"",open:"Choose the starting value"},
+ ],reply:"What starting value should it use?"}));
+ const compiler=vi.fn(),value=await runCustomAI(request,undefined,{call,compile:compiler},{saveProject:vi.fn()});
+ expect(value.intent?.requirements[0].origin).toMatchObject({kind:"message",requestId:request.id,messageIndex:0,quote:instruction});
+ expect(value.intent?.unresolved).toEqual(["Choose the starting value"]);expect(value.change).toBe("blocked");
+ expect(compiler).not.toHaveBeenCalled();expect(value.nextAction).toBeUndefined();
+});
+it("does not replace an invented quote or attach a blank new rule to an existing design",async()=>{
+ const wrong=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"not in this request",open:"Choose a value"},
+ ]}));
+ await expect(runCustomAI(request,undefined,{call:wrong,compile:vi.fn()})).rejects.toMatchObject({code:"intent"});
+ const previous=prior(),changed=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[...requirements,
+  {id:"new-rule",text:"A new reward",kind:"behavior",instruction:"",open:"Choose its recipient"},
+ ]}));
+ await expect(runCustomAI(request,undefined,{call:changed,compile:vi.fn()},{intent:previous.project.intent})).rejects.toMatchObject({code:"intent"});
+});
 it.each(["how do I launch this?","bitte noch nicht launchen","nice, explain the fees first"])("ordinary conversation does not produce a launch action: %s",async content=>{
  const previous=prior(),view=generalProjectView(previous),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:false,intentRequirements:[],requirements:[]}));
  const value=await runCustomAI({...request,draftId:"saved-general-source-0001",messages:[{role:"user",content}]},undefined,{call,compile:vi.fn()},

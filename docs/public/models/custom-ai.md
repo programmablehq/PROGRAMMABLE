@@ -38,6 +38,14 @@ Reloading a running reply reconnects to the saved request. It does not start ano
 
 The chat can look up public sources, indexed markets and basic onchain contract information. It includes source links; research does not establish that a contract is safe.
 
+## Fee allocations and integrations
+
+Describe the whole mechanism in one message, for example: “Put 30% of project fees into liquidity, use 20% for buyback and burn, and distribute 20% to top holders.” The chat keeps all three actions and checks their shares. This example leaves 30% unassigned. The remaining recipient and the intended holder group are choices to settle before building; the chat can propose a compact arrangement for you to confirm.
+
+These percentages divide collected project fees. They do not set a 70% swap tax or redirect mandatory platform fees. A liquidity deposit, a buyback, a burn and a holder distribution each need their actual contract behavior. Balanced percentages alone do not establish execution or launch readiness.
+
+For weather or other API-driven rules, describe the trigger and result in ordinary language. Keep private keys and API credentials out of the chat. The builder identifies the required integration and preserves the rule if that integration is not connected; research results alone do not activate it.
+
 ## General contract projects
 
 You can develop contract source for Ethereum, Robinhood, Base and HyperEVM in the same chat. The project keeps its source files, compiler settings, requirements and declared behavior checks together. An edit retains existing files unless the response explicitly replaces their contents. The builder can use the supplied OpenZeppelin and Uniswap v4 libraries without downloading packages during your request.

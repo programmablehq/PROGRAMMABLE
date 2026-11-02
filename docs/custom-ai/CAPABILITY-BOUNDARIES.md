@@ -35,7 +35,7 @@ Audited 2 November 2026. The design language is open-ended; the executable envir
 
 ## Limits that remain
 
-The GQA live generation failure needs a successful instrumented reproduction and repair before it counts as solved. Passing unit tests is insufficient. General source launch preparation is behind its existing activation flag and depends on backend readiness; this audit does not switch it on. The current trusted local worlds cover native/token v4 pools and their protected variant. Additional external protocols, cross-chain relays, arbitrary router/quote paths and real offchain services require actual integration work and matching evidence. The contract metadata tool remains limited to Ethereum/Robinhood and does not inspect arbitrary verified source. Hosted web research is a separately configured service.
+The saved GQA generation failure was resolved and verified through the public website in version 2.8.6: all thirteen rules were preserved, source compilation and independent review passed, and twenty-four declared runtime cases passed. General source launch preparation remains behind its existing activation flag and depends on backend readiness. The local fee-allocation planner checks arithmetic and preserves named actions; it does not execute them. The current trusted local worlds cover native/token v4 pools and their protected variant. Additional external protocols, holder-snapshot publishers, cross-chain relays, arbitrary router/quote paths and real offchain services require actual integration work and matching evidence. The contract metadata tool remains limited to Ethereum/Robinhood and does not inspect arbitrary verified source. Hosted web research is a separately configured service.
 
 ## Maintaining the builder
 

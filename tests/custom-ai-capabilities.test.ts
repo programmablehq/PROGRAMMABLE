@@ -22,6 +22,7 @@ describe("Custom AI capability discovery", () => {
       authentication: "wallet-session", messageLimit: 8000, recovery: "read-saved-request", stateAttribute: "data-chat-state" });
     expect(body.sourceProjects).toMatchObject({ chains: [1,4663,8453,999], state: "source-draft", requiresSession: true });
     expect(body.capabilities.find((value:{id:string})=>value.id==="arbitrary-hooks").state).toBe("source-draft");
+    expect(body.capabilities.find((value:{id:string})=>value.id==="fee-allocation-planning").state).toBe("design-only");
     expect(body.capabilities.find((value:{id:string})=>value.id==="external-events").state).toBe("design-only");
     expect(body.capabilities.find((value:{id:string})=>value.id==="fee-programs").state).toBe("requires-live-check");
     expect(response.headers.get("cache-control")).toContain("no-store");
