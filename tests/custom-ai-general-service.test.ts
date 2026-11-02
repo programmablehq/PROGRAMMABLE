@@ -40,6 +40,25 @@ it("turns a casual explicit launch request into a source-bound preparation actio
  expect(value.intent).toEqual(previous.project.intent);expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledTimes(1);
  expect(call.mock.calls[0][0].system).toContain("Questions, quotes, negation and requests to wait mean false");
 });
+it("binds a first design's missing quote to its actual user message while retaining its open choices",async()=>{
+ const call=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"",open:"Choose the starting value"},
+ ],reply:"What starting value should it use?"}));
+ const compiler=vi.fn(),value=await runCustomAI(request,undefined,{call,compile:compiler},{saveProject:vi.fn()});
+ expect(value.intent?.requirements[0].origin).toMatchObject({kind:"message",requestId:request.id,messageIndex:0,quote:instruction});
+ expect(value.intent?.unresolved).toEqual(["Choose the starting value"]);expect(value.change).toBe("blocked");
+ expect(compiler).not.toHaveBeenCalled();expect(value.nextAction).toBeUndefined();
+});
+it("does not replace an invented quote or attach a blank new rule to an existing design",async()=>{
+ const wrong=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"not in this request",open:"Choose a value"},
+ ]}));
+ await expect(runCustomAI(request,undefined,{call:wrong,compile:vi.fn()})).rejects.toMatchObject({code:"intent"});
+ const previous=prior(),changed=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[...requirements,
+  {id:"new-rule",text:"A new reward",kind:"behavior",instruction:"",open:"Choose its recipient"},
+ ]}));
+ await expect(runCustomAI(request,undefined,{call:changed,compile:vi.fn()},{intent:previous.project.intent})).rejects.toMatchObject({code:"intent"});
+});
 it.each(["how do I launch this?","bitte noch nicht launchen","nice, explain the fees first"])("ordinary conversation does not produce a launch action: %s",async content=>{
  const previous=prior(),view=generalProjectView(previous),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:false,intentRequirements:[],requirements:[]}));
  const value=await runCustomAI({...request,draftId:"saved-general-source-0001",messages:[{role:"user",content}]},undefined,{call,compile:vi.fn()},
@@ -49,6 +68,28 @@ it("never prepares a launch when the source still lacks its successful behavior 
  const previous=prior(),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:true,intentRequirements:[],requirements:[]}));
  const value=await runCustomAI({...request,draftId:"saved-general-source-0001"},undefined,{call,compile:vi.fn()},
   {generalProject:previous});expect(value.nextAction).toBeUndefined();
+});
+it.each([false,true])("saves a confirmed design-only answer and never launches the previous source (launch request %s)",async launchRequested=>{
+ const previous=prior(),intent={...previous.project.intent,requirements:previous.project.intent.requirements.map((rule,index)=>index===0
+  ?{...rule,text:"Choose the counter start",open:"Should the counter start at seven?"}:rule),unresolved:["Should the counter start at seven?"]};
+ const instruction="Ja, genau so. Nur die Regeln speichern, noch keinen Code erzeugen.";
+ const call=vi.fn().mockResolvedValue(plan({action:"answer",intentMode:"revise",launchRequested,reply:"Die Startzahl ist gespeichert.",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter, starting at seven",kind:"behavior",instruction,open:null},
+  {...requirements[1],instruction:""},
+ ]}));
+ const view=generalProjectView(previous);view.scenarios={scope:"isolated-declared-scenarios-v2",hash:`sha256:${"3".repeat(64)}`,planHash:`sha256:${"4".repeat(64)}`,passed:true,cases:5,failures:[]};
+ const compiler=vi.fn(),value=await runCustomAI({...request,draftId:"previous-source-0001",messages:[{role:"user",content:instruction}]},undefined,
+  {call,compile:compiler},{intent,generalProjectView:view,loadGeneralProject:async()=>previous});
+ expect(value.change).toBe("applied");expect(value.intent?.unresolved).toEqual([]);
+ expect(value.intent?.requirements[0]).toMatchObject({id:"counter",text:"Anyone can increment the counter, starting at seven",open:null});
+ expect(value.intent?.requirements[1]).toEqual(intent.requirements[1]);expect(value.nextAction).toBeUndefined();expect(compiler).not.toHaveBeenCalled();
+});
+it("keeps a closed rule unchanged when an answer proposes an unapproved edit",async()=>{
+ const previous=prior(),call=vi.fn().mockResolvedValue(plan({action:"answer",intentMode:"revise",intentRequirements:[
+  {...requirements[0],text:"The owner alone increments the counter",instruction:""},{...requirements[1],instruction:""},
+ ]}));
+ const value=await runCustomAI(request,undefined,{call,compile:vi.fn()},{intent:previous.project.intent});
+ expect(value.change).toBe("blocked");expect(value.intent?.requirements).toEqual(previous.project.intent.requirements);expect(value.nextAction).toBeUndefined();
 });
 
 it("builds the complete saved design when a casual request explicitly preserves it",async()=>{

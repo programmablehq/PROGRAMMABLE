@@ -4,6 +4,8 @@
 
 Each requirement has a stable id, plain text, a behavior/constraint/decision kind, its exact user-message origin and an optional open question. Model proposals cannot assign checked, active or launch-ready states. Old saved designs retain their source hash and requirement ids with an explicit legacy origin; no user quote is invented during migration.
 
+For a new design consisting of one user message, the server can bind a missing excerpt to that exact message. This records provenance, not acceptance of a proposed default. Open choices remain open. Incorrect nonempty quotes are still rejected, and additions or edits to an existing design retain their explicit quote requirements.
+
 The planner returns all requirements. Replacing or removing a saved requirement uses an explicit edit with a quote from the latest user message. A selected rule restricts edits to its id. Missing or unauthorized edits retain the previous requirement in the next design and block code generation. A question retains the same canonical design and revision.
 
 New planner responses name their executable subset in `implementedRequirementIds`.

@@ -7,3 +7,5 @@ Inputs are validated before dispatch. Tool versions are bound to stored requests
 A tool returns `KnowledgeResult` with source links and original timestamps. Search output is untrusted data and cannot activate onchain behavior. Model/style changes go in `ai-config.ts`; change its version when semantics change. Keep product limits in the enforcing core.
 
 Test the new adapter and its planner/dispatch integration. Search-only changes do not require deploying financial contracts. New money actions require their independent contract and lifecycle evidence before network activation.
+
+`plan_fee_flow` is a local arithmetic capability. It accepts up to twelve named basis-point shares, reports undecided or excessive allocation, and gives a conserved integer example. It neither reads an account nor transfers money. `mechanism-knowledge.ts` selects the corresponding reviewed guidance for planning, independent declarations, source generation and source review. Extend these separately when adding a new integration; a planning tool is not an execution adapter.
