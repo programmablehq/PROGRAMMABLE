@@ -96,3 +96,21 @@ describe("current status bound to the original owned submission",()=>{
   expect(()=>readGeneralLaunchStatus({status:{...wire(),wallet:{transaction:"forged"}}},binding)).toThrow("original submission");
  });
 });
+
+it.each([1,4663,8453,999] as const)("uses one atomic transport snapshot for automatically reviewed chain %s",async chainId=>{
+ const saved=record(chainId);saved.reviewSubjectHash=hash;
+ saved.submission={...saved.submission!,reviewId:resourceId,reviewSubjectHash:hash};
+ const status={...wire(saved),requestHash:raw,deadline:String(start/1000+3600),status:"authorized"};
+ const transport={schemaVersion:"programmable.automatic-launch-transport.v1" as const,reviewId:resourceId,resourceId,chainId:String(chainId) as "1"|"4663"|"8453"|"999",
+  controller:wallet,subjectHash:hash,originalRequestHash:hash,requestHash:raw,rawRequestSha256:status.rawRequestSha256,deadline:status.deadline,checkedAt:status.checkedAt,currentStatus:status};
+ const automatic=vi.fn().mockResolvedValue({schemaVersion:"programmable.automatic-launch-status.v1",reviewId:resourceId,state:"approved",manualReviewRequired:false,launchReady:false,
+  findings:[],timing:{sourceGeneratedAt:start-1000,startedAt:start-900,finishedAt:start,sourceToDecisionMs:1000,decisionWithinTarget:true},transport});
+ const backendStatus=vi.fn(),reader=createGeneralLaunchStatusReader({bridge:()=>({status:backendStatus}),automatic,now:()=>clock}),c=await current();
+ const result=await reader(c.request,c.authority,saved);
+ expect(result.requestHash).toBe(raw);expect(result.deadline).toBe(transport.deadline);expect(automatic).toHaveBeenCalledOnce();expect(backendStatus).not.toHaveBeenCalled();
+ const binding={account:wallet,chainId,resourceId,requestHash:hash,deadline:saved.identity.deadline,reviewId:resourceId,reviewSubjectHash:hash};
+ expect(()=>readGeneralLaunchStatus({status:{...result,automatic:{...result.automatic,transport:{...transport,subjectHash:raw}}}},binding)).toThrow();
+ expect(()=>readGeneralLaunchStatus({status:{...result,automatic:{...result.automatic,transport:{...transport,originalRequestHash:raw}}}},binding)).toThrow();
+ expect(()=>readGeneralLaunchStatus({status:{...result,automatic:undefined}},binding)).toThrow();
+ expect(()=>readGeneralLaunchStatus({status:result},{...binding,reviewId:undefined})).toThrow();
+});

@@ -13,6 +13,7 @@ import { generalLaunchDetailIssue } from "./general-details";
 import type { CoinSetup } from "./coin-setup";
 import { constructorDependencyState } from "./dependency-witness";
 import { checkedObservedOpeningPreparation } from "./opening-inputs.server";
+import { generalReviewSubjectHash } from "./automatic-source.server";
 
 export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
@@ -20,7 +21,7 @@ export type GeneralExchange = {
   state: "sending" | "unknown" | "rejected" | "completed";
   lease: string; until: number; attempts: number;
   httpStatus?: number; code?: string; disposition?: string; findingCodes?: string[];
-  resourceId?: string; backendState?: string;
+  resourceId?: string; backendState?: string; reviewId?:string; reviewSubjectHash?:`sha256:${string}`;
 };
 export type GeneralPreparation = {
   version: 1; id: string; account: Address; chainId: OwnedGeneralLaunchSource["project"]["chainId"];
@@ -35,9 +36,10 @@ export type GeneralPreparation = {
   packLease: { token: string; until: number; slot: number; startedAt?: number };
   packCode?: string; packHash?: `sha256:${string}`; requestSha256?: `sha256:${string}`; requestHash?: `sha256:${string}`;
   publicSourceId?: `sha256:${string}`; launchProfileHash?: string; launchIntentHash?: string;
+  reviewSubjectHash?:`sha256:${string}`;
   preflight?: GeneralExchange; submission?: GeneralExchange;
 };
-export type GeneralExchangeSummary = Pick<GeneralExchange, "httpStatus" | "code" | "disposition" | "findingCodes" | "resourceId" | "backendState">;
+export type GeneralExchangeSummary = Pick<GeneralExchange, "httpStatus" | "code" | "disposition" | "findingCodes" | "resourceId" | "backendState" | "reviewId" | "reviewSubjectHash">;
 type Transaction = <T>(work: (connection: AIConnection) => Promise<T>) => Promise<T>;
 type Sources = {
   read(db: AIConnection, owner: string, selection: GeneralLaunchSourceSelection): Promise<OwnedGeneralLaunchSource>;
@@ -128,13 +130,14 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation, comple
       || request.manifestDigest!==record.manifestDigest || request.executor!=="atomic_execute_and_stamp_v2"
       || request.budgets?.validAfter!==record.identity.validAfter || request.budgets.deadline!==record.identity.deadline
       || requestHash!==pack.planHash || pack.requestBody!==canonicalBrowserJsonV2(request))throw corrupt();
-    return {requestHash};
+    return {requestHash,reviewSubjectHash:generalReviewSubjectHash(record.chainId,request)};
   }
   if (request.schemaVersion !== "programmable.custom-launch-create-request.v3" || request.chainId !== String(record.chainId)
     || request.launchWallet?.toLowerCase() !== record.account.toLowerCase() || request.nonce !== record.identity.nonce
     || request.permitWindow?.validAfter !== record.identity.validAfter || request.permitWindow.deadline !== record.identity.deadline
     || !/^sha256:[a-f0-9]{64}$/u.test(request.launchProfileHash) || !/^sha256:[a-f0-9]{64}$/u.test(request.launchIntentHash)) throw corrupt();
   return { requestHash: canonicalBrowserSha256V2(request.schemaVersion, request),
+    reviewSubjectHash:generalReviewSubjectHash(record.chainId,request),
     launchProfileHash: request.launchProfileHash as string, launchIntentHash: request.launchIntentHash as string };
 }
 
@@ -203,6 +206,13 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
   }
   return {
     read: (owner: string,id: string) => transaction(db=>readIn(db,owner,id)),
+    readAutomaticInputs: (owner:string,id:string) => transaction(async db=>{
+      const record=await readIn(db,owner,id);
+      if(!record||record.packState!=="complete"||record.submission?.state!=="completed"||!record.submission.resourceId
+        ||!record.submission.reviewId||!record.reviewSubjectHash||record.submission.reviewSubjectHash!==record.reviewSubjectHash)throw conflict();
+      const source=await revalidate(db,owner,record),pack=await readPackIn(db,owner,record);
+      return {record,source,pack};
+    }),
     active: (owner: string,account: string) => transaction(async db=>{
       const row=(await db.query(`SELECT value->>'id' AS id FROM programmable_custom_ai_v1.objects
         WHERE owner=$1 AND kind='active-general-prepare' AND id=$2`,[owner,pointerId(getAddress(account))])).rows[0];
@@ -332,7 +342,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
 export function generalPreparationView(record: GeneralPreparation, now=Date.now()) {
   const projectExchange=(exchange:GeneralExchange|undefined)=>exchange?{
     state:exchange.state==="sending"&&exchange.until<=now?"unknown":exchange.state,
-    ...Object.fromEntries(["httpStatus","code","disposition","findingCodes","resourceId","backendState"].flatMap(key=>{
+    ...Object.fromEntries(["httpStatus","code","disposition","findingCodes","resourceId","backendState","reviewId","reviewSubjectHash"].flatMap(key=>{
       const value=exchange[key as keyof GeneralExchange];return value===undefined?[]:[[key,value]];
     })),
   }:undefined;

@@ -69,7 +69,7 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
       account:`0x${string}`;reviewId:string;
     } & ({operation:"bind-source";receipt:AutomaticSourceReceipt}|{operation:"check"|"status"})>):Promise<BackendLaunchReply> {
       const method=candidate.operation==="status"?"GET":"POST";
-      if(request.method!==method)throw new CustomAIError("launch-method","Use the explicit launch action to run automatic checks.",405);
+      if(method==="POST"?request.method!=="POST":!["GET","POST"].includes(request.method))throw new CustomAIError("launch-method","Use the explicit launch action to run automatic checks.",405);
       const current=requireFreshCustomAIAuthority(request,authority),account=getAddress(candidate.account);
       if(!current.principal.wallets.some(wallet=>getAddress(wallet)===account))
         throw new CustomAIError("wallet","Select the wallet that owns this saved submission.",403);

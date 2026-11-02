@@ -1,6 +1,8 @@
 # Custom AI workspace flow
 
-The conversation is the primary workspace. Coin identity and launch settings have one editor in the preview. Rules are rendered from the saved draft. Versions, request metrics and allowance are under Options, outside the primary conversation.
+The conversation is the primary workspace. Coin identity and launch settings have one editor in the preview. The coin name opens the workspace menu for new coins, versions, request details and usage. Chats opens the saved conversation library. Rules remain available in a collapsed disclosure; open decisions remain visible when needed. Assistant replies have a quiet copy icon that appears on hover or keyboard focus.
+
+A direct request such as “okay, launch this coin” can produce a source-bound preparation action. Questions about launching and requests not to launch do not. The action is consumed once for that exact source; a reload or another chat cannot replay it. Missing details open their editor. A successful automatic review can prepare the wallet step, while sending the transaction remains an explicit wallet confirmation.
 
 | State | Main action | Visible context | Recovery |
 | --- | --- | --- | --- |

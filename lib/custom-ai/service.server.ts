@@ -38,7 +38,7 @@ import { compileContractProject } from "./contract-project.server";
 import type { ContractProject } from "./contract-project";
 import { generalProjectView, type GeneralProjectView } from "./project-view";
 import { bindGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
-import {declareGeneralChecks} from "./check-declaration.server";
+import {declareGeneralChecks,GeneralCheckDeclarationError} from "./check-declaration.server";
 import { checkGeneralScenarios, type GeneralScenarioReport } from "./behavior-checks.server";
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 import { launchProductionGuidance } from "./production-guidance";
@@ -63,6 +63,7 @@ const planSchema = { type: "object", properties: {
     requirementId: { type: "string" }, operation: { type: "string", enum: ["replace", "remove"] }, instruction: { type: "string" },
   }, required: ["requirementId", "operation", "instruction"], additionalProperties: false } },
   action: { type: "string", enum: ["answer", "build", "clarify"] }, memory: { type: "string" },
+  launchRequested: { type: "boolean" },
   implementedRequirementIds: { type: "array", maxItems: MAX_INTENT_REQUIREMENTS, items: { type: "string" } }, setupPatch: setupSchema,
   lookups: { type: "array", items: { type: "object", properties: {
     kind: { type: "string", enum: ["catalog", "contract", "web"] }, query: { type: "string" },
@@ -72,7 +73,7 @@ const planSchema = { type: "object", properties: {
     afterSeconds: { type: "integer" }, buy: { type: "boolean" }, totalFeeBps: { type: "integer" },
     feedValue: { type: ["string", "null"] }, feedFresh: { type: ["boolean", "null"] },
   }, required: ["afterSeconds", "buy", "totalFeeBps", "feedValue", "feedFresh"], additionalProperties: false } },
-}, required: ["reply", "executionRoute", "intentRequirements", "action", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
+}, required: ["reply", "executionRoute", "intentRequirements", "action", "launchRequested", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
 type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compile: (source: string, signal?: AbortSignal, expectations?: FeeExpectation[], feed?: FeedBinding) => Promise<Draft>; compileProject?: typeof compileContractProject;checkProject?:typeof checkGeneralScenarios; feed?: typeof prepareEventFeed; lookup?: typeof readLiveKnowledge };
 export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec?: RuleSpecV2; owner?: string; draft?: Draft; generalProject?: GeneralProjectDraft; generalProjectView?: GeneralProjectView; loadGeneralProject?:()=>Promise<GeneralProjectDraft>; memory?: string; onProgress?: (event: ChatProgress) => void; onModelCall?:(call:ModelCallMetric)=>void;
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
@@ -190,6 +191,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   // Open questions have one authority: their canonical requirement. Do not
   // make the model repeat them in a second list and compare paraphrases.
   const readPlan = (value: Record<string, unknown>) => {
+    if(value.launchRequested!==undefined&&typeof value.launchRequested!=="boolean")throw new CustomAIError("plan","The requested next step could not be read. Your design is kept.",502);
     const declared = value.action === "answer" && value.intentRequirements === undefined && value.implementedRequirementIds === undefined
       ? [] : parseIntentRequirements(value.intentRequirements);
     // General source has no executable fee-program subset at interpretation
@@ -242,9 +244,12 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     plan.composable?.requirements ?? plan.requirements.map(text => ({ text }))) : [];
   const selection=plan.action==="build"&&intent?selectExecutionRoute(intent,coin.chainId,{route:generalOnly?"custom-contract":plan.executionRoute,requirementIds:implementationGaps.length?[]:intent.requirements.map(rule=>rule.id),missingCapabilities:implementationGaps}):undefined;
   const open = [...new Set([...(intent?.unresolved ?? []), ...(revised?.problems ?? []), ...(!context.saveProject?implementationGaps:[])])];
+  const launchAction=(sourceId:string|undefined,ready:boolean):Pick<ChatResult,"nextAction">=>interpreted.launchRequested===true&&ready&&sourceId&&!open.length
+    ?{nextAction:{kind:"prepare-launch",sourceId}}:{};
   if (plan.action === "build" && (open.length || intent && intentHasOpenParts(intent))) return { reply: "Your complete design is saved. The open items below still need resolving before I can build the source.", ...update, ruleSpec: previousSpec ?? plan.composable,
     intent, memory: plan.memory, change: "blocked", unresolved: open, ...(researched ? { chargedAs: "research", sources } : {}) };
   if (plan.action !== "build") return { reply: plan.reply, ...update, memory: plan.memory,
+    ...launchAction(request.draftId,plan.action==="answer"&&Boolean(previousProjectView?.compiled&&previousProjectView.scenarios?.passed||context.draft?.compiled&&context.draft.validation?.status==="passed")),
     ...(intent ? { intent } : {}),
     ...(previousSpec ? { ruleSpec: previousSpec } : {}),
     change: plan.action === "clarify" ? "blocked" : "unchanged", ...(open.length ? { unresolved: open } : {}),
@@ -274,7 +279,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
         signal?.throwIfAborted();
         if(!(error instanceof ModelResponseError)&&!(error instanceof TypeError)&&!(error instanceof SyntaxError)
           &&!(error instanceof CustomAIError&&error.code==="check-declaration"))throw error;
-        return {reply:"Your complete design is saved. The independent contract checks did not finish, so no source or launch was prepared.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract checks could not be prepared"]};
+        return {reply:"Your complete design is saved. The independent contract checks did not finish, so no source or launch was prepared.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract checks could not be prepared"],
+          ...(error instanceof GeneralCheckDeclarationError?{buildIssue:{stage:error.stage,code:error.reason}}:{})};
       }
       await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
     }
@@ -291,7 +297,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
     return {reply:generated.sourceAudit?.status==="changes_required"?`The source is saved. The independent review found a correction: ${generated.sourceAudit.findings[0]?.message}`
       :generated.scenarios?.passed===false?"The source is saved, but a declared contract check failed. Your previous draft is kept. Ask me to fix this source.":generated.reply,
-      intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
+      intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);
   if (previousSpec && !plan.composable) return { reply: "This change left out part of your saved design. Keep the complete rule before building.",
@@ -314,7 +320,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       const checked = await compileRuleSpec(ruleSpec, coreChainId, feeds, signal);
       if (checked.validation?.status !== "passed" || checked.lifecycle?.status !== "passed") throw new CustomAIError("rules", "The complete rule could not be verified yet. Your design is saved.", 422);
       return { reply: plan.reply, intent, ruleSpec, draft: bindCandidateIntent(intent!, { ...checked, hookSummary: ruleSpec.requirements.map(r => r.text).join("; ").slice(0, 220) }, context.draft),
-        memory: plan.memory, change: "applied", chargedAs: "build", ...update };
+        memory: plan.memory, change: "applied", chargedAs: "build", ...update,...launchAction(request.id,true) };
     } catch (error) {
       signal?.throwIfAborted();
       return { reply: error instanceof CustomAIError ? error.message : "The complete design is saved, but it could not be prepared for launch yet.",
@@ -359,7 +365,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       return { reply: `${answer.reply as string}${feed && process.env.CUSTOM_AI_EVENTS_ENABLED !== "true" ? " The event rule is prepared for testing; public event launches are not enabled yet." : ""}${program && !program.available ? " The funded program is prepared for testing; public launch of this new program is not enabled yet." : ""}`, intent, draft: bindCandidateIntent(intent!, { ...draft, ...(program ? { program } : {}), ...(summary ? { hookSummary: String(summary).trim() } : {}),
         verification: { status: "passed", sourceHash: draft.sourceHash, previousSourceHash: context.draft?.sourceHash,
           requirements: plan.requirements, checks: plan.feeChecks, cases: draft.validation.expectationCases } }, context.draft),
-      ...update, memory: plan.memory, change: "applied", chargedAs: "build", ...(sources.length ? { sources } : {}) };
+      ...update,...launchAction(request.id,true), memory: plan.memory, change: "applied", chargedAs: "build", ...(sources.length ? { sources } : {}) };
     }
     messages.splice(originalLength);
     messages.push({ role: "assistant", content: JSON.stringify(answer) }, { role: "user",

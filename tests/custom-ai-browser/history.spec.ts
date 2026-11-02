@@ -127,7 +127,7 @@ test("general source restores compactly and reads complete code only when explic
  await page.route("**/api/custom-ai/projects?**",route=>{sourceReads++;return route.fulfill({json:{version:1,requestId:f.calls[0].id,project:{hash:result.generalProject.projectHash,sources:{"Counter.sol":{content:"pragma solidity 0.8.26; contract Counter { uint256 public value; }"}}}}});});
  await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
  await box.fill("Build a general counter contract");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
- await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toHaveCount(0);expect(sourceReads).toBe(0);
+ await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toBeDisabled();expect(sourceReads).toBe(0);
  await box.fill("Keep this unsent source edit");await expect.poll(()=>[...f.studios.values()].some(s=>s.state.input==="Keep this unsent source edit")).toBe(true);
  f.control.otherReads=[];await page.reload();await expect(box).toHaveValue("Keep this unsent source edit");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
  expect(f.calls).toHaveLength(1);expect(sourceReads).toBe(0);expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);
@@ -234,7 +234,7 @@ test("metadata-only edits survive online save and reload without changing the ch
 test("retrying a lost create response opens the same chat without making another one",async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- f.control.lostCreates=1;await page.getByRole("button",{name:"New coin",exact:true}).click();
+ f.control.lostCreates=1;await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
  await expect(page.getByRole("region",{name:"Your saved chats"}).getByRole("alert")).toBeVisible();
  expect(f.chats.size).toBe(2);const created=[...f.chats.values()].find(chat=>chat.id!==LEGACY_CONVERSATION)!;
  await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toBeEditable();
@@ -245,17 +245,17 @@ test("retrying a lost create response opens the same chat without making another
 test("opening the recovered chat clears the pending create before the next new coin",async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- f.control.lostCreates=1;await page.getByRole("button",{name:"New coin",exact:true}).click();
+ f.control.lostCreates=1;await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
  const library=page.getByRole("region",{name:"Your saved chats"});await expect(library.getByRole("alert")).toBeVisible();
  await library.getByRole("button",{name:/^New coin/}).click();
  await box.fill("Work in the recovered chat");
- await page.getByRole("button",{name:"New coin",exact:true}).click();await expect(box).toHaveValue("");
+ await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();await expect(box).toHaveValue("");
  expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
 });
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Keep this original unsent idea");
- await page.getByRole("button",{name:"New coin",exact:true}).dblclick();await expect(box).toHaveValue("");expect(f.chats.size).toBe(2);await box.fill("Second private idea");
+ await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).dblclick();await expect(box).toHaveValue("");expect(f.chats.size).toBe(2);await box.fill("Second private idea");
  await page.getByRole("button",{name:"Chats",exact:true}).click();await page.getByRole("button",{name:/^Original idea/}).click();await expect(box).toHaveValue("Keep this original unsent idea");
  await page.reload();await expect(box).toHaveValue("Keep this original unsent idea");
  await page.getByRole("button",{name:"Chats",exact:true}).click();const original=[...f.chats.values()].find(c=>c.id===LEGACY_CONVERSATION)!;
@@ -285,7 +285,7 @@ test("changing the selected wallet keeps private chat inputs separate",async({pa
 });
 test("restoring a chat uses the latest archive filter after a delayed write",async({page})=>{
  const f=await fixture(page);await page.goto(origin);await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();
- await page.getByRole("button",{name:"New coin",exact:true}).click();await page.getByRole("button",{name:"Chats",exact:true}).click();
+ await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();await page.getByRole("button",{name:"Chats",exact:true}).click();
  await page.getByRole("button",{name:"Archive Original idea",exact:true}).click();
  await page.getByRole("checkbox",{name:"Show archived"}).check();await expect(page.getByRole("button",{name:"Restore Original idea",exact:true})).toBeVisible();
  let release!:()=>void,started=false;const gate=new Promise<void>(resolve=>{release=resolve;});f.control.beforeUpdate=async()=>{started=true;await gate;};
@@ -383,3 +383,5 @@ test("an older local-only copy remains stored without being adopted by a newly s
   const raw=await new Promise<unknown>(resolve=>{const r=db.transaction("drafts").objectStore("drafts").get("programmable.custom-ai.studio.v1:0x"+"a".repeat(40));r.onsuccess=()=>resolve(r.result);});db.close();return raw;
  });expect(JSON.parse(retained as string).input).toBe("Unattributed older private input");
 });
+
+async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat menu",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}

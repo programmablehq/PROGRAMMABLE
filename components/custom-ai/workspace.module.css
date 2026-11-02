@@ -22,7 +22,7 @@
 .ruleEditList button { min-width: 44px; min-height: 44px; padding: 4px; background: transparent; color: #ede7dc; border: 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .message { width: fit-content; max-width: 100%; margin-block: 0 28px; }
 .message:last-child { margin-bottom: 0; }
-.message[data-role="user"] { max-width: min(85%, 580px); margin-inline-start: auto; padding: 11px 16px; border-radius: 18px 18px 5px 18px; background: #20201e; }
+.message[data-role="user"] { max-width: min(85%, 580px); margin-inline-start: auto; padding: 12px 16px; border-radius: 16px 16px 4px 16px; background: #20201e; }
 .message[data-role="assistant"] { padding-block: 2px; }
 .messageText { font-size: 16px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .revealing::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-inline-start: 3px; vertical-align: -.1em; background: #b8b4ad; }
@@ -30,6 +30,11 @@
 .message > .copyAction { margin-top: 6px; }
 .copyAction button { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 0; border: 0; background: transparent; color: #aaa69f; font: inherit; font-size: 11px; cursor: pointer; }
 .copyAction button:hover { color: #f4f1eb; }
+.compactCopy button { justify-content: center; width: 36px; min-height: 36px; padding: 8px; border-radius: 8px; }
+@media (hover: hover) and (pointer: fine) {
+  .message .compactCopy { opacity: 0; transition: opacity 150ms ease-out; }
+  .message:hover .compactCopy, .message:focus-within .compactCopy { opacity: 1; }
+}
 .copyError { color: #ffc2af; font-size: 12px; line-height: 1.5; }
 .codeBlock { margin-block: 14px; overflow: hidden; border: 1px solid #44413b; border-radius: 12px; background: #171716; white-space: normal; }
 .codeToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 14px; border-bottom: 1px solid #343431; color: #aaa69f; font-size: 12px; }
@@ -53,7 +58,7 @@
 .error { color: #ffc2af; }
 .note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
 /* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */
-.coinPanel { min-width: 0; padding: 20px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.coinPanel { min-width: 0; max-height: clamp(360px, calc(100dvh - 124px), 800px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; box-sizing: border-box; padding: 20px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
 .sourceCode { max-height: 360px; overflow: auto; padding: 12px; border: 1px solid #343431; border-radius: 10px; white-space: pre; font: 12px/1.6 monospace; }
 .coinPreview { text-align: start; }
 .coinHeading { display: flex; align-items: center; gap: 16px; }
@@ -149,7 +154,7 @@
 @media (max-width: 740px) {
   .studio { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .conversation { position: static; height: clamp(360px, 60dvh, 520px); min-height: 0; }
-  .coinPanel { width: min(100%, 440px); margin-inline: auto; }
+  .coinPanel { width: min(100%, 440px); max-height: none; overflow-y: visible; margin-inline: auto; }
   .coinForm input, .coinForm textarea { font-size: 16px; }
 }
 @keyframes pulse { 0%, 70%, 100% { opacity: .35; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
@@ -158,18 +163,22 @@
   .transcript { padding-inline: 4px; }
   .message[data-role="user"] { max-width: 91%; }
 }
-.chatToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 2px 8px 14px; border-bottom: 1px solid #343431; }
+.chatToolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 0 12px; border-bottom: 1px solid #343431; }
 .chatIdentity { min-width: 0; flex: 1; }
 .chatIdentity > span { color: #aaa69f; font-size: 11px; }
 .chatIdentity p { margin: 3px 0 0; color: #f4f1eb; font-size: 16px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .toolbarActions { display: flex; align-items: center; gap: 8px; }
 .newCoin, .tools > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid #343431; border-radius: 9px; background: #171716; color: #d0cbc2; font: inherit; font-size: 12px; cursor: pointer; }
 .newCoin:hover, .tools > summary:hover { background: #242320; border-color: #77736b; }
-.tools { position: relative; }
-.tools > summary { list-style: none; }
+.tools { position: relative; min-width: 0; }
+.tools > summary { list-style: none; justify-content: space-between; border-color: transparent; background: transparent; padding-inline: 8px; font-size: 16px; }
+.tools > summary > span { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.tools > summary > svg { flex-shrink: 0; color: #aaa69f; }
 .tools > summary::-webkit-details-marker { display: none; }
 .tools[open] > summary > svg { transform: rotate(180deg); }
-.toolsPanel { position: absolute; inset-inline-end: 0; top: calc(100% + 8px); z-index: 12; width: min(300px, calc(100vw - 64px)); max-height: min(560px, 70dvh); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid #44413b; border-radius: 14px; background: #22211e; box-shadow: 0 8px 24px #0006; }
+.toolsPanel { position: absolute; inset-inline-start: 0; top: calc(100% + 8px); z-index: 46; width: min(300px, calc(100vw - 64px)); max-height: min(560px, 70dvh); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid #44413b; border-radius: 14px; background: #22211e; box-shadow: 0 8px 24px #0006; }
+.toolsPanel .newCoin, .toolsPanel .libraryToggle { width: 100%; justify-content: flex-start; gap: 8px; text-decoration: none; }
+.toolsPanel .libraryPanel { position: static; box-sizing: border-box; width: 100%; margin-block: 8px; box-shadow: none; }
 .toolsPanel button, .textButton { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #e2ddd4; font: inherit; font-size: 13px; cursor: pointer; text-align: start; text-decoration: underline; text-underline-offset: 4px; }
 .toolsPanel .toolsClose { display:none; }
 .contextActions > button { display: block; }
@@ -188,6 +197,12 @@
 .ruleReview ul { padding-inline-start: 18px; margin: 12px 0; }
 .ruleReview li + li { margin-top: 6px; }
 .ruleReview summary { cursor: pointer; min-height: 40px; align-content: center; }
+.coinRules { margin-top: 20px; padding-top: 12px; }
+.coinRules > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #f4f1eb; list-style: none; }
+.coinRules > summary::-webkit-details-marker { display: none; }
+.coinRules > summary::after { content: "+"; color: #aaa69f; font-size: 18px; }
+.coinRules[open] > summary::after { content: "−"; }
+.coinRules > summary > span { margin-inline-start: auto; color: #aaa69f; font-size: 12px; font-variant-numeric: tabular-nums; }
 .ruleReview table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .ruleReview td, .ruleReview th { padding: 6px 4px; text-align: start; border-bottom: 1px solid #343431; font-weight: 400; }
 .ruleReview thead th { color: #f4f1eb; }

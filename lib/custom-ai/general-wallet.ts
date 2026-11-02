@@ -19,8 +19,8 @@ export function generalWalletSubject(saved: GeneralPreparationView, status: Gene
   const id = saved.submission?.state === "completed" ? saved.submission.resourceId : undefined;
   if (!id || !saved.requestHash || saved.packState !== "complete") return fail();
   const checked = readGeneralLaunchStatus({ status }, { account: saved.account, chainId: saved.chainId, resourceId: id,
-    requestHash: saved.requestHash, deadline: String(saved.expiresAt / 1000) });
-  return Object.freeze({ chainId: saved.chainId, controller: saved.account, resourceId: id, requestHash: saved.requestHash,
+    requestHash: saved.requestHash, deadline: String(saved.expiresAt / 1000),reviewId:saved.submission?.reviewId,reviewSubjectHash:saved.submission?.reviewSubjectHash });
+  return Object.freeze({ chainId: saved.chainId, controller: saved.account, resourceId: id, requestHash: checked.requestHash,
     rawRequestSha256: checked.rawRequestSha256, deadline: checked.deadline! });
 }
 export function generalWalletDetailUrl(subject: GeneralWalletSubject): string {

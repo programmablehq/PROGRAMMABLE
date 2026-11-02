@@ -113,6 +113,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [imageReceipt, setImageReceipt] = useState<ImageReceipt>();
   const [restored, setRestored] = useState(false);
   const [launchLocked, setLaunchLocked] = useState(false);
+  const [launchCommand,setLaunchCommand]=useState<{id:string;sourceId:string}>();
+  const [buildIssue,setBuildIssue]=useState<ChatResult["buildIssue"]>();
   const retry = useRef<ChatRequest | null>(null);
   const retryBase = useRef<RetryBase | undefined>(undefined);
   const [recoveryRequest,setRecoveryRequest]=useState<ChatRequest>();
@@ -134,7 +136,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const storageKey = cacheKeys?.studio ?? `programmable.custom-ai.studio.v1:${owner}${conversationId&&conversationId!==LEGACY_CONVERSATION?`:chat:${conversationId}`:""}`;
   const legacyStorageKey=cacheKeys?.legacyStudio;
   const [chatRevision, setChatRevision] = useState(0);
-  function changeSettings(patch: CoinSetupPatch) { setSettings(current => applyCoinSetupPatch(current, patch)); }
+  function changeSettings(patch: CoinSetupPatch) { setLaunchCommand(undefined); setSettings(current => applyCoinSetupPatch(current, patch)); }
   const textarea = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const followReply = useRef(true);
@@ -155,6 +157,10 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const applyReply=useCallback((request:ChatRequest,data:ChatResult,submitted:ChatMessage[],previousPending?:string)=>{
     retry.current=null;
     setCanReconnect(false);
+    setBuildIssue(data.buildIssue);
+    const action=data.nextAction;
+    setLaunchCommand(action?.kind==="prepare-launch"&&(action.sourceId===request.draftId||action.sourceId===request.id)
+      &&data.change!=="blocked"?{id:request.id,sourceId:action.sourceId}:undefined);
     if(data.draft){setDraft(data.draft);setGeneralProject(undefined);setSourceRecovery(undefined);setDraftId(request.id);}
     if(data.generalProject){
       if(data.generalProject.compiled&&data.generalProject.scenarios?.passed!==false){setGeneralProject(data.generalProject);setDraft(undefined);setDraftId(request.id);setSourceRecovery(undefined);}
@@ -330,6 +336,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
 
   async function resolveConflict(useOnline: boolean) {
     if (!conflict) return;
+    setLaunchCommand(undefined);
     const server = conflict.server;
     if (useOnline) {
       try { await writeDraftCache(`${storageKey}:image`, null); }
@@ -389,6 +396,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
 
   async function startAnother() {
     if (coinTransition.current || busy || recoveryRequest || !restored || launchLocked) return;
+    setLaunchCommand(undefined);
     if(navigation){await navigation.newChat();return;}
     coinTransition.current = true; setSwitchingCoin(true);
     try {
@@ -407,6 +415,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   }
   async function restorePrevious() {
     if (!previousCoin || coinTransition.current || busy || recoveryRequest || !restored || launchLocked) return;
+    setLaunchCommand(undefined);
     coinTransition.current = true; setSwitchingCoin(true);
     try {
     await writeDraftCache(`${storageKey}:image`, previousCoin.imageBlob ?? null);
@@ -423,6 +432,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   }
   async function restoreVersion(version:Pick<StoredStudio,"state"|"draft"|"generalProject"|"intent">){
     if(busy||recoveryRequest||coinTransition.current||launchLocked||!version.draft&&!version.generalProject)return;
+    setLaunchCommand(undefined);
     coinTransition.current=true;setSwitchingCoin(true);
     try{
     await writeDraftCache(`${storageKey}:image`,null);
@@ -492,6 +502,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     const focus=document.activeElement===textarea.current||document.activeElement?.closest("form")===textarea.current?.form;
     await replyRef.current.run({request,
       beforeSend:async()=>{
+        setLaunchCommand(undefined);
         setRequestSaved(false);followReply.current=true;setShowLatest(false);setMessages(next);setInput("");setPendingChange(content);
         latestAttempt.current=request.id;
         if(conversationId&&request!==previousRequest){const saved=await flushCurrent(true);request.conversation={id:conversationId,account:owner,revision:saved!.revision};}
@@ -544,7 +555,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
 
   return <div className={styles.workspace}>
     <div className={styles.studio}>
-    <section className={styles.conversation} aria-label="Build your coin" data-chat-state={activity.id}>
+    <section className={styles.conversation} aria-label="Build your coin" data-chat-state={activity.id}
+      data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}>
       <WorkspaceTools name={settings.name} hasDraft={Boolean(draft||generalProject)} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
         navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)}
         canClear={Boolean(messages.length)} hasPrevious={(!navigation||conversationId===LEGACY_CONVERSATION)&&Boolean(previousCoin)}
@@ -583,7 +595,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           {message.role === "assistant" && message.sources?.length ? <ul className={styles.sources} aria-label="Sources">
             {safeKnowledgeSources(message.sources).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}
           </ul> : null}
-          <CopyButton label={message.role === "user" ? "Copy your message" : "Copy answer"} value={message.content} />
+          {message.role === "assistant" && <CopyButton compact label="Copy answer" value={message.content} />}
         </article>)}
         {busy && revealing === null && <div className={styles.typing} aria-hidden="true">
           <span /><span /><span />
@@ -621,7 +633,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
         <textarea ref={textarea} id="custom-ai-message" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
           aria-invalid={Boolean(inputError)} aria-describedby={["custom-ai-help", "custom-ai-state", error && "custom-ai-error", inputError && "custom-ai-input-error", editTarget && "custom-ai-edit-scope"].filter(Boolean).join(" ")}
-          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setInput(event.target.value); setInputError(""); }}
+          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setLaunchCommand(undefined); setInput(event.target.value); setInputError(""); }}
           onPaste={event => {
             const element = event.currentTarget;
             if (!pastedMessageFits(input, event.clipboardData.getData("text/plain"), element.selectionStart, element.selectionEnd)) {
@@ -652,11 +664,13 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       headers={headers} disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored} settings={settings} onChange={changeSettings} chatRevision={chatRevision}
       localPreview={localPreview} cacheKey={storageKey} imageReceipt={imageReceipt} onImageReceipt={setImageReceipt}
       generalLaunchEnabled={generalLaunchEnabled} pendingChange={pendingChange} flush={()=>flushCurrent(true)} onLaunchLocked={setLaunchLocked}
+      launchCommand={launchCommand}
       onEditRule={requirementId=>{if(generalProject&&!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
       {sourcePanel}
     </GeneralProjectPreview>:<CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}
       imageReceipt={imageReceipt} onImageReceipt={setImageReceipt} pendingChange={busy ? undefined : pendingChange}
+      launchCommand={launchCommand}
       onKeepRules={() => {
         setIntent(draft?.intent);
         setPendingChange(undefined); setContextId(draftId); setEditTarget(undefined);

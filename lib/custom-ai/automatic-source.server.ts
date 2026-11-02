@@ -16,6 +16,30 @@ export type AutomaticSourceReceipt = {
 const digest=/^sha256:[a-f0-9]{64}$/u;
 const invalid=():never=>{throw new CustomAIError("automatic-source-binding","The automatic review could not be matched to this saved source. Your draft is kept.",409);};
 
+export function generalReviewSubjectHash(chainId:number,request:Record<string,unknown>):`sha256:${string}` {
+  const payload=structuredClone(request);
+  if(chainId===4663){
+    if(!payload.budgets||typeof payload.budgets!=="object"||Array.isArray(payload.budgets))return invalid();
+    delete (payload.budgets as Record<string,unknown>).validAfter;delete (payload.budgets as Record<string,unknown>).deadline;
+  }else{
+    delete payload.permitWindow;delete payload.launchIntentHash;delete payload.fundingIntentHash;
+    if(payload.agentAttestation&&typeof payload.agentAttestation==="object"&&!Array.isArray(payload.agentAttestation)){
+      delete (payload.agentAttestation as Record<string,unknown>).subjectLaunchIntentHash;delete (payload.agentAttestation as Record<string,unknown>).checkedAt;
+    }
+  }
+  const policy="programmable.custom-launch-manual-review.v1";
+  return canonicalBrowserSha256V2(policy,{policy,chainId:String(chainId),request:payload});
+}
+
+export function readGeneralAutomaticIdentity(value:unknown,chainId:number,account:string,requestBody:string) {
+  const root=value as Record<string,unknown>|null,review=root?.manualReview as Record<string,unknown>|undefined;
+  if(!review||review.schemaVersion!=="programmable.custom-launch-manual-review.v1"
+    ||typeof review.reviewId!=="string"||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(review.reviewId)
+    ||review.chainId!==String(chainId)||typeof review.controller!=="string"||review.controller.toLowerCase()!==account.toLowerCase()
+    ||review.subjectHash!==generalReviewSubjectHash(chainId,JSON.parse(requestBody)))return invalid();
+  return {reviewId:review.reviewId,subjectHash:review.subjectHash as `sha256:${string}`,chainId:String(chainId),controller:account};
+}
+
 /** Only the owned checked source, sealed request and server-read source time
  * may be passed here. No chat messages or browser-supplied receipt are copied. */
 export function createAutomaticSourceReceipt(input:{source:OwnedGeneralLaunchSource;sourceGeneratedAt:number;requestBody:string;
@@ -36,6 +60,7 @@ export function createAutomaticSourceReceipt(input:{source:OwnedGeneralLaunchSou
   try{request=JSON.parse(input.requestBody);}catch{return invalid();}
   if(!request || Array.isArray(request)||request.chainId!==review.chainId
     || request.schemaVersion!==(review.chainId==="4663"?"programmable.custom-launch-plan.v1":"programmable.custom-launch-create-request.v3"))return invalid();
+  if(generalReviewSubjectHash(source.project.chainId,request)!==review.subjectHash)return invalid();
   const actor=review.chainId==="4663"?(request.controller as {address?:unknown})?.address:request.launchWallet;
   if(typeof actor!=="string"||actor.toLowerCase()!==controller.toLowerCase())return invalid();
   const units=(request.verificationBundle as {compilationUnits?:unknown})?.compilationUnits;

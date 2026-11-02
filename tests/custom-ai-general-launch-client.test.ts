@@ -183,3 +183,15 @@ describe("compact journal browser contract", () => {
     expect(generalSubmissionUrl(record({ chainId }))).toBeUndefined();
   });
 });
+
+it("one submit action runs its automatic check without another prepare or a manual review action",async()=>{
+ const f=fixture();await f.load();
+ const accepted=completed();accepted.submission={...accepted.submission!,reviewId:conversation,reviewSubjectHash:projectHash};
+ const now=Date.now(),automatic={schemaVersion:"programmable.automatic-launch-status.v1",reviewId:conversation,state:"approved",manualReviewRequired:false,launchReady:false,
+  findings:[],timing:{sourceGeneratedAt:now-1000,startedAt:now-900,finishedAt:now,sourceToDecisionMs:1000,decisionWithinTarget:true}};
+ f.request.mockResolvedValueOnce({preparation:record()}).mockResolvedValueOnce({preparation:accepted}).mockResolvedValueOnce({automatic})
+  .mockResolvedValueOnce({status:{...currentWire(accepted),automatic}});
+ await f.client.submit(async()=>input);
+ expect(f.posts().map(call=>call[2].action)).toEqual(["prepare","create","check"]);
+ expect(f.state().automatic?.state).toBe("approved");expect(f.state().unconfirmedId).toBeUndefined();expect(f.state().error).toBe("");
+});

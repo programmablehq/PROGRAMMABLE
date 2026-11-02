@@ -30,6 +30,27 @@ function prior():GeneralProjectDraft{
  return {version:1,reply:"Saved",summary:"Counter",project,compilation:{version:1,projectHash:project.hash,artifactHash:`sha256:${"b".repeat(64)}`,compiled:true,compiler:GENERAL_PROJECT_COMPILER,diagnostics:[],contracts:[],verification:"not-run",launchReady:false},selection:selectExecutionRoute(intent,1),requirementCoverage:"proposed",launchReady:false};
 }
 
+it("turns a casual explicit launch request into a source-bound preparation action without rebuilding",async()=>{
+ const previous=prior(),view=generalProjectView(previous);
+ view.scenarios={scope:"isolated-declared-scenarios-v2",hash:`sha256:${"3".repeat(64)}`,planHash:`sha256:${"4".repeat(64)}`,passed:true,cases:5,failures:[]};
+ const call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:true,intentRequirements:[],requirements:[],reply:"Ich bereite den Launch vor."}));
+ const compiler=vi.fn(),value=await runCustomAI({...request,draftId:"saved-general-source-0001",messages:[{role:"user",content:"ok passt, lass den coin jetzt launchen"}]},undefined,
+  {call,compile:compiler},{generalProjectView:view,intent:previous.project.intent});
+ expect(value.nextAction).toEqual({kind:"prepare-launch",sourceId:"saved-general-source-0001"});
+ expect(value.intent).toEqual(previous.project.intent);expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledTimes(1);
+ expect(call.mock.calls[0][0].system).toContain("Questions, quotes, negation and requests to wait mean false");
+});
+it.each(["how do I launch this?","bitte noch nicht launchen","nice, explain the fees first"])("ordinary conversation does not produce a launch action: %s",async content=>{
+ const previous=prior(),view=generalProjectView(previous),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:false,intentRequirements:[],requirements:[]}));
+ const value=await runCustomAI({...request,draftId:"saved-general-source-0001",messages:[{role:"user",content}]},undefined,{call,compile:vi.fn()},
+  {generalProjectView:view,intent:previous.project.intent});expect(value.nextAction).toBeUndefined();
+});
+it("never prepares a launch when the source still lacks its successful behavior checks",async()=>{
+ const previous=prior(),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:true,intentRequirements:[],requirements:[]}));
+ const value=await runCustomAI({...request,draftId:"saved-general-source-0001"},undefined,{call,compile:vi.fn()},
+  {generalProject:previous});expect(value.nextAction).toBeUndefined();
+});
+
 describe("general source generation inside the owned chat job",()=>{
  it("binds all canonical general rules without treating a redundant fee subset as source coverage",async()=>{
   const call=vi.fn().mockResolvedValueOnce(plan({implementedRequirementIds:["old-fee-rule"],requirements:["Redundant prose"]}))

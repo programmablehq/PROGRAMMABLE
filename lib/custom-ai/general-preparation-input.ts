@@ -4,7 +4,7 @@ import type { GeneralLaunchSourceSelection } from "./general-launch-source.serve
 import { CustomAIError } from "./types";
 
 type PrepareAction={action:"prepare";id:string;selection:GeneralLaunchSourceSelection;nativeFundingWei?:string;controllerKind?:"eoa"};
-type ExchangeAction={action:"preflight"|"create";id:string};
+type ExchangeAction={action:"preflight"|"create"|"check";id:string};
 const invalid=():never=>{throw new CustomAIError("launch-input","Open the current saved source to prepare this launch.",400);};
 function object(value:unknown):Record<string,unknown>{
   if(!value||typeof value!=="object"||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return invalid();
@@ -16,7 +16,7 @@ const hash=(value:unknown)=>typeof value==="string"&&/^sha256:[a-f0-9]{64}$/u.te
 export function parseGeneralPreparationAction(raw:unknown):PrepareAction|ExchangeAction {
   const value=object(raw);
   if(!identifier(value.id))return invalid();
-  if(value.action==="preflight"||value.action==="create"){
+  if(value.action==="preflight"||value.action==="create"||value.action==="check"){
     if(Object.keys(value).sort().join()!=="action,id")return invalid();
     return {action:value.action,id:String(value.id)};
   }

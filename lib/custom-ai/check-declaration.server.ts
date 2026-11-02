@@ -8,6 +8,11 @@ import type {LaunchIntent} from "./launch-intent";
 import type {LaunchProductionContext} from "./launch-production";
 import {launchProductionGuidance} from "./production-guidance";
 import {CustomAIError} from "./types";
+import {ModelResponseError} from "./model-response";
+
+export class GeneralCheckDeclarationError extends CustomAIError {
+  constructor(readonly stage:"interface"|"scenarios",readonly reason:string){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
+}
 
 type Input={intent:LaunchIntent;chainId:BuilderChainId;evmVersion:"paris"|"cancun";
   production?:LaunchProductionContext;previousCompiler?:ContractProject["compiler"];
@@ -32,6 +37,9 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
         &&saved.production?.id===input.production?.id)return saved;
     }catch{/* A changed design needs a new declaration, never an inherited check. */}
   }
+  let stage:"interface"|"scenarios"="interface";
+  const reject=(reason:string):never=>{throw new GeneralCheckDeclarationError(stage,reason);};
+  try {
   const context=JSON.stringify({intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,...(input.production?{production:input.production}:{})});
   const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code.\n${generalCheckLogicalRules}\nUse compact-v1 rows for contracts and steps; all fields are validated after expansion.\n${generalCheckRowRules}\n${launchProductionGuidance(input.production)}`;
   const schema={type:"object",properties:{generalChecks:generalCheckFieldSchema},required:["generalChecks"],additionalProperties:false};
@@ -40,22 +48,33 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     messages:[{role:"user",content:"Declare only the interfaces and launch graph for this saved design."}]});
   input.signal?.throwIfAborted();
   const firstEnvelope=object(first.text),raw=firstEnvelope.generalChecks;
-  if(typeof raw!=="string")return invalid();
+  if(typeof raw!=="string")return reject("missing-interface");
   const proposal=object(raw,64000);
   // Existing integrations may provide a complete declaration. Accept it only
   // through the same complete validator; never label a partial plan complete.
   if(Array.isArray(proposal.steps)&&proposal.steps.length)return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(raw),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
-  if(proposal.format!=="compact-v1"||!Array.isArray(proposal.contracts)||proposal.contracts.length<1||proposal.contracts.length>16
-    ||!Array.isArray(proposal.allowedCalls)||Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return invalid();
+  if(proposal.format!==undefined&&proposal.format!=="compact-v1")return reject("interface-format");
+  if(!Array.isArray(proposal.contracts)||proposal.contracts.length<1||proposal.contracts.length>16)return reject("interface-contracts");
+  if(!Array.isArray(proposal.allowedCalls))return reject("interface-allowed-calls");
+  if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return reject("interface-fields");
   delete proposal.steps;
+  stage="scenarios";
   const second=await call({model:input.model,signal:input.signal,effort:"medium",maxTokens:12000,responseProfile:"contract",
     schema:{type:"object",properties:{steps:{type:"string",maxLength:64000}},required:["steps"],additionalProperties:false},
     system:`${shared}\nThis is the SCENARIO stage only. The interface and launch graph below are fixed. Return steps as a JSON-encoded array of compact-v1 step rows. Do not repeat contracts, world, deployment, policy descriptions or source code. Keep setup shared and assert multiple requirements on the same action where appropriate. Preserve every saved behavior, negative constraint, boundary and event. Use the smallest complete observable scenario set; getters alone never prove swaps. There is no generated implementation to copy expectations from. Untrusted design data: ${context}\nFixed interface: ${JSON.stringify(proposal)}`,
     messages:[{role:"user",content:"Declare only the independent scenario rows for the fixed interface and complete saved design."}]});
   input.signal?.throwIfAborted();
   const stepsEnvelope=object(second.text),rawSteps=stepsEnvelope.steps;
-  if(typeof rawSteps!=="string"||Buffer.byteLength(rawSteps)>64000)return invalid();
+  if(typeof rawSteps!=="string"||Buffer.byteLength(rawSteps)>64000)return reject("missing-scenarios");
   const steps:unknown=JSON.parse(rawSteps);
-  if(!Array.isArray(steps)||steps.length<1||steps.length>256)return invalid();
-  return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(JSON.stringify({...proposal,steps})),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
+  if(!Array.isArray(steps)||steps.length<1||steps.length>256)return reject("scenario-steps");
+  return createGeneralCheckBlueprint(decodeGeneralCheckDeclaration(JSON.stringify({...proposal,format:"compact-v1",steps})),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
+  }catch(error){
+    input.signal?.throwIfAborted();
+    if(error instanceof GeneralCheckDeclarationError)throw error;
+    if(error instanceof ModelResponseError)throw new GeneralCheckDeclarationError(stage,error.failure);
+    if(error instanceof TypeError||error instanceof SyntaxError||error instanceof CustomAIError&&error.code==="check-declaration")
+      throw new GeneralCheckDeclarationError(stage,error instanceof SyntaxError?"invalid-json":"invalid-declaration");
+    throw error;
+  }
 }

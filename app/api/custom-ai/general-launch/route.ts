@@ -5,6 +5,7 @@ import { createCustomAIBackendLaunchBridge } from "@/lib/custom-ai/backend-launc
 import { parseGeneralPreparationAction } from "@/lib/custom-ai/general-preparation-input";
 import { createGeneralPreparationService } from "@/lib/custom-ai/general-preparation.server";
 import { createGeneralLaunchStatusReader } from "@/lib/custom-ai/general-launch-status.server";
+import { createGeneralAutomaticService } from "@/lib/custom-ai/general-automatic.server";
 import { generalPreparationView } from "@/lib/custom-ai/general-preparation-store.server";
 import { readOwnedGeneralPackImage } from "@/lib/custom-ai/general-pack-image.server";
 import { productionAIStore } from "@/lib/custom-ai/store.server";
@@ -16,7 +17,8 @@ export const runtime="nodejs";
 export const maxDuration=120;
 const backendBridge=()=>createCustomAIBackendLaunchBridge({backendBaseUrl:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL!,
   websiteToken:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN!,assertionKey:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2!,fetchBackend:fetch});
-const currentStatus=createGeneralLaunchStatusReader({bridge:backendBridge});
+const currentStatus=createGeneralLaunchStatusReader({bridge:backendBridge,
+  automatic:(request,authority,saved)=>createGeneralAutomaticService({store:productionAIStore(),bridge:backendBridge}).read(request,authority,saved)});
 const {resolve:resolveObservedDependencies,observe:observeDependencies}=createProductionConstructorDependencyServices();
 const enabled=()=>{
   if(process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED!=="true")throw new CustomAIError("unavailable","General launch preparation is not available here yet.",404);
@@ -53,6 +55,10 @@ export async function POST(request:Request) {
     const store=productionAIStore();
     await store.consume(authority.owner,"general-launch-control",120);
     const input=parseGeneralPreparationAction(await readPreviewBody(request));
+    if(input.action==="check"){
+      const automatic=await createGeneralAutomaticService({store,bridge:backendBridge}).check(request,authority,input.id);
+      return Response.json({automatic},{headers:aiHeaders});
+    }
     const service=createGeneralPreparationService({store,image:(owner,image,signal)=>readOwnedGeneralPackImage(store,owner,image,signal),
       bridge:backendBridge,resolveObservedDependencies,observeDependencies});
     const preparation=input.action==="prepare"?await service.prepare(request,authority,input):await service.exchange(request,authority,input.id,input.action);

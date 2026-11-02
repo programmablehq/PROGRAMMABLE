@@ -90,9 +90,9 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   await box.fill("Only adjust the weather rule later.");await page.reload();
   await expect(box).toHaveValue("Only adjust the weather rule later.");
   await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
-  await page.getByRole("button",{name:"New coin",exact:true}).click();
+  await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
   await expect(page.getByText("Requested rules (10)",{exact:true})).toHaveCount(0);
-  await page.getByText("Options",{exact:true}).click();
+  await openChatMenu(page);
   await page.getByRole("button",{name:"Restore previous coin",exact:true}).click();
   await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
   await expect(box).toHaveValue("Only adjust the weather rule later.");
@@ -141,7 +141,7 @@ test("new coin is separate from clearing messages and restores the unsent edit",
   await box.fill("Build Rain with 3% fees"); await box.press("Enter");
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add coin image", exact: true })).toBeEnabled();
-  await page.getByText("Options", { exact: true }).click();
+  await openChatMenu(page);
   await page.getByRole("button", { name: "Clear messages", exact: true }).click();
   await expect(page.getByText("Keep shaping your coin", { exact: true })).toBeVisible();
   await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toBeVisible();
@@ -150,7 +150,7 @@ test("new coin is separate from clearing messages and restores the unsent edit",
   await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
   await expect(box).toHaveValue("");
   await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toHaveCount(0);
-  await page.getByText("Options", { exact: true }).click();
+  await openChatMenu(page);
   await page.getByRole("button", { name: "Restore previous coin", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
   await expect(box).toHaveValue("Only change the fee after five minutes");
@@ -319,3 +319,5 @@ test("keeps offline input editable while preventing a new generation", async ({p
   await expect(page.getByRole("button",{name:"Send message"})).toBeEnabled();
   await expect(box).toHaveValue("Keep this idea while offline");
 });
+
+async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat menu",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}
