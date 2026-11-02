@@ -20,6 +20,7 @@ Audited 2 November 2026. The design language is open-ended; the executable envir
 - Independent declarations receive the actual pinned protection interfaces before generation instead of guessing constructors and ABIs.
 - Model tasks have one routing manifest and per-task metrics. No provider fallback or budget increase was added.
 - Rejected plans retain private, owned, context-bound diagnostics. An explicit correction reuses the plan rather than repeating all preceding inference.
+- Long scenario declarations use at most three pages of 4,000 output tokens under the existing combined 12,000-token ceiling. The pages share one fixture and are validated as one complete plan. After an interruption, an explicit request can reuse completed pages only for the same intent, chain, compiler and production context. A partial plan cannot start source generation or grant launch readiness.
 - Validator feedback identifies a row, requirement or deployment mismatch while retaining the same enforcing checks.
 
 ## Limits that remain
