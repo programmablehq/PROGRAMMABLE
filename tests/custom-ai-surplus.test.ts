@@ -58,6 +58,32 @@ describe("Surplus model routing", () => {
     for(const text of ['{}\n```json\n{"count":2}\n```','```json\n{"count":"2"}\n```','```javascript\n{"count":2}\n```','```json\n{"count":2}',
       '<invoke>{"count":2}</invoke>{"count":3}','[]<invoke>{"count":2}</invoke>','<invoke>{"count":"2"}</invoke>'])expect(()=>format.decode(text)).toThrow();
   });
+  it("records the rejected source field without retaining its response",async()=>{
+    useSurplus();
+    const schema={type:"object",properties:{reply:{type:"string"},sourceFiles:{type:"array",minItems:1,items:{type:"string"}}},required:["reply","sourceFiles"],additionalProperties:false};
+    const body={reply:"private source description",sourceFiles:[]};
+    const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:JSON.stringify(body)},finish_reason:"stop"}],usage:{prompt_tokens:10,completion_tokens:20}}));
+    vi.stubGlobal("fetch",fetcher);
+    const failure=await callSurplus({...input,schema,structuredTransport:"json-object"}).catch(error=>error);
+    expect(failure).toMatchObject({failure:"invalid-schema",schemaFailure:{kind:"schema",issues:[{path:"/sourceFiles",keyword:"minItems",expected:1}]},usage:{inputTokens:10,outputTokens:20}});
+    expect(JSON.stringify(failure)).not.toContain("source description");
+    expect(failure.partialDeclaration).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("distinguishes malformed JSON and redacts model-chosen field names",()=>{
+    const schema={type:"object",properties:{sourceFiles:{type:"object",additionalProperties:{type:"integer"}}},required:["sourceFiles"]};
+    const format=prepareSurplusSchema(schema,true);
+    let malformed:unknown;try{format.decode('{"sourceFiles":');}catch(error){malformed=error;}
+    expect(malformed).toMatchObject({schemaFailure:{kind:"json",issues:[]}});
+    let invalid:unknown;try{format.decode(JSON.stringify({sourceFiles:{private_api_key_example:"secret content"}}));}catch(error){invalid=error;}
+    expect(invalid).toMatchObject({schemaFailure:{kind:"schema",issues:[{path:"/sourceFiles/*",keyword:"type"}]}});
+    expect(JSON.stringify((invalid as {schemaFailure:unknown}).schemaFailure)).not.toMatch(/private_api_key_example|secret content/);
+  });
+  it("identifies a missing known envelope field without response values",()=>{
+    const format=prepareSurplusSchema({type:"object",properties:{action:{type:"string"}},required:["action"],additionalProperties:false},true);
+    let failure:unknown;try{format.decode('{}');}catch(error){failure=error;}
+    expect(failure).toMatchObject({schemaFailure:{kind:"schema",issues:[{path:"/action",keyword:"required"}]}});
+  });
   it("requires both a complete streamed result and the terminal marker", async () => {
     useSurplus();const onText=vi.fn();
     const events=[{choices:[{index:0,delta:{content:'{"reply":"OK"}'},finish_reason:null}]},{choices:[{index:0,delta:{},finish_reason:"stop"}],usage:{prompt_tokens:3,completion_tokens:4}}];

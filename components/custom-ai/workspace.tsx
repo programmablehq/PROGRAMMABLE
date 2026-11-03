@@ -36,6 +36,7 @@ import { builderChain } from "@/lib/custom-ai/execution-routing";
 import { CHAT_MESSAGE_LIMIT, pastedMessageFits, workspaceState } from "@/lib/custom-ai/workspace-state";
 import { passiveRefresh } from "@/lib/custom-ai/passive-refresh";
 import { SessionLoading } from "./session-loading";
+import { CONTINUE_SAVED_BUILD } from "@/lib/custom-ai/build-command";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
@@ -578,7 +579,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         {!localPreview&&owner!=="signed-out"&&<DraftVersions account={owner} conversationId={conversationId} headers={headers} disabled={busy||switchingCoin||launchLocked||!restored||saveFailed||Boolean(conflict)} currentDraftId={draftId} onRestore={restoreVersion}/>}
         {!localPreview&&owner!=="signed-out"&&<RequestInsights headers={headers} refreshKey={metricsRevision}/>}
         {usage && <details className={styles.toolSection}><summary>Usage</summary><div>
-          <p>{usage.hourly.remaining} of {usage.hourly.limit} credits this hour · {usage.daily.remaining} of {usage.daily.limit} today</p>
+          <p>{usage.hourly.remaining} of {usage.hourly.limit} credits left this hour · {usage.daily.remaining} of {usage.daily.limit} left today</p>
           <p>Replies and rebuilding saved source use 1 credit. AI builds and live research use 5. An interrupted AI attempt may use up to 5.</p>
           <p>Hourly reset: {new Date(usage.hourly.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Daily reset: {new Date(usage.daily.resetsAt).toLocaleString()}.</p>
           {usage.resumesAt > 0 && <p>Available again at {new Date(usage.resumesAt).toLocaleString()}.</p>}
@@ -635,7 +636,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       {buildIssue&&!busy&&<section className={styles.buildRecovery} aria-label="Continue saved build">
         <p>Your rules are saved. Continue this build from its saved work.</p>
         <button type="button" className={styles.textButton} disabled={activity.blocked||Boolean(input.trim())}
-          onClick={()=>void send("Build and verify the current saved design. Keep every saved rule unchanged. Do not launch, send a transaction or prepare a wallet request.")}>Continue building</button>
+          onClick={()=>void send(CONTINUE_SAVED_BUILD)}>Continue building</button>
         {input.trim()&&<small>Send or clear your draft message first.</small>}
       </section>}
 
