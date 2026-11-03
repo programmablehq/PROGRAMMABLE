@@ -13,10 +13,17 @@ describe("exact saved-source edits",()=>{
   [{path:"../Hook.sol",before:null,after:"contract Hook {}"}],
   [{path:"Hook.sol",before:null,after:"contract Hook {}"}],
   [{path:"Hook.sol",before:"",after:"x"}],
- ])("rejects a non-exact or unsafe edit atomically",changes=>expect(()=>applySourceChanges(previous,changes,new Set())).toThrow());
+  [{path:"Hook.sol",before:"uint fee = 3;",after:"uint fee = 3;"}],
+  [{path:"Hook.sol",before:"uint fee = 3;",after:"uint fee = 5;"},{path:"Hook.sol",before:"uint fee = 5;",after:"uint fee = 3;"}],
+ ].map(changes=>({changes})))("rejects a non-exact or unsafe edit atomically",({changes})=>expect(()=>applySourceChanges(previous,changes,new Set())).toThrow());
  it("rejects ambiguous excerpts and immutable dependencies",()=>{
   expect(()=>applySourceChanges({"A.sol":{content:"x x"}},[{path:"A.sol",before:"x",after:"y"}],new Set())).toThrow();
   expect(()=>applySourceChanges(previous,[{path:"Token.sol",before:"Token",after:"Other"}],new Set(["Token.sol"]))).toThrow();
+ });
+ it("ignores an unchanged context excerpt when the batch contains a real edit",()=>{
+  const changes=[{path:"Hook.sol",before:"function keep() external {}",after:"function keep() external {}"},
+   {path:"Hook.sol",before:"uint fee = 3;",after:"uint fee = 5;"}];
+  expect(applySourceChanges(previous,changes,new Set())["Hook.sol"].content).toContain("uint fee = 5;");
  });
  it("reassembles a large existing source from a small model response",async()=>{
   const big={"Hook.sol":{content:"// original context\n".repeat(3000)+previous["Hook.sol"].content}};
@@ -24,5 +31,11 @@ describe("exact saved-source edits",()=>{
   const result=await writeSourceEdits({request:{model:"fixture",system:"saved source",messages:[{role:"user",content:"Set fee to five"}],schema:{},maxTokens:16000},previous:big,immutable:new Set()},call);
   expect(call).toHaveBeenCalledOnce();expect(result.outputTokens).toBe(80);
   expect(JSON.parse(result.text).sourceFiles[0].content).toBe(big["Hook.sol"].content.replace("uint fee = 3;","uint fee = 5;"));
+ });
+ it("requires an actual edit for a changed intent but reuses an explicitly unchanged design",async()=>{
+  const call=vi.fn(async()=>({text:JSON.stringify({reply:"Already current.",summary:"Existing source retained",changes:[]}),inputTokens:1,outputTokens:10}));
+  const input={request:{model:"fixture",system:"saved source",messages:[{role:"user" as const,content:"Use the saved design"}],schema:{},maxTokens:16000},previous,immutable:new Set<string>()};
+  await expect(writeSourceEdits({...input,requireChange:true},call)).rejects.toMatchObject({code:"project-response"});
+  expect(JSON.parse((await writeSourceEdits(input,call)).text).sourceFiles[0].content).toBe(previous["Hook.sol"].content);
  });
 });

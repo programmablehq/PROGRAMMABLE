@@ -60,6 +60,22 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("keeps source-edit stages private, ordered and separate from completed projects",async()=>{
+    const scope={id:"00000000-0000-4000-8000-000000000010",account:"0x1000000000000000000000000000000000000001",revision:0};
+    await store.conversations.create("alice",scope.account,scope.id);
+    const attempt=await store.reserve("alice",{id,intent:"build",conversation:scope,messages:[{role:"user",content:"Build"}]});
+    const contextHash=`sha256:${"e".repeat(64)}` as const;
+    const progress={version:1 as const,contextHash,files:{},reply:"",summary:"",editing:{sources:{"Part.sol":{content:"contract Part {}"}},
+      steps:[{path:"Part.sol",instruction:"Implement state"},{path:"Part.sol",instruction:"Finish integration"}],next:0}};
+    await store.projects.saveSourceProgress("alice",id,attempt.lease!,progress);
+    const advanced={...progress,editing:{...progress.editing,next:1,sources:{"Part.sol":{content:"contract Part {uint value;}"}}}};
+    await store.projects.saveSourceProgress("alice",id,attempt.lease!,advanced);
+    await expect(store.projects.saveSourceProgress("alice",id,attempt.lease!,progress)).rejects.toMatchObject({code:"project-conflict"});
+    expect(await store.projects.read("alice",id)).toBeNull();
+    await store.finish("alice",id,attempt.lease!,undefined,"incomplete");
+    expect(await store.projects.readSourceProgress("alice",scope,contextHash)).toEqual(advanced);
+    expect(await store.projects.readSourceProgress("bob",scope,contextHash)).toBeUndefined();
+  });
   it("keeps unfinished source files private, append-only and bound to the live job lease",async()=>{
     const scope={id:"00000000-0000-4000-8000-000000000010",account:"0x1000000000000000000000000000000000000001",revision:0};
     await store.conversations.create("alice",scope.account,scope.id);

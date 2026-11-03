@@ -66,6 +66,11 @@ describe("explicitly corrected deployment data", () => {
     const next = { ...deployment, targets: [{ ...deployment.targets[0], argumentsJson: '[{"input":"name"}]' }] };
     expect(JSON.parse(recoverCorrectedDeployment(correction(next), graph)!)).toEqual({ deployment: next });
   });
+  it("accepts an explicitly correcting replacement without accepting or merging its draft",()=>{
+    const next={...deployment,targets:[{...deployment.targets[0],initializerFunction:"initialize",initializerValue:"funding"}]};
+    const captured=`${JSON.stringify({deployment})}\nWait — the initializer target must declare its initialize call; correcting:\n${JSON.stringify({deployment:next})}`;
+    expect(JSON.parse(recoverCorrectedDeployment(captured,graph)!)).toEqual({deployment:next});
+  });
   it("rejects ambiguous, incomplete, oversized and foreign graph data", () => {
     const invalid = [correction().replace("The corrected object follows.", "Another object."),
       correction().slice(0, -1), correction() + JSON.stringify({ deployment }),

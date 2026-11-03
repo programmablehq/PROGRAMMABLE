@@ -14,9 +14,10 @@ export function sourceImplementationContext(input: {
   dependencies: ContractProject["sources"];
   references: readonly Reference[];
   construction: readonly { source: string; initializationSources: string[] }[];
+  includeTemplateBodies?: boolean;
 }, path: string, completed: ContractProject["sources"]) {
   const { blueprint, dependencies } = input;
-  const active = blueprint.scenarios.contracts.filter(contract => contract.source === path);
+  const active = [...blueprint.scenarios.contracts,...(blueprint.scenarios.constructorChildren??[])].filter(contract => contract.source === path);
   if (!active.length) throw new TypeError("Source path is outside the frozen contract graph.");
   const signatures = new Set(active.flatMap(contract => contract.functions));
   const ranked = input.references.map(reference => ({ source: reference.source,
@@ -38,9 +39,9 @@ export function sourceImplementationContext(input: {
     },
     activeSource: path,
     dependencySources: Object.fromEntries(Object.entries(visibleDependencies).map(([name, file]) => [name, {
-      content: templates.has(name) ? compactDependencyCode(file.content) : libraryDeclarationReference(file.content),
+      content: templates.has(name) && input.includeTemplateBodies!==false ? compactDependencyCode(file.content) : libraryDeclarationReference(file.content),
     }])),
-    dependencySourceView: { format: "component-declarations-and-template-v1", completeTemplatePaths: [...templates] },
+    dependencySourceView: { format: "component-declarations-and-template-v1", completeTemplatePaths: input.includeTemplateBodies===false?[]:[...templates] },
     availableImportPaths: Object.keys(dependencies),
     initializationSources: input.construction.filter(value => !templates.has(value.source) && value.initializationSources.length)
       .map(value => ({ source: value.source, functions: value.initializationSources })),

@@ -1,12 +1,42 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve, relative } from "node:path";
+import { createRequire } from "node:module";
 import { isGeneralConstructorWorker, GENERAL_BEHAVIOR_WORKERS } from "./classify-verify-paths.mjs";
 
 const root = process.cwd();
+let typescript;
+/** Type-only imports are checked by the production TypeScript build. They do
+ * not add runtime test dependencies. Fall back to conservative scanning when
+ * the optional parser is unavailable or the source does not parse. */
+export function runtimeDependencySource(source,file) {
+  if(!/\b(?:import|export)\s/u.test(source)||!source.includes("type"))return source;
+  try{
+    typescript??=createRequire(resolve("package.json"))("typescript");
+    const ts=typescript,tree=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true);
+    if(tree.parseDiagnostics.length)return source;
+    const spans=[];
+    const visit=node=>{
+      if(ts.isImportDeclaration(node)){
+        const clause=node.importClause,bindings=clause?.namedBindings;
+        if(clause?.isTypeOnly||clause&&!clause.name&&bindings&&ts.isNamedImports(bindings)
+          &&bindings.elements.length&&bindings.elements.every(element=>element.isTypeOnly))spans.push([node.getStart(tree),node.end]);
+      }else if(ts.isExportDeclaration(node)){
+        const clause=node.exportClause;
+        if(node.isTypeOnly||clause&&ts.isNamedExports(clause)&&clause.elements.length
+          &&clause.elements.every(element=>element.isTypeOnly))spans.push([node.getStart(tree),node.end]);
+      }else if(ts.isImportTypeNode(node))spans.push([node.getStart(tree),node.end]);
+      ts.forEachChild(node,visit);
+    };
+    visit(tree);
+    for(const [start,end]of spans.sort((a,b)=>b[0]-a[0]))source=source.slice(0,start)+" ".repeat(end-start)+source.slice(end);
+    return source;
+  }catch{return source;}
+}
 export const interfaceVerificationPaths = new Set([
   "scripts/ci/interface-plan.mjs", "scripts/ci/interface-plan.test.mjs",
   "scripts/ci/verify-interface.mjs", "scripts/ci/classify-verify-paths.test.mjs",
+  "scripts/ci/classify-verify-paths.mjs",
   "scripts/ci/README.md",
 ]);
 const globalInput = /^(?:package(?:-lock)?\.json|[^/]*config\.[^/]+|tsconfig[^/]*\.json|\.github\/|scripts\/ci\/|lib\/vendor\/)/u;
@@ -71,7 +101,7 @@ export function relatedInputs(paths, files, read = file => readFileSync(file, "u
   const inputs = new Set(paths);
   const readers = [];
   for (const file of files.filter(path => /\.[cm]?[jt]sx?$/u.test(path))) {
-    const source = read(file);
+    const source = runtimeDependencySource(read(file),file);
     const readsFiles = /\b(?:readFileSync|readFile|readdirSync|readdir|globSync)\b/u.test(source);
     const references = new Set();
     for (const match of source.matchAll(/["'`]([^"'`\n]+)["'`]/gu)) {

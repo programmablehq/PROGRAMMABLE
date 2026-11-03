@@ -57,7 +57,7 @@ export function recoverCorrectedDeployment(response: string, graph: Record<strin
   if (replacementStart < 0) return;
   const explanation = text.slice(draftEnd, replacementStart);
   if (explanation.length > 2000 || /[{}\[\]]|```/u.test(explanation)
-    || !/\b(?:corrected|correction|revised|replacement)\b/iu.test(explanation)) return;
+    || !/\b(?:corrected|correcting|correction|revised|replacement)\b/iu.test(explanation)) return;
   const replacementEnd = objectEnd(replacementStart);
   if (replacementEnd !== text.length) return;
   try {

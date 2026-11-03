@@ -50,7 +50,8 @@ describe("protocol knowledge and model routing",()=>{
     const models={chat:"provider/planner",build:"provider/builder",escalation:"provider/repair"};
     expect(modelTask("planning",models)).toMatchObject({model:models.chat,structuredTransport:"json-object"});
     expect(modelTask("declaration-correction",models)).toMatchObject({model:models.build,maxTokens:8000});
-    expect(modelTask("source-audit",models)).toMatchObject({model:models.build,maxTokens:3500});
+    expect(modelTask("source-audit",models)).toMatchObject({model:models.escalation,maxTokens:3500});
+    expect(modelTask("scenarios",models)).toMatchObject({model:models.escalation,maxTokens:4000});
     expect(modelTask("source-implementation",models)).toMatchObject({model:models.build,maxTokens:16000,structuredTransport:"json-object"});
   });
 });

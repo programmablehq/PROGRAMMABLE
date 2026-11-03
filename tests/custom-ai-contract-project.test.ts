@@ -35,6 +35,17 @@ describe("bound Custom AI contract projects", () => {
     const first = createContractProject(original, intent, 1), second = createContractProject(reversed, intent, 1);
     expect(first.hash).toBe(second.hash); expect(projectCompilerInput(first)).toEqual(projectCompilerInput(second));
   });
+  it("accepts a protocol dependency closure beyond 48 files without relaxing byte limits", () => {
+    const value=input();
+    for(let i=0;i<127;i++)value.sources[`lib/Dependency${i}.sol`]={content:`pragma solidity 0.8.26; interface Dependency${i} {}`};
+    const project=createContractProject(value,intent,8453);
+    expect(Object.keys(projectCompilerInput(project).sources)).toHaveLength(128);
+    value.sources["lib/Overflow.sol"]={content:"pragma solidity 0.8.26; interface Overflow {}"};
+    expect(()=>createContractProject(value,intent,8453)).toThrow();
+    const oversized=input();
+    for(let i=0;i<5;i++)oversized.sources[`lib/Large${i}.sol`]={content:"x".repeat(80_000)};
+    expect(()=>createContractProject(oversized,intent,8453)).toThrow();
+  });
   it("rejects a changed source, chain or intent after hashing", () => {
     for (const change of [(p: ReturnType<typeof createContractProject>) => { p.sources["GeneralHook.sol"].content += "\n// changed"; },
       (p: ReturnType<typeof createContractProject>) => { p.chainId = 999; },

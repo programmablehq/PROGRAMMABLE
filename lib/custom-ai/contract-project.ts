@@ -6,7 +6,9 @@ import { checkedGeneralDeploymentBlueprint, type GeneralDeploymentBlueprint } fr
 import { GENERAL_PROJECT_COMPILER, approvedProjectCompiler, createProjectCompiler, projectCompilerProfile, VIAIR_200_REMAPPINGS, type ProjectCompiler } from "./compiler-profile";
 
 export { GENERAL_PROJECT_COMPILER };
-export const GENERAL_PROJECT_LIMITS = { files: 48, sourceBytes: 384_000, fileBytes: 96_000, entrypoints: 16 } as const;
+// The count includes the complete transitive library closure. Keep the byte
+// and entrypoint ceilings while allowing normal protocol libraries to fit.
+export const GENERAL_PROJECT_LIMITS = { files: 128, sourceBytes: 384_000, fileBytes: 96_000, entrypoints: 16 } as const;
 export type ProjectEntrypoint = { source: string; contract: string; role: "token" | "hook" | "liquidity" | "auxiliary" };
 export type ContractProject = {
   version: 1;

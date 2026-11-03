@@ -3,7 +3,9 @@ vi.mock("server-only", () => ({}));
 import ethKit from "../packages/launch/contracts/launch-protection-v1/standard-json.json";
 import baseKit from "../packages/launch/contracts/base-launch-protection-v1/standard-json.json";
 import hypeKit from "../packages/launch/contracts/hyperevm-launch-protection-v1/standard-json.json";
-import { canonicalGeneralSourceCatalog } from "../lib/custom-ai/canonical-dependencies.server";
+import implementationLibraries from "../lib/custom-ai/implementation-libraries.json";
+import sourcePins from "../contracts/dependencies/source-pins.json";
+import { canonicalGeneralSourceCatalog,canonicalImplementationLibraries } from "../lib/custom-ai/canonical-dependencies.server";
 import { dependencySourceContext } from "../lib/custom-ai/dependency-source-context";
 import { createContractProject } from "../lib/custom-ai/contract-project";
 import { createProjectCompiler } from "../lib/custom-ai/compiler-profile";
@@ -25,13 +27,19 @@ const intent: LaunchIntent = { version: 1, id: "canonical-source-catalog", revis
 describe("selected canonical protection source context", () => {
   it.each(profiles)("supplies the complete original chain $chain kit in a bounded model view", ({ chain, kit, path }) => {
     const sources = canonicalGeneralSourceCatalog(undefined, chain);
-    expect(sources).toEqual(kit.sources); expect(Object.keys(sources)).toHaveLength(41);
+    expect(sources).toEqual(kit.sources);expect(Object.keys(sources)).toHaveLength(41);
+    for(const [name,source] of Object.entries(kit.sources))expect(sources[name]).toEqual(source);
     expect(sources[path]).toEqual(kit.sources[path as keyof typeof kit.sources]);
     const context = dependencySourceContext(sources);
     expect(JSON.stringify(context.modelSources).length).toBeLessThan(120_000);
     expect(context.complete).toEqual(sources);
     sources[path].content = "changed by a caller";
     expect(canonicalGeneralSourceCatalog(undefined, chain)[path]).toEqual(kit.sources[path as keyof typeof kit.sources]);
+  });
+  it("uses the existing pinned Solady and v4 revisions for implementation helpers",()=>{
+    expect(implementationLibraries.pins.solady).toBe(sourcePins.dependencies.find(item=>item.name==="Solady")?.commit);
+    expect(implementationLibraries.pins.v4Core).toBe(sourcePins.dependencies.find(item=>item.name==="Uniswap v4 Core")?.commit);
+    expect(canonicalImplementationLibraries()).toEqual(implementationLibraries.sources);
   });
   it("keeps an earlier user-edited protection source editable and rejects an unsupported network", () => {
     const path = profiles[0].path;

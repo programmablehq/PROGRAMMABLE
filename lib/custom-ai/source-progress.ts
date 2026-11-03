@@ -7,6 +7,7 @@ export type SourceProgress = {
   files: Record<string, { content: string }>;
   reply: string; summary: string;
   partial?: { path: string; content: string; parts: number };
+  editing?: { sources: ContractProject["sources"]; steps: {path:string;instruction:string}[]; next: number };
 };
 
 /** Progress has no compiled artifacts or launch authority. Only a complete
@@ -24,7 +25,7 @@ export function checkedSourceProgress(value: unknown, contextHash?: string, allo
   const v = value as SourceProgress;
   const validPath=(path:unknown):path is string=>typeof path==="string"&&/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_-]+\.sol$/.test(path)
     &&!path.split('/').some(part=>part==='.'||part==='..')&&(!allowedPaths||allowedPaths.includes(path));
-  if (!v || Object.keys(v).some(key=>!["contextHash","files","partial","reply","summary","version"].includes(key)) || v.version !== 1
+  if (!v || Object.keys(v).some(key=>!["contextHash","files","partial","editing","reply","summary","version"].includes(key)) || v.version !== 1
     || !/^sha256:[a-f0-9]{64}$/.test(v.contextHash) || contextHash && v.contextHash !== contextHash
     || typeof v.reply !== "string" || v.reply.length > 3000 || typeof v.summary !== "string" || v.summary.length > 360
     || !v.files || typeof v.files !== "object" || Array.isArray(v.files)
@@ -37,13 +38,41 @@ export function checkedSourceProgress(value: unknown, contextHash?: string, allo
       ||!validPath(v.partial.path)||Object.hasOwn(v.files,v.partial.path)||typeof v.partial.content!=="string"||!v.partial.content.trim()
       ||new TextEncoder().encode(v.partial.content).length>96_000||!Number.isSafeInteger(v.partial.parts)||v.partial.parts<1||v.partial.parts>24))
     throw new TypeError("Invalid saved source progress.");
+  if(v.editing!==undefined){
+    const edit=v.editing;
+    if(!edit||typeof edit!=="object"||v.partial||Object.keys(edit).sort().join()!=="next,sources,steps"||!edit.sources||Array.isArray(edit.sources)
+      ||Object.keys(edit.sources).length<1||Object.keys(edit.sources).length+Object.keys(v.files).length>16
+      ||Object.entries(edit.sources).some(([path,file])=>!validPath(path)||Object.hasOwn(v.files,path)||!file
+        ||Object.keys(file).join()!=="content"||typeof file.content!=="string"||!file.content.trim()
+        ||new TextEncoder().encode(file.content).length>96_000)
+      ||!Array.isArray(edit.steps)||!edit.steps.length||edit.steps.length>12
+      ||edit.steps.some(step=>!step||Object.keys(step).sort().join()!=="instruction,path"||!Object.hasOwn(edit.sources,step.path)
+        ||typeof step.instruction!=="string"||!step.instruction.trim()||step.instruction.length>4000)
+      ||Object.keys(edit.sources).some(path=>!edit.steps.some(step=>step.path===path))
+      ||!Number.isSafeInteger(edit.next)||edit.next<0||edit.next>edit.steps.length)
+      throw new TypeError("Invalid source edit progress.");
+  }
   return structuredClone(v);
 }
 
-/** A saved prefix is private build work, never an executable source file.
- * Its bytes can only be appended or promoted unchanged into a complete file. */
+/** A saved prefix is append-only. Editing drafts advance one frozen plan step
+ * at a time; only the final integration step may edit multiple draft files.
+ * Neither form is a complete executable source or launch authority. */
 export function sourceProgressExtends(previous:SourceProgress,next:SourceProgress):boolean {
   if(previous.contextHash!==next.contextHash||Object.entries(previous.files).some(([path,file])=>next.files[path]?.content!==file.content))return false;
+  if(previous.editing){
+    if(next.partial)return false;
+    if(!next.editing)return previous.editing.next===previous.editing.steps.length
+      &&Object.entries(previous.editing.sources).every(([path,file])=>next.files[path]?.content===file.content);
+    const before=previous.editing,after=next.editing;
+    if(JSON.stringify(before.steps)!==JSON.stringify(after.steps)||after.next!==before.next+1)return false;
+    const active=before.steps[before.next]?.path;
+    const integrating=before.next===before.steps.length-1;
+    return Object.keys(before.sources).length===Object.keys(after.sources).length
+      &&Object.entries(before.sources).every(([path,file])=>Object.hasOwn(after.sources,path)
+        &&(integrating||path===active||after.sources[path].content===file.content));
+  }
+  if(next.editing)return !previous.partial;
   const part=previous.partial;
   if(!part)return true;
   if(next.files[part.path])return next.files[part.path].content.startsWith(part.content);
