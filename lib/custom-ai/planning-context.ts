@@ -5,6 +5,15 @@ import type {GeneralProjectDraft} from "./general-builder.server";
 import {generalProjectView,type GeneralProjectView} from "./project-view";
 import type {ContractProject} from "./contract-project";
 import {dependencySourceContext} from "./dependency-source-context";
+import type {LaunchProductionContext} from "./launch-production";
+
+/** Policy and known infrastructure are relevant to a conversation. The full
+ * execution graph is retained by the server and supplied to source planning. */
+export function planningProductionContext(context:LaunchProductionContext) {
+  const {graphProfile,...planning}=context;
+  void graphProfile;
+  return planning;
+}
 
 /** Source inspection is opt-in for checked drafts. Older drafts without a
  * verified behavior record retain their full source context. This changes

@@ -48,4 +48,19 @@ describe("lossless scenario page transport and recovery",()=>{
     const result=await declareGeneralChecks({...input,rejected},call);
     expect(call).not.toHaveBeenCalled();expect(result.scenarios.steps.map(step=>step.id)).toEqual(["zero","increment","one"]);
   });
+  it("recovers the first complete page from a rejected seller envelope before requesting later rows",async()=>{
+    const rows=[
+      ["zero","main:count()","[]","trader-a",0,"0",true,["counter"],{status:"success",returnsJson:'["0"]',swapFeePpm:null,events:[]}],
+      ["increment","main:increment()","[]","trader-a",0,"0",false,[],{status:"success",returnsJson:null,swapFeePpm:null,events:[]}],
+    ];
+    const response=`<invoke name="structured_output"><parameter name="steps">${JSON.stringify(rows)}</parameter><parameter name="complete">false</parameter></invoke>`;
+    const rejected:CheckDiagnostic={version:1,contextHash:checkContextHash(input),failures:[
+      {stage:"scenarios",message:"Seller returned its parameter envelope",declaration:null,response},
+    ],progress:{interface:JSON.stringify(declaration),steps:[]}};
+    const call=vi.fn(async()=>({text:JSON.stringify({steps:[row],complete:true}),inputTokens:1,outputTokens:1}));
+    const result=await declareGeneralChecks({...input,rejected},call);
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call.mock.calls[0]).toBeDefined();
+    expect(result.scenarios.steps.map(step=>step.id)).toEqual(["zero","increment","one"]);
+  });
 });

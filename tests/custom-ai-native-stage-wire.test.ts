@@ -96,6 +96,8 @@ describe("native independent declaration transport",()=>{
     expect(nativeScenarioRows([{...steps[1],argumentsJson:""}])).toEqual(nativeScenarioRows([steps[1]]));
     expect(()=>nativeScenarioRows([{...steps[1],signature:"balanceOf(address)",argumentsJson:""}])).toThrow();
     expect(()=>nativeScenarioRows([{...steps[1],signature:"event Counted(uint256 count)"}])).toThrow();
+    expect(nativeScenarioRows([{...steps[0],expect:{...steps[0].expect,returnsJson:"null"}}])).toEqual(nativeScenarioRows([steps[0]]));
+    expect(()=>createGeneralCheckBlueprint(nativeFullDeclaration({...graph,...interfaces,steps:[{...steps[1],expect:{...steps[1].expect,returnsJson:"null"}}]}),intent,8453,"cancun")).toThrow();
     const values='[{"pool":true},["true","-1000","4295128740"],"0x"]';
     const extraEscaped=JSON.stringify(values).slice(1,-1);
     const restored=nativeScenarioRows([{...steps[0],argumentsJson:extraEscaped}]) as {arguments:unknown[]}[];
@@ -117,6 +119,10 @@ describe("native independent declaration transport",()=>{
     const {contract,signature,...step}=steps[0],wire=[step.id,`${contract}:${signature}`,step.argumentsJson,step.from,step.afterSeconds,step.value,step.read,step.requirementIds,step.expect];
     expect(nativeScenarioRows([wire])).toEqual(nativeScenarioRows([steps[0]]));
     expect(JSON.parse(transport.decode(JSON.stringify({steps:[wire],complete:false})))).toEqual({steps:[wire],complete:false});
+    const envelope=`<invoke name="structured_output"><parameter name="steps">${JSON.stringify([wire])}</parameter><parameter name="complete">false</parameter></invoke>`;
+    const decoded=JSON.parse(transport.decode(envelope));
+    expect(decoded).toEqual({steps:[wire],complete:false});
+    expect(nativeScenarioRows(decoded.steps)).toEqual(nativeScenarioRows([steps[0]]));
     expect(()=>transport.decode(JSON.stringify({steps:[[wire[0],"main:swapCount()",...wire.slice(2)]],complete:false}))).toThrow();
     const tupleSchema=schema.properties.steps.items.anyOf[0] as {items:readonly {enum?:string[]}[]};
     expect(tupleSchema.items[1].enum).toContain("v4-router:nativeBalance(address)");

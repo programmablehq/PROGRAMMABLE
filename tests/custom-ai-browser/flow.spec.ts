@@ -331,4 +331,4 @@ test("keeps offline input editable while preventing a new generation", async ({p
   await expect(box).toHaveValue("Keep this idea while offline");
 });
 
-async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat menu",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}
+async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat options",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}

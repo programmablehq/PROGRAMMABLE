@@ -28,6 +28,24 @@ test('the launch remains visible while the saved rules start collapsed',async({p
  await expect(page.getByRole('list',{name:'Requested rules'})).toBeVisible();expect(f.posts.filter(p=>p.action==='create')).toHaveLength(0);
 });
 
+test('an unbuilt chat keeps another coin in history without showing its launch actions or polling it',async({page})=>{
+ const f=await fixture(page);await page.goto(origin);
+ await page.getByRole('button',{name:'Launch coin',exact:true}).click();
+ await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
+ const writes=f.posts.length;
+ await page.clock.install();
+ await page.goto(origin+'/?unbuilt&chat=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+ await expect(page.getByText('Earlier submission',{exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Launch submission',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Check current status',exact:true})).toHaveCount(0);
+ const reads=f.statusReads;
+ await page.clock.runFor(120000);
+ expect(f.statusReads).toBe(reads);expect(f.posts).toHaveLength(writes);
+ await page.getByText('Earlier submission',{exact:true}).click();
+ await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();
+ expect(f.errors).toEqual([]);
+});
+
 test('Plan source verification remains confirmed and stops automatic status reads',async({page})=>{
  const f=await fixture(page);f.currentStatus='source_verified';await page.clock.install();await page.goto(origin+'/?chain=4663');
  await page.getByRole('button',{name:'Launch coin',exact:true}).click();

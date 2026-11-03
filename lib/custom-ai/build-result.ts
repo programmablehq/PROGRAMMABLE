@@ -8,6 +8,20 @@ export type BuildReplyLocale = typeof BUILD_REPLY_LOCALES[number];
 export function buildReplyLocale(value: unknown): BuildReplyLocale {
   return BUILD_REPLY_LOCALES.includes(value as BuildReplyLocale) ? value as BuildReplyLocale : "en";
 }
+
+const unfinished: Record<BuildReplyLocale, readonly [string,string]> = {
+  en: ["Your design is saved. The checks stopped before the code was ready. Continue below and I’ll pick up the saved work.", "Your design and the code so far are saved. Continue below and I’ll finish from here."],
+  de: ["Dein Entwurf ist gespeichert. Die Prüfung ist hängen geblieben, bevor der Code fertig war. Unten kannst du genau hier weitermachen.", "Dein Entwurf und der bisherige Code sind gespeichert. Unten kannst du genau hier weiterbauen."],
+  fr: ["Ton projet est enregistré. La vérification s’est arrêtée avant la fin du code. Continue ci-dessous pour reprendre le travail enregistré.", "Ton projet et le code déjà écrit sont enregistrés. Continue ci-dessous pour reprendre ici."],
+  es: ["Tu diseño está guardado. La revisión se detuvo antes de terminar el código. Continúa abajo para retomar el trabajo guardado.", "Tu diseño y el código escrito están guardados. Continúa abajo para seguir desde aquí."],
+  it: ["Il progetto è salvato. La verifica si è fermata prima che il codice fosse pronto. Continua qui sotto per riprendere il lavoro salvato.", "Il progetto e il codice scritto finora sono salvati. Continua qui sotto per riprendere da qui."],
+  pt: ["O teu projeto está guardado. A verificação parou antes de o código estar pronto. Continua abaixo para retomar o trabalho guardado.", "O teu projeto e o código já escrito estão guardados. Continua abaixo para retomar daqui."],
+  nl: ["Je ontwerp is opgeslagen. De controle stopte voordat de code klaar was. Ga hieronder verder met het opgeslagen werk.", "Je ontwerp en de bestaande code zijn opgeslagen. Ga hieronder verder waar we gebleven waren."],
+  tr: ["Tasarımın kaydedildi. Kod tamamlanmadan kontrol durdu. Kaydedilen çalışmaya aşağıdan devam edebilirsin.", "Tasarımın ve yazılan kod kaydedildi. Aşağıdan kaldığın yerden devam edebilirsin."],
+};
+export function unfinishedBuildReply(stage:"checks"|"source",locale:unknown):string {
+  return unfinished[buildReplyLocale(locale)][stage==="checks"?0:1];
+}
 // Translating the presentation never changes the observed result or adds a
 // model call. The original finding remains exact when a correction is needed.
 const copy: Record<BuildReplyLocale, readonly string[]> = {

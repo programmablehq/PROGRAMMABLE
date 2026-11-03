@@ -85,3 +85,7 @@ On a phone, the chat comes first. Open the coin row to change its details. Websi
 For larger source projects, the builder saves completed files and private work in progress. If a build stops, **Continue building** uses the same saved rules and resumes from the saved section. Only complete source files can reach compilation or submission. A request to strengthen the independent behavior checks carries your requested examples into a new check plan instead of reusing the old one.
 
 Changes to an existing project keep the rest of its source intact. The builder applies exact edits to the saved files, then runs the compiler and independent checks again. If an edit cannot be applied unambiguously, the earlier source stays saved.
+
+The conversation and coin details share the available screen. Open **Chat options** for versions and usage. On mobile, expand the coin row when you need its details. A submission from another chat stays under **Earlier submission**; its launch controls do not replace the current design's next step.
+
+If a provider interrupts a check, the complete saved steps can be reused after validation. Continuing requests only the remaining work. A saved partial check plan is never reported as a completed contract or launch approval.

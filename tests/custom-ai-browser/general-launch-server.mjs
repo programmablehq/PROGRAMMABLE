@@ -12,12 +12,12 @@ export async function createGeneralLaunchServer(){
  import React,{useState,useCallback}from'react';import{createRoot}from'react-dom/client';
  import{GeneralProjectPreview}from'./components/custom-ai/general-preview';import styles from'./components/custom-ai/workspace.module.css';
  import'./app/globals.css';import'./app/interface.css';import'./app/programmable-experience.css';import'./app/webde-final-ui.css';import'./app/surfaces.css';
- const parameters=new URL(location.href).searchParams,chainId=Number(parameters.get('chain')||1),conversation='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ const parameters=new URL(location.href).searchParams,chainId=Number(parameters.get('chain')||1),conversation=parameters.get('chat')||'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
  const intent={version:1,id:'general-browser-intent-0001',revision:'c'.repeat(64),requirements:[{id:'counter',text:'Preserve the declared contract behavior',kind:'behavior',open:null,origin:{kind:'legacy'}}],unresolved:[],changes:[]};
  const image={id:'d'.repeat(64),hash:'e'.repeat(64),url:'/fixture-image.svg'};
  const source={version:1,chainId,intentRevision:intent.revision,projectHash:'sha256:'+'a'.repeat(64),artifactHash:'sha256:'+'b'.repeat(64),summary:'A saved custom contract',compiler:{version:'0.8.26+commit.8a97fa7a',optimizerRuns:1000,viaIR:false,evmVersion:'cancun'},entrypoints:[{source:'Counter.sol',contract:'Counter',role:'auxiliary'}],sourceFiles:1,sourceBytes:240,compiled:true,diagnostics:[],requirementCoverage:'proposed',verification:'not-run',launchReady:false,scenarios:{scope:'isolated-declared-scenarios-v1',hash:'sha256:'+'f'.repeat(64),planHash:'sha256:'+'1'.repeat(64),passed:true,cases:5,failures:[]}};
  function App(){
-  const[account,setAccount]=useState('0x'+'1'.repeat(40)),[project,setProject]=useState(source),[receipt,setReceipt]=useState(image),[locked,setLocked]=useState(false),[launchCommand,setLaunchCommand]=useState();
+  const[account,setAccount]=useState('0x'+'1'.repeat(40)),[project,setProject]=useState(parameters.has('unbuilt')?undefined:source),[receipt,setReceipt]=useState(image),[locked,setLocked]=useState(false),[launchCommand,setLaunchCommand]=useState();
   const[settings,setSettings]=useState({name:'Original coin',symbol:'ORIG',chainId,pairToken:chainId===999?'HYPE':'ETH',initialBuy:'0.01',description:parameters.has('missing')?'':'A declared custom launch',website:'https://example.com',x:'https://x.com/example'});
   const headers=useCallback(async()=>({Authorization:'synthetic-local-session'}),[]);
   const flush=async()=>{const response=await fetch('/fixture-studio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account,settings,image:receipt})});if(!response.ok)throw Error('Studio changed');return response.json();};

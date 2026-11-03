@@ -211,15 +211,15 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   // validator. Reuse only matching, private progress; the terminal flag never
   // proves coverage, and the same complete validator still decides acceptance.
   const lastFailure=savedProgress&&input.rejected?.failures.at(-1);
-  if(currentProgress.steps.length&&lastFailure?.stage==="scenarios"&&lastFailure.response){
+  if(lastFailure?.stage==="scenarios"&&lastFailure.response){
     let recovered:Record<string,unknown>|undefined;
     try{recovered=object(prepareSurplusSchema(scenarioSchemaForInterface(fixedInterface as Record<string,unknown>),true).decode(lastFailure.response));}
     catch{/* Incomplete or invalid pages remain untrusted; resume the saved prefix. */}
     if(recovered){
-      if(emptyCompletedPage(recovered))return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
+      if(currentProgress.steps.length&&emptyCompletedPage(recovered))return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
       // A semantic rejection already includes this page in its complete
       // declaration. Only a transport rejection can have an unappended page.
-      if(lastFailure.declaration===null){
+      if(lastFailure.declaration===null&&!emptyCompletedPage(recovered)){
         const next=resolveOpeningFixtureValue(nativeScenarioRows(recovered.steps),opening.inputs) as unknown[];
         const combined={...currentProgress,steps:[...currentProgress.steps,...next]};
         if(combined.steps.length<=256&&Buffer.byteLength(JSON.stringify(combined))<=96000){
