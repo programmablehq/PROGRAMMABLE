@@ -14,8 +14,10 @@ import { useGeneralLaunch } from "./use-general-launch";
 import styles from "./workspace.module.css";
 const GeneralLaunchWallet = lazy(() => import("./general-launch-wallet"));
 
-function currentStatusMessage(status: string): string {
-  if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return "Checking the saved source and preparing your launch.";
+function currentStatusMessage(status: string, automaticApproved: boolean): string {
+  if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return automaticApproved
+    ? "Automatic checks passed. Continue to prepare your wallet step."
+    : "Checking the saved source and preparing your launch.";
   if (["action_required", "needs_changes", "changes_requested"].includes(status)) return "Your submission needs an update. Open its details to continue.";
   if (["authorized", "launch_ready", "wallet_action_ready", "awaiting_wallet_signature", "reserved"].includes(status)) return "Your submission has wallet steps to review.";
   if (["submitted", "broadcast", "confirming", "finality_pending"].includes(status)) return "Waiting for the transaction to confirm.";
@@ -80,7 +82,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     : uncertain ? "The original submission is saved. Check its result before starting another one."
     : accepted ? launch.automatic?.state==="changes_required"?"This source needs the correction shown below. Update it in the chat."
       :launch.automatic?.state==="interrupted"?"The automatic check stopped. Continue with the same saved source."
-        :launch.currentStatus ? currentStatusMessage(launch.currentStatus.status) : "Your source is saved. Preparing the launch."
+        :launch.currentStatus ? currentStatusMessage(launch.currentStatus.status, launch.automatic?.state === "approved") : "Your source is saved. Preparing the launch."
     : project?.sourceReview==="changes_required" ? "Ask the chat to fix the source review findings."
     : detail ? detail.message : !complete ? "Finish the saved contract design in the chat before submitting it."
     : "Ready to check this source and prepare your launch.";
