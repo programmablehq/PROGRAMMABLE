@@ -1,5 +1,7 @@
+/** Field locations and validation keywords only; never response bodies or values. */
+export type ModelSchemaFailure={kind:"json"|"schema";issues:{path:string;keyword:string;expected?:number}[]};
 export type ModelCallMetric={model:string;task?:import("./model-tasks").ModelTask;durationMs:number;inputTokens:number|null;outputTokens:number|null;completed:boolean;
-  failure?:"output-limit"|"missing-end"|"empty-response"|"response-too-large"|"refused"|"timeout"|"invalid-schema"};
+  failure?:"output-limit"|"missing-end"|"empty-response"|"response-too-large"|"refused"|"timeout"|"invalid-schema";schemaFailure?:ModelSchemaFailure};
 export type RequestMetrics={startedAt:number;durationMs:number;state:"completed"|"failed";calls:ModelCallMetric[];tokenAccountingComplete:boolean};
 const MAX_RECORDED_CALLS=16;
 export function requestMetrics(startedAt:number,calls:ModelCallMetric[],completed:boolean,now=Date.now()):RequestMetrics {

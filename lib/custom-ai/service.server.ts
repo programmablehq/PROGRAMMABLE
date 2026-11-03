@@ -129,7 +129,7 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
     const started=Date.now();
     try{const result=await originalCall(input);context.onModelCall?.({model:input.model,...(input.task?{task:input.task}:{}),durationMs:Date.now()-started,inputTokens:result.inputTokens,outputTokens:result.outputTokens,completed:true});return result;}
     catch(error){context.onModelCall?.({model:input.model,...(input.task?{task:input.task}:{}),durationMs:Date.now()-started,inputTokens:error instanceof ModelResponseError?error.usage.inputTokens:null,
-      outputTokens:error instanceof ModelResponseError?error.usage.outputTokens:null,completed:false,...(error instanceof ModelResponseError?{failure:error.failure}:{})});throw error;}
+      outputTokens:error instanceof ModelResponseError?error.usage.outputTokens:null,completed:false,...(error instanceof ModelResponseError?{failure:error.failure,...(error.schemaFailure?{schemaFailure:error.schemaFailure}:{})}:{})});throw error;}
   }};
   const capabilityContext: CapabilityContext = { owner: context.owner ?? "local-preview", chainId: request.coin?.chainId ?? 1,
     signal, allowWeb: researchAvailable() || Boolean(dependencies.lookup), budget: { remaining: AI_CONFIG.maximumLookups },onProviderUsage:context.onModelCall };

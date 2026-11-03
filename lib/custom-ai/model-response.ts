@@ -1,5 +1,5 @@
 import { CustomAIError } from "./types";
-import type { ModelCallMetric } from "./request-metrics";
+import type { ModelCallMetric, ModelSchemaFailure } from "./request-metrics";
 
 export type ModelResponseProfile = "contract";
 export function reportedTokenCount(value: unknown): number | null {
@@ -16,9 +16,10 @@ export function modelResponseLimits(profile?: ModelResponseProfile) {
 export class ModelResponseError extends CustomAIError {
   public readonly usage: { inputTokens: number | null; outputTokens: number | null };
   declare readonly partialDeclaration?: string;
+  declare readonly schemaFailure?: ModelSchemaFailure;
   constructor(public failure: NonNullable<ModelCallMetric["failure"]>, usage: {
     inputTokens: number | null; outputTokens: number | null;
-  }, partialDeclaration?:string) {
+  }, partialDeclaration?:string, schemaFailure?:ModelSchemaFailure) {
     super("incomplete", failure === "timeout"
       ? "The model reached its time limit. Your complete idea is still saved."
       : failure === "output-limit"
@@ -28,5 +29,6 @@ export class ModelResponseError extends CustomAIError {
       : "The answer was cut short. Your draft is still saved.", 502);
     this.usage = { inputTokens: reportedTokenCount(usage.inputTokens), outputTokens: reportedTokenCount(usage.outputTokens) };
     if(partialDeclaration!==undefined)Object.defineProperty(this,"partialDeclaration",{value:partialDeclaration.slice(0,96000),enumerable:false});
+    if(schemaFailure)Object.defineProperty(this,"schemaFailure",{value:structuredClone(schemaFailure),enumerable:false});
   }
 }

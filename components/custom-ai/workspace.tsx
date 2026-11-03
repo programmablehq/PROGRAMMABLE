@@ -578,7 +578,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         {!localPreview&&owner!=="signed-out"&&<DraftVersions account={owner} conversationId={conversationId} headers={headers} disabled={busy||switchingCoin||launchLocked||!restored||saveFailed||Boolean(conflict)} currentDraftId={draftId} onRestore={restoreVersion}/>}
         {!localPreview&&owner!=="signed-out"&&<RequestInsights headers={headers} refreshKey={metricsRevision}/>}
         {usage && <details className={styles.toolSection}><summary>Usage</summary><div>
-          <p>{usage.hourly.remaining} of {usage.hourly.limit} credits this hour · {usage.daily.remaining} of {usage.daily.limit} today</p>
+          <p>{usage.hourly.remaining} of {usage.hourly.limit} credits left this hour · {usage.daily.remaining} of {usage.daily.limit} left today</p>
           <p>Replies and rebuilding saved source use 1 credit. AI builds and live research use 5. An interrupted AI attempt may use up to 5.</p>
           <p>Hourly reset: {new Date(usage.hourly.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Daily reset: {new Date(usage.daily.resetsAt).toLocaleString()}.</p>
           {usage.resumesAt > 0 && <p>Available again at {new Date(usage.resumesAt).toLocaleString()}.</p>}
