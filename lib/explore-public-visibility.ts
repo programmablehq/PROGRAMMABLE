@@ -65,7 +65,8 @@ const NON_PUBLIC_TOKEN_ADDRESSES = new Set(
 // Owner-requested discovery exclusions are separate from release canaries.
 // A matching address on another chain and future verified launches stay visible.
 export const OWNER_HIDDEN_EXPLORE_IDENTITIES_V1 = Object.freeze([
-  Object.freeze({ chainId: 4663, identity: "0xeaf107cff5858b009a96786b06e3360123152cdc" }), // PMAI3 owned Custom AI release proposal; not broadcast
+  Object.freeze({ chainId: 4663, identity: "0xeaf107cff5858b009a96786b06e3360123152cdc" }), // PMAI3 internal Custom AI verification launch
+  Object.freeze({ chainId: 4663, identity: "0xc1c7154a294e75fc74b6f19f05cc14d2ddc11521" }), // PMAI4 internal intake recovery proposal
   Object.freeze({ chainId: 4663, identity: "0x9e6308c085cc0179b372e853d6c9ac193d4a0ce5" }), // PMRPC30 owned provider-maintenance proposal; not broadcast
   Object.freeze({ chainId: 4663, identity: "0x1cb92796e841d0404a68858b846ca88c1fa61501" }), // PMBFT30 native HyperEVM finality verification
   Object.freeze({ chainId: 4663, identity: "0x8bf49ba3e70d4744535f5f490cdae21edc78dc17" }), // PMHRC30 HyperEVM receipt-coordinate verification

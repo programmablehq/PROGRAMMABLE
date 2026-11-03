@@ -23,6 +23,17 @@ const incompleteBuild = async (project: ContractProject): Promise<CompiledProjec
   compiler: GENERAL_PROJECT_COMPILER, compiled: false, diagnostics: [{ severity: "error", message: "Fixture needs repair" }], contracts: [], verification: "not-run", launchReady: false });
 
 describe("general project generation inside the owned AI job", () => {
+  it("assembles an entirely supplied source graph without calling a model",async()=>{
+    const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"GeneralHook.sol",contract:"GeneralHook",role:"hook",arguments:[],functions:["function counter() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-admin"]}],allowedCalls:[],steps:[
+      {id:"increment",contract:"main",signature:"increment()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:false,requirementIds:[],expect:{status:"success"}},
+      {id:"read",contract:"main",signature:"counter()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:true,requirementIds:["counter"],expect:{status:"success",returns:["1"]}},
+    ]},intent,999,"paris");
+    const call=vi.fn(),compile=vi.fn(incompleteBuild);
+    const value=await buildGeneralContract({...request(),blueprint,availableDependencySources:{"GeneralHook.sol":{content:source}}},undefined,{call,compile});
+    expect(call).not.toHaveBeenCalled();expect(compile).toHaveBeenCalledOnce();
+    expect(value.project.sources["GeneralHook.sol"].content).toBe(source);
+    expect(value.launchReady).toBe(false);
+  });
   it("shares identical fixed metadata while retaining every editable source byte",async()=>{
     const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"GeneralHook.sol",contract:"GeneralHook",role:"hook",arguments:[],functions:["function counter() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-admin"]}],allowedCalls:[],steps:[
       {id:"increment",contract:"main",signature:"increment()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:false,requirementIds:[],expect:{status:"success"}},

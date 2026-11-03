@@ -81,3 +81,5 @@ You can upload a coin image from the message box, paste or drop an image, or cho
 The chat shows the current build step while it works. You can write your next message during the build; it is kept as a draft until you send it. A finished, checked hook has a summary and **Launch coin** action in the conversation. This uses the same saved-source preparation and wallet confirmation as the coin panel.
 
 On a phone, the chat comes first. Open the coin row to change its details. Website, X profile and an optional X post are separate public links. An X post is kept as the supplied post URL and does not replace the required project profile on graph launches.
+
+For larger source projects, completed files are saved separately. If a build stops, **Continue building** uses the same saved rules and resumes from those files. Incomplete files cannot be submitted. A request to strengthen the independent behavior checks creates a new check plan instead of reusing the old one.

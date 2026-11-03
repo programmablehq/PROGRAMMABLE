@@ -60,6 +60,23 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("keeps unfinished source files private, append-only and bound to the live job lease",async()=>{
+    const scope={id:"00000000-0000-4000-8000-000000000010",account:"0x1000000000000000000000000000000000000001",revision:0};
+    await store.conversations.create("alice",scope.account,scope.id);
+    const attempt=await store.reserve("alice",{id,intent:"build",conversation:scope,messages:[{role:"user",content:"Build"}]});
+    const contextHash=`sha256:${"f".repeat(64)}` as const;
+    const progress={version:1 as const,contextHash,files:{"Part.sol":{content:"contract Part {}"}},reply:"Saved",summary:"Part"};
+    await expect(store.projects.saveSourceProgress("bob",id,attempt.lease!,progress)).rejects.toMatchObject({code:"interrupted"});
+    await store.projects.saveSourceProgress("alice",id,attempt.lease!,progress);
+    await expect(store.projects.saveSourceProgress("alice",id,attempt.lease!,{...progress,files:{"Part.sol":{content:"changed"}}})).rejects.toMatchObject({code:"project-conflict"});
+    expect(await store.projects.read("alice",id)).toBeNull();
+    expect(await store.projects.readSourceProgress("alice",scope,contextHash)).toBeUndefined();
+    await store.finish("alice",id,attempt.lease!,undefined,"incomplete");
+    expect(await store.projects.readSourceProgress("alice",scope,contextHash)).toEqual(progress);
+    expect(await store.projects.readSourceProgress("bob",scope,contextHash)).toBeUndefined();
+    expect(await store.projects.readSourceProgress("alice",{...scope,id:"another-chat"},contextHash)).toBeUndefined();
+    await expect(store.projects.saveSourceProgress("alice",id,attempt.lease!,progress)).rejects.toMatchObject({code:"interrupted"});
+  });
   it("reuses a failed source request's complete checks only for the original owner, conversation, chain and intent",async()=>{
     const scope={id:"00000000-0000-4000-8000-000000000010",account:"0x1000000000000000000000000000000000000001",revision:0};
     const source=project(),plan=blueprint(source);

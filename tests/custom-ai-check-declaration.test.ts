@@ -39,6 +39,14 @@ describe("bounded independent check declaration",()=>{
     const cached=await declareGeneralChecks(input,build),call=vi.fn();
     expect(await declareGeneralChecks({...input,cached},call)).toEqual(cached);expect(call).not.toHaveBeenCalled();
   });
+  it("builds a fresh independent plan when stronger verification was requested",async()=>{
+    const complete={...declaration,steps};
+    const cached=await declareGeneralChecks(input,vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(complete)})));
+    const call=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(complete)}));
+    await declareGeneralChecks({...input,cached,forceNew:true},call);
+    expect(call).toHaveBeenCalledOnce();
+    expect(call.mock.calls[0][0].system).not.toContain("pragma solidity");
+  });
   it("does not reuse a declaration for another intent or network",async()=>{
     const complete={...declaration,steps},build=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(complete)}));
     const cached=await declareGeneralChecks(input,build),call=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(complete)}));

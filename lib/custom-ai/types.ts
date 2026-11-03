@@ -69,7 +69,9 @@ export type Draft = {
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
   nextAction?: {kind:"prepare-launch";sourceId:string};
-  buildIssue?: {stage:"interface"|"scenarios";code:string};
+  replyLocale?: string;
+  verificationRefreshRequested?: boolean;
+  buildIssue?: {stage:"interface"|"scenarios"|"source";code:string};
   generalProject?: import("./project-view").GeneralProjectView;
   selection?: import("./execution-routing").RouteSelection;
   intent?: import("./launch-intent").LaunchIntent;
@@ -77,7 +79,11 @@ export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: s
   sources?: import("./knowledge").KnowledgeSource[] };
 
 export function isBriefChat(request: ChatRequest): boolean {
-  return request.intent === "chat" && request.messages.length === 1 && !request.contextId && !request.draftId
+  // In an existing design, "okay" can accept a pending economic decision.
+  // Leave those confirmations to the planner; greetings and thanks are inert.
+  if ((request.contextId || request.draftId || request.messages.length > 1)
+    && /^(ok|okay|cool)[!. ]*$/i.test(request.messages.at(-1)?.content.trim() ?? "")) return false;
+  return request.intent === "chat"
     && /^(hi|hello|hey|hallo|moin|guten morgen|guten abend|danke|dankeschön|merci|salut|bonjour|hola|gracias|ciao|grazie|thanks|thank you|ok|okay|cool|good morning|good evening)[!. ]*$/i
       .test(request.messages.at(-1)?.content.trim() ?? "");
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generalBuildReply } from "../lib/custom-ai/build-result";
+import { generalBuildReply, BUILD_REPLY_LOCALES } from "../lib/custom-ai/build-result";
 
 type Result = Parameters<typeof generalBuildReply>[0];
 const compiled = { compiled: true };
@@ -26,4 +26,12 @@ describe("observed build completion instead of a model's predicted result", () =
     expect(generalBuildReply({ compilation: compiled, sourceAudit: audit })).toContain("behavior checks are not complete");
     expect(generalBuildReply({ compilation: compiled })).not.toContain("passed");
   });
+});
+
+it("keeps the observed result and count when completion is localized",()=>{
+ for(const locale of BUILD_REPLY_LOCALES){
+  expect(generalBuildReply({compilation:compiled,sourceAudit:audit,scenarios},locale)).toContain("21");
+  expect(generalBuildReply({compilation:{compiled:false},sourceAudit:audit,scenarios},locale)).not.toContain("21");
+ }
+ expect(generalBuildReply({compilation:compiled,sourceAudit:audit,scenarios},"de")).toContain("Dein Hook ist gebaut und gespeichert");
 });

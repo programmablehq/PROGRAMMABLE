@@ -623,7 +623,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision && generalLaunchEnabled;
   const feeBuilt = draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
     && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
-  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && contextId === draftId && (generalBuilt || feeBuilt));
+  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
   const openCoinPanel = useCallback(() => {
     setCoinPanelOpen(true);
     requestAnimationFrame(() => {

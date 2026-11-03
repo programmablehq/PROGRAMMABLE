@@ -13,6 +13,7 @@ import type {ClaudeInput,ClaudeResult} from "../lib/custom-ai/claude.server";
 import {generalProjectView} from "../lib/custom-ai/project-view";
 import { ModelResponseError } from "../lib/custom-ai/model-response";
 import {CONTINUE_SAVED_BUILD} from "../lib/custom-ai/build-command";
+import {createGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 
 const instruction="Build a counter that anyone can increment with no owner.";
 const request:ChatRequest={id:"general-service-request-0001",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:instruction}]};
@@ -39,6 +40,19 @@ it("continues the complete saved design without another interpretation call",asy
  expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source");
  expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledTimes(1);
  expect(value.nextAction).toBeUndefined();expect(value.generalProject?.launchReady).toBe(false);
+});
+it("reuses the newer completed check plan after a requested refresh and interrupted source",async()=>{
+ const intent=prior().project.intent;
+ const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[],steps:[
+  {id:"increment",contract:"main",signature:"increment()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:false,requirementIds:[],expect:{status:"success"}},
+  {id:"read",contract:"main",signature:"count()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:true,requirementIds:["counter"],expect:{status:"success",returns:["1"]}},
+ ]},intent,999,"paris");
+ const call=vi.fn(async()=>generated()),oldPlan=vi.fn();
+ const value=await runCustomAI({...request,coin:{...EMPTY_COIN_SETUP,chainId:999,pairToken:"HYPE"},messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,
+  {call,compile:vi.fn(),compileProject:compile},{intent,verificationRefreshRequested:true,projectCompilerTarget:"paris",saveProject:async()=>{},saveBlueprint:async()=>{},saveCompilation:async()=>{},saveScenarios:async()=>{},loadNewerBlueprint:async()=>blueprint,loadBlueprint:oldPlan});
+ expect(oldPlan).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
+ expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source-implementation");
+ expect(value.intent).toEqual(intent);expect(value.generalProject?.launchReady).toBe(false);
 });
 it("keeps the planner for a saved design with an unresolved choice",async()=>{
  const previous=prior(),intent={...previous.project.intent,unresolved:["Choose the counter start"],requirements:previous.project.intent.requirements.map((r,i)=>i? r:{...r,open:"Choose the counter start"})};
@@ -292,4 +306,14 @@ describe("general source generation inside the owned chat job",()=>{
   expect(view.projectHash).toBe(project.hash);expect(view.artifactHash).toBe(full.compilation.artifactHash);expect(view.sourceBytes).toBe(new TextEncoder().encode(content).length);
   expect(serialized.length).toBeLessThan(2000);expect(serialized).not.toContain("private-source");expect(serialized).not.toContain("ab".repeat(128));expect(view).not.toHaveProperty("sources");expect(view).not.toHaveProperty("contracts");expect(full.project.sources["Counter.sol"].content).toBe(content);expect(view.launchReady).toBe(false);
  });
+});
+
+it("keeps a built design through a cheap acknowledgement without loading live chain context",async()=>{
+ const previous=prior(),compile=vi.fn(),loadProductionContext=vi.fn();
+ const call=vi.fn(async()=>result({reply:"Anytime."}));
+ const value=await runCustomAI({...request,contextId:"a-saved-context-id-0001",draftId:"a-saved-context-id-0001",messages:[...request.messages,{role:"user",content:"thanks"}]},undefined,
+  {call,compile},{generalProject:previous,loadProductionContext});
+ expect(call).toHaveBeenCalledOnce();expect(call.mock.calls[0]).toBeDefined();
+ expect(value.intent).toEqual(previous.project.intent);expect(value.change).toBe("unchanged");
+ expect(loadProductionContext).not.toHaveBeenCalled();expect(compile).not.toHaveBeenCalled();
 });

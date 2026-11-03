@@ -11,7 +11,7 @@ import { bindGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-b
 import { checkGeneralScenarios } from "./behavior-checks.server";
 import { generalBuildReply } from "./build-result";
 
-type CompilationSource = ProjectCheckpoint & { summary: string;blueprint?:GeneralCheckBlueprint };
+type CompilationSource = ProjectCheckpoint & { summary: string;replyLocale?:string;blueprint?:GeneralCheckBlueprint };
 
 /** Resolve the exact owned source before reserving work. This does not accept
  * source bytes, a command, a compiler or a replacement implementation. */
@@ -34,7 +34,7 @@ export async function readCompilationSource(store: AIStore, owner: string, reque
     if(!declared||declared.blueprint.id!==saved.blueprintId)throw new CustomAIError("behavior-context","The original contract checks could not be loaded. Your source is kept.",409);
     bindGeneralCheckBlueprint(declared.blueprint,saved.project);blueprint=declared.blueprint;
   }
-  return { ...saved,...(blueprint?{blueprint}:{}),summary: job.result?.generalProject?.summary ?? "Saved contract source" };
+  return { ...saved,replyLocale:job.result?.replyLocale,...(blueprint?{blueprint}:{}),summary: job.result?.generalProject?.summary ?? "Saved contract source" };
 }
 
 /** Called inside the existing lease/cancellation/transport. No inference,
@@ -57,8 +57,8 @@ export async function compileExistingProject(input: {
   if(scenarios)await store.projects.saveScenarios(owner,id,lease,scenarios);
   const selection = selectExecutionRoute(source.project.intent, source.project.chainId, { route: "custom-contract", requirementIds: source.project.intent.requirements.map(rule => rule.id), missingCapabilities: [] });
   const passed=compilation.compiled&&scenarios?.passed!==false;
-  const reply = generalBuildReply({ compilation, sourceAudit: source.sourceAudit, scenarios });
-  return { reply, intent: source.project.intent, selection,
+  const reply = generalBuildReply({ compilation, sourceAudit: source.sourceAudit, scenarios }, source.replyLocale);
+  return { reply, replyLocale:source.replyLocale, intent: source.project.intent, selection,
     generalProject: generalProjectView({ version: 1, reply, summary: source.summary, project: source.project, compilation, selection,...(source.blueprint?{blueprintId:source.blueprint.id}:{}),...(source.sourceAudit?{sourceAudit:source.sourceAudit}:{}),...(scenarios?{scenarios}:{}),requirementCoverage: "proposed", launchReady: false }),
     change: passed ? "applied" : "blocked", memory: "", chargedAs: "build" };
 }
