@@ -31,6 +31,34 @@ type Schema = {
   items?: Schema | Schema[];
 };
 
+/** Some sellers serialize their structured response as a named parameter
+ * envelope. Read only data fields from that exact envelope; never execute
+ * a tool, accept an unknown field, or infer missing values. */
+function structuredParameters(text: string, schema: Schema): string | undefined {
+  if (!/^\s*<invoke\s+name="structured_output"/u.test(text)) return undefined;
+  const invalid = (): never => { throw new SurplusSchemaError({kind:"json",issues:[]}); };
+  const envelope = /^\s*<invoke name="structured_output">\s*([\s\S]*?)\s*<\/invoke>\s*$/u.exec(text);
+  if (!envelope || !schema.properties) return invalid();
+  const body = envelope[1], fields: Record<string, unknown> = Object.create(null);
+  const parameter = /<parameter name="([A-Za-z][A-Za-z0-9_]{0,63})">([\s\S]*?)<\/parameter>\s*/guy;
+  let position = 0;
+  while (position < body.length) {
+    parameter.lastIndex = position;
+    const match = parameter.exec(body);
+    if (!match) return invalid();
+    const [,name,raw] = match;
+    if (!Object.hasOwn(schema.properties,name) || Object.hasOwn(fields,name) || /<\/?(?:parameter|invoke)\b/u.test(raw)) return invalid();
+    let value: unknown;
+    try { value = JSON.parse(raw); }
+    catch { if (schema.properties[name].type !== "string") return invalid(); value = raw; }
+    // A wire string may itself hold JSON, as it does for paged scenarios and
+    // object unions. Preserve that string for the existing strict decoder.
+    fields[name] = schema.properties[name].type === "string" && typeof value !== "string" ? raw : value;
+    position = parameter.lastIndex;
+  }
+  return JSON.stringify(fields);
+}
+
 /** The Claude bridge normalizes object unions into an invalid anyOf envelope. */
 export function prepareSurplusSchema(original: object, validateOriginal = false) {
   let changed = false;
@@ -56,7 +84,7 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
   const schema = transport(original as Schema);
   // Keep compiler ownership local: planner schemas are new objects per request.
   // An AJV-wide schema cache would retain every request's schema indefinitely.
-  const validate = changed || validateOriginal ? new Ajv({ strict: false, coerceTypes: false, removeAdditional: false, useDefaults: false }).compile(original) : undefined;
+  let validate = changed || validateOriginal ? new Ajv({ strict: false, coerceTypes: false, removeAdditional: false, useDefaults: false }).compile(original) : undefined;
   function restore(value: unknown, node: Schema): unknown {
     if (needsEncoding(node)) {
       // The gateway may already return the canonical object or null instead
@@ -73,6 +101,11 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     return value;
   }
   return { schema, decode(text: string) {
+    const parameters = structuredParameters(text,schema);
+    if (parameters !== undefined) {
+      text = parameters;
+      validate ??= new Ajv({ strict: false, coerceTypes: false, removeAdditional: false, useDefaults: false }).compile(original);
+    }
     // Some compatible sellers wrap complete JSON in one code fence. Select
     // only an unambiguous single JSON block; extra JSON or code still fails.
     const fence=/^\s*```(?:json)?[ \t]*\r?\n([\s\S]*)\r?\n```\s*$/iu.exec(text);

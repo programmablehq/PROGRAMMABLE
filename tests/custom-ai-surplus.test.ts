@@ -70,6 +70,27 @@ describe("Surplus model routing", () => {
     expect(failure.partialDeclaration).toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("decodes the seller's structured parameter envelope without another request",async()=>{
+    useSurplus();
+    const schema={type:"object",properties:{steps:{type:"string"},complete:{type:"boolean"}},required:["steps","complete"],additionalProperties:false};
+    const steps=[["read-count","counter:count()","[]","trader-a",0,"0",true,[],{status:"success",returnsJson:"[0]"}]];
+    const content=`\n<invoke name="structured_output">\n<parameter name="steps">${JSON.stringify(steps)}</parameter>\n<parameter name="complete">false</parameter>\n</invoke>`;
+    const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content},finish_reason:"stop"}],usage:{prompt_tokens:10,completion_tokens:20}}));
+    vi.stubGlobal("fetch",fetcher);
+    const result=await callSurplus({...input,schema});
+    expect(JSON.parse(result.text)).toEqual({steps:JSON.stringify(steps),complete:false});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("rejects ambiguous parameter envelopes and validates their exact field types",()=>{
+    const format=prepareSurplusSchema({type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false});
+    const wrap=(body:string)=>`<invoke name="structured_output">${body}</invoke>`;
+    expect(format.decode(wrap('<parameter name="count">2</parameter>'))).toBe('{"count":2}');
+    for(const text of [wrap('<parameter name="count">"2"</parameter>'),wrap('<parameter name="other">2</parameter>'),
+      wrap('<parameter name="count">1</parameter><parameter name="count">2</parameter>'),wrap(''),
+      wrap('<parameter name="count">2</parameter>')+'extra',wrap('<parameter name="count">2'),
+      wrap('<parameter name="count"><invoke>2</invoke></parameter>'),
+      wrap('<parameter name="count">2</parameter><parameter name="__proto__">{}</parameter>')])expect(()=>format.decode(text)).toThrow();
+  });
   it("distinguishes malformed JSON and redacts model-chosen field names",()=>{
     const schema={type:"object",properties:{sourceFiles:{type:"object",additionalProperties:{type:"integer"}}},required:["sourceFiles"]};
     const format=prepareSurplusSchema(schema,true);

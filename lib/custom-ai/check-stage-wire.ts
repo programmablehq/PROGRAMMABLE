@@ -209,8 +209,9 @@ export function nativeScenarioRows(value:unknown,maximum=32):unknown[]{
     // An empty argument string for a genuinely parameterless function has
     // one unambiguous meaning. Never infer a value for a parameter or return.
     const args=argumentsJson===""&&signature.endsWith("()")?[]:list(argumentsJson);
+    const noReturns=expected.returnsJson===null||typeof expected.returnsJson==="string"&&expected.returnsJson.trim()==="null";
     return {...fields,signature,arguments:args,expect:{status:expected.status,
-      ...(expected.returnsJson!==null?{returns:list(expected.returnsJson)}:{}),
+      ...(!noReturns?{returns:list(expected.returnsJson)}:{}),
       ...(expected.swapFeePpm!==null?{swapFeePpm:expected.swapFeePpm}:{}),...(events.length?{events}:{})}};
   });
 }
