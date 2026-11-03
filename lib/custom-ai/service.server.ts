@@ -87,7 +87,7 @@ export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec
   loadProductionContext?:(chainId:BuilderChainId,signal?:AbortSignal)=>Promise<LaunchProductionContext>;
   loadSourceLibraries?:(previous:ContractProject|undefined,chainId:BuilderChainId)=>ContractProject["sources"];
   saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void>;
-  loadBlueprint?:()=>Promise<GeneralCheckBlueprint|undefined>;
+  loadBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId)=>Promise<GeneralCheckBlueprint|undefined>;
   loadCheckDiagnostic?:()=>Promise<CheckDiagnostic|undefined>;saveCheckDiagnostic?:(diagnostic:CheckDiagnostic)=>Promise<void>;
   saveSourceAudit?:(audit:GeneralSourceAudit)=>Promise<void> };
 
@@ -324,7 +324,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       try {
         blueprint=await declareGeneralChecks({intent,chainId:coin.chainId,evmVersion,production:selectedProduction,
           interfaces:canonicalInterfaceContext(coin.chainId),
-          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:await context.loadBlueprint?.(),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
+          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:await context.loadBlueprint?.(intent,coin.chainId),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
       } catch(error) {
         signal?.throwIfAborted();
         if(!(error instanceof ModelResponseError)&&!(error instanceof TypeError)&&!(error instanceof SyntaxError)

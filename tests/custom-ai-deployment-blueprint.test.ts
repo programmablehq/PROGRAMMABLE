@@ -39,6 +39,11 @@ const selected = (chain: BuilderChainId = 999) => ({ controller: `0x${"11".repea
   settings: applyCoinSetupPatch(EMPTY_COIN_SETUP, { chainId: chain, name: "Example", symbol: "EX", initialBuy: "0.01" }) });
 
 describe("a production deployment declared before source", () => {
+  it("identifies a missing pool initialization call before source generation",()=>{
+    const value=raw();Object.assign(value.targets[2],{initializer:null,initializerValue:"0"});
+    expect(()=>declare(value)).toThrow("Deployment target liquidity needs an explicit initializer function");
+    expect(declare().targets[2].initializer?.function).toBe("initialize");
+  });
   it.each([1, 4663, 8453, 999] as const)("binds the complete graph and source to chain %i without fixture conversion", chain => {
     const blueprint = declare(raw(), chain), saved = project(chain);
     expect(blueprint.productionId).toBe(production(chain).id); expect(saved.deployment?.id).toBe(blueprint.id);

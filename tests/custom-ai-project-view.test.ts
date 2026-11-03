@@ -5,6 +5,13 @@ const view:GeneralProjectView={version:1,projectHash:`sha256:${"a".repeat(64)}`,
   compiler:{version:"0.8.26+commit.8a97fa7a",optimizerRuns:1000,viaIR:false,evmVersion:"cancun"},entrypoints:[{source:"Counter.sol",contract:"Counter",role:"auxiliary"}],
   sourceFiles:1,sourceBytes:240,compiled:true,diagnostics:[],requirementCoverage:"proposed",verification:"not-run",launchReady:false};
 describe("advisory browser source metadata",()=>{
+  it("keeps a negative source review visible without granting launch authority",()=>{
+    for(const sourceReview of ["passed","changes_required"] as const){
+      const result=cachedGeneralProjectView({...view,sourceReview});
+      expect(result?.sourceReview).toBe(sourceReview);expect(result?.launchReady).toBe(false);
+    }
+    expect(cachedGeneralProjectView({...view,sourceReview:"approved"})).toBeUndefined();
+  });
   it("restores bounded source metadata without adopting blobs or launch authority",()=>{
     expect(cachedGeneralProjectView({...view,sources:{"Unexpected.sol":{content:"not a chat restore"}}})).toEqual(view);
     expect(cachedGeneralProjectView({...view,launchReady:true})).toBeUndefined();

@@ -17,6 +17,7 @@ export type GeneralProjectView = {
   sourceFiles: number;
   sourceBytes: number;
   compiled: boolean;
+  sourceReview?: "passed" | "changes_required";
   diagnostics: GeneralProjectDraft["compilation"]["diagnostics"];
   requirementCoverage: "proposed";
   verification: "not-run";
@@ -31,6 +32,7 @@ export function generalProjectView(value: GeneralProjectDraft): GeneralProjectVi
     sourceFiles: Object.keys(project.sources).length,
     sourceBytes: Object.values(project.sources).reduce((sum, source) => sum + new TextEncoder().encode(source.content).length, 0),
     compiled: compilation.compiled, diagnostics: compilation.diagnostics.slice(0, 24).map(item => ({ severity: item.severity, message: item.message.slice(0, 800) })),
+    ...(value.sourceAudit?{sourceReview:value.sourceAudit.status}:{}),
     requirementCoverage: "proposed", verification: "not-run", launchReady: false,
     ...(value.blueprintId?{blueprintId:value.blueprintId}:{}),...(value.scenarios?{scenarios:scenarioOverview(value.scenarios)}:{}) };
 }
@@ -39,6 +41,7 @@ export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undef
   if(!value||typeof value!=="object"||Array.isArray(value))return;
   const v=value as GeneralProjectView;
   if(v.version!==1||typeof v.compiled!=="boolean"||v.launchReady!==false||v.verification!=="not-run"||v.requirementCoverage!=="proposed"
+    ||v.sourceReview!==undefined&&!["passed","changes_required"].includes(v.sourceReview)
     ||typeof v.summary!=="string"||!v.summary.trim()||v.summary.length>360||!Array.isArray(v.entrypoints)||!v.entrypoints.length||v.entrypoints.length>16
     ||v.entrypoints.some(item=>!item||typeof item.source!=="string"||item.source.length>180||typeof item.contract!=="string"||!/^[a-zA-Z_][a-zA-Z0-9_]{0,99}$/.test(item.contract)||!["token","hook","liquidity","auxiliary"].includes(item.role)))return;
   const base=cachedProjectOverview({...v,requestId:"cached-project-view",compilation:v.compiled?"compiled":"diagnostics"});
@@ -48,5 +51,6 @@ export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undef
   return {version:1,projectHash:base.projectHash,artifactHash:base.artifactHash,chainId:base.chainId,intentRevision:base.intentRevision,summary:v.summary,
     compiler:base.compiler,entrypoints:v.entrypoints.map(item=>({source:item.source,contract:item.contract,role:item.role})),sourceFiles:base.sourceFiles,sourceBytes:base.sourceBytes,
     compiled:v.compiled,diagnostics:base.diagnostics,requirementCoverage:"proposed",verification:"not-run",launchReady:false,
+    ...(v.sourceReview?{sourceReview:v.sourceReview}:{}),
     ...(v.blueprintId?{blueprintId:v.blueprintId}:{}),...(scenarios?{scenarios}:{})};
 }

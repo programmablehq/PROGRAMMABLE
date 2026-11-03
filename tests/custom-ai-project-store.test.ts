@@ -60,6 +60,25 @@ beforeEach(async () => {
 afterEach(async () => { await database.close(); });
 
 describe("owned general contract checkpoints", () => {
+  it("reuses a failed source request's complete checks only for the original owner, conversation, chain and intent",async()=>{
+    const scope={id:"00000000-0000-4000-8000-000000000010",account:"0x1000000000000000000000000000000000000001",revision:0};
+    const source=project(),plan=blueprint(source);
+    await store.conversations.create("alice",scope.account,scope.id);
+    const attempt=await store.reserve("alice",{id,intent:"build",conversation:scope,coin:{...EMPTY_COIN_SETUP,chainId:999},messages:[{role:"user",content:"Build the unchanged saved design"}]});
+    await store.projects.saveBlueprint("alice",id,attempt.lease!,{intent:source.intent,blueprint:plan});
+    expect(await store.projects.readFailedBlueprint("alice",scope,source.intent,999)).toBeUndefined();
+    await store.finish("alice",id,attempt.lease!,undefined,"incomplete");
+    expect(await store.projects.readFailedBlueprint("alice",scope,source.intent,999)).toEqual(plan);
+    expect(await store.projects.readFailedBlueprint("bob",scope,source.intent,999)).toBeUndefined();
+    expect(await store.projects.readFailedBlueprint("alice",{...scope,id:"00000000-0000-4000-8000-000000000011"},source.intent,999)).toBeUndefined();
+    expect(await store.projects.readFailedBlueprint("alice",{...scope,account:"0x2000000000000000000000000000000000000002"},source.intent,999)).toBeUndefined();
+    expect(await store.projects.readFailedBlueprint("alice",scope,source.intent,8453)).toBeUndefined();
+    expect(await store.projects.readFailedBlueprint("alice",scope,{...source.intent,revision:"b".repeat(64)},999)).toBeUndefined();
+    expect(await store.projects.readFailedBlueprint("alice",scope,{...source.intent,requirements:[{...source.intent.requirements[0],text:"An altered rule"}]},999)).toBeUndefined();
+    expect(await store.projects.read("alice",id)).toBeNull();
+    await database.query("UPDATE programmable_custom_ai_v1.jobs SET payload_hash='changed' WHERE owner='alice' AND id=$1",[id]);
+    expect(await store.projects.readFailedBlueprint("alice",scope,source.intent,999)).toBeUndefined();
+  });
   it("keeps rejected declarations private and bound to the active owner, lease and job payload",async()=>{
     const attempt=await reserve(),p=project();
     const diagnostic:CheckDiagnostic={version:1,contextHash:checkContextHash({...p,evmVersion:"paris"}),
