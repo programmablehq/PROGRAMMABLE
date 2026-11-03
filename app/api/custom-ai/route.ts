@@ -25,6 +25,7 @@ const previewResults = previewGlobal.customAIPreviewResults ?? new Map<string, C
 if (process.env.NODE_ENV === "development") previewGlobal.customAIPreviewResults = previewResults;
 
 export async function POST(request: Request) {
+  let rejectedReservation=false;
   try {
     const authority = await authorizeCustomAI(request, true, true);
     const input = parseChatRequest(await readPreviewBody(request));
@@ -64,7 +65,12 @@ export async function POST(request: Request) {
     }
     const profile = executionProfile(input.intent==="compile"?[]:getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
       allowWeb: researchAvailable(), budget: { remaining: 2 } }));
-    const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile) : null;
+    const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile).catch(error=>{
+      // A quota rejection rolls its transaction back before a job exists.
+      // Do not leave the browser reconnecting to that nonexistent request.
+      rejectedReservation=error instanceof CustomAIError&&error.code==="budget";
+      throw error;
+    }) : null;
     if (reserved && !reserved.lease) {
       if (reserved.job.state === "completed") return Response.json(reserved.job.result, { headers: aiHeaders });
       if (reserved.job.state === "failed") return aiError(new CustomAIError("interrupted", "The previous attempt ended. Send your message again to retry.", 409), "failed");
@@ -173,7 +179,7 @@ export async function POST(request: Request) {
       cancel() { connected = false; if (authority.kind === "preview") abort.abort(); },
     });
     return new Response(stream, { headers: { ...aiHeaders, "Content-Type": "text/event-stream", "X-Accel-Buffering": "no" } });
-  } catch (error) { return aiError(error,error instanceof CustomAIError&&error.code==="cancelled"?"failed":undefined); }
+  } catch (error) { return aiError(error,rejectedReservation||error instanceof CustomAIError&&error.code==="cancelled"?"failed":undefined); }
 }
 
 export async function GET(request: Request) {

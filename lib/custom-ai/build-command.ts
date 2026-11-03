@@ -1,5 +1,17 @@
 import type { ChatRequest } from "./types";
 
+export const CONTINUE_SAVED_BUILD = "Build and verify the current saved design. Keep every saved rule unchanged. Do not launch, send a transaction or prepare a wallet request.";
+
+/** Exact continuation commands only. Changes, questions and quoted instructions
+ * still need the planner; this helper never grants launch authority. */
+export function unchangedBuildCommand(request:Pick<ChatRequest,"intent"|"messages">):boolean {
+  const last=request.messages.at(-1);
+  if(last?.role!=="user")return false;
+  const text=last.content.normalize("NFKC").trim().replace(/\s+/gu," ").toLowerCase();
+  return text===CONTINUE_SAVED_BUILD.toLowerCase()
+    || /^(?:please |bitte )?(?:continue building|build (?:the )?(?:current )?saved (?:design|source)|baue? (?:den )?(?:aktuellen )?gespeicherten entwurf(?: fertig)?|mach (?:den )?gespeicherten entwurf fertig)[.!]?$/u.test(text);
+}
+
 /** A narrow fallback for an explicit command to build the unchanged source.
  * It grants no edits, launch, signature or verification and ignores quotations.
  * Other phrasing is still interpreted by the normal planner. */

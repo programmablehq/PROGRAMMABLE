@@ -36,6 +36,14 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await database.close(); });
 
 describe("durable chat retry and streaming", () => {
+  it("ends an unreserved quota rejection without a reconnect or model call",async()=>{
+    const store=runtime.store as ReturnType<typeof createAIStore>;
+    vi.spyOn(store,"reserve").mockRejectedValueOnce(new CustomAIError("budget","Wait for the hourly reset.",429,1000));
+    await expect(sendAIChat(request,async()=>({}),new AbortController().signal)).rejects.toMatchObject({code:"budget",status:429,requestState:"failed"});
+    expect(runtime.run).not.toHaveBeenCalled();
+    expect(await store.read(runtime.owner,request.id)).toBeNull();
+    expect((await store.usage(runtime.owner)).hourly.used).toBe(0);
+  });
   async function savedCompilerSource(){
     const store=runtime.store as ReturnType<typeof createAIStore>,account="0x"+"a".repeat(40),chat="legacy-wallet-studio";
     await store.conversations.create(runtime.owner,account,chat);
