@@ -374,8 +374,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       }}:{})},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
     } catch(error) {
       if(!(error instanceof SourceProgressPending))throw error;
-      return {reply:unfinishedBuildReply("source",update.replyLocale),
-        intent,selection,...update,...(verificationInstruction?{verificationInstruction}:{}),memory:plan.memory,change:"blocked",chargedAs:"build",buildIssue:{stage:"source",code:"source-pending"}};
+      return {reply:unfinishedBuildReply("source",update.replyLocale,error.hasProgress),
+        intent,selection,...update,...(verificationInstruction?{verificationInstruction}:{}),memory:plan.memory,change:"blocked",chargedAs:"build",buildIssue:{stage:"source",code:error.reason}};
     }
     await context.saveCompilation?.(generated.compilation);
     if(blueprint&&generated.compilation.compiled){

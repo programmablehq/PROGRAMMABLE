@@ -70,6 +70,24 @@ it("resumes an interrupted verification refresh without rebuilding its completed
  expect(value.verificationRefreshRequested).toBe(true);expect(value.verificationInstruction).toBe(verificationInstruction);
  expect(value.buildIssue?.stage).toBe("scenarios");
 });
+it("preserves a complete plan when the first source reply is empty, without a false code or launch result",async()=>{
+ const intent=prior().project.intent;
+ const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[],steps:[
+  {id:"increment",contract:"main",signature:"increment()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:false,requirementIds:[],expect:{status:"success"}},
+  {id:"read",contract:"main",signature:"count()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:true,requirementIds:["counter"],expect:{status:"success",returns:["1"]}},
+ ]},intent,999,"paris");
+ const call=vi.fn(async()=>{throw new ModelResponseError("output-limit",{inputTokens:100,outputTokens:16000});});
+ const save=vi.fn(),compiler=vi.fn(),saveSourceProgress=vi.fn(),onModelCall=vi.fn();
+ const value=await runCustomAI({...request,coin:{...EMPTY_COIN_SETUP,chainId:999,pairToken:"HYPE"},messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,
+  {call,compile:vi.fn(),compileProject:compiler},{intent,projectCompilerTarget:"paris",saveProject:save,saveSourceProgress,
+   saveBlueprint:async()=>{},saveCompilation:async()=>{},saveScenarios:async()=>{},loadBlueprint:async()=>blueprint,onModelCall});
+ expect(value.intent).toEqual(intent);expect(value.change).toBe("blocked");expect(value.chargedAs).toBe("build");
+ expect(value.buildIssue).toEqual({stage:"source",code:"output-limit"});
+ expect(value.reply).toContain("code response did not finish");expect(value.reply).not.toContain("code so far");
+ expect(value.generalProject).toBeUndefined();expect(value.nextAction).toBeUndefined();
+ expect(call).toHaveBeenCalledOnce();expect(save).not.toHaveBeenCalled();expect(compiler).not.toHaveBeenCalled();expect(saveSourceProgress).not.toHaveBeenCalled();
+ expect(onModelCall).toHaveBeenCalledWith(expect.objectContaining({completed:false,failure:"output-limit",outputTokens:16000}));
+});
 it("carries an explicit verification request into a fresh source-blind plan even if the planner misses the flag",async()=>{
  const intent=prior().project.intent;
  const declaration={contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[],steps:[

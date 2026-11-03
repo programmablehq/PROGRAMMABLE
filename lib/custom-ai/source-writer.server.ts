@@ -5,7 +5,7 @@ import { ModelResponseError } from "./model-response";
 import { checkedSourceProgress, type SourceProgress } from "./source-progress";
 
 export class SourceProgressPending extends CustomAIError {
-  constructor(readonly completed: number, readonly total: number) {
+  constructor(readonly completed: number, readonly total: number, readonly hasProgress = true, readonly reason = "source-pending") {
     super("source-pending", "Your build is saved. Continue building to finish the remaining contracts.", 422);
   }
 }
@@ -28,8 +28,8 @@ export async function writeSourceParts(input: {
     input.request.signal?.throwIfAborted();
     if (calls >= 4 || remaining < 1024 || Date.now() >= deadline - 30_000) throw new SourceProgressPending(Object.keys(progress.files).length, input.paths.length);
     const path = progress.partial?.path??input.paths.find(path=>!Object.hasOwn(progress.files,path))!;
-    const prefix=progress.partial?.content??"", maxTokens = Math.min(8000,remaining);
-    const maxPartChars=Math.min(16000,(maxTokens-512)*2);
+    const prefix=progress.partial?.content??"", maxTokens = Math.min(16000,remaining);
+    const maxPartChars=Math.min(32000,(maxTokens-512)*2);
     const schema = { type: "object", properties: {
       reply: { type: "string", maxLength: 3000 }, summary: { type: "string", maxLength: 360 },
       sourceFiles: { type: "array", minItems: 1, maxItems: 1, items: { type: "object", properties: {
@@ -44,8 +44,10 @@ export async function writeSourceParts(input: {
       });
     } catch (error) {
       input.request.signal?.throwIfAborted();
-      if ((Date.now() >= deadline || error instanceof ModelResponseError) && (Object.keys(progress.files).length||progress.partial))
-        throw new SourceProgressPending(Object.keys(progress.files).length, input.paths.length);
+      const hasProgress = Boolean(Object.keys(progress.files).length || progress.partial);
+      if (error instanceof ModelResponseError || Date.now() >= deadline && hasProgress)
+        throw new SourceProgressPending(Object.keys(progress.files).length, input.paths.length, hasProgress,
+          error instanceof ModelResponseError ? error.failure : "source-pending");
       throw error;
     }
     calls++;
