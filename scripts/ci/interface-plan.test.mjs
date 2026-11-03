@@ -97,6 +97,17 @@ test("source generation and admission checks install their actual compiler depen
   assert.equal(interfacePlan(["components/custom-ai/requested-rules.tsx"]).customAICompiler, false);
 });
 
+test("model configuration and transport changes provision the compiler used by their source-selection consumers", () => {
+  for (const path of ["lib/custom-ai/ai-config.ts", "lib/custom-ai/surplus.server.ts",
+    "lib/custom-ai/surplus-schema.server.ts", "lib/custom-ai/model-provider.server.ts", "lib/custom-ai/provider-config.server.ts"]) {
+    const plan = interfacePlan([path]);
+    assert.equal(plan.customAICompiler, true, path);
+    assert.equal(plan.full, false, path);
+    assert.equal(plan.activation, false, path);
+    assert.deepEqual(plan.browser, [], path);
+  }
+});
+
 test("constructor worker changes retain real-EVM, browser and pack-consumer coverage", () => {
   const files = ["lib/custom-ai/runtime-materialization.server.ts", "lib/custom-ai/general-pack.server.ts",
     "lib/custom-ai/general-plan-pack.server.ts", "tests/custom-ai-runtime-materialization.test.ts",

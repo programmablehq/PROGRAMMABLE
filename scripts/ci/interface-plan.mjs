@@ -54,7 +54,7 @@ export function interfacePlan(paths, { customAITracingOnly = false } = {}) {
     browser,
     wallet: browser.length > 0 || customAI,
     customAI,
-    customAICompiler: any(/^(?:lib\/custom-ai\/(?:compiler|lifecycle|rule-|core-sources|feed-v2-code|composable-code|general-|contract-project|check-(?:blueprint|declaration|plan-wire)|behavior-(?:checks|world)|service|project-store|public-launch-source|intent-coverage|launch-intent|planning-context|project-view)|scripts\/custom-ai\/|tests\/custom-ai-(?:compiler|lifecycle|events|rule-compiler|artifact|general-[a-z-]+|contract-project|check-(?:blueprint|declaration|plan-wire)|behavior-checks|project-store|intent-[a-z-]+)\.test\.ts)/u),
+    customAICompiler: any(/^(?:lib\/custom-ai\/(?:ai-config|surplus|model-provider|provider-config|compiler|lifecycle|rule-|core-sources|feed-v2-code|composable-code|general-|contract-project|check-(?:blueprint|declaration|plan-wire)|behavior-(?:checks|world)|service|project-store|public-launch-source|intent-coverage|launch-intent|planning-context|project-view)|scripts\/custom-ai\/|tests\/custom-ai-(?:compiler|lifecycle|events|rule-compiler|artifact|general-[a-z-]+|contract-project|check-(?:blueprint|declaration|plan-wire)|behavior-checks|project-store|intent-[a-z-]+)\.test\.ts)/u),
     migration: any(/(?:migration|wallet-provider|wallet-operation|chain-switch|app\/layout|app-shell)/u),
     moduleTools: any(/^(?:packages\/classic-modules\/|scripts\/(?:build-module-cli|module-cli|test\/module-cli)|contracts\/.*(?:module|Module))/u),
     activation: any(/^(?:contracts\/|config\/.*(?:custom|launch|registry)|lib\/custom-launch\/.*(?:discovery|manifest|release)|scripts\/.*(?:activation|release|clean-room)|docs\/operations\/releases\/)/u),
