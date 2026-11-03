@@ -14,7 +14,7 @@ export type SourceProgress = {
 export function sourceProgressContext(blueprint: GeneralCheckBlueprint, compiler: ContractProject["compiler"],
   dependencies: ContractProject["sources"], previous: ContractProject["sources"]) {
   return canonicalBrowserSha256V2("programmable.source-progress-context.v1", {
-    blueprint: blueprint.id, compiler,
+    blueprint: blueprint.id, compiler, implementationView: "component-source-v1",
     dependencies: canonicalBrowserSha256V2("programmable.source-dependencies.v1", dependencies),
     previous: canonicalBrowserSha256V2("programmable.previous-sources.v1", previous),
   });

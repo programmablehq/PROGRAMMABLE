@@ -8,6 +8,18 @@ const hash=`sha256:${"a".repeat(64)}` as const;
 const request:ClaudeInput={model:"local-fixture",system:"frozen intent",messages:[{role:"user",content:"build"}],schema:{},maxTokens:16000};
 function response(path:string){return {text:JSON.stringify({reply:"Written.",summary:"Complete file",sourceFiles:[{path,content:`pragma solidity 0.8.26; contract ${path[0]} {}`}]}),inputTokens:10,outputTokens:100};}
 describe("bounded source parts",()=>{
+ it("passes completed sibling code to the next component without another model call",async()=>{
+  const contexts: Record<string,{content:string}>[]=[];let next=0;
+  const paths=["A.sol","B.sol"];
+  const call=vi.fn(async(input:ClaudeInput)=>{
+   if(next===1)expect(input.system).toContain("contract A");
+   return response(paths[next++]);
+  });
+  await writeSourceParts({request,paths,contextHash:hash,save:async()=>{},
+   systemForPath:(_path,completed)=>{contexts.push(structuredClone(completed));return JSON.stringify(completed);}},call);
+  expect(contexts[0]).toEqual({});expect(contexts[1]["A.sol"].content).toContain("contract A");
+  expect(call).toHaveBeenCalledTimes(2);
+ });
  it("checkpoints complete files without multiplying the output budget",async()=>{
   const saved:SourceProgress[]=[];let index=0;const paths=["A.sol","B.sol","C.sol"];
   const calls:ClaudeInput[]=[];

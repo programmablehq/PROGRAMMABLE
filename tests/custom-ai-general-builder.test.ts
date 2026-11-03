@@ -72,14 +72,18 @@ describe("general project generation inside the owned AI job", () => {
     await expect(buildGeneralContract({...request(),blueprint,availableDependencySources},undefined,{call:renamed,compile})).rejects.toThrow();
     expect(compile).not.toHaveBeenCalled();
   });
-  it("starts independent source audit beside compilation after saving the source",async()=>{
+  it.each([false,true])("audits only after successful compilation (compiled=%s)",async compiled=>{
     const events:string[]=[];let release!:()=>void;const waiting=new Promise<void>(resolve=>{release=resolve;});
     const input=request();input.saveProject.mockImplementation(async()=>{events.push("saved");});
-    const pending=buildGeneralContract({...input,auditSource:async p=>{
-      events.push("audit");await waiting;return auditGeneralSource(p,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["counter","no-admin"],findings:[]}),inputTokens:1,outputTokens:1})});
-    }},undefined,{call:async()=>response(),compile:async p=>{events.push("compile");await waiting;return incompleteBuild(p);}});
-    await vi.waitFor(()=>expect(events).toEqual(["saved","compile","audit"]));release();
-    expect((await pending).sourceAudit?.status).toBe("passed");
+    const auditSource=vi.fn(async(p:ContractProject)=>{
+      events.push("audit");return auditGeneralSource(p,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["counter","no-admin"],findings:[]}),inputTokens:1,outputTokens:1})});
+    });
+    const pending=buildGeneralContract({...input,auditSource},undefined,{call:async()=>response(),compile:async p=>{
+      events.push("compile");await waiting;return {...await incompleteBuild(p),compiled};
+    }});
+    await vi.waitFor(()=>expect(events).toEqual(["saved","compile"]));expect(auditSource).not.toHaveBeenCalled();release();
+    const result=await pending;
+    expect(auditSource).toHaveBeenCalledTimes(compiled?1:0);expect(result.sourceAudit?.status).toBe(compiled?"passed":undefined);
   });
   it("uses one model call and saves the entire source before compilation", async () => {
     const input = request(), events: string[] = [];

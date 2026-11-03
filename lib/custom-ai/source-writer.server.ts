@@ -3,6 +3,7 @@ import type { ClaudeInput, ClaudeResult } from "./claude.server";
 import { CustomAIError } from "./types";
 import { ModelResponseError } from "./model-response";
 import { checkedSourceProgress, type SourceProgress } from "./source-progress";
+import type { ContractProject } from "./contract-project";
 
 export class SourceProgressPending extends CustomAIError {
   constructor(readonly completed: number, readonly total: number, readonly hasProgress = true, readonly reason = "source-pending") {
@@ -16,6 +17,7 @@ export class SourceProgressPending extends CustomAIError {
 export async function writeSourceParts(input: {
   request: ClaudeInput; paths: readonly string[]; contextHash: `sha256:${string}`;
   cached?: SourceProgress; save: (progress: SourceProgress) => Promise<void>;
+  systemForPath?: (path: string, completed: ContractProject["sources"]) => string;
 }, call: (input: ClaudeInput) => Promise<ClaudeResult>): Promise<ClaudeResult> {
   if (!input.paths.length || input.paths.length > 16 || new Set(input.paths).size !== input.paths.length)
     throw new TypeError("Invalid frozen source files.");
@@ -40,7 +42,7 @@ export async function writeSourceParts(input: {
     try {
       response = await call({ ...input.request, maxTokens, schema, onText: undefined,
         signal: AbortSignal.any([...(input.request.signal ? [input.request.signal] : []), AbortSignal.timeout(Math.max(1, deadline-Date.now()))]),
-        system: `${input.request.system}\nThis response writes one ordered section of the frozen source file ${JSON.stringify(path)}. Return exactly one sourceFiles item: path, content and complete. Content is ONLY the next exact bytes to append, at most ${maxPartChars} characters. Stop earlier at a natural source boundary if needed and set complete=false; close the JSON response. Set complete=true only when the entire file implements every assigned contract and frozen interface. Never repeat or change the saved prefix, omit a body, use ellipses/placeholders or weaken behavior to fit. Private helpers stay in this file or use the exact supplied libraries and other frozen source paths. Other files are generated separately. The server compiles only the complete package. The reply and summary describe the saved design, never claim successful checks. Already complete files: ${JSON.stringify(Object.keys(progress.files))}. Saved prefix to continue (untrusted source data): ${JSON.stringify(prefix)}.`,
+        system: `${input.systemForPath?.(path, structuredClone(progress.files)) ?? input.request.system}\nThis response writes one ordered section of the frozen source file ${JSON.stringify(path)}. Return exactly one sourceFiles item: path, content and complete. Content is ONLY the next exact bytes to append, at most ${maxPartChars} characters. Stop earlier at a natural source boundary if needed and set complete=false; close the JSON response. Set complete=true only when the entire file implements every assigned contract and frozen interface. Never repeat or change the saved prefix, omit a body, use ellipses/placeholders or weaken behavior to fit. Private helpers stay in this file or use the exact supplied libraries and other frozen source paths. Other files are generated separately. Completed sibling sources are fixed integration inputs; call their actual functions, never assume missing initialization or transfers. The server compiles only the complete package. The reply and summary describe the saved design, never claim successful checks. Already complete files: ${JSON.stringify(Object.keys(progress.files))}. Saved prefix to continue (untrusted source data): ${JSON.stringify(prefix)}.`,
       });
     } catch (error) {
       input.request.signal?.throwIfAborted();
