@@ -10,11 +10,14 @@ export class SurplusSchemaError extends CustomAIError {
     Object.defineProperty(this,"schemaFailure",{value:diagnostic,enumerable:false});
   }
 }
-const diagnosticFields=new Set(["reply","summary","sourceFiles","path","content","entrypoints","source","contract","role","requirementIds"]);
+const diagnosticFields=new Set(["reply","summary","sourceFiles","path","content","entrypoints","source","contract","role","requirementIds",
+  "action","executionRoute","intentMode","intentRequirements","ruleEdits","implementedRequirementIds","setupPatch","lookups","feeChecks",
+  "memory","launchRequested","composable","program","eventRule","name","symbol","chainId","pairToken","initialBuy","description","website","x"]);
 function schemaDiagnostic(errors:ErrorObject[]|null|undefined):ModelSchemaFailure {
   return {kind:"schema",issues:(errors??[]).slice(0,8).map(error=>({
     // Unknown or model-chosen object keys can contain private text. Never keep them.
-    path:error.instancePath.split("/").map((part,index)=>index===0?"":diagnosticFields.has(part)||/^\d{1,5}$/u.test(part)?part:"*").join("/").slice(0,180),
+    path:[...error.instancePath.split("/"),...((error.params.missingProperty??error.params.additionalProperty)!==undefined
+      ?[String(error.params.missingProperty??error.params.additionalProperty)]:[])].map((part,index)=>index===0?"":diagnosticFields.has(part)||/^\d{1,5}$/u.test(part)?part:"*").join("/").slice(0,180),
     keyword:error.keyword,
     ...(Number.isSafeInteger(error.params.limit)?{expected:error.params.limit as number}:{}),
   }))};

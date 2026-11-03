@@ -79,6 +79,11 @@ describe("Surplus model routing", () => {
     expect(invalid).toMatchObject({schemaFailure:{kind:"schema",issues:[{path:"/sourceFiles/*",keyword:"type"}]}});
     expect(JSON.stringify((invalid as {schemaFailure:unknown}).schemaFailure)).not.toMatch(/private_api_key_example|secret content/);
   });
+  it("identifies a missing known envelope field without response values",()=>{
+    const format=prepareSurplusSchema({type:"object",properties:{action:{type:"string"}},required:["action"],additionalProperties:false},true);
+    let failure:unknown;try{format.decode('{}');}catch(error){failure=error;}
+    expect(failure).toMatchObject({schemaFailure:{kind:"schema",issues:[{path:"/action",keyword:"required"}]}});
+  });
   it("requires both a complete streamed result and the terminal marker", async () => {
     useSurplus();const onText=vi.fn();
     const events=[{choices:[{index:0,delta:{content:'{"reply":"OK"}'},finish_reason:null}]},{choices:[{index:0,delta:{},finish_reason:"stop"}],usage:{prompt_tokens:3,completion_tokens:4}}];

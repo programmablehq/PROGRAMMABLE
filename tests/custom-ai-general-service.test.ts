@@ -12,6 +12,7 @@ import { applyCoinSetupPatch, EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-set
 import type {ClaudeInput,ClaudeResult} from "../lib/custom-ai/claude.server";
 import {generalProjectView} from "../lib/custom-ai/project-view";
 import { ModelResponseError } from "../lib/custom-ai/model-response";
+import {CONTINUE_SAVED_BUILD} from "../lib/custom-ai/build-command";
 
 const instruction="Build a counter that anyone can increment with no owner.";
 const request:ChatRequest={id:"general-service-request-0001",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:instruction}]};
@@ -29,6 +30,24 @@ function prior():GeneralProjectDraft{
  const project=createContractProject({compiler:{version:GENERAL_PROJECT_COMPILER,optimizerRuns:1000,viaIR:false,evmVersion:"paris"},sources:{"Counter.sol":{content:source}},entrypoints:[{source:"Counter.sol",contract:"Counter",role:"auxiliary"}]},intent,1);
  return {version:1,reply:"Saved",summary:"Counter",project,compilation:{version:1,projectHash:project.hash,artifactHash:`sha256:${"b".repeat(64)}`,compiled:true,compiler:GENERAL_PROJECT_COMPILER,diagnostics:[],contracts:[],verification:"not-run",launchReady:false},selection:selectExecutionRoute(intent,1),requirementCoverage:"proposed",launchReady:false};
 }
+
+it("continues the complete saved design without another interpretation call",async()=>{
+ const previous=prior(),saveProject=vi.fn(async()=>{}),call=vi.fn(async()=>generated());
+ const value=await runCustomAI({...request,messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,{call,compile:vi.fn(),compileProject:compile},
+  {generalProject:previous,saveProject});
+ expect(call).toHaveBeenCalledTimes(1);
+ expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source");
+ expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledTimes(1);
+ expect(value.nextAction).toBeUndefined();expect(value.generalProject?.launchReady).toBe(false);
+});
+it("keeps the planner for a saved design with an unresolved choice",async()=>{
+ const previous=prior(),intent={...previous.project.intent,unresolved:["Choose the counter start"],requirements:previous.project.intent.requirements.map((r,i)=>i? r:{...r,open:"Choose the counter start"})};
+ const call=vi.fn(async()=>plan({action:"clarify",intentMode:"preserve",intentRequirements:[],ruleEdits:[],reply:"Choose the starting value."}));
+ const saveProject=vi.fn(async()=>{});
+ await runCustomAI({...request,messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,{call,compile:vi.fn(),compileProject:compile},
+  {intent,generalProject:previous,saveProject});
+ expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("planning");expect(saveProject).not.toHaveBeenCalled();
+});
 
 it("turns a casual explicit launch request into a source-bound preparation action without rebuilding",async()=>{
  const previous=prior(),view=generalProjectView(previous);
