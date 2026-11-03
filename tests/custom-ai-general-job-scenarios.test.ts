@@ -90,11 +90,16 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("general scenarios in the a
   const call=vi.fn(async(input:ClaudeInput)=>{
    if(call.mock.calls.length===1){expect(input.system).toContain("ADVERSARIAL_ORACLE_TOUCH");return plan(poisoned);}
    if(call.mock.calls.length===2){expect(input.system).not.toContain("ADVERSARIAL_ORACLE_TOUCH");expect(JSON.stringify(input.messages)).not.toContain("ADVERSARIAL_ORACLE_TOUCH");return response({generalChecks:JSON.stringify(declaration())});}
-   return generated();
+   expect(input.system).toContain("The active response schema for this existing project");
+   return response({reply:"The counter now increments by one.",summary:"Counter without an owner",changes:[
+    {path:"Counter.sol",before:"count+=2;",after:"count+=1;"},
+   ]});
   });
   const value=await runCustomAI(inspected,undefined,{call,compile:vi.fn(),compileProject:compileContractProject},{...context(attempt.lease!),intent,generalProject:previous});
   expect(call).toHaveBeenCalledTimes(3);expect(value.generalProject?.scenarios?.passed).toBe(true);
   expect((await store.projects.readBlueprint("alice",request.id))?.blueprint.scenarios.steps[2].expect.returns).toEqual(["1"]);
+  expect((await store.projects.read("alice",request.id))?.project.sources["Counter.sol"].content).toContain("count+=1;");
+  expect((await store.projects.read("alice",request.id))?.project.sources["Counter.sol"].content).toContain("ADVERSARIAL_ORACLE_TOUCH");
  });
  it("resumes only the failed worker with its original oracle and artifacts, without inference or a second compilation",async()=>{
   const attempt=await store.reserve("alice",request),call=vi.fn().mockResolvedValueOnce(plan()).mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration())})).mockResolvedValueOnce(generated()),compiler=vi.fn(compileContractProject),outage=vi.fn(async()=>{throw new CustomAIError("behavior-worker","Fixture worker unavailable",503);});
