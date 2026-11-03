@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {requestedVerification} from "../lib/custom-ai/verification-request";
+import {requestedVerification,interruptedVerification} from "../lib/custom-ai/verification-request";
 const request=(content:string)=>({messages:[{role:"user" as const,content}]});
 describe("explicit verification changes",()=>{
  it.each([
@@ -9,4 +9,9 @@ describe("explicit verification changes",()=>{
  it.each(["Build the saved design","Run the current tests","Welche Tests fehlen?","Do not change the tests",'> Add missing tests'])
   ("does not turn a retry, question, negation or quotation into a fresh plan: %s",text=>expect(requestedVerification(request(text))).toBeUndefined());
  it("accepts the planner's explicit intent for other phrasings",()=>expect(requestedVerification(request("Bitte auch den glücklichen Ablauf prüfen."),true)).toBe("Bitte auch den glücklichen Ablauf prüfen."));
+ it("keeps the immediately interrupted request when the user continues",()=>{
+  const content="Add successful buyback and burn checks before building.";
+  expect(interruptedVerification({intent:"chat",messages:[{role:"user",content},{role:"user",content:"weiter"}]})).toBe(content);
+  expect(interruptedVerification({intent:"chat",messages:[{role:"user",content},{role:"assistant",content:"Done."},{role:"user",content:"weiter"}]})).toBeUndefined();
+ });
 });
