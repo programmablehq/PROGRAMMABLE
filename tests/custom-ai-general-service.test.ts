@@ -14,6 +14,8 @@ import {generalProjectView} from "../lib/custom-ai/project-view";
 import { ModelResponseError } from "../lib/custom-ai/model-response";
 import {CONTINUE_SAVED_BUILD} from "../lib/custom-ai/build-command";
 import {createGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
+import {checkContextHash} from "../lib/custom-ai/check-diagnostic";
+import {canonicalInterfaceContext} from "../lib/custom-ai/canonical-dependencies.server";
 
 const instruction="Build a counter that anyone can increment with no owner.";
 const request:ChatRequest={id:"general-service-request-0001",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:instruction}]};
@@ -53,6 +55,20 @@ it("reuses the newer completed check plan after a requested refresh and interrup
  expect(oldPlan).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
  expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source-implementation");
  expect(value.intent).toEqual(intent);expect(value.generalProject?.launchReady).toBe(false);
+});
+it("resumes an interrupted verification refresh without rebuilding its completed graph or accepting an older plan",async()=>{
+ const intent=prior().project.intent,verificationInstruction="Add successful counter checks.";
+ const graph={contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[]};
+ const diagnostic={version:1 as const,contextHash:checkContextHash({intent,chainId:999,evmVersion:"paris",verificationInstruction,interfaceHash:canonicalInterfaceContext(999).id}),
+   progress:{interface:JSON.stringify(graph),steps:[]},failures:[{stage:"scenarios" as const,message:"Interrupted scenario page",declaration:null}]};
+ const call=vi.fn(async()=>{throw new ModelResponseError("timeout",{inputTokens:0,outputTokens:0});}),oldPlan=vi.fn();
+ const value=await runCustomAI({...request,coin:{...EMPTY_COIN_SETUP,chainId:999,pairToken:"HYPE"},messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,
+  {call,compile:vi.fn(),compileProject:compile},{intent,verificationInstruction,verificationRefreshRequested:true,projectCompilerTarget:"paris",
+   saveProject:async()=>{},saveBlueprint:async()=>{},saveCompilation:async()=>{},saveScenarios:async()=>{},loadBlueprint:oldPlan,loadCheckDiagnostic:async()=>diagnostic});
+ expect(oldPlan).not.toHaveBeenCalled();
+ expect(call.mock.calls.map(args=>(args as unknown as [ClaudeInput])[0].task)).toEqual(["scenarios"]);
+ expect(value.verificationRefreshRequested).toBe(true);expect(value.verificationInstruction).toBe(verificationInstruction);
+ expect(value.buildIssue?.stage).toBe("scenarios");
 });
 it("carries an explicit verification request into a fresh source-blind plan even if the planner misses the flag",async()=>{
  const intent=prior().project.intent;

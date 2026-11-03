@@ -29,3 +29,42 @@ export function recoverCompletedInterface(response: string, graph: Record<string
     } catch { return; }
   }
 }
+
+/** A seller can emit a draft followed by one explicitly corrected object.
+ * Accept only the complete replacement, never merge drafts or finish JSON.
+ * This is limited to deployment data and the original graph-scoped schema. */
+export function recoverCorrectedDeployment(response: string, graph: Record<string, unknown>): string | undefined {
+  if (new TextEncoder().encode(response).length > 96_000) return;
+  const text = response.trim();
+  const objectEnd = (start: number) => {
+    if (text[start] !== "{") return -1;
+    let depth = 0, quoted = false, escaped = false;
+    for (let index = start; index < text.length; index++) {
+      const char = text[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') quoted = false;
+      } else if (char === '"') quoted = true;
+      else if (char === "{") depth++;
+      else if (char === "}" && --depth === 0) return index + 1;
+    }
+    return -1;
+  };
+  const draftEnd = objectEnd(0);
+  if (draftEnd < 0) return;
+  const replacementStart = text.indexOf("{", draftEnd);
+  if (replacementStart < 0) return;
+  const explanation = text.slice(draftEnd, replacementStart);
+  if (explanation.length > 2000 || /[{}\[\]]|```/u.test(explanation)
+    || !/\b(?:corrected|correction|revised|replacement)\b/iu.test(explanation)) return;
+  const replacementEnd = objectEnd(replacementStart);
+  if (replacementEnd !== text.length) return;
+  try {
+    const draft: unknown = JSON.parse(text.slice(0, draftEnd));
+    if (!draft || typeof draft !== "object" || Array.isArray(draft) || Object.keys(draft).join() !== "deployment") return;
+    const schema = interfaceSchemaForGraph(graph, true);
+    return prepareSurplusSchema({ type: "object", properties: { deployment: schema.properties.deployment },
+      required: ["deployment"], additionalProperties: false }, true).decode(text.slice(replacementStart));
+  } catch { return; }
+}

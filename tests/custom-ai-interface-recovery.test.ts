@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { recoverCompletedInterface } from "../lib/custom-ai/interface-recovery";
+import { recoverCompletedInterface, recoverCorrectedDeployment } from "../lib/custom-ai/interface-recovery";
 import { declareGeneralChecks } from "../lib/custom-ai/check-declaration.server";
 import { checkContextHash } from "../lib/custom-ai/check-diagnostic";
 import { ModelResponseError } from "../lib/custom-ai/model-response";
@@ -16,6 +16,11 @@ const interfaces = [{ id: "main", canonical: null, functions: ["function count()
 const partial = `\`\`\`json\n{"interfaces":${JSON.stringify(interfaces)},"deployment":{"targets":[`;
 const input = { intent, chainId: 1 as const, evmVersion: "paris" as const, model: "test-model" };
 const response = (body: unknown) => ({ text: JSON.stringify(body), inputTokens: 1, outputTokens: 1 });
+const deployment = { format: "fixture-refs-v2", targets: [{ id: "main", argumentsJson: "[]", initializerFunction: null,
+  initializerArgumentsJson: "[]", deploymentValue: "0", initializerValue: "0", hookPermissions: null }], constructorChildren: [],
+  pool: { token: "main", hook: "main", initializer: "main", platformFeeBinding: "main", fee: 0, tickSpacing: 60 },
+  fees: null, liquidityModel: null, openingPrice: null };
+const correction = (next: unknown = deployment) => `${JSON.stringify({ deployment })}\nThe corrected object follows.\n${JSON.stringify({ deployment: next })}`;
 
 describe("completed public-interface recovery", () => {
   it("recovers a complete ABI before an interrupted deployment without accepting deployment bytes", () => {
@@ -53,5 +58,36 @@ describe("completed public-interface recovery", () => {
     const resume = vi.fn().mockRejectedValue(new ModelResponseError("timeout", { inputTokens: 0, outputTokens: 0 }));
     await declareGeneralChecks({ ...current, rejected: error.diagnostic }, resume).catch(() => undefined);
     expect(resume.mock.calls.map(([request]) => request.task)).toEqual(["interface-deployment"]);
+  });
+});
+
+describe("explicitly corrected deployment data", () => {
+  it("uses the complete replacement and preserves JSON strings containing braces", () => {
+    const next = { ...deployment, targets: [{ ...deployment.targets[0], argumentsJson: '[{"input":"name"}]' }] };
+    expect(JSON.parse(recoverCorrectedDeployment(correction(next), graph)!)).toEqual({ deployment: next });
+  });
+  it("rejects ambiguous, incomplete, oversized and foreign graph data", () => {
+    const invalid = [correction().replace("The corrected object follows.", "Another object."),
+      correction().slice(0, -1), correction() + JSON.stringify({ deployment }),
+      correction() + " trailing text", correction().replace('"deployment":', '"command":'),
+      correction({ ...deployment, targets: [{ ...deployment.targets[0], id: "foreign" }] }),
+      correction({ ...deployment, unexpected: true }), correction() + " ".repeat(96_001)];
+    for (const value of invalid) expect(recoverCorrectedDeployment(value, graph)).toBeUndefined();
+  });
+  it.each([false, true])("retains completed interfaces and resumes scenarios without a second deployment call (saved=%s)", async saved => {
+    const production = projectLaunchProductionContext(captured.chains["1"], 1);
+    const current = { ...input, production };
+    const ready = { ...graph, contracts: [{ ...graph.contracts[0], functions: interfaces[0].functions }] };
+    const failure = { stage: "interface" as const, message: "Invalid JSON", declaration: null, response: correction() };
+    const rejected = { version: 1 as const, contextHash: checkContextHash(current),
+      progress: { interface: JSON.stringify(ready), steps: [] }, failures: saved ? [failure] : [{ ...failure, response: undefined }] };
+    const call = vi.fn(async request => {
+      if (request.task === "interface-deployment") throw new ModelResponseError("invalid-schema", { inputTokens: 1, outputTokens: 1 }, correction());
+      throw new ModelResponseError("timeout", { inputTokens: 0, outputTokens: 0 });
+    });
+    const error = await declareGeneralChecks({ ...current, rejected }, call).catch(value => value);
+    expect(call.mock.calls.map(([request]) => request.task)).toEqual(saved ? ["scenarios"] : ["interface-deployment", "scenarios"]);
+    expect(error.diagnostic.progress.interfacesPending).toBeUndefined();
+    expect(JSON.parse(error.diagnostic.progress.interface).deployment).toBeDefined();
   });
 });

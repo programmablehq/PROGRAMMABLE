@@ -344,10 +344,15 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       try {
         const newer=await context.loadNewerBlueprint?.(intent,coin.chainId,verificationInstruction);
         blueprint=await declareGeneralChecks({intent,chainId:coin.chainId,evmVersion,production:selectedProduction,
-          forceNew:Boolean(newVerification)||context.verificationRefreshRequested===true&&!newer,
+          // A newly requested audit replaces earlier work. An interrupted
+          // audit resumes its matching private progress, without reusing the
+          // older completed blueprint that the user asked us to replace.
+          forceNew:Boolean(newVerification),
           verificationInstruction,
           interfaces:canonicalInterfaceContext(coin.chainId),
-          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:newer??await context.loadBlueprint?.(intent,coin.chainId,verificationInstruction),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
+          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,
+          cached:newer??(context.verificationRefreshRequested===true?undefined:await context.loadBlueprint?.(intent,coin.chainId,verificationInstruction)),
+          rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
       } catch(error) {
         signal?.throwIfAborted();
         if(!(error instanceof ModelResponseError)&&!(error instanceof TypeError)&&!(error instanceof SyntaxError)
