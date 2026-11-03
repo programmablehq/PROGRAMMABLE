@@ -1,7 +1,7 @@
 import {describe,it,expect,vi} from "vitest";
 vi.mock("server-only",()=>({}));
 import {writeSourceParts,SourceProgressPending} from "../lib/custom-ai/source-writer.server";
-import {checkedSourceProgress,type SourceProgress} from "../lib/custom-ai/source-progress";
+import {checkedSourceProgress,sourceProgressExtends,type SourceProgress} from "../lib/custom-ai/source-progress";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 const hash=`sha256:${"a".repeat(64)}` as const;
@@ -25,14 +25,36 @@ describe("bounded source parts",()=>{
   const output=await writeSourceParts({request,paths:["A.sol","B.sol"],contextHash:hash,cached:saved,save:async()=>{}},resumed);
   expect(resumed).toHaveBeenCalledOnce();expect(JSON.parse(output.text).sourceFiles.map((f:{path:string})=>f.path)).toEqual(["A.sol","B.sol"]);
  });
- it("fits a large hook and small companion within one shared budget",async()=>{
-  let index=0;const paths=["A.sol","B.sol"],costs=[10_000,1_000],saved:SourceProgress[]=[];
+ it("saves a large hook in ordered sections within one shared budget",async()=>{
+  let index=0;const paths=["A.sol","B.sol"],costs=[6_000,4_000,1_000],saved:SourceProgress[]=[];
   const output=await writeSourceParts({request,paths,contextHash:hash,save:async p=>{saved.push(p);}},async input=>{
-   const cost=costs[index];
+   const cost=costs[index],part=index++;
    if(input.maxTokens<cost)throw new ModelResponseError("output-limit",{inputTokens:1,outputTokens:input.maxTokens});
-   return {...response(paths[index++]),outputTokens:cost};
+   return {text:JSON.stringify({reply:"Written",summary:"A and B",sourceFiles:[{path:part<2?"A.sol":"B.sol",content:part===0?"contract A {":part===1?"}":"contract B {}",complete:part!==0}]}),inputTokens:1,outputTokens:cost};
   });
   expect(output.outputTokens).toBe(11_000);expect(Object.keys(saved.at(-1)!.files)).toEqual(paths);
+  expect(saved[0].files).toEqual({});expect(saved[0].partial?.content).toBe("contract A {");
+  expect(JSON.parse(output.text).sourceFiles[0].content).toBe("contract A {}");
+ });
+ it("resumes the first large file after interruption without treating the prefix as complete source",async()=>{
+  let saved:SourceProgress|undefined;let n=0;
+  await expect(writeSourceParts({request,paths:["A.sol"],contextHash:hash,save:async p=>{saved=p;}},async()=>{
+   if(n++)throw new ModelResponseError("output-limit",{inputTokens:1,outputTokens:8000});
+   return {text:JSON.stringify({reply:"Writing",summary:"A",sourceFiles:[{path:"A.sol",content:"contract A {",complete:false}]}),inputTokens:1,outputTokens:5000};
+  })).rejects.toBeInstanceOf(SourceProgressPending);
+  expect(saved?.files).toEqual({});
+  const call=vi.fn(async(input:ClaudeInput)=>{
+   expect(input.system).toContain('contract A {');
+   return {text:JSON.stringify({reply:"Written",summary:"A",sourceFiles:[{path:"A.sol",content:"}",complete:true}]}),inputTokens:1,outputTokens:10};
+  });
+  const value=await writeSourceParts({request,paths:["A.sol"],contextHash:hash,cached:saved,save:async()=>{}},call);
+  expect(JSON.parse(value.text).sourceFiles[0].content).toBe("contract A {}");expect(call).toHaveBeenCalledOnce();
+ });
+ it("does not replace a saved prefix or expose it as a complete file",()=>{
+  const before:SourceProgress={version:1,contextHash:hash,files:{},reply:"Writing",summary:"A",partial:{path:"A.sol",content:"contract A {",parts:1}};
+  expect(sourceProgressExtends(before,{...before,partial:{path:"A.sol",content:"contract B {",parts:2}})).toBe(false);
+  expect(sourceProgressExtends(before,{version:1,contextHash:hash,files:{"A.sol":{content:"contract A {}"}},reply:"Done",summary:"A"})).toBe(true);
+  expect(()=>checkedSourceProgress({...before,files:{"A.sol":{content:"contract A {}"}}})).toThrow();
  });
  it("rejects a stale context, extra source path and mutable checkpoint",()=>{
   const p:SourceProgress={version:1,contextHash:hash,files:{"A.sol":{content:"contract A {}"}},reply:"Done",summary:"A"};

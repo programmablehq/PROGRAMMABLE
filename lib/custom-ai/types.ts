@@ -71,6 +71,7 @@ export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: s
   nextAction?: {kind:"prepare-launch";sourceId:string};
   replyLocale?: string;
   verificationRefreshRequested?: boolean;
+  verificationInstruction?: string;
   buildIssue?: {stage:"interface"|"scenarios"|"source";code:string};
   generalProject?: import("./project-view").GeneralProjectView;
   selection?: import("./execution-routing").RouteSelection;

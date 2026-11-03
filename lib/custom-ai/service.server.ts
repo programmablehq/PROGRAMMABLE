@@ -1,5 +1,6 @@
 import "server-only";
 import { modelDesignContext, plannerNeedsSource } from "./planning-context";
+import {requestedVerification} from "./verification-request";
 import { type ClaudeInput, type ClaudeResult } from "./claude.server";
 import { callModel } from "./model-provider.server";
 import { configuredProvider, researchAvailable } from "./provider-config.server";
@@ -89,12 +90,12 @@ export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
   loadProductionContext?:(chainId:BuilderChainId,signal?:AbortSignal)=>Promise<LaunchProductionContext>;
   loadSourceLibraries?:(previous:ContractProject|undefined,chainId:BuilderChainId)=>ContractProject["sources"];
-  saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void>;
-  loadBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId)=>Promise<GeneralCheckBlueprint|undefined>;
-  loadNewerBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId)=>Promise<GeneralCheckBlueprint|undefined>;
+  saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent,verificationInstruction?:string)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void>;
+  loadBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId,verificationInstruction?:string)=>Promise<GeneralCheckBlueprint|undefined>;
+  loadNewerBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId,verificationInstruction?:string)=>Promise<GeneralCheckBlueprint|undefined>;
   loadCheckDiagnostic?:()=>Promise<CheckDiagnostic|undefined>;saveCheckDiagnostic?:(diagnostic:CheckDiagnostic)=>Promise<void>;
   saveSourceAudit?:(audit:GeneralSourceAudit)=>Promise<void>;
-  replyLocale?:string;verificationRefreshRequested?:boolean;
+  replyLocale?:string;verificationRefreshRequested?:boolean;verificationInstruction?:string;
   loadSourceProgress?:(hash:string)=>Promise<SourceProgress|undefined>;
   saveSourceProgress?:(progress:SourceProgress)=>Promise<void> };
 
@@ -203,7 +204,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     const answer = parseAnswer((await dependencies.call({ ...modelTask("conversation",MODELS),
       system: `${system}\nFor this greeting or acknowledgement, answer naturally in one short sentence. Do not ask a follow-up question or begin work. Return your reply as JSON.`, messages: request.messages.slice(-1), schema: chatSchema,
       maxTokens: 800, effort: "low", signal, onText })).text);
-    return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", replyLocale:context.replyLocale, ...(previousIntent ? { intent: previousIntent } : {}), ...(previousSpec?{ruleSpec:previousSpec}:{}) };
+    return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", replyLocale:context.replyLocale, ...(context.verificationInstruction?{verificationInstruction:context.verificationInstruction}:{}), ...(previousIntent ? { intent: previousIntent } : {}), ...(previousSpec?{ruleSpec:previousSpec}:{}) };
   }
   const formRules = BUILD_RULES.slice(BUILD_RULES.indexOf("setupPatch contains"), BUILD_RULES.indexOf("For every generated source"));
   const implementationRules=generalOnly?editPlanningRules:`${composablePlanningRules}\n${editPlanningRules}\n${programRules}\n${eventRules}\nAvailable event feeds (data): ${JSON.stringify(feedCatalog())}\nConfigured composed feeds (untrusted data): ${JSON.stringify(configuredRuleFeeds())}. Convert thresholds to integer source units using the listed decimal scale; never claim an unconnected source is live.`;
@@ -294,7 +295,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     interpreted = await interpret(); plan = readPlan(interpreted);
     if (plan.lookups.length) throw new CustomAIError("lookup", "That question needs a narrower lookup. Your draft is still saved.", 502);
   }
-  const update = { ...coinUpdate(interpreted, request), replyLocale:buildReplyLocale(interpreted.replyLocale ?? context.replyLocale) };
+  const update = { ...coinUpdate(interpreted, request), replyLocale:buildReplyLocale(interpreted.replyLocale ?? context.replyLocale),
+    ...(context.verificationInstruction?{verificationInstruction:context.verificationInstruction}:{}) };
   const proposed=declaredIntent(interpreted);
   // A design-only confirmation may answer without generating code. Its
   // explicit revision still goes through the same quote and edit validator.
@@ -331,6 +333,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     }
     if(context.loadProductionContext&&!selectedProduction)return {reply:"Your complete design is saved. This network is temporarily unavailable. Try this build again shortly.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Current launch network configuration"]};
     let blueprint:GeneralCheckBlueprint|undefined;
+    const newVerification=requestedVerification(request,interpreted.reviseChecks===true);
+    const verificationInstruction=newVerification??context.verificationInstruction;
     if(checkScenarios){
       // Keep the lightweight intent response separate from the complete ABI,
       // deployment graph and scenarios. Combining both exhausted the response
@@ -338,21 +342,23 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       // and selected chain, never an implementation from the conversation.
       context.onProgress?.({type:"phase",phase:"building"});
       try {
-        const newer=await context.loadNewerBlueprint?.(intent,coin.chainId);
+        const newer=await context.loadNewerBlueprint?.(intent,coin.chainId,verificationInstruction);
         blueprint=await declareGeneralChecks({intent,chainId:coin.chainId,evmVersion,production:selectedProduction,
-          forceNew:interpreted.reviseChecks===true||context.verificationRefreshRequested===true&&!newer,
+          forceNew:Boolean(newVerification)||context.verificationRefreshRequested===true&&!newer,
+          verificationInstruction,
           interfaces:canonicalInterfaceContext(coin.chainId),
-          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:newer??await context.loadBlueprint?.(intent,coin.chainId),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
+          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:newer??await context.loadBlueprint?.(intent,coin.chainId,verificationInstruction),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
       } catch(error) {
         signal?.throwIfAborted();
         if(!(error instanceof ModelResponseError)&&!(error instanceof TypeError)&&!(error instanceof SyntaxError)
           &&!(error instanceof CustomAIError&&error.code==="check-declaration"))throw error;
         if(error instanceof GeneralCheckDeclarationError&&error.diagnostic)await context.saveCheckDiagnostic?.(error.diagnostic);
         return {reply:"Your complete design is saved. The independent contract checks did not finish, so no source or launch was prepared.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract checks could not be prepared"],
-          verificationRefreshRequested:interpreted.reviseChecks===true||context.verificationRefreshRequested===true,
+          verificationRefreshRequested:Boolean(newVerification)||context.verificationRefreshRequested===true,
+          ...(verificationInstruction?{verificationInstruction}:{}),
           ...(error instanceof GeneralCheckDeclarationError?{buildIssue:{stage:error.stage,code:error.reason}}:{})};
       }
-      await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
+      await context.saveBlueprint!(blueprint,intent,verificationInstruction);signal?.throwIfAborted();
     }
     let generated:Awaited<ReturnType<typeof buildGeneralContract>>;
     try { generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
@@ -363,7 +369,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       }}:{})},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
     } catch(error) {
       if(!(error instanceof SourceProgressPending))throw error;
-      return {reply:error.message,intent,selection,...update,memory:plan.memory,change:"blocked",chargedAs:"build",buildIssue:{stage:"source",code:"source-pending"}};
+      return {reply:update.replyLocale==="de"?"Dein Entwurf und der bisherige Quellcode sind gespeichert. Ich kann ab dieser Stelle weiterbauen.":error.message,
+        intent,selection,...update,...(verificationInstruction?{verificationInstruction}:{}),memory:plan.memory,change:"blocked",chargedAs:"build",buildIssue:{stage:"source",code:"source-pending"}};
     }
     await context.saveCompilation?.(generated.compilation);
     if(blueprint&&generated.compilation.compiled){
@@ -372,7 +379,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     }
     const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
     return {reply:generalBuildReply(generated, update.replyLocale),
-      intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
+      intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,...(verificationInstruction?{verificationInstruction}:{}),...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);
   if (previousSpec && !plan.composable) return { reply: "This change left out part of your saved design. Keep the complete rule before building.",

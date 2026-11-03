@@ -18,7 +18,7 @@ import { generalCheckCaseCount } from "./behavior-checks";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 import { createGeneralPreparationStore } from "./general-preparation-store.server";
 import { checkedCheckDiagnostic, type CheckDiagnostic } from "./check-diagnostic";
-import { checkedSourceProgress, type SourceProgress } from "./source-progress";
+import { checkedSourceProgress, sourceProgressExtends, type SourceProgress } from "./source-progress";
 
 export type ProjectCheckpoint = {
   version: 1;
@@ -33,7 +33,7 @@ export type ProjectCheckpoint = {
   scenarios?: GeneralScenarioReport;
   sourceAudit?: GeneralSourceAudit;
 };
-export type BlueprintCheckpoint = {version:1;requestId:string;payloadHash:string;intent:LaunchIntent;blueprint:GeneralCheckBlueprint};
+export type BlueprintCheckpoint = {version:1;requestId:string;payloadHash:string;intent:LaunchIntent;blueprint:GeneralCheckBlueprint;verificationInstruction?:string};
 type Transaction = <T>(work: (connection: AIConnection) => Promise<T>) => Promise<T>;
 const kind = "contract-project";
 const blueprintKind = "contract-check-blueprint";
@@ -63,16 +63,16 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       WHERE o.owner=$1 AND o.id=$2 AND o.kind=$3`,[owner,id,blueprintKind])).rows[0];
     return row?row.value as BlueprintCheckpoint:null;
   }
-  async function saveBlueprint(owner:string,id:string,lease:string,input:Pick<BlueprintCheckpoint,"intent"|"blueprint">){
+  async function saveBlueprint(owner:string,id:string,lease:string,input:Pick<BlueprintCheckpoint,"intent"|"blueprint"|"verificationInstruction">){
     const intent=structuredClone(input.intent),blueprint=checkedGeneralCheckBlueprint(input.blueprint,intent);
     if(Buffer.byteLength(JSON.stringify({intent,blueprint}))>384_000)throw new CustomAIError("project-size","This declared design is too large to save.",422);
     return transaction(async db=>{
       const payloadHash=await active(db,owner,id,lease),previous=await savedBlueprint(db,owner,id);
-      if(previous){if(previous.blueprint.id!==blueprint.id)throw conflict();return previous;}
+      if(previous){if(previous.blueprint.id!==blueprint.id||previous.verificationInstruction!==input.verificationInstruction)throw conflict();return previous;}
       // A plan created after source already exists cannot acquire the status
       // of an independent pre-generation receipt.
       if(await saved(db,owner,id))throw conflict();
-      const value:BlueprintCheckpoint={version:1,requestId:id,payloadHash,intent,blueprint};
+      const value:BlueprintCheckpoint={version:1,requestId:id,payloadHash,intent,blueprint,...(input.verificationInstruction?{verificationInstruction:input.verificationInstruction}:{})};
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,$2,$3,$4)`,[owner,blueprintKind,id,JSON.stringify(value)]);
       return value;
@@ -105,7 +105,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       if(row){
         if((row.value as {payloadHash:string}).payloadHash!==payloadHash)throw conflict();
         const previous=checkedSourceProgress((row.value as {progress:unknown}).progress,progress.contextHash);
-        if(Object.entries(previous.files).some(([path,file])=>progress.files[path]?.content!==file.content))throw conflict();
+        if(!sourceProgressExtends(previous,progress))throw conflict();
       }
       await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
         VALUES($1,'source-progress',$2,$3) ON CONFLICT(owner,kind,id)
@@ -295,7 +295,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
   /** A failed source response may still have a complete, independent plan.
    * Reuse that private plan only for the same owner, chat, chain and intent;
    * it carries no source, approval or fresh source-generation timestamp. */
-  async function readFailedBlueprint(owner:string,scope:NonNullable<ChatRequest["conversation"]>,intent:LaunchIntent,chainId:ContractProject["chainId"],afterId?:string):Promise<GeneralCheckBlueprint|undefined> {
+  async function readFailedBlueprint(owner:string,scope:NonNullable<ChatRequest["conversation"]>,intent:LaunchIntent,chainId:ContractProject["chainId"],afterId?:string,verificationInstruction?:string):Promise<GeneralCheckBlueprint|undefined> {
     return transaction(async db=>{
       const row=(await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
         JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
@@ -304,7 +304,8 @@ export function createProjectStore(transaction: Transaction, now: () => number =
         AND j.request#>>'{conversation,id}'=$3 AND lower(j.request#>>'{conversation,account}')=lower($4)
         AND o.value#>>'{blueprint,intentRevision}'=$5 AND j.request#>>'{coin,chainId}'=$6
         AND ($7::text IS NULL OR j.created_at > (SELECT created_at FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$7))
-        ORDER BY j.created_at DESC,j.id DESC LIMIT 1`,[owner,blueprintKind,scope.id,scope.account,intent.revision,String(chainId),afterId??null])).rows[0];
+        AND COALESCE(o.value->>'verificationInstruction','')=$8
+        ORDER BY j.created_at DESC,j.id DESC LIMIT 1`,[owner,blueprintKind,scope.id,scope.account,intent.revision,String(chainId),afterId??null,verificationInstruction??''])).rows[0];
       if(!row)return undefined;
       try{return checkedGeneralCheckBlueprint((row.value as BlueprintCheckpoint).blueprint,intent);}catch{return undefined;}
     });

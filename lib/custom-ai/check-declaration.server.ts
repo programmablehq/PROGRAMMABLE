@@ -29,7 +29,7 @@ export class GeneralCheckDeclarationError extends CustomAIError {
 }
 
 type Input={intent:LaunchIntent;chainId:BuilderChainId;evmVersion:"paris"|"cancun";
-  forceNew?:boolean;production?:LaunchProductionContext;previousCompiler?:ContractProject["compiler"];
+  forceNew?:boolean;verificationInstruction?:string;production?:LaunchProductionContext;previousCompiler?:ContractProject["compiler"];
   model:string;signal?:AbortSignal;cached?:GeneralCheckBlueprint;rejected?:CheckDiagnostic;interfaces?:CanonicalInterfaceContext;interfaceHash?:string};
 const invalid=():never=>{throw new CustomAIError("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);};
 const object=(text:string,maximum=96000):Record<string,unknown>=>{
@@ -92,7 +92,9 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const diagnostic=():CheckDiagnostic=>({version:1,contextHash:checkContextHash(input),failures:structuredClone(failures),...(progress?{progress:structuredClone(progress)}:{})});
   const reject=(reason:string):never=>{if(!failures.length)record(new Error(reason));throw new GeneralCheckDeclarationError(stage,reason,diagnostic());};
   try {
-  const scenarioContext={intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,...(input.production?{production:input.production,uniswapRouting:uniswapRoutingContext(input.production)}:{})};
+  const scenarioContext={intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,
+    ...(input.verificationInstruction?{requestedVerification:input.verificationInstruction}:{}),
+    ...(input.production?{production:input.production,uniswapRouting:uniswapRoutingContext(input.production)}:{})};
   const context=JSON.stringify({...scenarioContext,...(input.interfaces?{canonicalInterfaces:input.interfaces}:{})});
   const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code. When using canonical protected initializers, initialization executes the initial buy as a swap. Rules covering every successful swap also include that initial swap; do not assume a zero counter or no event after initialization. For each requested state-changing mechanism, include a successful execution with its observable asset or state effect as well as the relevant rejection path. Fee allocation getters and revert-only examples cannot prove liquidity deposits, buyback-and-burn execution, holder ranking, snapshot distribution or claims. Exercise those actions with sufficient accrued funds and observation history; verify the resulting position, received or burned tokens, recipient balances and prevention of a second claim. If the test world cannot observe a required action, preserve that limitation instead of claiming the requirement covered. swapFeePpm observes the PoolManager LP-fee field, not separately charged hook fees. Initializer minTokenOut is denominated in raw tokens, never native input; account for mandatory fees and price impact when choosing a positive minimum. A fixed zero-LP-fee pool emits zero there; verify platform and opening hook fees via quote results, vault state or balances instead. Logical fields below describe the server-expanded plan; the current stage schema defines its wire representation. All logical fields are validated after expansion.\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.verification.facts}\n${mechanismKnowledge(input.intent)}\n${generalCheckLogicalRules}\n${launchProductionGuidance(input.production)}`;
   const graphContext=JSON.stringify({...scenarioContext,...(input.interfaces?{canonicalInterfaces:{id:input.interfaces.id,
