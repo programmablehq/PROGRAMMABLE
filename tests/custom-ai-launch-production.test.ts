@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import captured from "./fixtures/custom-ai-launch-discovery.json";
 import protection from "./fixtures/custom-ai-launch-protection.json";
-import { createLaunchProductionDiscovery, projectLaunchProductionContext, projectLaunchProtectionStatus } from "../lib/custom-ai/launch-production.server";
+import { createLaunchBuildDiscovery, createLaunchProductionDiscovery, projectLaunchBuildContext, projectLaunchProductionContext, projectLaunchProtectionStatus } from "../lib/custom-ai/launch-production.server";
 import { checkedLaunchProductionContext, PROTECTED_COMPONENT_ROLES } from "../lib/custom-ai/launch-production";
 import { createContractProject, GENERAL_PROJECT_COMPILER, projectCompilerInput } from "../lib/custom-ai/contract-project";
 import { bindGeneralCheckBlueprint, createGeneralCheckBlueprint } from "../lib/custom-ai/check-blueprint";
@@ -132,6 +132,52 @@ describe("bounded shared chain discovery", () => {
     expect(result.every(value => value.status === "rejected")).toBe(true); expect(policyCalls).toBe(1); expect(fetcher).toHaveBeenCalledTimes(5);
     await expect(read(1, undefined, { fresh: true })).rejects.toThrow(); expect(policyCalls).toBe(1); expect(fetcher).toHaveBeenCalledTimes(5);
     time += 10001; await expect(read(1)).rejects.toThrow(); expect(policyCalls).toBe(2);
+  });
+});
+
+describe("source configuration during temporary launch unavailability", () => {
+  const paused = (chain: 8453 | 999) => {
+    const value = fixture(chain);
+    return { ...value, publicLaunchAuthorized: false, profile: { ...(value.profile as object), productionLaunchAuthorized: false } };
+  };
+  it.each([8453, 999] as const)("keeps chain %i's exact source configuration without admitting a launch", chain => {
+    const expected = projectLaunchProductionContext(fixture(chain), chain, protection);
+    expect(projectLaunchBuildContext(paused(chain), chain, protection)).toEqual(expected);
+    expect(() => projectLaunchProductionContext(paused(chain), chain, protection)).toThrow();
+    expect(paused(chain).profile.productionLaunchAuthorized).toBe(false);
+  });
+  it.each(chains)("rejects explicit unavailability during chain %i preparation even if the profile still appears active", chain => {
+    expect(() => projectLaunchProductionContext({ ...fixture(chain), publicLaunchAuthorized: false }, chain, protection)).toThrow();
+  });
+  it("never changes pinned bindings or accepts malformed and contradictory availability", () => {
+    const original = paused(8453);
+    for (const patch of [
+      { ...original, publicLaunchAuthorized: true },
+      { ...original, publicLaunchAuthorized: "false" },
+      { ...original, profile: { ...original.profile, productionLaunchAuthorized: null } },
+      { ...original, profile: { ...original.profile, poolManager: `0x${"a".repeat(40)}` } },
+      { ...original, profile: { ...original.profile, routerRuntimeCodeHash: `0x${"a".repeat(64)}` } },
+      { ...original, policy: { ...(fixture(8453).policy as object), platformFeeBps: 0 } },
+    ]) expect(() => projectLaunchBuildContext(patch, 8453, protection)).toThrow();
+    expect(() => projectLaunchBuildContext(original, 999, protection)).toThrow();
+  });
+  it("isolates the source cache from preparation and recovers without another source fetch", async () => {
+    let time = 0, available = false;
+    const fetcher = vi.fn(async (url: string | URL | Request) => policyUrl(url) ? json(protection) : json(available ? fixture(8453) : paused(8453)));
+    const deps = { fetch: fetcher, now: () => time };
+    const build = createLaunchBuildDiscovery(deps), prepare = createLaunchProductionDiscovery(deps);
+    const sources = await Promise.all(Array.from({ length: 20 }, () => build(8453)));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await expect(prepare(8453)).rejects.toMatchObject({ code: "launch-context", status: 503 });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    available = true;
+    await expect(prepare(8453, undefined, { fresh: true })).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    time += 10_001;
+    const recovered = await prepare(8453, undefined, { fresh: true });
+    expect(recovered.id).toBe(sources[0].id);
+    expect((await build(8453)).id).toBe(recovered.id);
+    expect(fetcher).toHaveBeenCalledTimes(6);
   });
 });
 

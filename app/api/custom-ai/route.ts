@@ -5,7 +5,7 @@ import { assertModelConnection, researchAvailable } from "@/lib/custom-ai/provid
 import { executionProfile, getCapabilities } from "@/lib/custom-ai/capabilities/registry.server";
 import { createPreviewBudget, readPreviewBody } from "@/lib/custom-ai/access.server";
 import { runCustomAI, type AIContext } from "@/lib/custom-ai/service.server";
-import { readLaunchProductionContext } from "@/lib/custom-ai/launch-production.server";
+import { readLaunchBuildContext } from "@/lib/custom-ai/launch-production.server";
 import { canonicalGeneralSourceCatalog } from "@/lib/custom-ai/canonical-dependencies.server";
 import { CustomAIError, parseChatRequest, type ChatProgress, type ChatResult } from "@/lib/custom-ai/types";
 import { authorizeCustomAI } from "@/lib/custom-ai/auth.server";
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
           ? compileExistingProject({store,owner:authority.owner,id:input.id,lease:reserved.lease,source:compilationSource,onProgress:progress},signal)
           : runCustomAI(input, signal, undefined, { ...context, onProgress: progress,onModelCall:call=>calls.push(call),
           ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
-            loadProductionContext:readLaunchProductionContext,
+            loadProductionContext:readLaunchBuildContext,
             loadSourceLibraries:canonicalGeneralSourceCatalog,
             loadBlueprint:async(intent,chainId)=>{
               for(const id of new Set([input.contextId,input.draftId].filter((value):value is string=>Boolean(value)))){

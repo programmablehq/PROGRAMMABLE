@@ -33,6 +33,7 @@ import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, nor
 import { bindIntentImplementation } from "./intent-coverage.server";
 import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
 import { buildGeneralContract, type GeneralProjectDraft } from "./general-builder.server";
+import { generalBuildReply } from "./build-result";
 import {auditGeneralSource,type GeneralSourceAudit} from "./source-audit.server";
 import { compileContractProject } from "./contract-project.server";
 import type { ContractProject } from "./contract-project";
@@ -354,8 +355,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       signal?.throwIfAborted();await context.saveScenarios!(generated.scenarios);
     }
     const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
-    return {reply:generated.sourceAudit?.status==="changes_required"?`The source is saved. The independent review found a correction: ${generated.sourceAudit.findings[0]?.message}`
-      :generated.scenarios?.passed===false?"The source is saved, but a declared contract check failed. Your previous draft is kept. Ask me to fix this source.":generated.reply,
+    return {reply:generalBuildReply(generated),
       intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);
