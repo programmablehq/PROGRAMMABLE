@@ -16,6 +16,15 @@ describe("bounded source parts",()=>{
   expect(JSON.parse(output.text).sourceFiles).toHaveLength(3);
   let budget=16000;for(const c of calls){expect(c.maxTokens).toBeLessThanOrEqual(budget);budget-=100;}
  });
+ it("fits two reasoning-enabled contract sections inside one shared build budget",async()=>{
+  const paths=["A.sol","B.sol"],calls:ClaudeInput[]=[];let next=0;
+  const result=await writeSourceParts({request,paths,contextHash:hash,save:async()=>{}},async input=>{
+   calls.push(input);expect(input.maxTokens).toBeGreaterThanOrEqual(7000);
+   return {...response(paths[next++]),outputTokens:7000};
+  });
+  expect(result.outputTokens).toBe(14000);expect(calls).toHaveLength(2);
+  expect(JSON.parse(result.text).sourceFiles.map((file:{path:string})=>file.path)).toEqual(paths);
+ });
  it("continues saved work without regenerating the completed file",async()=>{
   let saved:SourceProgress|undefined;let calls=0;
   await expect(writeSourceParts({request,paths:["A.sol","B.sol"],contextHash:hash,save:async p=>{saved=p;}},async()=>{
@@ -24,6 +33,12 @@ describe("bounded source parts",()=>{
   const resumed=vi.fn(async()=>response("B.sol"));
   const output=await writeSourceParts({request,paths:["A.sol","B.sol"],contextHash:hash,cached:saved,save:async()=>{}},resumed);
   expect(resumed).toHaveBeenCalledOnce();expect(JSON.parse(output.text).sourceFiles.map((f:{path:string})=>f.path)).toEqual(["A.sol","B.sol"]);
+ });
+ it("keeps an empty provider interruption at the source stage without inventing saved code or retrying",async()=>{
+  const save=vi.fn(),call=vi.fn(async()=>{throw new ModelResponseError("output-limit",{inputTokens:100,outputTokens:16000});});
+  await expect(writeSourceParts({request,paths:["A.sol"],contextHash:hash,save},call))
+   .rejects.toMatchObject({code:"source-pending",completed:0,total:1,hasProgress:false,reason:"output-limit"});
+  expect(call).toHaveBeenCalledOnce();expect(save).not.toHaveBeenCalled();
  });
  it("saves a large hook in ordered sections within one shared budget",async()=>{
   let index=0;const paths=["A.sol","B.sol"],costs=[6_000,4_000,1_000],saved:SourceProgress[]=[];

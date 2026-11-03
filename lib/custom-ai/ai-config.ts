@@ -5,7 +5,7 @@ export const AI_CONFIG = Object.freeze({
   id: "programmable-custom-ai", version: "2.8.25",
   models: { chat: "claude-haiku-5-5", build: "claude-sonnet-5-5", escalation: "claude-opus-5-5" },
   surplusModels: { chat: "claude-haiku-5.5", build: "claude-sonnet-5.5", escalation: "claude-opus-5.5" },
-  surplusClaudeProviderOrder: ["venice", "openrouter"] as readonly string[],
+  surplusClaudeProviders: ["openrouter", "venice"] as readonly string[],
   voice: VOICE,
   maximumLookups: 2, maximumBuildAttempts: 3, maximumPlanningTokens: 8000,
   maximumContractTokens: 16_000,

@@ -87,6 +87,7 @@ describe("general project generation inside the owned AI job", () => {
     const call = vi.fn(async () => response()), compile = vi.fn(async (project: ContractProject) => { events.push("compiled"); return incompleteBuild(project); });
     const result = await buildGeneralContract(input, undefined, { call, compile });
     expect(events).toEqual(["saved", "compiled"]); expect(call).toHaveBeenCalledTimes(1); expect(compile).toHaveBeenCalledTimes(1);
+    expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].maxTokens).toBe(16_000);
     expect(result.project.intent).toEqual(intent); expect(result.project.chainId).toBe(999);
     expect(result.project.sources["GeneralHook.sol"].content).toBe(source);
     expect(result.compilation.compiled).toBe(false); expect(result.requirementCoverage).toBe("proposed"); expect(result.launchReady).toBe(false);

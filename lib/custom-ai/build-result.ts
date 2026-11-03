@@ -19,7 +19,18 @@ const unfinished: Record<BuildReplyLocale, readonly [string,string]> = {
   nl: ["Je ontwerp is opgeslagen. De controle stopte voordat de code klaar was. Ga hieronder verder met het opgeslagen werk.", "Je ontwerp en de bestaande code zijn opgeslagen. Ga hieronder verder waar we gebleven waren."],
   tr: ["Tasarımın kaydedildi. Kod tamamlanmadan kontrol durdu. Kaydedilen çalışmaya aşağıdan devam edebilirsin.", "Tasarımın ve yazılan kod kaydedildi. Aşağıdan kaldığın yerden devam edebilirsin."],
 };
-export function unfinishedBuildReply(stage:"checks"|"source",locale:unknown):string {
+const sourceNotStarted: Record<BuildReplyLocale, string> = {
+  en: "Your design is saved. The code response did not finish. Continue below to pick up this build.",
+  de: "Dein Entwurf ist gespeichert. Die Code-Antwort wurde nicht fertig. Unten kannst du diesen Build fortsetzen.",
+  fr: "Ton projet est enregistré. La réponse contenant le code n’a pas abouti. Continue ci-dessous pour reprendre ce projet.",
+  es: "Tu diseño está guardado. La respuesta con el código no se completó. Continúa abajo para retomar este proyecto.",
+  it: "Il progetto è salvato. La risposta con il codice non è stata completata. Continua qui sotto per riprendere il progetto.",
+  pt: "O teu projeto está guardado. A resposta com o código não foi concluída. Continua abaixo para retomar o projeto.",
+  nl: "Je ontwerp is opgeslagen. Het antwoord met de code is niet afgerond. Ga hieronder verder met deze build.",
+  tr: "Tasarımın kaydedildi. Kod yanıtı tamamlanmadı. Bu derlemeye aşağıdan devam edebilirsin.",
+};
+export function unfinishedBuildReply(stage:"checks"|"source",locale:unknown,hasSourceProgress=true):string {
+  if (stage === "source" && !hasSourceProgress) return sourceNotStarted[buildReplyLocale(locale)];
   return unfinished[buildReplyLocale(locale)][stage==="checks"?0:1];
 }
 // Translating the presentation never changes the observed result or adds a

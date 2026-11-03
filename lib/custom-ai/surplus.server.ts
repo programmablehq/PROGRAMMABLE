@@ -78,11 +78,15 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     // These calls return data only. Lookups are separately bounded server
     // actions; never delegate shell or other tool execution to a seller.
     tool_choice: "none",
-    ...(input.model.startsWith("claude-") ? { provider_order: AI_CONFIG.surplusClaudeProviderOrder } : {}),
+    ...(input.model.startsWith("claude-") ? { provider: AI_CONFIG.surplusClaudeProviders, provider_order: AI_CONFIG.surplusClaudeProviders } : {}),
     ...(stream ? { stream_options: { include_usage: true } } : {}),
     messages: [{ role: "system", content: jsonObject?`${input.system}\nReturn exactly one JSON object matching this schema. Every field and type is validated locally; do not use markdown or omit required fields. Schema: ${JSON.stringify(input.schema)}`:input.system }, ...input.messages],
     response_format: jsonObject?{type:"json_object"}:{ type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },
-    reasoning_effort: input.effort ?? "medium",
+    // Claude's current routes use adaptive effort, not a fixed thinking-token
+    // allocation. Use the canonical nested control without a conflicting alias.
+    ...(input.model.startsWith("claude-")
+      ? { reasoning: { effort: input.effort ?? "medium" } }
+      : { reasoning_effort: input.effort ?? "medium" }),
   }, signal, limits.timeoutMs).catch(error => { if (timedOut()) throw incomplete("timeout"); throw error; });
   if (response.headers.get("content-type")?.includes("text/event-stream")) {
     let done = false;

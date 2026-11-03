@@ -138,7 +138,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   const librarySources = dependencySourceContext(availableDependencySources).complete;
   if (Object.entries(librarySources).some(([path, source]) => dependencySources[path] && dependencySources[path].content !== source.content))
     throw new CustomAIError("project-dependency", "The supplied library versions conflict. Keep one exact dependency version.", 409);
-  const dependencyContext = dependencySourceContext({ ...librarySources, ...dependencySources });
+  const dependencyContext = dependencySourceContext({ ...librarySources, ...dependencySources }, { libraryDeclarations: true });
   const previous = input.previous ? { hash: input.previous.hash, chainId: input.previous.chainId, intentRevision: input.previous.intent.revision,
     ...(blueprint&&canonicalBrowserJsonV2(input.previous.compiler)===canonicalBrowserJsonV2(blueprint.compiler)
       ?{compilerSource:"fixedChecks.compiler"}:{compiler:input.previous.compiler}),
@@ -165,7 +165,8 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production,uniswapRouting:uniswapRoutingContext(production)}:{}) });
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });
-  const generation:ClaudeInput = { ...modelTask(blueprint?"source-implementation":"source",configuredProvider().models), signal, maxTokens: AI_CONFIG.maximumContractTokens,responseProfile:"contract",
+  const generation:ClaudeInput = { ...modelTask(blueprint?"source-implementation":"source",configuredProvider().models), signal,
+    maxTokens: AI_CONFIG.maximumContractTokens, responseProfile:"contract",
     // A checked graph and canonical intent retain every saved decision. Old
     // failed assistant replies are not source requirements or fresh instructions.
     schema: blueprint?boundProjectResponseSchema:generalProjectResponseSchema, messages: blueprint?input.messages.slice(-1):input.messages,
@@ -184,7 +185,7 @@ ${blueprint?"Return reply first, summary and sourceFiles only. The server retain
 Each sourceFiles item has a path and Solidity content. Follow the active response schema when the server requests ordered source sections; only complete files are compiled. Use relative .sol paths and inline imports whose exact source is either in sourceFiles or supplied below. No shell commands, package installs, remote imports, JavaScript or host files.
 The compiler is pinned to ${JSON.stringify(compiler)}, with metadata bytecodeHash none and appendCBOR false. Do not return compiler configuration or dependency download instructions.
 Supplied dependency files are immutable input. Never replace or repeat their paths in sourceFiles. Available library files are included in the compiler input only when imported, together with their transitive imports. Use their exact supplied paths, or the listed compiler aliases when present. Never download or recreate a missing library.
-Large immutable libraries may be shown without comments and with normalized whitespace. All executable source and string literals remain present; the complete original files are saved and compiled. This view never changes editable project files or grants dependency behavior verification.
+Large immutable libraries may be shown as declaration references: exact names, types, imports, inheritance, constants and storage, with function bodies elided. These are API references for imports, not compilable replacements. Chain-specific protection sources retain their executable code. The complete original files are saved and compiled, never the references. This view never changes editable project files or grants dependency behavior verification.
 Constructors may have explicitly typed arguments for later graph preparation. Never silently substitute argument values or assume constructor execution has happened.
 When fixedChecks declares deployment, implement its complete constructor and initializer interfaces as well as its test interfaces. It is the production declaration; local fixture arguments and funded test accounts are separate. Preserve its symbolic parameter bindings and all previous behavior. A local adapter is never a production initializer.
 Isolated runtime materialization supplies the selected chain, exact constructor args, deployer and predicted addresses. It does not invent transaction origin, live block/time/randomness/gas conditions, ambient balances or unknown dependency code. Prefer a declared initialization step to start a launch timer. If the saved design explicitly needs unavailable constructor context, preserve that requirement and explain the missing capability; do not silently move or remove it.

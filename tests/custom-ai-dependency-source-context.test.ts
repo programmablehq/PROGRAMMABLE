@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { compactDependencyCode, dependencySourceContext } from "../lib/custom-ai/dependency-source-context";
+import { compactDependencyCode, dependencySourceContext, libraryDeclarationReference } from "../lib/custom-ai/dependency-source-context";
 import { buildGeneralContract } from "../lib/custom-ai/general-builder.server";
 import { compileContractProject, type CompiledProject } from "../lib/custom-ai/contract-project.server";
 import { createContractProject, type ContractProject } from "../lib/custom-ai/contract-project";
@@ -38,6 +38,44 @@ contract /* separation */ C {
   it("rejects an unfinished literal or block comment", () => {
     for (const source of ['/* unfinished', 'contract C { string x = "unfinished', "'unfinished\\"])
       expect(() => compactDependencyCode(source)).toThrow();
+  });
+  it("keeps library signatures and literal braces while omitting nested implementation", () => {
+    const reference = libraryDeclarationReference(`pragma solidity 0.8.26;
+import {Other} from "./Other.sol";
+library Sample {
+  string constant TEXT = "function fake() { modifier fake }";
+  struct Item { uint256 value; }
+  enum Mode { First, Second }
+  function (uint256) external returns (uint256) callback;
+  function read(Item memory item) internal pure returns (uint256) {
+    if (item.value > 1) { return item.value; } return 0;
+  }
+  modifier check() { require(true, "}"); _; }
+  function externalReference(uint256 value) external returns (uint256);
+}
+function free(uint256 value) pure returns (uint256) { return value + 1; }`);
+    expect(reference).toContain('string constant TEXT = "function fake() { modifier fake }";');
+    expect(reference).toContain('struct Item { uint256 value; }');
+    expect(reference).toContain('enum Mode { First, Second }');
+    expect(reference).toContain('function (uint256) external returns (uint256) callback;');
+    expect(reference).toContain('function read(Item memory item) internal pure returns (uint256);');
+    expect(reference).toContain('modifier check();');
+    expect(reference).toContain('function externalReference(uint256 value) external returns (uint256);');
+    expect(reference).toContain('function free(uint256 value) pure returns (uint256);');
+    expect(reference).not.toContain('return item.value');
+    expect(reference).not.toContain('value + 1');
+  });
+  it("keeps policy implementations and all original compiler bytes in the smaller reference", async () => {
+    const { sources } = await kit("base-launch-protection-v1");
+    const reference = dependencySourceContext(sources, { libraryDeclarations: true });
+    const full = dependencySourceContext(sources);
+    expect(reference.complete).toEqual(sources);
+    expect(reference.view.originalSourceHash).toBe(full.view.originalSourceHash);
+    expect(reference.view.format).toBe("library-declarations-and-policy-source-v1");
+    expect(JSON.stringify(reference.modelSources).length).toBeLessThan(JSON.stringify(full.modelSources).length * 0.7);
+    for (const [path, source] of Object.entries(sources)) {
+      if (!path.startsWith("lib/")) expect(reference.modelSources[path].content).toBe(compactDependencyCode(source.content));
+    }
   });
   it("keeps small dependency context complete and snapshots it before awaiting", () => {
     const sources = { "Tiny.sol": { content: "// useful context\ncontract Tiny {}" } };
@@ -76,7 +114,7 @@ contract /* separation */ C {
       messages: [{ role: "user", content: "Keep the complete protected source package." }], saveProject }, undefined, { call, compile });
     const modelInput = (call.mock.calls[0] as unknown as [{ system: string }])[0].system;
     expect(modelInput.length).toBeLessThan(160_000);
-    expect(modelInput).toContain("code-without-comments-v1");
+    expect(modelInput).toContain("library-declarations-and-policy-source-v1");
     expect(result.project.sources).toEqual(previous.sources);
     expect(result.project.hash).toBe(previous.hash);
     expect(call).toHaveBeenCalledTimes(1);

@@ -124,7 +124,7 @@ describe("Surplus model routing", () => {
     await expect(callSurplus({...input,responseProfile:"contract"})).resolves.toEqual({text:'{"reply":"Complete checks"}',inputTokens:12,outputTokens:6});
     const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
     expect(body).toMatchObject({stream:true,stream_options:{include_usage:true},max_tokens:200,
-      tool_choice:"none",provider_order:["venice","openrouter"]});
+      tool_choice:"none",provider:["openrouter","venice"],provider_order:["openrouter","venice"]});
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("does not attach Claude seller preferences to another model or accept a seller tool call",async()=>{
@@ -133,7 +133,7 @@ describe("Surplus model routing", () => {
     vi.stubGlobal("fetch",fetcher);
     await expect(callSurplus({...input,model:"another-model"})).rejects.toMatchObject({failure:"refused"});
     const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
-    expect(body.tool_choice).toBe("none");expect(body.provider_order).toBeUndefined();
+    expect(body.tool_choice).toBe("none");expect(body.provider).toBeUndefined();expect(body.provider_order).toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("cancels an unexpected textual tool envelope before reading the rest of a paid stream",async()=>{
@@ -144,6 +144,15 @@ describe("Surplus model routing", () => {
     vi.stubGlobal("fetch",fetcher);
     await expect(callSurplus({...input,responseProfile:"contract"})).rejects.toMatchObject({failure:"refused"});
     expect(cancel).toHaveBeenCalledTimes(1);expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it.each([8000,1500])("uses supported adaptive effort without changing the %s-token source limit",async maxTokens=>{
+    useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:"{}"},finish_reason:"stop"}]}));
+    vi.stubGlobal("fetch",fetcher);
+    await callSurplus({...input,model:"claude-sonnet-5.5",task:"source-implementation",effort:"low",maxTokens});
+    const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(body.max_tokens).toBe(maxTokens);
+    expect(body.reasoning).toEqual({effort:"low"});
+    expect(body.reasoning_effort).toBeUndefined();expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("accepts a complete contract reply after the old two-minute cutoff without a second request",async()=>{
     useSurplus();vi.useFakeTimers();

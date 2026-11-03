@@ -51,5 +51,6 @@ describe("protocol knowledge and model routing",()=>{
     expect(modelTask("planning",models)).toMatchObject({model:models.chat,structuredTransport:"json-object"});
     expect(modelTask("declaration-correction",models)).toMatchObject({model:models.build,maxTokens:8000});
     expect(modelTask("source-audit",models)).toMatchObject({model:models.build,maxTokens:3500});
+    expect(modelTask("source-implementation",models)).toMatchObject({model:models.build,maxTokens:16000,structuredTransport:"json-object"});
   });
 });
