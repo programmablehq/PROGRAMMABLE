@@ -768,7 +768,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     </section>
 
     <div className={styles.coinFrame} data-expanded={coinPanelOpen}>
-    <button type="button" className={styles.coinPanelToggle} aria-expanded={coinPanelOpen} aria-controls="custom-ai-coin-panel"
+    <button type="button" className={styles.coinPanelToggle} aria-label="Coin preview and details" aria-expanded={coinPanelOpen} aria-controls="custom-ai-coin-panel"
       onClick={() => setCoinPanelOpen(current => !current)}>
       <span><strong>{settings.name || "Your coin"}</strong><small>{settings.symbol ? `$${settings.symbol} · ` : ""}{builderChain(settings.chainId).name}</small></span>
       <ChevronDown size={18} aria-hidden="true" />

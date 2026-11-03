@@ -35,7 +35,7 @@ export function ImageAttachments({ disabled, onChoose, onURL }: {
   return <div ref={menu} className={styles.imageAttachments} onKeyDown={event => {
     if (event.key === "Escape") { event.preventDefault(); close(); }
   }}>
-    <button ref={trigger} type="button" aria-label="Add coin image" aria-expanded={open} aria-controls="custom-ai-image-options"
+    <button ref={trigger} type="button" aria-label="Attach image" aria-expanded={open} aria-controls="custom-ai-image-options"
       disabled={disabled || working} onClick={() => setOpen(current => !current)}><ImagePlus size={19} aria-hidden="true" /></button>
     {open && <div id="custom-ai-image-options" className={styles.attachmentMenu} role="group" aria-label="Coin image options">
       <button type="button" disabled={disabled || working} onClick={() => { close(); onChoose(); }}>

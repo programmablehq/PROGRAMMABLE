@@ -76,7 +76,7 @@ The [Custom AI catalog](https://programmable.market/api/custom-ai/tokens) provid
 
 ### Working in the chat
 
-You can upload a coin image from the message box, paste or drop an image, or choose **Add coin image → Use image** for a direct public HTTPS image link. A short message such as `Use this image: https://example.org/coin.png` updates only the image. The previous image stays in place if a replacement cannot be saved.
+You can upload a coin image from the message box, paste or drop an image, or choose **Attach image → Use image** for a direct public HTTPS image link. A short message such as `Use this image: https://example.org/coin.png` updates only the image. The previous image stays in place if a replacement cannot be saved.
 
 The chat shows the current build step while it works. You can write your next message during the build; it is kept as a draft until you send it. A finished, checked hook has a summary and **Launch coin** action in the conversation. This uses the same saved-source preparation and wallet confirmation as the coin panel.
 
