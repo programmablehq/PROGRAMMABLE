@@ -29,11 +29,14 @@ export async function compileContractProject(project: ContractProject, signal?: 
   const compiler = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
   const worker = join(process.cwd(), "scripts/custom-ai/general-project-worker.mjs");
   const directory = await mkdtemp(join(tmpdir(), "custom-ai-project-"));
+  // IR optimization of a complete protected graph needs more time on shared
+  // CPUs. Keep both profiles bounded without restarting completed generation.
+  const timeout = project.compiler.viaIR ? 75_000 : 35_000;
   try {
     const output = await new Promise<string>((resolve, reject) => {
       const child = execFile(process.execPath, ["--permission", `--allow-fs-read=${compiler}`, `--allow-fs-read=${worker}`,
         "--max-old-space-size=384", worker, compiler], { cwd: directory, env: { NODE_ENV: "production" }, encoding: "utf8",
-        timeout: 35_000, maxBuffer: 4_000_000, signal }, (error, stdout) => error
+        timeout, maxBuffer: 4_000_000, signal }, (error, stdout) => error
         ? reject(new CustomAIError("project-compiler", "The isolated contract build did not finish. Your source package is saved.", 503)) : resolve(stdout));
       child.stdin?.on("error", () => undefined);
       child.stdin?.end(JSON.stringify({ compilerInput, entrypoints: project.entrypoints }));
