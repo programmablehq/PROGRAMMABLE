@@ -258,9 +258,26 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       return value;
     });
   }
+  /** A failed source response may still have a complete, independent plan.
+   * Reuse that private plan only for the same owner, chat, chain and intent;
+   * it carries no source, approval or fresh source-generation timestamp. */
+  async function readFailedBlueprint(owner:string,scope:NonNullable<ChatRequest["conversation"]>,intent:LaunchIntent,chainId:ContractProject["chainId"]):Promise<GeneralCheckBlueprint|undefined> {
+    return transaction(async db=>{
+      const row=(await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
+        JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
+        AND j.payload_hash=o.value->>'payloadHash'
+        WHERE o.owner=$1 AND o.kind=$2 AND j.state='failed'
+        AND j.request#>>'{conversation,id}'=$3 AND lower(j.request#>>'{conversation,account}')=lower($4)
+        AND o.value#>>'{blueprint,intentRevision}'=$5 AND j.request#>>'{coin,chainId}'=$6
+        ORDER BY j.created_at DESC,j.id DESC LIMIT 1`,[owner,blueprintKind,scope.id,scope.account,intent.revision,String(chainId)])).rows[0];
+      if(!row)return undefined;
+      try{return checkedGeneralCheckBlueprint((row.value as BlueprintCheckpoint).blueprint,intent);}catch{return undefined;}
+    });
+  }
   return { save, complete, overview, saveBlueprint, saveCheckDiagnostic, readCheckDiagnostic, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
     preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
       publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),
+    readFailedBlueprint,
     read: (owner: string, id: string) => transaction(db => saved(db, owner, id)) };
 }

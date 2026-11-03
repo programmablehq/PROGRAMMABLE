@@ -49,7 +49,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   let walletSubject: GeneralWalletSubject | undefined;
   try { if (accepted && saved && launch.currentStatus) walletSubject = generalWalletSubject(saved, launch.currentStatus); }
   catch { /* Keep the original submission link. A mismatched status cannot open a wallet step. */ }
-  const complete = project?.compiled && project.scenarios?.passed && project.chainId === settings.chainId
+  const complete = project?.compiled && project.scenarios?.passed && project.sourceReview!=="changes_required" && project.chainId === settings.chainId
     && intent && project.intentRevision === intent.revision && !intentHasOpenParts(intent) && !pendingChange;
   const detail = generalLaunchDetailIssue(settings, Boolean(imageId));
   const warmed = useRef<string | undefined>(undefined);
@@ -79,6 +79,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     : accepted ? launch.automatic?.state==="changes_required"?"This source needs the correction shown below. Update it in the chat."
       :launch.automatic?.state==="interrupted"?"The automatic check stopped. Continue with the same saved source."
         :launch.currentStatus ? currentStatusMessage(launch.currentStatus.status) : "Your source is saved. Preparing the launch."
+    : project?.sourceReview==="changes_required" ? "Ask the chat to fix the source review findings."
     : detail ? detail.message : !complete ? "Finish the saved contract design in the chat before submitting it."
     : "Ready to check this source and prepare your launch.";
   if (saved && (uncertain || href) && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;

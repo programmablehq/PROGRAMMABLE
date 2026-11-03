@@ -102,11 +102,12 @@ export async function POST(request: Request) {
           ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
             loadProductionContext:readLaunchProductionContext,
             loadSourceLibraries:canonicalGeneralSourceCatalog,
-            loadBlueprint:async()=>{
+            loadBlueprint:async(intent,chainId)=>{
               for(const id of new Set([input.contextId,input.draftId].filter((value):value is string=>Boolean(value)))){
-                const saved=await store.projects.readBlueprint(authority.owner,id);if(saved)return saved.blueprint;
+                const saved=await store.projects.readBlueprint(authority.owner,id);
+                if(saved&&saved.intent.id===intent.id&&saved.intent.revision===intent.revision&&saved.blueprint.chainId===chainId)return saved.blueprint;
               }
-              return undefined;
+              return store.projects.readFailedBlueprint(authority.owner,input.conversation!,intent,chainId);
             },
             loadCheckDiagnostic:async()=>{
               for(const id of new Set([input.contextId,input.draftId].filter((value):value is string=>Boolean(value)))){
