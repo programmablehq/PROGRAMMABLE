@@ -12,7 +12,7 @@ export class SurplusSchemaError extends CustomAIError {
 }
 const diagnosticFields=new Set(["reply","summary","sourceFiles","path","content","entrypoints","source","contract","role","requirementIds",
   "action","executionRoute","intentMode","intentRequirements","ruleEdits","implementedRequirementIds","setupPatch","lookups","feeChecks",
-  "memory","launchRequested","composable","program","eventRule","name","symbol","chainId","pairToken","initialBuy","description","website","x"]);
+  "memory","replyLocale","launchRequested","reviseChecks","composable","program","eventRule","name","symbol","chainId","pairToken","initialBuy","description","website","x","socialPost"]);
 function schemaDiagnostic(errors:ErrorObject[]|null|undefined):ModelSchemaFailure {
   return {kind:"schema",issues:(errors??[]).slice(0,8).map(error=>({
     // Unknown or model-chosen object keys can contain private text. Never keep them.

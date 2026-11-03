@@ -73,3 +73,13 @@ Pair tokens must be compatible ERC20 tokens on the selected chain with a support
 The coin appears in Explore after finality and indexing. Its coin page provides swaps and creator-fee claims. Claims pay the recipients fixed in the contracts.
 
 The [Custom AI catalog](https://programmable.market/api/custom-ai/tokens) provides finalized launch records and its indexing status. Chat, draft and wallet-operation APIs require an authenticated website account; a Custom Launch API key does not replace that session.
+
+### Working in the chat
+
+You can upload a coin image from the message box, paste or drop an image, or choose **Attach image → Use image** for a direct public HTTPS image link. A short message such as `Use this image: https://example.org/coin.png` updates only the image. The previous image stays in place if a replacement cannot be saved.
+
+The chat shows the current build step while it works. You can write your next message during the build; it is kept as a draft until you send it. A finished, checked hook has a summary and **Launch coin** action in the conversation. This uses the same saved-source preparation and wallet confirmation as the coin panel.
+
+On a phone, the chat comes first. Open the coin row to change its details. Website, X profile and an optional X post are separate public links. An X post is kept as the supplied post URL and does not replace the required project profile on graph launches.
+
+For larger source projects, completed files are saved separately. If a build stops, **Continue building** uses the same saved rules and resumes from those files. Incomplete files cannot be submitted. A request to strengthen the independent behavior checks creates a new check plan instead of reusing the old one.

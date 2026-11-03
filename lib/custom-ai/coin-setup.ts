@@ -11,6 +11,7 @@ export type CoinSetup = {
   description?: string;
   website?: string;
   x?: string;
+  socialPost?: string;
 };
 export type CoinSetupPatch = Partial<CoinSetup>;
 export const EMPTY_COIN_SETUP: CoinSetup = { name: "", symbol: "", chainId: 1, pairToken: "ETH", initialBuy: "0.01" };
@@ -41,7 +42,7 @@ export function parseCoinSetupPatch(value: unknown): CoinSetupPatch {
   }
   // Empty and partially typed links remain valid private form state. The
   // canonical launch packer validates complete public metadata at preparation.
-  for (const field of ["description", "website", "x"] as const) {
+  for (const field of ["description", "website", "x", "socialPost"] as const) {
     const raw = input[field];
     if (raw == null) continue;
     if (typeof raw !== "string") throw new Error("Invalid coin details");
@@ -56,8 +57,9 @@ export function parseCoinSetupPatch(value: unknown): CoinSetupPatch {
 }
 
 /** Early form guidance only; the SDK remains the public metadata authority. */
-export function coinPresentationIssue(setup: CoinSetup, field: "description" | "website" | "x") {
+export function coinPresentationIssue(setup: CoinSetup, field: "description" | "website" | "x" | "socialPost") {
   const value = setup[field]?.normalize("NFC").trim() ?? "";
+  if (field === "socialPost" && !value) return "";
   if (field === "description") {
     if (new TextEncoder().encode(value).length < 20 || [...value.matchAll(/[\p{L}\p{N}]/gu)].length < 8)
       return "Add a short public description of your coin";
@@ -71,8 +73,10 @@ export function coinPresentationIssue(setup: CoinSetup, field: "description" | "
       || url.hostname.includes(":") || new TextEncoder().encode(value).length > 2048) throw Error();
     if (field === "x" && (url.hostname !== "x.com" || url.search || !/^\/[A-Za-z0-9_]{1,64}$/u.test(url.pathname)))
       return "Use your X profile link, such as https://x.com/your_coin";
+    if (field === "socialPost" && (url.hostname !== "x.com" || url.search || !/^\/[A-Za-z0-9_]{1,64}\/status\/[0-9]{1,24}$/u.test(url.pathname)))
+      return "Use the direct X post link, such as https://x.com/your_coin/status/123";
     return "";
-  } catch { return field === "website" ? "Add your project's public HTTPS website" : "Add your project's X profile link"; }
+  } catch { return field === "socialPost" ? "Use a public HTTPS X post link" : field === "website" ? "Add your project's public HTTPS website" : "Add your project's X profile link"; }
 }
 
 // Never carry a custom token address or its amount onto another network.

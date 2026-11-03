@@ -18,6 +18,7 @@ import { generalCheckCaseCount } from "./behavior-checks";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 import { createGeneralPreparationStore } from "./general-preparation-store.server";
 import { checkedCheckDiagnostic, type CheckDiagnostic } from "./check-diagnostic";
+import { checkedSourceProgress, type SourceProgress } from "./source-progress";
 
 export type ProjectCheckpoint = {
   version: 1;
@@ -93,6 +94,39 @@ export function createProjectStore(transaction: Transaction, now: () => number =
         WHERE o.owner=$1 AND o.id=$2 AND o.kind='check-diagnostic'`,[owner,id])).rows[0];
       if(!row)return undefined;
       return checkedCheckDiagnostic((row.value as {diagnostic:unknown}).diagnostic);
+    });
+  }
+  async function saveSourceProgress(owner:string,id:string,lease:string,input:SourceProgress) {
+    const progress=checkedSourceProgress(input);
+    return transaction(async db=>{
+      const payloadHash=await active(db,owner,id,lease);
+      const row=(await db.query(`SELECT value FROM programmable_custom_ai_v1.objects
+        WHERE owner=$1 AND kind='source-progress' AND id=$2 FOR UPDATE`,[owner,id])).rows[0];
+      if(row){
+        if((row.value as {payloadHash:string}).payloadHash!==payloadHash)throw conflict();
+        const previous=checkedSourceProgress((row.value as {progress:unknown}).progress,progress.contextHash);
+        if(Object.entries(previous.files).some(([path,file])=>progress.files[path]?.content!==file.content))throw conflict();
+      }
+      await db.query(`INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value)
+        VALUES($1,'source-progress',$2,$3) ON CONFLICT(owner,kind,id)
+        DO UPDATE SET value=$3,revision=programmable_custom_ai_v1.objects.revision+1,updated_at=now()`,
+        [owner,id,JSON.stringify({payloadHash,progress})]);
+    });
+  }
+  async function readSourceProgress(owner:string,scope:NonNullable<ChatRequest["conversation"]>,contextHash:string):Promise<SourceProgress|undefined>{
+    return transaction(async db=>{
+      const rows=(await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
+        JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id AND j.payload_hash=o.value->>'payloadHash'
+        WHERE o.owner=$1 AND o.kind='source-progress' AND o.value->'progress'->>'contextHash'=$2
+        AND j.request->'conversation'->>'id'=$3 AND lower(j.request->'conversation'->>'account')=$4
+        AND j.state IN ('completed','failed') AND NOT EXISTS (
+          SELECT 1 FROM programmable_custom_ai_v1.objects rejected
+          WHERE rejected.owner=o.owner AND rejected.id=o.id AND rejected.kind='contract-project'
+          AND (rejected.value->'compilation'->>'compiled'='false'
+            OR rejected.value->'sourceAudit'->>'status'='changes_required'
+            OR rejected.value->'scenarios'->>'passed'='false'))
+        ORDER BY o.updated_at DESC LIMIT 1`,[owner,contextHash,scope.id,scope.account.toLowerCase()])).rows;
+      return rows[0]?checkedSourceProgress((rows[0].value as {progress:unknown}).progress,contextHash):undefined;
     });
   }
   async function save(owner: string, id: string, lease: string, project: ContractProject, originalSourceId?:string) {
@@ -261,7 +295,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
   /** A failed source response may still have a complete, independent plan.
    * Reuse that private plan only for the same owner, chat, chain and intent;
    * it carries no source, approval or fresh source-generation timestamp. */
-  async function readFailedBlueprint(owner:string,scope:NonNullable<ChatRequest["conversation"]>,intent:LaunchIntent,chainId:ContractProject["chainId"]):Promise<GeneralCheckBlueprint|undefined> {
+  async function readFailedBlueprint(owner:string,scope:NonNullable<ChatRequest["conversation"]>,intent:LaunchIntent,chainId:ContractProject["chainId"],afterId?:string):Promise<GeneralCheckBlueprint|undefined> {
     return transaction(async db=>{
       const row=(await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
         JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
@@ -269,12 +303,13 @@ export function createProjectStore(transaction: Transaction, now: () => number =
         WHERE o.owner=$1 AND o.kind=$2 AND j.state='failed'
         AND j.request#>>'{conversation,id}'=$3 AND lower(j.request#>>'{conversation,account}')=lower($4)
         AND o.value#>>'{blueprint,intentRevision}'=$5 AND j.request#>>'{coin,chainId}'=$6
-        ORDER BY j.created_at DESC,j.id DESC LIMIT 1`,[owner,blueprintKind,scope.id,scope.account,intent.revision,String(chainId)])).rows[0];
+        AND ($7::text IS NULL OR j.created_at > (SELECT created_at FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$7))
+        ORDER BY j.created_at DESC,j.id DESC LIMIT 1`,[owner,blueprintKind,scope.id,scope.account,intent.revision,String(chainId),afterId??null])).rows[0];
       if(!row)return undefined;
       try{return checkedGeneralCheckBlueprint((row.value as BlueprintCheckpoint).blueprint,intent);}catch{return undefined;}
     });
   }
-  return { save, complete, overview, saveBlueprint, saveCheckDiagnostic, readCheckDiagnostic, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
+  return { save, complete, overview, saveSourceProgress, readSourceProgress, saveBlueprint, saveCheckDiagnostic, readCheckDiagnostic, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
     preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
       publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),

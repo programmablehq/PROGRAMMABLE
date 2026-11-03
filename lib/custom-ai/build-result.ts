@@ -3,22 +3,29 @@ type BuildResult = {
   sourceAudit?: { status: "passed" | "changes_required"; findings: ReadonlyArray<{ message: string }> };
   scenarios?: { passed: boolean; cases: number };
 };
+export const BUILD_REPLY_LOCALES = ["en", "de", "fr", "es", "it", "pt", "nl", "tr"] as const;
+export type BuildReplyLocale = typeof BUILD_REPLY_LOCALES[number];
+export function buildReplyLocale(value: unknown): BuildReplyLocale {
+  return BUILD_REPLY_LOCALES.includes(value as BuildReplyLocale) ? value as BuildReplyLocale : "en";
+}
+// Translating the presentation never changes the observed result or adds a
+// model call. The original finding remains exact when a correction is needed.
+const copy: Record<BuildReplyLocale, readonly string[]> = {
+  en: ["The source is saved. The independent review found a correction: {finding}", "The source is saved, but it has compiler diagnostics. Ask me to fix this source.", "The source is saved, but a declared contract check failed. Ask me to fix this source.", "Your hook is built and saved. It compiled successfully, the independent source review passed, and all {cases} declared checks passed. No launch transaction has been sent.", "Your source compiled and all {cases} declared checks passed. Independent source review is still required before launch preparation.", "Your source compiled and the independent source review passed. The declared behavior checks are not complete yet.", "Your source compiled and is saved. Independent source review and behavior checks are not complete yet."],
+  de: ["Der Quellcode ist gespeichert. Die unabhängige Prüfung hat eine nötige Korrektur gefunden: {finding}", "Der Quellcode ist gespeichert, lässt sich aber noch nicht fehlerfrei kompilieren. Sag mir, dass ich ihn korrigieren soll.", "Der Quellcode ist gespeichert. Eine Verhaltensprüfung ist fehlgeschlagen; die korrigieren wir vor dem Launch.", "Dein Hook ist gebaut und gespeichert. Compiler, unabhängige Quellcodeprüfung und alle {cases} Verhaltensprüfungen sind durch. Es wurde noch keine Launch-Transaktion gesendet.", "Der Quellcode ist kompiliert und alle {cases} Verhaltensprüfungen sind durch. Die unabhängige Quellcodeprüfung steht noch aus.", "Der Quellcode ist kompiliert und unabhängig geprüft. Die Verhaltensprüfungen sind noch nicht abgeschlossen.", "Der Quellcode ist kompiliert und gespeichert. Die unabhängige Quellcodeprüfung und die Verhaltensprüfungen stehen noch aus."],
+  fr: ["Le code est enregistré. La vérification indépendante a trouvé une correction à apporter : {finding}", "Le code est enregistré, mais la compilation signale encore une erreur. Demande-moi de la corriger.", "Le code est enregistré, mais un test de comportement a échoué. Il faut le corriger avant le lancement.", "Ton hook est créé et enregistré. La compilation, la vérification indépendante et les {cases} tests de comportement ont réussi. Aucune transaction de lancement n’a été envoyée.", "Le code a été compilé et les {cases} tests ont réussi. La vérification indépendante reste à faire.", "Le code a été compilé et vérifié indépendamment. Les tests de comportement ne sont pas encore terminés.", "Le code a été compilé et enregistré. La vérification indépendante et les tests de comportement restent à faire."],
+  es: ["El código está guardado. La revisión independiente encontró una corrección necesaria: {finding}", "El código está guardado, pero el compilador señala un error. Pídeme que lo corrija.", "El código está guardado, pero una prueba de comportamiento falló. Hay que corregirla antes del lanzamiento.", "Tu hook está creado y guardado. La compilación, la revisión independiente y las {cases} pruebas de comportamiento pasaron. No se ha enviado ninguna transacción de lanzamiento.", "El código se compiló y las {cases} pruebas pasaron. Falta la revisión independiente.", "El código se compiló y pasó la revisión independiente. Las pruebas de comportamiento todavía no han terminado.", "El código está compilado y guardado. Faltan la revisión independiente y las pruebas de comportamiento."],
+  it: ["Il codice è salvato. La verifica indipendente ha trovato una correzione necessaria: {finding}", "Il codice è salvato, ma il compilatore segnala un errore. Chiedimi di correggerlo.", "Il codice è salvato, ma un test del comportamento non è passato. Va corretto prima del lancio.", "Il tuo hook è creato e salvato. La compilazione, la verifica indipendente e tutti i {cases} test sono passati. Non è stata inviata alcuna transazione di lancio.", "Il codice è compilato e tutti i {cases} test sono passati. Manca la verifica indipendente.", "Il codice è compilato e verificato in modo indipendente. I test del comportamento non sono ancora terminati.", "Il codice è compilato e salvato. Mancano la verifica indipendente e i test del comportamento."],
+  pt: ["O código está guardado. A revisão independente encontrou uma correção necessária: {finding}", "O código está guardado, mas o compilador indica um erro. Pede-me para o corrigir.", "O código está guardado, mas um teste de comportamento falhou. É preciso corrigi-lo antes do lançamento.", "O teu hook está criado e guardado. A compilação, a revisão independente e os {cases} testes passaram. Nenhuma transação de lançamento foi enviada.", "O código foi compilado e os {cases} testes passaram. Falta a revisão independente.", "O código foi compilado e revisto de forma independente. Os testes de comportamento ainda não terminaram.", "O código está compilado e guardado. Faltam a revisão independente e os testes de comportamento."],
+  nl: ["De code is opgeslagen. De onafhankelijke controle vond een noodzakelijke correctie: {finding}", "De code is opgeslagen, maar de compiler meldt nog een fout. Vraag me die te herstellen.", "De code is opgeslagen, maar een gedragstest is mislukt. Die moet voor de lancering worden hersteld.", "Je hook is gebouwd en opgeslagen. De compilatie, onafhankelijke controle en alle {cases} gedragstests zijn geslaagd. Er is geen lanceringstransactie verzonden.", "De code is gecompileerd en alle {cases} tests zijn geslaagd. De onafhankelijke controle moet nog gebeuren.", "De code is gecompileerd en onafhankelijk gecontroleerd. De gedragstests zijn nog niet afgerond.", "De code is gecompileerd en opgeslagen. De onafhankelijke controle en gedragstests moeten nog gebeuren."],
+  tr: ["Kod kaydedildi. Bağımsız inceleme gerekli bir düzeltme buldu: {finding}", "Kod kaydedildi, ancak derleyici bir hata bildiriyor. Benden düzeltmemi isteyebilirsin.", "Kod kaydedildi, ancak bir davranış testi başarısız oldu. Lansmandan önce düzeltilmesi gerekiyor.", "Hook oluşturuldu ve kaydedildi. Derleme, bağımsız inceleme ve {cases} davranış testinin tamamı başarılı. Henüz bir lansman işlemi gönderilmedi.", "Kod derlendi ve {cases} testin tamamı başarılı. Bağımsız inceleme henüz tamamlanmadı.", "Kod derlendi ve bağımsız olarak incelendi. Davranış testleri henüz tamamlanmadı.", "Kod derlendi ve kaydedildi. Bağımsız inceleme ve davranış testleri henüz tamamlanmadı."],
+};
 
-/** Completion is reported from persisted check results, never a source model's
- * prediction written before the compiler and independent checks have run. */
-export function generalBuildReply(value: BuildResult): string {
-  if (value.sourceAudit?.status === "changes_required") {
-    return `The source is saved. The independent review found a correction: ${value.sourceAudit.findings[0]?.message ?? "Update this source before continuing."}`;
-  }
-  if (!value.compilation.compiled) return "The source is saved, but it has compiler diagnostics. Ask me to fix this source.";
-  if (value.scenarios?.passed === false) return "The source is saved, but a declared contract check failed. Ask me to fix this source.";
-  if (value.scenarios?.passed && value.sourceAudit?.status === "passed") {
-    return `Your hook is built and saved. It compiled successfully, the independent source review passed, and all ${value.scenarios.cases} declared checks passed. No launch transaction has been sent.`;
-  }
-  if (value.scenarios?.passed) {
-    return `Your source compiled and all ${value.scenarios.cases} declared checks passed. Independent source review is still required before launch preparation.`;
-  }
-  return value.sourceAudit?.status === "passed"
-    ? "Your source compiled and the independent source review passed. The declared behavior checks are not complete yet."
-    : "Your source compiled and is saved. Independent source review and behavior checks are not complete yet.";
+/** Completion is reported from persisted check results, never a source model's prediction. */
+export function generalBuildReply(value: BuildResult, locale: unknown = "en"): string {
+  const stage = value.sourceAudit?.status === "changes_required" ? 0 : !value.compilation.compiled ? 1
+    : value.scenarios?.passed === false ? 2 : value.scenarios?.passed && value.sourceAudit?.status === "passed" ? 3
+      : value.scenarios?.passed ? 4 : value.sourceAudit?.status === "passed" ? 5 : 6;
+  return copy[buildReplyLocale(locale)][stage].replace("{cases}", String(value.scenarios?.cases ?? 0))
+    .replace("{finding}", value.sourceAudit?.findings[0]?.message ?? "Update this source before continuing.");
 }

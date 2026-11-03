@@ -1,7 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Square, X } from "lucide-react";
 import { parseChatRequest, type AIUsage, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
@@ -22,7 +22,7 @@ import { WorkspaceTools } from "./workspace-tools";
 import { MessageContent } from "./message-content";
 import { CopyButton } from "./copy-button";
 import { StreamingReply } from "./streaming-reply";
-import { cachedLaunchIntent, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
+import { cachedLaunchIntent, intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 import { LEGACY_CONVERSATION } from "@/lib/custom-ai/conversation";
 import { useChatLibrary } from "./chat-library";
 import { useAIReply } from "./use-ai-reply";
@@ -37,6 +37,11 @@ import { CHAT_MESSAGE_LIMIT, pastedMessageFits, workspaceState } from "@/lib/cus
 import { passiveRefresh } from "@/lib/custom-ai/passive-refresh";
 import { SessionLoading } from "./session-loading";
 import { CONTINUE_SAVED_BUILD } from "@/lib/custom-ai/build-command";
+import { ChatProgressIndicator } from "./chat-progress";
+import { BuildOutcome } from "./build-outcome";
+import { ImageAttachments } from "./image-attachments";
+import { imageMessageURL } from "@/lib/custom-ai/image-message";
+import type { CoinDetailsControls } from "./coin-details";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
@@ -112,9 +117,16 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [previousCoin, setPreviousCoin] = useState<PreviousCoin>();
   const [phase, setPhase] = useState<ChatProgress & { type: "phase" }>({ type: "phase", phase: "thinking" });
   const [imageReceipt, setImageReceipt] = useState<ImageReceipt>();
+  const [imageBusy,setImageBusy]=useState(false);
+  const updateImageReceipt = useCallback((receipt: ImageReceipt | undefined) => {
+    setImageReceipt(receipt);
+    if (receipt) setNotice("Coin image updated.");
+  }, []);
+  const coinEditor=useRef<CoinDetailsControls>(null);
   const [restored, setRestored] = useState(false);
   const [launchLocked, setLaunchLocked] = useState(false);
   const [launchCommand,setLaunchCommand]=useState<{id:string;sourceId:string}>();
+  const [coinPanelOpen,setCoinPanelOpen]=useState(false);
   const [buildIssue,setBuildIssue]=useState<ChatResult["buildIssue"]>();
   const retry = useRef<ChatRequest | null>(null);
   const retryBase = useRef<RetryBase | undefined>(undefined);
@@ -139,9 +151,21 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [chatRevision, setChatRevision] = useState(0);
   function changeSettings(patch: CoinSetupPatch) { setLaunchCommand(undefined); setSettings(current => applyCoinSetupPatch(current, patch)); }
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const workspaceElement = useRef<HTMLDivElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const followReply = useRef(true);
   const [showLatest, setShowLatest] = useState(false);
+  useEffect(() => {
+    const viewport = window.visualViewport, element = workspaceElement.current;
+    if (!viewport || !element) return;
+    let frame = 0;
+    const resize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => element.style.setProperty("--custom-ai-viewport", `${viewport.height}px`));
+    };
+    resize(); viewport.addEventListener("resize", resize);
+    return () => { viewport.removeEventListener("resize", resize); cancelAnimationFrame(frame); element.style.removeProperty("--custom-ai-viewport"); };
+  }, []);
   const activity = workspaceState({ restored, switching: switchingCoin, busy, stopping, recovering: Boolean(recoveryRequest),
     launchLocked, conflict: Boolean(conflict), saveFailed, online, phase });
   useEffect(() => {
@@ -152,6 +176,22 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const followLatest = useCallback(() => {
     if (followReply.current && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
   }, []);
+  useEffect(() => {
+    const element = transcript.current;
+    if (!element) return;
+    let frame = 0;
+    const resized = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (followReply.current) followLatest();
+        else setShowLatest(element.scrollHeight - element.scrollTop - element.clientHeight >= 72);
+      });
+    };
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(resized);
+    observer?.observe(element);
+    window.visualViewport?.addEventListener("resize", resized);
+    return () => { observer?.disconnect(); window.visualViewport?.removeEventListener("resize", resized); cancelAnimationFrame(frame); };
+  }, [followLatest]);
   const replyController=useAIReply(()=>headersRef.current(),localPreview,{busy:setBusy,stopping:setStopping,phase:setPhase,partial:setRevealing,error:setError,notice:setNotice});
   const replyRef=useRef(replyController);
   useLayoutEffect(()=>{replyRef.current=replyController;},[replyController]);
@@ -162,6 +202,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     const action=data.nextAction;
     setLaunchCommand(action?.kind==="prepare-launch"&&(action.sourceId===request.draftId||action.sourceId===request.id)
       &&data.change!=="blocked"?{id:request.id,sourceId:action.sourceId}:undefined);
+    if(action?.kind==="prepare-launch"&&data.change!=="blocked")setCoinPanelOpen(true);
     if(data.draft){setDraft(data.draft);setGeneralProject(undefined);setSourceRecovery(undefined);setDraftId(request.id);}
     if(data.generalProject){
       if(data.generalProject.compiled&&data.generalProject.scenarios?.passed!==false){setGeneralProject(data.generalProject);setDraft(undefined);setDraftId(request.id);setSourceRecovery(undefined);}
@@ -182,7 +223,13 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     if(cause instanceof AIRequestError&&cause.requestState==="failed")retry.current=null;
     setCanReconnect(retry.current!==null);
     if(cause instanceof AIRequestError&&cause.code==="cancelled")setPendingChange(base.pendingChange);
-    setMessages(base.messages);if(request.intent!=="compile")setInput(preservedInput??request.messages.at(-1)!.content);setSaveRevision(value=>value+1);
+    const nextDraft = textarea.current?.value ?? "";
+    // A follow-up typed during generation belongs to the user. Keep it and
+    // retain the failed request in the transcript instead of overwriting it.
+    const hasNextDraft = request.intent !== "compile" && Boolean(nextDraft);
+    setMessages(hasNextDraft ? [...base.messages, request.messages.at(-1)!] : base.messages);
+    if(request.intent!=="compile")setInput(current => current || preservedInput || request.messages.at(-1)!.content);
+    setSaveRevision(value=>value+1);
     if(!localPreview&&conversationId&&cause instanceof AIRequestError&&cause.requestState==="failed"){
       const signal=lifetime.current?.signal;
       void aiRequest<ProjectOverview>(`/projects?${new URLSearchParams({account:owner,conversation:conversationId,id:request.id,overview:"1"})}`,()=>headersRef.current(),undefined,signal)
@@ -389,7 +436,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     saveQueue.current.invalidate();await saveQueue.current.idle();saveEpoch.current++;
     const active=!forSend&&replyRef.current.isActive()&&retry.current?retryBase.current:undefined;
     const state:StudioState={settings,messages:active?.messages??messages,draftId,sourceId,contextId,pendingChange:active?active.pendingChange:pendingChange,image:imageReceipt,
-      input:active&&retry.current?.intent!=="compile"?retry.current?.messages.at(-1)?.content??input:input,editTarget};
+      input,editTarget};
     const snapshot=studioSnapshot(state);
     if(snapshot===remote.current.saved)return {revision:remote.current.revision,snapshot};
     const saved=await saveStudio({account:owner,conversationId,headers:()=>headersRef.current(),state,base:{revision:remote.current.revision,snapshot:remote.current.saved},signal:lifetime.current!.signal,onRetry:()=>setNotice("Saving your chat…")});
@@ -471,7 +518,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     } else if (followReply.current && transcript.current) {
       transcript.current.scrollTop = transcript.current.scrollHeight;
     }
-  }, [messages, busy, revealing]);
+  }, [messages, busy]);
 
   useEffect(()=>{
     if(!restored||!recoveryRequest||conflict||recovered.current===recoveryRequest.id)return;
@@ -490,7 +537,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
 
   async function send(contentOverride?:string) {
-    if (replyRef.current.isActive() || coinTransition.current || activity.blocked) return;
+    if (replyRef.current.isActive() || coinTransition.current || activity.blocked || imageBusy) return;
     if(contentOverride!==undefined&&input.trim()){
       setNotice("Send or clear your draft message before continuing the saved build.");textarea.current?.focus();return;
     }
@@ -501,6 +548,15 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     if(!localPreview&&owner==="signed-out"){
       try{onConnectPrompt?.(content);setError("");setNotice("Connect your wallet. Your message stays here.");}
       catch(cause){setError(cause instanceof Error?cause.message:"Your message could not be prepared.");}
+      return;
+    }
+    const imageURL = imageMessageURL(content);
+    if (imageURL) {
+      const updated = await attachImageURL(imageURL);
+      if (updated) {
+        setInput(current => current.trim() === content ? "" : current);
+        setMessages(current => [...current, {role:"user",content}, {role:"assistant",content:/\b(?:bild|nimm|nutze|verwende|ändere|ersetze|bitte)\b/iu.test(content) ? "Das neue Bild ist gespeichert. Deine Regeln bleiben unverändert." : "The new image is saved. Your rules are unchanged."}]);
+      }
       return;
     }
     const base:RetryBase={messages,pendingChange};
@@ -563,10 +619,43 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored||launchLocked||saveFailed||Boolean(conflict)} recovery
     onCompile={source=>void retryCompilation(source)} onEdit={source=>void editSavedSource(source)}/>;
 
-  return <div className={styles.workspace}>
+  const generalBuilt = generalProject?.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
+    && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision && generalLaunchEnabled;
+  const feeBuilt = draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
+    && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
+  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
+  const openCoinPanel = useCallback(() => {
+    setCoinPanelOpen(true);
+    requestAnimationFrame(() => {
+      if (window.matchMedia("(max-width: 740px)").matches)
+        document.getElementById("custom-ai-coin-panel")?.scrollIntoView({block:"start", behavior:"instant"});
+    });
+  }, []);
+  const launchFromMessage = useCallback(() => {
+    if (!draftId || !showOutcome || activity.blocked || imageBusy) return;
+    openCoinPanel();
+    setLaunchCommand({ id: crypto.randomUUID(), sourceId: draftId });
+  }, [draftId, showOutcome, activity.blocked, imageBusy, openCoinPanel]);
+  const attachImage = async (file: File) => {
+    if (activity.blocked || imageBusy) return;
+    setLaunchCommand(undefined);
+    if (await coinEditor.current?.chooseImage(file)) setNotice("Coin image updated.");
+    else openCoinPanel();
+  };
+  const attachImageURL = async (url: string) => {
+    if (activity.blocked || imageBusy) return false;
+    setLaunchCommand(undefined);
+    const updated = await coinEditor.current?.imageFromURL(url) ?? false;
+    if (updated) setNotice("Coin image updated.");
+    return updated;
+  };
+
+  return <div ref={workspaceElement} className={styles.workspace}>
     <div className={styles.studio}>
     <section className={styles.conversation} aria-label="Build your coin" data-chat-state={activity.id}
-      data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}>
+      data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}
+      onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
+      onDrop={event => { const file = event.dataTransfer.files[0]; if (file) { event.preventDefault(); void attachImage(file); } }}>
       <WorkspaceTools name={settings.name} hasDraft={Boolean(draft||generalProject)} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
         navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)}
         canClear={Boolean(messages.length)} hasPrevious={(!navigation||conversationId===LEGACY_CONVERSATION)&&Boolean(previousCoin)}
@@ -607,17 +696,15 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           </ul> : null}
           {message.role === "assistant" && <CopyButton compact label="Copy answer" value={message.content} />}
         </article>)}
-        {busy && revealing === null && <div className={styles.typing} aria-hidden="true">
-          <span /><span /><span />
-        </div>}
+        {showOutcome && intent && <BuildOutcome name={settings.name} symbol={settings.symbol} network={builderChain(settings.chainId).name}
+          rules={intent.requirements} onLaunch={launchFromMessage} disabled={activity.blocked || imageBusy} />}
         {revealing !== null && <StreamingReply text={revealing} onAdvance={followLatest} />}
       </div>
       {showLatest && messages.length > 0 && <button type="button" className={styles.jumpToLatest} onClick={() => {
         followReply.current = true; followLatest(); setShowLatest(false);
       }}>Latest message<ArrowDown size={14} aria-hidden="true" /></button>}
-      <span id="custom-ai-state" className={activity.blocked || notice ? styles.progress : styles.srOnly} role="status" aria-atomic="true">
-        {activity.blocked ? activity.message : notice || activity.message}
-      </span>
+      <ChatProgressIndicator key={imageBusy ? "image" : activity.id} label={imageBusy ? "Saving your image…" : activity.blocked ? activity.message : notice || activity.message}
+        working={busy || imageBusy || Boolean(recoveryRequest) || switchingCoin || !restored} visible={imageBusy || activity.blocked || Boolean(notice)} />
       {notice && activity.blocked && notice !== activity.message && <p className={styles.notice}>{notice}</p>}
       {conflict && <div className={styles.saveActions}>
         <button type="button" disabled={busy} onClick={() => resolveConflict(false)}>Keep this device’s draft</button>
@@ -645,12 +732,16 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         <button type="button" aria-label="Edit the whole design instead" disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked} onClick={() => {setEditTarget(undefined);textarea.current?.focus();}}><X size={16} aria-hidden="true" /></button>
       </div>}
       {inputError && <p id="custom-ai-input-error" className={styles.error} role="alert">{inputError}</p>}
-      <form className={styles.composer} aria-label="Message Custom AI" onSubmit={event => { event.preventDefault(); void send(); }}>
+      <form className={styles.composer} aria-label="Message Custom AI" onSubmit={event => { event.preventDefault(); void send(); }}
+        >
+        <ImageAttachments disabled={activity.blocked || imageBusy} onChoose={() => { setLaunchCommand(undefined); coinEditor.current?.focus("image"); }} onURL={attachImageURL} />
         <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
-        <textarea ref={textarea} id="custom-ai-message" name="message" autoComplete="off" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
+        <textarea ref={textarea} id="custom-ai-message" name="message" autoComplete="off" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={switchingCoin || !restored || launchLocked}
           aria-invalid={Boolean(inputError)} aria-describedby={["custom-ai-help", "custom-ai-state", error && "custom-ai-error", inputError && "custom-ai-input-error", editTarget && "custom-ai-edit-scope"].filter(Boolean).join(" ")}
           placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setLaunchCommand(undefined); setInput(event.target.value); setInputError(""); }}
           onPaste={event => {
+            const image = [...event.clipboardData.files].find(file => file.type.startsWith("image/"));
+            if (image) { event.preventDefault(); void attachImage(image); return; }
             const element = event.currentTarget;
             if (!pastedMessageFits(input, event.clipboardData.getData("text/plain"), element.selectionStart, element.selectionEnd)) {
               event.preventDefault(); setInputError("That paste would exceed 8,000 characters. Shorten it and paste again; your current message is unchanged.");
@@ -668,7 +759,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
             void replyRef.current.stop();
           }}>
           <Square size={15} strokeWidth={1.75} aria-hidden="true" />
-        </button> : <button type="submit" className={styles.send} disabled={activity.blocked} data-empty={!input.trim()} aria-label="Send message" aria-describedby="custom-ai-state">
+        </button> : <button type="submit" className={styles.send} disabled={activity.blocked || imageBusy} data-empty={!input.trim()} aria-label="Send message" aria-describedby="custom-ai-state">
           <ArrowUp size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>}
       </form>
@@ -676,16 +767,25 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. {editTarget && "Escape returns to the whole design and keeps your message. "}Messages are processed by the configured AI provider.</p>
     </section>
 
+    <div className={styles.coinFrame} data-expanded={coinPanelOpen}>
+    <button type="button" className={styles.coinPanelToggle} aria-label="Coin preview and details" aria-expanded={coinPanelOpen} aria-controls="custom-ai-coin-panel"
+      onClick={() => setCoinPanelOpen(current => !current)}>
+      <span><strong>{settings.name || "Your coin"}</strong><small>{settings.symbol ? `$${settings.symbol} · ` : ""}{builderChain(settings.chainId).name}</small></span>
+      <ChevronDown size={18} aria-hidden="true" />
+    </button>
+    <div id="custom-ai-coin-panel" className={styles.coinFrameBody}>
     {!restored?<aside className={styles.coinPanel} aria-label="Coin preview and details" aria-busy="true"><p role="status">Loading your coin…</p></aside>:generalProject||!builderChain(settings.chainId).feeCore?<GeneralProjectPreview key={previewRevision} project={generalProject} intent={intent} draftId={draftId} account={owner} conversationId={conversationId}
       headers={headers} disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored} settings={settings} onChange={changeSettings} chatRevision={chatRevision}
-      localPreview={localPreview} cacheKey={storageKey} imageReceipt={imageReceipt} onImageReceipt={setImageReceipt}
+      localPreview={localPreview} cacheKey={storageKey} imageReceipt={imageReceipt} onImageReceipt={updateImageReceipt}
+      editorControls={coinEditor} onImageBusy={setImageBusy}
       generalLaunchEnabled={generalLaunchEnabled} pendingChange={pendingChange} flush={()=>flushCurrent(true)} onLaunchLocked={setLaunchLocked}
       launchCommand={launchCommand}
       onEditRule={requirementId=>{if(generalProject&&!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
       {sourcePanel}
     </GeneralProjectPreview>:<CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}
-      imageReceipt={imageReceipt} onImageReceipt={setImageReceipt} pendingChange={busy ? undefined : pendingChange}
+      imageReceipt={imageReceipt} onImageReceipt={updateImageReceipt} pendingChange={busy ? undefined : pendingChange}
+      editorControls={coinEditor} onImageBusy={setImageBusy}
       launchCommand={launchCommand}
       onKeepRules={() => {
         setIntent(draft?.intent);
@@ -698,6 +798,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         textarea.current?.focus();
       }}
       onStartAnother={() => { void startAnother().catch(() => setError("The previous coin could not be saved on this device. Try again.")); }}>{sourcePanel}</CustomAILaunchPreview>}
+    </div>
+    </div>
     </div>
   </div>;
 }

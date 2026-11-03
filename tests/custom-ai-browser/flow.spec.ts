@@ -130,6 +130,7 @@ test("mobile layout reflows and the editor remains keyboard accessible", async (
   const box=page.getByRole("textbox", {name:"Describe your coin or ask a question"});
   await box.focus(); await expect(box).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", {name:"Coin preview and details", exact:true}).click();
   await page.locator("summary").filter({ hasText: "Coin details" }).click();
   await page.getByLabel("Name",{exact:true}).fill("Rain");
   await expect(page.getByLabel("Name",{exact:true})).toHaveValue("Rain");
@@ -167,6 +168,11 @@ test("preview and composer remain reachable at each supported layout width", asy
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("textbox", { name: "Describe your coin or ask a question" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeVisible();
+    if (width <= 740) {
+      const details = page.getByRole("button", {name:"Coin preview and details", exact:true});
+      await expect(details).toHaveAttribute("aria-expanded", "false");
+      await details.click();
+    }
     await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`workspace-${width}.png`), fullPage: true });
@@ -180,7 +186,7 @@ test("starter ideas fill the composer without spending a request", async ({page}
   const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
   await expect(box).toHaveValue(/5%.*1%.*10 minutes/);
   await expect(box).toBeFocused();
-  await expect(page.getByRole("button",{name:"Launch coin"})).toBeDisabled();
+  await expect(page.getByRole("button",{name:"Launch coin"})).toHaveCount(0);
   expect(calls).toBe(0);
 });
 test("checked fee drafts expose source-bound rule editing and retain it after an interrupted reply", async ({page}) => {
@@ -254,6 +260,7 @@ test("shows the full timed and weather rule together with its liquidity allocati
   await page.screenshot({path:testInfo.outputPath("combined-rules-desktop.png"),fullPage:true});
   await page.setViewportSize({width:390,height:844});
   await page.reload();
+  await page.getByRole("button", {name:"Coin preview and details", exact:true}).click();
   await expect(page.getByText("100% → permanently locked liquidity",{exact:true})).toBeVisible();
   await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

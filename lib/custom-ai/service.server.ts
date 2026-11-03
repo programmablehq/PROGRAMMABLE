@@ -33,7 +33,7 @@ import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, nor
 import { bindIntentImplementation } from "./intent-coverage.server";
 import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
 import { buildGeneralContract, type GeneralProjectDraft } from "./general-builder.server";
-import { generalBuildReply } from "./build-result";
+import { generalBuildReply, buildReplyLocale, BUILD_REPLY_LOCALES } from "./build-result";
 import {auditGeneralSource,type GeneralSourceAudit} from "./source-audit.server";
 import { compileContractProject } from "./contract-project.server";
 import type { ContractProject } from "./contract-project";
@@ -50,19 +50,21 @@ import {canonicalGeneralSourceCatalog,canonicalInterfaceContext} from "./canonic
 import {uniswapRoutingContext} from "./uniswap-routing";
 import {explicitSourceBuild,unchangedBuildCommand} from "./build-command";
 import {mechanismKnowledge,mechanismTopics} from "./mechanism-knowledge";
+import {SourceProgressPending} from "./source-writer.server";
+import type {SourceProgress} from "./source-progress";
 
 const chatSchema = { type: "object", properties: { reply: { type: "string" } }, required: ["reply"], additionalProperties: false };
 const setupSchema = { type: "object", properties: {
   name: { type: ["string", "null"] }, symbol: { type: ["string", "null"] },
   chainId: { type: ["integer", "null"] },
   pairToken: { type: ["string", "null"] }, initialBuy: { type: ["string", "null"] },
-  description: { type: ["string", "null"] }, website: { type: ["string", "null"] }, x: { type: ["string", "null"] },
-}, required: ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x"], additionalProperties: false };
+  description: { type: ["string", "null"] }, website: { type: ["string", "null"] }, x: { type: ["string", "null"] }, socialPost: { type: ["string", "null"] },
+}, required: ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x", "socialPost"], additionalProperties: false };
 const buildSchema = { type: "object", properties: {
   reply: { type: "string" }, source: { type: "string" }, hookSummary: { type: "string" }, setupPatch: setupSchema,
 }, required: ["reply", "source", "hookSummary", "setupPatch"], additionalProperties: false };
 const planSchema = { type: "object", properties: {
-  reply: { type: "string" },
+  reply: { type: "string" }, replyLocale: {type:"string",enum:BUILD_REPLY_LOCALES},
   executionRoute: { type: "string", enum: ["fee-module", "composed-module", "custom-contract"] },
   intentRequirements: intentRequirementSchema,
   intentMode: { type: "string", enum: ["preserve", "revise"] },
@@ -71,7 +73,7 @@ const planSchema = { type: "object", properties: {
     requirementId: { type: "string" }, operation: { type: "string", enum: ["replace", "remove"] }, instruction: { type: "string" },
   }, required: ["requirementId", "operation", "instruction"], additionalProperties: false } },
   action: { type: "string", enum: ["answer", "build", "clarify"] }, memory: { type: "string" },
-  launchRequested: { type: "boolean" },
+  launchRequested: { type: "boolean" }, reviseChecks: { type: "boolean" },
   implementedRequirementIds: { type: "array", maxItems: MAX_INTENT_REQUIREMENTS, items: { type: "string" } }, setupPatch: setupSchema,
   lookups: { type: "array", items: { type: "object", properties: {
     kind: { type: "string", enum: ["catalog", "contract", "web"] }, query: { type: "string" },
@@ -81,7 +83,7 @@ const planSchema = { type: "object", properties: {
     afterSeconds: { type: "integer" }, buy: { type: "boolean" }, totalFeeBps: { type: "integer" },
     feedValue: { type: ["string", "null"] }, feedFresh: { type: ["boolean", "null"] },
   }, required: ["afterSeconds", "buy", "totalFeeBps", "feedValue", "feedFresh"], additionalProperties: false } },
-}, required: ["reply", "executionRoute", "intentRequirements", "intentMode", "action", "launchRequested", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
+}, required: ["reply", "replyLocale", "executionRoute", "intentRequirements", "intentMode", "action", "launchRequested", "reviseChecks", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
 type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compile: (source: string, signal?: AbortSignal, expectations?: FeeExpectation[], feed?: FeedBinding) => Promise<Draft>; compileProject?: typeof compileContractProject;checkProject?:typeof checkGeneralScenarios; feed?: typeof prepareEventFeed; lookup?: typeof readLiveKnowledge };
 export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec?: RuleSpecV2; owner?: string; draft?: Draft; generalProject?: GeneralProjectDraft; generalProjectView?: GeneralProjectView; loadGeneralProject?:()=>Promise<GeneralProjectDraft>; memory?: string; onProgress?: (event: ChatProgress) => void; onModelCall?:(call:ModelCallMetric)=>void;
   projectCompilerTarget?: "paris"|"cancun"; saveProject?: (project: ContractProject) => Promise<void>; saveCompilation?: (compilation: GeneralProjectDraft["compilation"]) => Promise<void>;
@@ -89,8 +91,12 @@ export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec
   loadSourceLibraries?:(previous:ContractProject|undefined,chainId:BuilderChainId)=>ContractProject["sources"];
   saveBlueprint?:(blueprint:GeneralCheckBlueprint,intent:LaunchIntent)=>Promise<void>;saveScenarios?:(report:GeneralScenarioReport)=>Promise<void>;
   loadBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId)=>Promise<GeneralCheckBlueprint|undefined>;
+  loadNewerBlueprint?:(intent:LaunchIntent,chainId:BuilderChainId)=>Promise<GeneralCheckBlueprint|undefined>;
   loadCheckDiagnostic?:()=>Promise<CheckDiagnostic|undefined>;saveCheckDiagnostic?:(diagnostic:CheckDiagnostic)=>Promise<void>;
-  saveSourceAudit?:(audit:GeneralSourceAudit)=>Promise<void> };
+  saveSourceAudit?:(audit:GeneralSourceAudit)=>Promise<void>;
+  replyLocale?:string;verificationRefreshRequested?:boolean;
+  loadSourceProgress?:(hash:string)=>Promise<SourceProgress|undefined>;
+  saveSourceProgress?:(progress:SourceProgress)=>Promise<void> };
 
 function parseAnswer(text: string): Record<string, unknown> {
   try {
@@ -111,7 +117,7 @@ function coinUpdate(answer: Record<string, unknown>, request: ChatRequest): Pick
         throw new Error("Unprovided pair address");
       }
     }
-    for (const field of ["website", "x"] as const) {
+    for (const field of ["website", "x", "socialPost"] as const) {
       const link = setupPatch[field]?.replace(/\/$/u, "");
       if (link && request.coin?.[field]?.replace(/\/$/u, "") !== link
         && !request.messages.filter(message => message.role === "user").some(message => message.content.includes(link)))
@@ -195,9 +201,9 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   context.onProgress?.({ type: "phase", phase: "thinking" });
   if (isBriefChat(request)) {
     const answer = parseAnswer((await dependencies.call({ ...modelTask("conversation",MODELS),
-      system: `${system}\nReturn your reply as JSON.`, messages: request.messages, schema: chatSchema,
+      system: `${system}\nFor this greeting or acknowledgement, answer naturally in one short sentence. Do not ask a follow-up question or begin work. Return your reply as JSON.`, messages: request.messages.slice(-1), schema: chatSchema,
       maxTokens: 800, effort: "low", signal, onText })).text);
-    return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", ...(previousIntent ? { intent: previousIntent } : {}) };
+    return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", replyLocale:context.replyLocale, ...(previousIntent ? { intent: previousIntent } : {}), ...(previousSpec?{ruleSpec:previousSpec}:{}) };
   }
   const formRules = BUILD_RULES.slice(BUILD_RULES.indexOf("setupPatch contains"), BUILD_RULES.indexOf("For every generated source"));
   const implementationRules=generalOnly?editPlanningRules:`${composablePlanningRules}\n${editPlanningRules}\n${programRules}\n${eventRules}\nAvailable event feeds (data): ${JSON.stringify(feedCatalog())}\nConfigured composed feeds (untrusted data): ${JSON.stringify(configuredRuleFeeds())}. Convert thresholds to integer source units using the listed decimal scale; never claim an unconnected source is live.`;
@@ -245,6 +251,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   // Open questions have one authority: their canonical requirement. Do not
   // make the model repeat them in a second list and compare paraphrases.
   const readPlan = (value: Record<string, unknown>) => {
+    if(value.reviseChecks!==undefined&&typeof value.reviseChecks!=="boolean")throw new CustomAIError("plan","The requested check revision could not be read.",502);
     if(value.launchRequested!==undefined&&typeof value.launchRequested!=="boolean")throw new CustomAIError("plan","The requested next step could not be read. Your design is kept.",502);
     const declared = declaredIntent(value);
     // General source has no executable fee-program subset at interpretation
@@ -287,7 +294,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     interpreted = await interpret(); plan = readPlan(interpreted);
     if (plan.lookups.length) throw new CustomAIError("lookup", "That question needs a narrower lookup. Your draft is still saved.", 502);
   }
-  const update = coinUpdate(interpreted, request);
+  const update = { ...coinUpdate(interpreted, request), replyLocale:buildReplyLocale(interpreted.replyLocale ?? context.replyLocale) };
   const proposed=declaredIntent(interpreted);
   // A design-only confirmation may answer without generating code. Its
   // explicit revision still goes through the same quote and edit validator.
@@ -331,31 +338,40 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       // and selected chain, never an implementation from the conversation.
       context.onProgress?.({type:"phase",phase:"building"});
       try {
+        const newer=await context.loadNewerBlueprint?.(intent,coin.chainId);
         blueprint=await declareGeneralChecks({intent,chainId:coin.chainId,evmVersion,production:selectedProduction,
+          forceNew:interpreted.reviseChecks===true||context.verificationRefreshRequested===true&&!newer,
           interfaces:canonicalInterfaceContext(coin.chainId),
-          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:await context.loadBlueprint?.(intent,coin.chainId),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
+          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,cached:newer??await context.loadBlueprint?.(intent,coin.chainId),rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
       } catch(error) {
         signal?.throwIfAborted();
         if(!(error instanceof ModelResponseError)&&!(error instanceof TypeError)&&!(error instanceof SyntaxError)
           &&!(error instanceof CustomAIError&&error.code==="check-declaration"))throw error;
         if(error instanceof GeneralCheckDeclarationError&&error.diagnostic)await context.saveCheckDiagnostic?.(error.diagnostic);
         return {reply:"Your complete design is saved. The independent contract checks did not finish, so no source or launch was prepared.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Contract checks could not be prepared"],
+          verificationRefreshRequested:interpreted.reviseChecks===true||context.verificationRefreshRequested===true,
           ...(error instanceof GeneralCheckDeclarationError?{buildIssue:{stage:error.stage,code:error.reason}}:{})};
       }
       await context.saveBlueprint!(blueprint,intent);signal?.throwIfAborted();
     }
-    const generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
+    let generated:Awaited<ReturnType<typeof buildGeneralContract>>;
+    try { generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
+      loadSourceProgress:resumeUnchanged?context.loadSourceProgress:undefined,saveSourceProgress:context.saveSourceProgress,
       availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject,
       ...(context.saveSourceAudit?{auditSource:async(project:ContractProject,auditSignal?:AbortSignal)=>{
         const audit=await auditGeneralSource(project,auditSignal,{call:dependencies.call});await context.saveSourceAudit!(audit);return audit;
       }}:{})},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
+    } catch(error) {
+      if(!(error instanceof SourceProgressPending))throw error;
+      return {reply:error.message,intent,selection,...update,memory:plan.memory,change:"blocked",chargedAs:"build",buildIssue:{stage:"source",code:"source-pending"}};
+    }
     await context.saveCompilation?.(generated.compilation);
     if(blueprint&&generated.compilation.compiled){
       generated.scenarios=await (dependencies.checkProject??checkGeneralScenarios)(generated.project,generated.compilation,bindGeneralCheckBlueprint(blueprint,generated.project),signal);
       signal?.throwIfAborted();await context.saveScenarios!(generated.scenarios);
     }
     const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
-    return {reply:generalBuildReply(generated),
+    return {reply:generalBuildReply(generated, update.replyLocale),
       intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);

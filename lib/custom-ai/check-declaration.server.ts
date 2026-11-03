@@ -29,7 +29,7 @@ export class GeneralCheckDeclarationError extends CustomAIError {
 }
 
 type Input={intent:LaunchIntent;chainId:BuilderChainId;evmVersion:"paris"|"cancun";
-  production?:LaunchProductionContext;previousCompiler?:ContractProject["compiler"];
+  forceNew?:boolean;production?:LaunchProductionContext;previousCompiler?:ContractProject["compiler"];
   model:string;signal?:AbortSignal;cached?:GeneralCheckBlueprint;rejected?:CheckDiagnostic;interfaces?:CanonicalInterfaceContext;interfaceHash?:string};
 const invalid=():never=>{throw new CustomAIError("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);};
 const object=(text:string,maximum=96000):Record<string,unknown>=>{
@@ -64,7 +64,7 @@ function remainingRequirements(intent:LaunchIntent,proposal:Record<string,unknow
  * and one total output ceiling, rather than retrying a truncated large answer.
  * The existing validator still checks the complete combined declaration. */
 export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=>Promise<ClaudeResult>):Promise<GeneralCheckBlueprint>{
-  input={...input,interfaceHash:input.interfaces?.id};
+  input={...input,interfaceHash:input.interfaces?.id,...(input.forceNew?{cached:undefined,rejected:undefined}:{})};
   input.signal?.throwIfAborted();
   if(input.cached){
     try{

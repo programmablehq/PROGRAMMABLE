@@ -8,7 +8,7 @@ export function unchangedBuildCommand(request:Pick<ChatRequest,"intent"|"message
   const last=request.messages.at(-1);
   if(last?.role!=="user")return false;
   const text=last.content.normalize("NFKC").trim().replace(/\s+/gu," ").toLowerCase();
-  return text===CONTINUE_SAVED_BUILD.toLowerCase()
+  return /^(?:continue|weiter|mach weiter)[.!]?$/u.test(text) || text===CONTINUE_SAVED_BUILD.toLowerCase()
     || /^(?:please |bitte )?(?:continue building|build (?:the )?(?:current )?saved (?:design|source)|baue? (?:den )?(?:aktuellen )?gespeicherten entwurf(?: fertig)?|mach (?:den )?gespeicherten entwurf fertig)[.!]?$/u.test(text);
 }
 

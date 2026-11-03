@@ -186,8 +186,8 @@ describe("complete launch intent and source revisions", () => {
       const {requirements,...recorded}=original;
       // Translate only exact known old labels into the new identity field;
       // this historical recording must not gain inferred rule coverage.
-      const captured={...recorded,intentMode:"revise",launchRequested:false,implementedRequirementIds:original.intentRequirements.filter(rule=>requirements.includes(rule.text)).map(rule=>rule.id),
-        executionRoute:"fee-module",setupPatch:{description:null,website:null,x:null,...original.setupPatch}};
+      const captured={...recorded,intentMode:"revise",launchRequested:false,reviseChecks:false,replyLocale:"en",implementedRequirementIds:original.intentRequirements.filter(rule=>requirements.includes(rule.text)).map(rule=>rule.id),
+        executionRoute:"fee-module",setupPatch:{description:null,website:null,x:null,socialPost:null,...original.setupPatch}};
       const properties=(input.schema as {properties?:Record<string,unknown>}).properties;
       // Short explanatory follow-ups now use the cheaper reply-only contract.
       if(properties&&Object.keys(properties).join() === "reply")return response({reply:original.reply});
