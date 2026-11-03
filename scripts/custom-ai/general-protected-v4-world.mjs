@@ -53,7 +53,7 @@ export async function createGeneralProtectedV4World(requireTool,{vm,common,chain
    if((BigInt(predicted)&16383n)!==BigInt(permissions))throw Error("A protected hook salt was not found within the fixture budget.");
    signalDeployment({caller:pins.router,creation});
    let result;
-   try{result=await run({to:pins.router,data:encodeFunctionData({abi:fixture.contracts.GeneralProtectedV4Fixture.abi,functionName:"deploy",args:[creation,salt]})});}
+   try{result=await run({to:pins.router,data:encodeFunctionData({abi:fixture.contracts.GeneralProtectedV4Fixture.abi,functionName:"deploy",args:[creation,salt]}),construction:true});}
    finally{signalDeployment(null);}
    if(result.execResult.exceptionError)return {result,address:null};
    const actual=decodeFunctionResult({abi:fixture.contracts.GeneralProtectedV4Fixture.abi,functionName:"deploy",data:bytesToHex(result.execResult.returnValue)});

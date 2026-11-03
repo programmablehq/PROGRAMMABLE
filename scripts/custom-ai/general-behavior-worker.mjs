@@ -44,8 +44,9 @@ async function check({chainId,evmVersion,contracts,plan}){
   if(BigInt(target)>0n&&BigInt(target)<=10n)return;
   if(!activeTargets.has(target))fail("unexpected-call","A declared case called a recipient outside its declared call targets.");
  });
- const run=async({to,data,from="creator",afterSeconds=0,value:amount="0",read=false})=>{
-  const gasLimit=to?8_000_000n:15_000_000n;
+ const run=async({to,data,from="creator",afterSeconds=0,value:amount="0",read=false,construction=false})=>{
+  // A trusted CREATE2 fixture calls the factory instead of a bare CREATE.
+  const gasLimit=!to||construction?15_000_000n:8_000_000n;
   if(gasUsed+gasLimit>150_000_000n)throw Error("The declared checks exceed their total execution budget.");
   activeTargets=new Set(plan.allowedCalls.flatMap(reference=>{try{return [String(value(reference)).toLowerCase()];}catch{return [];}}));
   if(world){

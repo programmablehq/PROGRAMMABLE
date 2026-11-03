@@ -353,7 +353,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
           forceNew:Boolean(newVerification),
           verificationInstruction,
           interfaces:canonicalInterfaceContext(coin.chainId),
-          previousCompiler:previous?.project.compiler,model:MODELS.build,signal,
+          previousCompiler:previous?.project.compiler,model:MODELS.build,scenarioModel:MODELS.escalation,
+          coin:{name:coin.name,symbol:coin.symbol,pairToken:coin.pairToken,initialBuy:coin.initialBuy},signal,
           cached:newer??(context.verificationRefreshRequested===true?undefined:await context.loadBlueprint?.(intent,coin.chainId,verificationInstruction)),
           rejected:await context.loadCheckDiagnostic?.()},dependencies.call);
       } catch(error) {
@@ -372,9 +373,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     try { generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,
       loadSourceProgress:resumeUnchanged?context.loadSourceProgress:undefined,saveSourceProgress:context.saveSourceProgress,
       availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject,
-      ...(context.saveSourceAudit?{auditSource:async(project:ContractProject,auditSignal?:AbortSignal)=>{
-        const audit=await auditGeneralSource(project,auditSignal,{call:dependencies.call});await context.saveSourceAudit!(audit);return audit;
-      }}:{})},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
+      ...(context.saveSourceAudit?{auditSource:(project:ContractProject,auditSignal?:AbortSignal)=>auditGeneralSource(project,auditSignal,{call:dependencies.call}),
+        saveAudit:context.saveSourceAudit}: {})},signal,{call:dependencies.call,compile:dependencies.compileProject??compileContractProject});
     } catch(error) {
       if(!(error instanceof SourceProgressPending))throw error;
       return {reply:unfinishedBuildReply("source",update.replyLocale,error.hasProgress),

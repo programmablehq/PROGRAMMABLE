@@ -70,8 +70,10 @@ async function check({chainId,evmVersion,contracts,plan}){
   observed.add(frame.target.id);
   if(plan.allowedCalls.some(reference=>reference?.contract===frame.target.id))activeTargets.add(frame.target.address.toLowerCase());
  });
- const run=async({to,data,from="creator",afterSeconds=0,value:amount="0",read=false})=>{
-  const gasLimit=to?8_000_000n:15_000_000n;
+ const run=async({to,data,from="creator",afterSeconds=0,value:amount="0",read=false,construction=false})=>{
+  // CREATE2 goes through a trusted factory, so `to` alone does not distinguish
+  // deployment from a normal call. Only the fixed fixture can select this lane.
+  const gasLimit=!to||construction?15_000_000n:8_000_000n;
   if(gasUsed+gasLimit>150_000_000n)throw Error("The declared checks exceed their total execution budget.");
   activeTargets=new Set(plan.allowedCalls.flatMap(reference=>{try{return [String(value(reference)).toLowerCase()];}catch{return [];}}));
   if(world){

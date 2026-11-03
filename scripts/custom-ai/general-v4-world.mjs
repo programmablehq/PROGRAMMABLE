@@ -27,7 +27,7 @@ export async function createGeneralV4World(requireTool,run){
    if((BigInt(predicted)&16383n)!==BigInt(permissions))throw Error("A permission-matched hook address was not found within the fixture budget.");
    signalDeployment({caller:router,creation});
    let result;
-   try{result=await run({to:router,data:encodeFunctionData({abi:fixture.abi,functionName:"deploy",args:[creation,salt]})});}
+   try{result=await run({to:router,data:encodeFunctionData({abi:fixture.abi,functionName:"deploy",args:[creation,salt]}),construction:true});}
    finally{signalDeployment(null);}
    if(result.execResult.exceptionError) return {result,address:null};
    const actual=decodeFunctionResult({abi:fixture.abi,functionName:"deploy",data:bytesToHex(result.execResult.returnValue)});

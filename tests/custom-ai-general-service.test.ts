@@ -298,6 +298,19 @@ describe("general source generation inside the owned chat job",()=>{
   expect(events).toEqual(["source","compile","artifacts"]);expect(call).toHaveBeenCalledTimes(2);expect(fee).not.toHaveBeenCalled();
   expect(value.generalProject?.sourceFiles).toBe(1);expect(value.generalProject?.verification).toBe("not-run");expect(JSON.stringify(value.generalProject)).not.toContain(source);expect(value.selection?.route).toBe("custom-contract");expect(value.draft).toBeUndefined();expect(value.chargedAs).toBe("build");
  });
+ it("persists the independent audit only after its matching immutable source",async()=>{
+  const events:string[]=[];let saved:ContractProject|undefined;
+  const call=vi.fn(async(input:ClaudeInput)=>input.task==="planning"?plan():input.task==="source-audit"
+   ?result({reviewedRequirementIds:requirements.map(rule=>rule.id),findings:[]}):generated());
+  const value=await runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:async project=>{
+   events.push("compile");return {...await compile(project),compiled:true,diagnostics:[]};
+  }},{saveProject:async project=>{expect(saved).toBeUndefined();saved=project;events.push("source");},
+   saveSourceAudit:async audit=>{expect(saved?.hash).toBe(audit.projectHash);events.push("audit");},
+   saveCompilation:async()=>{events.push("artifacts");}});
+  expect(events).toEqual(["source","compile","audit","artifacts"]);
+  expect(call.mock.calls.filter(([input])=>input.task==="source-audit")).toHaveLength(1);
+  expect(value.change).toBe("applied");expect(value.generalProject?.launchReady).toBe(false);
+ });
  it.each([8453,999] as const)("cannot route even a proposed complete fee template on chain%i into another chain's fixed core",async chainId=>{
   const call=vi.fn().mockResolvedValueOnce(plan({executionRoute:"fee-module",feeChecks:[{afterSeconds:0,buy:true,totalFeeBps:100},{afterSeconds:0,buy:false,totalFeeBps:100}]})).mockResolvedValueOnce(generated()),fee=vi.fn();
   const value=await runCustomAI({...request,coin:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId})},undefined,{call,compile:fee,compileProject:compile},{saveProject:async()=>{}});

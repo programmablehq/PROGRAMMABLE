@@ -27,7 +27,7 @@ type Artifact={sourcePath:string;contractName:string;abi:AbiEntry[]};
 const type=(p:Parameter):string=>p.type.startsWith("tuple")?`(${p.components!.map(type).join(",")})${p.type.slice(5)}`:p.type;
 const surface=(a:Artifact)=>a.abi.filter(f=>f.type==="function").map(f=>`function ${f.name}(${f.inputs!.map(type).join(",")})${f.stateMutability==="nonpayable"?"":` ${f.stateMutability}`}${f.outputs?.length?` returns (${f.outputs.map(type).join(",")})`:""}`);
 
-async function fixture(chain:1|4663|8453|999,wrongRecipient=false){
+async function fixture(chain:1|4663|8453|999,wrongRecipient=false,constructorSlots=0){
  const prefix=chain===999?"HyperEvm":chain===8453?"Base":"";
  const root=join(process.cwd(),"packages/launch/contracts",chain===999?"hyperevm-launch-protection-v1":chain===8453?"base-launch-protection-v1":"launch-protection-v1");
  const names=[`${prefix}ProtectedNativeInitializerV1`,"ProtectedLaunchTokenV1",`${prefix}ProtectedNative30HookV1`,"EthereumNativeFeeVaultV3",`${prefix}LaunchProtectionModuleV1`];
@@ -64,6 +64,12 @@ async function fixture(chain:1|4663|8453|999,wrongRecipient=false){
   ]};
  const blueprint=createGeneralCheckBlueprint(raw,intent,chain,"cancun");
  if(wrongRecipient){const path=artifacts[3].sourcePath,source=standard.sources[path].content;expect(source).toContain("_claim(creatorRecipient, amount, false)");standard.sources[path].content=source.replace("_claim(creatorRecipient, amount, false)","_claim(PLATFORM_RECIPIENT, amount, false)");}
+ if(constructorSlots){
+  const path=artifacts[2].sourcePath,source=standard.sources[path].content;
+  standard.sources[path].content=source.replace("    uint256 public immutable CHAIN_ID;", `    uint256[${constructorSlots}] private constructorState;\n    uint256 public immutable CHAIN_ID;`)
+   .replace("        CHAIN_ID = block.chainid;", `        for(uint256 i;i<${constructorSlots};++i) constructorState[i]=i+1;\n        CHAIN_ID = block.chainid;`);
+  expect(standard.sources[path].content).not.toBe(source);
+ }
  const project=createContractProject({compiler:blueprint.compiler,sources:standard.sources,entrypoints:blueprint.entrypoints},intent,chain);
  const compilation=await compileContractProject(project);expect(compilation.compiled).toBe(true);
  return {project,compilation,plan:bindGeneralCheckBlueprint(blueprint,project),raw};
@@ -91,6 +97,10 @@ describe("protected world declaration boundaries",()=>{
  });
 });
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("original source in the declared protected pool",()=>{
+ it("uses the bounded constructor allowance for a hook deployed through CREATE2",async()=>{
+  const input=await fixture(8453,false,320),report=await checkGeneralScenarios(input.project,input.compilation,input.plan);
+  expect(report.failures).toEqual([]);expect(report.passed).toBe(true);expect(report.launchReady).toBe(false);
+ },90000);
  it.each([1,4663,8453,999] as const)("executes initialization, trades and fixed fee claims on chain %s",async chain=>{
   const input=await fixture(chain),projectHash=input.project.hash,artifactHash=input.compilation.artifactHash;
   if(chain===8453){

@@ -17,6 +17,8 @@ export function isGeneralConstructorWorker(path) {
 export const GENERAL_BEHAVIOR_WORKERS = Object.freeze([
   "scripts/custom-ai/general-behavior-worker.mjs",
   "scripts/custom-ai/general-behavior-v2-worker.mjs",
+  "scripts/custom-ai/general-v4-world.mjs",
+  "scripts/custom-ai/general-protected-v4-world.mjs",
   "scripts/custom-ai/declared-events.mjs",
 ]);
 

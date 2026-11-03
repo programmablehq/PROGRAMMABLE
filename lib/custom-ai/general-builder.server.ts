@@ -2,7 +2,7 @@ import "server-only";
 import type { ClaudeInput, ClaudeResult } from "./claude.server";
 import { callModel } from "./model-provider.server";
 import { configuredProvider } from "./provider-config.server";
-import { GENERAL_CONTRACT_VOICE } from "./prompt";
+import { GENERAL_SOURCE_VOICE } from "./prompt";
 import { modelDesignContext } from "./planning-context";
 import { partialReply } from "./conversation";
 import { CustomAIError, type ChatMessage, type ChatProgress } from "./types";
@@ -17,7 +17,7 @@ import { checkedLaunchProductionContext, type LaunchProductionContext } from "./
 import { launchProductionGuidance } from "./production-guidance";
 import { dependencySourceContext } from "./dependency-source-context";
 import { sourceImplementationContext } from "./source-implementation-context";
-import { canonicalInterfaceContext } from "./canonical-dependencies.server";
+import { canonicalInterfaceContext,canonicalImplementationLibraries } from "./canonical-dependencies.server";
 import { resolveInlineLibraries } from "./inline-libraries";
 import { AI_CONFIG } from "./ai-config";
 import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.server";
@@ -30,6 +30,9 @@ import {createGeneralDeploymentBlueprint, deploymentBlueprintInput} from "./depl
 import {writeSourceParts} from "./source-writer.server";
 import {writeSourceEdits} from "./source-edits.server";
 import {sourceProgressContext,type SourceProgress} from "./source-progress";
+import {sourceFoundation} from "./source-foundation.server";
+import {editSourceFoundation} from "./source-editor.server";
+import {repairCompilerSource} from "./source-repair.server";
 import {canonicalBrowserJsonV2} from "@/lib/custom-launch/browser-authority-v2";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
@@ -57,11 +60,12 @@ type Input = { intent: LaunchIntent; chainId: BuilderChainId; messages: ChatMess
   saveProject: (project: ContractProject) => Promise<void>;
   loadSourceProgress?:(hash:string)=>Promise<SourceProgress|undefined>;
   saveSourceProgress?:(progress:SourceProgress)=>Promise<void>;
-  auditSource?:(project:ContractProject,signal?:AbortSignal)=>Promise<GeneralSourceAudit> };
+  auditSource?:(project:ContractProject,signal?:AbortSignal)=>Promise<GeneralSourceAudit>;
+  saveAudit?:(audit:GeneralSourceAudit)=>Promise<void> };
 type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compile: typeof compileContractProject };
 
-/** Called inside an already reserved, owned job. One explicit generation, one
- * isolated build, no paid repair loop, network discovery or wallet action. */
+/** Called inside an already reserved, owned job. Source work has one bounded
+ * budget, no open-ended repair loop, network discovery or wallet action. */
 export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   dependencies: Dependencies = { call: callModel, compile: compileContractProject }): Promise<GeneralProjectDraft> {
   signal?.throwIfAborted();
@@ -95,19 +99,32 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
       throw new CustomAIError("project-context", "Use the saved contract from this design and network.", 409);
     }
   }
-  const finish = async (project:ContractProject,reply:string,summary:string):Promise<GeneralProjectDraft> => {
+  const correctionPolicy: {deferredSave?:boolean;repair?: (project:ContractProject,compilation:CompiledProject)=>Promise<ContractProject|undefined>} = {};
+  const finish = async (project:ContractProject,reply:string,summary:string,precomputed?:{compilation:CompiledProject;sourceAudit:GeneralSourceAudit}):Promise<GeneralProjectDraft> => {
     if(blueprint)try{bindGeneralCheckBlueprint(blueprint,project);}catch{throw new CustomAIError("behavior-context","The generated source changed its declared contract graph. The original design and checks are kept.",502);}
-    await input.saveProject(structuredClone(project));
+    let saved=false;
+    if(!correctionPolicy.deferredSave||precomputed){await input.saveProject(structuredClone(project));saved=true;}
     signal?.throwIfAborted();
     input.onProgress?.({ type: "phase", phase: "checking" });
     const controller=new AbortController(),scope=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
     let compilation:CompiledProject,sourceAudit:GeneralSourceAudit|undefined;
     try{
-      compilation=await compile(structuredClone(project),scope);
+      compilation=precomputed?.compilation??await compile(structuredClone(project),scope);
+      if(!compilation.compiled&&correctionPolicy.repair){
+        const corrected=await correctionPolicy.repair(project,compilation);
+        if(corrected){
+          if(blueprint)bindGeneralCheckBlueprint(blueprint,corrected);
+          project=corrected;
+          await input.saveProject(structuredClone(project));
+          saved=true;
+          compilation=await compile(structuredClone(project),scope);
+        }
+      }
+      if(!saved)await input.saveProject(structuredClone(project));
       // Failed syntax/types already give an exact repair target. Do not pay for
       // an independent model audit until there is executable code to inspect.
-      if(compilation.compiled)sourceAudit=await input.auditSource?.(structuredClone(project),scope);
-      if(sourceAudit)sourceAudit=checkedGeneralSourceAudit(sourceAudit,project);
+      if(compilation.compiled)sourceAudit=precomputed?.sourceAudit??await input.auditSource?.(structuredClone(project),scope);
+      if(sourceAudit){sourceAudit=checkedGeneralSourceAudit(sourceAudit,project);await input.saveAudit?.(sourceAudit);}
     }catch(error){controller.abort(error);throw error;}
     return {version:1,reply,summary,project,compilation,selection,...(blueprint?{blueprintId:blueprint.id}:{}),
       ...(sourceAudit?{sourceAudit}:{}),requirementCoverage:"proposed",launchReady:false};
@@ -137,7 +154,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   if (Object.entries(dependencySources).some(([path, source]) => previousSources[path] && previousSources[path].content !== source.content)) {
     throw new CustomAIError("project-dependency", "A fixed dependency changed since this source was saved. Keep the saved version or review that upgrade explicitly.", 409);
   }
-  const availableDependencySources = input.availableDependencySources ?? {};
+  const availableDependencySources = { ...(blueprint?canonicalImplementationLibraries(input.previous):{}), ...input.availableDependencySources };
   if (Object.keys(availableDependencySources).length) createContractProject({ compiler, sources: availableDependencySources,
     entrypoints: [{ source: Object.keys(availableDependencySources)[0], contract: "LibraryValidation", role: "auxiliary" }] }, intent, chainId);
   const librarySources = dependencySourceContext(availableDependencySources).complete;
@@ -180,7 +197,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   const context = JSON.stringify(commonContext);
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });
-  const system = (context: string) => `${GENERAL_CONTRACT_VOICE}\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.callbacks.facts}\n${PROTOCOL_TOPICS.routing.facts}
+  const system = (context: string) => `${GENERAL_SOURCE_VOICE}\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.callbacks.facts}\n${PROTOCOL_TOPICS.routing.facts}
 Generate a complete general Custom Contract source project for the saved design, not a fixed fee module.
 ${blueprint?"The checked architecture and complete saved intent below are fixed. The latest message identifies this edit; all earlier decisions are already in that context. Focus this step on complete source, not another design pass.":""}
 ${mechanismKnowledge(intent)}
@@ -213,18 +230,43 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     onText: text => { const reply = partialReply(text); if (reply !== undefined) input.onProgress?.({ type: "reply", text: reply }); },
     system: system(context) };
   const progressContext=blueprint?sourceProgressContext(blueprint,compiler,{...librarySources,...dependencySources},previousSources):undefined;
+  const cached=progressContext?await input.loadSourceProgress?.(progressContext):undefined;
+  const catalog=blueprint?canonicalInterfaceContext(chainId):undefined;
+  const foundationCandidate=blueprint&&!input.previous?sourceFoundation(blueprint,paths,dependencyContext.complete,catalog!.contracts):null;
+  // Enable only the pattern with complete independent runtime qualification.
+  // Other shapes retain their existing writer until separately qualified.
+  const foundation=foundationCandidate?.completeReference?foundationCandidate:null;
+  let referenceFindings:GeneralSourceAudit["findings"]|undefined;
+  if(foundation&&blueprint&&input.auditSource&&!cached){
+    const roots=Object.fromEntries(blueprint.entrypoints.flatMap(entry=>librarySources[entry.source]?[[entry.source,librarySources[entry.source]]]:[]));
+    const candidate=createContractProject({compiler,sources:resolveInlineLibraries({...dependencySources,...roots,...foundation.sources},librarySources,compiler),entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment);
+    input.onProgress?.({type:"phase",phase:"checking"});
+    const compilation=await compile(structuredClone(candidate),signal);
+    if(compilation.compiled){
+      const sourceAudit=checkedGeneralSourceAudit(await input.auditSource(structuredClone(candidate),signal),candidate);
+      if(sourceAudit.status==="passed")return finish(candidate,"The existing implementation matches your saved design. I have kept its contract code and checked it against your requirements.","Existing implementation matched to the saved design",{compilation,sourceAudit});
+      referenceFindings=sourceAudit.findings;
+    }
+    input.onProgress?.({type:"phase",phase:"building"});
+  }
+  correctionPolicy.deferredSave=Boolean(foundation&&input.saveSourceProgress);
+  const systemForPath=(path:string,completed:ContractProject["sources"],integrating=false)=>{
+    const component=sourceImplementationContext({blueprint:blueprint!,dependencies:dependencyContext.complete,
+      references:catalog!.contracts,construction:catalog!.construction,includeTemplateBodies:!integrating},path,completed);
+    return system(JSON.stringify({...commonContext,...component}))
+      +(referenceFindings?`\nRequired semantic corrections from the independent reference review: ${JSON.stringify(referenceFindings)}`:"")
+      + (integrating?"\nAll supplied project draft sources are editable for final integration. Their frozen interfaces and deployment remain unchanged.":"\nOnly activeSource is being written in this response. Other frozen entrypoints are separate files; preserve their declared interfaces. Sibling code is the current integration input; later planned steps may extend it.")
+      + " The full independent scenario plan remains on the server and its ID is unchanged.";
+  };
   const response = blueprint&&input.previous
-    ? await writeSourceEdits({request:generation,previous:previousSources,immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)])},call)
+    ? await writeSourceEdits({request:generation,previous:previousSources,immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)]),
+      requireChange:input.previous.intent.revision!==intent.revision},call)
+    : blueprint&&input.saveSourceProgress&&paths.length&&foundation&&!cached?.partial
+    ? await editSourceFoundation({request:{...generation,system:generation.system+(referenceFindings?`\nRequired semantic corrections from the independent reference review: ${JSON.stringify(referenceFindings)}`:"")},patchTask:modelTask("source-edit",configuredProvider().models),seeds:foundation.sources,allowUnchanged:foundation.completeReference&&!referenceFindings?.length,paths,contextHash:progressContext!,cached,
+      save:input.saveSourceProgress,systemForPath},call)
     : blueprint&&input.saveSourceProgress&&paths.length
     ? await writeSourceParts({request:generation,paths,contextHash:progressContext!,
-      cached:await input.loadSourceProgress?.(progressContext!),save:input.saveSourceProgress,
-      systemForPath:(path,completed)=>{
-        const catalog=canonicalInterfaceContext(chainId);
-        const component=sourceImplementationContext({blueprint,dependencies:dependencyContext.complete,
-          references:catalog.contracts,construction:catalog.construction},path,completed);
-        return system(JSON.stringify({...commonContext,...component}))
-          + "\nOnly activeSource is being written in this response. Other frozen entrypoints are separate files; preserve their declared interfaces. Completed sibling code is immutable input for this step. The full independent scenario plan remains on the server and its ID is unchanged.";
-      }},call)
+      cached,save:input.saveSourceProgress,systemForPath},call)
     : await call(generation);
   signal?.throwIfAborted();
   let answer: Record<string, unknown>;
@@ -253,5 +295,12 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     sources[file.path] = { content: file.content };
   }
   const project = createContractProject({ compiler, sources: resolveInlineLibraries(sources, librarySources, compiler), entrypoints: answer.entrypoints }, intent, chainId, production, blueprint?.deployment);
+  if(correctionPolicy.deferredSave)correctionPolicy.repair=async(current,compilation)=>{
+    const repaired=await repairCompilerSource({project:current,compilation,
+      request:{...generation,...modelTask("source-edit",configuredProvider().models)},
+      remainingTokens:Math.max(0,AI_CONFIG.maximumContractTokens-(response.outputTokens??AI_CONFIG.maximumContractTokens)),
+      immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)])},call);
+    return repaired?createContractProject({compiler,sources:repaired,entrypoints:current.entrypoints},intent,chainId,production,blueprint?.deployment):undefined;
+  };
   return finish(project,answer.reply as string,answer.summary as string);
 }

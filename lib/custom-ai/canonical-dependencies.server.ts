@@ -5,12 +5,20 @@ import hyperSourcePackage from "@/packages/launch/contracts/hyperevm-launch-prot
 import type { ContractProject } from "./contract-project";
 import { builderChain, type BuilderChainId } from "./execution-routing";
 import interfaces from "./canonical-interfaces.json";
+import implementationLibraries from "./implementation-libraries.json";
+import {implementationPatternReferences} from "./implementation-patterns";
 import {createHash} from "node:crypto";
 import {canonicalBrowserSha256V2} from "@/lib/custom-launch/browser-authority-v2";
 
 // These exact library sources are shared by the three published protection
 // packages. No runtime downloads, package installs or filesystem imports occur.
 const libraries = Object.fromEntries(Object.entries(sourcePackage.sources).filter(([path]) => path.startsWith("lib/")));
+
+/** Additional pinned helpers are opt-in to source implementation, so chat and
+ * source-blind planning do not receive their complete bodies on every request. */
+export function canonicalImplementationLibraries(previous?:ContractProject):ContractProject["sources"] {
+  return sourceCatalog(implementationLibraries.sources,previous);
+}
 
 export function canonicalGeneralLibraries(previous?: ContractProject): ContractProject["sources"] {
   return sourceCatalog(libraries, previous);
@@ -28,6 +36,7 @@ export function canonicalGeneralSourceCatalog(previous: ContractProject | undefi
 
 const interfaceCache=new Map<BuilderChainId,CanonicalInterfaceContext>();
 export type CanonicalInterfaceContext={id:`sha256:${string}`;contracts:(typeof interfaces.families)["launch-protection-v1"];
+  implementationPatterns?:ReturnType<typeof implementationPatternReferences>;
   construction:{contract:string;source:string;constructorSource:string;structSources:string[];callbackDeclarations:string[];initializationSources:string[]}[]};
 /** Exact local ABI reference before source-blind planning. Verify the catalog
  * against its immutable inline source, not a search result or a guessed ABI. */
@@ -41,7 +50,8 @@ export function canonicalInterfaceContext(chainId:BuilderChainId):CanonicalInter
     if(!source||createHash("sha256").update(source.content).digest("hex")!==contract.sourceSha256)throw new Error("Canonical interface source changed; regenerate its catalog.");
   }
   const construction=contracts.map(contract=>constructionFacts(sources[contract.source].content,contract.contract,contract.source));
-  const value={id:canonicalBrowserSha256V2("programmable.canonical-interface-context.v1",{chainId,contracts,construction}),contracts,construction};
+  const implementationPatterns=implementationPatternReferences(chainId);
+  const value={id:canonicalBrowserSha256V2("programmable.canonical-interface-context.v1",{chainId,contracts,construction,implementationPatterns}),contracts,construction,implementationPatterns};
   interfaceCache.set(chainId,value);return structuredClone(value);
 }
 

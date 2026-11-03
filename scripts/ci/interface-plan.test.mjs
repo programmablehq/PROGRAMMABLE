@@ -3,8 +3,17 @@ import test from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
-import { interfacePlan, relatedInputs } from "./interface-plan.mjs";
+import { interfacePlan, relatedInputs, runtimeDependencySource } from "./interface-plan.mjs";
 import { GENERAL_CONSTRUCTOR_WORKERS, GENERAL_BEHAVIOR_WORKERS } from "./classify-verify-paths.mjs";
+
+test("runtime test selection ignores type-only edges and retains mixed/runtime imports",()=>{
+  const source="import type {Config} from './types'; import {type Result} from './result'; export type {Shape} from './shape'; import {type Data, run} from './runtime'; import './side-effect'; type Lazy = import('./lazy').Value;";
+  const scanned=runtimeDependencySource(source,"test.ts");
+  for(const name of ["./types","./result","./shape","./lazy"])assert.equal(scanned.includes(name),false,name);
+  for(const name of ["./runtime","./side-effect"])assert.equal(scanned.includes(name),true,name);
+  const broken="import type { from './unfinished'";
+  assert.equal(runtimeDependencySource(broken,"test.ts"),broken);
+});
 
 test("coin metadata does not run unrelated wallet, migration, CLI or activation checks", () => {
   const plan = interfacePlan(["lib/server/codex-token-metadata.ts", "lib/coin-metadata.ts"]);
@@ -70,6 +79,16 @@ test("Interface selector maintenance keeps affected wallet coverage without full
   assert.equal(plan.verificationTools, true);
   assert.ok(plan.browser.includes("wallet-session"));
   assert.equal(plan.activation, false);
+});
+
+test("known classifier maintenance runs its own verification without unrelated interface suites",()=>{
+  const plan=interfacePlan(["scripts/ci/classify-verify-paths.mjs"]);
+  assert.equal(plan.full,false);
+  assert.equal(plan.verificationTools,true);
+  assert.equal(plan.scriptTests,true);
+  assert.equal(plan.customAI,false);
+  assert.deepEqual(plan.browser,[]);
+  assert.equal(interfacePlan(["scripts/ci/unknown-policy.mjs"]).full,true);
 });
 
 test("a read-only Custom AI extension does not select financial or wallet browser work", () => {

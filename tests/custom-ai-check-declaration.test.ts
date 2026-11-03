@@ -25,13 +25,14 @@ describe("bounded independent check declaration",()=>{
   it("splits interface and scenarios while retaining complete semantic validation",async()=>{
     const call=vi.fn(async(request:ClaudeInput)=>call.mock.calls.length===1?
       response({generalChecks:JSON.stringify(declaration)}):response({steps:JSON.stringify(steps)}));
-    const checked=await declareGeneralChecks(input,call);
+    const checked=await declareGeneralChecks({...input,scenarioModel:"scenario-model",coin:{name:"Counter",symbol:"CNT",pairToken:"ETH",initialBuy:"0.01"}},call);
     expect(checked.scenarios.steps).toHaveLength(3);
     expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
     expect(call).toHaveBeenCalledTimes(2);
-    expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:6000});
-    expect(call.mock.calls[1][0]).toMatchObject({effort:"low",maxTokens:4000});
+    expect(call.mock.calls[0][0]).toMatchObject({model:"test-model",effort:"low",maxTokens:6000});
+    expect(call.mock.calls[1][0]).toMatchObject({model:"scenario-model",effort:"low",maxTokens:4000});
     expect(call.mock.calls[1][0].system).toContain("Counter.sol");
+    expect(call.mock.calls[1][0].system).toContain('"initialBuy":"0.01"');
     expect(call.mock.calls.every(([request])=>!request.system.includes("pragma solidity"))).toBe(true);
   });
   it("reuses a matching validated declaration without another paid call",async()=>{
