@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { ChevronDown, Plus, X } from "lucide-react";
+import { Ellipsis, Plus, X } from "lucide-react";
 import styles from "./workspace.module.css";
 
 export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoin, onClearMessages, onRestorePrevious, navigation, children }: {
@@ -22,10 +22,13 @@ export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoi
     return () => document.removeEventListener("pointerdown", outside);
   }, []);
   return <header className={styles.chatToolbar}>
+      <div className={styles.chatIdentity}><p>{name.trim() || "New hook"}</p></div>
+      <div className={styles.toolbarActions}>
+      {navigation}
       <details ref={tools} className={styles.tools} onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); closeTools(); }
       }}>
-        <summary aria-label="Chat menu"><span>{name.trim() || "New coin"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
+        <summary aria-label="Chat options"><Ellipsis size={18} aria-hidden="true" /></summary>
         <div className={styles.toolsPanel}>
           <button className={styles.toolsClose} type="button" aria-label="Close chat menu" onClick={closeTools}>Close<X size={16} aria-hidden="true" /></button>
           <button type="button" className={styles.newCoin} disabled={disabled} onClick={() => { closeTools(); onNewCoin(); }}>
@@ -39,6 +42,6 @@ export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoi
           {children}
         </div>
       </details>
-      {navigation}
+      </div>
   </header>;
 }

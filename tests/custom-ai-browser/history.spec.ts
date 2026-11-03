@@ -394,4 +394,4 @@ test("an older local-only copy remains stored without being adopted by a newly s
  });expect(JSON.parse(retained as string).input).toBe("Unattributed older private input");
 });
 
-async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat menu",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}
+async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat options",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}

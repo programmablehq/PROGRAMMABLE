@@ -1,7 +1,13 @@
-.workspace { width: min(1140px, calc(100% - 48px)); margin: 32px auto 64px; color: #f4f1eb; }
-:global(body):has(.workspace) :global(.site-header[data-custom-ai="true"]) { background: #050505; }
-.studio { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
-.conversation { position: sticky; top: 84px; align-self: start; display: flex; flex-direction: column; min-width: 0; height: clamp(360px, calc(100dvh - 124px), 800px); padding: 12px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.workspace { box-sizing: border-box; width: min(1280px, 100%); height: calc(var(--custom-ai-viewport, 100dvh) - var(--header-height, 64px)); margin: 0 auto; padding: 16px 24px; color: #f4f1eb; }
+:global(body):has(.workspace) { --header-height: calc(64px + env(safe-area-inset-top)); background: #111110; }
+:global(body):has(.workspace) :global(.site-header[data-custom-ai="true"]) { height: var(--header-height); min-height: var(--header-height); background: #111110; }
+:global(body):has(.workspace) :global(.app-frame > main) { padding: 0; }
+:global(body):has(.workspace) :global(.site-header[data-custom-ai="true"] h1) { font-size: 18px; line-height: 24px; letter-spacing: 0; }
+:global(body):has(.workspace) :global(.atmosphere-backdrop),
+:global(body):has(.workspace) :global([data-site-footer]),
+:global(body):has(.workspace) :global(.mobile-nav) { display: none; }
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; height: 100%; min-height: 0; align-items: stretch; }
+.conversation { position: relative; display: flex; flex-direction: column; box-sizing: border-box; min-width: 0; min-height: 0; height: 100%; padding: 0 8px; background: #111110; }
 .transcript { flex: 1; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; padding: 12px 8px 24px; }
 .empty { min-height: 100%; display: grid; align-content: center; text-align: center; padding: 24px; }
 .empty h2 { margin: 0; font-size: clamp(25px, 3vw, 30px); line-height: 1.25; font-weight: 400; letter-spacing: -.035em; text-wrap: balance; }
@@ -50,7 +56,11 @@
 .workDots { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 4px; width: 22px; height: 16px; }
 .workDots > span { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .6; }
 .elapsed { margin-inline-start: auto; flex-shrink: 0; color: #aaa69f; font-size: 12px; font-variant-numeric: tabular-nums; }
-.coinFrame { min-width: 0; }
+.coinFrame { min-width: 0; min-height: 0; }
+.coinFrameBody { height: 100%; min-height: 0; }
+.previousSubmission { margin-top: 16px; padding-top: 12px; border-top: 1px solid #343431; color: #aaa69f; font-size: 12px; }
+.previousSubmission summary { min-height: 44px; align-content: center; cursor: pointer; }
+.previousSubmission a { display: inline-block; margin-block: 8px; }
 .coinPanelToggle { display: none; }
 .buildOutcome { margin-block: 16px 4px; padding: 20px; border: 1px solid #44413b; border-radius: 16px; background: #191917; }
 .outcomeStatus { display: flex; align-items: center; gap: 8px; color: #c7c2ba; font-size: 13px; }
@@ -96,7 +106,7 @@
 .error { color: #ffc2af; }
 .note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
 /* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */
-.coinPanel { min-width: 0; max-height: clamp(360px, calc(100dvh - 124px), 800px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; box-sizing: border-box; padding: 20px; border: 1px solid #343431; border-radius: 20px; background: #111110; }
+.coinPanel { min-width: 0; height: 100%; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; box-sizing: border-box; padding: 8px 0 8px 24px; border-inline-start: 1px solid #343431; background: #111110; }
 .sourceCode { max-height: 360px; overflow: auto; padding: 12px; border: 1px solid #343431; border-radius: 10px; white-space: pre; font: 12px/1.6 monospace; }
 .coinPreview { text-align: start; }
 .coinHeading { display: flex; align-items: center; gap: 16px; }
@@ -190,21 +200,21 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 740px) {
-  .studio { grid-template-columns: minmax(0, 1fr); gap: 40px; }
-  .conversation { position: static; height: clamp(360px, 60dvh, 520px); min-height: 0; }
-  .coinPanel { width: min(100%, 440px); max-height: none; overflow-y: visible; margin-inline: auto; }
+  .studio { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px; }
+  .conversation { height: 100%; min-height: 0; }
+  .coinPanel { width: 100%; height: auto; max-height: none; overflow-y: visible; margin-inline: auto; padding: 16px; border: 1px solid #343431; border-radius: 16px; }
   .coinForm input, .coinForm textarea { font-size: 16px; }
 }
 @keyframes pulse { 0%, 70%, 100% { opacity: .35; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
 @media (max-width: 560px) {
-  .workspace { width: calc(100% - 32px); margin: 24px auto 40px; }
+  .workspace { padding: 8px 12px max(8px, env(safe-area-inset-bottom)); }
   .transcript { padding-inline: 4px; }
   .message[data-role="user"] { max-width: 91%; }
 }
 .chatToolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 0 12px; border-bottom: 1px solid #343431; }
 .chatIdentity { min-width: 0; flex: 1; }
 .chatIdentity > span { color: #aaa69f; font-size: 11px; }
-.chatIdentity p { margin: 3px 0 0; color: #f4f1eb; font-size: 16px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.chatIdentity p { margin: 0; color: #f4f1eb; font-size: 16px; font-weight: 500; line-height: 1.5; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .toolbarActions { display: flex; align-items: center; gap: 8px; }
 .newCoin, .tools > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid #343431; border-radius: 9px; background: #171716; color: #d0cbc2; font: inherit; font-size: 12px; cursor: pointer; }
 .newCoin:hover, .tools > summary:hover { background: #242320; border-color: #77736b; }
@@ -281,8 +291,10 @@
   .coinFrame[data-expanded="true"] .coinFrameBody { margin-top: 12px; }
   .coinFrame[data-expanded="true"] .coinPanelToggle > svg { transform: rotate(180deg); }
   .studio { gap: 12px; }
-  .conversation { height: max(220px, calc(var(--custom-ai-viewport, 100dvh) - 208px)); }
-  .workspace { margin-block: 12px 24px; }
+  .conversation { height: 100%; }
+  .workspace { margin-block: 0; }
+  .workspace:has(.coinFrame[data-expanded="true"]) { height: auto; min-height: calc(var(--custom-ai-viewport, 100dvh) - var(--header-height, 64px)); }
+  .workspace:has(.coinFrame[data-expanded="true"]) .conversation { height: max(240px, calc(var(--custom-ai-viewport, 100dvh) - var(--header-height, 64px) - 100px)); }
   .send { width: 44px; height: 44px; }
   .compactCopy button { width: 44px; min-height: 44px; }
 }
@@ -320,8 +332,8 @@
   .libraryPanel, .libraryEmpty .libraryPanel { position:fixed; inset-inline:16px; top:auto; bottom:16px; width:auto; max-height:min(70dvh,560px); overflow-y:auto; }
 }
 @media (max-width:560px) {
-  .chatIdentity { flex:1 1 100%; }
-  .toolbarActions { width:100%; flex-wrap:wrap; }
+  .chatIdentity { flex:1 1 auto; }
+  .toolbarActions { width:auto; flex:0 0 auto; flex-wrap:nowrap; }
   .libraryToggle { min-height:44px; }
   .toolsPanel { position:fixed; inset-inline:16px; top:auto; bottom:16px; width:auto; max-height:min(70dvh,560px); }
   .toolsPanel .toolsClose { display:flex; align-items:center; justify-content:center; gap:6px; margin-inline-start:auto; text-decoration:none; }
@@ -335,6 +347,10 @@
   .newCoin, .tools > summary, .libraryToggle { justify-content:center; min-width:0; width:100%; padding-inline:6px; font-size:12px; }
   .newCoin > svg { display:none; }
 }
+
+.toolbarActions .tools > summary { width: 40px; min-width: 40px; min-height: 44px; padding: 8px; border: 0; background: transparent; }
+.toolbarActions .toolsPanel { right: 0; left: auto; }
+@media (min-width: 741px) { :global(body):has(.workspace) { overflow: hidden; } }
 
 .messageText p { margin: 0; white-space: pre-wrap; }
 .messageText p + p, .messageText h3, .messageText blockquote, .messageText ul, .messageText ol { margin-block: 12px; }

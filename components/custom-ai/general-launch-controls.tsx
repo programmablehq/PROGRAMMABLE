@@ -33,7 +33,9 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   flush: () => Promise<{ revision: number } | undefined>; onLaunchLocked: (locked: boolean) => void;
   launchCommand?:{id:string;sourceId:string};
 }) {
-  const launch = useGeneralLaunch({ enabled, account, scope, headers });
+  const launch = useGeneralLaunch({ enabled, account, scope, headers, observedSource: {
+    conversationId, sourceId: draftId, projectHash: project?.projectHash, artifactHash: project?.artifactHash, chainId: settings.chainId,
+  } });
   // The backend checks the actual controller code. Wallet classification is
   // not a form choice for the person creating a coin.
   const controllerKind = "eoa";
@@ -82,7 +84,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     : project?.sourceReview==="changes_required" ? "Ask the chat to fix the source review findings."
     : detail ? detail.message : !complete ? "Finish the saved contract design in the chat before submitting it."
     : "Ready to check this source and prepare your launch.";
-  if (saved && (uncertain || href) && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;
+  if (saved && uncertain && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;
 
   const proceed=useCallback(async()=>{
     if (launch.busy || disabled) return;
@@ -105,6 +107,10 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     handledCommand.current=launchCommand.id;void proceed();
   },[enabled,launchCommand,draftId,disabled,launch.busy,launch.loaded,complete,proceed]);
   if (!enabled) return null;
+  if (!complete && !accepted && !uncertain) return historyHref ? <details className={styles.previousSubmission}>
+    <summary>Earlier submission</summary>
+    <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>
+  </details> : null;
 
   return <section className={styles.generalLaunch} aria-label="Launch submission" aria-busy={launch.busy}>
     <p className={styles.note} role="status">{status}</p>
@@ -120,7 +126,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()}
         prepareCommand={launch.automatic?.state==="approved"&&launchCommand&&launchCommand.sourceId===draftId?launchCommand.id:undefined} />
     </Suspense>}
-    {href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}
+    {accepted && href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}
     {accepted&&["interrupted","not_started"].includes(launch.automatic?.state??"")&&<button type="button" className={styles.createButton}
       disabled={launch.busy||disabled} onClick={()=>{void launch.check();}}>Continue check<ArrowRight size={16} aria-hidden="true" /></button>}
     {accepted&&launch.automatic?.state==="changes_required"&&launch.automatic.findings.map(finding=><p className={styles.error} key={finding.code} role="status">{finding.message}</p>)}

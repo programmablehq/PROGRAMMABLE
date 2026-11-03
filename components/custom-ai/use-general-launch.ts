@@ -3,7 +3,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createGeneralLaunchClient, type GeneralLaunchState, type GeneralPrepareInput } from "@/lib/custom-ai/general-preparation";
 import type { AISessionHeaders } from "@/lib/custom-ai/client";
 
-export function useGeneralLaunch({ enabled, account, scope, headers }: { enabled: boolean; account: string; scope: string; headers: AISessionHeaders }) {
+export function useGeneralLaunch({ enabled, account, scope, headers, observedSource }: { enabled: boolean; account: string; scope: string; headers: AISessionHeaders;
+  observedSource?: { conversationId?: string; sourceId?: string; projectHash?: string; artifactHash?: string; chainId: number } }) {
   const key = JSON.stringify([enabled, account.toLowerCase(), scope]);
   const initial: GeneralLaunchState = { preparation: null, phase: enabled ? "loading" : "idle", error: "", loaded: false };
   const [saved, setSaved] = useState<{ key: string; state: GeneralLaunchState }>();
@@ -21,7 +22,10 @@ export function useGeneralLaunch({ enabled, account, scope, headers }: { enabled
   const state = saved?.key === key ? saved.state : initial;
   const latest = useRef(state);
   useLayoutEffect(() => { latest.current = state; }, [state]);
-  const submissionKey = state.preparation?.submission?.state === "completed" && state.preparation.submission.resourceId
+  const currentSource = !observedSource || state.preparation?.conversationId === observedSource.conversationId
+    && state.preparation?.sourceId === observedSource.sourceId && state.preparation?.projectHash === observedSource.projectHash
+    && state.preparation?.artifactHash === observedSource.artifactHash && state.preparation?.chainId === observedSource.chainId;
+  const submissionKey = currentSource && state.preparation?.submission?.state === "completed" && state.preparation.submission.resourceId
     ? JSON.stringify([state.preparation.id, state.preparation.requestHash, state.preparation.submission.resourceId]) : undefined;
   useEffect(() => {
     if (!enabled || !submissionKey) return;
