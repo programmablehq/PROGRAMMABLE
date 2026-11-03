@@ -75,13 +75,22 @@ export function checkedGeneralLaunchSource(owner: string, selected: GeneralLaunc
     || JSON.stringify(scenarios.requirementIds) !== JSON.stringify(project.intent.requirements.map(rule => rule.id).sort())
     || canonicalBrowserSha256V2(`programmable.general-scenario-report.v${plan.version}`, report) !== scenarioHash
     || view?.projectHash !== project.hash || view.artifactHash !== artifactHash || view.intentRevision !== currentIntent.revision) return checks();
-  const binding = { version: 1 as const, ownerHash: canonicalBrowserSha256V2("programmable.custom-ai-launch-owner.v1", owner),
-    account: selected.account.toLowerCase(), conversation: selected.conversation.toLowerCase(), contextId: studio.contextId,
+  let binding = { version: 1 as const, ownerHash: canonicalBrowserSha256V2("programmable.custom-ai-launch-owner.v1", owner),
+    account: selected.account.toLowerCase(), conversation: selected.conversation.toLowerCase(), contextId: selected.id,
     sourceId: selected.id, payloadHash: sourceJob.payloadHash, chainId: selected.chainId, projectHash: project.hash, artifactHash,
     blueprintId: declared.blueprint.id, scenarioHash, intentRevision: currentIntent.revision,
     settings: studio.settings, image: studio.image ?? null };
-  const bindingHash = canonicalBrowserSha256V2("programmable.custom-ai-launch-source.v1", binding);
-  if (selected.bindingHash !== undefined && selected.bindingHash !== bindingHash) return changed();
+  let bindingHash = canonicalBrowserSha256V2("programmable.custom-ai-launch-source.v1", binding);
+  // The latest context was fully validated above. An acknowledgement with the
+  // same intent must not invalidate an already packed, identical source. New
+  // bindings anchor to the source job; old bindings remain readable only when
+  // their exact context and every semantic field still match.
+  if (selected.bindingHash !== undefined && selected.bindingHash !== bindingHash) {
+    const legacyBinding = { ...binding, contextId: studio.contextId };
+    const legacyHash = canonicalBrowserSha256V2("programmable.custom-ai-launch-source.v1", legacyBinding);
+    if (selected.bindingHash !== legacyHash) return changed();
+    binding = legacyBinding; bindingHash = legacyHash;
+  }
   const sourceAudit=checkpoint.sourceAudit?checkedGeneralSourceAudit(checkpoint.sourceAudit,project):undefined;
   if(sourceAudit?.status==="changes_required")return checks();
   return structuredClone({ bindingHash, binding, studioRevision: snapshot.studioRevision, project, compilation,

@@ -16,6 +16,7 @@ import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import captured from "./fixtures/custom-ai-launch-discovery.json";
 import protection from "./fixtures/custom-ai-launch-protection.json";
 import { projectLaunchProductionContext } from "../lib/custom-ai/launch-production.server";
+import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
 
 const owner = "alice", account = `0x${"11".repeat(20)}`, chat = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const id = "checked-general-source-0001", storageId = conversationStorageId(account, chat);
@@ -139,6 +140,25 @@ describe("current owned source selection before general launch packing", () => {
     await expect(store.projects.readForLaunch(owner, original)).rejects.toMatchObject({ code: "launch-source-changed" });
     expect((await store.projects.readForLaunch(owner, { ...original, bindingHash: checked.bindingHash })).bindingHash).toBe(checked.bindingHash);
     revision = await store.saveObject(owner, "studio", storageId, { ...state, settings: { ...state.settings, name: "Changed name" } }, revision);
+    await expect(store.projects.readForLaunch(owner, { ...original, bindingHash: checked.bindingHash })).rejects.toMatchObject({ code: "launch-source-changed" });
+  });
+
+  it("keeps an already packed source usable after an acknowledgement with the exact same intent", async () => {
+    const original = selection(), checked = await store.projects.readForLaunch(owner, original);
+    const nextId = "unchanged-general-thanks-0001";
+    const next = await store.reserve(owner, { id: nextId, intent: "chat", draftId: id, contextId: id,
+      messages: [{ role: "user", content: "Danke!" }], conversation: { account, id: chat, revision } });
+    await store.finish(owner, nextId, next.lease!, { reply: "Gern!", intent, change: "unchanged" });
+    revision = await store.saveObject(owner, "studio", storageId, { ...state, contextId: nextId }, revision);
+    const resumed = await store.projects.readForLaunch(owner, { ...original, bindingHash: checked.bindingHash });
+    expect(resumed.bindingHash).toBe(checked.bindingHash);
+    expect(resumed.binding.contextId).toBe(id);
+    expect(resumed.project.hash).toBe(checked.project.hash);
+    const fresh = await store.projects.readForLaunch(owner, selection());
+    expect(fresh.bindingHash).toBe(checked.bindingHash);
+    const legacyHash = canonicalBrowserSha256V2("programmable.custom-ai-launch-source.v1", { ...checked.binding, contextId: nextId });
+    expect((await store.projects.readForLaunch(owner, { ...selection(), bindingHash: legacyHash })).bindingHash).toBe(legacyHash);
+    revision = await store.saveObject(owner, "studio", storageId, { ...state, contextId: nextId, settings: { ...state.settings, name: "Changed name" } }, revision);
     await expect(store.projects.readForLaunch(owner, { ...original, bindingHash: checked.bindingHash })).rejects.toMatchObject({ code: "launch-source-changed" });
   });
 
