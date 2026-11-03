@@ -23,6 +23,7 @@ import {uniswapRoutingContext} from "./uniswap-routing";
 import {graphSchemaForConstraints,interfaceSchemaForGraph,nativeFullDeclaration,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeStageInstructions,nativeDeployment,nativeDeploymentInstructions,scenarioSchemaForInterface} from "./check-stage-wire";
 import {mechanismKnowledge} from "./mechanism-knowledge";
 import {prepareSurplusSchema} from "./surplus-schema.server";
+import {recoverCompletedInterface} from "./interface-recovery";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
@@ -177,10 +178,13 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     const fixtures=[...proposal.contracts,...(Array.isArray(proposal.constructorChildren)?proposal.constructorChildren:[])];
     const ids=fixtures.map(fixture=>Array.isArray(fixture)?fixture[0]:(fixture as Record<string,unknown>)?.id);
     if(ids.some(id=>typeof id!=="string")||new Set(ids).size!==ids.length)return reject("interface-contract-identities");
-    const response=await call({...modelTask("interface-abi",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
-      schema:interfaceSchemaForGraph(proposal,Boolean(input.production)),
-      system:`Declare the source-blind public interfaces and production values for the fixed graph.\n${PROTOCOL_CORE}\n${nativeStageInstructions}\n${nativeDeploymentInstructions}\n${generalDeploymentPlanningRules}\nThis is the PUBLIC INTERFACE AND PRODUCTION VALUES stage only. The graph below is fixed. Return the native interfaces array with exactly one object per fixture id, including constructor children. canonical is an exact pinned catalog contract name when its full interface is inherited, otherwise null. With a canonical name, functions lists only additional public methods; with canonical:null it lists the complete public interface. Include public getters. Never repeat a referenced canonical ABI. Preserve every saved requirement. Do not change local ids, constructors, world, roles, allowed calls or constraints. Declare the corresponding production arguments separately in the native deployment object. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
-      messages:[{role:"user",content:"Declare public interfaces using canonical references and the compact production values for the fixed graph."}]});
+    const priorFailure=savedProgress&&input.rejected?.failures.at(-1);
+    const recovered=priorFailure?.stage==="interface"&&priorFailure.response
+      ?recoverCompletedInterface(priorFailure.response,proposal):undefined;
+    const response=recovered?{text:recovered}:await call({...modelTask("interface-abi",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
+      schema:interfaceSchemaForGraph(proposal,false),
+      system:`Declare the source-blind public interfaces for the fixed graph.\n${PROTOCOL_CORE}\n${nativeStageInstructions}\nThis is the PUBLIC INTERFACE stage only. The graph below is fixed. Return the native interfaces array with exactly one object per fixture id, including constructor children. canonical is an exact pinned catalog contract name when its full interface is inherited, otherwise null. With a canonical name, functions lists only additional public methods; with canonical:null it lists the complete public interface required by the design and its observations. Include the public getters needed to check the saved requirements. Never repeat a referenced canonical ABI or add unrelated helper methods. Preserve every saved requirement. Do not change local ids, constructors, world, roles, allowed calls or constraints. Set deployment:null; production values are declared in the next separate step. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
+      messages:[{role:"user",content:"Declare only the public interfaces using canonical references. Production values come next."}]});
     input.signal?.throwIfAborted();
     responseText=response.text;
     const envelope=object(response.text);
@@ -197,7 +201,25 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     }
     proposal.contracts=proposal.contracts.map(fill);
     if(Array.isArray(proposal.constructorChildren))proposal.constructorChildren=proposal.constructorChildren.map(fill);
-    progress=undefined;
+    progress={interface:JSON.stringify(proposal),steps:[]};
+  }
+  if(input.production&&!proposal.deployment){
+    responseText=undefined;
+    // A finished ABI survives an interrupted deployment response. The next
+    // explicit continuation resumes here without paying for that ABI again.
+    progress={interface:JSON.stringify(proposal),steps:[]};
+    const fullSchema=interfaceSchemaForGraph(proposal,true);
+    const response=await call({...modelTask("interface-deployment",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
+      schema:{type:"object",properties:{deployment:fullSchema.properties.deployment},required:["deployment"],additionalProperties:false},
+      system:`Declare only the production values for this fixed source-blind graph.\n${nativeStageInstructions}\n${nativeDeploymentInstructions}\n${generalDeploymentPlanningRules}\n${launchProductionGuidance(input.production)}\nThe response schema contains deployment only. Do not repeat interfaces, local constructors, source code or scenarios. All graph identities and saved requirements are fixed. Preserve the exact initializer ABI and constructor-created children. Untrusted design data: ${context}\nFixed graph and public interfaces: ${JSON.stringify(proposal)}`,
+      messages:[{role:"user",content:"Declare the compact production deployment values for the fixed graph. Return only deployment."}]});
+    input.signal?.throwIfAborted();responseText=response.text;
+    const envelope=object(response.text);
+    if(Object.keys(envelope).join()!=="deployment")return reject("deployment-fields");
+    const deployment=nativeDeployment(envelope.deployment,proposal);
+    if(deployment===null)return reject("deployment-missing");
+    proposal.deployment=deployment;
+    progress={interface:JSON.stringify(proposal),steps:[]};
   }
   const opening=resolveOpeningFixture(proposal,input.chainId);proposal=opening.proposal;
   stage="scenarios";
