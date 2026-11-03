@@ -349,7 +349,7 @@
 }
 
 .toolbarActions .tools > summary { width: 40px; min-width: 40px; min-height: 44px; padding: 8px; border: 0; background: transparent; }
-.toolbarActions .toolsPanel { right: 0; left: auto; }
+@media (min-width: 561px) { .toolbarActions .toolsPanel { right: 0; left: auto; } }
 @media (min-width: 741px) { :global(body):has(.workspace) { overflow: hidden; } }
 
 .messageText p { margin: 0; white-space: pre-wrap; }
