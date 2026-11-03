@@ -1,6 +1,24 @@
 import "server-only";
-import Ajv from "ajv";
+import Ajv, { type ErrorObject } from "ajv";
 import { CustomAIError } from "./types";
+import type { ModelSchemaFailure } from "./request-metrics";
+
+export class SurplusSchemaError extends CustomAIError {
+  declare readonly schemaFailure: ModelSchemaFailure;
+  constructor(diagnostic:ModelSchemaFailure){
+    super("response","The AI response did not match the requested design. Your draft is saved.",502);
+    Object.defineProperty(this,"schemaFailure",{value:diagnostic,enumerable:false});
+  }
+}
+const diagnosticFields=new Set(["reply","summary","sourceFiles","path","content","entrypoints","source","contract","role","requirementIds"]);
+function schemaDiagnostic(errors:ErrorObject[]|null|undefined):ModelSchemaFailure {
+  return {kind:"schema",issues:(errors??[]).slice(0,8).map(error=>({
+    // Unknown or model-chosen object keys can contain private text. Never keep them.
+    path:error.instancePath.split("/").map((part,index)=>index===0?"":diagnosticFields.has(part)||/^\d{1,5}$/u.test(part)?part:"*").join("/").slice(0,180),
+    keyword:error.keyword,
+    ...(Number.isSafeInteger(error.params.limit)?{expected:error.params.limit as number}:{}),
+  }))};
+}
 
 type Schema = {
   [key: string]: unknown;
@@ -65,12 +83,10 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     // tags or prose as actions, and reject competing objects/arrays or fences.
     if(start>=0&&end>=start&&!/[{}\[\]]|```/u.test(normalized.slice(0,start)+normalized.slice(end+1)))normalized=normalized.slice(start,end+1);
     if (!validate) return normalized;
-    try {
-      const restored = restore(JSON.parse(normalized), original as Schema);
-      if (!validate(restored)) throw Error("Original schema rejected response");
-      return JSON.stringify(restored);
-    } catch {
-      throw new CustomAIError("response", "The AI response did not match the requested design. Your draft is saved.", 502);
-    }
+    let restored:unknown;
+    try { restored=restore(JSON.parse(normalized),original as Schema); }
+    catch { throw new SurplusSchemaError({kind:"json",issues:[]}); }
+    if(!validate(restored))throw new SurplusSchemaError(schemaDiagnostic(validate.errors));
+    return JSON.stringify(restored);
   } };
 }

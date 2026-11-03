@@ -154,11 +154,13 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   if (context.length > 160_000) throw new CustomAIError("project-context", "This project needs a smaller focused change. Your complete saved source is kept.", 422);
   input.onProgress?.({ type: "phase", phase: "building" });
   const response = await call({ ...modelTask(blueprint?"source-implementation":"source",configuredProvider().models), signal, maxTokens: AI_CONFIG.maximumContractTokens,responseProfile:"contract",
-    schema: blueprint?boundProjectResponseSchema:generalProjectResponseSchema, messages: input.messages,
+    // A checked graph and canonical intent retain every saved decision. Old
+    // failed assistant replies are not source requirements or fresh instructions.
+    schema: blueprint?boundProjectResponseSchema:generalProjectResponseSchema, messages: blueprint?input.messages.slice(-1):input.messages,
     onText: text => { const reply = partialReply(text); if (reply !== undefined) input.onProgress?.({ type: "reply", text: reply }); },
     system: `${GENERAL_CONTRACT_VOICE}\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.callbacks.facts}\n${PROTOCOL_TOPICS.routing.facts}
 Generate a complete general Custom Contract source project for the saved design, not a fixed fee module.
-${blueprint?"The checked architecture is already fixed. Focus this step on complete source, not another design pass.":""}
+${blueprint?"The checked architecture and complete saved intent below are fixed. The latest message identifies this edit; all earlier decisions are already in that context. Focus this step on complete source, not another design pass.":""}
 ${mechanismKnowledge(intent)}
 The selected route is ${JSON.stringify(chain)}. It uses the existing Custom Launch review and source admission.
 ${production?"The saved production context supplies the selected chain's exact source-admission profile, PoolManager, execution binding and mandatory fee/protection rules. Implement these together with every agreed user rule. Never substitute local fixtures, a different chain or the old fixed fee core. A policy conflict requires clarification, never removing a saved rule. Discovery is configuration, not approval or proof of live dependency behavior.":"No production context was supplied for this local source build. Do not invent network addresses or claim this project can be submitted."}

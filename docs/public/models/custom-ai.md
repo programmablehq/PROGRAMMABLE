@@ -54,6 +54,10 @@ Declared event checks compare the logs emitted by the actual local contract call
 
 General projects also follow the selected network's mandatory Custom Launch policy. Temporary buyer limits count cumulative buys, and temporary recipient limits count cumulative token inflows, including wallet-to-wallet transfers. Sending tokens out does not restore that allowance. Tax-exempt wallets remain capped during the launch window; their exemption applies to the additional opening surcharge. The chat includes these fixed rules when you ask for normal ERC20 transfers and explains any explicit conflict in your design.
 
+A completed contract-check plan stays with its saved chat, design and network. Continuing after an interrupted source build reuses that plan; changing its rules or network requires a matching plan. The earlier source remains saved when an update fails. An independent source review can require changes before launch preparation is available.
+
+Open **Usage** from the chat menu for remaining credits and reset times. Reconnecting reads the saved request and does not start another paid generation. A new build is a separate request.
+
 A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. When [live capabilities](https://programmable.market/api/custom-ai/capabilities) report general launch preparation enabled, use **Launch coin** or ask the chat to launch. The platform prepares and automatically checks the exact saved source on the selected network. The result and available wallet steps stay in the chat. Use **Continue launch here** to inspect those steps, or **Open submission** for the full record. Sending a transaction still requires wallet confirmation. If preparation is unavailable on the selected network, the project remains a saved source draft.
 
 For an existing Custom Launch submission, continue through its original [API workflow](../developers/custom-launch.md). Its review decision and current wallet preparation determine the next step.

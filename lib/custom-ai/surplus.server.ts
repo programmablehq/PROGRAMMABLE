@@ -4,7 +4,7 @@ import { CustomAIError } from "./types";
 import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { readServerEvents } from "./events";
-import { prepareSurplusSchema } from "./surplus-schema.server";
+import { prepareSurplusSchema, SurplusSchemaError } from "./surplus-schema.server";
 import { ModelResponseError, modelResponseLimits, reportedTokenCount } from "./model-response";
 
 const endpoint = "https://api.surplusintelligence.ai/v1";
@@ -113,5 +113,6 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   if (!text) throw incomplete("empty-response");
   if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
   try{return { text: format.decode(text), inputTokens, outputTokens };}
-  catch{throw incomplete("invalid-schema");}
+  catch(error){throw new ModelResponseError("invalid-schema",{inputTokens,outputTokens},input.captureIncompleteDeclaration?text:undefined,
+    error instanceof SurplusSchemaError?error.schemaFailure:undefined);}
 }
