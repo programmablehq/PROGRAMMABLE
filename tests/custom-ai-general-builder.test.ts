@@ -40,7 +40,7 @@ describe("general project generation inside the owned AI job", () => {
       {id:"read",contract:"main",signature:"counter()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:true,requirementIds:["counter"],expect:{status:"success",returns:["1"]}},
     ]},intent,999,"paris");
     const previous=createContractProject({compiler:blueprint.compiler,sources:{"GeneralHook.sol":{content:source}},entrypoints:blueprint.entrypoints},intent,999);
-    const call=vi.fn(async()=>response());
+    const call=vi.fn(async()=>({text:JSON.stringify({reply:"Retained the existing source.",summary:"Same saved hook",changes:[]}),inputTokens:1,outputTokens:1}));
     const latest={role:"user" as const,content:"Build the unchanged saved design now."};
     const result=await buildGeneralContract({...request(),previous,blueprint,messages:[
       {role:"user",content:"Old draft request"},{role:"assistant",content:"An old incomplete explanation"},latest]},undefined,{call,compile:incompleteBuild});
