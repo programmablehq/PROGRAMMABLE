@@ -52,6 +52,7 @@ import {uniswapRoutingContext} from "./uniswap-routing";
 import {explicitSourceBuild,unchangedBuildCommand} from "./build-command";
 import {mechanismKnowledge,mechanismTopics} from "./mechanism-knowledge";
 import {SourceProgressPending} from "./source-writer.server";
+import {isSavedDesignQuestion} from "./design-question";
 import type {SourceProgress} from "./source-progress";
 
 const chatSchema = { type: "object", properties: { reply: { type: "string" } }, required: ["reply"], additionalProperties: false };
@@ -145,6 +146,8 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const savedIntent = context.intent ?? context.generalProject?.project.intent ?? migrateLaunchIntent({ draft: context.draft, ruleSpec: previousSpec,
     requestId: request.contextId ?? request.draftId, unresolved: context.unresolved });
   const previousIntent = savedIntent ? normalizeLaunchIntentQuestions(savedIntent) : undefined;
+  const savedDesignQuestion = Boolean(previousIntent?.requirements.length && isSavedDesignQuestion(request));
+  const replyOnly = isBriefChat(request) || savedDesignQuestion;
   const topics=mechanismTopics(previousIntent,request.messages.at(-1)?.content);
   const capabilities=getCapabilities(capabilityContext).filter(tool=>tool.ref.id!=="plan_fee_flow"||topics.includes("fee-flows"));
   const previousProjectView=context.generalProject?generalProjectView(context.generalProject):context.generalProjectView;
@@ -160,7 +163,7 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const checkScenarios=Boolean(context.saveBlueprint&&context.saveScenarios&&context.saveCompilation);
   const initialChain=request.coin?.chainId??1;
   let production:LaunchProductionContext|undefined;
-  if(context.loadProductionContext&&!isBriefChat(request)){
+  if(context.loadProductionContext&&!replyOnly){
     try{production=checkedLaunchProductionContext(await context.loadProductionContext(initialChain,signal),initialChain);}
     catch(error){signal?.throwIfAborted();if(!(error instanceof CustomAIError)||error.code!=="launch-context")throw error;}
   }
@@ -200,9 +203,9 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     if (reply !== undefined) context.onProgress?.({ type: "reply", text: reply });
   };
   context.onProgress?.({ type: "phase", phase: "thinking" });
-  if (isBriefChat(request)) {
+  if (replyOnly) {
     const answer = parseAnswer((await dependencies.call({ ...modelTask("conversation",MODELS),
-      system: `${system}\nFor this greeting or acknowledgement, answer naturally in one short sentence. Do not ask a follow-up question or begin work. Return your reply as JSON.`, messages: request.messages.slice(-1), schema: chatSchema,
+      system: `${system}\n${savedDesignQuestion ? "Answer this question briefly using only the saved design. Explain configured rules without claiming completed code, tests or a launch. Do not edit rules or metadata, start work, request a wallet action or invent live information." : "For this greeting or acknowledgement, answer naturally in one short sentence. Do not ask a follow-up question or begin work."} Return your reply as JSON.`, messages: request.messages.slice(-1), schema: chatSchema,
       maxTokens: 800, effort: "low", signal, onText })).text);
     return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", replyLocale:context.replyLocale, ...(context.verificationInstruction?{verificationInstruction:context.verificationInstruction}:{}), ...(previousIntent ? { intent: previousIntent } : {}), ...(previousSpec?{ruleSpec:previousSpec}:{}) };
   }

@@ -82,9 +82,13 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     };
   }
   const schema = transport(original as Schema);
+  const root = original as Schema;
+  const replyOnly = root.type === "object" && root.additionalProperties === false
+    && Object.keys(root.properties ?? {}).join() === "reply" && root.properties?.reply.type === "string"
+    && Array.isArray(root.required) && root.required.length === 1 && root.required[0] === "reply";
   // Keep compiler ownership local: planner schemas are new objects per request.
   // An AJV-wide schema cache would retain every request's schema indefinitely.
-  let validate = changed || validateOriginal ? new Ajv({ strict: false, coerceTypes: false, removeAdditional: false, useDefaults: false }).compile(original) : undefined;
+  let validate = changed || validateOriginal || replyOnly ? new Ajv({ strict: false, coerceTypes: false, removeAdditional: false, useDefaults: false }).compile(original) : undefined;
   function restore(value: unknown, node: Schema): unknown {
     if (needsEncoding(node)) {
       // The gateway may already return the canonical object or null instead
@@ -121,7 +125,15 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     if (!validate) return normalized;
     let restored:unknown;
     try { restored=restore(JSON.parse(normalized),original as Schema); }
-    catch { throw new SurplusSchemaError({kind:"json",issues:[]}); }
+    catch {
+      // A reply-only request has no action or editable fields. Some sellers
+      // return its answer as plain text despite JSON mode. Preserve that text
+      // literally; never use this recovery for planners or contract source.
+      if (!replyOnly || !normalized.trim() || normalized.length > 4000
+        || /[{}\[\]`]|<\/?(?:invoke|parameter)\b|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/iu.test(normalized))
+        throw new SurplusSchemaError({kind:"json",issues:[]});
+      restored = { reply: normalized.trim() };
+    }
     if(!validate(restored))throw new SurplusSchemaError(schemaDiagnostic(validate.errors));
     return JSON.stringify(restored);
   } };
