@@ -1,4 +1,5 @@
 import type { ChatRequest } from "./types";
+import {unchangedBuildCommand} from "./build-command";
 
 /** Verification requests do not change contract rules or grant launch authority.
  * Keep the exact user's wording for the source-blind declaration stage. */
@@ -13,4 +14,11 @@ export function requestedVerification(request:Pick<ChatRequest,"messages">,plann
     &&/\b(?:tests?|checks?|verification|prüf\w*|pruef\w*|verhaltenstest\w*)\b/u.test(direct)
     &&!/^(?:what|which|how|was|welche|wie)\b/u.test(direct);
   return (planned||asksChange)&&text.length<=8000?text:undefined;
+}
+
+/** A failed request has no assistant result to carry its verification context.
+ * The immediately preceding unsatisfied user turn is still in the owned chat. */
+export function interruptedVerification(request:Pick<ChatRequest,"intent"|"messages">):string|undefined {
+  if(!unchangedBuildCommand(request)||request.messages.at(-2)?.role!=="user")return undefined;
+  return requestedVerification({messages:request.messages.slice(0,-1)});
 }

@@ -83,3 +83,5 @@ The chat shows the current build step while it works. You can write your next me
 On a phone, the chat comes first. Open the coin row to change its details. Website, X profile and an optional X post are separate public links. An X post is kept as the supplied post URL and does not replace the required project profile on graph launches.
 
 For larger source projects, the builder saves completed files and private work in progress. If a build stops, **Continue building** uses the same saved rules and resumes from the saved section. Only complete source files can reach compilation or submission. A request to strengthen the independent behavior checks carries your requested examples into a new check plan instead of reusing the old one.
+
+Changes to an existing project keep the rest of its source intact. The builder applies exact edits to the saved files, then runs the compiler and independent checks again. If an edit cannot be applied unambiguously, the earlier source stays saved.

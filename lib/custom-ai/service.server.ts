@@ -1,6 +1,6 @@
 import "server-only";
 import { modelDesignContext, plannerNeedsSource } from "./planning-context";
-import {requestedVerification} from "./verification-request";
+import {requestedVerification,interruptedVerification} from "./verification-request";
 import { type ClaudeInput, type ClaudeResult } from "./claude.server";
 import { callModel } from "./model-provider.server";
 import { configuredProvider, researchAvailable } from "./provider-config.server";
@@ -334,7 +334,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     if(context.loadProductionContext&&!selectedProduction)return {reply:"Your complete design is saved. This network is temporarily unavailable. Try this build again shortly.",intent,selection,...update,memory:plan.memory,change:"blocked",unresolved:["Current launch network configuration"]};
     let blueprint:GeneralCheckBlueprint|undefined;
     const newVerification=requestedVerification(request,interpreted.reviseChecks===true);
-    const verificationInstruction=newVerification??context.verificationInstruction;
+    const verificationInstruction=newVerification??context.verificationInstruction??interruptedVerification(request);
     if(checkScenarios){
       // Keep the lightweight intent response separate from the complete ABI,
       // deployment graph and scenarios. Combining both exhausted the response
