@@ -5,6 +5,7 @@ export const MODEL_TASKS = {
   planning: { role: "chat", effort: "medium", maxTokens: 16_000 },
   interface: { role: "build", effort: "low", maxTokens: 6000 },
   "interface-abi": { role: "build", effort: "low", maxTokens: 4000 },
+  "interface-deployment": { role: "build", effort: "low", maxTokens: 4000 },
   scenarios: { role: "build", effort: "low", maxTokens: 4000 },
   "declaration-correction": { role: "build", effort: "low", maxTokens: 8000 },
   source: { role: "build", effort: "high", maxTokens: 16_000 },
