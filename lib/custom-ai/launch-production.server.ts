@@ -69,7 +69,8 @@ export function projectLaunchProductionContext(value: unknown, chainId: BuilderC
   try {
     const chain = builderChain(chainId), cap = object(value);
     const protection = protectionValue === undefined ? undefined : projectLaunchProtectionStatus(protectionValue);
-    if (cap.schemaVersion !== "programmable.custom-launch-capabilities.v1") throw Error();
+    if (cap.schemaVersion !== "programmable.custom-launch-capabilities.v1"
+      || cap.publicLaunchAuthorized !== undefined && cap.publicLaunchAuthorized !== true) throw Error();
     if (chainId === 4663) {
       const availability = object(cap.availability), bindings = object(availability.bindings), execution = object(bindings.execution), atomic = object(execution.atomic), fee = object(cap.currentTradeFeePolicy);
       if (cap.chainId !== "4663" || cap.launchContract !== "/v4/chains/4663/custom-launch-contract/manifest.json"
@@ -127,7 +128,24 @@ export function projectLaunchProductionContext(value: unknown, chainId: BuilderC
   } catch { throw unavailable(); }
 }
 
-export function createLaunchProductionDiscovery(dependencies: { fetch: typeof fetch; now: () => number }) {
+/** Source generation needs the pinned deployment configuration, not current RPC
+ * availability. Only the availability bit may differ from the canonical SDK
+ * profile. All addresses, hashes, fees and protections still pass the same
+ * closed validator. This snapshot cannot admit or prepare a launch. */
+export function projectLaunchBuildContext(value: unknown, chainId: BuilderChainId, protectionValue?: unknown): LaunchProductionContext {
+  if (chainId !== 8453 && chainId !== 999) return projectLaunchProductionContext(value, chainId, protectionValue);
+  try {
+    const cap = object(value), profile = object(cap.profile);
+    if (typeof profile.productionLaunchAuthorized !== "boolean"
+      || cap.publicLaunchAuthorized !== undefined && (typeof cap.publicLaunchAuthorized !== "boolean"
+        || cap.publicLaunchAuthorized !== profile.productionLaunchAuthorized)) throw Error();
+    return projectLaunchProductionContext({ ...cap, publicLaunchAuthorized: true,
+      profile: { ...profile, productionLaunchAuthorized: true } }, chainId, protectionValue);
+  } catch { throw unavailable(); }
+}
+
+type DiscoveryDependencies = { fetch: typeof fetch; now: () => number };
+function createLaunchDiscovery(dependencies: DiscoveryDependencies, project: typeof projectLaunchProductionContext) {
   const cache = new Map<BuilderChainId, { until: number; value?: LaunchProductionContext; pending?: Promise<LaunchProductionContext> }>();
   let policyCache: { until: number; value?: unknown; pending?: Promise<unknown> } | undefined;
   async function readJson(path: string, maximumBytes: number) {
@@ -164,7 +182,7 @@ export function createLaunchProductionDiscovery(dependencies: { fetch: typeof fe
   }
   async function load(chainId: BuilderChainId, fresh: boolean) {
     const [capabilities, policy] = await Promise.all([readJson(builderChain(chainId).capabilitiesPath, MAX_BYTES), readPolicy(fresh)]);
-    return projectLaunchProductionContext(capabilities, chainId, policy);
+    return project(capabilities, chainId, policy);
   }
   return async function read(chainId: BuilderChainId, signal?: AbortSignal, options: { fresh?: boolean } = {}) {
     signal?.throwIfAborted(); builderChain(chainId);
@@ -192,4 +210,13 @@ export function createLaunchProductionDiscovery(dependencies: { fetch: typeof fe
     });
   };
 }
+export function createLaunchProductionDiscovery(dependencies: DiscoveryDependencies) {
+  return createLaunchDiscovery(dependencies, projectLaunchProductionContext);
+}
+export function createLaunchBuildDiscovery(dependencies: DiscoveryDependencies) {
+  return createLaunchDiscovery(dependencies, projectLaunchBuildContext);
+}
 export const readLaunchProductionContext = createLaunchProductionDiscovery({ fetch: (...args) => fetch(...args), now: Date.now });
+// Keep availability-sensitive preparation and build-only snapshots in separate
+// caches. A successful build read must never populate the preparation cache.
+export const readLaunchBuildContext = createLaunchBuildDiscovery({ fetch: (...args) => fetch(...args), now: Date.now });

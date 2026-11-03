@@ -7,6 +7,7 @@ import type { AIStore } from "../lib/custom-ai/store.server";
 import { parseChatRequest, type ChatRequest } from "../lib/custom-ai/types";
 import { EMPTY_COIN_SETUP } from "../lib/custom-ai/coin-setup";
 import { canonicalBrowserSha256V2 } from "../lib/custom-launch/browser-authority-v2";
+import { auditGeneralSource } from "../lib/custom-ai/source-audit.server";
 const account="0x"+"a".repeat(40),chat="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",sourceId="saved-source-request-0001";
 const project=createContractProject({compiler:{version:GENERAL_PROJECT_COMPILER,optimizerRuns:1000,viaIR:false,evmVersion:"cancun"},sources:{"Hook.sol":{content:"pragma solidity 0.8.26; contract Hook {}"}},entrypoints:[{source:"Hook.sol",contract:"Hook",role:"hook"}]},{version:1,id:"design",revision:"a".repeat(64),parentRevision:"b".repeat(64),requirements:[{id:"no-owner",text:"No owner privileges",kind:"constraint",open:null,origin:{kind:"legacy"}}],unresolved:[],changes:[]},1);
 const request:ChatRequest={id:"retry-source-request-0001",intent:"compile",compilationOf:{id:sourceId,projectHash:project.hash},conversation:{account,id:chat,revision:0},coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:"Retry the saved build"}]};
@@ -53,6 +54,17 @@ describe("compile-only owned recovery",()=>{
   const compile=vi.fn(),receipt=compilation();
   await compileExistingProject({store,owner:"alice",id:request.id,lease:"current",source:{...checkpoint,compilation:receipt}},undefined,compile);
   expect(compile).not.toHaveBeenCalled();expect(complete).toHaveBeenCalledWith("alice",request.id,"current",receipt);
+ });
+ it("retains a passed independent source review when resuming compilation",async()=>{
+  const sourceAudit=await auditGeneralSource(project,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["no-owner"],findings:[]}),inputTokens:1,outputTokens:1})});
+  const saveSourceAudit=vi.fn(),compiled=compilation(),compile=vi.fn();
+  const auditedStore={...store,projects:{...store.projects,saveSourceAudit}} as AIStore;
+  const value=await compileExistingProject({store:auditedStore,owner:"alice",id:request.id,lease:"current",source:{...checkpoint,compilation:compiled,sourceAudit}},undefined,compile);
+  expect(saveSourceAudit).toHaveBeenCalledWith("alice",request.id,"current",sourceAudit);
+  expect(value.generalProject?.sourceReview).toBe("passed");
+  expect(value.generalProject?.scenarios).toBeUndefined();
+  expect(value.generalProject?.launchReady).toBe(false);
+  expect(compile).not.toHaveBeenCalled();
  });
  it("keeps the source checkpoint after a compiler outage and does not retry automatically",async()=>{
   const compile=vi.fn(async()=>{throw Error("Compiler unavailable");});

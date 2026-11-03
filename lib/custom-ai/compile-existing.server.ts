@@ -9,6 +9,7 @@ import { selectExecutionRoute } from "./execution-routing";
 import { generalProjectView } from "./project-view";
 import { bindGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import { checkGeneralScenarios } from "./behavior-checks.server";
+import { generalBuildReply } from "./build-result";
 
 type CompilationSource = ProjectCheckpoint & { summary: string;blueprint?:GeneralCheckBlueprint };
 
@@ -56,9 +57,8 @@ export async function compileExistingProject(input: {
   if(scenarios)await store.projects.saveScenarios(owner,id,lease,scenarios);
   const selection = selectExecutionRoute(source.project.intent, source.project.chainId, { route: "custom-contract", requirementIds: source.project.intent.requirements.map(rule => rule.id), missingCapabilities: [] });
   const passed=compilation.compiled&&scenarios?.passed!==false;
-  const reply = scenarios?.passed===false?"The source is saved, but a declared contract check failed. Edit this source before another build.":scenarios?.passed?"The saved source compiled and its declared examples passed. Launch review and preparation are still pending.":compilation.compiled ? "The saved source compiled. Its behavior and launch preparation still need verification."
-    : "The saved source has compiler diagnostics. The complete source is kept for the next edit.";
+  const reply = generalBuildReply({ compilation, sourceAudit: source.sourceAudit, scenarios });
   return { reply, intent: source.project.intent, selection,
-    generalProject: generalProjectView({ version: 1, reply, summary: source.summary, project: source.project, compilation, selection,...(source.blueprint?{blueprintId:source.blueprint.id}:{}),...(scenarios?{scenarios}:{}),requirementCoverage: "proposed", launchReady: false }),
+    generalProject: generalProjectView({ version: 1, reply, summary: source.summary, project: source.project, compilation, selection,...(source.blueprint?{blueprintId:source.blueprint.id}:{}),...(source.sourceAudit?{sourceAudit:source.sourceAudit}:{}),...(scenarios?{scenarios}:{}),requirementCoverage: "proposed", launchReady: false }),
     change: passed ? "applied" : "blocked", memory: "", chargedAs: "build" };
 }

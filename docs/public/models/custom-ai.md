@@ -56,6 +56,8 @@ General projects also follow the selected network's mandatory Custom Launch poli
 
 A completed contract-check plan stays with its saved chat, design and network. Continuing after an interrupted source build reuses that plan; changing its rules or network requires a matching plan. The earlier source remains saved when an update fails. An independent source review can require changes before launch preparation is available.
 
+A temporary RPC outage on Base or HyperEVM does not prevent source generation when the exact network configuration is still available. The builder preserves the pinned contracts, fees and protections. Launch preparation checks current availability separately and remains unavailable while that network is blocked. Completed build messages use the actual compiler, source-review and declared-check results.
+
 Open **Usage** from the chat menu for remaining credits and reset times. Reconnecting reads the saved request and does not start another paid generation. A new build is a separate request.
 
 A source project may still need constructor inputs, current network data or additional behavior evidence. Those missing parts remain visible with the saved design. When [live capabilities](https://programmable.market/api/custom-ai/capabilities) report general launch preparation enabled, use **Launch coin** or ask the chat to launch. The platform prepares and automatically checks the exact saved source on the selected network. The result and available wallet steps stay in the chat. Use **Continue launch here** to inspect those steps, or **Open submission** for the full record. Sending a transaction still requires wallet confirmation. If preparation is unavailable on the selected network, the project remains a saved source draft.
