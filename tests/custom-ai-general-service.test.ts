@@ -43,6 +43,18 @@ it("continues the complete saved design without another interpretation call",asy
  expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledTimes(1);
  expect(value.nextAction).toBeUndefined();expect(value.generalProject?.launchReady).toBe(false);
 });
+it("answers a saved-design question with one reply-only call and no production read or edit",async()=>{
+ const intent=prior().project.intent,loadProductionContext=vi.fn(),saveProject=vi.fn(),compiler=vi.fn();
+ const call=vi.fn(async()=>result({reply:"The saved fees remain unchanged."}));
+ const value=await runCustomAI({...request,messages:[{role:"user",content:"Wie ist die gespeicherte Fee-Verteilung? Bitte nur kurz antworten."}]},undefined,
+  {call,compile:compiler},{intent,loadProductionContext,saveProject});
+ expect(value.intent).toEqual(intent);expect(value.change).toBe("unchanged");expect(value.nextAction).toBeUndefined();
+ expect(loadProductionContext).not.toHaveBeenCalled();expect(saveProject).not.toHaveBeenCalled();expect(compiler).not.toHaveBeenCalled();
+ expect(call).toHaveBeenCalledOnce();
+ const input=(call.mock.calls[0] as unknown as [ClaudeInput])[0];
+ expect(input).toMatchObject({task:"conversation",maxTokens:800});expect(input.messages).toHaveLength(1);
+ expect(input.schema).toEqual({type:"object",properties:{reply:{type:"string"}},required:["reply"],additionalProperties:false});
+});
 it("reuses the newer completed check plan after a requested refresh and interrupted source",async()=>{
  const intent=prior().project.intent;
  const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[],steps:[

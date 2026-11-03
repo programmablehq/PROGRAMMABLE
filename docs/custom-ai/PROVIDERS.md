@@ -16,6 +16,8 @@ Adaptive Claude routes receive the configured effort in the `reasoning.effort` f
 
 Large source-generation contexts use declaration references for immutable libraries. They preserve imports, types, signatures, constants and storage; function bodies are omitted from the model view. Chain-specific protection implementations and the full saved design remain present. Compilation always uses the complete original dependency sources, bound by their original source hash, never the shortened references.
 
+Short questions about an existing design use a reply-only request with the latest message and saved context. That route cannot edit rules, metadata or launch state and does not fetch production bindings. Its closed reply schema also accepts a bounded plain-text answer; planners and source generators still require their complete structured response. Mixed questions and instructions remain on the planning route.
+
 The Claude bridge rejects the planner's nested `anyOf` tool envelopes, nullable object schemas and several JSON Schema length/range keywords. Object union values travel as JSON-encoded strings; unsupported constraints remain in field descriptions and are enforced locally. The adapter restores the result and validates it against the complete original schema before the planner or any tool can use it. Runtime tool validation, available tools and lookup limits remain authoritative.
 
 Surplus selection never falls back to the direct Anthropic key. An empty Surplus key stops before a provider request. Each provider has its own cooldown, so an Anthropic billing incident does not disable a valid Surplus connection.
