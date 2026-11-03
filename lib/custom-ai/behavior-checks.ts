@@ -105,7 +105,7 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
   if(world&&contracts.some(contract=>contract.id===world.hook&&contract.value!==undefined&&contract.value!=="0"))return bad();
   if(world&&(!entrypoints.some(entry=>entry.role==="token"&&contracts.find(item=>item.id===world.token)?.source===entry.source&&contracts.find(item=>item.id===world.token)?.contract===entry.contract)
     ||!entrypoints.some(entry=>entry.role==="hook"&&contracts.find(item=>item.id===world.hook)?.source===entry.source&&contracts.find(item=>item.id===world.hook)?.contract===entry.contract)))return bad();
-  if(world?.kind==="v4-protected-native-token-v1"&&!entrypoints.some(entry=>entry.role==="liquidity"&&contracts.find(item=>item.id===world.initializer)?.source===entry.source&&contracts.find(item=>item.id===world.initializer)?.contract===entry.contract))return bad();
+  if(world?.kind==="v4-protected-native-token-v1"&&!entrypoints.some(entry=>entry.role==="liquidity"&&contracts.find(item=>item.id===world.initializer)?.source===entry.source&&contracts.find(item=>item.id===world.initializer)?.contract===entry.contract))return bad(`protected-world-initializer:${world.initializer}:requires-liquidity-role`);
   const allowedCalls=values(input.allowedCalls,contractIds,0,fixtureNames);
   if(allowedCalls.some(item=>typeof item==="string"
     ? !/^0x[0-9a-f]{40}$/i.test(item)||!intent.requirements.some(rule=>(rule.text+(rule.origin.kind==="message"?rule.origin.quote:"")).toLowerCase().includes(item.toLowerCase()))
