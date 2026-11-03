@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     };
     const previousRead=readResult(input.contextId);
     const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
-    const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, verificationRefreshRequested:previous?.verificationRefreshRequested, replyLocale:previous?.replyLocale,
+    const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, verificationRefreshRequested:previous?.verificationRefreshRequested, verificationInstruction:previous?.verificationInstruction, replyLocale:previous?.replyLocale,
       intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
     if(current?.generalProject&&store&&authority.kind==="account"&&input.draftId){
       const view=current.generalProject;
@@ -108,11 +108,11 @@ export async function POST(request: Request) {
           ...(store&&authority.kind==="account"&&reserved?.lease&&input.conversation?{
             loadProductionContext:readLaunchBuildContext,
             loadSourceLibraries:canonicalGeneralSourceCatalog,
-            loadNewerBlueprint:async(intent,chainId)=>store.projects.readFailedBlueprint(authority.owner,input.conversation!,intent,chainId,input.contextId??input.draftId),
-            loadBlueprint:async(intent,chainId)=>{
+            loadNewerBlueprint:async(intent,chainId,instruction)=>store.projects.readFailedBlueprint(authority.owner,input.conversation!,intent,chainId,input.contextId??input.draftId,instruction),
+            loadBlueprint:async(intent,chainId,instruction)=>{
               for(const id of new Set([input.contextId,input.draftId].filter((value):value is string=>Boolean(value)))){
                 const saved=await store.projects.readBlueprint(authority.owner,id);
-                if(saved&&saved.intent.id===intent.id&&saved.intent.revision===intent.revision&&saved.blueprint.chainId===chainId)return saved.blueprint;
+                if(saved&&saved.verificationInstruction===instruction&&saved.intent.id===intent.id&&saved.intent.revision===intent.revision&&saved.blueprint.chainId===chainId)return saved.blueprint;
               }
               return undefined;
             },
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
             saveSourceProgress:async(progress:import("@/lib/custom-ai/source-progress").SourceProgress)=>store.projects.saveSourceProgress(authority.owner,input.id,reserved.lease!,progress),
             saveProject:async(project:import("@/lib/custom-ai/contract-project").ContractProject)=>{await store.projects.save(authority.owner,input.id,reserved.lease!,project);},
             saveCompilation:async(compilation:import("@/lib/custom-ai/contract-project.server").CompiledProject)=>{await store.projects.complete(authority.owner,input.id,reserved.lease!,compilation);},
-            saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent});},
+            saveBlueprint:async(blueprint:import("@/lib/custom-ai/check-blueprint").GeneralCheckBlueprint,intent:import("@/lib/custom-ai/launch-intent").LaunchIntent,verificationInstruction?:string)=>{await store.projects.saveBlueprint(authority.owner,input.id,reserved.lease!,{blueprint,intent,verificationInstruction});},
             saveScenarios:async(report:import("@/lib/custom-ai/behavior-checks.server").GeneralScenarioReport)=>{await store.projects.saveScenarios(authority.owner,input.id,reserved.lease!,report);},
             saveSourceAudit:async(audit:import("@/lib/custom-ai/source-audit.server").GeneralSourceAudit)=>{await store.projects.saveSourceAudit(authority.owner,input.id,reserved.lease!,audit);},
           }:{}),

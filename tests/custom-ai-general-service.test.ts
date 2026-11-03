@@ -54,6 +54,23 @@ it("reuses the newer completed check plan after a requested refresh and interrup
  expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source-implementation");
  expect(value.intent).toEqual(intent);expect(value.generalProject?.launchReady).toBe(false);
 });
+it("carries an explicit verification request into a fresh source-blind plan even if the planner misses the flag",async()=>{
+ const intent=prior().project.intent;
+ const declaration={contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[],steps:[
+  {id:"increment",contract:"main",signature:"increment()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:false,requirementIds:[],expect:{status:"success"}},
+  {id:"read",contract:"main",signature:"count()",arguments:[],from:"trader-a",afterSeconds:0,value:"0",read:true,requirementIds:["counter"],expect:{status:"success",returns:["1"]}},
+ ]};
+ const blueprint=createGeneralCheckBlueprint(declaration,intent,999,"paris");
+ const instruction="Build the saved design and add the missing successful increment checks.";
+ const call=vi.fn(async(input:ClaudeInput)=>input.task==="planning"?plan({intentMode:"preserve",intentRequirements:[],reviseChecks:false})
+  :input.task==="interface"?result({generalChecks:JSON.stringify(declaration)}):generated());
+ const saveBlueprint=vi.fn(async()=>{});
+ await runCustomAI({...request,coin:{...EMPTY_COIN_SETUP,chainId:999,pairToken:"HYPE"},messages:[{role:"user",content:instruction}]},undefined,
+  {call,compile:vi.fn(),compileProject:compile},{intent,projectCompilerTarget:"paris",saveProject:async()=>{},saveBlueprint,saveCompilation:async()=>{},saveScenarios:async()=>{},loadBlueprint:async()=>blueprint});
+ const independent=call.mock.calls.find(([input])=>input.task==="interface")?.[0];
+ expect(independent?.system).toContain(instruction);
+ expect(saveBlueprint.mock.calls[0]).toEqual([expect.any(Object),intent,instruction]);
+});
 it("keeps the planner for a saved design with an unresolved choice",async()=>{
  const previous=prior(),intent={...previous.project.intent,unresolved:["Choose the counter start"],requirements:previous.project.intent.requirements.map((r,i)=>i? r:{...r,open:"Choose the counter start"})};
  const call=vi.fn(async()=>plan({action:"clarify",intentMode:"preserve",intentRequirements:[],ruleEdits:[],reply:"Choose the starting value."}));
