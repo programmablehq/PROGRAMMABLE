@@ -69,7 +69,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     });
   }, [enabled, launch, uncertain, accepted, disabled, detail, complete, project, intent, draftId, conversationId,
     warmKey, flush, account, settings.chainId, controllerKind]);
-  const detailLabel = detail ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image", description: "Add description", website: "Add project link", x: "Add X link" }[detail.field] : "";
+  const detailLabel = detail ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image", description: "Add description", website: "Add project link", x: "Add X profile", socialPost: "Check X post link" }[detail.field] : "";
   const checking = saved?.submission?.state === "sending";
   const label = !launch.loaded ? "Check saved submission" : uncertain ? checking ? "Check submission" : "Recover submission"
     : detail ? detailLabel : "Launch coin";

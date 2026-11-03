@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceReply, messageBlocks } from "../lib/custom-ai/message-display";
+import { advanceReply, messageBlocks, textBlocks, inlineParts } from "../lib/custom-ai/message-display";
 
 describe("assistant message display", () => {
   it("preserves exact code, whitespace and addresses for its own copy action", () => {
@@ -36,5 +36,22 @@ describe("assistant message display", () => {
     expect(first).not.toMatch(/[\uD800-\uDBFF]$/);
     expect(first.endsWith("\u200d")).toBe(false);
     expect(advanceReply(first, text, 200)).toBe(text);
+  });
+});
+
+
+describe("semantic chat content", () => {
+  it("keeps paragraphs distinct and gives rule lists real list semantics", () => {
+    expect(textBlocks("Done.\n\nYour rules:\n- 30% liquidity\n- 20% buyback\n\nNext step.")).toEqual([
+      {kind:"paragraph",text:"Done.\n"},{kind:"paragraph",text:"Your rules:"},
+      {kind:"list",ordered:false,start:1,items:["30% liquidity","20% buyback"]},{kind:"paragraph",text:"Next step."},
+    ]);
+    expect(textBlocks("3. Review\n4. Launch")).toEqual([{kind:"list",ordered:true,start:3,items:["Review","Launch"]}]);
+  });
+  it("never turns HTML, script URLs or credential-bearing links into executable content", () => {
+    const unsafe = "<img src=x onerror=alert(1)> [click](javascript:alert(1)) https://user:pass@example.org";
+    expect(inlineParts(unsafe).some(part => part.kind === "link")).toBe(false);
+    expect(inlineParts(unsafe).map(part=>part.text).join("")).toBe(unsafe);
+    expect(inlineParts("[Docs](https://docs.programmable.market) **Ready** `0x123`.")).toContainEqual({kind:"link",text:"Docs",href:"https://docs.programmable.market"});
   });
 });

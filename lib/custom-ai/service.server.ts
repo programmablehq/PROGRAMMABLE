@@ -56,8 +56,8 @@ const setupSchema = { type: "object", properties: {
   name: { type: ["string", "null"] }, symbol: { type: ["string", "null"] },
   chainId: { type: ["integer", "null"] },
   pairToken: { type: ["string", "null"] }, initialBuy: { type: ["string", "null"] },
-  description: { type: ["string", "null"] }, website: { type: ["string", "null"] }, x: { type: ["string", "null"] },
-}, required: ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x"], additionalProperties: false };
+  description: { type: ["string", "null"] }, website: { type: ["string", "null"] }, x: { type: ["string", "null"] }, socialPost: { type: ["string", "null"] },
+}, required: ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x", "socialPost"], additionalProperties: false };
 const buildSchema = { type: "object", properties: {
   reply: { type: "string" }, source: { type: "string" }, hookSummary: { type: "string" }, setupPatch: setupSchema,
 }, required: ["reply", "source", "hookSummary", "setupPatch"], additionalProperties: false };
@@ -111,7 +111,7 @@ function coinUpdate(answer: Record<string, unknown>, request: ChatRequest): Pick
         throw new Error("Unprovided pair address");
       }
     }
-    for (const field of ["website", "x"] as const) {
+    for (const field of ["website", "x", "socialPost"] as const) {
       const link = setupPatch[field]?.replace(/\/$/u, "");
       if (link && request.coin?.[field]?.replace(/\/$/u, "") !== link
         && !request.messages.filter(message => message.role === "user").some(message => message.content.includes(link)))

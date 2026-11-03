@@ -96,7 +96,7 @@ describe("online draft recovery", () => {
 });
 
 describe("restoring local changes", () => {
-  it.each(["description", "website", "x"] as const)("saves and detects concurrent changes to %s alone", field => {
+  it.each(["description", "website", "x", "socialPost"] as const)("saves and detects concurrent changes to %s alone", field => {
     const local = { ...original, settings: { ...original.settings, [field]: "local value" } };
     const other = { revision: 2, state: { ...original, settings: { ...original.settings, [field]: "other value" } } };
     expect(studioSnapshot(local)).not.toBe(studioSnapshot(original));

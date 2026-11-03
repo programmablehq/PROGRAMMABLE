@@ -7,6 +7,7 @@ import { CustomAIError } from "@/lib/custom-ai/types";
 import { MAX_TOKEN_IMAGE_UPLOAD_BYTES, PROGRAMMABLE_TOKEN_IMAGE_HOST } from "@/lib/token-image";
 import { verifyTokenImageWebpV1 } from "@/lib/server/token-image-webp-v1";
 import { readProductionTokenImageBlobV1 } from "@/app/api/token-image/handler";
+import { imageFromLink } from "@/lib/custom-ai/image-link.server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -15,7 +16,8 @@ export async function POST(request: Request) {
   try {
     const authority = await authorizeCustomAI(request);
     if (authority.kind !== "account") throw new CustomAIError("auth", "Connect your wallet to continue.", 401);
-    if (request.headers.get("content-type") !== "image/webp") throw new CustomAIError("image", "Choose a coin image.", 415);
+    const contentType = request.headers.get("content-type")?.split(";")[0].trim();
+    if (contentType !== "image/webp" && contentType !== "application/json") throw new CustomAIError("image", "Choose a coin image.", 415);
     const store = productionAIStore();
     await store.consume(authority.owner, "image", 20);
     const reader = request.body?.getReader();
@@ -25,11 +27,17 @@ export async function POST(request: Request) {
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
         size += value.byteLength;
-        if (size > MAX_TOKEN_IMAGE_UPLOAD_BYTES) { await reader.cancel(); throw new CustomAIError("image", "Choose a smaller image.", 413); }
+        if (size > (contentType === "application/json" ? 4096 : MAX_TOKEN_IMAGE_UPLOAD_BYTES)) { await reader.cancel(); throw new CustomAIError("image", "Choose a smaller image.", 413); }
         chunks.push(value);
       }
     } finally { reader.releaseLock(); }
-    const bytes = Buffer.concat(chunks);
+    let bytes = Buffer.concat(chunks);
+    if (contentType === "application/json") {
+      let input: unknown;
+      try { input = JSON.parse(bytes.toString("utf8")); }
+      catch { throw new CustomAIError("image", "Use a direct public image link.", 422); }
+      bytes = Buffer.from(await imageFromLink(input));
+    }
     await verifyTokenImageWebpV1(bytes);
     const hash = sha(bytes), id = sha(`${authority.owner}:${hash}`);
     const old = await store.readObject<{ id: string; hash: string; url: string }>(authority.owner, "image", id);

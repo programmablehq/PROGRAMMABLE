@@ -140,7 +140,7 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
     budgets:{maxTotalValue:values.nativeValueWei,maxTotalGas:MAX_TOTAL_GAS.toString(),validAfter:identity.validAfter,deadline:identity.deadline},
     feeObligations:[],claimDescriptors:[],distributionPreferences:[],publication:{visibility:"listed",primaryComponentId:recipe.pool.token,primaryMarketId:marketId,
       name:settings.name,symbol:settings.symbol,...(settings.description?.trim()?{description:settings.description.normalize("NFC").replace(/\r\n?/gu,"\n").trim()}:{}),imageUrl:image.url,
-      links:[settings.website,settings.x].filter((uri):uri is string=>Boolean(uri?.trim())).map(uri=>new URL(uri.trim()).href)}};
+      links:[settings.website,settings.x,settings.socialPost].filter((uri):uri is string=>Boolean(uri?.trim())).map(uri=>new URL(uri.trim()).href)}};
   // Plan V1 HTTP accepts the exact canonical JSON bytes, without the V3
   // graph packer's trailing newline. The signed raw-body hash retains that.
   const requestBody=canonicalBrowserJsonV2(plan);

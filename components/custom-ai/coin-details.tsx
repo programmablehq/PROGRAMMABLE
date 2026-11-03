@@ -14,7 +14,11 @@ import { CoinSelect } from "./coin-select";
 import styles from "./workspace.module.css";
 
 export type CoinEditorImage = { blob: Blob; url: string };
-export type CoinDetailsControls = { focus: (field: "name" | "symbol" | "image" | "description" | "website" | "x") => void };
+export type CoinDetailsControls = {
+  focus: (field: "name" | "symbol" | "image" | "description" | "website" | "x" | "socialPost") => void;
+  chooseImage: (file: File) => Promise<boolean>;
+  imageFromURL: (url: string) => Promise<boolean>;
+};
 export function CoinDetails({settings,onChange,chatRevision,disabled,headers,localPreview,cacheKey,imageReceipt,onImageReceipt,onImage,onImageBusy,controlsRef,stage,summary,description,imageURI,feeCore=true}:{
   settings:CoinSetup;onChange:(patch:CoinSetupPatch)=>void;chatRevision:number;disabled:boolean;
   headers:AISessionHeaders;localPreview:boolean;cacheKey:string;imageReceipt?:ImageReceipt;
@@ -22,9 +26,10 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   controlsRef?:Ref<CoinDetailsControls>;stage:string;summary?:string;description?:string;imageURI?:string;feeCore?:boolean;
 }) {
   const [detailsOpen,setDetailsOpen]=useState(false);
-  const [focusRequest,setFocusRequest]=useState<{field:"name"|"symbol"|"description"|"website"|"x"}>();
+  const [focusRequest,setFocusRequest]=useState<{field:"name"|"symbol"|"description"|"website"|"x"|"socialPost"}>();
   const fileInput = useRef<HTMLInputElement>(null);
   const imageRequest = useRef(0);
+  const imageAbort = useRef<AbortController | null>(null);
   const [image, setImage] = useState<{ blob: Blob; url: string }>();
   const [imageBusy, setImageBusy] = useState(false);
   useEffect(()=>{onImageBusy?.(imageBusy);},[imageBusy,onImageBusy]);
@@ -33,7 +38,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   const [pairInput, setPairInput] = useState("");
   const [pairError, setPairError] = useState("");
   const [buyTouched, setBuyTouched] = useState(false);
-  const [presentationTouched, setPresentationTouched] = useState<Partial<Record<"description" | "website" | "x", boolean>>>({});
+  const [presentationTouched, setPresentationTouched] = useState<Partial<Record<"description" | "website" | "x" | "socialPost", boolean>>>({});
   const native=builderChain(settings.chainId).currency;
   const isNative = settings.pairToken === native;
   const hasCustomPair = customPair || !isNative;
@@ -48,7 +53,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
     return () => { cancelled = true; };
   }, [cacheKey]);
 
-  useEffect(() => () => { imageRequest.current++; }, []);
+  useEffect(() => () => { imageRequest.current++; imageAbort.current?.abort(); }, []);
   useEffect(() => () => { if (image) URL.revokeObjectURL(image.url); }, [image]);
   useEffect(() => {
     if (settings.chainId !== lastSettings.current.chainId || settings.pairToken !== lastSettings.current.pairToken
@@ -60,23 +65,48 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   }, [settings, isNative, chatRevision]);
 
   async function chooseImage(file?: File) {
-    if (!file) return;
+    if (!file) return false;
     const request = ++imageRequest.current;
-    onImageReceipt(undefined);
+    imageAbort.current?.abort();
+    const controller = new AbortController(); imageAbort.current = controller;
     setImageBusy(true); setImageError("");
     try {
       const blob = await prepareTokenImage(file);
-      if (request !== imageRequest.current) return;
-      setImage({ blob, url: URL.createObjectURL(blob) });
-      void writeDraftCache(`${cacheKey}:image`, blob).catch(() => setImageError("Keep this tab open; the image could not be saved on this device"));
+      if (request !== imageRequest.current) return false;
+      let receipt: ImageReceipt | undefined;
       if (!localPreview && !cacheKey.endsWith(":signed-out")) {
-        const response = await fetch("/api/custom-ai/image", { method: "POST", headers: { ...await headers(), "Content-Type": "image/webp" }, body: blob });
-        const receipt = await response.json();
-        if (!response.ok) throw Error(receipt.error || "The image could not be uploaded");
-        if (request === imageRequest.current) onImageReceipt(receipt);
+        const response = await fetch("/api/custom-ai/image", { method: "POST", headers: { ...await headers(), "Content-Type": "image/webp" }, body: blob, signal: controller.signal });
+        const value = await response.json();
+        if (!response.ok) throw Error(value.error || "The image could not be uploaded");
+        receipt = value;
       }
+      if (request !== imageRequest.current) return false;
+      setImage({ blob, url: URL.createObjectURL(blob) }); onImageReceipt(receipt);
+      void writeDraftCache(`${cacheKey}:image`, blob).catch(() => setImageError("Keep this tab open; the image could not be saved on this device"));
+      return true;
     } catch (error) {
       if (request === imageRequest.current) setImageError(error instanceof Error ? error.message : "Choose another image");
+      return false;
+    } finally { if (request === imageRequest.current) setImageBusy(false); }
+  }
+
+  async function imageFromURL(url: string) {
+    const request = ++imageRequest.current;
+    imageAbort.current?.abort();
+    const controller = new AbortController(); imageAbort.current = controller;
+    setImageBusy(true); setImageError("");
+    try {
+      if (localPreview || cacheKey.endsWith(":signed-out")) throw Error("Connect your wallet to save an image link.");
+      const response = await fetch("/api/custom-ai/image", { method: "POST", headers: { ...await headers(), "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal: controller.signal });
+      const value = await response.json();
+      if (!response.ok) throw Error(value.error || "The image link could not be loaded.");
+      if (request !== imageRequest.current) return false;
+      setImage(undefined); onImageReceipt(value);
+      void writeDraftCache(`${cacheKey}:image`, null).catch(() => undefined);
+      return true;
+    } catch (error) {
+      if (request === imageRequest.current) setImageError(error instanceof Error ? error.message : "Choose another image link.");
+      return false;
     } finally { if (request === imageRequest.current) setImageBusy(false); }
   }
 
@@ -96,9 +126,9 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   }
   const imageURL=imageURI??imageReceipt?.url??image?.url;
   useEffect(()=>{onImage(image);},[image,onImage]);
-  useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);setFocusRequest({field});if(field==="description"||field==="website"||field==="x")setPresentationTouched(current=>({...current,[field]:true}));}}),[]);
+  useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);setFocusRequest({field});if(field==="description"||field==="website"||field==="x"||field==="socialPost")setPresentationTouched(current=>({...current,[field]:true}));},chooseImage,imageFromURL}));
   useLayoutEffect(()=>{if(detailsOpen&&focusRequest)document.getElementById(`custom-ai-${focusRequest.field}`)?.focus();},[detailsOpen,focusRequest]);
-  const presentationError = (field: "description" | "website" | "x") => presentationTouched[field] ? coinPresentationIssue(settings, field) : "";
+  const presentationError = (field: "description" | "website" | "x" | "socialPost") => presentationTouched[field] ? coinPresentationIssue(settings, field) : "";
   return <>
     <section className={styles.coinPreview} aria-label="Coin preview">
       <div className={styles.coinHeading}>
@@ -112,7 +142,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
           {imageBusy && <span className={styles.imageLoading}><LoaderCircle size={22} aria-hidden="true" /><span className={styles.srOnly}>Preparing image</span></span>}
         </button>
         {(image || imageReceipt) && <button type="button" className={styles.removeImage} disabled={disabled || imageBusy} aria-label="Remove coin image"
-          onClick={() => { imageRequest.current++; setImage(undefined); onImageReceipt(undefined); setImageError(""); void writeDraftCache(`${cacheKey}:image`, null).catch(() => undefined); }}><X size={14} aria-hidden="true" /></button>}
+          onClick={() => { imageRequest.current++; imageAbort.current?.abort(); setImage(undefined); onImageReceipt(undefined); setImageError(""); void writeDraftCache(`${cacheKey}:image`, null).catch(() => undefined); }}><X size={14} aria-hidden="true" /></button>}
         <input ref={fileInput} className={styles.srOnly} type="file" tabIndex={-1} aria-label="Coin image file"
           accept={TOKEN_IMAGE_ACCEPT} disabled={disabled || imageBusy}
           onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void chooseImage(file); }} />
@@ -177,10 +207,10 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
           <p id="custom-ai-description-help" className={presentationError("description") ? styles.error : styles.note}>
             {presentationError("description") || "Shown publicly with your coin. You can also write it in the chat."}
           </p>
-          {(["website", "x"] as const).map(field => <div key={field} className={styles.presentationField}>
-            <label htmlFor={`custom-ai-${field}`}>{field === "website" ? "Project website" : "X profile"}
+          {(["website", "x", "socialPost"] as const).map(field => <div key={field} className={styles.presentationField}>
+            <label htmlFor={`custom-ai-${field}`}>{field === "website" ? "Project website" : field === "x" ? "X profile" : "X post (optional)"}
               <input id={`custom-ai-${field}`} name={field} type="url" inputMode="url" value={settings[field] ?? ""}
-                placeholder={field === "website" ? "https://your-project.com" : "https://x.com/your_coin"}
+                placeholder={field === "website" ? "https://your-project.com" : field === "x" ? "https://x.com/your_coin" : "https://x.com/your_coin/status/…"}
                 maxLength={2048} autoComplete="off" autoCapitalize="none" spellCheck={false}
                 aria-invalid={Boolean(presentationError(field)) || undefined} aria-describedby={`custom-ai-${field}-help`}
                 onChange={event => onChange({ [field]: event.target.value })}

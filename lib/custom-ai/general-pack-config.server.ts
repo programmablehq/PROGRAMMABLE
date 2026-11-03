@@ -101,7 +101,7 @@ export function generalGraphPackConfig(input: GeneralPackInput) {
       tickSpacing: recipe.pool.tickSpacing, quoteCurrency: values.quoteCurrency },
     projectMetadata: { schemaVersion: "programmable.project-metadata-input.v1", token: { name: settings.name, symbol: settings.symbol },
       presentation: { description: settings.description!.normalize("NFC").replace(/\r\n?/gu, "\n").trim(), image: { sourcePath: "image.webp", uri: image.url },
-        links: [{ kind: "website", uri: new URL(settings.website!.trim()).href }, { kind: "x", uri: new URL(settings.x!.trim()).href }] } },
+        links: [{ kind: "website", uri: new URL(settings.website!.trim()).href }, { kind: "x", uri: new URL(settings.x!.trim()).href }, ...(settings.socialPost?.trim() ? [{ kind: "other", uri: new URL(settings.socialPost.trim()).href }] : [])] } },
     launchProfile: { schemaVersion: "programmable.direct-native-hook-graph-profile-selection.v3",
       profileId: "programmable.direct-native-hook-graph.v1", profileRevision: 3,
       targetRoles: { tokenTargetId: recipe.pool.token, hookTargetId: recipe.pool.hook, initializerTargetId: recipe.pool.initializer, platformFeeBindingTargetId: recipe.pool.platformFeeBinding },

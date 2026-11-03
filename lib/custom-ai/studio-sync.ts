@@ -14,7 +14,7 @@ export function studioSnapshot(state: StudioState) {
   return JSON.stringify([settings.name, settings.symbol, settings.chainId, settings.pairToken, settings.initialBuy,
     state.messages.map(message => [message.role, message.content, ...(message.sources?.length ? [message.sources] : [])]), state.draftId ?? null,
     image ? [image.id, image.url, image.hash] : null, state.contextId ?? null, state.pendingChange ?? null, state.input ?? "", state.editTarget ? [state.editTarget.sourceHash,state.editTarget.requirementId] : null, state.sourceId ?? null,
-    settings.description ?? "", settings.website ?? "", settings.x ?? ""]);
+    settings.description ?? "", settings.website ?? "", settings.x ?? "", settings.socialPost ?? ""]);
 }
 export function studioBase(server: StoredStudio | null): StudioBase {
   return { revision: server?.revision ?? 0, snapshot: server ? studioSnapshot(server.state) : "" };
@@ -23,7 +23,17 @@ export function restoreStudio(local: StudioState | null, previous: StudioBase | 
   const base = studioBase(server);
   // Older snapshots omitted input, rule selection, source or public metadata.
   // Upgrade their empty defaults without accepting a changed revision.
-  if(previous)try{let values=JSON.parse(previous.snapshot);if(Array.isArray(values)&&values.length===10)values=[...values,"",null];if(Array.isArray(values)&&values.length===12)values=[...values,null];if(Array.isArray(values)&&values.length===13)previous={...previous,snapshot:JSON.stringify([...values,"","",""])};}catch{/* Invalid old metadata still conflicts. */}
+  if (previous) try {
+    let values = JSON.parse(previous.snapshot);
+    if (Array.isArray(values)) {
+      if (values.length === 10) values = [...values, "", null];
+      if (values.length === 12) values = [...values, null];
+      if (values.length === 13) values = [...values, "", "", ""];
+      if (values.length === 16) values = [...values, ""];
+      previous = { ...previous, snapshot: JSON.stringify(values) };
+    }
+  } catch { /* Invalid old metadata still conflicts. */ }
+
   const snapshot = local ? studioSnapshot(local) : "";
   const dirty = Boolean(local && snapshot !== base.snapshot && snapshot !== previous?.snapshot);
   const conflict = dirty && (previous

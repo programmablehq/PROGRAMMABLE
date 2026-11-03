@@ -156,7 +156,9 @@ https://developers.uniswap.org/docs/protocols/v4/concepts/hooks`;
 
 export const BUILD_RULES = `Generate a draft for the described fee logic, preserving the user's intent.
 Output JSON with reply (string in the user's language), source (Solidity string), hookSummary (English string), and setupPatch.
-setupPatch contains name, symbol, chainId, pairToken, initialBuy, description, website and x. Set each field to null unless the user
+setupPatch contains name, symbol, chainId, pairToken, initialBuy, description, website, x and socialPost.
+Use setupPatch.socialPost for a user-provided X post URL (/handle/status/id), separately from the X profile in setupPatch.x. Preserve the exact provided post; never silently replace it with a profile. It is optional public metadata, not a contract rule.
+Set each field to null unless the user
 asks to set or change it. Apply explicit coin details in chat even without a request to change the hook.
 When building a named coin, include its supplied name and ticker in setupPatch as well as the source.
 Use chainId 1 for Ethereum mainnet, 4663 for Robinhood, 8453 for Base and 999 for HyperEVM. Never infer an unsupported chain.

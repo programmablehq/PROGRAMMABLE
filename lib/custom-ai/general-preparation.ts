@@ -88,13 +88,13 @@ function readEditor(value: unknown, chainId: unknown): GeneralPreparationView["e
   if (!object(value) || !exactKeys(value, ["settings", "imageId"]) || typeof value.imageId !== "string" || !/^[a-f0-9]{64}$/u.test(value.imageId)
     || !object(value.settings)) return invalid();
   const settings = value.settings;
-  if (!exactKeys(settings, ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x"])
+  if (!exactKeys(settings, ["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x", "socialPost"])
     || settings.chainId !== chainId || ["name", "symbol", "pairToken", "initialBuy"].some(key => typeof settings[key] !== "string")) return invalid();
   try { return { settings: parseCoinSetupPatch(settings) as CoinSetup, imageId: value.imageId }; } catch { return invalid(); }
 }
 export function sameGeneralEditor(saved: GeneralPreparationView, settings: CoinSetup, imageId?: string): boolean {
   return saved.editor?.imageId === imageId && Boolean(saved.editor) &&
-    (["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x"] as const)
+    (["name", "symbol", "chainId", "pairToken", "initialBuy", "description", "website", "x", "socialPost"] as const)
       .every(key => (saved.editor!.settings[key] ?? "") === (settings[key] ?? ""));
 }
 export function readGeneralPreparation(value: unknown, account: string, id?: string): GeneralPreparationView | null {

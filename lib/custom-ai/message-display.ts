@@ -34,3 +34,53 @@ export function advanceReply(current: string, target: string, elapsedMs: number,
   const points = Array.from(rest);
   return prefix + points.slice(0, Math.max(1, Math.ceil(points.length * .4))).join("");
 }
+
+export type TextBlock = { kind: "paragraph" | "heading" | "quote"; text: string }
+  | { kind: "list"; ordered: boolean; start: number; items: string[] };
+
+/** A deliberately small display grammar. Never interprets HTML or runs model output. */
+export function textBlocks(text: string): TextBlock[] {
+  const blocks: TextBlock[] = [];
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    if (!line.trim()) { const last = blocks.at(-1); if (last?.kind === "paragraph") last.text += "\n"; continue; }
+    const item = /^\s{0,3}(?:([-+*])|(\d{1,3})[.)])\s+(.+)$/.exec(line);
+    if (item) {
+      const ordered = Boolean(item[2]), previous = blocks.at(-1);
+      if (previous?.kind === "list" && previous.ordered === ordered) previous.items.push(item[3]);
+      else blocks.push({ kind: "list", ordered, start: item[2] ? Number(item[2]) : 1, items: [item[3]] });
+      continue;
+    }
+    const heading = /^#{1,6}\s+(.+)$/.exec(line), quote = /^>\s?(.*)$/.exec(line);
+    if (heading || quote) { blocks.push({ kind: heading ? "heading" : "quote", text: (heading ?? quote)![1] }); continue; }
+    const previous = blocks.at(-1);
+    if (previous?.kind === "paragraph" && !/\n$/.test(previous.text)) previous.text += `\n${line}`;
+    else blocks.push({ kind: "paragraph", text: line });
+  }
+  return blocks;
+}
+
+export type InlinePart = { kind: "text" | "strong" | "code"; text: string } | { kind: "link"; text: string; href: string };
+export function inlineParts(text: string): InlinePart[] {
+  const parts: InlinePart[] = [];
+  const token = /`([^`\n]+)`|\*\*([^*\n]+)\*\*|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>]+)/g;
+  let cursor = 0;
+  for (const match of text.matchAll(token)) {
+    const at = match.index!;
+    if (at > cursor) parts.push({ kind: "text", text: text.slice(cursor, at) });
+    if (match[1]) parts.push({ kind: "code", text: match[1] });
+    else if (match[2]) parts.push({ kind: "strong", text: match[2] });
+    else {
+      const raw = match[4] ?? match[5];
+      const href = match[4] ? raw : raw.replace(/[.,;!?]+$/, "");
+      try {
+        const url = new URL(href);
+        if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw Error();
+        parts.push({ kind: "link", text: match[3] ?? href, href });
+        if (href.length < raw.length) parts.push({ kind: "text", text: raw.slice(href.length) });
+      } catch { parts.push({ kind: "text", text: match[0] }); }
+    }
+    cursor = at + match[0].length;
+  }
+  if (cursor < text.length) parts.push({ kind: "text", text: text.slice(cursor) });
+  return parts;
+}
