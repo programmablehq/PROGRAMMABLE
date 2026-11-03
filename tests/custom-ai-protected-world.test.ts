@@ -70,6 +70,19 @@ async function fixture(chain:1|4663|8453|999,wrongRecipient=false){
 }
 
 describe("protected world declaration boundaries",()=>{
+ it("gives a repairable initializer role error before source generation",()=>{
+  const rules:LaunchIntent={...intent,requirements:[intent.requirements[0]],unresolved:[]};
+  const declaration=(role:"auxiliary"|"liquidity")=>({
+   world:{kind:"v4-protected-native-token-v1",token:"token",hook:"hook",initializer:"initializer",hookPermissions:0x20cc,fee:0,tickSpacing:60,sqrtPriceX96:sqrtPrice,nativeUsdAnswer:"300000000000"},
+   contracts:([['initializer','Initializer',role],['token','Token','token'],['hook','Hook','hook']] as const).map(([id,contract,entryRole])=>({
+    id,contract,source:"Project.sol",role:entryRole,arguments:[],functions:["function ready() view returns (bool)"],allowReceive:false,allowFallback:false,surfaceRequirements:["surface"]})),
+   allowedCalls:[],steps:[{id:"initializer-read",contract:"initializer",signature:"ready()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:true,requirementIds:[],expect:{status:"success",returns:[true]}}]
+  });
+  expect(()=>createGeneralCheckBlueprint(declaration("auxiliary"),rules,8453,"cancun")).toThrow("protected-world-initializer:initializer:requires-liquidity-role");
+  const result=createGeneralCheckBlueprint(declaration("liquidity"),rules,8453,"cancun");
+  expect(result.entrypoints.find(entry=>entry.contract==="Initializer")?.role).toBe("liquidity");
+  expect(result.scenarios.steps[0].expect.returns).toEqual([true]);
+ });
  it("binds the fixed fixture revision and rejects a changed or incomplete world",()=>{
   const raw={kind:"v4-protected-native-token-v1",token:"token",hook:"hook",initializer:"initializer",hookPermissions:0x20cc,fee:0,tickSpacing:60,sqrtPriceX96:sqrtPrice,nativeUsdAnswer:"1000000000000000000"};
   const ids=new Set(["token","hook","initializer"]),world=parseV4CheckWorld(raw,ids);

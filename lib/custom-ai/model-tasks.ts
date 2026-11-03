@@ -8,6 +8,8 @@ export const MODEL_TASKS = {
   scenarios: { role: "build", effort: "low", maxTokens: 4000 },
   "declaration-correction": { role: "build", effort: "low", maxTokens: 8000 },
   source: { role: "build", effort: "high", maxTokens: 16_000 },
+  // A frozen graph already owns the design; reserve its output budget for code.
+  "source-implementation": { role: "build", effort: "low", maxTokens: 16_000 },
   "fee-source": { role: "build", effort: "high", maxTokens: 6000 },
   "fee-escalation": { role: "escalation", effort: "high", maxTokens: 6000 },
   "source-audit": { role: "build", effort: "low", maxTokens: 3500 },
