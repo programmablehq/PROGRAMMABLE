@@ -28,7 +28,11 @@ export async function writeSourceParts(input: {
   for (let i = 0; i < todo.length; i++) {
     input.request.signal?.throwIfAborted();
     if (calls >= 4 || remaining < 1024 || Date.now() >= deadline - 30_000) throw new SourceProgressPending(Object.keys(progress.files).length, input.paths.length);
-    const path = todo[i], maxTokens = Math.floor(remaining / Math.min(todo.length - i, 4 - calls));
+    // Files can differ greatly in size. A per-file equal split can truncate a
+    // large hook even when its small companion would fit the total budget.
+    // Charge actual output after each complete file and give the next file
+    // the remaining allowance, without increasing the overall ceiling.
+    const path = todo[i], maxTokens = remaining;
     const schema = { type: "object", properties: {
       reply: { type: "string", maxLength: 3000 }, summary: { type: "string", maxLength: 360 },
       sourceFiles: { type: "array", minItems: 1, maxItems: 1, items: { type: "object", properties: {

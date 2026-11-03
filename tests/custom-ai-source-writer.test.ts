@@ -25,6 +25,15 @@ describe("bounded source parts",()=>{
   const output=await writeSourceParts({request,paths:["A.sol","B.sol"],contextHash:hash,cached:saved,save:async()=>{}},resumed);
   expect(resumed).toHaveBeenCalledOnce();expect(JSON.parse(output.text).sourceFiles.map((f:{path:string})=>f.path)).toEqual(["A.sol","B.sol"]);
  });
+ it("fits a large hook and small companion within one shared budget",async()=>{
+  let index=0;const paths=["A.sol","B.sol"],costs=[10_000,1_000],saved:SourceProgress[]=[];
+  const output=await writeSourceParts({request,paths,contextHash:hash,save:async p=>{saved.push(p);}},async input=>{
+   const cost=costs[index];
+   if(input.maxTokens<cost)throw new ModelResponseError("output-limit",{inputTokens:1,outputTokens:input.maxTokens});
+   return {...response(paths[index++]),outputTokens:cost};
+  });
+  expect(output.outputTokens).toBe(11_000);expect(Object.keys(saved.at(-1)!.files)).toEqual(paths);
+ });
  it("rejects a stale context, extra source path and mutable checkpoint",()=>{
   const p:SourceProgress={version:1,contextHash:hash,files:{"A.sol":{content:"contract A {}"}},reply:"Done",summary:"A"};
   expect(()=>checkedSourceProgress(p,`sha256:${"b".repeat(64)}`)).toThrow();
