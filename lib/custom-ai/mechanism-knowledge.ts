@@ -5,7 +5,7 @@ import { PROTOCOL_TOPICS, type ProtocolTopic } from "./protocol-knowledge";
 export function mechanismTopics(intent?: Pick<LaunchIntent, "requirements">, message = "") {
   const text = [message, ...(intent?.requirements.map(rule => rule.text) ?? [])].join(" ").toLowerCase();
   const topics: ProtocolTopic[] = [];
-  if (/liquidit|liquidity|buyback|buy.?back|burn|holder|geb[uü]hr.*(?:teil|verteil)|fee.*(?:split|allocat|distribut)|reinvest|dividend/.test(text)) topics.push("fee-flows");
+  if (/liquidit|liquidity|buyback|buy.?back|burn|holder|geb[uü]hr.*(?:teil|verteil)|fee.*(?:split|allocat|distribut)|project.?fees|projektfees|projektgeb[uü]hr|fees?.{0,100}(?:wallet|creator|recipient)|geb[uü]hren?.{0,100}(?:wallet|creator|empf[aä]nger)|reinvest|dividend/.test(text)) topics.push("fee-flows");
   if (/\bapi\b|oracle|weather|wetter|perpetual|funding rate|signed.*(?:feed|data)|datenquelle|external.*(?:data|event)|webhook/.test(text)) topics.push("integrations");
   if (/timer|countdown|schedule|epoch|snapshot|\btwap\b|weather|wetter|oracle|keeper|zeitgesteuert|stunden|täglich|taeglich|cross.?chain|random|zufall|\bvrf\b/.test(text)) topics.push("external-data");
   if (/\brouter\b|routing|hookdata|payer|exact.?input|exact.?output|universal.?router|swap.?route/.test(text)) topics.push("routing");

@@ -55,6 +55,20 @@ it("answers a saved-design question with one reply-only call and no production r
  expect(input).toMatchObject({task:"conversation",maxTokens:800});expect(input.messages).toHaveLength(1);
  expect(input.schema).toEqual({type:"object",properties:{reply:{type:"string"}},required:["reply"],additionalProperties:false});
 });
+it("keeps a general design's model response focused on its actual choices",async()=>{
+ const call=vi.fn().mockResolvedValue(result({reply:"What starting value should it use?",replyLocale:"en",action:"clarify",intentMode:"revise",
+  intentRequirements:[{...requirements[0],open:"Choose the starting value"}],memory:"Counter",ruleEdits:[],setupPatch:{},lookups:[],launchRequested:false,reviseChecks:false}));
+ const compiler=vi.fn();
+ const value=await runCustomAI({...request,coin:{...EMPTY_COIN_SETUP,chainId:8453}},undefined,{call,compile:compiler},{saveProject:vi.fn()});
+ const schema=call.mock.calls[0][0].schema;
+ expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:8000});
+ expect(call.mock.calls[0][0].structuredTransport).toBeUndefined();
+ for(const field of ["executionRoute","program","eventRule","composable","feeChecks","implementedRequirementIds"]){
+  expect(schema.properties).not.toHaveProperty(field);expect(schema.required).not.toContain(field);
+ }
+ expect(value.intent?.unresolved).toEqual(["Choose the starting value"]);
+ expect(value.nextAction).toBeUndefined();expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
+});
 it("reuses the newer completed check plan after a requested refresh and interrupted source",async()=>{
  const intent=prior().project.intent;
  const blueprint=createGeneralCheckBlueprint({contracts:[{id:"main",source:"Counter.sol",contract:"Counter",role:"auxiliary",arguments:[],functions:["function count() view returns(uint256)","function increment()"],allowReceive:false,allowFallback:false,surfaceRequirements:["no-owner"]}],allowedCalls:[],steps:[
@@ -284,8 +298,8 @@ describe("general source generation inside the owned chat job",()=>{
   await runCustomAI(question,undefined,{call,compile:vi.fn()});
   await runCustomAI(question,undefined,{call,compile:vi.fn()},{generalProject:prior()});
   const fee=captured[0],general=captured[1],schema=general.schema as {properties:{program:unknown;eventRule:unknown;composable:unknown;executionRoute:unknown}};
-  expect(schema.properties.program).toEqual({type:"null"});expect(schema.properties.eventRule).toEqual({type:"null"});expect(schema.properties.composable).toEqual({type:"null"});
-  expect(schema.properties.executionRoute).toEqual({type:"string",enum:["custom-contract"]});
+  expect(schema.properties.program).toBeUndefined();expect(schema.properties.eventRule).toBeUndefined();expect(schema.properties.composable).toBeUndefined();
+  expect(schema.properties.executionRoute).toBeUndefined();
   expect(JSON.stringify(general.schema).length).toBeLessThan(JSON.stringify(fee.schema).length);
   expect(general.system.length).toBeLessThan(fee.system.length);expect(call).toHaveBeenCalledTimes(2);
  });
