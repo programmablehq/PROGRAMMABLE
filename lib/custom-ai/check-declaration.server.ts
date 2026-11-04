@@ -24,6 +24,7 @@ import {graphSchemaForConstraints,interfaceSchemaForGraph,nativeFullDeclaration,
 import {mechanismKnowledge} from "./mechanism-knowledge";
 import {recoverCompletedInterface,recoverCorrectedDeployment} from "./interface-recovery";
 import {recoverScenarioPage} from "./scenario-recovery";
+import {bindDeclaredWorldParticipants} from "./fixture-participants";
 import type {CoinSetup} from "./coin-setup";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
@@ -109,7 +110,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     const metadata=bindCanonicalTokenMetadata(opening.proposal.deployment);
     return {...opening.proposal,...(metadata.changed?{deployment:metadata.value}:{}),steps:resolveOpeningFixtureValue(opening.proposal.steps,opening.inputs)};
   };
-  const completeDeclaration=(text:string)=>createGeneralCheckBlueprint(expandedDeclaration(text),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
+  const completeDeclaration=(text:string)=>createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
   const qualify=async(raw:string)=>{
     try{return completeDeclaration(raw);}
     catch(error){
