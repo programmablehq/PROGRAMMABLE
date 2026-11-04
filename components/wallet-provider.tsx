@@ -3135,7 +3135,7 @@ function PrivyWalletBridge({
     if (sessionSubject === null) {
       throw new Error("Your wallet session expired. Reconnect and try again");
     }
-    let expectedSessionGeneration: number | null = null;
+    let expectedIdentityGeneration: number | null = null;
     let expectedNetworkGeneration: number | null = null;
     const assertCurrentSession = () => {
       const current = walletRequestSessionRef.current;
@@ -3146,8 +3146,8 @@ function PrivyWalletBridge({
       ) {
         throw new Error("The wallet session changed. Reconnect and try again");
       }
-      if (expectedSessionGeneration !== null && (
-        walletSessionGenerationRef.current !== expectedSessionGeneration
+      if (expectedIdentityGeneration !== null && (
+        walletIdentityGenerationRef.current !== expectedIdentityGeneration
         || walletNetworkGenerationRef.current !== expectedNetworkGeneration
         || !walletChainIdsEqual(current.chainId, targetChainHex)
       )) {
@@ -3160,7 +3160,7 @@ function PrivyWalletBridge({
         assertCurrentSession();
       }
       // Pin after our own requested switch, before any provider/lock/fee awaits.
-      expectedSessionGeneration = walletSessionGenerationRef.current;
+      expectedIdentityGeneration = walletIdentityGenerationRef.current;
       expectedNetworkGeneration = walletNetworkGenerationRef.current;
       assertCurrentSession();
       const sendLocked = (execute: (fees?: Awaited<ReturnType<typeof readHyperEvmWalletFees>>) => Promise<Hex>) =>

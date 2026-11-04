@@ -50,7 +50,7 @@ function harness(chainId: GraphWalletChain, options: {
   const chainHex = `0x${Number(chainId).toString(16)}`;
   let providerChain = options.initialChain ?? chainHex;
   let providerAccount: string = account;
-  const sessionGeneration = { current: 1 }, networkGeneration = { current: 1 };
+  const sessionGeneration = { current: 1 }, identityGeneration = { current: 1 }, networkGeneration = { current: 1 };
   const session = { current: { authenticated: true, privyUserId: "fixture-owner", account: account as string,
     chainId: providerChain } };
   const paused = deferred(), resume = deferred();
@@ -89,7 +89,7 @@ function harness(chainId: GraphWalletChain, options: {
   const fees = { maxFeePerGas: "0x10", maxPriorityFeePerGas: "0x0" };
   const callbackModule = { exports: undefined as unknown };
   runInNewContext(code, { module: callbackModule, connectedWallet, wallet: { account, chainId: providerChain }, user: { id: "fixture-owner" },
-    walletRequestSessionRef: session, walletSessionGenerationRef: sessionGeneration, walletNetworkGenerationRef: networkGeneration,
+    walletRequestSessionRef: session, walletSessionGenerationRef: sessionGeneration, walletIdentityGenerationRef: identityGeneration, walletNetworkGenerationRef: networkGeneration,
     walletChainIdsEqual, appChain: { id: 1, name: "Ethereum" }, base: { id: 8453, name: "Base" }, hyperEvm: { id: 999, name: "HyperEVM" },
     getWalletProviderOnChain, enableHyperEvmLargeTransactionsV1: async () => undefined,
     readHyperEvmWalletFees: async () => { if (options.pause === "fees") await pause(); return fees; },
@@ -103,7 +103,7 @@ function harness(chainId: GraphWalletChain, options: {
   const boundary = { context: { requestId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", requestHash: `sha256:${"44".repeat(32)}` as const,
     actionHash: graphWalletActionHash(action) }, assertCurrent() {} };
   const invoke = () => (callbackModule.exports as (action: unknown, boundary: unknown) => Promise<string>)(action, boundary);
-  return { invoke, send, provider, paused: paused.promise, resume: resume.resolve, changeNetwork, session, sessionGeneration,
+  return { invoke, send, provider, paused: paused.promise, resume: resume.resolve, changeNetwork, session, identityGeneration, sessionGeneration,
     changeAccount: (emitEvent: boolean) => { providerAccount = otherAccount; if (emitEvent) { session.current.account = otherAccount; sessionGeneration.current++; } },
     lease: () => store.getItem(`programmable:wallet-request:v1:${chainId}:${account}`),
     attempts: () => readGraphWalletAttempts(account, chainId, store), chainHex, action, connectedWallet };
@@ -157,7 +157,7 @@ describe("browser launch send authority after asynchronous preparation", () => {
     if (kind === "account") f.changeAccount(true);
     if (kind === "session") f.session.current.privyUserId = "other-user";
     if (kind === "logout") f.session.current.authenticated = false;
-    if (kind === "generation") f.sessionGeneration.current++;
+    if (kind === "generation") f.identityGeneration.current++;
     f.resume();
     await expect(pending).rejects.toThrow("changed");
     expect(f.send).not.toHaveBeenCalled(); expect(f.lease()).toBeNull(); expect(f.attempts()).toEqual([]);
@@ -178,6 +178,12 @@ describe("browser launch send authority after asynchronous preparation", () => {
     await expect(f.invoke()).resolves.toBe(hash);
     expect(f.connectedWallet.switchChain).toHaveBeenCalledExactlyOnceWith(1);
     expect(f.send).toHaveBeenCalledOnce();
+  });
+
+  it("allows an SDK wrapper refresh while the same wallet and network stay verified", async () => {
+    const f = harness("1", { pause: "lock" });
+    const pending = f.invoke(); await f.paused; f.sessionGeneration.current++; f.resume();
+    await expect(pending).resolves.toBe(hash); expect(f.send).toHaveBeenCalledOnce();
   });
 
   it("keeps an ambiguous wallet send locked and journaled against retries", async () => {
