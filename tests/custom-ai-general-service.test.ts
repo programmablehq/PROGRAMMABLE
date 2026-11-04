@@ -268,7 +268,8 @@ describe("general source generation inside the owned chat job",()=>{
   const call=vi.fn<(input:ClaudeInput)=>Promise<ClaudeResult>>(async()=>plan({action:"answer",intentRequirements:[],requirements:[],generalChecks:null}));
   await runCustomAI(request,undefined,{call,compile:vi.fn()},{saveBlueprint:async()=>{},saveScenarios:async()=>{},saveCompilation:async()=>{}});
   expect(call).toHaveBeenCalledTimes(1);
-  expect(call.mock.calls[0][0]).toMatchObject({responseProfile:"contract",maxTokens:16000});
+  expect(call.mock.calls[0][0]).toMatchObject({maxTokens:8000});
+  expect(call.mock.calls[0][0].responseProfile).toBeUndefined();
   expect(call.mock.calls[0][0].schema).not.toHaveProperty("properties.generalChecks");
  });
  it.each(["output-limit","timeout"] as const)("preserves every agreed rule when the separate declaration fails with %s without retrying or generating source",async failure=>{
