@@ -154,6 +154,15 @@ describe("Surplus model routing", () => {
     expect(body.reasoning).toEqual({effort:"low"});
     expect(body.reasoning_effort).toBeUndefined();expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("does not spend the discussion budget on hidden Haiku planning while preserving build reasoning",async()=>{
+    useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:'{"reply":"Ready."}'},finish_reason:"stop"}]}));
+    vi.stubGlobal("fetch",fetcher);
+    await callSurplus({...input,model:"claude-haiku-5.5",task:"planning",effort:"low",maxTokens:8000});
+    const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(body.reasoning).toEqual({effort:"low",enabled:false});expect(body.max_tokens).toBe(8000);
+    await callSurplus({...input,model:"claude-haiku-5.5",task:"planning",effort:"medium",maxTokens:8000});
+    expect(JSON.parse(String((fetcher.mock.calls[1] as unknown as [string,RequestInit])[1].body)).reasoning).toEqual({effort:"medium"});
+  });
   it("accepts a complete contract reply after the old two-minute cutoff without a second request",async()=>{
     useSurplus();vi.useFakeTimers();
     vi.spyOn(AbortSignal,"timeout").mockImplementation(ms=>{

@@ -2,6 +2,19 @@ import type { ChatRequest } from "./types";
 
 export const CONTINUE_SAVED_BUILD = "Build and verify the current saved design. Keep every saved rule unchanged. Do not launch, send a transaction or prepare a wallet request.";
 
+/** An explicit request to discuss first is a no-build boundary, not a change
+ * to the saved rules. Quoted examples and code do not establish that boundary. */
+export function designOnlyRequest(request:Pick<ChatRequest,"intent"|"messages">):boolean{
+  if(request.intent!=="chat"||request.messages.at(-1)?.role!=="user")return false;
+  const text=request.messages.at(-1)!.content.normalize("NFKC").replace(/```[\s\S]*?```/g," ")
+    .replace(/^\s*>.*$/gm," ").replace(/"[^"\n]*"|„[^“\n]*“|“[^”\n]*”|`[^`\n]*`/g," ").toLowerCase();
+  if(/\b(?:do not|don't)\s+(?:just|only)\s+(?:want\s+to\s+)?(?:plan|discuss|design)\b/.test(text))return false;
+  return /\b(?:do not|don't|not)\s+(?:build|generate|deploy)(?:\s+or\s+launch)?\s+(?:it|this|anything)?\s*(?:yet\b|now\b|[.!?]|$)/.test(text)
+    ||/\bnoch\s+nicht\s+(?:bauen|generieren|deployen|veröffentlichen)\b/.test(text)
+    ||/\b(?:only|just)\s+(?:want\s+to\s+)?(?:discuss|plan|explore|brainstorm|shape|design)\b/.test(text)
+    ||/\b(?:erstmal|zuerst|nur)\s+(?:besprechen|planen|überlegen|brainstormen)\b/.test(text);
+}
+
 /** Exact continuation commands only. Changes, questions and quoted instructions
  * still need the planner; this helper never grants launch authority. */
 export function unchangedBuildCommand(request:Pick<ChatRequest,"intent"|"messages">):boolean {
