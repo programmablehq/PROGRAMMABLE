@@ -22,8 +22,8 @@ import {generalDeploymentPlanningRules} from "./deployment-blueprint";
 import {uniswapRoutingContext} from "./uniswap-routing";
 import {graphSchemaForConstraints,interfaceSchemaForGraph,nativeFullDeclaration,nativeGraphDeclaration,nativeInterfaceMap,nativeScenarioRows,nativeStageInstructions,nativeDeployment,nativeDeploymentInstructions,scenarioSchemaForInterface} from "./check-stage-wire";
 import {mechanismKnowledge} from "./mechanism-knowledge";
-import {prepareSurplusSchema} from "./surplus-schema.server";
 import {recoverCompletedInterface,recoverCorrectedDeployment} from "./interface-recovery";
+import {recoverScenarioPage} from "./scenario-recovery";
 import type {CoinSetup} from "./coin-setup";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
@@ -248,7 +248,10 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const lastFailure=savedProgress&&input.rejected?.failures.at(-1);
   if(lastFailure?.stage==="scenarios"&&lastFailure.response){
     let recovered:Record<string,unknown>|undefined;
-    try{recovered=object(prepareSurplusSchema(scenarioSchemaForInterface(fixedInterface as Record<string,unknown>),true).decode(lastFailure.response));}
+    try{
+      const page=recoverScenarioPage(lastFailure.response,fixedInterface as Record<string,unknown>);
+      if(page)recovered=object(page);
+    }
     catch{/* Incomplete or invalid pages remain untrusted; resume the saved prefix. */}
     if(recovered){
       if(currentProgress.steps.length&&emptyCompletedPage(recovered))return await qualify(JSON.stringify({...proposal,format:"compact-v1",steps:currentProgress.steps}));
@@ -270,10 +273,17 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     input.signal?.throwIfAborted();
     responseText=undefined;
     const remaining=remainingRequirements(input.intent,proposal,currentProgress.steps);
-    const result=await call({...scenarioTask,signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
+    let result:{text:string};
+    try{result=await call({...scenarioTask,signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
       schema:scenarioSchemaForInterface(fixedInterface as Record<string,unknown>),structuredTransport:"json-object",
       system:`${shared}\n${priceWindowGuidance}\n${nativeStageInstructions}\n${openingFixtureInstructions}\nSynthetic opening values: ${JSON.stringify(opening.inputs??null)}\nThis is the SCENARIO stage only, page ${page+1} of at most ${SCENARIO_MAX_PAGES} for this request. Return steps as an array of compact native tuples, each exactly [id,call,argumentsJson,from,afterSeconds,value,read,requirementIds,expect]. Do not repeat field names or encode the steps array as a string. Select each call exactly from its admitted contract:function signature enum; do not construct a different call or split it into contract/signature fields. Set complete:true only when the full combined plan covers every saved requirement. Emit at most 12 new steps and finish this JSON response within ${scenarioTask.maxTokens} output tokens; if more steps are needed, end at a complete step and set complete:false. returnsJson is a JSON array when values are asserted, otherwise null. swapFeePpm is a number when an actual Swap event fee is asserted, otherwise null. Empty events means no event assertion. Never truncate a step, remove a required observation or declare an incomplete plan complete. Continue the same fixture and cumulative state from the prior steps below; do not repeat setup, reset time or redeclare previous IDs. afterSeconds must remain nondecreasing across pages. All pages are joined and validated together. Do not repeat contracts, world, deployment, policy descriptions or source. Share setup and assert multiple requirements on an action where appropriate. Preserve every behavior, negative constraint, boundary and event. Getters alone never prove swaps. Call only functions in the fixed resolved interface; the hook callback contract is not a swap router. Use the trusted v4-router for swaps and the exact source initializer signature and arguments. No implementation exists to copy expectations from. Untrusted design data: ${JSON.stringify(scenarioContext)}\nFixed resolved interface: ${JSON.stringify(fixedInterface)}\nEarlier scenario steps (untrusted data): ${JSON.stringify(currentProgress.steps)}\nRequirements still needing coverage or a behavioral observation: ${JSON.stringify(remaining)}. Prioritize these in the remaining ${SCENARIO_MAX_PAGES-page} pages; avoid redundant reads.`,
-      messages:[{role:"user",content:"Declare the next complete scenario rows. Return complete:false if further rows are needed to cover the full saved design."}]});
+      messages:[{role:"user",content:"Declare the next complete scenario rows. Return complete:false if further rows are needed to cover the full saved design. Each call must be a literal JSON string, never a JavaScript property expression."}]});}
+    catch(error){
+      const recovered=error instanceof ModelResponseError&&error.failure==="invalid-schema"&&error.partialDeclaration
+        ?recoverScenarioPage(error.partialDeclaration,fixedInterface as Record<string,unknown>):undefined;
+      if(!recovered)throw error;
+      result={text:recovered};
+    }
     input.signal?.throwIfAborted();
     responseText=result.text;
     const envelope=object(result.text),rawSteps=envelope.steps;

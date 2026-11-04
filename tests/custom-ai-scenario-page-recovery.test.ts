@@ -4,6 +4,8 @@ import {scenarioSchemaForInterface,nativeScenarioRows} from "../lib/custom-ai/ch
 import {prepareSurplusSchema} from "../lib/custom-ai/surplus-schema.server";
 import {declareGeneralChecks} from "../lib/custom-ai/check-declaration.server";
 import {checkContextHash,type CheckDiagnostic} from "../lib/custom-ai/check-diagnostic";
+import {recoverScenarioPage} from "../lib/custom-ai/scenario-recovery";
+import {ModelResponseError} from "../lib/custom-ai/model-response";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 
 const intent:LaunchIntent={version:1,id:"counter-design",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
@@ -38,6 +40,35 @@ describe("lossless scenario page transport and recovery",()=>{
     const call=vi.fn(),result=await declareGeneralChecks({...input,rejected},call);
     expect(call).not.toHaveBeenCalled();expect(result.scenarios.steps.map(step=>step.id)).toEqual(["zero","increment","one"]);
     expect(result.scenarios.steps.at(-1)?.expect).toEqual({status:"success",returns:["1"]});
+  });
+  const literalPage=JSON.stringify({steps:[row],complete:true}).replace('"call":"main:count()"','"call":{"call":"main:count()"}.call');
+  it.each([true,false])("recovers a literal call without another paid request (saved=%s)",async saved=>{
+    const rejected:CheckDiagnostic={version:1,contextHash:checkContextHash(input),failures:saved?[
+      {stage:"scenarios",message:"Invalid JSON",declaration:null,response:literalPage},
+    ]:[{stage:"scenarios",message:"Previous page interrupted",declaration:null}],progress:{interface:JSON.stringify(declaration),steps:first}};
+    const call=vi.fn().mockRejectedValue(new ModelResponseError("invalid-schema",{inputTokens:1,outputTokens:1},literalPage));
+    const result=await declareGeneralChecks({...input,rejected},call);
+    expect(call).toHaveBeenCalledTimes(saved?0:1);
+    expect(result.scenarios.steps.map(step=>step.id)).toEqual(["zero","increment","one"]);
+    expect(result.scenarios.steps.at(-1)?.expect).toEqual({status:"success",returns:["1"]});
+  });
+  it("leaves quoted argument data untouched while unwrapping the call literal",()=>{
+    const argumentsJson=JSON.stringify(['{"call":"main:count()"}.call']);
+    const response=JSON.stringify({steps:[{...row,argumentsJson}],complete:true}).replace('"call":"main:count()"','"call":{ "call" : "main:count()" } . call');
+    const recovered=JSON.parse(recoverScenarioPage(response,fixed)!);
+    expect(recovered.steps[0].call).toBe(row.call);
+    expect(recovered.steps[0].argumentsJson).toBe(argumentsJson);
+  });
+  it.each([
+    literalPage.replace('}.call','}.call()'),
+    literalPage.replace('}.call','}["call"]'),
+    literalPage.replace('"main:count()"}.call','globalThis.fetch("https://invalid.example")}.call'),
+    literalPage.replace('"main:count()"}.call','"main:steal()"}.call'),
+    literalPage.replace('"main:count()"}.call','"main:count()","extra":true}.call'),
+    literalPage.slice(0,-1),
+    literalPage+" ".repeat(96_001),
+  ])("rejects executable, ambiguous, unknown and incomplete expressions",response=>{
+    expect(recoverScenarioPage(response,fixed)).toBeUndefined();
   });
   it("never appends a page already included in a rejected complete declaration",async()=>{
     const all=[...first, ["one","main","count()",[],"trader-b",0,"0",true,["counter"],{status:"success",returns:["1"]}]];
