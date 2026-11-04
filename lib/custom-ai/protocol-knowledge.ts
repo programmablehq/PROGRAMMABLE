@@ -1,6 +1,6 @@
 /** Reviewed protocol knowledge, not current deployment discovery. Keep additions
  * independent so a new mechanic does not require rewriting the chat prompt. */
-export const PROTOCOL_KNOWLEDGE_VERSION = "2026-11-03.2";
+export const PROTOCOL_KNOWLEDGE_VERSION = "2026-11-04.1";
 const hooks = "https://developers.uniswap.org/docs/protocols/v4/concepts/hooks";
 export const PROTOCOL_TOPICS = {
   callbacks: {
@@ -21,7 +21,7 @@ export const PROTOCOL_TOPICS = {
   },
   composition: {
     title: "Unconventional designs and composition", source: hooks,
-    facts: "Translate creative language into trigger, state, actor, assets, action, limits and observable outcomes. Stateful counters, epochs, games, auctions, discounts, vesting, custom curves, vault integrations and combinations belong in general source when a fixed module cannot express every requirement. Keep a single canonical intent and all agreed constraints; never simplify an idea to a fee schedule just to fit a template. Decompose dependencies and auxiliary contracts explicitly. Ask only about an unresolved choice that changes economics or authority. Use pinned inline dependencies and inspect their actual interfaces; names, examples and a model's memory do not prove compatibility. Novel mechanics remain proposals until the corresponding behavior, router and dependency evidence exists.",
+    facts: "Translate creative language into trigger, state, actor, assets, action, limits and observable outcomes. Stateful counters, epochs, games, auctions, discounts, vesting, custom curves, vault integrations and combinations belong in general source when a fixed module cannot express every requirement. Keep a single canonical intent and all agreed constraints; never simplify an idea to a fee schedule just to fit a template. Compose only the pieces needed: fee schedules use timestamps and bounded fee calculation; limit orders and DCA/TWAMM-like execution need funded order escrow, bounded fills, cancellation, expiry and a real transaction trigger; auctions need an allocation rule, settlement and refunds; vesting needs a funded escrow, beneficiary and claim schedule; games need explicit state transitions and a manipulation-resistant randomness source when chance matters; loyalty or holder rewards need authenticated ownership/history, earned credits and claims; liquidity rebalancing needs position ownership, price bounds and an authorized executor; vault, lending or perpetual integrations need the actual chain's protocol interface and explicit asset/risk limits. These are design patterns, not claims that a deployed adapter or full implementation already exists. Token-wide transfer or ranking rules may require a custom ERC20 alongside the hook, because swap callbacks do not observe every transfer. Decompose dependencies and auxiliary contracts explicitly. Ask only about an unresolved choice that changes economics or authority. Use pinned inline dependencies and inspect their actual interfaces; names, examples and a model's memory do not prove compatibility. Novel mechanics remain proposals until the corresponding behavior, router and dependency evidence exists.",
   },
   "fee-flows": {
     title: "Fee allocation, liquidity and holder rewards", source: "https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees",
