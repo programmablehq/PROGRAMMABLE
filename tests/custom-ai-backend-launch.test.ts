@@ -32,6 +32,19 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("body-bound session launch producer", () => {
+  it("reads one complete owned resource with a fresh GET assertion and no mutation",async()=>{
+    const req=new Request("https://site.test/api/custom-ai/product-runtime"),authority=await authorizeCustomAI(req);
+    const f=bridge(vi.fn().mockResolvedValue(reply({launchId:id,status:"finalized"},200)),4096);
+    const result=await f.service.resource(req,authority,{chainId:8453,account:wallet,resourceId:id});
+    const [url,init]=f.fetchBackend.mock.calls[0] as [URL,RequestInit];
+    expect(url.pathname).toBe(`/v4/chains/8453/wallet-admin/custom-launches/${id}`);expect(url.search).toBe("");
+    expect(init.method).toBe("GET");expect(init.body).toBeUndefined();expect(init.redirect).toBe("error");
+    expect(result.value).toEqual({launchId:id,status:"finalized"});
+    expect(new Headers(init.headers).get("x-programmable-wallet-address")).toBe(wallet);
+    await expect(f.service.resource(req,{...authority},{chainId:8453,account:wallet,resourceId:id})).rejects.toMatchObject({code:"session_changed"});
+    await expect(f.service.resource(req,authority,{chainId:8453,account:other,resourceId:id})).rejects.toMatchObject({code:"wallet"});
+    expect(f.fetchBackend).toHaveBeenCalledOnce();
+  });
   it("binds automatic source and check commands to the current request without exposing a wallet permit",async()=>{
     const req=request(),authority=await authorizeCustomAI(req),hash=`sha256:${"1".repeat(64)}` as const;
     const receipt:AutomaticSourceReceipt={schemaVersion:"programmable.automatic-source-context.v1",reviewId:id,subjectHash:hash,chainId:"8453",controller:wallet,

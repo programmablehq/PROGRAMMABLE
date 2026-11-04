@@ -85,7 +85,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     // Claude's current routes use adaptive effort, not a fixed thinking-token
     // allocation. Use the canonical nested control without a conflicting alias.
     ...(input.model.startsWith("claude-")
-      ? { reasoning: { effort: input.effort ?? "medium", ...(input.task === "source-edit" && input.model.includes("haiku") ? { enabled: false } : {}) } }
+      ? { reasoning: { effort: input.effort ?? "medium", ...((input.task === "source-edit"||input.task === "planning"&&input.effort==="low") && input.model.includes("haiku") ? { enabled: false } : {}) } }
       : { reasoning_effort: input.effort ?? "medium" }),
   }, signal, limits.timeoutMs).catch(error => { if (timedOut()) throw incomplete("timeout"); throw error; });
   if (response.headers.get("content-type")?.includes("text/event-stream")) {

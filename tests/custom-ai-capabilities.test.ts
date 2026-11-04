@@ -21,6 +21,7 @@ describe("Custom AI capability discovery", () => {
     expect(body.browser).toEqual({ url: "https://programmable.market/launch/custom-ai", guide: "https://programmable.market/developers/custom-ai-browser.md",
       authentication: "wallet-session", messageLimit: 8000, recovery: "read-saved-request", stateAttribute: "data-chat-state" });
     expect(body.sourceProjects).toMatchObject({ chains: [1,4663,8453,999], state: "source-draft", requiresSession: true });
+    expect(body.productRuntime).toMatchObject({requiresSession:true,chains:[1,4663,8453,999],maximumContracts:16,maximumRPCReadsPerProvider:32,cacheSeconds:60,polling:false,walletActions:false});
     expect(body.capabilities.find((value:{id:string})=>value.id==="arbitrary-hooks").state).toBe("source-draft");
     expect(body.capabilities.find((value:{id:string})=>value.id==="fee-allocation-planning").state).toBe("design-only");
     expect(body.capabilities.find((value:{id:string})=>value.id==="external-events").state).toBe("design-only");
@@ -36,6 +37,7 @@ describe("Custom AI capability discovery", () => {
     const body=await GET().json();
     expect(body.sourceProjects.launchPreparation).toBe("requires-current-review-and-preparation");
     expect(body.sourceProjects.state).toBe("source-draft");
+    expect(body.productRuntime.state).toBe("requested-contract-observations");
   });
 });
 

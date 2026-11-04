@@ -125,6 +125,24 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
         return { httpStatus: 200, value, location: null };
       } catch (error) { if (error instanceof CustomAIError) throw error; throw unavailable(); }
     },
+    /** One owned resource for post-launch inspection, with the same current
+     * wallet assertion as status reads. No submission or review is created. */
+    async resource(request:Request,authority:AIAuthority,candidate:Readonly<{chainId:BuilderChainId;account:`0x${string}`;resourceId:string}>):Promise<BackendLaunchReply>{
+      if(request.method!=="GET")throw new CustomAIError("launch-method","Read the saved launch with GET.",405);
+      const current=requireFreshCustomAIAuthority(request,authority),account=getAddress(candidate.account);
+      if(!current.principal.wallets.some(wallet=>getAddress(wallet)===account))throw new CustomAIError("wallet","Select the wallet that owns this saved submission.",403);
+      if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(candidate.resourceId))throw unavailable();
+      const target=`${walletLaunchMutationTargetV1(candidate.chainId,"create")}/${candidate.resourceId}`;
+      const assertion=createWalletAdminBffAssertionV2({method:"GET",requestTarget:target,privyUserId:current.principal.privyUserId,walletAddress:account,
+        issuedAt:(input.now?.()??new Date()).toISOString(),nonce:input.nonce?.()??randomBytes(16).toString("base64url"),bodyBytes:Buffer.alloc(0),assertionKey:key});
+      try{
+        const response=await input.fetchBackend(new URL(target,base),{method:"GET",cache:"no-store",redirect:"error",
+          signal:AbortSignal.any([request.signal,AbortSignal.timeout(Math.min(10_000,timeoutMs))]),headers:{Accept:"application/json",Authorization:`Bearer ${input.websiteToken}`,
+            "X-Programmable-Privy-User-Id":current.principal.privyUserId,"X-Programmable-Wallet-Address":account.toLowerCase(),...assertion}});
+        if(response.status!==200){await response.body?.cancel().catch(()=>undefined);throw unavailable();}
+        return {httpStatus:200,value:await boundedReply(response,maximum),location:null};
+      }catch(error){if(error instanceof CustomAIError)throw error;throw unavailable();}
+    },
     async submit(request: Request, authority: AIAuthority, candidate: Readonly<{
       chainId: BuilderChainId; operation: WalletLaunchMutationV1; account: `0x${string}`;
       bodyBytes: Uint8Array; idempotencyKey: string | null;

@@ -126,7 +126,9 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
       productionId: plan.productionId, publicSourceId: plan.publicSourceId, identity: plan.identity,
       requestBody, requestSha256, receipt: completed.receipt, reproducibleConfig,
       runtimeMaterialization: completed.runtimeMaterialization,
-      ...(construction.version >= 2 ? { constructorMaterialization: construction } : {}), launchReady: false as const };
+      // Keep the already computed addresses for post-launch reads even when
+      // this graph has no constructor-created children. No second execution.
+      ...(construction ? { constructorMaterialization: construction } : {}), launchReady: false as const };
     return { ...body, hash: canonicalBrowserSha256V2(`programmable.custom-ai-general-graph-pack.v${body.version}`, body) };
   } finally { await rm(directory, { recursive: true, force: true }); }
 }

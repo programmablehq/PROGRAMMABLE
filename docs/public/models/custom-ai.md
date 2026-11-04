@@ -50,6 +50,8 @@ The expandable **Product plan** records the parts needed by your design: contrac
 
 For new contract builds, the plan can link actions such as deposits, claims and balance reads to specific functions in the declared contract interface. The builder checks those links against the compiled ABI and the corresponding local examples. **Contract actions** shows the linked functions inside the product plan. These source links do not activate a service or submit a transaction.
 
+After a newly prepared product is launched, expand **Deployed contracts** and choose **Check contracts** to inspect its contract addresses. The observation matches the original saved package, finalized launch receipt and deployed code through two configured providers. It is requested only when you click and briefly cached. This confirms those contracts at the displayed time; it does not prove current claimable balances, start an external service or sign a transaction. Older packages without a saved contract snapshot remain available through their original submission.
+
 You can also ask for different product ideas without replacing the current coin. The chat considers execution rules, incentives, liquidity, external events and treasury mechanics. Selecting a design is separate from exploring it. A planned service is not automatically hosted or funded by adding it to the plan.
 
 For weather or other API-driven rules, describe the trigger and result in ordinary language. Keep private keys and API credentials out of the chat. The builder identifies the required integration and preserves the rule if that integration is not connected; research results alone do not activate it.

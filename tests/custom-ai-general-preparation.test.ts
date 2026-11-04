@@ -100,6 +100,23 @@ beforeEach(async()=>{
 afterEach(async()=>{await database?.close();vi.restoreAllMocks();vi.unstubAllEnvs();vi.clearAllMocks();});
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch preparation",()=>{
+  it("reads the immutable submitted runtime pack after a new draft and signing-window expiry",async()=>{
+    const saved=await stage();
+    await expect(store.projects.preparations.readRuntimeInputs(owner,ticket)).rejects.toThrow();
+    const claimed=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId),value=resource(saved);
+    await store.projects.preparations.finishExchange(owner,ticket,"create",claimed.lease!,{state:"completed",reply:value,
+      summary:projectGeneralGraphReply("create",{httpStatus:202,value,location:`/v1/launches/${launchId}`},saved)});
+    const storageId=conversationStorageId(fixture.controller,record.selection.conversation);
+    const studio=await store.readObject<Record<string,unknown>>(owner,"studio",storageId);
+    await store.saveObject(owner,"studio",storageId,{settings:record.editor?.settings??{},messages:[],input:"A different product"},studio!.revision);
+    clock=Number(record.identity.deadline)*1000+86_400_000;
+    const before=(await database.query("SELECT subject,used FROM programmable_custom_ai_v1.budgets ORDER BY subject")).rows;
+    const historical=await store.projects.preparations.readRuntimeInputs(owner,ticket);
+    expect(historical.pack.hash).toBe(pack.hash);expect(historical.record.requestHash).toBe(saved.requestHash);
+    expect((await database.query("SELECT subject,used FROM programmable_custom_ai_v1.budgets ORDER BY subject")).rows).toEqual(before);
+    await expect(store.projects.preparations.readRuntimeInputs("another-owner",ticket)).rejects.toThrow();
+    await expect(store.projects.preparations.claimExchange(owner,ticket,"preflight",record.productionId)).rejects.toThrow();
+  });
   it("binds the actual saved source once, runs automatic review and reuses its recorded result",async()=>{
     const saved=await stage(),claim=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
     const value={...resource(saved),manualReview:{schemaVersion:"programmable.custom-launch-manual-review.v1",reviewId:launchId,

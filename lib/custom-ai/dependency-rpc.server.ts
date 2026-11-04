@@ -5,6 +5,7 @@ import type { TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1"
 import { createConstructorDependencyServices } from "./dependency-witness.server";
 import type { LaunchProductionContext } from "./launch-production";
 import { CustomAIError } from "./types";
+import {allowedProductRuntimeRPC} from "./product/runtime-rpc";
 
 type Chain = LaunchProductionContext["chainId"];
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -72,7 +73,8 @@ function selectedEndpoints(chain: Chain, env: Environment): readonly [string, st
 
 /** Lazy, server-owned provider selection. Reuses the existing production roles;
  * nothing is read until a selected project actually needs observations. */
-export function createProductionDependencyRpcs(options: { env?: Environment; fetcher?: typeof fetch; now?: () => number; metadataOnly?: boolean } = {}) {
+export function createProductionDependencyRpcs(options: { env?: Environment; fetcher?: typeof fetch; now?: () => number; metadataOnly?: boolean; productRuntime?:boolean } = {}) {
+  if(options.metadataOnly&&options.productRuntime)throw new TypeError("Choose one bounded RPC read protocol.");
   const env = { ...(options.env ?? process.env) }, fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now;
   const pairs = new Map<Chain, readonly [TradeRpcV1, TradeRpcV1]>();
   const providers = new Map<string, { active: number; starts: number[]; pausedUntil: number; read: TradeRpcV1 }>();
@@ -81,7 +83,7 @@ export function createProductionDependencyRpcs(options: { env?: Environment; fet
     const previous = providers.get(url); if (previous) return previous.read;
     const state = { active: 0, starts: [] as number[], pausedUntil: 0, read: undefined as unknown as TradeRpcV1 };
     state.read = async (method, params) => {
-      if (!Array.isArray(params) || !allowed(method, params, options.metadataOnly === true)) throw unavailable();
+      if (!Array.isArray(params) || !(options.productRuntime?allowedProductRuntimeRPC(method,params):allowed(method, params, options.metadataOnly === true))) throw unavailable();
       const time = now(); state.starts = state.starts.filter(start => start > time - 1_000);
       if (state.active >= 4 || state.starts.length >= 16 || state.pausedUntil > time) throw unavailable();
       state.active++; state.starts.push(time);
