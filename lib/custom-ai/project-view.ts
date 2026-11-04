@@ -2,6 +2,7 @@ import type { ContractProject } from "./contract-project";
 import type { GeneralProjectDraft } from "./general-builder.server";
 import { cachedProjectOverview } from "./project-overview";
 import { cachedScenarioOverview, scenarioOverview, type ScenarioOverview } from "./scenario-overview";
+import {cachedProductImplementation,type ProductImplementation} from "./product/implementation";
 
 /** Public-to-the-owning-browser projection. Complete source and bytecode stay
  * in the owned checkpoint and are read explicitly for inspection or a build. */
@@ -24,10 +25,12 @@ export type GeneralProjectView = {
   launchReady: false;
   blueprintId?:`sha256:${string}`;
   productBlueprintId?:`sha256:${string}`;
+  implementation?:ProductImplementation;
   scenarios?:ScenarioOverview;
 };
-export function generalProjectView(value: GeneralProjectDraft): GeneralProjectView {
+export function generalProjectView(value: GeneralProjectDraft,implementation?:ProductImplementation): GeneralProjectView {
   const { project, compilation } = value;
+  if(implementation&&(!project.productBlueprintId||!cachedProductImplementation(implementation,{projectHash:project.hash,artifactHash:compilation.artifactHash,intentRevision:project.intent.revision,productBlueprintId:project.productBlueprintId})))throw TypeError("Product implementation changed.");
   return { version: 1, projectHash: project.hash, artifactHash: compilation.artifactHash, chainId: project.chainId,
     intentRevision: project.intent.revision, summary: value.summary, compiler: project.compiler, entrypoints: project.entrypoints,
     sourceFiles: Object.keys(project.sources).length,
@@ -35,7 +38,7 @@ export function generalProjectView(value: GeneralProjectDraft): GeneralProjectVi
     compiled: compilation.compiled, diagnostics: compilation.diagnostics.slice(0, 24).map(item => ({ severity: item.severity, message: item.message.slice(0, 800) })),
     ...(value.sourceAudit?{sourceReview:value.sourceAudit.status}:{}),
     requirementCoverage: "proposed", verification: "not-run", launchReady: false,
-    ...(value.blueprintId?{blueprintId:value.blueprintId}:{}),...(project.productBlueprintId?{productBlueprintId:project.productBlueprintId}:{}),...(value.scenarios?{scenarios:scenarioOverview(value.scenarios)}:{}) };
+    ...(value.blueprintId?{blueprintId:value.blueprintId}:{}),...(project.productBlueprintId?{productBlueprintId:project.productBlueprintId}:{}),...(implementation?{implementation}:{}),...(value.scenarios?{scenarios:scenarioOverview(value.scenarios)}:{}) };
 }
 
 export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undefined {
@@ -48,10 +51,12 @@ export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undef
   const base=cachedProjectOverview({...v,requestId:"cached-project-view",compilation:v.compiled?"compiled":"diagnostics"});
   if(!base?.artifactHash)return;
   const scenarios=v.scenarios?cachedScenarioOverview(v.scenarios):undefined;
+  const implementation=v.implementation&&v.productBlueprintId?cachedProductImplementation(v.implementation,{projectHash:base.projectHash,artifactHash:base.artifactHash,intentRevision:base.intentRevision,productBlueprintId:v.productBlueprintId}):undefined;
+  if(v.implementation&&!implementation)return;
   if(v.scenarios&&!scenarios||v.blueprintId!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.blueprintId)||v.productBlueprintId!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.productBlueprintId))return;
   return {version:1,projectHash:base.projectHash,artifactHash:base.artifactHash,chainId:base.chainId,intentRevision:base.intentRevision,summary:v.summary,
     compiler:base.compiler,entrypoints:v.entrypoints.map(item=>({source:item.source,contract:item.contract,role:item.role})),sourceFiles:base.sourceFiles,sourceBytes:base.sourceBytes,
     compiled:v.compiled,diagnostics:base.diagnostics,requirementCoverage:"proposed",verification:"not-run",launchReady:false,
     ...(v.sourceReview?{sourceReview:v.sourceReview}:{}),
-    ...(v.blueprintId?{blueprintId:v.blueprintId}:{}),...(v.productBlueprintId?{productBlueprintId:v.productBlueprintId}:{}),...(scenarios?{scenarios}:{})};
+    ...(v.blueprintId?{blueprintId:v.blueprintId}:{}),...(v.productBlueprintId?{productBlueprintId:v.productBlueprintId}:{}),...(implementation?{implementation}:{}),...(scenarios?{scenarios}:{})};
 }

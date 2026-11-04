@@ -27,6 +27,7 @@ import {recoverScenarioPage} from "./scenario-recovery";
 import {bindDeclaredWorldParticipants} from "./fixture-participants";
 import type {CoinSetup} from "./coin-setup";
 import {checkedProductBlueprint,type ProductBlueprint} from "./product/blueprint";
+import {checkedProductBindings,PRODUCT_BINDING_RULES} from "./product/bindings";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
@@ -77,6 +78,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   if(input.cached){
     try{
       const saved=checkedGeneralCheckBlueprint(input.cached,input.intent);
+      if(input.productBlueprint&&saved.productBindings)checkedProductBindings(saved.productBindings,saved.scenarios,saved.entrypoints,input.productBlueprint);
       if(saved.chainId===input.chainId&&saved.compiler.evmVersion===input.evmVersion
         &&saved.productBlueprintId===input.productBlueprint?.id
         &&saved.production?.id===input.production?.id){
@@ -108,7 +110,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     ...(input.interfaces?.implementationPatterns?.length?{implementationReferenceSemantics:input.interfaces.implementationPatterns.map(({id,semantics})=>({id,semantics}))}:{}),
     ...(input.production?{production:input.production,uniswapRouting:uniswapRoutingContext(input.production)}:{})};
   const context=JSON.stringify({...scenarioContext,...(input.interfaces?{canonicalInterfaces:input.interfaces}:{})});
-  const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code. When using canonical protected initializers, initialization executes the initial buy as a swap. Rules covering every successful swap also include that initial swap; do not assume a zero counter or no event after initialization. For each requested state-changing mechanism, include a successful execution with its observable asset or state effect as well as the relevant rejection path. Fee allocation getters and revert-only examples cannot prove liquidity deposits, buyback-and-burn execution, holder ranking, snapshot distribution or claims. Exercise those actions with sufficient accrued funds, adequate observation history and a spot price inside the allowed price band; elapsed time alone does not prove eligibility. Verify the resulting position, received or burned tokens, recipient balances, mandatory fee accrual during internal swaps and prevention of a second claim. When an action returns false without spending, a second call can also return false; do not invent a revert expectation. Snapshot claims use holders and balances captured before the epoch boundary: a new recipient after the snapshot cannot claim the preceding epoch. Include the valid prior holder and reject the new holder. If the test world cannot observe a required action, preserve that limitation instead of claiming the requirement covered. swapFeePpm observes the PoolManager LP-fee field, not separately charged hook fees. Initializer minTokenOut is denominated in raw tokens, never native input; account for mandatory fees and price impact when choosing a positive minimum. A fixed zero-LP-fee pool emits zero there; verify platform and opening hook fees via quote results, vault state or balances instead. Logical fields below describe the server-expanded plan; the current stage schema defines its wire representation. All logical fields are validated after expansion.\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.verification.facts}\n${mechanismKnowledge(input.intent)}\n${generalCheckLogicalRules}\n${launchProductionGuidance(input.production)}`;
+  const shared=`Declare independent contract examples before source generation. Never derive expected values from implementation code. When using canonical protected initializers, initialization executes the initial buy as a swap. Rules covering every successful swap also include that initial swap; do not assume a zero counter or no event after initialization. For each requested state-changing mechanism, include a successful execution with its observable asset or state effect as well as the relevant rejection path. Fee allocation getters and revert-only examples cannot prove liquidity deposits, buyback-and-burn execution, holder ranking, snapshot distribution or claims. Exercise those actions with sufficient accrued funds, adequate observation history and a spot price inside the allowed price band; elapsed time alone does not prove eligibility. Verify the resulting position, received or burned tokens, recipient balances, mandatory fee accrual during internal swaps and prevention of a second claim. When an action returns false without spending, a second call can also return false; do not invent a revert expectation. Snapshot claims use holders and balances captured before the epoch boundary: a new recipient after the snapshot cannot claim the preceding epoch. Include the valid prior holder and reject the new holder. If the test world cannot observe a required action, preserve that limitation instead of claiming the requirement covered. swapFeePpm observes the PoolManager LP-fee field, not separately charged hook fees. Initializer minTokenOut is denominated in raw tokens, never native input; account for mandatory fees and price impact when choosing a positive minimum. A fixed zero-LP-fee pool emits zero there; verify platform and opening hook fees via quote results, vault state or balances instead. Logical fields below describe the server-expanded plan; the current stage schema defines its wire representation. All logical fields are validated after expansion.\n${PROTOCOL_CORE}\n${PROTOCOL_TOPICS.verification.facts}\n${mechanismKnowledge(input.intent)}\n${PRODUCT_BINDING_RULES}\n${generalCheckLogicalRules}\n${launchProductionGuidance(input.production)}`;
   const graphContext=JSON.stringify({...scenarioContext,...(input.interfaces?{canonicalInterfaces:{id:input.interfaces.id,
     contracts:input.interfaces.contracts.map(({functions,events,...contract})=>{void functions;void events;return contract;}),construction:input.interfaces.construction,implementationPatterns:input.interfaces.implementationPatterns}}:{})});
   const expandedDeclaration=(text:string)=>{
@@ -117,7 +119,11 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     const metadata=bindCanonicalTokenMetadata(opening.proposal.deployment);
     return {...opening.proposal,...(metadata.changed?{deployment:metadata.value}:{}),steps:resolveOpeningFixtureValue(opening.proposal.steps,opening.inputs)};
   };
-  const completeDeclaration=(text:string)=>createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler,input.productBlueprint?.id);
+  const completeDeclaration=(text:string)=>{
+    const checked=createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler,input.productBlueprint?.id);
+    if(input.productBlueprint)checkedProductBindings(checked.productBindings,checked.scenarios,checked.entrypoints,input.productBlueprint);
+    return checked;
+  };
   const qualify=async(raw:string)=>{
     try{return completeDeclaration(raw);}
     catch(error){
@@ -174,7 +180,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   if(proposal.format!==undefined&&proposal.format!=="compact-v1")return reject("interface-format");
   if(!Array.isArray(proposal.contracts)||proposal.contracts.length<1||proposal.contracts.length>16)return reject("interface-contracts");
   if(!Array.isArray(proposal.allowedCalls))return reject("interface-allowed-calls");
-  if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps"].includes(key)))return reject("interface-fields");
+  if(Object.keys(proposal).some(key=>!["format","contracts","allowedCalls","world","deployment","constructorChildren","compilerProfile","steps","productBindings"].includes(key)))return reject("interface-fields");
   delete proposal.steps;
   if(interfacesPending&&proposal.format==="compact-v1"){
     // Older saved graph stages used compact rows. Expand the same identities
@@ -190,11 +196,11 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     const ids=fixtures.map(fixture=>Array.isArray(fixture)?fixture[0]:(fixture as Record<string,unknown>)?.id);
     if(ids.some(id=>typeof id!=="string")||new Set(ids).size!==ids.length)return reject("interface-contract-identities");
     const priorFailure=savedProgress&&input.rejected?.failures.at(-1);
-    const recovered=priorFailure?.stage==="interface"&&priorFailure.response
+    const recovered=!input.productBlueprint&&priorFailure?.stage==="interface"&&priorFailure.response
       ?recoverCompletedInterface(priorFailure.response,proposal):undefined;
     const response=recovered?{text:recovered}:await call({...modelTask("interface-abi",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
-      schema:interfaceSchemaForGraph(proposal,false),
-      system:`Declare the source-blind public interfaces for the fixed graph.\n${PROTOCOL_CORE}\n${nativeStageInstructions}\nThis is the PUBLIC INTERFACE stage only. The graph below is fixed. Return the native interfaces array with exactly one object per fixture id, including constructor children. canonical is an exact pinned catalog contract name when its full interface is inherited, otherwise null. With a canonical name, functions lists only additional public methods; with canonical:null it lists the complete public interface required by the design and its observations. Include the public getters needed to check the saved requirements. Never repeat a referenced canonical ABI or add unrelated helper methods. Preserve every saved requirement. Do not change local ids, constructors, world, roles, allowed calls or constraints. Set deployment:null; production values are declared in the next separate step. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
+      schema:interfaceSchemaForGraph(proposal,false,input.productBlueprint),
+      system:`Declare the source-blind public interfaces for the fixed graph.\n${PROTOCOL_CORE}\n${nativeStageInstructions}\n${PRODUCT_BINDING_RULES}\nThis is the PUBLIC INTERFACE stage only. The graph below is fixed. Return the native interfaces array with exactly one object per fixture id, including constructor children. canonical is an exact pinned catalog contract name when its full interface is inherited, otherwise null. With a canonical name, functions lists only additional public methods; with canonical:null it lists the complete public interface required by the design and its observations. Include the public getters needed to check the saved requirements. Never repeat a referenced canonical ABI or add unrelated helper methods. Preserve every saved requirement. Do not change local ids, constructors, world, roles, allowed calls or constraints. Set deployment:null; production values are declared in the next separate step. Do not output source, scenarios or the graph again. Untrusted design data: ${context}\nFixed graph: ${JSON.stringify(proposal)}`,
       messages:[{role:"user",content:"Declare only the public interfaces using canonical references. Production values come next."}]});
     input.signal?.throwIfAborted();
     responseText=response.text;
@@ -210,6 +216,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
       const deployment=nativeDeployment(Object.hasOwn(envelope,"deployment")?envelope.deployment:envelope.deploymentJson,proposal);
       if(deployment!==null)proposal.deployment=deployment;
     }
+    if(input.productBlueprint&&envelope.productBindings!==undefined)proposal.productBindings=envelope.productBindings;
     proposal.contracts=proposal.contracts.map(fill);
     if(Array.isArray(proposal.constructorChildren))proposal.constructorChildren=proposal.constructorChildren.map(fill);
     progress={interface:JSON.stringify(proposal),steps:[]};

@@ -3,6 +3,7 @@
 import { Disclosure } from "@/components/disclosure";
 import type { ProductBlueprint, ProductIssue } from "@/lib/custom-ai/product/blueprint";
 import { reviewProductEconomics } from "@/lib/custom-ai/product/economics";
+import type {ProductImplementation} from "@/lib/custom-ai/product/implementation";
 import styles from "./workspace.module.css";
 
 function issueText(issue: ProductIssue): string {
@@ -13,16 +14,22 @@ function issueText(issue: ProductIssue): string {
   return "Some saved rules still need to be assigned to the implementation.";
 }
 
-export function ProductPlan({ blueprint }: { blueprint: ProductBlueprint }) {
+export function ProductPlan({ blueprint, implementation }: { blueprint: ProductBlueprint; implementation?:ProductImplementation }) {
   const names = new Map(blueprint.components.map(component => [component.id, component.name]));
   const assets = new Map(blueprint.assets.map(asset => [asset.id, asset.name]));
   const economics = reviewProductEconomics(blueprint);
+  const linked=implementation?.productBlueprintId===blueprint.id&&implementation.intentRevision===blueprint.intentRevision?implementation:undefined;
   return <Disclosure className={`${styles.ruleReview} ${styles.coinRules}`}>
     <summary>Product plan<span>{blueprint.components.length}</span></summary>
     <p className={styles.note}>The parts of your design. Implementation and launch are checked separately.</p>
     <ul>
       {blueprint.components.map(component => <li key={component.id}><strong>{component.name}</strong><br />{component.purpose}</li>)}
     </ul>
+    {linked&&linked.actions.length>0&&<section aria-label="Linked contract actions">
+      <h3>Contract actions</h3>
+      <p className={styles.note}>{linked.evidence==="declared-scenarios-passed"?"Linked to the source and checked locally.":"Linked to the compiled source."}</p>
+      <ul>{linked.actions.map(action=><li key={action.id}>{names.get(action.target)} · <code>{action.signature}</code></li>)}</ul>
+    </section>}
     {blueprint.flows.length > 0 && <>
       <h3>Where funds go</h3>
       <ul>{blueprint.flows.map(flow => <li key={flow.id}>

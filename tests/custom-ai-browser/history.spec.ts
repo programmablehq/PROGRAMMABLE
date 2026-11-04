@@ -12,6 +12,8 @@ import type { GeneralProjectView } from "../../lib/custom-ai/project-view";
 import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
 import { overviewFromView } from "../../lib/custom-ai/project-overview";
 import { createProductBlueprint } from "../../lib/custom-ai/product/blueprint";
+import { canonicalBrowserSha256V2 } from "../../lib/custom-launch/browser-authority-v2";
+import type { ProductImplementation } from "../../lib/custom-ai/product/implementation";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
@@ -29,6 +31,30 @@ function checkedFixture(revision=1,passed=true){
   scenarios:{scope:"isolated-declared-scenarios-v1" as const,hash:`sha256:${"3".repeat(64)}` as const,planHash:`sha256:${"4".repeat(64)}` as const,passed,cases:5,
     failures:passed?[]:[{caseId:"increment-one",code:"return-value",message:"The declared increment did not match."}]}}};
 }
+
+test("source-linked product actions remain inspectable after reload",async({page},info)=>{
+ const f=await fixture(page),result=checkedFixture();
+ const product=createProductBlueprint({components:[{id:"counter",kind:"adapter",name:"Counter",purpose:"Track the counter",requirementIds:["counter"],dependsOn:[]}],assets:[],flows:[],services:[],
+   interfaceActions:[{id:"read-counter",target:"counter",kind:"inspect",requirementIds:["counter"]}]},result.intent,1);
+ const body:Omit<ProductImplementation,"id">={version:1,productBlueprintId:product.id,projectHash:result.generalProject.projectHash,artifactHash:result.generalProject.artifactHash,
+   checkBlueprintId:result.generalProject.blueprintId,intentRevision:result.intent.revision,evidence:"declared-scenarios-passed",deployed:false,
+   components:[{id:"counter",fixture:"counter",source:"Counter.sol",contract:"Counter"}],actions:[{id:"read-counter",target:"counter",fixture:"counter",signature:"value()",mutability:"view"}]};
+ const implementation={...body,id:canonicalBrowserSha256V2("programmable.product-implementation.v1",body)};
+ f.control.respond=()=>({...result,productBlueprint:product,generalProject:{...result.generalProject,productBlueprintId:product.id,implementation}});
+ await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await box.fill("Build the counter");await box.press("Enter");
+ const summary=page.locator("summary").filter({hasText:/^Product plan/});await summary.click();
+ const actions=page.getByRole("region",{name:"Linked contract actions"});
+ await expect(actions).toBeVisible();await expect(actions.getByText("value()",{exact:true})).toBeVisible();
+ await page.setViewportSize({width:360,height:900});
+ const toggle=page.getByRole("button",{name:"Coin preview and details",exact:true});
+ if(await toggle.getAttribute("aria-expanded")==="false")await toggle.click();
+ await actions.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath("product-functions-360.png"),fullPage:true});
+ await page.setViewportSize({width:1440,height:900});await page.reload();await summary.click();
+ await expect(actions.getByText("value()",{exact:true})).toBeVisible();
+ expect(f.calls).toHaveLength(1);
+});
 
 test("observed simulation is readable by keyboard and survives reload without extra requests",async({page},info)=>{
  const f=await fixture(page),result=checkedFixture();

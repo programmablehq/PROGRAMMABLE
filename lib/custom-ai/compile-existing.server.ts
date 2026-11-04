@@ -9,6 +9,7 @@ import { selectExecutionRoute } from "./execution-routing";
 import { generalProjectView } from "./project-view";
 import { bindGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import { checkGeneralScenarios } from "./behavior-checks.server";
+import {createProductImplementation} from "./product/implementation.server";
 import { generalBuildReply } from "./build-result";
 import { restoredProductBlueprint, type ProductBlueprint } from "./product/blueprint";
 
@@ -62,6 +63,6 @@ export async function compileExistingProject(input: {
   const passed=compilation.compiled&&scenarios?.passed!==false;
   const reply = generalBuildReply({ compilation, sourceAudit: source.sourceAudit, scenarios }, source.replyLocale);
   return { reply, replyLocale:source.replyLocale, intent: source.project.intent, selection,...(source.productBlueprint?{productBlueprint:source.productBlueprint}:{}),
-    generalProject: generalProjectView({ version: 1, reply, summary: source.summary, project: source.project, compilation, selection,...(source.blueprint?{blueprintId:source.blueprint.id}:{}),...(source.sourceAudit?{sourceAudit:source.sourceAudit}:{}),...(scenarios?{scenarios}:{}),requirementCoverage: "proposed", launchReady: false }),
+    generalProject: generalProjectView({ version: 1, reply, summary: source.summary, project: source.project, compilation, selection,...(source.blueprint?{blueprintId:source.blueprint.id}:{}),...(source.sourceAudit?{sourceAudit:source.sourceAudit}:{}),...(scenarios?{scenarios}:{}),requirementCoverage: "proposed", launchReady: false },source.productBlueprint&&source.blueprint?createProductImplementation(source.productBlueprint,source.blueprint,source.project,compilation,scenarios):undefined),
     change: passed ? "applied" : "blocked", memory: "", chargedAs: "build" };
 }

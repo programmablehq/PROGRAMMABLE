@@ -48,6 +48,8 @@ These percentages divide collected project fees. They do not set a 70% swap tax 
 
 The expandable **Product plan** records the parts needed by your design: contracts, money flows, external services and interface actions. It belongs to the saved design and remains available after reloading or restoring a version. The chat can calculate a specific allocation example without querying a price provider. The example preserves any unassigned share and rounding; it does not claim that a swap, buyback or payout has executed.
 
+For new contract builds, the plan can link actions such as deposits, claims and balance reads to specific functions in the declared contract interface. The builder checks those links against the compiled ABI and the corresponding local examples. **Contract actions** shows the linked functions inside the product plan. These source links do not activate a service or submit a transaction.
+
 You can also ask for different product ideas without replacing the current coin. The chat considers execution rules, incentives, liquidity, external events and treasury mechanics. Selecting a design is separate from exploring it. A planned service is not automatically hosted or funded by adding it to the plan.
 
 For weather or other API-driven rules, describe the trigger and result in ordinary language. Keep private keys and API credentials out of the chat. The builder identifies the required integration and preserves the rule if that integration is not connected; research results alone do not activate it.

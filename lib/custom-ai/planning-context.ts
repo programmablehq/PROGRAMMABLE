@@ -53,6 +53,7 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
       sourceIncluded:includeSource}:null,
     ...(projectView?{generalProject:{projectHash:projectView.projectHash,chainId:projectView.chainId,summary:projectView.summary,
       entrypoints:projectView.entrypoints,compiler:projectView.compiler,compiled:projectView.compiled,
+      ...(projectView.implementation?{boundSourceActions:{evidence:projectView.implementation.evidence,deployed:false,actions:projectView.implementation.actions}}:{}),
       ...(projectView.blueprintId?{declaredChecks:{blueprintId:projectView.blueprintId,...(projectView.scenarios?{scope:projectView.scenarios.scope,passed:projectView.scenarios.passed,cases:projectView.scenarios.cases,failures:projectView.scenarios.failures}:{state:"pending"})}}:{}),
       ...(input.includeExecution&&projectView.scenarios?.execution?{simulation:executionContext(projectView.scenarios.execution)}:{}),
       verification:"not-run",sourceIncluded:includeSource&&Boolean(generalProject),...(sources&&generalProject?{sources,

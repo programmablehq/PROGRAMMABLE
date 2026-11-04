@@ -39,6 +39,7 @@ import {auditGeneralSource,type GeneralSourceAudit} from "./source-audit.server"
 import { compileContractProject } from "./contract-project.server";
 import type { ContractProject } from "./contract-project";
 import { generalProjectView, type GeneralProjectView } from "./project-view";
+import {createProductImplementation} from "./product/implementation.server";
 import { bindGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import {declareGeneralChecks,GeneralCheckDeclarationError} from "./check-declaration.server";
 import { checkGeneralScenarios, type GeneralScenarioReport } from "./behavior-checks.server";
@@ -411,7 +412,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     }
     const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
     return {reply:generalBuildReply(generated, update.replyLocale),
-      intent,selection:generated.selection,generalProject:generalProjectView(generated),...update,...(verificationInstruction?{verificationInstruction}:{}),...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
+      intent,selection:generated.selection,generalProject:generalProjectView(generated,update.productBlueprint&&blueprint?createProductImplementation(update.productBlueprint,blueprint,generated.project,generated.compilation,generated.scenarios):undefined),...update,...(verificationInstruction?{verificationInstruction}:{}),...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);
   if (previousSpec && !plan.composable) return { reply: "This change left out part of your saved design. Keep the complete rule before building.",

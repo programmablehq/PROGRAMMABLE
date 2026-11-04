@@ -18,7 +18,7 @@ export function GET() {
     protocolKnowledge: { version: PROTOCOL_KNOWLEDGE_VERSION, topics: Object.keys(PROTOCOL_TOPICS), networkRequests: 0 },
     productPlanning: { version: 1, knowledgeVersion: PRODUCT_DESIGN_KNOWLEDGE_VERSION,
       componentKinds: ["token","hook","vault","adapter","automation","indexer","interface"],
-      persistence: "owned-intent-revision", sourceBinding: "product-blueprint-hash",
+      persistence: "owned-intent-revision", sourceBinding: "product-blueprint-hash", functionBindings:"independent-declared-interface",
       allocationExamples: "exact-integer-arithmetic", contractExecution: "separate-verification", serviceDeployment: "not-automatic" },
     dataAdapters: { state:"private-observation-readers", format:"public-https-json", requiresSession:true, credentials:false, generatedCodeExecution:false, automaticOnchainPublication:false,
       maximumToolCalls:AI_CONFIG.maximumLookups,maximumResponseBytes:128000,sharedCacheSeconds:10 },

@@ -1,6 +1,8 @@
 import {parseAbi,parseAbiItem,toFunctionSignature} from "viem";
 import {V4_WORLD_STEP_SIGNATURES} from "./behavior-world";
 import {bindCanonicalTokenMetadata} from "./deployment-metadata";
+import type {ProductBlueprint} from "./product/blueprint";
+import {productBindingsSchema} from "./product/bindings";
 
 /** Native stage envelopes keep the response itself structured. Only constructor
  * values and the separately documented deployment graph need JSON value text.
@@ -32,7 +34,7 @@ const nativeTarget={id:identifier,argumentsJson:string(12000),initializerFunctio
 const nativeChild={id:identifier,argumentsJson:string(12000),value:string(30)};
 /** Keep the production envelope typed as well. A string containing a second
  * schema cannot be validated by the provider adapter before expansion. */
-export function interfaceSchemaForGraph(graph:Record<string,unknown>,production:boolean){
+export function interfaceSchemaForGraph(graph:Record<string,unknown>,production:boolean,product?:ProductBlueprint){
   const ids=(key:string)=>(graph[key] as Record<string,unknown>[]|undefined)?.map(item=>String(item.id))??[];
   const roots=ids("contracts"),children=ids("constructorChildren");
   const allIds=[...roots,...children];
@@ -45,8 +47,9 @@ export function interfaceSchemaForGraph(graph:Record<string,unknown>,production:
     fees:{anyOf:[{type:"null"},object({buyPpm:{type:"integer",minimum:0,maximum:100000},sellPpm:{type:"integer",minimum:0,maximum:100000}})]},
     liquidityModel:{type:["string","null"],enum:[null,"external-concentrated-liquidity","launch-seeded-concentrated-liquidity","hook-inventory-custom-accounting"]},
     openingPrice:{anyOf:[{type:"null"},object({supply:string(40),targetFdvUsd:string(40)})]}});
-  return object({interfaces:{...array(object({...interfaceStageSchema.properties.interfaces.items.properties,id:idSchema(allIds)}),16),minItems:allIds.length,maxItems:allIds.length},
-    deployment:production?deployment:{type:"null"}});
+  const properties={interfaces:{...array(object({...interfaceStageSchema.properties.interfaces.items.properties,id:idSchema(allIds)}),16),minItems:allIds.length,maxItems:allIds.length},
+    deployment:production?deployment:{type:"null"}};
+  return product?object({...properties,productBindings:productBindingsSchema(product,allIds)}):object(properties);
 }
 const event=object({contract:identifier,signature:string(2000),argumentsJson:string(12000)});
 export const scenarioStageSchema=object({steps:array(object({id:identifier,contract:identifier,signature:string(2000),argumentsJson:string(12000),

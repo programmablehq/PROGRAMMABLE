@@ -7,6 +7,7 @@ import { createGeneralCheckPlan, normalizeGeneralCheckScenarios, type GeneralChe
 import { checkedLaunchProductionContext, type LaunchProductionContext } from "./launch-production";
 import { createGeneralDeploymentBlueprint, deploymentBlueprintInput, generalDeploymentPlanningRules, type GeneralDeploymentBlueprint } from "./deployment-blueprint";
 import {validateDeclaredInterfaceCalls} from "./declared-interface-calls";
+import {checkedProductBindings,type ProductBindings} from "./product/bindings";
 
 /** The interpreter declares this before code generation. It contains agreed
  * interfaces and scenarios, no implementation source or compiler artifacts. */
@@ -23,6 +24,7 @@ export type GeneralCheckBlueprint = {
   production?: LaunchProductionContext;
   deployment?: GeneralDeploymentBlueprint;
   productBlueprintId?: `sha256:${string}`;
+  productBindings?: ProductBindings;
 };
 const fail=(reason="invalid-blueprint"):never=>{throw new TypeError(`Declare complete contract scenarios before generating source. Validation: ${reason}.`);};
 
@@ -53,7 +55,7 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
     ||!["paris","cancun"].includes(evmVersion)||!value||typeof value!=="object"||Array.isArray(value)
     ||![Object.prototype,null].includes(Object.getPrototypeOf(value))||new TextEncoder().encode(JSON.stringify(value)).length>96_000)return fail();
   const raw=value as Record<string,unknown>;
-  if(Object.keys(raw).some(key=>!["contracts","allowedCalls","steps","world","deployment","constructorChildren","compilerProfile"].includes(key))
+  if(Object.keys(raw).some(key=>!["contracts","allowedCalls","steps","world","deployment","constructorChildren","compilerProfile","productBindings"].includes(key))
     ||!["contracts","allowedCalls","steps"].every(key=>Object.hasOwn(raw,key))||!Array.isArray(raw.contracts)||!raw.contracts.length||raw.contracts.length>16)return fail();
   const contracts:Record<string,unknown>[]=[],children:Record<string,unknown>[]=[],entries:ProjectEntrypoint[]=[];
   if(raw.constructorChildren!==undefined&&(!Array.isArray(raw.constructorChildren)||!raw.constructorChildren.length||raw.contracts.length+raw.constructorChildren.length>16))return fail();
@@ -72,6 +74,8 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
   validateDeclaredInterfaceCalls(scenarios);
   const deployment=raw.deployment!==undefined?production?createGeneralDeploymentBlueprint(raw.deployment,entrypoints,production,intent):fail():undefined;
   validateDeclaredInterfaceCalls(scenarios,deployment);
+  if(raw.productBindings!==undefined&&!productBlueprintId)return fail("product-bindings-require-product");
+  const productBindings=raw.productBindings!==undefined?checkedProductBindings(raw.productBindings,scenarios,entrypoints):undefined;
   if(deployment) {
     const declared=deployment.version===2?deployment.constructorChildren:[],observed=scenarios.constructorChildren??[];
     if(declared.length!==observed.length)return fail("deployment-constructor-children-count");
@@ -91,7 +95,7 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
   }
   const compiler=createProjectCompiler(Object.hasOwn(raw,"compilerProfile")?raw.compilerProfile:previousCompiler?projectCompilerProfile(previousCompiler):newProjectCompilerProfile(production),evmVersion);
   const body={version:1 as const,intentId:intent.id,intentRevision:intent.revision,intentHash:canonicalBrowserSha256V2("programmable.general-check-intent.v1",intent),chainId,
-    compiler,entrypoints,scenarios,...(production?{production:checkedLaunchProductionContext(production,chainId)}:{}),...(deployment?{deployment}:{}),...(productBlueprintId?{productBlueprintId}:{})};
+    compiler,entrypoints,scenarios,...(production?{production:checkedLaunchProductionContext(production,chainId)}:{}),...(deployment?{deployment}:{}),...(productBlueprintId?{productBlueprintId}:{}),...(productBindings?{productBindings}:{})};
   return structuredClone({...body,id:canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body)});
 }
 
@@ -100,7 +104,7 @@ export function generalCheckBlueprintInput(value:GeneralCheckBlueprint) {
     role:value.entrypoints.find(entry=>entry.source===fixture.source&&entry.contract===fixture.contract)?.role})),
     allowedCalls:value.scenarios.allowedCalls,steps:value.scenarios.steps,compilerProfile:projectCompilerProfile(value.compiler),...(value.scenarios.world?{world:value.scenarios.world}:{}),
     ...(value.scenarios.constructorChildren?{constructorChildren:value.scenarios.constructorChildren.map(child=>({...child,role:"auxiliary"}))}:{}),
-    ...(value.deployment?{deployment:deploymentBlueprintInput(value.deployment)}:{})};
+    ...(value.deployment?{deployment:deploymentBlueprintInput(value.deployment)}:{}),...(value.productBindings?{productBindings:value.productBindings}:{})};
 }
 
 export function checkedGeneralCheckBlueprint(value:GeneralCheckBlueprint,intent:LaunchIntent):GeneralCheckBlueprint {
