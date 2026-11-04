@@ -6,6 +6,9 @@ vi.mock("../lib/server/creator-article/wallet-principal.server",()=>({
   createPrivyWalletPrincipalAuthenticatorV1:()=>({authenticate:mock.authenticate}),WalletPrincipalAuthenticationErrorV1:class extends Error{},
 }));
 import {generalPackFixture} from "./fixtures/custom-ai-general-pack";
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
+import {auditGeneralSource} from "../lib/custom-ai/source-audit.server";
+import {createGeneralPublicSource,generalSourcePublicUri} from "../lib/custom-ai/public-launch-source.server";
 import {createAIStore,CUSTOM_AI_SCHEMA,type AIStore} from "../lib/custom-ai/store.server";
 import {conversationStorageId} from "../lib/custom-ai/conversation.server";
 import {generalProjectView} from "../lib/custom-ai/project-view";
@@ -38,7 +41,8 @@ function service(fetchBackend:typeof fetch){const production=vi.fn().mockResolve
     backendBaseUrl:"https://api.test/",websiteToken:"w".repeat(43),assertionKey:"k".repeat(43),fetchBackend,now:()=>new Date(clock),timeoutMs:1000})})};}
 beforeAll(async()=>{
   clock=time;fixture=await generalPackFixture(4663);const db=new PGlite();await db.exec(CUSTOM_AI_SCHEMA);const seed=makeStore(db),source=fixture.source,binding=source.binding;
-  const view=generalProjectView({version:1,reply:"Original checked source",summary:"Marker",project:source.project,compilation:source.compilation,scenarios:source.scenarios,
+  const sourceAudit=await auditGeneralSource(source.project,undefined,{call:async()=>sourceAuditModelReply(source.project)});
+  const view=generalProjectView({version:1,reply:"Original checked source",summary:"Marker",project:source.project,compilation:source.compilation,scenarios:source.scenarios,sourceAudit,
     blueprintId:source.blueprint.id,selection:selectExecutionRoute(source.project.intent,4663),requirementCoverage:"proposed",launchReady:false});
   const request={id:binding.sourceId,intent:"build",conversation:{id:binding.conversation,account:fixture.controller,revision:1},coin:binding.settings,
     messages:[{role:"user",content:"Private Plan preparation fixture"}]};
@@ -48,12 +52,13 @@ beforeAll(async()=>{
   const storageId=conversationStorageId(fixture.controller,binding.conversation),objects=[
     ["conversation",storageId,{id:binding.conversation,account:fixture.controller,archived:false,title:"Private Plan",createdAt:new Date(time).toISOString()}],
     ["studio",storageId,{settings:binding.settings,image:binding.image,messages:request.messages,draftId:binding.sourceId,sourceId:binding.sourceId,contextId:binding.contextId}],
-    ["contract-project",binding.sourceId,{version:1,requestId:binding.sourceId,payloadHash:binding.payloadHash,project:source.project,compilation:source.compilation,scenarios:source.scenarios,blueprintId:source.blueprint.id}],
+    ["contract-project",binding.sourceId,{version:1,requestId:binding.sourceId,payloadHash:binding.payloadHash,project:source.project,compilation:source.compilation,scenarios:source.scenarios,sourceAudit,blueprintId:source.blueprint.id}],
     ["contract-check-blueprint",binding.sourceId,{version:1,requestId:binding.sourceId,payloadHash:binding.payloadHash,intent:source.project.intent,blueprint:source.blueprint}],
   ];
   for(const [kind,key,value]of objects)await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,$2,$3,$4)",[owner,kind,key,JSON.stringify(value)]);
   const reserved=await seed.projects.preparations.reserve(owner,id,selected(),undefined,"eoa");record=reserved.record;
   expect(reserved.source!.bindingHash).toBe(source.bindingHash);
+  fixture.source=reserved.source!;fixture.exported=createGeneralPublicSource(fixture.source);fixture.url=generalSourcePublicUri(fixture.exported.id);
   pack=await packGeneralRobinhoodPlan({...fixture,identity:record.identity},{address:record.account,kind:"eoa"});
   snapshot={};for(const table of tables)snapshot[table]=(await db.query<Record<string,unknown>>(`SELECT * FROM programmable_custom_ai_v1.${table}`)).rows;
   await db.close();

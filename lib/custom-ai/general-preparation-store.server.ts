@@ -15,6 +15,7 @@ import { constructorDependencyState } from "./dependency-witness";
 import { checkedObservedOpeningPreparation } from "./opening-inputs.server";
 import { generalReviewSubjectHash } from "./automatic-source.server";
 import { generalCoinPreparationEligibility } from "./project-view";
+import { validateCreateDisposition, type CreateDisposition } from "./create-disposition";
 
 export type GeneralPackedLaunch = Awaited<ReturnType<typeof packGeneralGraph>> | Awaited<ReturnType<typeof packGeneralRobinhoodPlan>>;
 export type GeneralExchangeOperation = "preflight" | "create";
@@ -23,6 +24,7 @@ export type GeneralExchange = {
   lease: string; until: number; attempts: number;
   httpStatus?: number; code?: string; disposition?: string; findingCodes?: string[];
   resourceId?: string; backendState?: string; reviewId?:string; reviewSubjectHash?:`sha256:${string}`;
+  createDisposition?: CreateDisposition;
 };
 export type GeneralPreparation = {
   version: 1; id: string; account: Address; chainId: OwnedGeneralLaunchSource["project"]["chainId"];
@@ -321,6 +323,10 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
         const source=!initial.submission?await revalidate(db,owner,initial):null;
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`custom-ai-general-launch:${owner}:${initial.account.toLowerCase()}`]);
         const record=await readIn(db,owner,id,true);if(!record || record.packState!=="complete" || record.productionId!==productionId)throw conflict();
+        // Historical terminal tickets remain readable after their active
+        // pointer is released, but can never acquire another send lease.
+        if(record.submission?.state==="rejected" && record.submission.createDisposition)
+          return {record,lease:null,pack:null};
         const active=(await db.query(`SELECT value->>'id' AS id FROM programmable_custom_ai_v1.objects
           WHERE owner=$1 AND kind='active-general-prepare' AND id=$2`,[owner,pointerId(record.account)])).rows[0];
         if(active?.id!==id)throw conflict();
@@ -343,14 +349,40 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
       });
     },
     async finishExchange(owner: string,id: string,operation: GeneralExchangeOperation,lease: string,
-      outcome: {state:"completed";summary:GeneralExchangeSummary;reply:unknown}|{state:"unknown"|"rejected";summary:GeneralExchangeSummary}) {
+      outcome: ({state:"completed";summary:GeneralExchangeSummary;reply:unknown}|{state:"unknown"|"rejected";summary:GeneralExchangeSummary;reply?:unknown})
+        & {rawReply?:string;createDisposition?:CreateDisposition}) {
       outcome=structuredClone(outcome);
       return transaction(async db=>{
+        const initial=await readIn(db,owner,id);if(!initial)throw conflict();
+        await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`custom-ai-general-launch:${owner}:${initial.account.toLowerCase()}`]);
         const record=await readIn(db,owner,id,true), key=exchangeKey(operation), exchange=record?.[key];
-        if(!record || !exchange || exchange.lease!==lease || exchange.state!=="sending")throw conflict();
+        if(!record || !exchange || exchange.lease!==lease || exchange.state!=="sending" || exchange.until<=now())throw conflict();
         const summary=outcome.summary;
         if(Buffer.byteLength(JSON.stringify(summary))>16_000)throw corrupt();
         record[key]={...exchange,...summary,state:outcome.state,until:0};
+        if(outcome.createDisposition) {
+          if(operation!=="create" || outcome.state!=="rejected" || ![400,422].includes(summary.httpStatus??0)
+            || summary.resourceId || summary.reviewId)throw corrupt();
+          const pack=await readPackIn(db,owner,record);
+          const marker=validateCreateDisposition(outcome.createDisposition,{chainId:record.chainId,account:record.account,
+            bodyBytes:Buffer.from(pack.requestBody),idempotencyKey:record.idempotencyKey});
+          const replyMarker=validateCreateDisposition((outcome.reply as {createDisposition?:unknown})?.createDisposition,
+            {chainId:record.chainId,account:record.account,bodyBytes:Buffer.from(pack.requestBody),idempotencyKey:record.idempotencyKey});
+          if(!marker || !replyMarker || marker.requestSha256!==record.requestSha256)throw corrupt();
+          const released=await db.query(`DELETE FROM programmable_custom_ai_v1.objects
+            WHERE owner=$1 AND kind='active-general-prepare' AND id=$2 AND value->>'id'=$3 RETURNING id`,[owner,pointerId(record.account),id]);
+          if(released.rows.length!==1)throw conflict();
+          record[key].createDisposition=marker;
+        }
+        // Keep large successful replies once in REPLY_KIND. Attempt history
+        // retains their digest; small error receipts preserve the original bytes.
+        const replyBytes=outcome.rawReply===undefined?undefined:Buffer.from(outcome.rawReply);
+        const history=JSON.stringify({operation,...record[key],
+          ...(replyBytes?{replySha256:fileSha256V2(replyBytes),replyBytes:replyBytes.length,
+            ...(outcome.state!=="completed"&&replyBytes.length<=65_536?{rawReply:outcome.rawReply}:{})}:{})});
+        if(Buffer.byteLength(history)>96_000)throw corrupt();
+        await db.query("INSERT INTO programmable_custom_ai_v1.objects(owner,kind,id,value) VALUES($1,'general-launch-exchange',$2,$3)",
+          [owner,`${id}-${operation}-${lease}`,history]);
         if(outcome.state==="completed") {
           const text=JSON.stringify(outcome.reply);
           if(Buffer.byteLength(text)>64*1024*1024)throw corrupt();
@@ -368,6 +400,7 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
 export function generalPreparationView(record: GeneralPreparation, now=Date.now()) {
   const projectExchange=(exchange:GeneralExchange|undefined)=>exchange?{
     state:exchange.state==="sending"&&exchange.until<=now?"unknown":exchange.state,
+    ...(exchange===record.submission && exchange.state==="rejected" && exchange.createDisposition?{terminalNoResource:true as const}:{}),
     ...Object.fromEntries(["httpStatus","code","disposition","findingCodes","resourceId","backendState","reviewId","reviewSubjectHash"].flatMap(key=>{
       const value=exchange[key as keyof GeneralExchange];return value===undefined?[]:[[key,value]];
     })),

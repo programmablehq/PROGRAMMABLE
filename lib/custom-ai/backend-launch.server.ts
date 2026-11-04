@@ -8,10 +8,15 @@ import { createWalletLaunchBffAssertionV1, walletLaunchMutationTargetV1, type Wa
   "@/lib/server/custom-launch/wallet-launch-bff-assertion-v1";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "@/lib/server/custom-launch/wallet-admin-bff-assertion-v2";
 import type { AutomaticSourceReceipt } from "./automatic-source.server";
+import { validateCreateDisposition, type CreateDisposition } from "./create-disposition";
 
 /** A private transport response only. Its HTTP status is never a source,
  * review, permit, wallet execution, finality or public-availability verdict. */
-export type BackendLaunchReply = { httpStatus: number; value: unknown; location: string | null };
+export type BackendLaunchReply = { httpStatus: number; value: unknown; location: string | null; rawBody?: string };
+const createFailures = new WeakMap<BackendLaunchRejected, { reply: unknown; rawReply: string; createDisposition?: CreateDisposition }>();
+// Only the authenticated submit exchange can populate this map. Error text,
+// browser input and independently constructed exceptions cannot mint proof.
+export const backendCreateFailure = (error: unknown) => error instanceof BackendLaunchRejected ? createFailures.get(error) : undefined;
 export class BackendLaunchRejected extends CustomAIError {
   constructor(readonly backendStatus: number, readonly backendCode: string | null, readonly findings: readonly unknown[]) {
     super("launch-submission", backendStatus === 403 ? "Reconnect the wallet that owns this project."
@@ -27,7 +32,7 @@ function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 const unavailable = () => new CustomAIError("launch-transport", "The launch service did not return a complete response. Your saved request is kept.", 503);
-async function boundedReply(response: Response, maximum: number) {
+async function boundedReply(response: Response, maximum: number, retain?: (text: string) => void) {
   if (!/^application\/json(?:\s*;|$)/iu.test(response.headers.get("content-type") ?? "")) {
     await response.body?.cancel().catch(() => undefined); throw unavailable();
   }
@@ -45,7 +50,10 @@ async function boundedReply(response: Response, maximum: number) {
       if (size > maximum) { await reader.cancel(); throw unavailable(); }
       chunks.push(chunk.value);
     }
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, size))) as unknown;
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, size));
+    const value = JSON.parse(text) as unknown;
+    retain?.(text);
+    return value;
   } finally { reader.releaseLock(); }
 }
 
@@ -147,6 +155,7 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
       chainId: BuilderChainId; operation: WalletLaunchMutationV1; account: `0x${string}`;
       bodyBytes: Uint8Array; idempotencyKey: string | null;
     }>): Promise<BackendLaunchReply> {
+      candidate = { ...candidate };
       if (request.method !== "POST") throw new CustomAIError("launch-method", "Prepare this launch with an explicit request.", 405);
       const current = requireFreshCustomAIAuthority(request, authority), account = getAddress(candidate.account);
       if (!current.principal.wallets.some(wallet => getAddress(wallet) === account))
@@ -169,11 +178,18 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
             ...(responseVersion === null ? {} : { "Programmable-Launch-Response-Version": responseVersion }), ...assertion,
           }, body: bytes });
         if (response.status >= 300 && response.status < 400) { await response.body?.cancel().catch(() => undefined); throw unavailable(); }
-        const value = await boundedReply(response, maximum);
+        let rawBody = "";
+        const value = await boundedReply(response, maximum, text => { rawBody = text; });
         if (!response.ok) {
           const object = record(value), error = record(object?.error), code = error?.code;
           const findings = Array.isArray(object?.findings) ? object.findings.slice(0, 32) : [];
-          throw new BackendLaunchRejected(response.status, typeof code === "string" && /^[A-Z][A-Z0-9_]{1,127}$/u.test(code) ? code : null, findings);
+          const rejected = new BackendLaunchRejected(response.status, typeof code === "string" && /^[A-Z][A-Z0-9_]{1,127}$/u.test(code) ? code : null, findings);
+          if (candidate.operation === "create") {
+            const createDisposition = [400, 422].includes(response.status) && response.headers.get("location") === null
+              ? validateCreateDisposition(object?.createDisposition, { ...candidate, account, bodyBytes: bytes }) : undefined;
+            createFailures.set(rejected, { reply: value, rawReply: rawBody, ...(createDisposition ? { createDisposition } : {}) });
+          }
+          throw rejected;
         }
         const location = response.headers.get("location");
         if (location !== null) {
@@ -181,7 +197,7 @@ export function createCustomAIBackendLaunchBridge(input: Readonly<{
           if (url.origin !== base.origin || url.search || url.hash || !url.pathname.startsWith(`${resourceBase}/`)
             || !/^[A-Za-z0-9-]{16,128}$/u.test(url.pathname.slice(resourceBase.length + 1))) throw unavailable();
         }
-        return { httpStatus: response.status, value, location };
+        return { httpStatus: response.status, value, location, rawBody };
       } catch (error) {
         if (error instanceof CustomAIError) throw error;
         throw unavailable();

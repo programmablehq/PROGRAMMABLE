@@ -25,6 +25,35 @@ function fixture() {
 }
 
 describe("explicit general launch client", () => {
+  it("archives a terminal rejection, clears uncertainty and prepares a corrected ticket without replaying the old one",async()=>{
+    const f=fixture();await f.load();
+    const terminal=record({submission:{state:"rejected",httpStatus:422,terminalNoResource:true}});
+    f.request.mockResolvedValueOnce({preparation:record()}).mockRejectedValueOnce(Error("Source needs correction"))
+      .mockResolvedValueOnce({preparation:terminal});
+    await f.client.submit(async()=>input);
+    expect(f.state().unconfirmedId).toBeUndefined();expect(f.state().preparation).toBeNull();
+    expect(f.state().previousSubmission).toEqual(terminal);
+    const corrected={...input,selection:{...input.selection,id:"corrected-source-client-0002"}};
+    const fresh=record({id:"general-client-ticket-0002",sourceId:corrected.selection.id});
+    f.request.mockResolvedValueOnce({preparation:fresh});
+    await f.client.prepare(async()=>corrected);
+    expect(f.state().preparation?.id).toBe(fresh.id);expect(f.state().previousSubmission).toEqual(terminal);
+    expect(f.posts().map(call=>call[2].action)).toEqual(["prepare","create","prepare"]);
+  });
+  it("reads a terminal ticket as history on reload and never resubmits it during recovery",async()=>{
+    const f=fixture(),terminal=record({submission:{state:"rejected",httpStatus:400,terminalNoResource:true}});
+    await f.load(terminal);expect(f.state().previousSubmission).toEqual(terminal);expect(f.state().preparation).toBeNull();
+    await f.client.recover();expect(f.posts()).toHaveLength(0);
+  });
+  it.each([
+    {state:"unknown",httpStatus:422,terminalNoResource:true},
+    {state:"rejected",httpStatus:409,terminalNoResource:true},
+    {state:"rejected",httpStatus:422,terminalNoResource:false},
+    {state:"rejected",httpStatus:422,terminalNoResource:true,resourceId:conversation},
+    {state:"completed",httpStatus:422,terminalNoResource:true},
+  ])("rejects an inconsistent terminal projection %j",submission=>{
+    expect(()=>readGeneralPreparation({preparation:record({submission:submission as GeneralPreparationView["submission"]})},account)).toThrow();
+  });
   it.each([422,409,503])("keeps an HTTP %i rejection without no-resource proof on exact-ticket recovery",async httpStatus=>{
     const f=fixture(),rejected=record({submission:{state:"rejected",httpStatus}});
     await f.load(rejected);

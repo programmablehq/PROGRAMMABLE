@@ -56,7 +56,9 @@ describe("public Explore OpenAPI contract", () => {
   it("validates the actual Base projection and preserves its chain and finalized source", async () => {
     const token = `0x${"11".repeat(20)}`, hook = `0x${"22".repeat(20)}`, zero = `0x${"00".repeat(20)}`;
     const id = `0x${"33".repeat(32)}`, time = "2026-10-20T20:00:00.000Z";
-    mocks.baseFeed.mockResolvedValue({ status: "current", generatedAt: time, launches: [{
+    mocks.baseFeed.mockResolvedValue({ status: "current", generatedAt: time,
+      quality: { status: "complete", sourceRowCount: 1, publishedRowCount: 1, quarantinedRowCount: 0, diagnostics: [] },
+      retainedRowCount: 0, launches: [{
       creator: `0x${"44".repeat(20)}`, routerLaunchId: id, resourceId: "synthetic-base-resource",
       token, hook, poolId: id, poolKey: { currency0: zero, currency1: token, fee: 8388608, tickSpacing: 60, hooks: hook },
       finalizedAt: time, finality: { transactionHash: id, blockNumber: "52870000" }, routingFeePolicy: {},
@@ -68,6 +70,9 @@ describe("public Explore OpenAPI contract", () => {
     expect(valid(response), JSON.stringify(valid.errors)).toBe(true);
     expect(response.items).toHaveLength(1);
     expect(response.sourceEvidence).toMatchObject({ chainId: "8453", records: 1 });
+    expect(valid({ ...response, status: "partial", sourceEvidence: { ...response.sourceEvidence,
+      quality: { status: "partial", sourceRowCount: 2, publishedRowCount: 1, quarantinedRowCount: 1,
+        diagnostics: [{ rowIndex: 1, code: "FINALIZED_ROW_QUARANTINED" }] } } })).toBe(true);
     expect(valid({ ...response, chainId: 1 })).toBe(false);
     expect(valid({ ...response, status: "ready", sourceEvidence: null })).toBe(false);
     const operation = programmablePublicOpenApi.paths["/api/explore/base"].get;

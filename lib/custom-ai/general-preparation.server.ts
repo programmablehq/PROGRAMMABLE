@@ -1,7 +1,7 @@
 import "server-only";
 import { getAddress } from "viem";
 import { requireFreshCustomAIAuthority, type AIAuthority } from "./auth.server";
-import { BackendLaunchRejected, type createCustomAIBackendLaunchBridge } from "./backend-launch.server";
+import { BackendLaunchRejected, backendCreateFailure, type createCustomAIBackendLaunchBridge } from "./backend-launch.server";
 import { createGeneralPublicSource, generalSourcePublicUri } from "./public-launch-source.server";
 import { packGeneralGraph } from "./general-pack.server";
 import { packGeneralRobinhoodPlan } from "./general-plan-pack.server";
@@ -72,7 +72,8 @@ export function createGeneralPreparationService(deps: {
       // Completed work and an active send only need the compact owned journal.
       // In particular, ordinary polling never repeats discovery or submission.
       const previous=operation==="create"?saved.submission:saved.preflight;
-      if(previous?.state==="completed" || previous?.state==="sending" && previous.until>now())return generalPreparationView(saved,now());
+      if(previous?.state==="completed" || saved.submission?.state==="rejected" && saved.submission.createDisposition
+        || previous?.state==="sending" && previous.until>now())return generalPreparationView(saved,now());
       if(operation==="preflight"&&saved.submission)return generalPreparationView(saved,now());
       // A recovery is an exact replay of a previously attempted request. The
       // backend checks that original resource before parsing a new request, so
@@ -85,17 +86,21 @@ export function createGeneralPreparationService(deps: {
       const claimed=await preparations.claimExchange(current.owner,id,operation,saved.productionId);
       if(!claimed.lease||!claimed.pack)return generalPreparationView(claimed.record,now());
       const {record,lease,pack}=claimed;
+      let received: Awaited<ReturnType<ReturnType<typeof createCustomAIBackendLaunchBridge>["submit"]>> | undefined;
       try {
         const reply=await deps.bridge().submit(request,authority,{chainId:record.chainId,operation,account:record.account,
           bodyBytes:Buffer.from(pack.requestBody),idempotencyKey:operation==="create"?record.idempotencyKey:null});
+        received=reply;
         const summary=(record.chainId===4663?projectGeneralPlanReply:projectGeneralGraphReply)(operation,reply,record);
-        return generalPreparationView(await preparations.finishExchange(current.owner,id,operation,lease,{state:"completed",summary,reply:reply.value}),now());
+        return generalPreparationView(await preparations.finishExchange(current.owner,id,operation,lease,{state:"completed",summary,reply:reply.value,rawReply:reply.rawBody}),now());
       } catch(error) {
-        // Any unconfirmed create retains its original identity and blocks a new
-        // ticket. An explicit retry can send only these exact saved bytes.
+        // Only the authenticated bridge's exact no-resource marker can release
+        // this ticket, in the same lease-checked transaction as its history.
         const rejected=error instanceof BackendLaunchRejected && error.backendStatus<500;
+        const failure=operation==="create"?backendCreateFailure(error):undefined;
         await preparations.finishExchange(current.owner,id,operation,lease,{state:rejected?"rejected":"unknown",summary:{
-          ...(error instanceof BackendLaunchRejected?{httpStatus:error.backendStatus,...(error.backendCode?{code:error.backendCode}:{})}:{code:"RESPONSE_UNCONFIRMED"})}}).catch(()=>undefined);
+          ...(error instanceof BackendLaunchRejected?{httpStatus:error.backendStatus,...(error.backendCode?{code:error.backendCode}:{})}:{code:"RESPONSE_UNCONFIRMED"})},
+          ...(received?{reply:received.value,rawReply:received.rawBody}:{}),...failure}).catch(()=>undefined);
         throw error;
       }
     },
