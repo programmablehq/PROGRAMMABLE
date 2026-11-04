@@ -48,6 +48,13 @@ describe("canonical product blueprint", () => {
     candidate.flows.push({ ...candidate.flows[0], id: "funding", source: "trader", target: "fee-hook", allocationGroup: null, shareBps: null });
     expect(reviewProductEconomics(createProductBlueprint(candidate,intent,8453)).fundingToDefine).toEqual([]);
   });
+  it("keeps an intentional reserve at its source instead of treating it as an external transfer",()=>{
+    const candidate=plan();candidate.flows[3].target="fee-hook";
+    const result=projectAllocation(createProductBlueprint(candidate,intent,8453),{source:"fee-hook",asset:"quote",allocationGroup:"project-fees",amountAtoms:"1001"});
+    expect(result.transfers).toHaveLength(3);
+    expect(result).toMatchObject({retainedAtoms:"301",retainedAllocationAtoms:"300",unassignedAtoms:"0",roundingAtoms:"1"});
+    expect(result.transfers.reduce((sum,flow)=>sum+BigInt(flow.amountAtoms),0n)+BigInt(result.retainedAtoms)).toBe(1001n);
+  });
   it("rejects projections of undecided budgets, unrelated groups and impossible integer amounts", () => {
     const candidate = plan(); candidate.flows[0].shareBps = null;
     const product = createProductBlueprint(candidate,intent,8453);

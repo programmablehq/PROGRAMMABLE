@@ -70,12 +70,14 @@ export function projectAllocation(product: ProductBlueprint, input: AllocationEx
   if (flows.some(flow => flow.shareBps === null) || sum > 10000) throw new TypeError("Resolve the undecided or excess allocation before projecting amounts.");
   const amount = BigInt(input.amountAtoms);
   if (amount >= 1n << 256n) throw new TypeError("The amount exceeds the asset integer range.");
-  const transfers = flows.map(flow => ({ flowId: flow.id, recipient: flow.target, shareBps: flow.shareBps!, amountAtoms: (amount * BigInt(flow.shareBps!) / 10000n).toString() }));
+  const allocations = flows.map(flow => ({ flowId: flow.id, recipient: flow.target, shareBps: flow.shareBps!, amountAtoms: (amount * BigInt(flow.shareBps!) / 10000n).toString() }));
+  const transfers = allocations.filter(allocation => allocation.recipient !== input.source);
+  const retainedAllocation = allocations.filter(allocation => allocation.recipient === input.source).reduce((total, allocation) => total + BigInt(allocation.amountAtoms), 0n);
   const sent = transfers.reduce((total, transfer) => total + BigInt(transfer.amountAtoms), 0n);
   const unassigned = amount * BigInt(10000 - sum) / 10000n;
   return { scope: "allocation-arithmetic" as const, productId: product.id, source: input.source, asset: input.asset, allocationGroup: input.allocationGroup,
-    inputAtoms: amount.toString(), transfers, retainedAtoms: (amount - sent).toString(), unassignedAtoms: unassigned.toString(),
-    roundingAtoms: (amount - sent - unassigned).toString(), contractExecution: "not-run" as const };
+    inputAtoms: amount.toString(), transfers, retainedAtoms: (amount - sent).toString(), retainedAllocationAtoms: retainedAllocation.toString(), unassignedAtoms: unassigned.toString(),
+    roundingAtoms: (amount - sent - retainedAllocation - unassigned).toString(), contractExecution: "not-run" as const };
 }
 
 export const PRODUCT_ECONOMIC_RULES = `Think in assets, cash flows, timing and permissions, not only fee percentages. A payment needs a named funding source. A cycle or a later buyer is not guaranteed income. Distinguish a fee allocation from a swap tax, trading return, token price and promised yield. Explain who can claim, what balance or snapshot makes them eligible, when funds become available, and whether the same funds are being promised twice.
