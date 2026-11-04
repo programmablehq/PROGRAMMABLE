@@ -1,0 +1,13 @@
+# Reusable public data readers
+
+An owned chat can create and reuse a private `data_adapter` through the ordinary planning-tool dispatcher. The definition is data: a public HTTPS endpoint, value and timestamp paths, exact decimal scale, accepted range, freshness window and optional categorical mapping. It cannot contain code, headers, credential bindings, file imports or transaction instructions.
+
+`createJSONDataAdapter` validates and hashes the complete definition. `createDataAdapterLibrary` reads a real response and validates an observation before storing a reader under the current account. The ID is content-addressed; changing its extraction, units or source produces another version. A repeated identical create reuses the owned record. Reads and list operations cannot select another owner. Listing reads at most 21 small records and returns 20 with a cursor for the next page.
+
+`public-json.server.ts` accepts only HTTPS on the default port. It rejects local hostnames, IP-literal endpoints, credential-bearing URLs and non-public DNS answers. The request connects to a checked address while retaining the original hostname for TLS and HTTP. Redirects, compressed responses and responses above 128,000 bytes are rejected. Each outbound attempt has an eight-second deadline; concurrent duplicate public reads share one request and successful results are cached for up to ten seconds, reduced for shorter freshness windows. Cancelling one subscriber does not cancel another subscriber's read.
+
+Numeric JSON tokens are retained as their original decimal text using the pinned Node runtime's source-aware JSON parser. The extractor rejects values that cannot be represented at the declared scale; it does not silently round them. Timestamp format is explicit. Observations must be current, monotonic and consistent at an already-seen timestamp. Stored observations identify the exact adapter version.
+
+The result reports `parsed-observation-only` and `onchainBinding: not-configured`. This is evidence of extraction and transport, not proof that the data provider tells the truth. It does not deploy or fund a keeper. The existing operator-owned publisher can use the same reader through `prepareJSONFeedUpdate` only when its already configured feed ID and source version match. That function prepares an update and never broadcasts it.
+
+The tool uses the existing per-request planning-tool allowance. It does not increase provider budgets, ask users for backend keys, or start a polling loop. Sources requiring authentication, undocumented timestamps, POST requests, arbitrary transforms or other protocols need a separately implemented capability. Preserve those product requirements rather than claiming this public reader implements them.

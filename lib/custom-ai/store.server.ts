@@ -283,9 +283,11 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       return Number(updated.rows[0].revision);
     });
   }
-  async function listObjects<T>(owner: string, kind: string): Promise<T[]> {
+  async function listObjects<T>(owner: string, kind: string, limit=10001, after=""): Promise<T[]> {
+    if(!Number.isSafeInteger(limit)||limit<1||limit>10001)throw new CustomAIError("input","Choose a bounded catalog size.");
+    if(after!==""&&!identifier(after))throw new CustomAIError("input","Choose a valid catalog cursor.");
     return transaction(async db => {
-      const rows = (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind=$2 ORDER BY id LIMIT 10001", [owner,kind])).rows;
+      const rows = (await db.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind=$2 AND id>$4 ORDER BY id LIMIT $3", [owner,kind,limit,after])).rows;
       if (rows.length > 10000) throw Error("Custom AI catalog requires pagination");
       return rows.map(row => row.value as T);
     });

@@ -13,6 +13,8 @@ Read https://programmable.market/api/custom-ai/capabilities for the current chai
 5. Read the assistant's reply and the coin preview. If a change was not applied, the previous checked draft remains. Answer open questions or edit the relevant rule. Verify the network and fee examples before proceeding.
 6. **Coin details** contains the name, ticker, network, pair and initial buy. **Coin rules** expands the saved requirements. **Launch coin** explains any missing image or required setting. A direct chat request such as “okay, launch it” can start preparation for the exact checked source. Check the capabilities endpoint for current availability; a visible disabled button does not mean preparation is enabled. Follow the saved wallet flow and report a launch only after its transaction and resulting coin are confirmed.
 
+**Product plan**, when present, shows the components, funds and external services needed by the saved design. It stays attached to that design revision across reload and version restoration. A listed adapter, automation or interface is planned work until its implementation and operation are separately established. The chat can explain a proposed split using exact amounts; these calculations are not executed swaps or contract simulations.
+
 ## Interruptions and recovery
 
 - **Reconnect to saved reply** reads the existing request. A reload also resumes that request; neither should create another paid generation. Do not submit the original prompt again while its outcome is unknown.

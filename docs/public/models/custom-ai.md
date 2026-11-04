@@ -46,7 +46,13 @@ Describe the whole mechanism in one message, for example: “Put 30% of project 
 
 These percentages divide collected project fees. They do not set a 70% swap tax or redirect mandatory platform fees. A liquidity deposit, a buyback, a burn and a holder distribution each need their actual contract behavior. Balanced percentages alone do not establish execution or launch readiness.
 
+The expandable **Product plan** records the parts needed by your design: contracts, money flows, external services and interface actions. It belongs to the saved design and remains available after reloading or restoring a version. The chat can calculate a specific allocation example without querying a price provider. The example preserves any unassigned share and rounding; it does not claim that a swap, buyback or payout has executed.
+
+You can also ask for different product ideas without replacing the current coin. The chat considers execution rules, incentives, liquidity, external events and treasury mechanics. Selecting a design is separate from exploring it. A planned service is not automatically hosted or funded by adding it to the plan.
+
 For weather or other API-driven rules, describe the trigger and result in ordinary language. Keep private keys and API credentials out of the chat. The builder identifies the required integration and preserves the rule if that integration is not connected; research results alone do not activate it.
+
+For a public JSON source with documented fields and a timestamp, the chat can prepare a private reusable reader and check an actual observation. Its definition records units, accepted values and freshness. This does not publish data onchain or start an automated service. Authenticated sources and other API formats need their own integration; credentials belong in that integration, not in a chat message or URL.
 
 ## General contract projects
 

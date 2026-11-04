@@ -26,12 +26,15 @@ import {recoverCompletedInterface,recoverCorrectedDeployment} from "./interface-
 import {recoverScenarioPage} from "./scenario-recovery";
 import {bindDeclaredWorldParticipants} from "./fixture-participants";
 import type {CoinSetup} from "./coin-setup";
+import {checkedProductBlueprint,type ProductBlueprint} from "./product/blueprint";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
 }
 
 type Input={intent:LaunchIntent;chainId:BuilderChainId;evmVersion:"paris"|"cancun";
+  productBlueprint?:ProductBlueprint;
+  productBlueprintId?:`sha256:${string}`;
   forceNew?:boolean;verificationInstruction?:string;production?:LaunchProductionContext;previousCompiler?:ContractProject["compiler"];
   model:string;scenarioModel?:string;coin?:Pick<CoinSetup,"name"|"symbol"|"pairToken"|"initialBuy">;signal?:AbortSignal;cached?:GeneralCheckBlueprint;rejected?:CheckDiagnostic;interfaces?:CanonicalInterfaceContext;interfaceHash?:string};
 const invalid=():never=>{throw new CustomAIError("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);};
@@ -68,14 +71,17 @@ function remainingRequirements(intent:LaunchIntent,proposal:Record<string,unknow
  * The existing validator still checks the complete combined declaration. */
 export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=>Promise<ClaudeResult>):Promise<GeneralCheckBlueprint>{
   input={...input,interfaceHash:input.interfaces?.id,...(input.forceNew?{cached:undefined,rejected:undefined}:{})};
+  if(input.productBlueprint)input.productBlueprint=checkedProductBlueprint(input.productBlueprint,input.intent,input.chainId);
+  input={...input,productBlueprintId:input.productBlueprint?.id};
   input.signal?.throwIfAborted();
   if(input.cached){
     try{
       const saved=checkedGeneralCheckBlueprint(input.cached,input.intent);
       if(saved.chainId===input.chainId&&saved.compiler.evmVersion===input.evmVersion
+        &&saved.productBlueprintId===input.productBlueprint?.id
         &&saved.production?.id===input.production?.id){
         const raw=generalCheckBlueprintInput(saved),metadata=bindCanonicalTokenMetadata(raw.deployment);
-        return metadata.changed?createGeneralCheckBlueprint({...raw,deployment:metadata.value},input.intent,input.chainId,input.evmVersion,input.production):saved;
+        return metadata.changed?createGeneralCheckBlueprint({...raw,deployment:metadata.value},input.intent,input.chainId,input.evmVersion,input.production,undefined,input.productBlueprint?.id):saved;
       }
     }catch{/* A changed design needs a new declaration, never an inherited check. */}
   }
@@ -96,6 +102,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const reject=(reason:string):never=>{if(!failures.length)record(new Error(reason));throw new GeneralCheckDeclarationError(stage,reason,diagnostic());};
   try {
   const scenarioContext={intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,
+    ...(input.productBlueprint?{productBlueprint:input.productBlueprint}:{}),
     ...(input.coin?{launchInputs:input.coin}:{}),
     ...(input.verificationInstruction?{requestedVerification:input.verificationInstruction}:{}),
     ...(input.interfaces?.implementationPatterns?.length?{implementationReferenceSemantics:input.interfaces.implementationPatterns.map(({id,semantics})=>({id,semantics}))}:{}),
@@ -110,7 +117,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     const metadata=bindCanonicalTokenMetadata(opening.proposal.deployment);
     return {...opening.proposal,...(metadata.changed?{deployment:metadata.value}:{}),steps:resolveOpeningFixtureValue(opening.proposal.steps,opening.inputs)};
   };
-  const completeDeclaration=(text:string)=>createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler);
+  const completeDeclaration=(text:string)=>createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler,input.productBlueprint?.id);
   const qualify=async(raw:string)=>{
     try{return completeDeclaration(raw);}
     catch(error){

@@ -10,8 +10,9 @@ import { generalProjectView } from "./project-view";
 import { bindGeneralCheckBlueprint, type GeneralCheckBlueprint } from "./check-blueprint";
 import { checkGeneralScenarios } from "./behavior-checks.server";
 import { generalBuildReply } from "./build-result";
+import { restoredProductBlueprint, type ProductBlueprint } from "./product/blueprint";
 
-type CompilationSource = ProjectCheckpoint & { summary: string;replyLocale?:string;blueprint?:GeneralCheckBlueprint };
+type CompilationSource = ProjectCheckpoint & { summary: string;replyLocale?:string;blueprint?:GeneralCheckBlueprint;productBlueprint?:ProductBlueprint };
 
 /** Resolve the exact owned source before reserving work. This does not accept
  * source bytes, a command, a compiler or a replacement implementation. */
@@ -34,7 +35,9 @@ export async function readCompilationSource(store: AIStore, owner: string, reque
     if(!declared||declared.blueprint.id!==saved.blueprintId)throw new CustomAIError("behavior-context","The original contract checks could not be loaded. Your source is kept.",409);
     bindGeneralCheckBlueprint(declared.blueprint,saved.project);blueprint=declared.blueprint;
   }
-  return { ...saved,replyLocale:job.result?.replyLocale,...(blueprint?{blueprint}:{}),summary: job.result?.generalProject?.summary ?? "Saved contract source" };
+  const productBlueprint=restoredProductBlueprint(job.result?.productBlueprint,saved.project.intent,saved.project.chainId);
+  if(productBlueprint?.id!==saved.project.productBlueprintId)throw new CustomAIError("product","The saved product plan does not match this source. Restore its original version before continuing.",409);
+  return { ...saved,replyLocale:job.result?.replyLocale,...(blueprint?{blueprint}:{}),...(productBlueprint?{productBlueprint}:{}),summary: job.result?.generalProject?.summary ?? "Saved contract source" };
 }
 
 /** Called inside the existing lease/cancellation/transport. No inference,
@@ -58,7 +61,7 @@ export async function compileExistingProject(input: {
   const selection = selectExecutionRoute(source.project.intent, source.project.chainId, { route: "custom-contract", requirementIds: source.project.intent.requirements.map(rule => rule.id), missingCapabilities: [] });
   const passed=compilation.compiled&&scenarios?.passed!==false;
   const reply = generalBuildReply({ compilation, sourceAudit: source.sourceAudit, scenarios }, source.replyLocale);
-  return { reply, replyLocale:source.replyLocale, intent: source.project.intent, selection,
+  return { reply, replyLocale:source.replyLocale, intent: source.project.intent, selection,...(source.productBlueprint?{productBlueprint:source.productBlueprint}:{}),
     generalProject: generalProjectView({ version: 1, reply, summary: source.summary, project: source.project, compilation, selection,...(source.blueprint?{blueprintId:source.blueprint.id}:{}),...(source.sourceAudit?{sourceAudit:source.sourceAudit}:{}),...(scenarios?{scenarios}:{}),requirementCoverage: "proposed", launchReady: false }),
     change: passed ? "applied" : "blocked", memory: "", chargedAs: "build" };
 }

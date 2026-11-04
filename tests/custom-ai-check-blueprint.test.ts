@@ -18,6 +18,17 @@ const project=(increment=1)=>createContractProject({compiler:{version:GENERAL_PR
   entrypoints:[{source:"Counter.sol",contract:"Counter",role:"auxiliary"}]},intent,999);
 
 describe("the source-independent general scenario blueprint",()=>{
+  it("binds checks and source to the same product architecture while leaving older drafts readable",()=>{
+    const source=project(),productId=`sha256:${"c".repeat(64)}` as const;
+    const checked=createGeneralCheckBlueprint(declared(),intent,999,"cancun",undefined,undefined,productId);
+    const bound=createContractProject({compiler:source.compiler,sources:source.sources,entrypoints:source.entrypoints},intent,999,undefined,undefined,productId);
+    expect(bound.hash).not.toBe(source.hash);
+    expect(checkedGeneralCheckBlueprint(checked,intent).productBlueprintId).toBe(productId);
+    expect(bindGeneralCheckBlueprint(checked,bound).projectHash).toBe(bound.hash);
+    expect(()=>bindGeneralCheckBlueprint(checked,source)).toThrow();
+    expect(()=>checkedGeneralCheckBlueprint({...checked,productBlueprintId:`sha256:${"d".repeat(64)}`},intent)).toThrow();
+    expect(bindGeneralCheckBlueprint(createGeneralCheckBlueprint(declared(),intent,999,"cancun"),source)).toBeDefined();
+  });
   it("is defined without implementation source and binds the same oracle to different implementations",()=>{
     const raw=declared(),blueprint=createGeneralCheckBlueprint(raw,intent,999,"cancun");
     expect(blueprint).not.toHaveProperty("sources");expect(blueprint).not.toHaveProperty("projectHash");expect(blueprint).not.toHaveProperty("launchReady");

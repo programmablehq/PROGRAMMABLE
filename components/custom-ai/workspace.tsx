@@ -32,6 +32,8 @@ import { bindPromptHandoff, createPromptHandoff, type PromptHandoff } from "@/li
 import { cachedGeneralProjectView, type GeneralProjectView } from "@/lib/custom-ai/project-view";
 import { cachedProjectOverview, overviewFromView, type ProjectOverview } from "@/lib/custom-ai/project-overview";
 import { GeneralProjectPreview } from "./general-preview";
+import { ProductPlan } from "./product-plan";
+import { restoredProductBlueprint, type ProductBlueprint } from "@/lib/custom-ai/product/blueprint";
 import { ProjectSource } from "./project-source";
 import { builderChain } from "@/lib/custom-ai/execution-routing";
 import { CHAT_MESSAGE_LIMIT, pastedMessageFits, workspaceState } from "@/lib/custom-ai/workspace-state";
@@ -91,7 +93,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const cacheScope=library?.cacheScope;
   const headers: AISessionHeaders=useCallback(async():Promise<Record<string,string>>=>({...await sessionHeaders(),...(cacheScope?{"X-Custom-AI-Cache-Scope":cacheScope}:{})}),[sessionHeaders,cacheScope]);
   type RetryBase = { messages: ChatMessage[]; pendingChange?: string };
-  type PreviousCoin = StudioState & { draft?: Draft; generalProject?:GeneralProjectView;sourceRecovery?:ProjectOverview;intent?: LaunchIntent; imageBlob?: Blob; input?: string; editTarget?: EditTarget; request?: ChatRequest; retryBase?: RetryBase };
+  type PreviousCoin = StudioState & { draft?: Draft; generalProject?:GeneralProjectView;sourceRecovery?:ProjectOverview;intent?: LaunchIntent; productBlueprint?:ProductBlueprint; imageBlob?: Blob; input?: string; editTarget?: EditTarget; request?: ChatRequest; retryBase?: RetryBase };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -112,6 +114,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const sourceId=sourceRecovery?.requestId;
   const latestAttempt=useRef<string|undefined>(undefined);
   const [intent, setIntent] = useState<LaunchIntent>();
+  const [productBlueprint,setProductBlueprint]=useState<ProductBlueprint>();
   const [settings, setSettings] = useState(EMPTY_COIN_SETUP);
   const [draftId, setDraftId] = useState<string>();
   const [contextId, setContextId] = useState<string>();
@@ -213,6 +216,9 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       else setSourceRecovery(overviewFromView(request.id,data.generalProject));
     }
     if(data.intent)setIntent(data.intent);
+    setProductBlueprint(current=>data.intent
+      ?restoredProductBlueprint(data.productBlueprint??current,data.intent,data.setupPatch?.chainId??request.coin?.chainId??1)
+      :data.setupPatch?.chainId&&current?.chainId!==data.setupPatch.chainId?undefined:current);
     if(data.change==="applied")setEditTarget(undefined);
     if(data.setupPatch){setSettings(current=>applyCoinSetupPatch(current,data.setupPatch!));setChatRevision(value=>value+1);}
     setContextId(request.id);
@@ -286,6 +292,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           if (saved.draft && typeof saved.draft.source === "string") setDraft(saved.draft);
           setGeneralProject(cachedGeneralProjectView(saved.generalProject));setSourceRecovery(sourceRecovery);
           setIntent(cachedLaunchIntent(saved.intent) ?? cachedLaunchIntent(saved.draft?.intent));
+          setProductBlueprint(restoredProductBlueprint(saved.productBlueprint,cachedLaunchIntent(saved.intent)??cachedLaunchIntent(saved.draft?.intent),settings.chainId));
           if (typeof saved.draftId === "string") setDraftId(saved.draftId);
           retry.current = saved.retry ? parseChatRequest(saved.retry) : null;
           setEditTarget(saved.editTarget ?? retry.current?.editTarget);
@@ -315,6 +322,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
               setDraftId(server.state.draftId); setDraft(server.draft); setImageReceipt(server.state.image);
               setGeneralProject(server.generalProject);setSourceRecovery(server.sourceRecovery);
               setIntent(server.intent ?? server.draft?.intent);
+              setProductBlueprint(restoredProductBlueprint(server.productBlueprint,server.intent??server.draft?.intent,server.state.settings.chainId));
               setContextId(server.state.contextId); setPendingChange(server.state.pendingChange);
               retry.current=null;setRecoveryRequest(undefined);
               setInput(server.state.input??"");setEditTarget(server.state.editTarget);
@@ -347,11 +355,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   }, [storageKey, legacyStorageKey, localPreview, owner, restoreRevision,conversationId]);
   useEffect(() => {
     if (!restored || owner === "signed-out") return;
-    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, input, editTarget, settings, draft, generalProject,sourceRecovery,intent, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,retryBase:retryBase.current,
+    void writeDraftCache(storageKey, JSON.stringify({ version: 1, messages, input, editTarget, settings, draft, generalProject,sourceRecovery,intent,productBlueprint, draftId, contextId, pendingChange, image: imageReceipt, retry: retry.current,retryBase:retryBase.current,
       // Keep the last shared version so a failed save survives a reload.
       syncBase: cachedBase.current }))
       .catch(() => setNotice("This browser could not save your draft. Keep this tab open."));
-  }, [storageKey, owner, restored, messages, input, editTarget, settings, draft, generalProject,sourceRecovery,intent, draftId, contextId, pendingChange, imageReceipt, saveRevision]);
+  }, [storageKey, owner, restored, messages, input, editTarget, settings, draft, generalProject,sourceRecovery,intent,productBlueprint, draftId, contextId, pendingChange, imageReceipt, saveRevision]);
 
   useEffect(() => {
     saveQueue.current.invalidate();
@@ -401,6 +409,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       setGeneralProject(server?.generalProject);setSourceRecovery(server?.sourceRecovery);
       setBuildIssue(server?.buildIssue);
       setIntent(server?.intent ?? server?.draft?.intent);
+      setProductBlueprint(restoredProductBlueprint(server?.productBlueprint,server?.intent??server?.draft?.intent,server?.state.settings.chainId??settings.chainId));
       setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
       setContextId(server?.state.contextId); setPendingChange(server?.state.pendingChange);
       setInput(server?.state.input??"");setEditTarget(server?.state.editTarget);
@@ -455,12 +464,12 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     if(navigation){await navigation.newChat();return;}
     coinTransition.current = true; setSwitchingCoin(true);
     try {
-    const previous = { messages, settings, draft, generalProject,sourceRecovery,intent, draftId, contextId, pendingChange, image: imageReceipt, input, editTarget, request: retry.current ?? undefined,retryBase:retryBase.current,
+    const previous = { messages, settings, draft, generalProject,sourceRecovery,intent,productBlueprint, draftId, contextId, pendingChange, image: imageReceipt, input, editTarget, request: retry.current ?? undefined,retryBase:retryBase.current,
       imageBlob: await readDraftCache<Blob>(`${storageKey}:image`) ?? undefined };
     await writeDraftCache(`${storageKey}:previous`, previous);
     setPreviousCoin(previous);
     await writeDraftCache(`${storageKey}:image`, null);
-    setMessages([]); setSettings(EMPTY_COIN_SETUP); setDraft(undefined);setGeneralProject(undefined);setSourceRecovery(undefined); setIntent(undefined); setDraftId(undefined);
+    setMessages([]); setSettings(EMPTY_COIN_SETUP); setDraft(undefined);setGeneralProject(undefined);setSourceRecovery(undefined); setIntent(undefined);setProductBlueprint(undefined); setDraftId(undefined);
     setBuildIssue(undefined);
     setContextId(undefined); setPendingChange(undefined); setImageReceipt(undefined); retry.current = null;
     setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
@@ -479,6 +488,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     setGeneralProject(previousCoin.generalProject);setSourceRecovery(previousCoin.sourceRecovery);
     setBuildIssue(undefined);
     setIntent(previousCoin.intent ?? previousCoin.draft?.intent);
+    setProductBlueprint(restoredProductBlueprint(previousCoin.productBlueprint,previousCoin.intent??previousCoin.draft?.intent,previousCoin.settings.chainId));
     setDraftId(previousCoin.draftId); setContextId(previousCoin.contextId); setPendingChange(previousCoin.pendingChange);
     setImageReceipt(previousCoin.image); retry.current = previousCoin.request ?? null; setInput(previousCoin.input ?? ""); setError("");
     retryBase.current=previousCoin.retryBase??{messages:previousCoin.messages,pendingChange:previousCoin.pendingChange};recovered.current=undefined;setRecoveryRequest(previousCoin.request);
@@ -487,7 +497,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     textarea.current?.focus();
     } finally { coinTransition.current = false; setSwitchingCoin(false); }
   }
-  async function restoreVersion(version:Pick<StoredStudio,"state"|"draft"|"generalProject"|"intent">){
+  async function restoreVersion(version:Pick<StoredStudio,"state"|"draft"|"generalProject"|"intent"|"productBlueprint">){
     if(busy||recoveryRequest||coinTransition.current||launchLocked||!version.draft&&!version.generalProject)return;
     setLaunchCommand(undefined);
     coinTransition.current=true;setSwitchingCoin(true);
@@ -498,6 +508,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     setGeneralProject(version.generalProject);setSourceRecovery(undefined);
     setBuildIssue(undefined);
     setIntent(version.intent ?? version.draft?.intent);
+    setProductBlueprint(restoredProductBlueprint(version.productBlueprint,version.intent??version.draft?.intent,version.state.settings.chainId));
     setContextId(state.contextId);setPendingChange(state.pendingChange);setImageReceipt(state.image);
     retry.current=null;setInput("");setError("");setNotice("Saved rules restored.");setPreviewRevision(v=>v+1);
     setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
@@ -541,7 +552,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
 
   const generalBuilt = generalProject?.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
-    && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision && generalLaunchEnabled;
+    && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision
+    && generalProject.productBlueprintId === productBlueprint?.id && generalLaunchEnabled;
   const feeBuilt = draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
     && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
   const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
@@ -603,7 +615,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         if(conversationId&&request!==previousRequest){const saved=await flushCurrent(true);request.conversation={id:conversationId,account:owner,revision:saved!.revision};}
         retry.current=request;retryBase.current=base;
         try{
-          await writeDraftCache(storageKey,JSON.stringify({version:1,messages:next,input:"",editTarget,settings,draft,generalProject,sourceRecovery,intent,draftId,contextId,pendingChange:content,image:imageReceipt,
+          await writeDraftCache(storageKey,JSON.stringify({version:1,messages:next,input:"",editTarget,settings,draft,generalProject,sourceRecovery,intent,productBlueprint,draftId,contextId,pendingChange:content,image:imageReceipt,
             retry:request,retryBase:base,syncBase:cachedBase.current}));
           setRequestSaved(true);
         }catch{retry.current=previousRequest;retryBase.current=previousRetryBase;throw Error("This browser could not save the new request. Your previous saved request is kept.");}
@@ -630,7 +642,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       const saved=await flushCurrent(true);request.conversation!.revision=saved!.revision;
       retry.current=request;retryBase.current=base;
       try{
-        await writeDraftCache(storageKey,JSON.stringify({version:1,messages,input,editTarget,settings,draft,generalProject,sourceRecovery,intent,draftId,contextId,pendingChange,image:imageReceipt,
+        await writeDraftCache(storageKey,JSON.stringify({version:1,messages,input,editTarget,settings,draft,generalProject,sourceRecovery,intent,productBlueprint,draftId,contextId,pendingChange,image:imageReceipt,
           retry:request,retryBase:base,syncBase:cachedBase.current}));setRequestSaved(true);
       }catch{retry.current=previousRequest;retryBase.current=previousBase;throw Error("This browser could not save the build request. Your source is kept.");}
     },onResult:data=>applyReply(request,data,base.messages,base.pendingChange),onFailure:cause=>restoreFailedReply(request,cause,base),onSettled:()=>replySettled(false)});
@@ -649,6 +661,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     finally{coinTransition.current=false;setSwitchingCoin(false);}
   }
 
+  const productPanel=productBlueprint&&productBlueprint.chainId===settings.chainId&&productBlueprint.intentRevision===intent?.revision&&<ProductPlan blueprint={productBlueprint}/>;
   const sourcePanel=sourceRecovery&&<ProjectSource key={sourceRecovery.requestId} source={sourceRecovery} chainId={settings.chainId} account={owner} conversationId={conversationId} headers={headers}
     disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored||launchLocked||saveFailed||Boolean(conflict)} recovery
     onCompile={source=>void retryCompilation(source)} onEdit={source=>void editSavedSource(source)}/>;
@@ -805,7 +818,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       generalLaunchEnabled={generalLaunchEnabled} pendingChange={pendingChange} flush={()=>flushCurrent(true)} onLaunchLocked={setLaunchLocked}
       launchCommand={launchCommand}
       onEditRule={requirementId=>{if(generalProject&&!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
-      {sourcePanel}
+      {productPanel}{sourcePanel}
     </GeneralProjectPreview>:<CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
       draftId={draftId} headers={headers} localPreview={localPreview} cacheKey={storageKey} onLaunchLocked={setLaunchLocked}
       imageReceipt={imageReceipt} onImageReceipt={updateImageReceipt} pendingChange={busy ? undefined : pendingChange}
@@ -813,6 +826,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       launchCommand={launchCommand}
       onKeepRules={() => {
         setIntent(draft?.intent);
+        setProductBlueprint(current=>restoredProductBlueprint(current,draft?.intent,settings.chainId));
         setPendingChange(undefined); setContextId(draftId); setEditTarget(undefined);
         retry.current = null; setNotice("Keeping the previous rules.");
       }}
@@ -821,7 +835,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         setEditTarget({ sourceHash: draft.sourceHash, requirementId });
         textarea.current?.focus();
       }}
-      onStartAnother={() => { void startAnother().catch(() => setError("The previous coin could not be saved on this device. Try again.")); }}>{sourcePanel}</CustomAILaunchPreview>}
+      onStartAnother={() => { void startAnother().catch(() => setError("The previous coin could not be saved on this device. Try again.")); }}>{productPanel}{sourcePanel}</CustomAILaunchPreview>}
     </div>
     </div>}
     </div>

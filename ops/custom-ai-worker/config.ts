@@ -2,6 +2,7 @@ import { getAddress, type Address } from "viem";
 import type { RuleFeedBinding } from "../../lib/custom-ai/rule-compiler.server";
 import type { FeedDefinition } from "../../lib/custom-ai/feed-adapters/source.server";
 import manifest from "../../lib/custom-ai/composable-manifest.json";
+import { createJSONDataAdapter } from "../../lib/custom-ai/feed-adapters/json.server";
 
 export type WorkerNetwork = { chainId:1|4663; programFactory:Address; signerKeyEnv:string; priceKeyEnv:string;
   rpcEnvs:[string,string]; transactionLimitWei:bigint; dailyLimitWei:bigint;
@@ -18,10 +19,15 @@ export function parseWorkerConfig(raw:string):WorkerNetwork[] {
     if(transactionLimitWei>dailyLimitWei)throw Error("Transaction budget exceeds daily budget");
     const feeds=(n.feeds as WorkerNetwork["feeds"]).map(f=>{
       const d=f.definition,b=f.binding;
+      const range=d?.kind==="json"?/^-?\d{1,77}$/:/^\d{1,30}$/;
       if(!d||!b||!/^[-a-z0-9]{1,64}$/.test(b.id)||b.id!==d.id||b.sourceVersion!==d.sourceVersion||!/^0x[0-9a-f]{64}$/i.test(b.runtimeHash)||!/^0x[0-9a-f]+$/i.test(b.runtimeCode)
-        ||!/^\d{1,30}$/.test(b.minimum)||!/^\d{1,30}$/.test(b.maximum)||BigInt(b.minimum)>BigInt(b.maximum)
+        ||!range.test(b.minimum)||!range.test(b.maximum)||BigInt(b.minimum)>BigInt(b.maximum)
         ||d.maxAgeSeconds!==b.maxAge||!Number.isSafeInteger(b.maxAge)||b.maxAge<60||b.maxAge>3600)throw Error("Invalid worker data source");
-      if(d.kind==="market"){
+      if(d.kind==="json"){
+        const adapter=createJSONDataAdapter(d.adapter?.definition);
+        if(adapter.id!==d.id||adapter.implementationHash!==d.sourceVersion||adapter.id!==d.adapter.id||adapter.implementationHash!==d.adapter.implementationHash
+          ||adapter.definition.maxAgeSeconds!==d.maxAgeSeconds||adapter.definition.minimum!==b.minimum||adapter.definition.maximum!==b.maximum)throw Error("Invalid JSON data source binding");
+      }else if(d.kind==="market"){
         if(d.sourceVersion!=="programmable-market-usd6-v1"||d.unit!=="micro-USD"||![1,4663].includes(d.chainId)||!/^0x[0-9a-f]{40}$/i.test(d.token)||!["priceUsd","marketCapUsd","volume24hUsd"].includes(d.metric))throw Error("Invalid market data source");
       }else{
         if(d.kind!=="model"||d.unit!=="mm"||!Number.isFinite(d.latitude)||Math.abs(d.latitude)>90||!Number.isFinite(d.longitude)||Math.abs(d.longitude)>180)throw Error("Invalid weather data source");

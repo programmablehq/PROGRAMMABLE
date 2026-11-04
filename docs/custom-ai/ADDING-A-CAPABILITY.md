@@ -12,6 +12,8 @@ Test the new adapter and its planner/dispatch integration. Search-only changes d
 
 ## Reusable source implementations
 
+Public JSON observation readers can use the declarative, account-owned `data_adapter` capability described in [DATA-ADAPTERS.md](DATA-ADAPTERS.md). It validates a current source observation and records an immutable definition before reuse. It grants no code execution, external writes, credentials or onchain publication. Add a new execution capability separately when those are required.
+
 Keep implementation references under `lib/custom-ai/implementation-patterns/`. They are editable starting code, not deployed contracts or approval evidence. `implementation-patterns.ts` matches the complete ABI and construction shape, maps contract identities together and binds the selected chain's canonical PoolManager and protection module. Missing or incompatible bindings use the existing source writer.
 
 Include concise interface semantics with each reference: index conventions, return values versus reverts, observation windows and accounting effects of internal calls. The independent planner receives these facts and the selected coin's initial buy without receiving generated source. Equivalent ABI formatting and parameter names are normalized; return types and mutability must still match.

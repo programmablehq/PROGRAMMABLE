@@ -180,13 +180,13 @@ describe("complete launch intent and source revisions", () => {
   it("replays the real Surplus design and follow-up through the current server without provider calls", async () => {
     let index=0;
     const call=vi.fn(async(input:{schema:object})=>{
-      // Keep the recorded design and reply. New optional coin metadata was
-      // absent in 2.4, so its current schema values are explicitly null.
+      // Keep the recorded design and reply. Metadata and the product-plan
+      // field absent in 2.4 are explicitly null in the current envelope.
       const original=recording.responses[index++];
       const {requirements,...recorded}=original;
       // Translate only exact known old labels into the new identity field;
       // this historical recording must not gain inferred rule coverage.
-      const captured={...recorded,intentMode:"revise",launchRequested:false,reviseChecks:false,replyLocale:"en",implementedRequirementIds:original.intentRequirements.filter(rule=>requirements.includes(rule.text)).map(rule=>rule.id),
+      const captured={...recorded,productPlan:null,intentMode:"revise",launchRequested:false,reviseChecks:false,replyLocale:"en",implementedRequirementIds:original.intentRequirements.filter(rule=>requirements.includes(rule.text)).map(rule=>rule.id),
         executionRoute:"fee-module",setupPatch:{description:null,website:null,x:null,socialPost:null,...original.setupPatch}};
       const properties=(input.schema as {properties?:Record<string,unknown>}).properties;
       // Short explanatory follow-ups now use the cheaper reply-only contract.

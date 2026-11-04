@@ -34,6 +34,7 @@ import {sourceFoundation} from "./source-foundation.server";
 import {editSourceFoundation} from "./source-editor.server";
 import {repairCompilerSource} from "./source-repair.server";
 import {canonicalBrowserJsonV2} from "@/lib/custom-launch/browser-authority-v2";
+import {checkedProductBlueprint,type ProductBlueprint} from "./product/blueprint";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -55,6 +56,7 @@ export type GeneralProjectDraft = { version: 1; reply: string; summary: string; 
   blueprintId?:GeneralCheckBlueprint["id"];scenarios?:GeneralScenarioReport;
   selection: ReturnType<typeof selectExecutionRoute>; requirementCoverage: "proposed"; launchReady: false };
 type Input = { intent: LaunchIntent; chainId: BuilderChainId; messages: ChatMessage[]; evmVersion: "paris" | "cancun";
+  productBlueprint?:ProductBlueprint;
   dependencySources?: ContractProject["sources"]; availableDependencySources?: ContractProject["sources"]; previous?: ContractProject; blueprint?:GeneralCheckBlueprint; onProgress?: (event: ChatProgress) => void;
   production?: LaunchProductionContext;
   saveProject: (project: ContractProject) => Promise<void>;
@@ -80,7 +82,9 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     ...(input.availableDependencySources ? { availableDependencySources: structuredClone(input.availableDependencySources) } : {}) };
   const { call, compile } = dependencies;
   const { intent, chainId } = input, chain = builderChain(chainId);
+  const productBlueprint=input.productBlueprint?checkedProductBlueprint(input.productBlueprint,intent,chainId):undefined;
   const blueprint=input.blueprint?checkedGeneralCheckBlueprint(input.blueprint,intent):undefined;
+  if(blueprint&&blueprint.productBlueprintId!==productBlueprint?.id)throw new CustomAIError("behavior-context","The product plan changed. Keep its source and checks on the same saved revision.",409);
   const production=input.production?checkedLaunchProductionContext(input.production,chainId):undefined;
   if(blueprint&&blueprint.production?.id!==production?.id)throw new CustomAIError("behavior-context","Keep the source and declared checks on their saved launch configuration.",409);
   if(blueprint&&(blueprint.chainId!==chainId||blueprint.compiler.evmVersion!==input.evmVersion))throw new CustomAIError("behavior-context","Keep the declared contract checks on their saved network and compiler target.",409);
@@ -132,12 +136,13 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   const metadataSource=input.previous;
   if(metadataSource?.deployment&&production&&blueprint?.deployment
     &&metadataSource.production?.id===production.id
+    &&metadataSource.productBlueprintId===productBlueprint?.id
     &&canonicalBrowserJsonV2(metadataSource.intent)===canonicalBrowserJsonV2(intent)
     &&canonicalBrowserJsonV2(metadataSource.entrypoints)===canonicalBrowserJsonV2(blueprint.entrypoints)
     &&canonicalBrowserJsonV2(metadataSource.compiler)===canonicalBrowserJsonV2(blueprint.compiler)){
     const metadata=bindCanonicalTokenMetadata(deploymentBlueprintInput(metadataSource.deployment));
     if(metadata.changed&&createGeneralDeploymentBlueprint(metadata.value,metadataSource.entrypoints,production,intent).id===blueprint.deployment.id){
-      const project=createContractProject({compiler:metadataSource.compiler,sources:metadataSource.sources,entrypoints:metadataSource.entrypoints},intent,chainId,production,blueprint.deployment);
+      const project=createContractProject({compiler:metadataSource.compiler,sources:metadataSource.sources,entrypoints:metadataSource.entrypoints},intent,chainId,production,blueprint.deployment,productBlueprint?.id);
       return finish(project,"The coin name and ticker now use your selected details. The existing contract code has been retained and checked again.","Coin metadata binding updated");
     }
   }
@@ -187,10 +192,10 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   if(blueprint&&paths.length===0){
     const pinned=Object.fromEntries(blueprint.entrypoints.map(entry=>[entry.source,librarySources[entry.source]??dependencySources[entry.source]]));
     const sources=resolveInlineLibraries({...previousSources,...dependencySources,...pinned},librarySources,compiler);
-    return finish(createContractProject({compiler,sources,entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment),
+    return finish(createContractProject({compiler,sources,entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment,productBlueprint?.id),
       "Using the exact existing contract sources.","Saved design using the existing source library");
   }
-  const commonContext = { intent: modelDesignContext({ intent }, false).intent,
+  const commonContext = { intent: modelDesignContext({ intent }, false).intent, ...(productBlueprint?{productBlueprint}:{}),
     dependencySources: dependencyContext.modelSources, dependencySourceView: dependencyContext.view, previous,
     ...(compiler.viaIR?{compilerImportAliases:VIAIR_200_REMAPPINGS}:{}),
     ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production,uniswapRouting:uniswapRoutingContext(production)}:{}) };
@@ -239,7 +244,7 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
   let referenceFindings:GeneralSourceAudit["findings"]|undefined;
   if(foundation&&blueprint&&input.auditSource&&!cached){
     const roots=Object.fromEntries(blueprint.entrypoints.flatMap(entry=>librarySources[entry.source]?[[entry.source,librarySources[entry.source]]]:[]));
-    const candidate=createContractProject({compiler,sources:resolveInlineLibraries({...dependencySources,...roots,...foundation.sources},librarySources,compiler),entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment);
+    const candidate=createContractProject({compiler,sources:resolveInlineLibraries({...dependencySources,...roots,...foundation.sources},librarySources,compiler),entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment,productBlueprint?.id);
     input.onProgress?.({type:"phase",phase:"checking"});
     const compilation=await compile(structuredClone(candidate),signal);
     if(compilation.compiled){
@@ -294,13 +299,13 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     returnedPaths.add(file.path);
     sources[file.path] = { content: file.content };
   }
-  const project = createContractProject({ compiler, sources: resolveInlineLibraries(sources, librarySources, compiler), entrypoints: answer.entrypoints }, intent, chainId, production, blueprint?.deployment);
+  const project = createContractProject({ compiler, sources: resolveInlineLibraries(sources, librarySources, compiler), entrypoints: answer.entrypoints }, intent, chainId, production, blueprint?.deployment,productBlueprint?.id);
   if(correctionPolicy.deferredSave)correctionPolicy.repair=async(current,compilation)=>{
     const repaired=await repairCompilerSource({project:current,compilation,
       request:{...generation,...modelTask("source-edit",configuredProvider().models)},
       remainingTokens:Math.max(0,AI_CONFIG.maximumContractTokens-(response.outputTokens??AI_CONFIG.maximumContractTokens)),
       immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)])},call);
-    return repaired?createContractProject({compiler,sources:repaired,entrypoints:current.entrypoints},intent,chainId,production,blueprint?.deployment):undefined;
+    return repaired?createContractProject({compiler,sources:repaired,entrypoints:current.entrypoints},intent,chainId,production,blueprint?.deployment,productBlueprint?.id):undefined;
   };
   return finish(project,answer.reply as string,answer.summary as string);
 }
