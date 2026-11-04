@@ -1,7 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Square, Wallet, X } from "lucide-react";
 import { parseChatRequest, type AIUsage, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
@@ -66,9 +66,10 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
   const acceptPrompt=(id:string)=>setPendingPrompt(current=>current?.id===id?undefined:current);
   const boundPrompt=pendingPrompt?.principal===wallet.sessionOwner&&pendingPrompt?.account===owner?pendingPrompt:undefined;
   const connectPrompt=(content:string)=>{
-    setPendingPrompt(createPromptHandoff(content));
+    setPendingPrompt(content.trim()?createPromptHandoff(content):undefined);
     wallet.openWallet();
   };
+  const invalidatePrompt=(content:string)=>setPendingPrompt(current=>current&&current.content!==content.trim()?undefined:current);
   const headers: AISessionHeaders = async (): Promise<Record<string, string>> => {
     if (localPreview) return {};
     const access = await wallet.getAccessToken();
@@ -79,10 +80,11 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
   };
   if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <SessionLoading onReconnect={wallet.openWallet}/>;
   if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
-  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} onConnectPrompt={connectPrompt}/>;
+  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} onConnectPrompt={connectPrompt} onGuestInput={invalidatePrompt}/>;
 }
 
-function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, initialPrompt, onPromptAccepted, onConnectPrompt }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void }) {
+function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, initialPrompt, onPromptAccepted, onConnectPrompt, onGuestInput }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void; onGuestInput?:(content:string)=>void }) {
+  const wallet=useWallet(),signedOut=!localPreview&&owner==="signed-out";
   const incomingPrompt=useRef(initialPrompt?{prompt:initialPrompt,accept:onPromptAccepted}:undefined);
   const library=useChatLibrary(),conversationId=library?.id,navigation=library?.navigation;
   const cacheScope=library?.cacheScope;
@@ -561,14 +563,10 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       setNotice("Send or clear your draft message before continuing the saved build.");textarea.current?.focus();return;
     }
     const content = (contentOverride??input).trim();
+    if(signedOut){connectCurrentIdea(content);return;}
     if (!content) { textarea.current?.focus(); return; }
     if (input.length > CHAT_MESSAGE_LIMIT) { setInputError("Keep this message within 8,000 characters. Your text is still here."); textarea.current?.focus(); return; }
     setInputError("");
-    if(!localPreview&&owner==="signed-out"){
-      try{onConnectPrompt?.(content);setError("");setNotice("Connect your wallet. Your message stays here.");}
-      catch(cause){setError(cause instanceof Error?cause.message:"Your message could not be prepared.");}
-      return;
-    }
     const launchLocale = directLaunchCommand(content);
     if (launchLocale && showOutcome && !retry.current && !recoveryRequest) {
       followReply.current = true; setShowLatest(false); setInput("");
@@ -615,6 +613,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     });
   }
 
+  function connectCurrentIdea(content=input.trim()) {
+    try { onConnectPrompt?.(content); setError(""); setNotice("Complete the wallet connection. Your idea stays here."); }
+    catch(cause) { setError(cause instanceof Error?cause.message:"Your message could not be prepared."); }
+  }
+
   async function retryCompilation(source:ProjectOverview){
     if(localPreview||!conversationId||replyRef.current.isActive()||recoveryRequest||coinTransition.current||!restored||launchLocked||saveFailed||conflict)return;
     if(settings.chainId!==source.chainId){setError("Keep this source on its saved network or prepare a new revision.");return;}
@@ -650,6 +653,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     onCompile={source=>void retryCompilation(source)} onEdit={source=>void editSavedSource(source)}/>;
 
   const attachImage = async (file: File) => {
+    if(signedOut){setInputError("Connect your wallet before adding a coin image.");return;}
     if (activity.blocked || imageBusy) return;
     setLaunchCommand(undefined);
     if (await coinEditor.current?.chooseImage(file)) setNotice("Coin image updated.");
@@ -664,12 +668,17 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   };
 
   return <div ref={workspaceElement} className={styles.workspace}>
-    <div className={styles.studio}>
-    <section className={styles.conversation} aria-label="Build your coin" data-chat-state={activity.id}
+    <div className={styles.studio} data-guest={signedOut||undefined}>
+    <section className={styles.conversation} aria-label="Build your coin" data-chat-state={signedOut?"wallet-required":activity.id}
       data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}
       onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
       onDrop={event => { const file = event.dataTransfer.files[0]; if (file) { event.preventDefault(); void attachImage(file); } }}>
       <WorkspaceTools name={settings.name} hasDraft={Boolean(draft||generalProject)} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
+        guest={signedOut} access={!localPreview&&<button type="button" className={styles.walletAccess} aria-haspopup="dialog"
+          aria-label={signedOut?"Connect wallet":`Connected wallet ${owner}. Manage wallet`}
+          disabled={launchLocked||switchingCoin||!restored} onClick={()=>signedOut?connectCurrentIdea():wallet.openWallet()}>
+          <Wallet size={16} aria-hidden="true"/>{signedOut?"Connect wallet":`${owner.slice(0,6)}…${owner.slice(-4)}`}
+        </button>}
         navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)}
         canClear={Boolean(messages.length)} hasPrevious={(!navigation||conversationId===LEGACY_CONVERSATION)&&Boolean(previousCoin)}
         onNewCoin={() => { void startAnother().catch(() => setError("Your current coin could not be saved. Try again.")); }}
@@ -695,10 +704,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         }}>
         {!messages.length && !busy && <div className={styles.empty}>
           <h2>{draft||generalProject ? "Keep shaping your coin" : "What are we building?"}</h2>
-          <p>{draft||generalProject ? "Your saved rules are still here. Tell me what you’d like to change." : "Describe your idea. Shape the rules here, then launch from your wallet."}</p>
+          <p>{signedOut?"Connect your wallet to build and save your hook. You can write your idea first."
+            :draft||generalProject ? "Your saved rules are still here. Tell me what you’d like to change." : "Describe your idea. Shape the rules here, then launch from your wallet."}</p>
           <div className={styles.starterIdeas} aria-label="Ideas to get started">
             {starterIdeas.map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked}
-              onClick={() => { setInput(idea.prompt); textarea.current?.focus(); }}>{idea.title}<ArrowUp size={15} aria-hidden="true" /></button>)}
+              onClick={() => { setInput(idea.prompt); onGuestInput?.(idea.prompt); textarea.current?.focus(); }}>{idea.title}<ArrowUp size={15} aria-hidden="true" /></button>)}
           </div>
         </div>}
         {messages.map((message, index) => <article className={styles.message} key={index} data-role={message.role}>
@@ -716,7 +726,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       {showLatest && messages.length > 0 && <button type="button" className={styles.jumpToLatest} onClick={() => {
         followReply.current = true; followLatest(); setShowLatest(false);
       }}>Latest message<ArrowDown size={14} aria-hidden="true" /></button>}
-      <ChatProgressIndicator key={imageBusy ? "image" : activity.id} label={imageBusy ? "Saving your image…" : activity.blocked ? activity.message : notice || activity.message}
+      <ChatProgressIndicator key={imageBusy ? "image" : activity.id} label={imageBusy ? "Saving your image…" : activity.blocked ? activity.message : notice || (signedOut?"Connect your wallet to start building. Your idea stays here.":activity.message)}
         working={busy || imageBusy || Boolean(recoveryRequest) || switchingCoin || !restored} visible={imageBusy || activity.blocked || Boolean(notice)} />
       {notice && activity.blocked && notice !== activity.message && <p className={styles.notice}>{notice}</p>}
       {conflict && <div className={styles.saveActions}>
@@ -747,11 +757,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       {inputError && <p id="custom-ai-input-error" className={styles.error} role="alert">{inputError}</p>}
       <form className={styles.composer} aria-label="Message Custom AI" onSubmit={event => { event.preventDefault(); void send(); }}
         >
-        <ImageAttachments disabled={activity.blocked || imageBusy} onChoose={() => { setLaunchCommand(undefined); coinEditor.current?.focus("image"); }} onURL={attachImageURL} />
+        {!signedOut&&<ImageAttachments disabled={activity.blocked || imageBusy} onChoose={() => { setLaunchCommand(undefined); coinEditor.current?.focus("image"); }} onURL={attachImageURL} />}
         <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
         <textarea ref={textarea} id="custom-ai-message" name="message" autoComplete="off" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={switchingCoin || !restored || launchLocked}
           aria-invalid={Boolean(inputError)} aria-describedby={["custom-ai-help", "custom-ai-state", error && "custom-ai-error", inputError && "custom-ai-input-error", editTarget && "custom-ai-edit-scope"].filter(Boolean).join(" ")}
-          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setLaunchCommand(undefined); setInput(event.target.value); setInputError(""); }}
+          placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setLaunchCommand(undefined); setInput(event.target.value); onGuestInput?.(event.target.value); setInputError(""); }}
           onPaste={event => {
             const image = [...event.clipboardData.files].find(file => file.type.startsWith("image/"));
             if (image) { event.preventDefault(); void attachImage(image); return; }
@@ -772,7 +782,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
             void replyRef.current.stop();
           }}>
           <Square size={15} strokeWidth={1.75} aria-hidden="true" />
-        </button> : <button type="submit" className={styles.send} disabled={activity.blocked || imageBusy} data-empty={!input.trim()} aria-label="Send message" aria-describedby="custom-ai-state">
+        </button> : <button type="submit" className={styles.send} disabled={activity.blocked || imageBusy} data-empty={!input.trim()} aria-label={signedOut?"Connect wallet to start building":"Send message"} aria-describedby="custom-ai-state">
           <ArrowUp size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>}
       </form>
@@ -780,7 +790,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. {editTarget && "Escape returns to the whole design and keeps your message. "}Messages are processed by the configured AI provider.</p>
     </section>
 
-    <div className={styles.coinFrame} data-expanded={coinPanelOpen}>
+    {!signedOut&&<div className={styles.coinFrame} data-expanded={coinPanelOpen}>
     <button type="button" className={styles.coinPanelToggle} aria-label="Coin preview and details" aria-expanded={coinPanelOpen} aria-controls="custom-ai-coin-panel"
       onClick={() => setCoinPanelOpen(current => !current)}>
       <span><strong>{settings.name || "Your coin"}</strong><small>{settings.symbol ? `$${settings.symbol} · ` : ""}{builderChain(settings.chainId).name}</small></span>
@@ -812,7 +822,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       }}
       onStartAnother={() => { void startAnother().catch(() => setError("The previous coin could not be saved on this device. Try again.")); }}>{sourcePanel}</CustomAILaunchPreview>}
     </div>
-    </div>
+    </div>}
     </div>
   </div>;
 }

@@ -4,9 +4,9 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Ellipsis, Plus, X } from "lucide-react";
 import styles from "./workspace.module.css";
 
-export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoin, onClearMessages, onRestorePrevious, navigation, children }: {
+export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoin, onClearMessages, onRestorePrevious, navigation, children, access, guest=false }: {
   name: string; hasDraft: boolean; disabled: boolean; canClear: boolean; hasPrevious: boolean;
-  onNewCoin: () => void; onClearMessages: () => void; onRestorePrevious: () => void; navigation?: ReactNode; children: ReactNode;
+  onNewCoin: () => void; onClearMessages: () => void; onRestorePrevious: () => void; navigation?: ReactNode; children: ReactNode; access?: ReactNode; guest?: boolean;
 }) {
   const tools = useRef<HTMLDetailsElement>(null);
   function closeTools() {
@@ -24,8 +24,9 @@ export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoi
   return <header className={styles.chatToolbar}>
       <div className={styles.chatIdentity}><p>{name.trim() || "New hook"}</p></div>
       <div className={styles.toolbarActions}>
+      {access}
       {navigation}
-      <details ref={tools} className={styles.tools} onKeyDown={event => {
+      {!guest&&<details ref={tools} className={styles.tools} onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); closeTools(); }
       }}>
         <summary aria-label="Chat options"><Ellipsis size={18} aria-hidden="true" /></summary>
@@ -41,7 +42,7 @@ export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoi
           </section>
           {children}
         </div>
-      </details>
+      </details>}
       </div>
   </header>;
 }

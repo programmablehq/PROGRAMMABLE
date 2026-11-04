@@ -10,7 +10,7 @@ export function SessionLoading({ onReconnect }: { onReconnect: () => void }) {
     return () => clearTimeout(timer);
   }, []);
   return <div className={`${styles.workspace} ${styles.libraryEmpty}`}>
-    <p role="status">{delayed ? "Your wallet session is taking longer to reconnect." : "Restoring your wallet session…"}</p>
+    <p role="status">{delayed ? "Your wallet connection is taking longer than expected." : "Checking your wallet connection…"}</p>
     {delayed && <><p>Your saved chats are kept. Reconnect your wallet to continue.</p>
       <button type="button" className={styles.textButton} onClick={onReconnect}>Reconnect wallet</button></>}
   </div>;

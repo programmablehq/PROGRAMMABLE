@@ -2,6 +2,8 @@
 
 Describe your coin or hook in the [Custom AI chat](https://programmable.market/launch/custom-ai). The chat keeps the agreed rules and explains which parts can be built on your selected network.
 
+Connect and sign in with your wallet before building or saving a hook. You can write your idea first and select **Connect wallet**; the current idea is kept for your signed-in chat. Coin details, images and launch controls become available after sign-in. The active wallet is shown in the chat toolbar. Connecting does not submit a launch transaction.
+
 Browser agents can use the same labelled controls and saved chats. The [browser workflow guide](https://programmable.market/developers/custom-ai-browser.md) describes input, progress and recovery. Read [live capabilities](https://programmable.market/api/custom-ai/capabilities) for the current network and launch-preparation scope.
 
 The fixed fee builder supports launches on Ethereum and Robinhood. Its accepted drafts do not need a manual submission review. General contract projects use a separate source, behavior-check and Custom Launch review process. Generating or compiling a project does not make it launch-ready.
