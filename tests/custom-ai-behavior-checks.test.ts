@@ -46,6 +46,8 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("exact general source in th
     const report=await checkGeneralScenarios(source,compiled,plan);
     expect(report).toMatchObject({passed:true,cases:7,scope:"isolated-declared-scenarios-v1",projectHash:source.hash,artifactHash:compiled.artifactHash,planHash:plan.id,launchReady:false});
     expect(report.failures).toEqual([]);expect(BigInt(report.gasUsed)).toBeGreaterThan(0n);
+    expect(report.execution).toMatchObject({environment:"isolated-declared-fixtures",networkAccess:false,gasFeesCharged:false,plannedSteps:5,executedSteps:5,detailsComplete:true});
+    expect(report.execution?.steps.filter(step=>step.read).map(step=>step.outputs[0].value)).toEqual(["0","1","2"]);
     const changed={...plan,intentRevision:"b".repeat(64)};
     await expect(checkGeneralScenarios(source,compiled,changed)).rejects.toMatchObject({code:"behavior-context"});
     const {artifactHash:discarded,...otherCompiler}={...compiled,compiler:"unbound-compiler"};void discarded;
@@ -70,6 +72,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("exact general source in th
       const source=project(`function fee() external pure returns(uint256){return ${rate};}`,design),compiled=await compileContractProject(source);
       const report=await checkGeneralScenarios(source,compiled,createGeneralCheckPlan(declared,source));
       expect(report.passed).toBe(passed);if(!passed)expect(report.failures[0].code).toBe("return-value");
+      expect(report.execution?.steps[0].outputs[0].value).toBe(String(rate));
     }
   });
   it("detects a hidden payment recipient even when a public getter tells the expected story",async()=>{
@@ -82,6 +85,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("exact general source in th
       const source=project(`function recipient() external pure returns(address){return address(0x1000000000000000000000000000000000000001);} function pay() external payable {(bool ok,)=payable(address(${recipient})).call{value:msg.value}(\"\");require(ok);}`,design),compiled=await compileContractProject(source);
       const report=await checkGeneralScenarios(source,compiled,createGeneralCheckPlan(declared,source));
       expect(report.passed).toBe(passed);if(!passed)expect(report.failures.some(failure=>failure.code==="unexpected-call")).toBe(true);
+      if(passed)expect(report.execution?.steps[1].nativeChanges.map(change=>[change.account,BigInt(change.after)-BigInt(change.before)])).toEqual([
+        ["account/creator",1000n],["account/trader-a",-1000n],
+      ]);
     }
   });
   it("keeps worker outages separate from a failed contract assertion",async()=>{

@@ -60,6 +60,8 @@ You can develop contract source for Ethereum, Robinhood, Base and HyperEVM in th
 
 Declared event checks compare the logs emitted by the actual local contract calls, including the emitting contract, values, order and count. A public counter or an event in the contract's ABI does not prove that the expected event was emitted. These checks are local examples, not evidence of a live launch.
 
+Expand **Simulation** to inspect the actual return values, events and native balance changes recorded during those calls. A failed expectation still shows the value the contract returned. The preview uses local test balances, raw units and no gas charges. It records bounded details from the existing execution, without another model call or blockchain transaction. Asking about a different scenario does not by itself execute that scenario.
+
 General projects also follow the selected network's mandatory Custom Launch policy. Temporary buyer limits count cumulative buys, and temporary recipient limits count cumulative token inflows, including wallet-to-wallet transfers. Sending tokens out does not restore that allowance. Tax-exempt wallets remain capped during the launch window; their exemption applies to the additional opening surcharge. The chat includes these fixed rules when you ask for normal ERC20 transfers and explains any explicit conflict in your design.
 
 A completed contract-check plan stays with its saved chat, design and network. Continuing after an interrupted source build reuses that plan; changing its rules or network requires a matching plan. The earlier source remains saved when an update fails. An independent source review can require changes before launch preparation is available.

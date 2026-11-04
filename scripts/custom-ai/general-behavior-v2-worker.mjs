@@ -3,12 +3,13 @@ import {join} from "node:path";
 import {createGeneralV4World} from "./general-v4-world.mjs";
 import {createGeneralProtectedV4World} from "./general-protected-v4-world.mjs";
 import {declaredEventsMatch} from "./declared-events.mjs";
+import {createExecutionRecorder} from "./execution-trace.mjs";
 const requireTool=createRequire(join(process.argv[2],"package.json"));
 let input="";process.stdin.setEncoding("utf8");
 process.stdin.on("data",chunk=>{input+=chunk;if(Buffer.byteLength(input)>6_000_000)process.exit(3);});
 process.stdin.on("end",async()=>{try{process.stdout.write(JSON.stringify(await check(JSON.parse(input))));}catch{process.exitCode=4;}});
 
-async function check({chainId,evmVersion,contracts,plan}){
+async function check({chainId,evmVersion,contracts,plan,recordExecution=false}){
  const {createVM}=requireTool("@ethereumjs/vm"),{createCustomCommon,Mainnet,Hardfork}=requireTool("@ethereumjs/common"),{createBlock}=requireTool("@ethereumjs/block");
  const {createAddressFromString,createAccount,hexToBytes,bytesToHex}=requireTool("@ethereumjs/util");
  const {parseAbi,toFunctionSignature,encodeDeployData,encodeFunctionData,encodeAbiParameters,getContractAddress,getCreate2Address,keccak256}=requireTool("viem");
@@ -17,6 +18,7 @@ async function check({chainId,evmVersion,contracts,plan}){
  const vm=await createVM({common}),accounts={creator:"0x1000000000000000000000000000000000000001","trader-a":"0x2000000000000000000000000000000000000002","trader-b":"0x3000000000000000000000000000000000000003"};
  for(const address of Object.values(accounts))await vm.stateManager.putAccount(createAddressFromString(address),createAccount({balance:10n**24n}));
  const deployed=new Map(),failures=[],frames=[],observed=new Set(),nextChild=new Map();
+ const recorder=recordExecution?createExecutionRecorder({vm,accounts,deployed,requireTool,plannedSteps:plan.steps.length,recipients:()=>plan.allowedCalls.map(reference=>value(reference))}):undefined;
  let cases=0,gasUsed=0n,number=1n,currentCase="setup",activeTargets=new Set(),world,expectedDeployment,currentConstructor;
  const abiType=parameter=>parameter.type.startsWith("tuple")?`(${(parameter.components??[]).map(abiType).join(",")})${parameter.type.slice(5)}`:parameter.type;
  const fail=(code,message)=>{if(failures.length<32)failures.push({caseId:currentCase,code,message:String(message).slice(0,500)});};
@@ -124,8 +126,10 @@ async function check({chainId,evmVersion,contracts,plan}){
   if(!failures.length)for(const step of plan.steps){
    currentCase=step.id;const target=deployed.get(step.contract),fn=target?.artifact.abi.find(item=>item.type==="function"&&toFunctionSignature(item)===step.signature);
    if(!fn){fail("undeclared-function","The declared call is absent from this contract interface.");break;}
+   const before=await recorder?.before();
    const result=await run({to:target.address,data:encodeFunctionData({abi:[fn],functionName:fn.name,args:step.arguments.map(value)}),from:step.from,
     afterSeconds:step.afterSeconds,value:step.value,read:step.read});cases++;
+   await recorder?.record(step,fn,result,before);
    const reverted=Boolean(result.execResult.exceptionError);
    if(reverted!==(step.expect.status==="revert"))fail("execution-status","The declared success or revert expectation did not match.");
    if(!reverted&&step.expect.returns!==undefined){
@@ -141,5 +145,5 @@ async function check({chainId,evmVersion,contracts,plan}){
    if(failures.length)break;
   }
  }catch{fail("fixture-execution","The declared fixture could not finish within its supported local execution.");}
- return {passed:failures.length===0,cases,gasUsed:gasUsed.toString(),failures};
+ return {passed:failures.length===0,cases,gasUsed:gasUsed.toString(),failures,...(recorder?{execution:recorder.result()}:{})};
 }

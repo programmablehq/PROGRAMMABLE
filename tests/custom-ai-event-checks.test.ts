@@ -84,7 +84,11 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("actual compiled event logs
     return checkGeneralScenarios(p,await compileContractProject(p),bindGeneralCheckBlueprint(blueprint,p));
   }
   it.each([false,true])("checks actual emitters, callers and counts in worker V2=%s",async nested=>{
-    expect(await report("emit SwapCounted(msg.sender,count);",nested)).toMatchObject({version:nested?2:1,passed:true,cases:8,launchReady:false,failures:[]});
+    const actual=await report("emit SwapCounted(msg.sender,count);",nested);
+    expect(actual).toMatchObject({version:nested?2:1,passed:true,cases:8,launchReady:false,failures:[]});
+    const events=actual.execution?.steps.flatMap(step=>step.events)??[];
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({contract:"counter",name:"SwapCounted",arguments:[{name:"sender"},{name:"count",value:"1"}]});
   });
   it.each([
     ["missing","",undefined],

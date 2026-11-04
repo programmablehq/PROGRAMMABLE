@@ -4,6 +4,7 @@ import { aiRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ProjectOverview } from "@/lib/custom-ai/project-overview";
 import type { ProjectCheckpoint } from "@/lib/custom-ai/project-store.server";
 import { builderChain, type BuilderChainId } from "@/lib/custom-ai/execution-routing";
+import { ExecutionPreview } from "./execution-preview";
 import styles from "./workspace.module.css";
 
 export function ProjectSource({source,chainId,account,conversationId,headers,disabled,recovery=false,onCompile,onEdit}:{
@@ -32,7 +33,7 @@ export function ProjectSource({source,chainId,account,conversationId,headers,dis
     const link=document.createElement("a");link.href=url;link.download=`programmable-source-${source.projectHash.slice(7,19)}.json`;link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  return <section className={styles.ruleReview} aria-label={recovery?"Saved source recovery":"Contract source"}>
+  return <><ExecutionPreview trace={source.scenarios?.execution}/><section className={styles.ruleReview} aria-label={recovery?"Saved source recovery":"Contract source"}>
     <h3>{recovery?"Your new source is saved":"Contract source"}</h3>
     {recovery&&<p>Your previous draft is kept. {source.compilation==="pending"?"The compiler did not finish. Retry this saved source without another AI request.":checksPending?"Continue the saved contract checks without another AI request or compiler run.":"This source needs an edit before another build."}</p>}
     <details onToggle={event=>{if(event.currentTarget.open)void open();}}>
@@ -54,5 +55,5 @@ export function ProjectSource({source,chainId,account,conversationId,headers,dis
     {recovery&&source.compilation==="pending"&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId||!matchesNetwork} onClick={()=>onCompile(source)}>Retry saved build</button>}
     {recovery&&checksPending&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId||!matchesNetwork} onClick={()=>onCompile(source)}>Resume contract checks</button>}
     {recovery&&(source.compilation==="diagnostics"||source.scenarios?.passed===false)&&onEdit&&<button type="button" className={styles.textButton} disabled={disabled||!conversationId||!matchesNetwork} onClick={()=>onEdit(source)}>Edit this source</button>}
-  </section>;
+  </section></>;
 }

@@ -30,6 +30,38 @@ function checkedFixture(revision=1,passed=true){
     failures:passed?[]:[{caseId:"increment-one",code:"return-value",message:"The declared increment did not match."}]}}};
 }
 
+test("observed simulation is readable by keyboard and survives reload without extra requests",async({page},info)=>{
+ const f=await fixture(page),result=checkedFixture();
+ const execution={version:1 as const,environment:"isolated-declared-fixtures" as const,networkAccess:false as const,gasFeesCharged:false as const,
+   plannedSteps:2,executedSteps:2,detailsComplete:true,steps:[
+     {id:"send-payment",contract:"main",signature:"pay()",from:"trader-a" as const,afterSeconds:0,value:"1000",read:false,status:"success" as const,
+       outputs:[],events:[],nativeChanges:[{account:"account/creator",before:"1000000000000000000000000",after:"1000000000000000000001000"}],detailsComplete:true},
+     {id:"read-count",contract:"main",signature:"value()",from:"trader-a" as const,afterSeconds:0,value:"0",read:true,status:"success" as const,
+       outputs:[{name:"value",type:"uint256",value:"1",truncated:false}],events:[],nativeChanges:[],detailsComplete:true},
+   ]};
+ f.control.respond=()=>({...result,generalProject:{...result.generalProject,scenarios:{...result.generalProject.scenarios,execution}}});
+ await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await box.fill("Build my payment hook");await box.press("Enter");
+ const summary=page.locator("summary").filter({hasText:/^Simulation/});
+ await summary.focus();await page.keyboard.press("Enter");
+ const observed=page.getByRole("region",{name:"Observed contract simulation"});
+ await expect(observed).toBeVisible();await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
+ await expect(observed.getByText("Local simulation with test balances.",{exact:false})).toBeVisible();
+ for(const width of [360,1440]){
+   await page.setViewportSize({width,height:900});
+   const toggle=page.getByRole("button",{name:"Coin preview and details",exact:true});
+   if(width===360&&await toggle.getAttribute("aria-expanded")==="false")await toggle.click();
+   await expect(observed).toBeVisible();await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
+   await observed.scrollIntoViewIfNeeded();
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+   await page.screenshot({path:info.outputPath(`simulation-${width}.png`),fullPage:true});
+ }
+ await page.reload();await expect(summary).toBeVisible();await summary.click();
+ await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
+ expect(f.calls).toHaveLength(1);
+});
+
 for(const width of [360,1440])test(`first visit explains wallet access without exposing unavailable editor controls at ${width}px`,async({page},info)=>{
  const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1');
  await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeEnabled();

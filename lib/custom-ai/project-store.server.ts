@@ -18,6 +18,7 @@ import { generalCheckCaseCount } from "./behavior-checks";
 import { checkedGeneralPublicSource, createGeneralPublicSource, generalSourcePublicUri, type GeneralPublicSource } from "./public-launch-source.server";
 import { createGeneralPreparationStore } from "./general-preparation-store.server";
 import { checkedCheckDiagnostic, type CheckDiagnostic } from "./check-diagnostic";
+import { cachedExecutionTrace } from "./execution-trace";
 import { checkedSourceProgress, sourceProgressExtends, type SourceProgress } from "./source-progress";
 
 export type ProjectCheckpoint = {
@@ -158,7 +159,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
   async function saveScenarios(owner:string,id:string,lease:string,report:GeneralScenarioReport){
     report=structuredClone(report);
     const {hash,...body}=report;
-    const keys="artifactHash,cases,failures,gasUsed,hash,launchReady,passed,planHash,projectHash,requirementIds,scope,version";
+    const keys=["artifactHash","cases","failures","gasUsed","hash","launchReady","passed","planHash","projectHash","requirementIds","scope","version",...(report.execution?["execution"]:[])].sort().join();
     if(Object.keys(report).sort().join()!==keys||![1,2].includes(report.version)||report.scope!==`isolated-declared-scenarios-v${report.version}`||report.launchReady!==false
       ||hash!==canonicalBrowserSha256V2(`programmable.general-scenario-report.v${report.version}`,body)||Buffer.byteLength(JSON.stringify(report))>96_000
       ||typeof report.passed!=="boolean"||!Number.isSafeInteger(report.cases)||report.cases<0||report.cases>300
@@ -172,6 +173,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
         ||previous.project.hash!==report.projectHash||previous.compilation.artifactHash!==report.artifactHash)throw conflict();
       const plan=bindGeneralCheckBlueprint(declared.blueprint,previous.project);
       if(plan.id!==report.planHash||plan.version!==report.version||report.passed&&report.cases!==generalCheckCaseCount(plan)
+        ||report.execution&&(!cachedExecutionTrace(report.execution,plan)||report.passed&&report.execution.executedSteps!==plan.steps.length)
         ||JSON.stringify(report.requirementIds)!==JSON.stringify(previous.project.intent.requirements.map(rule=>rule.id).sort()))throw conflict();
       if(previous.scenarios){if(previous.scenarios.hash!==hash)throw conflict();return previous;}
       const value:ProjectCheckpoint={...previous,scenarios:report,overview:projectOverview(id,previous.project,previous.compilation,{blueprintId:declared.blueprint.id,scenarios:report})};
