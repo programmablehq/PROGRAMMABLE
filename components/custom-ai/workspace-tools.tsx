@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { Ellipsis, Plus, X } from "lucide-react";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 
 export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoin, onClearMessages, onRestorePrevious, navigation, children, access, guest=false }: {
@@ -26,7 +27,7 @@ export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoi
       <div className={styles.toolbarActions}>
       {access}
       {navigation}
-      {!guest&&<details ref={tools} className={styles.tools} onKeyDown={event => {
+      {!guest&&<Disclosure ref={tools} className={styles.tools} onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); closeTools(); }
       }}>
         <summary aria-label="Chat options"><Ellipsis size={18} aria-hidden="true" /></summary>
@@ -42,7 +43,7 @@ export function WorkspaceTools({ name, disabled, canClear, hasPrevious, onNewCoi
           </section>
           {children}
         </div>
-      </details>}
+      </Disclosure>}
       </div>
   </header>;
 }

@@ -116,7 +116,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   }
   const panel=(locked:boolean)=><div className={styles.chatLibrary} ref={root} data-custom-ai-library="true">
     <button ref={toggle} type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls={open?"custom-ai-chats":undefined} onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
-    {open&&<section id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
+    <section hidden={!open} inert={!open} id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
       <header><strong>Your chats</strong><button type="button" aria-label="Close chat list" onClick={close}><X size={16} aria-hidden="true"/></button></header>
       <button type="button" disabled={locked||loading||!cacheScope} onClick={()=>void newChat()}><Plus size={16} aria-hidden="true"/>New chat</button>
       <label className={styles.librarySearch}><Search size={16} aria-hidden="true"/><span className={styles.srOnly}>Search your chats</span><input type="search" value={search} onChange={e=>filter(e.target.value,query.current.archived)} maxLength={80} placeholder="Search chats"/></label>
@@ -133,7 +133,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       {page.cursor&&<button type="button" disabled={loading} onClick={()=>void load(search,archived,page.cursor)}>More chats</button>}
       {loading&&<p role="status">Loading chats…</p>}
       {error&&<p role="alert">{error}</p>}
-    </section>}
+    </section>
   </div>;
   if(!selected||!cacheScope)return <div className={styles.libraryEmpty}>{panel(transitioning)}{error&&<><p role="alert">{error}</p><button type="button" onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}{!error&&!open&&<p role="status">Loading your chats…</p>}</div>;
   return <LibraryContext.Provider value={{id:selected,cacheScope,navigation:{pending:transitioning,tools:panel,newChat,registerFlush}}}><Fragment key={selected}>{children}</Fragment></LibraryContext.Provider>;

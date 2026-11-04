@@ -10,6 +10,7 @@ import { CoinDetails, type CoinDetailsControls } from "./coin-details";
 import { GeneralLaunchControls } from "./general-launch-controls";
 import { ProjectSource } from "./project-source";
 import { RequestedRules } from "./requested-rules";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 
 export function GeneralProjectPreview({project,intent,draftId,account,conversationId,headers,disabled,settings,onChange,chatRevision,localPreview,cacheKey,imageReceipt,onImageReceipt,onEditRule,generalLaunchEnabled=false,pendingChange,flush,onLaunchLocked,children,launchCommand,editorControls,onImageBusy}:{
@@ -37,13 +38,13 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
     <GeneralLaunchControls enabled={enabled} account={account} conversationId={conversationId} scope={cacheKey} headers={headers}
       project={project} intent={intent} draftId={draftId} settings={settings} imageId={imageReceipt?.id} disabled={disabled||imageBusy}
       pendingChange={pendingChange} editor={editor} flush={flush??(async()=>undefined)} onLaunchLocked={lock} launchCommand={launchCommand}/>
-    {intent&&<details className={`${styles.ruleReview} ${styles.coinRules}`}>
+    {intent&&<Disclosure className={`${styles.ruleReview} ${styles.coinRules}`}>
       <summary>Coin rules<span>{intent.requirements.length}</span></summary>
       <section aria-label="Requested contract rules">
         <RequestedRules rules={intent.requirements} changes={intent.parentRevision?intent.changes:[]} disabled={disabled||launchBusy||!matches} onEditRule={onEditRule}/>
         {intent.unresolved.filter(question=>!intent.requirements.some(rule=>rule.open===question)).map(question=><p key={question}>{question}</p>)}
       </section>
-    </details>}
+    </Disclosure>}
     {project&&draftId&&<ProjectSource key={draftId} source={overviewFromView(draftId,project)} chainId={settings.chainId} account={account} conversationId={conversationId} headers={headers} disabled={disabled} onCompile={()=>undefined}/>}
     {children}
   </aside>;

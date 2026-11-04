@@ -39,10 +39,11 @@ export type TextBlock = { kind: "paragraph" | "heading" | "quote"; text: string 
   | { kind: "list"; ordered: boolean; start: number; items: string[] };
 
 /** A deliberately small display grammar. Never interprets HTML or runs model output. */
-export function textBlocks(text: string): TextBlock[] {
+export function textBlocks(text: string, assistant = false): TextBlock[] {
   const blocks: TextBlock[] = [];
   for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
-    if (!line.trim()) { const last = blocks.at(-1); if (last?.kind === "paragraph") last.text += "\n"; continue; }
+    const separator = assistant && /^\s{0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(line);
+    if (!line.trim() || separator) { const last = blocks.at(-1); if (last?.kind === "paragraph") last.text += "\n"; continue; }
     const item = /^\s{0,3}(?:([-+*])|(\d{1,3})[.)])\s+(.+)$/.exec(line);
     if (item) {
       const ordered = Boolean(item[2]), previous = blocks.at(-1);
@@ -57,6 +58,11 @@ export function textBlocks(text: string): TextBlock[] {
     else blocks.push({ kind: "paragraph", text: line });
   }
   return blocks;
+}
+
+/** Only prose is restyled. Code and link tokens keep their exact original bytes. */
+export function assistantProseText(text: string): string {
+  return text.replace(/([^\s])[ \t]*\u2014[ \t]*/g, "$1, ").replace(/\u2014[ \t]*/g, "");
 }
 
 export type InlinePart = { kind: "text" | "strong" | "code"; text: string } | { kind: "link"; text: string; href: string };

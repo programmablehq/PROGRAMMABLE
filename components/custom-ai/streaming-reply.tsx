@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { advanceReply } from "@/lib/custom-ai/message-display";
+import { MessageContent } from "./message-content";
 import styles from "./workspace.module.css";
 
 export function StreamingReply({ text, onAdvance }: { text: string; onAdvance: () => void }) {
@@ -24,6 +25,6 @@ export function StreamingReply({ text, onAdvance }: { text: string; onAdvance: (
   }, [text]);
   useLayoutEffect(() => { onAdvance(); }, [visible, onAdvance]);
   return <div className={styles.message} data-role="assistant">
-    <div className={`${styles.messageText} ${styles.revealing}`} aria-hidden="true">{visible}</div>
+    <div aria-hidden="true" inert><MessageContent content={visible} assistant streaming /></div>
   </div>;
 }
