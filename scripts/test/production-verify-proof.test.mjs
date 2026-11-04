@@ -462,6 +462,25 @@ test("resolver accepts only the two untouched Interface workers as a skipped pai
   await assert.rejects(resolveFixtures(fixtures));
 });
 
+test("resolver accepts GitHub's zero-ID empty-name representation only for unexecuted skipped workers", async () => {
+  for (const names of [VERIFY_INTERFACE_WORKER_JOB_NAMES, VERIFY_CONTRACT_WORKER_JOB_NAMES]) {
+    const fixtures = validApiFixtures();
+    const workers = fixtures.jobs.jobs.filter(job => names.includes(job.name));
+    workers.forEach(skipInterfaceWorker);
+    // A single API response can mix null and zero representations across jobs.
+    Object.assign(workers[0], {runner_id: 0, runner_name: "", runner_group_id: 0, runner_group_name: ""});
+    assert.equal((await resolveFixtures(fixtures)).runId, RUN_ID);
+    for (const patch of [
+      {runner_id: 1}, {runner_name: "self-hosted"}, {runner_group_name: "Default"},
+      {runner_group_id: null}, {steps: [{conclusion: "skipped"}]}, {conclusion: "success"},
+    ]) {
+      const changed = structuredClone(fixtures);
+      Object.assign(changed.jobs.jobs.find(job => job.name === workers[0].name), patch);
+      await assert.rejects(resolveFixtures(changed));
+    }
+  }
+});
+
 test("resolver rejects missing, mismatched, failed or assigned-but-skipped Interface workers", async () => {
   for (const name of VERIFY_INTERFACE_WORKER_JOB_NAMES) {
     for (const mutate of [

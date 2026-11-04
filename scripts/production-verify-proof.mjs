@@ -493,6 +493,14 @@ function validateVerifyJobs(response, run) {
       && (VERIFY_INTERFACE_WORKER_JOB_NAMES.includes(job.name)
         || VERIFY_CONTRACT_WORKER_JOB_NAMES.includes(job.name))
       && job.conclusion === "skipped";
+    // GitHub represents an unassigned runner as nulls or as zero IDs with
+    // empty names. Neither representation identifies an executing runner.
+    const unassignedRunner = isObject(job) && (
+      (job.runner_id === null && job.runner_name === null
+        && job.runner_group_id === null && job.runner_group_name === null)
+      || (job.runner_id === 0 && job.runner_name === ""
+        && job.runner_group_id === 0 && job.runner_group_name === "")
+    );
     if (
       !isObject(job)
       || typeof job.name !== "string"
@@ -510,10 +518,7 @@ function validateVerifyJobs(response, run) {
         || job.runner_group_name !== "GitHub Actions"
       ))
       || (skippedWorker && (
-        job.runner_id !== null
-        || job.runner_name !== null
-        || job.runner_group_id !== null
-        || job.runner_group_name !== null
+        !unassignedRunner
         || !Array.isArray(job.steps)
         || job.steps.length !== 0
       ))
