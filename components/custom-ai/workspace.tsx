@@ -41,6 +41,7 @@ import { ChatProgressIndicator } from "./chat-progress";
 import { BuildOutcome } from "./build-outcome";
 import { ImageAttachments } from "./image-attachments";
 import { imageMessageURL } from "@/lib/custom-ai/image-message";
+import { directLaunchCommand } from "@/lib/custom-ai/launch-command";
 import type { CoinDetailsControls } from "./coin-details";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
@@ -536,6 +537,24 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     },true);
   },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
 
+  const generalBuilt = generalProject?.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
+    && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision && generalLaunchEnabled;
+  const feeBuilt = draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
+    && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
+  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
+  const openCoinPanel = useCallback(() => {
+    setCoinPanelOpen(true);
+    requestAnimationFrame(() => {
+      if (window.matchMedia("(max-width: 740px)").matches)
+        document.getElementById("custom-ai-coin-panel")?.scrollIntoView({block:"start", behavior:"instant"});
+    });
+  }, []);
+  const launchFromMessage = useCallback(() => {
+    if (!draftId || !showOutcome || activity.blocked || imageBusy) return;
+    openCoinPanel();
+    setLaunchCommand({ id: crypto.randomUUID(), sourceId: draftId });
+  }, [draftId, showOutcome, activity.blocked, imageBusy, openCoinPanel]);
+
   async function send(contentOverride?:string) {
     if (replyRef.current.isActive() || coinTransition.current || activity.blocked || imageBusy) return;
     if(contentOverride!==undefined&&input.trim()){
@@ -548,6 +567,17 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     if(!localPreview&&owner==="signed-out"){
       try{onConnectPrompt?.(content);setError("");setNotice("Connect your wallet. Your message stays here.");}
       catch(cause){setError(cause instanceof Error?cause.message:"Your message could not be prepared.");}
+      return;
+    }
+    const launchLocale = directLaunchCommand(content);
+    if (launchLocale && showOutcome && !retry.current && !recoveryRequest) {
+      followReply.current = true; setShowLatest(false); setInput("");
+      setMessages(current => conversationWindow([...current, { role: "user", content }, {
+        role: "assistant", content: launchLocale === "de"
+          ? "Ich bereite deinen geprüften Hook für den Launch vor. Fehlende Coin-Details kannst du direkt ergänzen; die Transaktion bestätigst du in deiner Wallet."
+          : "I’m preparing your checked hook for launch. You can fill in any missing coin details here, then confirm the transaction in your wallet.",
+      }], 40, 30_000));
+      launchFromMessage();
       return;
     }
     const imageURL = imageMessageURL(content);
@@ -619,23 +649,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored||launchLocked||saveFailed||Boolean(conflict)} recovery
     onCompile={source=>void retryCompilation(source)} onEdit={source=>void editSavedSource(source)}/>;
 
-  const generalBuilt = generalProject?.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
-    && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision && generalLaunchEnabled;
-  const feeBuilt = draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
-    && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
-  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
-  const openCoinPanel = useCallback(() => {
-    setCoinPanelOpen(true);
-    requestAnimationFrame(() => {
-      if (window.matchMedia("(max-width: 740px)").matches)
-        document.getElementById("custom-ai-coin-panel")?.scrollIntoView({block:"start", behavior:"instant"});
-    });
-  }, []);
-  const launchFromMessage = useCallback(() => {
-    if (!draftId || !showOutcome || activity.blocked || imageBusy) return;
-    openCoinPanel();
-    setLaunchCommand({ id: crypto.randomUUID(), sourceId: draftId });
-  }, [draftId, showOutcome, activity.blocked, imageBusy, openCoinPanel]);
   const attachImage = async (file: File) => {
     if (activity.blocked || imageBusy) return;
     setLaunchCommand(undefined);

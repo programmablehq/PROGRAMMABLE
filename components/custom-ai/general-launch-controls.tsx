@@ -122,7 +122,10 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         disabled={disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
     {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
-    {historyHref && <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>}
+    {historyHref && <details className={styles.previousSubmission}>
+      <summary>Earlier submission</summary>
+      <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>
+    </details>}
     {walletSubject && <Suspense fallback={<p className={styles.note} role="status">Loading launch controls…</p>}>
       <GeneralLaunchWallet key={JSON.stringify([scope, account.toLowerCase(), walletSubject.chainId, walletSubject.resourceId, walletSubject.requestHash])}
         subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()}
