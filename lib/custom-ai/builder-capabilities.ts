@@ -20,5 +20,5 @@ export function builderCapabilities(configuration: { events: boolean; programs: 
 export const starterIdeas = [
   { title: "A falling launch fee", prompt: "Build a coin with a 5% total buy and sell fee at launch, falling to 1% over 10 minutes." },
   { title: "Split fees", prompt: "Build a hook that puts 30% of its project fees into liquidity, uses 20% for buyback and burn, and sends 20% to top holders. Help me settle the remaining share and who qualifies, then build the complete design." },
-  { title: "Find existing hooks", prompt: "Find examples of existing Uniswap v4 hooks and explain which mechanics I could use for my coin." },
+  { title: "Explore ideas", prompt: "What could we build here? Give me three different, concrete coin ideas and a useful starting point. Just explain them for now; keep my saved coin unchanged." },
 ] as const;

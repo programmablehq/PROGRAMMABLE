@@ -13,6 +13,7 @@ import { createLatestSaveQueue } from "@/lib/custom-ai/latest-save-queue";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { conversationWindow } from "@/lib/custom-ai/conversation";
 import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 import { DraftVersions } from "./draft-versions";
 import { RequestInsights } from "./request-insights";
@@ -689,12 +690,12 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         }}>
         {!localPreview&&owner!=="signed-out"&&<DraftVersions account={owner} conversationId={conversationId} headers={headers} disabled={busy||switchingCoin||launchLocked||!restored||saveFailed||Boolean(conflict)} currentDraftId={draftId} onRestore={restoreVersion}/>}
         {!localPreview&&owner!=="signed-out"&&<RequestInsights headers={headers} refreshKey={metricsRevision}/>}
-        {usage && <details className={styles.toolSection}><summary>Usage</summary><div>
+        {usage && <Disclosure className={styles.toolSection}><summary>Usage</summary><div>
           <p>{usage.hourly.remaining} of {usage.hourly.limit} credits left this hour · {usage.daily.remaining} of {usage.daily.limit} left today</p>
           <p>Replies and rebuilding saved source use 1 credit. AI builds and live research use 5. An interrupted AI attempt may use up to 5.</p>
           <p>Hourly reset: {new Date(usage.hourly.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Daily reset: {new Date(usage.daily.resetsAt).toLocaleString()}.</p>
           {usage.resumesAt > 0 && <p>Available again at {new Date(usage.resumesAt).toLocaleString()}.</p>}
-        </div></details>}
+        </div></Disclosure>}
       </WorkspaceTools>
       <div ref={transcript} className={styles.transcript} role="log" aria-label="Conversation" aria-busy={busy}
         aria-live="polite" aria-relevant="additions" onScroll={event => {
@@ -713,7 +714,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         </div>}
         {messages.map((message, index) => <article className={styles.message} key={index} data-role={message.role}>
           <span className={styles.srOnly}>{message.role === "user" ? "You" : "Custom AI"}</span>
-          <MessageContent content={message.content} />
+          <MessageContent content={message.content} assistant={message.role === "assistant"} />
           {message.role === "assistant" && message.sources?.length ? <ul className={styles.sources} aria-label="Sources">
             {safeKnowledgeSources(message.sources).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}
           </ul> : null}

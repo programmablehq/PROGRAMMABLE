@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { ArrowUpRight, Check } from "lucide-react";
 import type { LaunchIntent } from "@/lib/custom-ai/launch-intent";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 
 export const BuildOutcome = memo(function BuildOutcome({ name, symbol, network, rules, onLaunch, disabled }: {
@@ -11,10 +12,10 @@ export const BuildOutcome = memo(function BuildOutcome({ name, symbol, network, 
     <div className={styles.outcomeStatus}><Check size={16} aria-hidden="true" />Built and checked</div>
     <h2>{name || "Your hook"}{symbol && <span translate="no"> ${symbol}</span>}</h2>
     <p>{network} · Ready to prepare your launch</p>
-    <details className={styles.outcomeRules}>
+    <Disclosure className={styles.outcomeRules}>
       <summary>{rules.length} saved {rules.length === 1 ? "rule" : "rules"}</summary>
       <ul>{rules.map(rule => <li key={rule.id}>{rule.text}</li>)}</ul>
-    </details>
+    </Disclosure>
     <button type="button" className={styles.outcomeLaunch} onClick={onLaunch} disabled={disabled}>
       Launch coin<ArrowUpRight size={17} aria-hidden="true" />
     </button>

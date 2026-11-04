@@ -37,7 +37,7 @@ export function ImageAttachments({ disabled, onChoose, onURL }: {
   }}>
     <button ref={trigger} type="button" aria-label="Attach image" aria-expanded={open} aria-controls="custom-ai-image-options"
       disabled={disabled || working} onClick={() => setOpen(current => !current)}><ImagePlus size={19} aria-hidden="true" /></button>
-    {open && <div id="custom-ai-image-options" className={styles.attachmentMenu} role="group" aria-label="Coin image options">
+    <div hidden={!open} inert={!open} id="custom-ai-image-options" className={styles.attachmentMenu} role="group" aria-label="Coin image options">
       <button type="button" disabled={disabled || working} onClick={() => { close(); onChoose(); }}>
         <Upload size={16} aria-hidden="true" />Upload image
       </button>
@@ -51,6 +51,6 @@ export function ImageAttachments({ disabled, onChoose, onURL }: {
         {working ? "Loading image…" : "Use image"}
       </button>
       {error && <p id="custom-ai-image-link-error" role="alert">{error}</p>}
-    </div>}
+    </div>
   </div>;
 }

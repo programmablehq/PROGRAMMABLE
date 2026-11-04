@@ -12,6 +12,7 @@ import type { GeneralDetailField } from "@/lib/custom-ai/general-details";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { CoinSelect } from "./coin-select";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 
 export type CoinEditorImage = { blob: Blob; url: string };
@@ -129,7 +130,12 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   const imageURL=imageURI??imageReceipt?.url??image?.url;
   useEffect(()=>{onImage(image);},[image,onImage]);
   useImperativeHandle(controlsRef,()=>({focus(field){if(field==="image"){fileInput.current?.click();return;}setDetailsOpen(true);setFocusRequest({field});if(field==="description"||field==="website"||field==="x"||field==="socialPost")setPresentationTouched(current=>({...current,[field]:true}));},chooseImage,imageFromURL}));
-  useLayoutEffect(()=>{if(detailsOpen&&focusRequest)document.getElementById(`custom-ai-${focusRequest.field === "initialBuy" ? "buy" : focusRequest.field}`)?.focus();},[detailsOpen,focusRequest]);
+  useLayoutEffect(()=>{
+    if(!detailsOpen||!focusRequest)return;
+    // Let the disclosure restore interactive children before focusing a missing field.
+    const frame=requestAnimationFrame(()=>document.getElementById(`custom-ai-${focusRequest.field === "initialBuy" ? "buy" : focusRequest.field}`)?.focus());
+    return()=>cancelAnimationFrame(frame);
+  },[detailsOpen,focusRequest]);
   const presentationError = (field: "description" | "website" | "x" | "socialPost") => presentationTouched[field] ? coinPresentationIssue(settings, field) : "";
   return <>
     <section className={styles.coinPreview} aria-label="Coin preview">
@@ -154,11 +160,11 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
       </div>
       {imageBusy && <button type="button" className={styles.textButton} onClick={cancelImage}>Cancel image upload</button>}
       <p id="custom-ai-image-error" className={styles.error} role="alert">{imageError}</p>
-      {(settings.description || description || summary) && <details className={styles.designSummary}><summary>About this coin</summary><p className={styles.coinBio}>{settings.description || description || coinBio(settings.name, summary!)}</p></details>}
+      {(settings.description || description || summary) && <Disclosure className={styles.designSummary}><summary>About this coin</summary><p className={styles.coinBio}>{settings.description || description || coinBio(settings.name, summary!)}</p></Disclosure>}
     </section>
 
     <form className={styles.coinForm} onSubmit={event => event.preventDefault()}>
-      <details className={styles.coinDetails} open={detailsOpen} onToggle={event => setDetailsOpen(event.currentTarget.open)}>
+      <Disclosure className={styles.coinDetails} open={detailsOpen} onToggle={event => setDetailsOpen(event.currentTarget.open)}>
         <summary><span>Coin details</span><span className={styles.settingsSummary}>{builderChain(settings.chainId).name} · {isNative ? native : "Custom pair"}</span><ChevronDown size={16} aria-hidden="true" /></summary>
       <fieldset disabled={disabled}>
         <legend className={styles.srOnly}>Coin details</legend>
@@ -225,7 +231,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
           </div>)}
         </>}
       </fieldset>
-      </details>
+      </Disclosure>
     </form>
   </>;
 }

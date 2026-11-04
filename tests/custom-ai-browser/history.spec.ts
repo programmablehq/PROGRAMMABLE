@@ -469,3 +469,29 @@ test("an older local-only copy remains stored without being adopted by a newly s
 });
 
 async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat options",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) test(`menus preserve focus and unsent input with ${reducedMotion} motion`, async ({page}) => {
+  const f = await fixture(page);
+  await page.emulateMedia({reducedMotion});
+  await page.setViewportSize({width: reducedMotion === "reduce" ? 360 : 1440, height: 900});
+  await page.goto(origin);
+  const chats = page.getByRole("button", {name:"Chats", exact:true});
+  await chats.click();
+  const panel = page.getByRole("region", {name:"Your saved chats"});
+  await expect(panel).toBeVisible();
+  await page.getByRole("button", {name:"Close chat list"}).click();
+  await expect(chats).toBeFocused();
+  await expect(page.locator("#custom-ai-chats")).toHaveAttribute("inert", "");
+  await expect(panel).not.toBeVisible();
+  const attach = page.getByRole("button", {name:"Attach image", exact:true});
+  await attach.click();
+  await page.getByRole("textbox", {name:"Or use an image link"}).fill("https://example.org/coin.png");
+  await page.keyboard.press("Escape");
+  await expect(attach).toBeFocused();
+  await expect(page.locator("#custom-ai-image-options")).toHaveAttribute("inert", "");
+  await attach.click();
+  await expect(page.getByRole("textbox", {name:"Or use an image link"})).toHaveValue("https://example.org/coin.png");
+  await page.keyboard.press("Escape");
+  expect(f.calls).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

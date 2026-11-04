@@ -1,5 +1,6 @@
 import type { Draft } from "@/lib/custom-ai/types";
 import { summarizeRules } from "@/lib/custom-ai/rule-summary";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
 import { RequestedRules } from "./requested-rules";
@@ -38,12 +39,12 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
       <p className={styles.pendingRequest}>{pendingChange}</p>
       {draft && <button type="button" className={styles.textButton} disabled={disabled} onClick={onKeepRules}>Keep previous rules</button>}
     </>}
-    {intent && <details>
+    {intent && <Disclosure>
       <summary>Requested rules ({intent.requirements.length})</summary>
       <RequestedRules rules={intent.requirements} changes={intent.parentRevision ? intent.changes : []} disabled={disabled} onEditRule={editable}/>
       {intent.unresolved.filter(question => !intent.requirements.some(rule => rule.open === question)).map(question => <p key={question}>Open: {question}</p>)}
       <p className={styles.note}>These are your requested rules. Source checks and launch preparation are separate.</p>
-    </details>}
+    </Disclosure>}
     {ready ? <>
       {summary && <>
         <ol className={styles.ruleTimeline} aria-label="Fee timeline">
@@ -59,11 +60,11 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
         {" "}Execution is permissionless; its timing is not guaranteed.
         {!draft.program.available && " This program is prepared for testing; public launch is not enabled yet."}</p>}
       {!summary && !intent && <ul>{verified.requirements.map((rule, index) => <li key={index}>{rule}</li>)}</ul>}
-      {!intent && draft?.composable && onEditRule && <details>
+      {!intent && draft?.composable && onEditRule && <Disclosure>
         <summary>Edit a rule</summary>
         <RequestedRules rules={draft.composable.spec.requirements} disabled={disabled} onEditRule={onEditRule}/>
-      </details>}
-      <details><summary>Checked fee examples</summary>
+      </Disclosure>}
+      <Disclosure><summary>Checked fee examples</summary>
         <p>Total fees include the 0.5% platform fee. These examples were checked for buys and sells on both supported networks.</p>
         <table><caption className={styles.srOnly}>Fees by time after launch</caption>
           <thead><tr><th scope="col">Time / condition</th><th scope="col">Buy</th><th scope="col">Sell</th></tr></thead>
@@ -72,7 +73,7 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
             return <td key={String(buy)}>{check ? percent(check.totalFeeBps) : "—"}</td>;
           })}</tr>)}</tbody>
         </table>
-      </details>
+      </Disclosure>
       <p className={styles.note}>Your launch confirms these exact rules.</p>
     </> : draft && <p>Ask the chat to check this saved draft against your intended rules before creating the coin.</p>}
   </section>;

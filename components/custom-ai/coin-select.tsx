@@ -30,7 +30,7 @@ export function CoinSelect({ label, value, options, disabled, onChange }: {
   }}>
     <span className={styles.fieldLabel} id={`${id}-label`}>{label}</span>
     <button type="button" ref={trigger} className={styles.selectTrigger} disabled={disabled}
-      aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="listbox" aria-expanded={open}
+      aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="listbox" aria-expanded={open && !disabled}
       aria-controls={open ? `${id}-options` : undefined}
       onClick={() => { setActive(selected); setOpen(!open); }} onKeyDown={event => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -39,7 +39,7 @@ export function CoinSelect({ label, value, options, disabled, onChange }: {
       }}>
       <span id={`${id}-value`}>{options[selected]?.label}</span><ChevronDown size={15} aria-hidden="true" />
     </button>
-    {open && !disabled && <div className={styles.selectMenu} role="listbox" id={`${id}-options`} aria-labelledby={`${id}-label`}>
+    <div hidden={!open || disabled} inert={!open || disabled} className={styles.selectMenu} role="listbox" id={`${id}-options`} aria-labelledby={`${id}-label`}>
       {options.map((option, index) => <button key={option.value} ref={element => { items.current[index] = element; }}
         type="button" role="option" aria-selected={option.value === value} tabIndex={index === active ? 0 : -1}
         onClick={() => { onChange(option.value); close(); }} onKeyDown={event => {
@@ -52,6 +52,6 @@ export function CoinSelect({ label, value, options, disabled, onChange }: {
         }}>
         {option.label}{option.value === value && <Check size={15} aria-hidden="true" />}
       </button>)}
-    </div>}
+    </div>
   </div>;
 }

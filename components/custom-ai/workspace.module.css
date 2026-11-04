@@ -33,7 +33,6 @@
 .message[data-role="user"] { max-width: min(85%, 580px); margin-inline-start: auto; padding: 12px 16px; border-radius: 16px 16px 4px 16px; background: #20201e; }
 .message[data-role="assistant"] { padding-block: 2px; }
 .messageText { font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
-.revealing::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-inline-start: 3px; vertical-align: -.1em; background: #b8b4ad; }
 .copyAction { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: 100%; white-space: normal; }
 .message > .copyAction { margin-top: 6px; }
 .copyAction button { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 0; border: 0; background: transparent; color: #aaa69f; font: inherit; font-size: 11px; cursor: pointer; }
@@ -59,11 +58,11 @@
 .elapsed { margin-inline-start: auto; flex-shrink: 0; color: #aaa69f; font-size: 12px; font-variant-numeric: tabular-nums; }
 .coinFrame { min-width: 0; min-height: 0; }
 .coinFrameBody { height: 100%; min-height: 0; }
-.previousSubmission { margin-top: 16px; padding-top: 12px; border-top: 1px solid #343431; color: #aaa69f; font-size: 12px; }
+.previousSubmission { margin-top: 16px; padding-top: 12px; border: 0; color: #aaa69f; font-size: 12px; }
 .previousSubmission summary { min-height: 44px; align-content: center; cursor: pointer; }
 .previousSubmission a { display: inline-block; margin-block: 8px; }
 .coinPanelToggle { display: none; }
-.buildOutcome { margin-block: 16px 4px; padding: 20px; border: 1px solid #44413b; border-radius: 16px; background: #191917; }
+.buildOutcome { margin-block: 16px 4px; padding: 20px; border: 0; border-radius: 16px; background: #191917; }
 .outcomeStatus { display: flex; align-items: center; gap: 8px; color: #c7c2ba; font-size: 13px; }
 .buildOutcome h2 { margin: 12px 0 4px; font-size: 20px; line-height: 1.35; font-weight: 500; overflow-wrap: anywhere; }
 .buildOutcome h2 span { color: #aaa69f; font-size: 14px; font-weight: 400; }
@@ -107,7 +106,7 @@
 .error { color: #ffc2af; }
 .note { margin: 8px 0; color: #aaa69f; font-size: 12px; line-height: 1.65; }
 /* Coin details use the same image treatment and quiet form hierarchy as Module Mode. */
-.coinPanel { min-width: 0; height: 100%; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; box-sizing: border-box; padding: 8px 0 8px 24px; border-inline-start: 1px solid #343431; background: #111110; }
+.coinPanel { min-width: 0; height: 100%; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #343431 transparent; box-sizing: border-box; padding: 8px 0 8px 24px; border-inline-start: 0; background: #111110; }
 .sourceCode { max-height: 360px; overflow: auto; padding: 12px; border: 1px solid #343431; border-radius: 10px; white-space: pre; font: 12px/1.6 monospace; }
 .coinPreview { text-align: start; }
 .coinHeading { display: flex; align-items: center; gap: 16px; }
@@ -126,7 +125,7 @@
 .coinForm { margin-top: 16px; }
 .designSummary { margin-top: 12px; color: #b8b4ad; font-size: 13px; }
 .designSummary summary { min-height: 40px; align-content: center; cursor: pointer; }
-.coinDetails { padding-block: 6px; border-block: 1px solid #343431; }
+.coinDetails { padding-block: 6px; border: 0; }
 .coinDetails > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #e2ddd4; font-size: 13px; cursor: pointer; list-style: none; }
 .coinDetails > summary::-webkit-details-marker { display: none; }
 .coinDetails > summary > svg { flex: 0 0 auto; }
@@ -212,7 +211,7 @@
   .transcript { padding-inline: 4px; }
   .message[data-role="user"] { max-width: 91%; }
 }
-.chatToolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 0 12px; border-bottom: 1px solid #343431; }
+.chatToolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 0 12px; border: 0; }
 .chatIdentity { min-width: 0; flex: 1; }
 .chatIdentity > span { color: #aaa69f; font-size: 11px; }
 .chatIdentity p { margin: 0; color: #f4f1eb; font-size: 16px; font-weight: 500; line-height: 1.5; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -235,7 +234,7 @@
 .toolsPanel .toolsClose { display:none; }
 .contextActions > button { display: block; }
 .contextActions p, .toolSection p { margin: 4px 0 12px; color: #b8b4ad; font-size: 12px; line-height: 1.6; }
-.toolSection { padding-block: 8px; border-top: 1px solid #44413b; color: #d0cbc2; font-size: 13px; }
+.toolSection { padding-block: 8px; border: 0; color: #d0cbc2; font-size: 13px; }
 .toolSection > summary { min-height: 44px; align-content: center; cursor: pointer; }
 .toolSection > div { padding-block: 8px; }
 .usage { position: relative; font-size: 13px; color: #c7c2ba; }
@@ -244,7 +243,7 @@
 .usage p { line-height: 1.6; margin: 0 0 8px; }
 .progress { display: block; margin: 8px 0; color: #c7c2ba; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .inputLimit { margin: 6px 4px 0; text-align: end; color: #b8b4ad; font-size: 12px; font-variant-numeric: tabular-nums; }
-.ruleReview { margin-top: 24px; padding-top: 18px; border-top: 1px solid #44413b; color: #c7c2ba; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.ruleReview { margin-top: 24px; padding-top: 18px; border: 0; color: #c7c2ba; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .ruleReview h3 { margin: 0 0 10px; color: #f4f1eb; font-size: 15px; font-weight: 500; }
 .ruleReview ul { padding-inline-start: 18px; margin: 12px 0; }
 .ruleReview li + li { margin-top: 6px; }
@@ -275,9 +274,9 @@
 .ruleTimeline small { color: #aaa69f; }
 .ruleReview h4 { color: #f4f1eb; font-size: inherit; font-weight: 500; margin: 18px 0 8px; }
 .ruleReview .ruleAllocations { list-style: none; padding: 0; }
-.ruleAllocations li { padding: 10px 0; border-top: 1px solid #343431; }
+.ruleAllocations li { padding: 10px 0; border: 0; }
 .usage > .versionList { max-height: 400px; overflow-y: auto; overscroll-behavior: contain; }
-.versionList article { padding: 10px 0; border-top: 1px solid #44413b; }
+.versionList article { padding: 10px 0; border: 0; }
 .versionList strong { color: #f4f1eb; font-weight: 500; }
 .versionList small { display: block; margin-bottom: 4px; }
 .operationStatus { border: 1px solid #44413b; border-radius: 12px; padding: 16px; margin-bottom: 12px; color: #c7c2ba; font-size: 13px; }
@@ -309,12 +308,12 @@
 }
 
 .chatLibrary { position:relative; }
-.libraryToggle { display:flex; align-items:center; gap:6px; min-height:38px; padding:8px 10px; border:1px solid var(--border, #2b2b2b); border-radius:10px; background:transparent; color:inherit; font:inherit; font-size:13px; }
-.libraryPanel { position:absolute; right:0; top:calc(100% + 8px); z-index:45; width:min(340px,calc(100vw - 40px)); padding:14px; border:1px solid var(--border, #2b2b2b); border-radius:14px; background:#101112; box-shadow:0 16px 40px #0006; text-align:left; }
+.libraryToggle { cursor:pointer; display:flex; align-items:center; gap:6px; min-height:38px; padding:8px 10px; border:1px solid var(--border, #2b2b2b); border-radius:10px; background:transparent; color:inherit; font:inherit; font-size:13px; }
+.libraryPanel { position:absolute; right:0; top:calc(100% + 8px); z-index:45; width:min(340px,calc(100vw - 40px)); padding:14px; border:1px solid var(--border, #2b2b2b); border-radius:14px; background:#22211e; box-shadow:0 16px 40px #0006; text-align:left; }
 .libraryPanel header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .libraryPanel button { display:inline-flex; align-items:center; gap:7px; min-height:36px; border-radius:8px; padding:7px; color:inherit; background:transparent; border:0; font:inherit; font-size:13px; cursor:pointer; }
 .libraryPanel button:hover { background:#ffffff0a; }
-.libraryPanel button:focus-visible,.libraryToggle:focus-visible { outline:2px solid #b6facc; outline-offset:2px; }
+.libraryPanel button:focus-visible,.libraryToggle:focus-visible { outline:2px solid #ede7dc; outline-offset:2px; }
 .libraryPanel button:disabled,.libraryToggle:disabled { opacity:.45; cursor:default; }
 .librarySearch { display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px; border:1px solid #ffffff20; border-radius:8px; }
 .libraryPanel input:not([type=checkbox]) { background:transparent; border:0; color:inherit; width:100%; min-width:0; font:inherit; font-size:16px; outline-offset:4px; }
@@ -370,3 +369,25 @@
 .messageText > div:last-child > :last-child { margin-bottom: 0; }
 
 @media (max-width: 740px) { .imageAttachments > button { width: 44px; min-height: 44px; } }
+
+/* Local movement follows the action; hidden menus immediately leave tab order. */
+.workspace :is(.libraryPanel, .attachmentMenu, .selectMenu)[hidden] { display: none; opacity: 0; transform: translateY(-4px); }
+.message[data-role="assistant"] .messageText blockquote { padding-inline-start: 0; border: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .libraryPanel, .attachmentMenu, .selectMenu {
+    opacity: 1; transform: translateY(0);
+    transition: opacity 160ms ease-out, transform 160ms ease-out, display 160ms allow-discrete;
+  }
+  @starting-style {
+    .libraryPanel, .attachmentMenu, .selectMenu { opacity: 0; transform: translateY(-4px); }
+    .toolsPanel { opacity: 0; transform: translateY(-4px); }
+  }
+  .toolsPanel { transition: opacity 140ms ease-out, transform 140ms ease-out; }
+  .tools[data-disclosure-closing] > .toolsPanel { opacity: 0; transform: translateY(-4px); }
+  .coinDetails > summary > svg, .coinPanelToggle > svg { transition: transform 160ms ease-out; }
+  .coinDetails[data-disclosure-closing] > summary > svg { transform: rotate(0); }
+  .workspace :is(.starterIdeas button, .libraryToggle, .walletAccess, .imageAttachments > button, .outcomeLaunch) {
+    transition: background-color 150ms ease-out, scale 150ms ease-out;
+  }
+  .workspace :is(.starterIdeas button, .libraryToggle, .walletAccess, .imageAttachments > button, .outcomeLaunch):active:not(:disabled) { scale: .96; }
+}

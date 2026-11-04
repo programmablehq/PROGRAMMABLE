@@ -11,6 +11,7 @@ import { intentHasOpenParts, type LaunchIntent } from "@/lib/custom-ai/launch-in
 import type { GeneralProjectView } from "@/lib/custom-ai/project-view";
 import type { CoinDetailsControls } from "./coin-details";
 import { useGeneralLaunch } from "./use-general-launch";
+import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 const GeneralLaunchWallet = lazy(() => import("./general-launch-wallet"));
 
@@ -115,10 +116,10 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     handledCommand.current=launchCommand.id;void proceed();
   },[enabled,launchCommand,draftId,disabled,launch.busy,launch.loaded,complete,proceed]);
   if (!enabled) return null;
-  if (!complete && !accepted && !uncertain) return historyHref ? <details className={styles.previousSubmission}>
+  if (!complete && !accepted && !uncertain) return historyHref ? <Disclosure className={styles.previousSubmission}>
     <summary>Earlier submission</summary>
     <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>
-  </details> : null;
+  </Disclosure> : null;
 
   return <section className={styles.generalLaunch} aria-label="Launch submission" aria-busy={launch.busy}>
     <p className={styles.note} role="status">{status}</p>
@@ -128,10 +129,10 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         disabled={disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
     {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
-    {historyHref && <details className={styles.previousSubmission}>
+    {historyHref && <Disclosure className={styles.previousSubmission}>
       <summary>Earlier submission</summary>
       <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>
-    </details>}
+    </Disclosure>}
     {walletSubject && <Suspense fallback={<p className={styles.note} role="status">Loading launch controls…</p>}>
       <GeneralLaunchWallet key={JSON.stringify([scope, account.toLowerCase(), walletSubject.chainId, walletSubject.resourceId, walletSubject.requestHash])}
         subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()}
