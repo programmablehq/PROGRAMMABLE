@@ -222,6 +222,8 @@
 .newCoin, .tools > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid #343431; border-radius: 9px; background: #171716; color: #d0cbc2; font: inherit; font-size: 12px; cursor: pointer; }
 .newCoin:hover, .tools > summary:hover { background: #242320; border-color: #77736b; }
 .tools { position: relative; min-width: 0; }
+/* The menu floats outside its summary; the disclosure's height clip must not hide it. */
+.tools[data-disclosure-pointer] { overflow: visible !important; }
 .tools > summary { list-style: none; justify-content: space-between; border-color: transparent; background: transparent; padding-inline: 8px; font-size: 16px; }
 .tools > summary > span { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .tools > summary > svg { flex-shrink: 0; color: #aaa69f; }
