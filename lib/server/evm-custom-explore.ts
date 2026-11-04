@@ -37,9 +37,10 @@ export function createEvmCustomExploreReaders<T extends EvmCustomChainId>(chainI
       links: (launch.projectMetadata?.presentation.links ?? []).map(link => ({ label: link.kind, url: link.uri })),
       market: null,
     }));
-    return { status: feed.status === "current" ? "ready" as const : "stale" as const, updatedAt: feed.generatedAt,
+    return { status: feed.quality.status === "partial" ? "partial" as const : feed.status === "current" ? "ready" as const : "stale" as const, updatedAt: feed.generatedAt,
       items, presentations, sourceEvidence: { source: `${network.slug}-finalized-custom-launch-feed-v1` as const,
-        generatedAt: feed.generatedAt, chainId: network.apiId, records: items.length } };
+        generatedAt: feed.generatedAt, chainId: network.apiId, records: items.length,
+        freshness: feed.status, quality: feed.quality, retainedRecords: feed.retainedRowCount } };
   }
   async function readLaunches(page: number, query: string, filters: RobinhoodExploreFilters, size: 6 | 8 | 10 | 50) {
     const catalog = await readCatalog();
@@ -79,7 +80,7 @@ export function createEvmCustomExploreReaders<T extends EvmCustomChainId>(chainI
   }
   async function readLaunchEvidence(address: string) {
     const feed = await readFeed();
-    if (feed.status !== "current")
+    if (feed.status !== "current" || feed.quality.status !== "complete")
       throw new Error("Launch evidence is temporarily stale");
     return feed.launches.find(row => row.token.toLowerCase() === address.toLowerCase()) ?? null;
   }

@@ -7,6 +7,7 @@ export type GeneralExchangeView = {
   state: "sending" | "unknown" | "rejected" | "completed";
   httpStatus?: number; code?: string; disposition?: string; findingCodes?: string[];
   resourceId?: string; backendState?: string;reviewId?:string;reviewSubjectHash?:`sha256:${string}`;
+  terminalNoResource?: true;
 };
 /** Owner-only journal facts. These are neither a live lifecycle query nor
  * authorization to sign, broadcast, or call a wallet. */
@@ -73,13 +74,15 @@ export function readGeneralLaunchStatus(value: unknown, binding: GeneralStatusBi
     || !date(v.createdAt) || !date(v.updatedAt) || !date(v.checkedAt) || Date.parse(v.updatedAt) < Date.parse(v.createdAt)) return bad();
   return structuredClone(v) as GeneralLaunchStatus;
 }
-function exchange(value: unknown): GeneralExchangeView {
-  if (!object(value) || !exactKeys(value, ["state", "httpStatus", "code", "disposition", "findingCodes", "resourceId", "backendState", "reviewId", "reviewSubjectHash"])
+function exchange(value: unknown, create = false): GeneralExchangeView {
+  if (!object(value) || !exactKeys(value, ["state", "httpStatus", "code", "disposition", "findingCodes", "resourceId", "backendState", "reviewId", "reviewSubjectHash", "terminalNoResource"])
     || !["sending", "unknown", "rejected", "completed"].includes(String(value.state))
     || value.httpStatus !== undefined && (!Number.isInteger(value.httpStatus) || Number(value.httpStatus) < 100 || Number(value.httpStatus) > 599)
     || ["code", "disposition", "backendState"].some(key => value[key] !== undefined && !text(value[key]))
     || value.resourceId !== undefined && !uuid(value.resourceId)
     || value.reviewId !== undefined && !uuid(value.reviewId) || value.reviewSubjectHash !== undefined && !hash(value.reviewSubjectHash)
+    || value.terminalNoResource !== undefined && (!create || value.terminalNoResource !== true || value.state !== "rejected"
+      || ![400, 422].includes(Number(value.httpStatus)) || value.resourceId !== undefined || value.reviewId !== undefined || value.backendState !== undefined)
     || value.findingCodes !== undefined && (!Array.isArray(value.findingCodes) || value.findingCodes.length > 256
       || value.findingCodes.some(code => !text(code) || !/^[A-Z][A-Z0-9_]{0,127}$/u.test(code)))) return invalid();
   return structuredClone(value) as GeneralExchangeView;
@@ -112,7 +115,7 @@ export function readGeneralPreparation(value: unknown, account: string, id?: str
     || v.code !== undefined && !text(v.code) || v.requestHash !== undefined && !hash(v.requestHash)
     || v.coin !== undefined && (!object(v.coin) || !exactKeys(v.coin, ["name", "symbol"]) || !text(v.coin.name, 256) || !text(v.coin.symbol, 64))) return invalid();
   return { ...structuredClone(v), ...(v.editor === undefined ? {} : { editor: readEditor(v.editor, v.chainId) }), ...(v.preflight === undefined ? {} : { preflight: exchange(v.preflight) }),
-    ...(v.submission === undefined ? {} : { submission: exchange(v.submission) }) } as GeneralPreparationView;
+    ...(v.submission === undefined ? {} : { submission: exchange(v.submission, true) }) } as GeneralPreparationView;
 }
 
 export function generalSubmissionUrl(preparation: GeneralPreparationView): string | undefined {
@@ -139,7 +142,11 @@ export function createGeneralLaunchClient(options: {
   const { account, signal } = options, request = options.request ?? aiRequest, now = options.now ?? Date.now;
   let state: GeneralLaunchState = { preparation: null, phase: "loading", error: "", loaded: false }, active = false, statusActive = false;
   function update(patch: Partial<GeneralLaunchState>) {
-    if (patch.preparation === null) patch = { ...patch, previousSubmission: undefined };
+    // A terminal ticket is history, not an active preparation or wallet step.
+    // Keep it locally while letting the existing controls prepare a correction.
+    if (patch.preparation?.submission?.terminalNoResource === true)
+      patch = { ...patch, previousSubmission: structuredClone(patch.preparation), preparation: null, unconfirmedId: undefined };
+    else if (patch.preparation === null) patch = { ...patch, previousSubmission: undefined };
     else if (patch.preparation && state.preparation?.submission?.state === "completed"
       && patch.preparation.submission?.state !== "completed")
       patch = { ...patch, previousSubmission: structuredClone(state.preparation) };
@@ -165,6 +172,7 @@ export function createGeneralLaunchClient(options: {
     finally { active = false; if (!signal.aborted) update({ phase: "idle" }); }
   }
   async function create(preparation: GeneralPreparationView) {
+    if (preparation.submission?.terminalNoResource === true) return;
     if (preparation.submission?.state === "completed") {await check(preparation);return;}
     if (preparation.submission?.state === "sending") { await read(preparation.id); return; }
     update({ phase: "submitting", unconfirmedId: preparation.id });

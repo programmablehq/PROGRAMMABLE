@@ -1,3 +1,5 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
+import {fileSha256V2} from "../lib/custom-launch/browser-authority-v2";
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only",()=>({}));
@@ -8,14 +10,14 @@ vi.mock("../lib/server/creator-article/wallet-principal.server",()=>({
 import {createAIStore,CUSTOM_AI_SCHEMA,type AIStore} from "../lib/custom-ai/store.server";
 import {generalPackFixture} from "./fixtures/custom-ai-general-pack";
 import {packGeneralGraph} from "../lib/custom-ai/general-pack.server";
-import {generalProjectView} from "../lib/custom-ai/project-view";
+import {generalProjectView,generalCoinPreparationEligibility} from "../lib/custom-ai/project-view";
 import {selectExecutionRoute} from "../lib/custom-ai/execution-routing";
 import {conversationStorageId} from "../lib/custom-ai/conversation.server";
 import {generalPreparationView,type GeneralPackedLaunch,type GeneralPreparation} from "../lib/custom-ai/general-preparation-store.server";
 import {createGeneralPublicSource,generalSourcePublicUri} from "../lib/custom-ai/public-launch-source.server";
 import {projectGeneralGraphReply} from "../lib/custom-ai/general-launch-response.server";
 import {createGeneralPreparationService} from "../lib/custom-ai/general-preparation.server";
-import {createCustomAIBackendLaunchBridge} from "../lib/custom-ai/backend-launch.server";
+import {backendCreateFailure,createCustomAIBackendLaunchBridge} from "../lib/custom-ai/backend-launch.server";
 import {authorizeCustomAI} from "../lib/custom-ai/auth.server";
 import {parseGeneralPreparationAction} from "../lib/custom-ai/general-preparation-input";
 import {CustomAIError} from "../lib/custom-ai/types";
@@ -74,7 +76,7 @@ beforeAll(async()=>{
   await seed.projects.complete(owner,sourceId,reserved.lease!,fixture.source.compilation);
   await seed.projects.saveScenarios(owner,sourceId,reserved.lease!,fixture.source.scenarios);
   await seed.projects.saveSourceAudit(owner,sourceId,reserved.lease!,await auditGeneralSource(fixture.source.project,undefined,{
-    call:async()=>({text:JSON.stringify({reviewedRequirementIds:fixture.source.project.intent.requirements.map(rule=>rule.id),findings:[]}),inputTokens:1,outputTokens:1})}));
+    call:async()=>sourceAuditModelReply(fixture.source.project)}));
   const view=generalProjectView({version:1,reply:"Source checked",summary:"Marker",project:fixture.source.project,compilation:fixture.source.compilation,
     scenarios:fixture.source.scenarios,blueprintId:fixture.source.blueprint.id,selection:selectExecutionRoute(fixture.source.project.intent,1),requirementCoverage:"proposed",launchReady:false});
   await seed.finish(owner,sourceId,reserved.lease!,{reply:"Source checked",generalProject:view,intent:fixture.source.project.intent,change:"applied"});
@@ -100,6 +102,23 @@ beforeEach(async()=>{
 afterEach(async()=>{await database?.close();vi.restoreAllMocks();vi.unstubAllEnvs();vi.clearAllMocks();});
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch preparation",()=>{
+  it("derives coin eligibility from checked source and the bound deployment graph",()=>{
+    expect(generalCoinPreparationEligibility(fixture.source)).toEqual({eligible:true,missing:[]});
+    for(const patch of [
+      {deployment:undefined},
+      {deployment:{...fixture.source.project.deployment!,pool:{...fixture.source.project.deployment!.pool,token:"missing"}}},
+      {deployment:{...fixture.source.project.deployment!,productionId:`sha256:${"f".repeat(64)}` as const}},
+    ])expect(generalCoinPreparationEligibility({...fixture.source,project:{...fixture.source.project,...patch}}))
+      .toEqual({eligible:false,missing:["coin-deployment"]});
+    expect(generalCoinPreparationEligibility({...fixture.source,sourceAudit:undefined}))
+      .toEqual({eligible:false,missing:["source-review"]});
+  });
+  it("refuses a new preparation with no source audit before reserving another identity",async()=>{
+    await database.query("UPDATE programmable_custom_ai_v1.objects SET value=value-'sourceAudit' WHERE owner=$1 AND kind='contract-project' AND id=$2",
+      [owner,selected().id]);
+    await expect(store.projects.preparations.reserve(owner,nextTicket,selected(),"1")).rejects.toMatchObject({code:"launch-source-checks"});
+    expect(await store.projects.preparations.read(owner,nextTicket)).toBeNull();
+  });
   it("reads the immutable submitted runtime pack after a new draft and signing-window expiry",async()=>{
     const saved=await stage();
     await expect(store.projects.preparations.readRuntimeInputs(owner,ticket)).rejects.toThrow();
@@ -245,6 +264,94 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     const results=await Promise.all([store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId),store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId)]);
     expect(results.filter(result=>result.lease)).toHaveLength(1);expect(results.map(result=>result.record.idempotencyKey)).toEqual([record.idempotencyKey,record.idempotencyKey]);
     expect(generalPreparationView(results[1].record,clock).submission?.state).toBe("sending");
+  });
+  it.each([422,409])("does not release an HTTP %i rejection without explicit no-resource proof",async status=>{
+    await stage();
+    const transport=vi.fn().mockResolvedValue(Response.json({schemaVersion:"programmable.api-error.v1",
+      error:{code:status===409?"IDEMPOTENCY_CONFLICT":"PROFILE_INVALID",retryable:false}},{status}));
+    const f=service(transport),current=await request();
+    await expect(f.instance.exchange(current.req,current.authority,ticket,"create")).rejects.toMatchObject({code:"launch-submission"});
+    const rejected=(await store.projects.preparations.read(owner,ticket))!;
+    expect(rejected.submission).toMatchObject({state:"rejected",httpStatus:status});
+    await expect(store.projects.preparations.reserve(owner,nextTicket,selected(),"1")).rejects.toMatchObject({code:"launch-preparation-changed"});
+    const replay=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
+    expect(replay.pack?.requestBody).toBe(pack.requestBody);
+    expect(replay.record.idempotencyKey).toBe(record.idempotencyKey);
+    expect(replay.record.identity).toEqual(record.identity);
+  });
+  const terminalMarker=()=>({schemaVersion:"programmable.wallet-create-disposition.v1",disposition:"terminal_no_resource",
+    chainId:"1",controller:record.account.toLowerCase(),requestSha256:pack.requestSha256,idempotencyKey:record.idempotencyKey});
+  it("releases a proven terminal ticket for a corrected preparation, retaining exact history and refusing resubmission",async()=>{
+    await stage();
+    const raw=JSON.stringify({error:{code:"INVALID_SOURCE"},createDisposition:terminalMarker()},null,2);
+    const transport=vi.fn().mockResolvedValue(new Response(raw,{status:400,headers:{"content-type":"application/json"}}));
+    const f=service(transport),current=await request();
+    await expect(f.instance.exchange(current.req,current.authority,ticket,"create")).rejects.toMatchObject({code:"launch-submission"});
+    const old=(await store.projects.preparations.read(owner,ticket))!;
+    expect(old.submission).toMatchObject({state:"rejected",createDisposition:terminalMarker()});
+    expect(await store.projects.preparations.active(owner,record.account)).toBeNull();
+    const view=generalPreparationView(old,clock);
+    expect(view.submission).toMatchObject({terminalNoResource:true,state:"rejected"});expect(view.launchReady).toBe(false);
+    expect(JSON.stringify(view)).not.toContain("idempotencyKey");expect(JSON.stringify(view)).not.toContain("createDisposition");
+    const key=conversationStorageId(record.account,record.selection.conversation),studio=await store.readObject<{settings:object}>(owner,"studio",key);
+    const revision=await store.saveObject(owner,"studio",key,{...studio!.value,settings:{...studio!.value.settings,name:"Corrected coin"}},studio!.revision);
+    const fresh=await store.projects.preparations.reserve(owner,nextTicket,{...selected(),studioRevision:revision});
+    expect(fresh.record.id).toBe(nextTicket);expect(fresh.record.idempotencyKey).not.toBe(record.idempotencyKey);
+    expect(fresh.record.identity.nonce).not.toBe(record.identity.nonce);expect(fresh.record.coin?.name).toBe("Corrected coin");
+    expect(await store.projects.preparations.read(owner,ticket)).toEqual(old);
+    expect((await database.query<{value:{requestBody:string}}>("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='general-launch-pack' AND id=$2",[owner,ticket])).rows[0].value.requestBody).toBe(pack.requestBody);
+    const history=(await database.query<{value:{rawReply:string;replySha256:string;replyBytes:number}}>("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='general-launch-exchange'",[owner])).rows;
+    expect(history).toHaveLength(1);expect(history[0].value.rawReply).toBe(raw);expect(history[0].value.replySha256).toBe(fileSha256V2(Buffer.from(raw)));expect(history[0].value.replyBytes).toBe(Buffer.byteLength(raw));
+    const again=await request();expect((await f.instance.exchange(again.req,again.authority,ticket,"create")).submission?.terminalNoResource).toBe(true);
+    expect((await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId)).lease).toBeNull();
+    expect(transport).toHaveBeenCalledOnce();expect((await store.projects.preparations.active(owner,record.account))?.id).toBe(nextTicket);
+  });
+  it("recovers unknown bytes with a fresh exact replay before releasing a terminal request, retaining both attempts",async()=>{
+    await stage();
+    const raw=JSON.stringify({error:{code:"WALLET_CREATE_TERMINAL_NO_RESOURCE"},createDisposition:terminalMarker()});
+    const transport=vi.fn().mockRejectedValueOnce(Error("response lost"))
+      .mockResolvedValueOnce(new Response(raw,{status:422,headers:{"content-type":"application/json"}}));
+    const f=service(transport),first=await request();
+    await expect(f.instance.exchange(first.req,first.authority,ticket,"create")).rejects.toMatchObject({code:"launch-transport"});
+    expect((await store.projects.preparations.active(owner,record.account))?.id).toBe(ticket);
+    await expect(store.projects.preparations.reserve(owner,nextTicket,selected(),"1")).rejects.toMatchObject({code:"launch-preparation-changed"});
+    const next=await request();
+    await expect(f.instance.exchange(next.req,next.authority,ticket,"create")).rejects.toMatchObject({code:"launch-submission"});
+    for(const [,init] of transport.mock.calls as [URL,RequestInit][]){
+      expect(Buffer.from(init.body as Uint8Array).toString()).toBe(pack.requestBody);
+      expect(new Headers(init.headers).get("idempotency-key")).toBe(record.idempotencyKey);
+    }
+    expect(await store.projects.preparations.active(owner,record.account)).toBeNull();
+    const history=(await database.query<{value:{state:string;rawReply?:string}}>("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='general-launch-exchange'",[owner])).rows;
+    expect(history.map(row=>row.value.state).sort()).toEqual(["rejected","unknown"]);
+    expect(history.find(row=>row.value.state==="rejected")?.value.rawReply).toBe(raw);
+  });
+  it.each(["mismatch","location","post-reservation","ordinary"])("keeps %s errors locked to the original request",async variant=>{
+    await stage();
+    const value={error:{code:"FAILED"},...(variant==="ordinary"?{}:{createDisposition:{...terminalMarker(),...(variant==="mismatch"?{idempotencyKey:"different"}:{})}})};
+    const transport=vi.fn().mockImplementation(async()=>Response.json(value,{status:variant==="post-reservation"?503:422,
+      headers:variant==="location"?{location:`/v3/wallet-admin/custom-launches/${launchId}`}:{}}));
+    const f=service(transport),current=await request();
+    await expect(f.instance.exchange(current.req,current.authority,ticket,"create")).rejects.toThrow();
+    expect((await store.projects.preparations.active(owner,record.account))?.id).toBe(ticket);
+    expect((await store.projects.preparations.read(owner,ticket))?.submission?.createDisposition).toBeUndefined();
+    await expect(store.projects.preparations.reserve(owner,nextTicket,selected(),"1")).rejects.toMatchObject({code:"launch-preparation-changed"});
+    const replay=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
+    expect(replay.pack?.requestBody).toBe(pack.requestBody);expect(replay.record.idempotencyKey).toBe(record.idempotencyKey);
+  });
+  it.each(["expired","replaced","pointer"])("cannot persist terminal proof or release a pointer after the %s lease condition",async variant=>{
+    await stage();const claim=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
+    const transport=vi.fn().mockResolvedValue(Response.json({createDisposition:terminalMarker()},{status:422}));
+    const current=await request();const bridge=createCustomAIBackendLaunchBridge({backendBaseUrl:"https://api.test/",websiteToken:"w".repeat(43),assertionKey:"k".repeat(43),fetchBackend:transport});
+    const error=await bridge.submit(current.req,current.authority,{chainId:1,operation:"create",account:record.account,bodyBytes:Buffer.from(pack.requestBody),idempotencyKey:record.idempotencyKey}).catch(error=>error);
+    const failure=backendCreateFailure(error)!;expect(failure.createDisposition).toBeTruthy();
+    if(variant==="pointer")await database.query("UPDATE programmable_custom_ai_v1.objects SET value=$1 WHERE owner=$2 AND kind='active-general-prepare'",[JSON.stringify({id:nextTicket}),owner]);
+    else {clock=claim.record.submission!.until+1;if(variant==="replaced")await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);}
+    await expect(store.projects.preparations.finishExchange(owner,ticket,"create",claim.lease!,{state:"rejected",summary:{httpStatus:422},...failure})).rejects.toMatchObject({code:"launch-preparation-changed"});
+    expect((await store.projects.preparations.read(owner,ticket))?.submission?.createDisposition).toBeUndefined();
+    expect((await database.query("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='general-launch-exchange'",[owner])).rows).toHaveLength(0);
+    const pointer=(await database.query<{value:{id:string}}>("SELECT value FROM programmable_custom_ai_v1.objects WHERE owner=$1 AND kind='active-general-prepare'",[owner])).rows[0].value;
+    expect(pointer.id).toBe(variant==="pointer"?nextTicket:ticket);
   });
   it("persists unknown sends and retries exact bytes and idempotency only after a fresh explicit action",async()=>{
     await stage();await markPreflight();

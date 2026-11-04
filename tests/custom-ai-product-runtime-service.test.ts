@@ -72,11 +72,11 @@ describe("private requested runtime snapshots",()=>{
     const auth={kind:"account",owner:"owned-account",principal:{wallets:[wallet]}} as unknown as AIAuthority;
     const req=()=>new Request("https://site.test/api/custom-ai/product-runtime?id="+id);
     const [a,b]=await Promise.all([read(req(),auth,id),read(req(),auth,id)]);
-    expect(a).toEqual(b);expect(a).not.toBe(b);expect(mocks.source).toHaveBeenCalledOnce();expect(resource).toHaveBeenCalledOnce();expect(mocks.observe).toHaveBeenCalledOnce();
-    await read(req(),auth,id);expect(resource).toHaveBeenCalledOnce();
+    expect(a).toEqual(b);expect(a).not.toBe(b);expect(mocks.source).toHaveBeenCalledTimes(2);expect(resource).toHaveBeenCalledTimes(2);expect(mocks.observe).toHaveBeenCalledOnce();
+    await read(req(),auth,id);expect(resource).toHaveBeenCalledTimes(2);
     const other={...auth,principal:{wallets:[`0x${"2".repeat(40)}`]}} as unknown as AIAuthority;
-    await expect(read(req(),other,id)).rejects.toMatchObject({code:"wallet"});expect(resource).toHaveBeenCalledOnce();
-    time+=60_001;await read(req(),auth,id);expect(resource).toHaveBeenCalledTimes(2);
+    await expect(read(req(),other,id)).rejects.toMatchObject({code:"wallet"});expect(resource).toHaveBeenCalledTimes(2);
+    time+=60_001;await read(req(),auth,id);expect(resource).toHaveBeenCalledTimes(3);
     expect(mocks.source.mock.calls[0].slice(1)).toEqual(["owned-account",id]);
   });
   it("backs off after a failed observation without returning a healthy state",async()=>{

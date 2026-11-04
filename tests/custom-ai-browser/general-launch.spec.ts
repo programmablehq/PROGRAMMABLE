@@ -21,6 +21,12 @@ test('a chat launch request prepares its exact source once; stale requests and r
  await page.reload();await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
  expect(f.posts.filter(p=>p.action==='create')).toHaveLength(1);expect(f.errors).toEqual([]);
 });
+test('an auxiliary source cannot offer or start coin preparation',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?auxiliary');
+ await expect(page.getByText('Source saved. A coin launch needs a token, hook, liquidity initializer and pool declaration.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toHaveCount(0);
+ expect(f.posts).toEqual([]);expect(f.errors).toEqual([]);
+});
 test('the launch remains visible while the saved rules start collapsed',async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toBeVisible();

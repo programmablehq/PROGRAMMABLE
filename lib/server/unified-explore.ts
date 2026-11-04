@@ -61,7 +61,7 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
       ? [{ tokenAddress: row.tokenAddress, poolId: row.poolId }] : []),
   ].map(row => [`${row.tokenAddress.toLowerCase()}:${row.poolId.toLowerCase()}`, row])).values()];
   const observations = wants(1) ? readConfirmingEthereumLaunches().catch(() => []) : Promise.resolve([]);
-  const aiRead = wants(4663)
+  const aiRead = wants(1) || wants(4663)
     ? readCustomAICatalog().catch(() => ({ status:"unavailable" as const, updatedAt:null, items:[] }))
     : Promise.resolve({ status: "inactive" as const, updatedAt: null, items: [] });
   // Preserve each network's full visible universe before query/profile filters.
@@ -102,15 +102,15 @@ export async function readUnifiedLaunches(page = 1, query = "", filters: Robinho
       ? await dependencies.ethereumMarkets(catalog.items, 999, universes.get(999)).catch(() => new Map<string, RobinhoodCoinMarket>()) : new Map<string, RobinhoodCoinMarket>()] as const),
   ]);
   const ai = await aiRead;
-  const aiRows = ai.items.filter(row => owned(row.creator) && isVisibleExploreQueryIdentityV1(row,row.chainId,query));
+  const aiRows = ai.items.filter(row => wants(row.chainId) && owned(row.creator) && isVisibleExploreQueryIdentityV1(row,row.chainId,query));
   const aiMetadata = new Map(aiRows.map(row=>[exploreIdentityKey(row),row]));
   const sources = { robinhood: rh.status, ethereum: eth.status, base: base.status, hyperevm: hyperevm.status, customAI: ai.status };
   const activeSources = [wants(4663) ? rh : null, wants(1) ? eth : null,
     wants(8453) && dependencies.base ? base : null,
     wants(999) && dependencies.hyperevm ? hyperevm : null,
-    wants(4663) && ai.status !== "inactive" ? ai : null].filter((source): source is typeof rh => source !== null);
+    (wants(1) || wants(4663)) && ai.status !== "inactive" ? ai : null].filter((source): source is NonNullable<typeof source> => source !== null);
   const available = activeSources.filter(source => source.status !== "unavailable");
-  const status = !available.length ? "unavailable" as const : available.length < activeSources.length || wants(1) && eth.status === "partial" ? "partial" as const
+  const status = !available.length ? "unavailable" as const : available.length < activeSources.length || available.some(source => source.status === "partial") ? "partial" as const
     : available.some(source => source.status === "stale") ? "stale" as const
       : available.some(source => source.status === "syncing") ? "syncing" as const : "ready" as const;
   const updatedAt = available.flatMap(source => source.updatedAt ? [source.updatedAt] : [])

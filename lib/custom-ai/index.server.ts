@@ -5,7 +5,7 @@ import { decodeEventLog, decodeFunctionData, decodeFunctionResult, encodeFunctio
 import bundle from "@/scripts/custom-ai/core-bundle.json";
 import { bytesV1, objectV1, quantityV1, tradeBlockV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 import { asAddress, asHash, customAIChain, type CustomAIChain } from "./chain.server";
-import { currentCustomAIDeployment, verifyCustomAIDeployment } from "./deployment.server";
+import { currentCustomAIDeployment, publishedCustomAIIndexSources, verifyCustomAIDeployment } from "./deployment.server";
 import { customAIFactoryAbi, customAIPlanHash, predictCustomAIToken, type LaunchParameters } from "./launch-plan";
 import { encodeLaunchValue } from "./wallet";
 import { matchesRuntime } from "./runtime";
@@ -109,24 +109,27 @@ export async function syncCustomAIIndex(chainId: 1 | 4663, store: AIStore = prod
 }
 
 export async function readCustomAICatalog() {
-  const enabled = ([1,4663] as const).filter(chainId=>currentCustomAIDeployment(chainId)?.status === "active");
-  if (!enabled.length) return { status:"inactive" as const,updatedAt:null,items:[] as CustomAIPublicToken[] };
+  const sources = ([1,4663] as const).flatMap(publishedCustomAIIndexSources);
+  if (!sources.length) return { status:"inactive" as const,updatedAt:null,items:[] as CustomAIPublicToken[] };
   const store = productionAIStore();
-  const cursors = await Promise.all(enabled.map(chainId=> {
-    const deployment = currentCustomAIDeployment(chainId)!;
-    return store.readObject<Cursor>("public","index",id(`${chainId}:${deployment.factory.address}:${deployment.bundleHash}`));
-  }));
+  const cursors = await Promise.all(sources.map(source =>
+    store.readObject<Cursor>("public","index",id(`${source.chainId}:${source.factory}:${source.bundleHash}`))));
   const tokens = await store.listObjects<CustomAIPublicToken>("public","token");
   const status = cursors.some(cursor=>!cursor) ? "syncing" as const
     : cursors.some(cursor=>Date.now()-Date.parse(cursor!.value.updatedAt)>600_000) ? "stale" as const
       : cursors.some(cursor=>cursor!.value.status !== "current") ? "syncing" as const : "ready" as const;
-  return { status,updatedAt:cursors.map(cursor=>cursor?.value.updatedAt).filter((value):value is string=>!!value).sort()[0]??null,items:tokens.filter(token=> enabled.includes(token.chainId)
-    && currentCustomAIDeployment(token.chainId)?.factory.address.toLowerCase() === token.factory.toLowerCase()
-    && currentCustomAIDeployment(token.chainId)?.bundleHash === token.coreBundleHash) };
+  return { status,updatedAt:cursors.map(cursor=>cursor?.value.updatedAt).filter((value):value is string=>!!value).sort()[0]??null,items:tokens.filter(token=> sources.some(source =>
+    source.chainId === token.chainId && source.factory.toLowerCase() === token.factory.toLowerCase()
+    && source.bundleHash === token.coreBundleHash)) };
 }
 export async function readCustomAIToken(chainId:1|4663,address:string, allowStaged = false) {
   const deployment = currentCustomAIDeployment(chainId);
-  if (!deployment || deployment.status !== "active" && !allowStaged) return null;
   const saved = await productionAIStore().readObject<CustomAIPublicToken>("public","token",publicId(chainId,address));
-  return saved?.value.factory.toLowerCase() === deployment.factory.address.toLowerCase() && saved.value.coreBundleHash === deployment.bundleHash ? saved.value : null;
+  if (!saved || saved.value.chainId !== chainId || saved.value.tokenAddress.toLowerCase() !== address.toLowerCase()) return null;
+  const sources = publishedCustomAIIndexSources(chainId);
+  const published = sources.some(source => source.factory.toLowerCase() === saved.value.factory.toLowerCase()
+    && source.bundleHash === saved.value.coreBundleHash);
+  const staged = allowStaged && deployment?.status === "staged"
+    && saved.value.factory.toLowerCase() === deployment.factory.address.toLowerCase() && saved.value.coreBundleHash === deployment.bundleHash;
+  return published || staged ? saved.value : null;
 }

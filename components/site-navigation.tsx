@@ -10,6 +10,7 @@ import {
 } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   DiscordBrandIcon,
@@ -30,7 +31,7 @@ const desktopNavItems = [
 ];
 
 const menuNavItems = [
-  { href: "/launch/custom-ai", label: "Custom AI" },
+  { href: "/launch/custom-ai", label: "AI Chat" },
   { href: "/developers/api-keys", label: "API keys" },
   { href: "/docs", label: "Docs" },
   { href: "/analytics", label: "Analytics" },
@@ -313,7 +314,7 @@ export function SiteHeader() {
       }}
     >
       <div className={`header-inner ${styles.headerInner}`}>
-        <div className="header-brand">
+        <div className={`header-brand ${styles.brandWithBack}`}>
           <Link
             className="wordmark"
             href="/"
@@ -330,10 +331,16 @@ export function SiteHeader() {
               priority
             />
           </Link>
+          {pathname === "/launch/custom-ai" && (
+            <Link className={styles.backToLaunch} href="/launch">
+              <ArrowLeft size={16} strokeWidth={1.5} aria-hidden="true" />
+              <span>Launch</span>
+            </Link>
+          )}
         </div>
 
         {pathname === "/launch/custom-ai" ? (
-          <h1 className={styles.pageTitle}>Custom AI</h1>
+          <h1 className={styles.pageTitle}>AI Chat</h1>
         ) : (
           <>
             <DesktopNavigation />

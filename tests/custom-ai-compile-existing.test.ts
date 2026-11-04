@@ -1,3 +1,4 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only",()=>({}));
 import { compileExistingProject, readCompilationSource } from "../lib/custom-ai/compile-existing.server";
@@ -56,7 +57,7 @@ describe("compile-only owned recovery",()=>{
   expect(compile).not.toHaveBeenCalled();expect(complete).toHaveBeenCalledWith("alice",request.id,"current",receipt);
  });
  it("retains a passed independent source review when resuming compilation",async()=>{
-  const sourceAudit=await auditGeneralSource(project,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["no-owner"],findings:[]}),inputTokens:1,outputTokens:1})});
+  const sourceAudit=await auditGeneralSource(project,undefined,{call:async()=>sourceAuditModelReply(project)});
   const saveSourceAudit=vi.fn(),compiled=compilation(),compile=vi.fn();
   const auditedStore={...store,projects:{...store.projects,saveSourceAudit}} as AIStore;
   const value=await compileExistingProject({store:auditedStore,owner:"alice",id:request.id,lease:"current",source:{...checkpoint,compilation:compiled,sourceAudit}},undefined,compile);

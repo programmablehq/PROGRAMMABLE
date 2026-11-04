@@ -1,3 +1,4 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only",()=>({}));
 import { runCustomAI } from "../lib/custom-ai/service.server";
@@ -316,7 +317,7 @@ describe("general source generation inside the owned chat job",()=>{
  it("persists the independent audit only after its matching immutable source",async()=>{
   const events:string[]=[];let saved:ContractProject|undefined;
   const call=vi.fn(async(input:ClaudeInput)=>input.task==="planning"?plan():input.task==="source-audit"
-   ?result({reviewedRequirementIds:requirements.map(rule=>rule.id),findings:[]}):generated());
+   ?sourceAuditModelReply(saved!):generated());
   const value=await runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:async project=>{
    events.push("compile");return {...await compile(project),compiled:true,diagnostics:[]};
   }},{saveProject:async project=>{expect(saved).toBeUndefined();saved=project;events.push("source");},

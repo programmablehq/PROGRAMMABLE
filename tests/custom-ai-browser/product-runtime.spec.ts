@@ -7,7 +7,7 @@ test.beforeAll(async()=>{
   const bundle=await build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Panel from './components/custom-ai/product-runtime';
     import './app/globals.css';import styles from './components/custom-ai/workspace.module.css';
     createRoot(document.getElementById('root')).render(<main className={styles.workspace}><section style={{padding:24,width:'100%',maxWidth:700,margin:'auto'}}><h1>River rewards</h1><p>Your saved product</p><Panel preparationId="runtime-preparation-0001" sourceId="runtime-source-0001" chainId={1} headers={async()=>({Authorization:'synthetic-local-session'})}/></section></main>);`,
-    loader:"tsx",resolveDir:process.cwd()},bundle:true,platform:"browser",format:"esm",jsx:"automatic",write:false,outdir:"/fixture-output",define:{"process.env.NODE_ENV":'"production"'}});
+    loader:"tsx",resolveDir:process.cwd()},bundle:true,platform:"browser",format:"esm",jsx:"automatic",write:false,outdir:"/fixture-output",external:["/brand/*"],define:{"process.env.NODE_ENV":'"production"'}});
   server=createServer((req,res)=>{
     const asset=bundle.outputFiles.find(file=>req.url===(file.path.endsWith(".css")?"/fixture.css":"/fixture.js"));
     if(asset){res.setHeader("Content-Type",asset.path.endsWith(".css")?"text/css":"text/javascript");res.end(asset.contents);return;}

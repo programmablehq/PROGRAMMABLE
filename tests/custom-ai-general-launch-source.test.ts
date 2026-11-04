@@ -67,6 +67,16 @@ const selection = (): GeneralLaunchSourceSelection => ({ id, account, conversati
   projectHash: project.hash, artifactHash: compilation.artifactHash, intentRevision: intent.revision });
 
 describe("current owned source selection before general launch packing", () => {
+  it("keeps auxiliary source inspectable but refuses coin preparation",async()=>{
+    const source=await store.projects.readForLaunch(owner,selection());
+    expect(source.project.sources["Marker.sol"].content).toContain("contract Marker");
+    const view=generalProjectView({...source,version:1,reply:"Source checked",summary:"Marker",
+      selection:selectExecutionRoute(intent,999),requirementCoverage:"proposed",launchReady:false});
+    expect(view.coinPreparation).toEqual({eligible:false,missing:["source-review","coin-deployment"]});
+    await expect(store.projects.preparations.reserve(owner,"auxiliary-coin-ticket-0001",selection()))
+      .rejects.toMatchObject({code:"launch-source-checks"});
+    expect(await store.projects.preparations.active(owner,account)).toBeNull();
+  });
   it("rejects an updated product architecture even when the text intent revision is unchanged",async()=>{
     await database.query("UPDATE programmable_custom_ai_v1.jobs SET result=jsonb_set(result,'{productBlueprint}', $2::jsonb) WHERE owner=$1 AND id=$3",[owner,JSON.stringify({id:`sha256:${"c".repeat(64)}`}),id]);
     await expect(store.projects.readForLaunch(owner,selection())).rejects.toMatchObject({code:"launch-source-changed"});

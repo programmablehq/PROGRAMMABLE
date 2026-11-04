@@ -5,6 +5,8 @@ import { keccak256, toHex, type Hex } from "viem";
 import captured from "./fixtures/custom-ai-launch-discovery.json";
 import protection from "./fixtures/custom-ai-launch-protection.json";
 import { generalPackFixture } from "./fixtures/custom-ai-general-pack";
+import { sourceAuditModelReply } from "./fixtures/custom-ai-source-audit";
+import { auditGeneralSource } from "../lib/custom-ai/source-audit.server";
 import { projectLaunchProductionContext } from "../lib/custom-ai/launch-production.server";
 import { createLaunchProductionContext } from "../lib/custom-ai/launch-production";
 import { replayNativeFeedConstructorRead } from "../lib/custom-ai/dependency-witness.server";
@@ -69,7 +71,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([
     await seed.projects.save(owner,binding.sourceId,reserved.lease!,source.project);
     await seed.projects.complete(owner,binding.sourceId,reserved.lease!,source.compilation);
     await seed.projects.saveScenarios(owner,binding.sourceId,reserved.lease!,source.scenarios);
-    const view=generalProjectView({version:1,reply:"Source checked",summary:"Observed inputs",project:source.project,compilation:source.compilation,scenarios:source.scenarios,
+    const sourceAudit=await auditGeneralSource(source.project,undefined,{call:async()=>sourceAuditModelReply(source.project)});
+    await seed.projects.saveSourceAudit(owner,binding.sourceId,reserved.lease!,sourceAudit);
+    const view=generalProjectView({version:1,reply:"Source checked",summary:"Observed inputs",project:source.project,compilation:source.compilation,scenarios:source.scenarios,sourceAudit,
       blueprintId:source.blueprint.id,selection:selectExecutionRoute(source.project.intent,chain),requirementCoverage:"proposed",launchReady:false});
     await seed.finish(owner,binding.sourceId,reserved.lease!,{reply:"Source checked",generalProject:view,intent:source.project.intent,change:"applied"});
     revision=await seed.saveObject(owner,"studio",key,{settings:binding.settings,image:binding.image,messages:[],draftId:binding.sourceId,sourceId:binding.sourceId,contextId:binding.contextId},revision);

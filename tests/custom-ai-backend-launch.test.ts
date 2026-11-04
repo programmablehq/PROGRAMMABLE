@@ -1,3 +1,4 @@
+import {SOURCE_AUDIT_POLICY_ID,SOURCE_AUDIT_REVIEWED_POLICY_IDS} from "../lib/custom-ai/source-audit-policy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, createHmac } from "node:crypto";
 vi.mock("server-only", () => ({}));
@@ -7,7 +8,7 @@ vi.mock("../lib/server/creator-article/wallet-principal.server", () => ({
   WalletPrincipalAuthenticationErrorV1: class extends Error {},
 }));
 import { authorizeCustomAI, requireFreshCustomAIAuthority, type AIAuthority } from "../lib/custom-ai/auth.server";
-import { createCustomAIBackendLaunchBridge } from "../lib/custom-ai/backend-launch.server";
+import { BackendLaunchRejected, backendCreateFailure, createCustomAIBackendLaunchBridge } from "../lib/custom-ai/backend-launch.server";
 import { createWalletLaunchBffAssertionV1, walletLaunchMutationTargetV1 } from "../lib/server/custom-launch/wallet-launch-bff-assertion-v1";
 import type { AutomaticSourceReceipt } from "../lib/custom-ai/automatic-source.server";
 
@@ -32,6 +33,47 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("body-bound session launch producer", () => {
+  const disposition = (chainId = candidate.chainId as number) => ({
+    schemaVersion: "programmable.wallet-create-disposition.v1", disposition: "terminal_no_resource",
+    chainId: String(chainId), controller: wallet,
+    requestSha256: `sha256:${createHash("sha256").update(bodyBytes).digest("hex")}`, idempotencyKey,
+  });
+  it.each([1, 4663, 8453, 999])("retains an authenticated exact-byte terminal create rejection on chain %s", async chainId => {
+    const marker=disposition(chainId), raw=JSON.stringify({error:{code:"INVALID_SOURCE"},createDisposition:marker},null,2);
+    const f=bridge(vi.fn().mockResolvedValue(new Response(raw,{status:chainId===4663?422:400,headers:{"content-type":"application/json"}})));
+    const req=request(),authority=await authorizeCustomAI(req);
+    const error=await f.service.submit(req,authority,{...candidate,chainId:chainId as 1|4663|8453|999}).catch(error=>error);
+    expect(backendCreateFailure(error)).toEqual({createDisposition:marker,reply:JSON.parse(raw),rawReply:raw});
+    expect(f.fetchBackend).toHaveBeenCalledOnce();
+  });
+  it.each([
+    {schemaVersion:"other"}, {disposition:"rejected"}, {chainId:8453}, {chainId:"1"},
+    {controller:other}, {controller:wallet.replace("0x","0X")},
+    {requestSha256:`sha256:${"0".repeat(64)}`}, {requestSha256:undefined},
+    {idempotencyKey:idempotencyKey+" "}, {idempotencyKey:"other"}, {launchReady:true},
+  ])("ignores malformed or mismatched marker %j", async patch => {
+    const f=bridge(vi.fn().mockResolvedValue(reply({createDisposition:{...disposition(),...patch}},422)));
+    const req=request(),authority=await authorizeCustomAI(req);
+    const error=await f.service.submit(req,authority,candidate).catch(error=>error);
+    expect(backendCreateFailure(error)?.createDisposition).toBeUndefined();
+  });
+  it.each([401,403,409,429,500,503])("does not accept a terminal marker on HTTP %s", async status => {
+    const f=bridge(vi.fn().mockResolvedValue(reply({createDisposition:disposition()},status)));
+    const req=request(),authority=await authorizeCustomAI(req);
+    const error=await f.service.submit(req,authority,candidate).catch(error=>error);
+    expect(backendCreateFailure(error)?.createDisposition).toBeUndefined();
+  });
+  it("refuses Location, preflight, changed forwarded bytes and independently constructed errors as terminal proof", async () => {
+    for(const variant of ["location","preflight","bytes"]){
+      const f=bridge(vi.fn().mockResolvedValue(reply({createDisposition:disposition()},422,variant==="location"?{location:`/v4/chains/8453/wallet-admin/custom-launches/${id}`} : {})));
+      const req=request(),authority=await authorizeCustomAI(req);
+      const error=await f.service.submit(req,authority,{...candidate,
+        ...(variant==="preflight"?{operation:"preflight" as const,idempotencyKey:null}:{}),
+        ...(variant==="bytes"?{bodyBytes:Buffer.from(bodyBytes.toString()+" ")}:{})}).catch(error=>error);
+      expect(backendCreateFailure(error)?.createDisposition).toBeUndefined();
+    }
+    expect(backendCreateFailure(Object.assign(new BackendLaunchRejected(422,"INVALID_SOURCE",[]),{createDisposition:disposition()}))).toBeUndefined();
+  });
   it("reads one complete owned resource with a fresh GET assertion and no mutation",async()=>{
     const req=new Request("https://site.test/api/custom-ai/product-runtime"),authority=await authorizeCustomAI(req);
     const f=bridge(vi.fn().mockResolvedValue(reply({launchId:id,status:"finalized"},200)),4096);
@@ -50,7 +92,7 @@ describe("body-bound session launch producer", () => {
     const receipt:AutomaticSourceReceipt={schemaVersion:"programmable.automatic-source-context.v1",reviewId:id,subjectHash:hash,chainId:"8453",controller:wallet,
       sourceGeneratedAt:now.getTime()-90_000,artifactHash:hash,intentHash:hash,productionHash:hash,verifierRevision:hash,
       intent:{version:1,id:"gqa",revision:"a".repeat(64),requirements:[],changes:[],unresolved:[]},compilationUnits:[{id:"gqa",inputHash:hash}],
-      projectHash:hash,sourceAudit:{version:1,projectHash:hash,intentHash:hash,productionId:hash,model:"test",checkedAt:now.getTime(),reviewedRequirementIds:[],findings:[],status:"passed",launchReady:false,hash}};
+      projectHash:hash,sourceAudit:{version:1,compilerInputHash:hash,policyId:SOURCE_AUDIT_POLICY_ID,reviewedPolicyIds:[...SOURCE_AUDIT_REVIEWED_POLICY_IDS],projectHash:hash,intentHash:hash,productionId:hash,model:"test",checkedAt:now.getTime(),reviewedRequirementIds:[],findings:[],status:"passed",launchReady:false,hash}};
     const f=bridge(vi.fn().mockResolvedValue(reply({schemaVersion:"programmable.automatic-source-bound.v1",reviewId:id,bound:true},200)));
     await f.service.automaticReview(req,authority,{account:wallet,reviewId:id,operation:"bind-source",receipt});
     const [url,init]=f.fetchBackend.mock.calls[0] as [URL,RequestInit];
@@ -138,7 +180,7 @@ describe("body-bound session launch producer", () => {
     expect(headers.get("x-programmable-wallet-address")).toBe(wallet);
     expect(headers.get("idempotency-key")).toBe(idempotencyKey);
     expect(headers.get("programmable-launch-response-version")).toBeNull();
-    expect(result).toEqual({ httpStatus: 202, value: { status: "received" }, location: null });
+    expect(result).toEqual({ httpStatus: 202, value: { status: "received" }, location: null, rawBody: '{"status":"received"}' });
     expect(result).not.toHaveProperty("launchReady");
   });
 

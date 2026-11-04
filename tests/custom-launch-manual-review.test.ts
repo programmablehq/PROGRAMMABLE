@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash, createHmac } from "node:crypto";
 vi.mock("server-only", () => ({}));
 import { createManualReviewStartBridgeV1 } from "../lib/server/custom-launch/manual-review-start-v1";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
@@ -99,20 +100,48 @@ describe("24-hour review and launch windows", () => {
     expect(customLaunchReviewOverdue(pending, due)).toBe(true);
     expect(customLaunchReviewLabel(pending, due)).toBe("Review pending");
   });
-  it("lets an authenticated non-admin start only through the owner-bound backend", async () => {
+  it.each(["1", "4663", "8453", "999"] as const)("starts chain %s through the signed owner-bound backend", async chainId => {
     const owner = "0x2222222222222222222222222222222222222222" as const;
-    const fetchBackend = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ review: approved }));
+    const now = Date.parse("2026-10-09T03:30:00Z");
+    const pending = { ...approved, chainId, controller: owner };
+    const started = { ...pending, launchRequestedAt: new Date(now).toISOString(), launchDeadline: pending.expiresAt };
+    expect(customLaunchReviewNeedsStart(pending, now)).toBe(true);
+    const fetchBackend = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ review: started }));
     const route = createManualReviewStartBridgeV1({ authenticator: { authenticate: async () => ({ privyUserId: "did:privy:owner", privySessionId: "session", wallets: [owner] }) },
       backendBaseUrl: "https://api.programmable.market", websiteToken: "w".repeat(43), bffAssertionKeyV2: "b".repeat(43), fetchBackend });
-    const request = (walletAddress = owner) => new Request("https://programmable.market/api/custom-launch-reviews/start", { method: "POST",
-      headers: { Origin: "https://programmable.market", "Content-Type": "application/json" }, body: JSON.stringify({ chainId: "1", launchId: review.reviewId, walletAddress }) });
-    expect((await route(request())).status).toBe(200);
+    const request = (walletAddress: string = owner) => new Request("https://programmable.market/api/custom-launch-reviews/start", { method: "POST",
+      headers: { Origin: "https://programmable.market", "Content-Type": "application/json" }, body: JSON.stringify({ chainId, launchId: review.reviewId, walletAddress }) });
+    const response = await route(request());
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.review).toEqual(started);
+    expect(customLaunchReviewNeedsStart(result.review, now)).toBe(false);
+    expect(customLaunchReviewAllowsSigning(result.review, now)).toBe(true);
     const [url, init] = fetchBackend.mock.calls[0]!;
     expect(String(url)).toBe("https://api.programmable.market/v1/wallet-admin/custom-launch-reviews/start");
-    expect(JSON.parse(String(init!.body))).toEqual({ chainId: "1", launchId: review.reviewId });
-    expect(new Headers(init!.headers).get("X-Programmable-Wallet-Address")).toBe(owner);
-    expect((await route(new Request("https://programmable.market/api/custom-launch-reviews/start", { method: "POST", body: JSON.stringify({ chainId: "1", launchId: review.reviewId, walletAddress: WEBSITE_ADMIN_WALLET }) }))).status).toBe(403);
+    expect(JSON.parse(String(init!.body))).toEqual({ chainId, launchId: review.reviewId });
+    const headers = new Headers(init!.headers);
+    expect(headers.get("X-Programmable-Wallet-Address")).toBe(owner);
+    expect(headers.get("X-Programmable-Privy-User-Id")).toBe("did:privy:owner");
+    const digest = `sha256:${createHash("sha256").update(String(init!.body)).digest("hex")}`;
+    expect(headers.get("X-Programmable-Bff-Assertion-Body-Sha256")).toBe(digest);
+    const signedFields = ["POST", new URL(String(url)).pathname, "did:privy:owner", owner,
+      headers.get("X-Programmable-Bff-Assertion-Issued-At"), headers.get("X-Programmable-Bff-Assertion-Nonce"), digest];
+    const signature = createHmac("sha256", "b".repeat(43))
+      .update(`programmable.custom-launch-api.wallet-bff-assertion.v2\0${signedFields.join("\0")}`).digest("hex");
+    expect(headers.get("X-Programmable-Bff-Assertion-Signature")).toBe(`hmac-sha256:${signature}`);
+    expect((await route(request(WEBSITE_ADMIN_WALLET))).status).toBe(403);
     expect(fetchBackend).toHaveBeenCalledTimes(1);
+  });
+  it.each(["10", "01", "0x1", 1, 8453, null])("rejects unsupported or non-canonical start chain %s", async chainId => {
+    const owner = "0x2222222222222222222222222222222222222222" as const;
+    const fetchBackend = vi.fn<typeof fetch>();
+    const route = createManualReviewStartBridgeV1({ authenticator: { authenticate: async () => ({ privyUserId: "did:privy:owner", privySessionId: "session", wallets: [owner] }) },
+      backendBaseUrl: "https://api.programmable.market", websiteToken: "w".repeat(43), bffAssertionKeyV2: "b".repeat(43), fetchBackend });
+    const response = await route(new Request("https://programmable.market/api/custom-launch-reviews/start", { method: "POST",
+      body: JSON.stringify({ chainId, launchId: review.reviewId, walletAddress: owner }) }));
+    expect(response.status).toBe(400);
+    expect(fetchBackend).not.toHaveBeenCalled();
   });
   it("preserves preparation backoff and does not disguise authentication failures as transient", async () => {
     const owner = "0x2222222222222222222222222222222222222222" as const;

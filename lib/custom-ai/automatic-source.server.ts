@@ -75,7 +75,10 @@ export function createAutomaticSourceReceipt(input:{source:OwnedGeneralLaunchSou
     const bytes=Buffer.from(unit.standardJsonInputBase64,"base64");
     if(bytes.length>5_242_880||bytes.toString("base64")!==unit.standardJsonInputBase64
       ||fileSha256V2(bytes)!==unit.standardJsonInputSha256)return invalid();
-    try{if(canonicalBrowserJsonV2(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes)))!==compilerInput)return invalid();}
+    try{
+      const canonicalInput=canonicalBrowserJsonV2(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes)));
+      if(canonicalInput!==compilerInput||fileSha256V2(new TextEncoder().encode(canonicalInput))!==sourceAudit.compilerInputHash)return invalid();
+    }
     catch{return invalid();}
     return {id:unit.compilationUnitId as string,inputHash:unit.standardJsonInputSha256 as `sha256:${string}`};
   });

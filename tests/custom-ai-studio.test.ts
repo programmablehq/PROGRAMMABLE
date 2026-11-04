@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const auth = vi.hoisted(() => vi.fn());
-const store = vi.hoisted(() => ({ readObject: vi.fn(), read: vi.fn(), saveObject: vi.fn(), consume: vi.fn(), projects: { overview: vi.fn() } }));
+const store = vi.hoisted(() => ({ readObject: vi.fn(), read: vi.fn(), saveObject: vi.fn(), consume: vi.fn(), projects: { overview: vi.fn(), read: vi.fn() } }));
 vi.mock("../lib/custom-ai/auth.server", () => ({ authorizeCustomAI: auth }));
 vi.mock("../lib/custom-ai/store.server", () => ({ productionAIStore: () => store }));
 import { GET, POST } from "../app/api/custom-ai/studio/route";
@@ -70,12 +70,25 @@ describe("private studio drafts", () => {
     expect(store.saveObject).not.toHaveBeenCalled();expect(store.consume).not.toHaveBeenCalled();expect(store.projects.overview).not.toHaveBeenCalled();
   });
   it("restores a compact general source result without reading its complete source", async () => {
-    const generalProject={projectHash:"sha256:"+"a".repeat(64),compiled:true,launchReady:false};
+    const generalProject={projectHash:"sha256:"+"a".repeat(64),compiled:true,launchReady:false,coinPreparation:{eligible:false,missing:["coin-deployment"]}};
     store.readObject.mockResolvedValue({revision:2,value:{...state,draftId:"general-source-0001"}});
     store.read.mockResolvedValue({result:{generalProject}});
     const value=await (await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`))).json();
     expect(value.generalProject).toEqual(generalProject);expect(value.draft).toBeUndefined();
     expect(store.projects.overview).not.toHaveBeenCalled();
+    expect(store.projects.read).not.toHaveBeenCalled();
+  });
+  it("restores old coin eligibility from its exact owned checkpoint without leaking source",async()=>{
+    const projectHash="sha256:"+"a".repeat(64),artifactHash="sha256:"+"b".repeat(64),draftId="general-source-0001";
+    const generalProject={projectHash,artifactHash,compiled:true,launchReady:false};
+    store.readObject.mockResolvedValue({revision:2,value:{...state,draftId}});
+    store.read.mockResolvedValue({result:{generalProject}});
+    store.projects.read.mockResolvedValue({project:{hash:projectHash,sources:{"Private.sol":{content:"private source"}}},compilation:{compiled:true,artifactHash},sourceAudit:{status:"passed"},scenarios:{passed:true}});
+    const response=await GET(new Request(`https://programmable.market/api/custom-ai/studio?account=${account}`));
+    const value=await response.json();
+    expect(value.generalProject.coinPreparation).toEqual({eligible:false,missing:["coin-deployment"]});
+    expect(store.projects.read).toHaveBeenCalledWith("alice",draftId);
+    expect(JSON.stringify(value)).not.toContain("private source");expect(store.saveObject).not.toHaveBeenCalled();
   });
   it("retains a failed source separately from the previous working draft", async () => {
     const sourceId="failed-source-request-0001",draftId="previous-draft-0001";

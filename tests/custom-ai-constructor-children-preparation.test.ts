@@ -2,6 +2,8 @@ import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vite
 vi.mock("server-only", () => ({}));
 import { PGlite } from "@electric-sql/pglite";
 import { generalPackFixture } from "./fixtures/custom-ai-general-pack";
+import { sourceAuditModelReply } from "./fixtures/custom-ai-source-audit";
+import { auditGeneralSource } from "../lib/custom-ai/source-audit.server";
 import { createAIStore, CUSTOM_AI_SCHEMA, type AIStore } from "../lib/custom-ai/store.server";
 import { conversationStorageId } from "../lib/custom-ai/conversation.server";
 import { generalProjectView } from "../lib/custom-ai/project-view";
@@ -35,7 +37,9 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR).each([8453, 4663] as const)
     await seed.projects.save(owner, binding.sourceId, reserved.lease!, source.project);
     await seed.projects.complete(owner, binding.sourceId, reserved.lease!, source.compilation);
     await seed.projects.saveScenarios(owner, binding.sourceId, reserved.lease!, source.scenarios);
-    const view = generalProjectView({ version: 1, reply: "Source checked", summary: "Observed children", project: source.project, compilation: source.compilation, scenarios: source.scenarios,
+    const sourceAudit = await auditGeneralSource(source.project, undefined, { call: async () => sourceAuditModelReply(source.project) });
+    await seed.projects.saveSourceAudit(owner, binding.sourceId, reserved.lease!, sourceAudit);
+    const view = generalProjectView({ version: 1, reply: "Source checked", summary: "Observed children", project: source.project, compilation: source.compilation, scenarios: source.scenarios, sourceAudit,
       blueprintId: source.blueprint.id, selection: selectExecutionRoute(source.project.intent, chain), requirementCoverage: "proposed", launchReady: false });
     await seed.finish(owner, binding.sourceId, reserved.lease!, { reply: "Source checked", generalProject: view, intent: source.project.intent, change: "applied" });
     revision = await seed.saveObject(owner, "studio", key, { settings: binding.settings, image: binding.image, messages: [], draftId: binding.sourceId, sourceId: binding.sourceId, contextId: binding.contextId }, revision);

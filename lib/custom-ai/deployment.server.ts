@@ -18,6 +18,37 @@ export function currentCustomAIDeployment(chainId: 1 | 4663): CoreDeployment | n
   return (bindings.networks as Record<string, CoreDeployment | null>)[String(chainId)] ?? null;
 }
 
+type PublishedIndexSource = Readonly<{
+  chainId: 1 | 4663;
+  factory: Address;
+  bundleHash: string;
+  deploymentBlock: string;
+  acceptanceEvidenceHash: string;
+}>;
+
+// Read-only history pinned from release 24f70487 and the committed
+// docs/operations/custom-ai/funded-acceptance-20261022.json. Retain these entries
+// when active bindings change. New historical generations require reviewed pins;
+// persisted token records can never add a trusted factory or bundle.
+export const CUSTOM_AI_PUBLISHED_INDEX_SOURCES: readonly PublishedIndexSource[] = Object.freeze([
+  Object.freeze({ chainId: 1 as const, factory: "0x8E40C2917Bf43f6d93710f8Dcc7A449BD76525aD" as Address,
+    bundleHash: "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249", deploymentBlock: "26245676",
+    acceptanceEvidenceHash: "0bbcf81f4f141b29f900e9a8e4c2e6e873a51533a622c99e2c0019143ba62fe5" }),
+  Object.freeze({ chainId: 4663 as const, factory: "0xEE92C51F4d99b269e50Bb567d2Adf04141A603b4" as Address,
+    bundleHash: "50f90512fc91a45f6bf2aa204db0a04628540fb21a000309f6288fb46495d249", deploymentBlock: "94826255",
+    acceptanceEvidenceHash: "0bbcf81f4f141b29f900e9a8e4c2e6e873a51533a622c99e2c0019143ba62fe5" }),
+]);
+
+export function publishedCustomAIIndexSources(chainId: 1 | 4663): readonly PublishedIndexSource[] {
+  const history = CUSTOM_AI_PUBLISHED_INDEX_SOURCES.filter(source => source.chainId === chainId);
+  const current = currentCustomAIDeployment(chainId);
+  if (current?.status !== "active" || !current.deploymentBlock || !current.acceptanceEvidenceHash
+    || history.some(source => source.factory.toLowerCase() === current.factory.address.toLowerCase() && source.bundleHash === current.bundleHash)) return history;
+  // Only the committed active release binding can supplement the pinned history.
+  return [...history, { chainId, factory: current.factory.address, bundleHash: current.bundleHash,
+    deploymentBlock: current.deploymentBlock, acceptanceEvidenceHash: current.acceptanceEvidenceHash }];
+}
+
 export async function verifyCustomAIDeployment(chain: CustomAIChain, deployment: CoreDeployment) {
   if (deployment.chainId !== chain.chainId || deployment.bundleHash !== CUSTOM_AI_BUNDLE_HASH
     || bundle.bundleHash !== CUSTOM_AI_BUNDLE_HASH) throw Error("The core deployment does not match this build.");

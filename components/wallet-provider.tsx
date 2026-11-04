@@ -3135,6 +3135,8 @@ function PrivyWalletBridge({
     if (sessionSubject === null) {
       throw new Error("Your wallet session expired. Reconnect and try again");
     }
+    let expectedIdentityGeneration: number | null = null;
+    let expectedNetworkGeneration: number | null = null;
     const assertCurrentSession = () => {
       const current = walletRequestSessionRef.current;
       if (
@@ -3144,12 +3146,23 @@ function PrivyWalletBridge({
       ) {
         throw new Error("The wallet session changed. Reconnect and try again");
       }
+      if (expectedIdentityGeneration !== null && (
+        walletIdentityGenerationRef.current !== expectedIdentityGeneration
+        || walletNetworkGenerationRef.current !== expectedNetworkGeneration
+        || !walletChainIdsEqual(current.chainId, targetChainHex)
+      )) {
+        throw new Error("The wallet network or account changed. Review the launch and try again");
+      }
     };
     try {
       if (wallet.chainId !== targetChainHex) {
         await connectedWallet.switchChain(targetChain.id);
         assertCurrentSession();
       }
+      // Pin after our own requested switch, before any provider/lock/fee awaits.
+      expectedIdentityGeneration = walletIdentityGenerationRef.current;
+      expectedNetworkGeneration = walletNetworkGenerationRef.current;
+      assertCurrentSession();
       const sendLocked = (execute: (fees?: Awaited<ReturnType<typeof readHyperEvmWalletFees>>) => Promise<Hex>) =>
         runWithBrowserWalletRequestLock({
           sessionSubject,
@@ -3205,6 +3218,18 @@ function PrivyWalletBridge({
       });
       assertCurrentSession();
       return await sendLocked(async (fees) => {
+        try {
+          assertCurrentSession();
+          await assertExternalWalletAuthorityCurrent({
+            expectedAccount: wallet.account,
+            expectedChainId: targetChainHex,
+            networkName: targetNetworkName,
+            request: (method) => provider.request({ method }),
+          });
+          assertCurrentSession();
+        } catch (error) {
+          throw new WalletRequestNotSubmittedError(error instanceof Error ? error.message : "Wallet preparation is unavailable.");
+        }
         const hash = await provider.request({
           method: "eth_sendTransaction",
           params: [
@@ -3213,6 +3238,7 @@ function PrivyWalletBridge({
               to: input.to,
               data: input.data,
               value: input.value,
+              chainId: targetChainHex,
               ...fees,
             },
           ],

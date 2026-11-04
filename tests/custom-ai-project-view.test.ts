@@ -1,10 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { cachedGeneralProjectView, type GeneralProjectView } from "../lib/custom-ai/project-view";
 import { cachedProjectOverview, overviewFromView } from "../lib/custom-ai/project-overview";
+import { GENERAL_PROJECT_LIMITS } from "../lib/custom-ai/contract-project";
 const view:GeneralProjectView={version:1,projectHash:`sha256:${"a".repeat(64)}`,artifactHash:`sha256:${"b".repeat(64)}`,chainId:999,intentRevision:"c".repeat(64),summary:"Saved source",
   compiler:{version:"0.8.26+commit.8a97fa7a",optimizerRuns:1000,viaIR:false,evmVersion:"cancun"},entrypoints:[{source:"Counter.sol",contract:"Counter",role:"auxiliary"}],
   sourceFiles:1,sourceBytes:240,compiled:true,diagnostics:[],requirementCoverage:"proposed",verification:"not-run",launchReady:false};
 describe("advisory browser source metadata",()=>{
+  it.each([48,49,GENERAL_PROJECT_LIMITS.files])("restores a %i-file project and recovery overview without losing local input",sourceFiles=>{
+    const local={input:"Unsent local edit",project:{...view,sourceFiles}};
+    const restored={...local,project:cachedGeneralProjectView(JSON.parse(JSON.stringify(local.project)))};
+    expect(restored).toEqual(local);
+    const overview=overviewFromView("saved-source-request-0001",restored.project!);
+    expect(cachedProjectOverview(overview)).toEqual(overview);
+  });
+  it("retains compiler file and byte bounds during restoration",()=>{
+    for(const patch of [{sourceFiles:GENERAL_PROJECT_LIMITS.files+1},{sourceBytes:GENERAL_PROJECT_LIMITS.sourceBytes+1}]){
+      expect(cachedGeneralProjectView({...view,...patch})).toBeUndefined();
+      expect(cachedProjectOverview({...overviewFromView("saved-source-request-0001",view),...patch})).toBeUndefined();
+    }
+  });
+  it("restores advisory coin eligibility without promoting legacy or malformed metadata",()=>{
+    const coinPreparation={eligible:false,missing:["coin-deployment"]};
+    expect(cachedGeneralProjectView({...view,coinPreparation})?.coinPreparation).toEqual(coinPreparation);
+    expect(cachedGeneralProjectView(view)?.coinPreparation).toBeUndefined();
+    for(const invalid of [{eligible:true,missing:["coin-deployment"]},{eligible:false,missing:[]},{eligible:false,missing:["unknown"]}])
+      expect(cachedGeneralProjectView({...view,coinPreparation:invalid})).toBeUndefined();
+  });
   it("keeps a negative source review visible without granting launch authority",()=>{
     for(const sourceReview of ["passed","changes_required"] as const){
       const result=cachedGeneralProjectView({...view,sourceReview});

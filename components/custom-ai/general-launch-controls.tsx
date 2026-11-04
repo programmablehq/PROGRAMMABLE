@@ -55,7 +55,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   let walletSubject: GeneralWalletSubject | undefined;
   try { if (accepted && saved && launch.currentStatus) walletSubject = generalWalletSubject(saved, launch.currentStatus); }
   catch { /* Keep the original submission link. A mismatched status cannot open a wallet step. */ }
-  const complete = project?.compiled && project.scenarios?.passed && project.sourceReview!=="changes_required" && project.chainId === settings.chainId
+  const complete = project?.coinPreparation?.eligible === true && project.compiled && project.scenarios?.passed && project.sourceReview === "passed" && project.chainId === settings.chainId
     && intent && project.intentRevision === intent.revision && !intentHasOpenParts(intent) && !pendingChange;
   const detail = generalLaunchDetailIssue(settings, Boolean(imageId));
   const warmed = useRef<string | undefined>(undefined);
@@ -117,10 +117,15 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     handledCommand.current=launchCommand.id;void proceed();
   },[enabled,launchCommand,draftId,disabled,launch.busy,launch.loaded,complete,proceed]);
   if (!enabled) return null;
-  if (!complete && !accepted && !uncertain) return historyHref ? <Disclosure className={styles.previousSubmission}>
-    <summary>Earlier submission</summary>
-    <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>
-  </Disclosure> : null;
+  if (!complete && !accepted && !uncertain) return <>
+    {project?.coinPreparation?.missing.includes("coin-deployment") && <p className={styles.note} role="status">
+      Source saved. A coin launch needs a token, hook, liquidity initializer and pool declaration.
+    </p>}
+    {historyHref && <Disclosure className={styles.previousSubmission}>
+      <summary>Earlier submission</summary>
+      <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>
+    </Disclosure>}
+  </>;
 
   return <section className={styles.generalLaunch} aria-label="Launch submission" aria-busy={launch.busy}>
     <p className={styles.note} role="status">{status}</p>
