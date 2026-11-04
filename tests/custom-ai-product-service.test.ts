@@ -27,6 +27,25 @@ const response = (value: unknown) => ({ text: JSON.stringify(value), inputTokens
 const compile = vi.fn(async () => { throw Error("No fee compilation expected"); });
 
 describe("product blueprint in the existing chat pipeline", () => {
+  it("keeps summary requests in the answer lane without generating source",async()=>{
+    const initial=await runCustomAI(request,undefined,{call:async()=>response(envelope()),compile});
+    const call=vi.fn(async()=>response(envelope({intentMode:"preserve",intentRequirements:[],productPlan:null})));
+    const build=vi.fn();
+    const result=await runCustomAI({...request,id:"summary-request-0001",messages:[...request.messages,{role:"assistant",content:initial.reply},{role:"user",content:"Generate a short summary of the saved rules."}]},
+      undefined,{call,compile:build},{intent:initial.intent,productBlueprint:initial.productBlueprint,saveProject:async()=>{}});
+    expect(result.change).toBe("unchanged");expect(result.intent?.revision).toBe(initial.intent?.revision);
+    expect(call).toHaveBeenCalledOnce();expect(build).not.toHaveBeenCalled();
+  });
+  it("blocks a changed product when the missing replacement plan cannot be repaired",async()=>{
+    const initial=await runCustomAI(request,undefined,{call:async()=>response(envelope()),compile});
+    const call=vi.fn(async(input:ClaudeInput)=>response(input.task==="product-repair"?{productPlan:{...productPlan,components:[]}}:
+      envelope({action:"build",intentMode:"preserve",intentRequirements:[],productPlan:null})));
+    const build=vi.fn();
+    const result=await runCustomAI({...request,id:"changed-product-0001",coin:{...request.coin!,chainId:1},messages:[...request.messages,{role:"assistant",content:initial.reply},{role:"user",content:"Build the saved contracts on Ethereum."}]},
+      undefined,{call,compile:build},{intent:initial.intent,productBlueprint:initial.productBlueprint,saveProject:async()=>{}});
+    expect(result.buildIssue).toEqual({stage:"product",code:"incomplete-plan"});expect(build).not.toHaveBeenCalled();
+    expect(call.mock.calls.some(([input])=>input.task==="product-repair"&&input.system.includes(initial.productBlueprint!.id))).toBe(true);
+  });
   it("repairs a malformed architecture once without asking the user to repeat the design", async () => {
     const bad = structuredClone(productPlan); bad.interfaceActions[0].target = "missing";
     const call = vi.fn(async (input:ClaudeInput)=>response(input.task==="product-repair"?{productPlan}:envelope({productPlan:bad})));

@@ -87,4 +87,29 @@ describe("private conversation storage",()=>{
     await expect(store.reserve("alice",request(chat.id,0))).rejects.toMatchObject({code:"conversation"});
     expect((await store.usage("alice")).hourly.used).toBe(1);
   });
+  it("keeps an unconsumed reply recoverable when a stale tab sends again",async()=>{
+    const chat=await store.conversations.create("alice",account,randomUUID()),id=conversationStorageId(account,chat.id);
+    await store.saveObject("alice","studio",id,state(),0);
+    const first=request(chat.id,1),reserved=await store.reserve("alice",first);
+    await store.finish("alice",first.id,reserved.lease!,{reply:"Saved reply"});
+    await expect(store.reserve("alice",request(chat.id,1))).rejects.toMatchObject({code:"conflict"});
+    expect((await store.conversations.read("alice",account,chat.id))?.activeRequest).toBe(first.id);
+    expect((await store.usage("alice")).hourly.used).toBe(1);
+    expect((await store.reserve("alice",first)).lease).toBeNull();
+    await store.saveObject("alice","studio",id,{...state(),contextId:first.id},1);
+    expect((await store.reserve("alice",{...request(chat.id,2),contextId:first.id})).lease).toBeTruthy();
+  });
+  it.each(["cancelled","provider_connection"])("clears a %s edit after saving the preserved design",async reason=>{
+    const chat=await store.conversations.create("alice",account,randomUUID()),id=conversationStorageId(account,chat.id);
+    const first=request(chat.id,0),initial=await store.reserve("alice",first);
+    await store.finish("alice",first.id,initial.lease!,{reply:"Saved design"});
+    const saved={...state(),contextId:first.id};await store.saveObject("alice","studio",id,saved,0);
+    const edit={...request(chat.id,1),contextId:first.id},pending=await store.reserve("alice",edit);
+    await store.saveObject("alice","studio",id,saved,1);
+    expect((await store.conversations.read("alice",account,chat.id))?.activeRequest).toBe(edit.id);
+    if(reason==="cancelled")await store.cancel("alice",edit.id);else await store.finish("alice",edit.id,pending.lease!,undefined,reason);
+    await store.saveObject("alice","studio",id,saved,2);
+    expect((await store.conversations.read("alice",account,chat.id))?.activeRequest).toBeUndefined();
+    expect((await store.read("alice",edit.id))?.state).toBe("failed");
+  });
 });

@@ -36,21 +36,24 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   const launchButton=useRef<HTMLButtonElement>(null),handledCommand=useRef<string|undefined>(undefined);
   const [image,setImage]=useState<CoinEditorImage>();
   const [imageBusy,setImageBusy]=useState(false);
+  const [pairPending,setPairPending]=useState(false);
   const imageStatus=useCallback((busy:boolean)=>{setImageBusy(busy);onImageBusy?.(busy);},[onImageBusy]);
   const reviewedSourceHash = !pendingChange && draft?.compiled && draft.validation?.status === "passed"
     && draft.verification?.status === "passed" && draft.verification.sourceHash === draft.sourceHash
     && intentMatchesCandidate(intent, draft) ? draft.sourceHash : undefined;
   const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview, readyTicket: preparation?.inputKey === preparationKey && preparation?.revision === draft?.sourceHash ? preparation?.ticket : undefined });
-  const bound = launch.saved?.session;
+  const savedSession = launch.saved?.session;
+  const bound = savedSession && savedSession.draftId===draftId ? savedSession : undefined;
+  const otherLaunch = launch.saved && !bound && launch.saved.session.state!=="confirmed" ? launch.saved.session : undefined;
   const settings: CoinSetup = useMemo(() => bound ? { ...editingSettings, name: bound.settings.name, symbol: bound.settings.symbol,
     chainId: bound.chainId, initialBuy: bound.settings.initialBuy,
     pairToken: bound.settings.quote.toLowerCase() === setupQuoteAddress({ ...editingSettings, chainId: bound.chainId, pairToken: "ETH" }).toLowerCase() ? "ETH" : bound.settings.quote } : editingSettings, [bound, editingSettings]);
   const imageURL = bound?.settings.imageURI ?? imageReceipt?.url ?? image?.url;
   useEffect(() => { onLaunchLocked(launch.locked); }, [launch.locked, onLaunchLocked]);
-  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), pendingChange, openRequirements: intent ? intentHasOpenParts(intent) : false,
+  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), pendingChange, pairPending, openRequirements: intent ? intentHasOpenParts(intent) : false,
     name: settings.name, symbol: settings.symbol, image: Boolean(imageURL), connected: Boolean(account) });
   useEffect(() => {
-    if (localPreview || !account || !draftId || !reviewedSourceHash || !imageReceipt || disabled || launch.locked || !editingSettings.name.trim() || !editingSettings.symbol.trim()) return;
+    if (localPreview || !account || !draftId || !reviewedSourceHash || !imageReceipt || disabled || pairPending || launch.locked || !editingSettings.name.trim() || !editingSettings.symbol.trim()) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setPreparation({ state: "working", message: "Preparing your launch…", revision: reviewedSourceHash, inputKey: preparationKey, expiresAt: 0 });
@@ -60,7 +63,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
         .then(result => setPreparation({ ...result, inputKey: preparationKey })).catch(error => { if (!controller.signal.aborted) setPreparation({ state: "blocked", message: error instanceof Error ? error.message : "The launch preparation could not finish.", revision: reviewedSourceHash, inputKey: preparationKey, expiresAt: 0 }); });
     }, 750);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [localPreview, account, draftId, reviewedSourceHash, imageReceipt, disabled, launch.locked, editingSettings, preparationKey]);
+  }, [localPreview, account, draftId, reviewedSourceHash, imageReceipt, disabled, pairPending, launch.locked, editingSettings, preparationKey]);
   useEffect(() => {
     if (preparation?.state !== "ready") return;
     const timer = setTimeout(() => setPreparation(current => current === preparation ? undefined : current), Math.max(0, preparation.expiresAt - Date.now()));
@@ -72,25 +75,31 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   const missingLabel = missingField ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image" }[missingField] : undefined;
   const addMissingDetail=useCallback(()=>{if(missingField)editor.current?.focus(missingField);},[missingField,editor]);
   useEffect(()=>{
-    if(!launchCommand||handledCommand.current===launchCommand.id||launchCommand.sourceId!==draftId||disabled||imageBusy||launch.busy||!launch.loaded)return;
+    if(!launchCommand||handledCommand.current===launchCommand.id||launchCommand.sourceId!==draftId||disabled||imageBusy||pairPending||otherLaunch||launch.busy||!launch.loaded)return;
     handledCommand.current=launchCommand.id;
     launchButton.current?.scrollIntoView({block:"nearest"});launchButton.current?.focus();
     if(missingField){addMissingDetail();return;}
     if(!localPreview&&reviewedSourceHash&&readiness.state==="design-ready"&&!bound)void launch.prepare();
-  },[launchCommand,draftId,disabled,imageBusy,launch,missingField,addMissingDetail,localPreview,reviewedSourceHash,readiness.state,bound]);
+  },[launchCommand,draftId,disabled,imageBusy,pairPending,otherLaunch,launch,missingField,addMissingDetail,localPreview,reviewedSourceHash,readiness.state,bound]);
 
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled||launch.locked||launch.busy}
       headers={headers} localPreview={localPreview} cacheKey={cacheKey} imageReceipt={imageReceipt} onImageReceipt={onImageReceipt}
-      onImage={setImage} onImageBusy={imageStatus} controlsRef={editor} stage={bound?.state==="confirmed"?"Published coin":reviewedSourceHash?"Checked draft":"Coin preview"}
+      onImage={setImage} onImageBusy={imageStatus} onPairPending={setPairPending} controlsRef={editor} stage={bound?.state==="confirmed"?"Published coin":reviewedSourceHash?"Checked draft":"Coin preview"}
       imageURI={bound?.settings.imageURI} summary={summary} description={bound?.description}/>
-    {(bound || draft || Boolean(intent?.requirements.length)) && <form className={styles.coinForm} onSubmit={event=>event.preventDefault()}>
+    {otherLaunch&&<section className={styles.coinForm} aria-label="Saved launch recovery">
+      <p className={styles.note}>Finish the saved launch for {otherLaunch.settings.name} before starting this coin.</p>
+      <button type="button" className={styles.createButton} disabled={disabled||launch.busy} onClick={()=>{void launch.proceed();}}>{launch.label}<ArrowRight size={16} aria-hidden="true" /></button>
+      {launch.message&&<p className={styles.note} role="status">{launch.message}</p>}
+      {launch.error&&<p className={styles.error} role="alert">{launch.error}</p>}
+    </section>}
+    {!otherLaunch&&(bound || draft || Boolean(intent?.requirements.length)) && <form className={styles.coinForm} onSubmit={event=>event.preventDefault()}>
       {!bound && <RuleReview draft={draft} intent={intent} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
         quoteLabel={settings.pairToken==="ETH" ? "ETH" : "pair tokens"}
         onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
       {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
-      <button ref={launchButton} type="button" className={styles.createButton} disabled={disabled || imageBusy || launch.busy
+      <button ref={launchButton} type="button" className={styles.createButton} disabled={disabled || imageBusy || !bound && pairPending || launch.busy
         || !missingField && (localPreview || !bound && readiness.state !== "design-ready")}
         onClick={() => { if (!bound && missingField) addMissingDetail(); else if (bound?.state === "confirmed") { if (launch.startAnother()) onStartAnother(); } else void launch.proceed(); }}>
         {!bound && missingLabel ? missingLabel : bound?.state === "confirmed" ? "Create another coin" : launch.label}<ArrowRight size={16} aria-hidden="true" /></button>

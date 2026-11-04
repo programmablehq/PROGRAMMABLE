@@ -10,7 +10,8 @@ import type {LaunchProductionContext} from "./launch-production";
 import {launchProductionGuidance} from "./production-guidance";
 import {CustomAIError} from "./types";
 import {ModelResponseError} from "./model-response";
-import {checkContextHash,reusableCheckFailure,reusableCheckProgress,type CheckDiagnostic,type CheckFailure,type CheckProgress} from "./check-diagnostic";
+import {checkContextHash,checkLaunchInputsHash,reusableCheckFailure,reusableCheckProgress,type CheckDiagnostic,type CheckFailure,type CheckProgress} from "./check-diagnostic";
+import {modelIntentContext} from "./planning-context";
 import {modelTask,SCENARIO_MAX_PAGES} from "./model-tasks";
 import {PROTOCOL_CORE,PROTOCOL_TOPICS} from "./protocol-knowledge";
 import type {CanonicalInterfaceContext} from "./canonical-dependencies.server";
@@ -64,7 +65,7 @@ function remainingRequirements(intent:LaunchIntent,proposal:Record<string,unknow
       if(expected&&(expected.status==="revert"||Array.isArray(expected.returns)&&expected.returns.length||expected.swapFeePpm!==undefined||Array.isArray(expected.events)&&expected.events.length))observed.add(id);
     }
   }
-  return intent.requirements.filter(rule=>!covered.has(rule.id)||rule.kind==="behavior"&&!observed.has(rule.id));
+  return modelIntentContext(intent).requirements.filter(rule=>!covered.has(rule.id)||rule.kind==="behavior"&&!observed.has(rule.id));
 }
 
 /** Every proposal is source-blind. Scenario pages share one ordered fixture
@@ -74,16 +75,18 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   input={...input,interfaceHash:input.interfaces?.id,...(input.forceNew?{cached:undefined,rejected:undefined}:{})};
   if(input.productBlueprint)input.productBlueprint=checkedProductBlueprint(input.productBlueprint,input.intent,input.chainId);
   input={...input,productBlueprintId:input.productBlueprint?.id};
+  const launchInputsHash=checkLaunchInputsHash(input.coin);
   input.signal?.throwIfAborted();
   if(input.cached){
     try{
       const saved=checkedGeneralCheckBlueprint(input.cached,input.intent);
       if(input.productBlueprint&&saved.productBindings)checkedProductBindings(saved.productBindings,saved.scenarios,saved.entrypoints,input.productBlueprint);
       if(saved.chainId===input.chainId&&saved.compiler.evmVersion===input.evmVersion
+        &&saved.launchInputsHash===launchInputsHash
         &&saved.productBlueprintId===input.productBlueprint?.id
         &&saved.production?.id===input.production?.id){
         const raw=generalCheckBlueprintInput(saved),metadata=bindCanonicalTokenMetadata(raw.deployment);
-        return metadata.changed?createGeneralCheckBlueprint({...raw,deployment:metadata.value},input.intent,input.chainId,input.evmVersion,input.production,undefined,input.productBlueprint?.id):saved;
+        return metadata.changed?createGeneralCheckBlueprint({...raw,deployment:metadata.value},input.intent,input.chainId,input.evmVersion,input.production,undefined,input.productBlueprint?.id,launchInputsHash):saved;
       }
     }catch{/* A changed design needs a new declaration, never an inherited check. */}
   }
@@ -103,7 +106,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   const diagnostic=():CheckDiagnostic=>({version:1,contextHash:checkContextHash(input),failures:structuredClone(failures),...(progress?{progress:structuredClone(progress)}:{})});
   const reject=(reason:string):never=>{if(!failures.length)record(new Error(reason));throw new GeneralCheckDeclarationError(stage,reason,diagnostic());};
   try {
-  const scenarioContext={intent:input.intent,chainId:input.chainId,evmVersion:input.evmVersion,
+  const scenarioContext={intent:modelIntentContext(input.intent),chainId:input.chainId,evmVersion:input.evmVersion,
     ...(input.productBlueprint?{productBlueprint:input.productBlueprint}:{}),
     ...(input.coin?{launchInputs:input.coin}:{}),
     ...(input.verificationInstruction?{requestedVerification:input.verificationInstruction}:{}),
@@ -120,7 +123,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     return {...opening.proposal,...(metadata.changed?{deployment:metadata.value}:{}),steps:resolveOpeningFixtureValue(opening.proposal.steps,opening.inputs)};
   };
   const completeDeclaration=(text:string)=>{
-    const checked=createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler,input.productBlueprint?.id);
+    const checked=createGeneralCheckBlueprint(bindDeclaredWorldParticipants(expandedDeclaration(text)),input.intent,input.chainId,input.evmVersion,input.production,input.previousCompiler,input.productBlueprint?.id,launchInputsHash);
     if(input.productBlueprint)checkedProductBindings(checked.productBindings,checked.scenarios,checked.entrypoints,input.productBlueprint);
     return checked;
   };

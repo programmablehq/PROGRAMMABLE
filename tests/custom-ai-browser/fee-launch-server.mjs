@@ -8,14 +8,17 @@ export async function createFeeLaunchServer() {
   const bundle=await build({stdin:{loader:"tsx",resolveDir:root,contents:`
     import React,{useState,useCallback}from'react';import{createRoot}from'react-dom/client';
     import{CustomAILaunchPreview}from'./components/custom-ai/launch-preview';
-    const parameters=new URL(location.href).searchParams,hash='a'.repeat(64),draftId='saved-fee-source-0001';
+    const parameters=new URL(location.href).searchParams,hash='a'.repeat(64);
     const draft={source:'synthetic fee fixture',sourceHash:hash,compiled:true,diagnostics:[],validation:{status:'passed'},verification:{status:'passed',sourceHash:hash,requirements:['Charge 3% on buys and sells'],checks:[],cases:8}};
     function App(){
-      const[settings,setSettings]=useState({name:parameters.has('missing-name')?'':'Fee fixture',symbol:'FEE',chainId:1,pairToken:'ETH',initialBuy:'0.01',description:'A local fee fixture',website:'https://example.com',x:''});
+      const[draftId,setDraftId]=useState('saved-fee-source-0001');
+      const[settings,setSettings]=useState({name:parameters.has('missing-name')?'':'Fee fixture',symbol:'FEE',chainId:1,pairToken:parameters.has('custom-pair')?'0x'+'4'.repeat(40):'ETH',initialBuy:'0.01',description:'A local fee fixture',website:'https://example.com',x:''});
       const[command,setCommand]=useState();const[receipt,setReceipt]=useState({id:'b'.repeat(64),url:'/image.svg'});
       const headers=useCallback(async()=>({Authorization:'synthetic-local-session'}),[]);
       return <><button onClick={()=>setCommand({id:'chat-command-1',sourceId:draftId})}>Ask to launch in chat</button>
         <button onClick={()=>setCommand({id:'stale-command-1',sourceId:'another-draft'})}>Stale launch request</button>
+        <button onClick={()=>{setDraftId('saved-fee-source-0002');setSettings(s=>({...s,name:'Second coin',symbol:'TWO'}));}}>Open second coin</button>
+        <button onClick={()=>{setDraftId('saved-fee-source-0001');setSettings(s=>({...s,name:'Fee fixture',symbol:'FEE'}));}}>Open original coin</button>
         <CustomAILaunchPreview draft={draft} settings={settings} disabled={false} chatRevision={0} onChange={patch=>setSettings(s=>({...s,...patch}))}
           draftId={draftId} headers={headers} localPreview={false} cacheKey="fee-launch-fixture" onLaunchLocked={()=>{}}
           imageReceipt={receipt} onImageReceipt={setReceipt} onKeepRules={()=>{}} onStartAnother={()=>{}} onEditRule={()=>{}} launchCommand={command}/></>;

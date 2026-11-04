@@ -129,17 +129,18 @@ export function useCustomAILaunch(input: { readyTicket?: string; settings: CoinS
     const timer = setTimeout(() => { if (!operation.current && continueFlow.current) void proceed(); }, 0);
     return () => clearTimeout(timer);
   });
-  const pending = saved && saved.session.state !== "confirmed";
-  const step = saved?.session.steps.at(-1);
-  const label = busy ? "Preparing…" : saved?.session.state === "failed" ? "Try transaction again" : saved?.session.state === "waiting" ? "Check transaction"
-    : saved?.session.state === "ready" && step ? "Continue in wallet" : "Launch coin";
+  const visible = saved && (saved.session.draftId === input.draftId || saved.session.state !== "confirmed") ? saved : null;
+  const pending = visible && visible.session.state !== "confirmed";
+  const step = visible?.session.steps.at(-1);
+  const label = busy ? "Preparing…" : visible?.session.state === "failed" ? "Try transaction again" : visible?.session.state === "waiting" ? "Check transaction"
+    : visible?.session.state === "ready" && step ? "Continue in wallet" : "Launch coin";
   function startAnother() {
     if (!saved || saved.session.state!=="confirmed") return false;
     try { dismissFinishedLaunch(saved);current.current=null;setSaved(null);receipt.current=undefined;setError("");return true; }
     catch {setError("The completed launch could not be saved. Keep this tab open.");return false;}
   }
-  return { proceed, prepare, startAnother, loaded: input.localPreview || !account || identity.current === account && loaded, busy, error, label, locked: Boolean(pending), saved,
-    message: saved?.session.state === "confirmed" ? "Your coin is live."
-      : saved?.session.state === "waiting" ? step?.kind === "launch" ? "Your launch is confirming." : "Waiting for the transaction to confirm."
-      : saved?.session.state === "failed" ? step?.failureReason === "replaced" ? "This wallet request was replaced. Your earlier steps are saved." : "The transaction reverted. Your earlier steps are saved." : "" };
+  return { proceed, prepare, startAnother, loaded: input.localPreview || !account || identity.current === account && loaded, busy, error, label, locked: Boolean(pending), saved: visible,
+    message: visible?.session.state === "confirmed" ? "Your coin is live."
+      : visible?.session.state === "waiting" ? step?.kind === "launch" ? "Your launch is confirming." : "Waiting for the transaction to confirm."
+      : visible?.session.state === "failed" ? step?.failureReason === "replaced" ? "This wallet request was replaced. Your earlier steps are saved." : "The transaction reverted. Your earlier steps are saved." : "" };
 }

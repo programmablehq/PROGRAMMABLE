@@ -3,9 +3,18 @@ import type { ContractProject } from "./contract-project";
 import type { BuilderChainId } from "./execution-routing";
 import type { LaunchIntent } from "./launch-intent";
 import type { LaunchProductionContext } from "./launch-production";
+import type { CoinSetup } from "./coin-setup";
+
+export type CheckLaunchInputs = Pick<CoinSetup,"name"|"symbol"|"pairToken"|"initialBuy">;
+export function checkLaunchInputsHash(coin?:CheckLaunchInputs) {
+  return coin ? canonicalBrowserSha256V2("programmable.check-launch-inputs.v1", {
+    name:coin.name.trim(),symbol:coin.symbol.trim().toUpperCase(),pairToken:coin.pairToken.trim().toLowerCase(),
+    initialBuy:coin.initialBuy.trim().replace(/(\.\d*?)0+$/u,"$1").replace(/\.$/u,"")
+  }) : undefined;
+}
 
 export type CheckContext = { intent: LaunchIntent; chainId: BuilderChainId; evmVersion: "paris" | "cancun";
-  production?: LaunchProductionContext; previousCompiler?: ContractProject["compiler"];interfaceHash?:string;verificationInstruction?:string;productBlueprintId?:`sha256:${string}` };
+  production?: LaunchProductionContext; previousCompiler?: ContractProject["compiler"];interfaceHash?:string;verificationInstruction?:string;productBlueprintId?:`sha256:${string}`;coin?:CheckLaunchInputs };
 export type CheckFailure = { stage: "interface" | "scenarios"; message: string; declaration: string | null; response?:string };
 export type CheckProgress = { interface: string; steps: unknown[];interfacesPending?:true };
 export type CheckDiagnostic = { version: 1; contextHash: `sha256:${string}`; failures: CheckFailure[]; progress?: CheckProgress };
@@ -14,6 +23,7 @@ export const checkContextHash = (input: CheckContext) => canonicalBrowserSha256V
   production: input.production ?? null, previousCompiler: input.previousCompiler ?? null,interfaceHash:input.interfaceHash??null,
   ...(input.verificationInstruction?{verificationInstruction:input.verificationInstruction}:{}),
   ...(input.productBlueprintId?{productBlueprintId:input.productBlueprintId}:{}),
+  ...(input.coin?{launchInputsHash:checkLaunchInputsHash(input.coin)}:{}),
 });
 
 /** Private owner data only; never serialize this through the public job result.

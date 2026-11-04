@@ -40,7 +40,10 @@ export function explicitSourceBuild(request: Pick<ChatRequest,"intent"|"messages
   const polite=text.replace(/^(?:(?:ok(?:ay)?|hey|bitte|please|jetzt|now|go|guck mal|schau mal|ja|yes)[\s,!.:]*)+/,"");
   const modal=/^(?:(?:can|could|would) you|(?:kannst|könntest|koenntest|würdest|wuerdest) du)\s+(?:please\s+|bitte\s+)?/;
   const command=polite.replace(modal,"");
-  if(/^(?:build|rebuild|generate|compile|implement|baue?|erstelle?|erzeuge?|kompiliere?|implementiere?)\b/.test(command))return true;
+  if(/^(?:build|rebuild|generate|compile|implement|baue?|erstelle?|erzeuge?|kompiliere?|implementiere?)\b/.test(command)) {
+    if(/\b(?:summary|summaries|explanation|names?|list|ideas?|image|logo|website|zusammenfassung|erklärung|erklaerung|namen|liste|ideen|bild)\b/.test(command))return false;
+    return /\b(?:source|code|contracts?|hook|design|coin|token|project|quellcode|entwurf|vertrag|projekt|it|this|ihn|es|das)\b/.test(command.slice(0,180));
+  }
   if(modal.test(polite)&&!/(?:erklär|erlauter|erläuter|zeigen|sagen|explain|tell|show)/.test(command)
     &&/\b(?:hook|code|quellcode|entwurf|vertrag|contracts?|coin|token|projekt|ihn|es|das)\b[^.!?\n]{0,140}\b(?:bauen|erstellen|erzeugen|kompilieren)\??$/.test(command))return true;
   return /^mach(?:e)?\b[^.!?\n]{0,160}\bfertig\b/.test(command)

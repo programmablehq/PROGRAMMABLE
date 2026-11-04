@@ -24,6 +24,10 @@ export async function bindConversationJob(db: AIConnection, owner: string, reque
   if (Number(studio?.revision ?? 0) !== scope.revision || (state?.draftId ?? "") !== (request.draftId ?? "") || (state?.contextId ?? "") !== (request.contextId ?? "")) {
     throw new CustomAIError("conflict", "This chat changed in another window. Reload it before sending.", 409);
   }
+  if (meta.activeRequest && meta.activeRequest !== request.id) {
+    const active = (await db.query("SELECT state FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2", [owner,meta.activeRequest])).rows[0];
+    if (active?.state === "completed") throw new CustomAIError("conflict", "A reply is ready in this chat. Reload it before sending another message.", 409);
+  }
   for (const contextId of new Set([request.draftId,request.contextId].filter((value): value is string => Boolean(value)))) {
     const row = (await db.query("SELECT request FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2",[owner,contextId])).rows[0];
     if (!row || !jobMatchesConversation(row.request as ChatRequest,scope.account,scope.id)) throw new CustomAIError("context", "That design belongs to another chat.",409);
@@ -42,7 +46,10 @@ export async function updateConversationStudio(db: AIConnection, owner: string, 
     const job = (await db.query("SELECT request FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2",[owner,contextId])).rows[0];
     if (!job || !jobMatchesConversation(job.request as ChatRequest,meta.account,meta.id)) throw new CustomAIError("context", "That design belongs to another chat.",409);
   }
-  if (state.contextId === meta.activeRequest) delete meta.activeRequest;
+  if (meta.activeRequest) {
+    const active = (await db.query("SELECT state FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2", [owner,meta.activeRequest])).rows[0];
+    if (active?.state === "failed" || active?.state === "completed" && state.contextId === meta.activeRequest) delete meta.activeRequest;
+  }
   if (!meta.customTitle) meta.title=conversationTitle(state.settings.name || state.messages.find(m=>m.role==="user")?.content || meta.title);
   await db.query("UPDATE programmable_custom_ai_v1.objects SET value=$3,revision=revision+1,updated_at=now() WHERE owner=$1 AND kind='conversation' AND id=$2",[owner,id,JSON.stringify(meta)]);
 }

@@ -293,10 +293,23 @@ test("compile-only recovery keeps the working source, unsent text and pending re
  await expect(recovery).toHaveCount(0);await expect(box).toHaveValue("Keep this other unsent change");
  await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[2].id);
  expect(f.calls[2]).toMatchObject({intent:"compile",messages:[],compilationOf:{id:f.calls[1].id,projectHash:second.generalProject.projectHash}});
- expect([...f.studios.values()][0].state.pendingChange).toBe(change);
+ expect([...f.studios.values()][0].state.pendingChange).toBeUndefined();
  expect([...f.studios.values()][0].state.messages).toEqual([{role:"user",content:"Build a general counter"},{role:"assistant",content:first.reply}]);
  await page.reload();await expect(box).toHaveValue("Keep this other unsent change");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
  expect(inferenceRequests).toBe(2);expect(f.calls).toHaveLength(3);
+});
+test("changing a checked fee draft to another route removes its ready card",async({page})=>{
+ const f=await fixture(page),hash="a".repeat(64),text="Charge 3% on buys and sells";
+ const intent:LaunchIntent={version:1,id:"fee-draft",revision:"b".repeat(64),requirements:[{id:"fee",kind:"behavior",text,open:null,origin:{kind:"legacy",sourceHash:hash}}],changes:[],unresolved:[]};
+ f.control.respond=()=>({reply:"The fee hook is saved.",intent,change:"applied",draft:{source:"synthetic source",sourceHash:hash,compiled:true,diagnostics:[],validation:{version:"self-contained-fee-v1",status:"passed",artifactHash:hash,cases:1,samples:[],deployments:[]},verification:{status:"passed",sourceHash:hash,requirements:[text],checks:[],cases:1}}} as unknown as ChatResult);
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ await box.fill("Build my fee hook");await box.press("Enter");await expect(page.getByRole("region",{name:"Your built hook"})).toBeVisible();
+ await page.locator("summary").filter({hasText:"Coin details"}).click();
+ await page.getByRole("button",{name:"Base",exact:true}).click();await expect(page.getByRole("region",{name:"Your built hook"})).toHaveCount(0);
+ await page.locator("summary").filter({hasText:"Coin details"}).click();
+ await page.getByRole("button",{name:"HyperEVM",exact:true}).click();await expect(page.getByRole("region",{name:"Your built hook"})).toHaveCount(0);
+ await page.getByRole("button",{name:"Ethereum",exact:true}).click();await expect(page.getByRole("region",{name:"Your built hook"})).toBeVisible();
+ expect(f.calls).toHaveLength(1);
 });
 test("general source diagnostics stay a separate proposal until explicitly selected for editing",async({page})=>{
  const f=await fixture(page);let n=0;f.control.respond=()=>++n===1?generalFixture():generalFixture(2,false);

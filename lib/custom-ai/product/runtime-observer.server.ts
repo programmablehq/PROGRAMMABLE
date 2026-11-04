@@ -2,7 +2,7 @@ import "server-only";
 import {decodeEventLog,decodeFunctionResult,encodeFunctionData,getContractAddress,keccak256,parseAbi,toHex,type Hex} from "viem";
 import {CUSTOM_LAUNCH_PLAN_ATOMIC_ABI_V2} from "@/lib/custom-launch/atomic-plan-codec-v2";
 import {customLaunchPlanDigestBytesV1,customLaunchPlanOccurrenceIdV1} from "@/lib/custom-launch/stamp-plan-codec-v1";
-import type {TradeRpcV1} from "@/lib/server/custom-launch/routed-trade-rpc-v1";
+import type {ProductReadRpc} from "./read-rpc";
 import {CustomAIError} from "../types";
 import type {ProductRuntimeSource} from "./runtime-source.server";
 import type {ProductRuntime} from "./runtime";
@@ -25,7 +25,7 @@ const block=(value:unknown)=>{const raw=object(value);return {number:quantity(ra
  * Receipt component events are emitted by the pinned executor after its runtime
  * checks. Re-reading every per-component registry mapping would duplicate them. */
 export async function observeProductRuntime(source:ProductRuntimeSource,anchor:{transactionHash:Hex;launchId:Hex|null},
-  rpcs:readonly [TradeRpcV1,TradeRpcV1],options:{signal:AbortSignal;now?:()=>number;paceMs?:number}):Promise<ProductRuntime>{
+  rpcs:readonly [ProductReadRpc,ProductReadRpc],options:{signal:AbortSignal;now?:()=>number;paceMs?:number}):Promise<ProductRuntime>{
   const stopped=new AbortController();
   const now=options.now??Date.now,started=now(),signal=AbortSignal.any([options.signal,stopped.signal,AbortSignal.timeout(30_000)]);
   const reads=[0,0],last=[0,0];
@@ -34,7 +34,7 @@ export async function observeProductRuntime(source:ProductRuntimeSource,anchor:{
     const wait=Math.max(0,(options.paceMs??80)-(now()-last[index]));
     if(wait)await new Promise<void>((resolve,reject)=>{const abort=()=>{clearTimeout(timer);reject(signal.reason);};
       const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},wait);signal.addEventListener("abort",abort,{once:true});});
-    signal.throwIfAborted();last[index]=now();const result=await rpcs[index](method,[...params]);signal.throwIfAborted();return result;
+    signal.throwIfAborted();last[index]=now();const result=await rpcs[index](method,[...params],signal);signal.throwIfAborted();return result;
   };
   if(source.targets.length<1||source.targets.length>16||new Set(source.targets.map(item=>item.id)).size!==source.targets.length
     ||new Set(source.targets.map(item=>item.address.toLowerCase())).size!==source.targets.length)return fail();

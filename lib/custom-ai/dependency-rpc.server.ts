@@ -1,7 +1,7 @@
 import "server-only";
 import { productionMainnetRpcPair } from "@/lib/onchain/website-rpc-providers.server";
 import { readBoundedUtf8BodyV1, discardBodyV1 } from "@/lib/server/custom-launch/bounded-utf8-body-v1";
-import type { TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
+import type { ProductReadRpc } from "./product/read-rpc";
 import { createConstructorDependencyServices } from "./dependency-witness.server";
 import type { LaunchProductionContext } from "./launch-production";
 import { CustomAIError } from "./types";
@@ -11,6 +11,18 @@ import {allowedProductActionReadRPC,checkedProductActionReadCall,type ProductAct
 type Chain = LaunchProductionContext["chainId"];
 type Environment = Readonly<Record<string, string | undefined>>;
 const unavailable = () => new CustomAIError("launch-dependency", "The selected chain's contract inputs could not be verified. Your design is saved.", 503);
+type ProviderBudget = { active: number; starts: number[]; pausedUntil: number };
+// Function/target permissions remain on each adapter. Provider pressure is
+// shared by adapters using the same transport and endpoint in this process.
+// A new saved action must not reset an exhausted provider's cooldown.
+const providerBudgets = new WeakMap<typeof fetch, Map<string, ProviderBudget>>();
+function providerBudget(fetcher: typeof fetch, url: string): ProviderBudget {
+  let budgets = providerBudgets.get(fetcher);
+  if (!budgets) { budgets = new Map(); providerBudgets.set(fetcher, budgets); }
+  let budget = budgets.get(url);
+  if (!budget) { budget = { active: 0, starts: [], pausedUntil: 0 }; budgets.set(url, budget); }
+  return budget;
+}
 const address = (v: unknown) => typeof v === "string" && /^0x[0-9a-f]{40}$/iu.test(v);
 const blockNumber = (v: unknown) => typeof v === "string" && /^0x[0-9a-f]{1,64}$/iu.test(v);
 const object = (v: unknown): Record<string, unknown> | undefined => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
@@ -78,27 +90,29 @@ export function createProductionDependencyRpcs(options: { env?: Environment; fet
   if([options.metadataOnly,options.productRuntime,Boolean(options.productActionRead)].filter(Boolean).length>1)throw new TypeError("Choose one bounded RPC read protocol.");
   const actionRead=options.productActionRead?checkedProductActionReadCall(options.productActionRead):undefined;
   const env = { ...(options.env ?? process.env) }, fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now;
-  const pairs = new Map<Chain, readonly [TradeRpcV1, TradeRpcV1]>();
-  const providers = new Map<string, { active: number; starts: number[]; pausedUntil: number; read: TradeRpcV1 }>();
+  const pairs = new Map<Chain, readonly [ProductReadRpc, ProductReadRpc]>();
+  const providers = new Map<string, ProductReadRpc>();
   let sequence = 0;
-  const readFor = (url: string): TradeRpcV1 => {
-    const previous = providers.get(url); if (previous) return previous.read;
-    const state = { active: 0, starts: [] as number[], pausedUntil: 0, read: undefined as unknown as TradeRpcV1 };
-    state.read = async (method, params) => {
+  const readFor = (url: string): ProductReadRpc => {
+    const previous = providers.get(url); if (previous) return previous;
+    const state = providerBudget(fetcher, url);
+    const read: ProductReadRpc = async (method, params, signal) => {
+      signal?.throwIfAborted();
       if (!Array.isArray(params) || !(actionRead?allowedProductActionReadRPC(method,params,actionRead):options.productRuntime?allowedProductRuntimeRPC(method,params):allowed(method, params, options.metadataOnly === true))) throw unavailable();
       const time = now(); state.starts = state.starts.filter(start => start > time - 1_000);
       if (state.active >= 4 || state.starts.length >= 16 || state.pausedUntil > time) throw unavailable();
       state.active++; state.starts.push(time);
       const id = ++sequence, controller = new AbortController(), timer = setTimeout(() => controller.abort(), 10_000);
       try {
-        const response = await fetcher(url, { method: "POST", redirect: "error", cache: "no-store", signal: controller.signal,
+        const requestSignal = signal ? AbortSignal.any([signal,controller.signal]) : controller.signal;
+        const response = await fetcher(url, { method: "POST", redirect: "error", cache: "no-store", signal: requestSignal,
           headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
         if (!response.ok || !response.body) {
           discardBodyV1(response);
           if ([402, 429, 503].includes(response.status)) state.pausedUntil = now() + 30_000;
           throw unavailable();
         }
-        const result = object(JSON.parse(await readBoundedUtf8BodyV1(response, 524_288, { signal: controller.signal, timeoutMs: 10_000 })));
+        const result = object(JSON.parse(await readBoundedUtf8BodyV1(response, 524_288, { signal: requestSignal, timeoutMs: 10_000 })));
         if (!result || result.jsonrpc !== "2.0" || result.id !== id || Object.hasOwn(result, "error") || !Object.hasOwn(result, "result")) {
           if ([-32005, -32007].includes(Number(object(result?.error)?.code))) state.pausedUntil = now() + 30_000;
           throw unavailable();
@@ -107,9 +121,9 @@ export function createProductionDependencyRpcs(options: { env?: Environment; fet
       } catch { throw unavailable(); }
       finally { clearTimeout(timer); state.active--; }
     };
-    providers.set(url, state); return state.read;
+    providers.set(url, read); return read;
   };
-  return (chain: Chain): readonly [TradeRpcV1, TradeRpcV1] => {
+  return (chain: Chain): readonly [ProductReadRpc, ProductReadRpc] => {
     if(actionRead&&actionRead.chainId!==chain)throw unavailable();
     let pair = pairs.get(chain);
     if (!pair) { const urls = selectedEndpoints(chain, env); pair = [readFor(urls[0]), readFor(urls[1])]; pairs.set(chain, pair); }

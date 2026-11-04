@@ -35,6 +35,35 @@ describe("historical resource identity",()=>{
 });
 beforeEach(()=>{vi.clearAllMocks();});
 describe("private requested runtime snapshots",()=>{
+  it("does not cache cancellation as a provider outage",async()=>{
+    const {source,reply}=graph();mocks.source.mockResolvedValue(source);
+    mocks.observe.mockImplementationOnce((_source,_anchor,_rpcs,options)=>new Promise((_resolve,reject)=>{
+      options.signal.addEventListener("abort",()=>reject(options.signal.reason),{once:true});
+    })).mockResolvedValue({state:"contracts-observed",components:[]});
+    const read=createProductRuntimeReader({store:()=>({} as AIStore),bridge:()=>({resource:vi.fn().mockResolvedValue(reply)}),rpcs:()=>[vi.fn(),vi.fn()]});
+    const auth={kind:"account",owner:"owned-account",principal:{wallets:[source.controller]}} as unknown as AIAuthority;
+    const controller=new AbortController(),url="https://site.test/api/custom-ai/product-runtime?id="+id;
+    const first=read(new Request(url,{signal:controller.signal}),auth,id).catch(error=>error);
+    await vi.waitFor(()=>expect(mocks.observe).toHaveBeenCalledOnce());controller.abort();
+    const retry=read(new Request(url),auth,id);
+    expect((await first).name).toBe("AbortError");await expect(retry).resolves.toMatchObject({state:"contracts-observed"});
+    await read(new Request(url),auth,id);expect(mocks.observe).toHaveBeenCalledTimes(2);
+  });
+  it("does not let one closed tab cancel another runtime reader",async()=>{
+    const {source,reply}=graph();mocks.source.mockResolvedValue(source);
+    let finish!:(value:unknown)=>void,signal!:AbortSignal;
+    mocks.observe.mockImplementation((_source,_anchor,_rpcs,options)=>{signal=options.signal;return new Promise((resolve,reject)=>{
+      finish=resolve;signal.addEventListener("abort",()=>reject(signal.reason),{once:true});
+    });});
+    const read=createProductRuntimeReader({store:()=>({} as AIStore),bridge:()=>({resource:vi.fn().mockResolvedValue(reply)}),rpcs:()=>[vi.fn(),vi.fn()]});
+    const auth={kind:"account",owner:"owned-account",principal:{wallets:[source.controller]}} as unknown as AIAuthority;
+    const controller=new AbortController(),req=()=>new Request("https://site.test/api/custom-ai/product-runtime?id="+id);
+    const first=read(new Request(req(),{signal:controller.signal}),auth,id).catch(error=>error),second=read(req(),auth,id);
+    await vi.waitFor(()=>expect(mocks.observe).toHaveBeenCalledOnce());controller.abort();
+    expect((await first).name).toBe("AbortError");expect(signal.aborted).toBe(false);
+    finish({state:"contracts-observed",components:[]});await expect(second).resolves.toMatchObject({state:"contracts-observed"});
+    await expect(read(req(),auth,id)).resolves.toMatchObject({state:"contracts-observed"});expect(mocks.observe).toHaveBeenCalledOnce();
+  });
   it("deduplicates simultaneous views, caches a minute and rechecks wallet access on every read",async()=>{
     const {source,reply}=graph(),wallet=source.controller;
     mocks.source.mockResolvedValue(source);mocks.observe.mockResolvedValue({state:"contracts-observed",components:[]});
