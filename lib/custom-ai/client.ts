@@ -73,6 +73,22 @@ export async function aiRequest<T>(path: string, headers: AISessionHeaders, body
   });
 }
 
+/** Image uploads share the chat's bounded credential and response handling. */
+export async function aiImageRequest<T>(body: Blob | { url: string }, headers: AISessionHeaders, signal?: AbortSignal): Promise<T> {
+  return boundedRequest(signal, 30_000, async requestSignal => {
+    const credentials = await headers();
+    requestSignal.throwIfAborted();
+    const file = body instanceof Blob;
+    const response = await fetch("/api/custom-ai/image", {
+      method: "POST", cache: "no-store", credentials: "same-origin", signal: requestSignal,
+      headers: { ...credentials, "Content-Type": file ? "image/webp" : "application/json" },
+      body: file ? body : JSON.stringify(body),
+    });
+    requestSignal.throwIfAborted();
+    return await responseValue(response) as T;
+  });
+}
+
 type SavedReply = { id?: string; state: string; request?: ChatRequest; payloadHash?: string; result?: ChatResult; errorCode?: string; phase?: ChatPhase; heartbeatAt?: number };
 export const sameAIRequest = (left: ChatRequest, right: ChatRequest) => JSON.stringify(parseChatRequest(left)) === JSON.stringify(parseChatRequest(right));
 const readReply = (input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal, statusOnly=false) =>
