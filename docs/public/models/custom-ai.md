@@ -52,6 +52,8 @@ You can also ask for different product ideas without replacing the current coin.
 
 For weather or other API-driven rules, describe the trigger and result in ordinary language. Keep private keys and API credentials out of the chat. The builder identifies the required integration and preserves the rule if that integration is not connected; research results alone do not activate it.
 
+For a public JSON source with documented fields and a timestamp, the chat can prepare a private reusable reader and check an actual observation. Its definition records units, accepted values and freshness. This does not publish data onchain or start an automated service. Authenticated sources and other API formats need their own integration; credentials belong in that integration, not in a chat message or URL.
+
 ## General contract projects
 
 You can develop contract source for Ethereum, Robinhood, Base and HyperEVM in the same chat. The project keeps its source files, compiler settings, requirements and declared behavior checks together. An edit retains existing files unless the response explicitly replaces their contents. The builder can use the supplied OpenZeppelin and Uniswap v4 libraries without downloading packages during your request.

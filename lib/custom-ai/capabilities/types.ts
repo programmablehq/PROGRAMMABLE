@@ -6,6 +6,7 @@ export type CapabilityContext = {
   budget: { remaining: number }; allowWeb: boolean;
   onProviderUsage?:(value:import("../request-metrics").ModelCallMetric)=>void;
   productBlueprint?: import("../product/blueprint").ProductBlueprint;
+  dataAdapters?: import("../feed-adapters/library.server").DataAdapterLibrary;
 };
 export type ToolCapability = {
   ref: CapabilityRef; kind: "tool"; description: string; inputSchema: object;

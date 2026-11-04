@@ -20,6 +20,8 @@ export function GET() {
       componentKinds: ["token","hook","vault","adapter","automation","indexer","interface"],
       persistence: "owned-intent-revision", sourceBinding: "product-blueprint-hash",
       allocationExamples: "exact-integer-arithmetic", contractExecution: "separate-verification", serviceDeployment: "not-automatic" },
+    dataAdapters: { state:"private-observation-readers", format:"public-https-json", requiresSession:true, credentials:false, generatedCodeExecution:false, automaticOnchainPublication:false,
+      maximumToolCalls:AI_CONFIG.maximumLookups,maximumResponseBytes:128000,sharedCacheSeconds:10 },
     sourceProjects: { chains: builderChains.map(chain => chain.id), requiresSession: true, state: "source-draft", recovery:"complete-file-checkpoints", sourceOutputBudget:AI_CONFIG.maximumContractTokens,
       launchPreparation: process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true" ? "requires-current-review-and-preparation" : "not-enabled" },
     capabilities: builderCapabilities({ events: process.env.CUSTOM_AI_EVENTS_ENABLED === "true", programs: process.env.CUSTOM_AI_PROGRAMS_ENABLED === "true", generalSources: true }),

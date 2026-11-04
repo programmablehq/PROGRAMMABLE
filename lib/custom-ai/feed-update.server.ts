@@ -105,3 +105,11 @@ export async function prepareWeatherFeedUpdate(input:{feed:import("./rule-compil
   if(input.feed.id!==input.definition.id||input.feed.sourceVersion!==input.definition.sourceVersion)throw Error("Weather source binding changed");
   return prepareObservedFeedUpdate({...input,readObservation:previous=>(readSource??readWeather)(input.definition,previous,signal)});
 }
+
+/** Existing publisher authority is supplied by its operator, never by a chat
+ * adapter. This prepares a bound observation and does not broadcast it. */
+export async function prepareJSONFeedUpdate(input:{feed:import("./rule-compiler.server").RuleFeedBinding;adapter:import("./feed-adapters/json.server").JSONDataAdapter;chainId:1|4663;signingKey:Hex},signal?:AbortSignal){
+  const {readJSONObservation}=await import("./feed-adapters/json.server");
+  if(input.feed.id!==input.adapter.id||input.feed.sourceVersion!==input.adapter.implementationHash)throw Error("Data adapter does not match the configured publisher");
+  return prepareObservedFeedUpdate({...input,readObservation:async previous=>(await readJSONObservation(input.adapter,previous,signal)).observation});
+}
