@@ -11,6 +11,7 @@ import {studioSnapshot} from "../../lib/custom-ai/studio-sync";
 import type { GeneralProjectView } from "../../lib/custom-ai/project-view";
 import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
 import { overviewFromView } from "../../lib/custom-ai/project-overview";
+import { createProductBlueprint } from "../../lib/custom-ai/product/blueprint";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
@@ -124,7 +125,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
    const saved=studios.get(k),chat=chats.get(k),active=chat?.activeRequest?jobs.get(chat.activeRequest):undefined;
    const draft=saved?.state.draftId?jobs.get(saved.state.draftId)?.result:undefined,context=saved?.state.contextId?jobs.get(saved.state.contextId)?.result:undefined;
    const proposal=saved?.state.sourceId?jobs.get(saved.state.sourceId)?.result?.generalProject:undefined;
-   return route.fulfill({json:saved?{...saved,draft:draft?.draft,generalProject:draft?.generalProject,intent:context?.intent??draft?.intent,buildIssue:context?.buildIssue,...(proposal?{sourceRecovery:overviewFromView(saved!.state.sourceId!,proposal)}:{}),...(active&&active.state!=="failed"&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
+   return route.fulfill({json:saved?{...saved,draft:draft?.draft,generalProject:draft?.generalProject,intent:context?.intent??draft?.intent,productBlueprint:context?.productBlueprint??draft?.productBlueprint,buildIssue:context?.buildIssue,...(proposal?{sourceRecovery:overviewFromView(saved!.state.sourceId!,proposal)}:{}),...(active&&active.state!=="failed"&&saved.state.contextId!==active.request.id?{activeRequest:active.request}:{})}:null});
   }
   if(url.pathname==="/api/custom-ai"){
    if(body){calls.push(body);const scope=body.conversation,chat=chats.get(key(scope.account,scope.id,principal))!;expect(scope.revision).toBe(studios.get(key(scope.account,scope.id,principal))?.revision);chat.activeRequest=body.id;if(!chat.customTitle)chat.title=body.coin?.name||body.messages.find((m:{role:string})=>m.role==="user")?.content||chat.title;chat.revision++;
@@ -495,3 +496,26 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) test(`menus pr
   expect(f.calls).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+ test("the canonical product plan survives reload without replacing the user's unsent message", async ({page}) => {
+  const f = await fixture(page), intent = generalFixture().intent;
+  const productBlueprint = createProductBlueprint({
+    components: [{id:"counter",kind:"adapter",name:"Counter contract",purpose:"Keep and expose the counter",requirementIds:["counter"],dependsOn:[]},
+      {id:"counter-page",kind:"interface",name:"Counter page",purpose:"Show the public counter value",requirementIds:["counter"],dependsOn:["counter"]}],
+    assets:[],flows:[],services:[],interfaceActions:[{id:"inspect",target:"counter",kind:"inspect",requirementIds:["counter"]}],
+  }, intent, 8453);
+  f.control.respond = () => ({reply:"Your product plan is saved.",change:"applied",intent,productBlueprint,setupPatch:{chainId:8453}});
+  await page.goto(origin);
+  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+  await box.fill("Plan a counter with a small page, without building yet.");await box.press("Enter");
+  const summary=page.locator("summary").filter({hasText:"Product plan"});await expect(summary).toBeVisible();
+  await summary.click();await expect(page.getByText("Counter page",{exact:true})).toBeVisible();
+  await box.fill("Keep this next idea unsent");
+  await expect.poll(()=>[...f.studios.values()].some(studio=>studio.state.input==="Keep this next idea unsent")).toBe(true);
+  await page.reload();await expect(box).toHaveValue("Keep this next idea unsent");
+  await summary.click();await expect(page.getByText("Counter page",{exact:true})).toBeVisible();
+  expect(f.calls).toHaveLength(1);
+  await page.setViewportSize({width:360,height:900});
+  await page.getByRole("button",{name:"Coin preview and details",exact:true}).click();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ });

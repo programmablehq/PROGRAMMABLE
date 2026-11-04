@@ -6,6 +6,7 @@ import { productionAIStore } from "@/lib/custom-ai/store.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
 import { CustomAIError } from "@/lib/custom-ai/types";
 import type { StudioState, DraftVersion } from "@/lib/custom-ai/studio";
+import { restoredProductBlueprint } from "@/lib/custom-ai/product/blueprint";
 type SavedVersion={studioId:string;state:StudioState;sourceHash:string;summary?:string};
 export const runtime="nodejs";
 export async function GET(request:Request){
@@ -26,7 +27,9 @@ export async function GET(request:Request){
       if(!job||!jobMatchesConversation(job.request,account,query.get("conversation")??LEGACY_CONVERSATION)
         ||(!draft&&!generalProject)||(draft?.sourceHash??generalProject?.projectHash)!==v.sourceHash)throw new CustomAIError("version","That version needs to be checked again before use.",409);
       const context=v.state.contextId===v.state.draftId?undefined:v.state.contextId?(await store.read(auth.owner,v.state.contextId))?.result:undefined;
-      return Response.json({state:v.state,draft,generalProject,intent:context?.intent??job.result?.intent??draft?.intent},{headers:aiHeaders});
+      const intent=context?.intent??job.result?.intent??draft?.intent;
+      const productBlueprint=restoredProductBlueprint(context?.productBlueprint??job.result?.productBlueprint,intent,v.state.settings.chainId);
+      return Response.json({state:v.state,draft,generalProject,intent,...(productBlueprint?{productBlueprint}:{})},{headers:aiHeaders});
     }
     const rows=await store.draftVersions(auth.owner,studioId);
     const versions:DraftVersion[]=rows.map(row=>{const v=row.value as SavedVersion;return {id:String(row.id),createdAt:new Date(String(row.updated_at)).toISOString(),name:v.state.settings.name,summary:v.summary??"Saved rules",sourceHash:v.sourceHash,draftId:v.state.draftId!};});

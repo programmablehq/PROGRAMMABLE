@@ -12,6 +12,9 @@ describe("read-only saved-design questions",()=>{
  it.each(["Welche Gebühren gelten? Ändere sie auf 2%.","What are the fees? Then launch it.","Explain the rules and remove the holder limit.","How do I build this design?","Wie ist die Verteilung? Setz die Fee auf 3%.","What are the rules? Send the ETH.","Was macht der Entwurf? Mach die Gebühren niedriger.","Use these rules: https://example.com","Hallo"])("keeps edits and actions with the full planner: %s",text=>{
   expect(isSavedDesignQuestion(request(text))).toBe(false);
  });
+ it.each(["What happens to the fee split with 100 ETH?","Wie ist die Verteilung bei 1 ETH?","How would the mechanism behave if the feed stops?","What if the fee revenue doubles?"])("keeps numeric and scenario questions in the capable planner: %s",text=>{
+  expect(isSavedDesignQuestion(request(text))).toBe(false);
+ });
  it("normalizes text replies only for the closed reply-only schema",()=>{
   expect(JSON.parse(prepareSurplusSchema(schema,true).decode("30% Liquidität, 20% Buyback/Burn, 20% Holder, 30% Creator.")))
    .toEqual({reply:"30% Liquidität, 20% Buyback/Burn, 20% Holder, 30% Creator."});

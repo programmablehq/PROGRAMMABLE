@@ -23,6 +23,7 @@ export type GeneralProjectView = {
   verification: "not-run";
   launchReady: false;
   blueprintId?:`sha256:${string}`;
+  productBlueprintId?:`sha256:${string}`;
   scenarios?:ScenarioOverview;
 };
 export function generalProjectView(value: GeneralProjectDraft): GeneralProjectView {
@@ -34,7 +35,7 @@ export function generalProjectView(value: GeneralProjectDraft): GeneralProjectVi
     compiled: compilation.compiled, diagnostics: compilation.diagnostics.slice(0, 24).map(item => ({ severity: item.severity, message: item.message.slice(0, 800) })),
     ...(value.sourceAudit?{sourceReview:value.sourceAudit.status}:{}),
     requirementCoverage: "proposed", verification: "not-run", launchReady: false,
-    ...(value.blueprintId?{blueprintId:value.blueprintId}:{}),...(value.scenarios?{scenarios:scenarioOverview(value.scenarios)}:{}) };
+    ...(value.blueprintId?{blueprintId:value.blueprintId}:{}),...(project.productBlueprintId?{productBlueprintId:project.productBlueprintId}:{}),...(value.scenarios?{scenarios:scenarioOverview(value.scenarios)}:{}) };
 }
 
 export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undefined {
@@ -47,10 +48,10 @@ export function cachedGeneralProjectView(value:unknown):GeneralProjectView|undef
   const base=cachedProjectOverview({...v,requestId:"cached-project-view",compilation:v.compiled?"compiled":"diagnostics"});
   if(!base?.artifactHash)return;
   const scenarios=v.scenarios?cachedScenarioOverview(v.scenarios):undefined;
-  if(v.scenarios&&!scenarios||v.blueprintId!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.blueprintId))return;
+  if(v.scenarios&&!scenarios||v.blueprintId!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.blueprintId)||v.productBlueprintId!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.productBlueprintId))return;
   return {version:1,projectHash:base.projectHash,artifactHash:base.artifactHash,chainId:base.chainId,intentRevision:base.intentRevision,summary:v.summary,
     compiler:base.compiler,entrypoints:v.entrypoints.map(item=>({source:item.source,contract:item.contract,role:item.role})),sourceFiles:base.sourceFiles,sourceBytes:base.sourceBytes,
     compiled:v.compiled,diagnostics:base.diagnostics,requirementCoverage:"proposed",verification:"not-run",launchReady:false,
     ...(v.sourceReview?{sourceReview:v.sourceReview}:{}),
-    ...(v.blueprintId?{blueprintId:v.blueprintId}:{}),...(scenarios?{scenarios}:{})};
+    ...(v.blueprintId?{blueprintId:v.blueprintId}:{}),...(v.productBlueprintId?{productBlueprintId:v.productBlueprintId}:{}),...(scenarios?{scenarios}:{})};
 }

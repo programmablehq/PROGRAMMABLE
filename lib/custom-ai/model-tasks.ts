@@ -3,6 +3,7 @@
 export const MODEL_TASKS = {
   conversation: { role: "chat", effort: "low", maxTokens: 800 },
   planning: { role: "chat", effort: "medium", maxTokens: 16_000 },
+  "product-repair": { role: "chat", effort: "low", maxTokens: 4000 },
   interface: { role: "build", effort: "low", maxTokens: 6000 },
   "interface-abi": { role: "build", effort: "low", maxTokens: 4000 },
   "interface-deployment": { role: "build", effort: "low", maxTokens: 4000 },

@@ -5,6 +5,7 @@ export type CapabilityContext = {
   owner: string; chainId: import("../execution-routing").BuilderChainId; signal?: AbortSignal;
   budget: { remaining: number }; allowWeb: boolean;
   onProviderUsage?:(value:import("../request-metrics").ModelCallMetric)=>void;
+  productBlueprint?: import("../product/blueprint").ProductBlueprint;
 };
 export type ToolCapability = {
   ref: CapabilityRef; kind: "tool"; description: string; inputSchema: object;

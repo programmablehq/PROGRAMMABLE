@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const previousRead=readResult(input.contextId);
     const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, verificationRefreshRequested:previous?.verificationRefreshRequested, verificationInstruction:previous?.verificationInstruction, replyLocale:previous?.replyLocale,
-      intent: previous?.intent ?? current?.intent, unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
+      intent: previous?.intent ?? current?.intent, productBlueprint: previous?.productBlueprint ?? current?.productBlueprint, productPlanIncomplete: previous?.buildIssue?.stage === "product", unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
     if(current?.generalProject&&store&&authority.kind==="account"&&input.draftId){
       const view=current.generalProject;
       context.loadGeneralProject=async()=>{
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       await providerHealth().assertAvailable();
     }
     const profile = executionProfile(input.intent==="compile"?[]:getCapabilities({ owner: context.owner!, chainId: input.coin?.chainId ?? 1,
-      allowWeb: researchAvailable(), budget: { remaining: 2 } }));
+      allowWeb: researchAvailable(), budget: { remaining: 2 }, productBlueprint: context.productBlueprint }));
     const reserved = store && authority.kind === "account" ? await store.reserve(authority.owner, input, profile).catch(error=>{
       // A quota rejection rolls its transaction back before a job exists.
       // Do not leave the browser reconnecting to that nonexistent request.

@@ -68,11 +68,12 @@ export type Draft = {
   };
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  productBlueprint?: import("./product/blueprint").ProductBlueprint;
   nextAction?: {kind:"prepare-launch";sourceId:string};
   replyLocale?: string;
   verificationRefreshRequested?: boolean;
   verificationInstruction?: string;
-  buildIssue?: {stage:"interface"|"scenarios"|"source";code:string};
+  buildIssue?: {stage:"product"|"interface"|"scenarios"|"source";code:string};
   generalProject?: import("./project-view").GeneralProjectView;
   selection?: import("./execution-routing").RouteSelection;
   intent?: import("./launch-intent").LaunchIntent;

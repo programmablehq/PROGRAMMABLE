@@ -5,12 +5,13 @@ import contract from "./contract-read/index.server";
 import searchHooks from "./search-hooks/index.server";
 import protocol from "./protocol/index.server";
 import feeFlow from "./fee-flow/index.server";
+import productAllocation from "./product-allocation/index.server";
 import type { CapabilityContext, CapabilityRef, ToolCapability } from "./types";
 import { AI_CONFIG, type ExecutionProfile } from "../ai-config";
 import { CustomAIError } from "../types";
 import { configuredProvider } from "../provider-config.server";
 
-const registry: readonly ToolCapability[] = [catalog, web, contract, searchHooks, protocol, feeFlow];
+const registry: readonly ToolCapability[] = [catalog, web, contract, searchHooks, protocol, feeFlow, productAllocation];
 export function getCapabilities(context: CapabilityContext, entries = registry) {
   const ids = new Set<string>();
   for (const entry of entries) {

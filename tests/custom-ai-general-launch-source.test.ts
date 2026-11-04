@@ -67,6 +67,10 @@ const selection = (): GeneralLaunchSourceSelection => ({ id, account, conversati
   projectHash: project.hash, artifactHash: compilation.artifactHash, intentRevision: intent.revision });
 
 describe("current owned source selection before general launch packing", () => {
+  it("rejects an updated product architecture even when the text intent revision is unchanged",async()=>{
+    await database.query("UPDATE programmable_custom_ai_v1.jobs SET result=jsonb_set(result,'{productBlueprint}', $2::jsonb) WHERE owner=$1 AND id=$3",[owner,JSON.stringify({id:`sha256:${"c".repeat(64)}`}),id]);
+    await expect(store.projects.readForLaunch(owner,selection())).rejects.toMatchObject({code:"launch-source-changed"});
+  });
   it("publishes only a deliberate exact-source export and reuses its immutable public identity", async () => {
     expect(await store.projects.readPublicSource(project.hash.slice(7))).toBeNull();
     const first = await store.projects.publishForLaunch(owner, selection()), second = await store.projects.publishForLaunch(owner, selection());

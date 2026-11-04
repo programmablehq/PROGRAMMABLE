@@ -20,6 +20,7 @@ export type ContractProject = {
   entrypoints: ProjectEntrypoint[];
   production?: LaunchProductionContext;
   deployment?: GeneralDeploymentBlueprint;
+  productBlueprintId?: `sha256:${string}`;
 };
 const fail = (): never => { throw new TypeError("Use a complete source package with the pinned compiler and supported settings."); };
 const object = (value: unknown): Record<string, unknown> => {
@@ -37,8 +38,9 @@ export function projectSourcePath(value: unknown): string {
 
 /** Only inline Standard JSON sources enter the compiler. There is no remote
  * dependency resolution, model-selected command or host import callback. */
-export function createContractProject(value: unknown, intent: LaunchIntent, chainId: BuilderChainId, production?: LaunchProductionContext, deployment?: GeneralDeploymentBlueprint): ContractProject {
+export function createContractProject(value: unknown, intent: LaunchIntent, chainId: BuilderChainId, production?: LaunchProductionContext, deployment?: GeneralDeploymentBlueprint, productBlueprintId?: `sha256:${string}`): ContractProject {
   builderChain(chainId);
+  if (productBlueprintId !== undefined && !/^sha256:[a-f0-9]{64}$/.test(productBlueprintId)) fail();
   if (!intent || !/^[a-f0-9]{64}$/.test(intent.revision) || intentHasOpenParts(intent)
     || !intent.requirements.length || intent.requirements.length > 64) throw new TypeError("Resolve the complete saved design before compiling its contract.");
   const input = object(value); exact(input, ["compiler", "sources", "entrypoints"]);
@@ -69,6 +71,7 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
   const body: Omit<ContractProject, "hash"> = { version: 1 as const, chainId, intent,
     compiler: createProjectCompiler(projectCompilerProfile(compiler), compiler.evmVersion), sources, entrypoints,
     ...(production ? { production: checkedLaunchProductionContext(production, chainId) } : {}),
+    ...(productBlueprintId ? { productBlueprintId } : {}),
     ...(deployment ? { deployment: checkedGeneralDeploymentBlueprint(deployment, entrypoints, production!, intent) } : {}) };
   const hash = canonicalBrowserSha256V2("programmable.custom-ai-project.v1", body);
   // Copy the complete intent so later mutation of an interpreter object cannot
@@ -77,7 +80,7 @@ export function createContractProject(value: unknown, intent: LaunchIntent, chai
 }
 
 export function projectCompilerInput(project: ContractProject) {
-  const checked = createContractProject({ compiler: project.compiler, sources: project.sources, entrypoints: project.entrypoints }, project.intent, project.chainId, project.production, project.deployment);
+  const checked = createContractProject({ compiler: project.compiler, sources: project.sources, entrypoints: project.entrypoints }, project.intent, project.chainId, project.production, project.deployment, project.productBlueprintId);
   if (checked.hash !== project.hash) throw new TypeError("The contract project changed after it was saved.");
   return { language: "Solidity", sources: checked.sources, settings: { optimizer: { enabled: true, runs: checked.compiler.optimizerRuns },
     viaIR: checked.compiler.viaIR, evmVersion: checked.compiler.evmVersion, metadata: { bytecodeHash: "none", appendCBOR: false },

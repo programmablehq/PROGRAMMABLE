@@ -5,7 +5,7 @@ import type { LaunchIntent } from "./launch-intent";
 import type { LaunchProductionContext } from "./launch-production";
 
 export type CheckContext = { intent: LaunchIntent; chainId: BuilderChainId; evmVersion: "paris" | "cancun";
-  production?: LaunchProductionContext; previousCompiler?: ContractProject["compiler"];interfaceHash?:string;verificationInstruction?:string };
+  production?: LaunchProductionContext; previousCompiler?: ContractProject["compiler"];interfaceHash?:string;verificationInstruction?:string;productBlueprintId?:`sha256:${string}` };
 export type CheckFailure = { stage: "interface" | "scenarios"; message: string; declaration: string | null; response?:string };
 export type CheckProgress = { interface: string; steps: unknown[];interfacesPending?:true };
 export type CheckDiagnostic = { version: 1; contextHash: `sha256:${string}`; failures: CheckFailure[]; progress?: CheckProgress };
@@ -13,6 +13,7 @@ export const checkContextHash = (input: CheckContext) => canonicalBrowserSha256V
   intent: input.intent, chainId: input.chainId, evmVersion: input.evmVersion,
   production: input.production ?? null, previousCompiler: input.previousCompiler ?? null,interfaceHash:input.interfaceHash??null,
   ...(input.verificationInstruction?{verificationInstruction:input.verificationInstruction}:{}),
+  ...(input.productBlueprintId?{productBlueprintId:input.productBlueprintId}:{}),
 });
 
 /** Private owner data only; never serialize this through the public job result.

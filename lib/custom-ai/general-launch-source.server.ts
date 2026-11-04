@@ -53,7 +53,9 @@ export function checkedGeneralLaunchSource(owner: string, selected: GeneralLaunc
     || !compilation?.compiled || !scenarios?.passed) return checks();
   try { projectCompilerInput(project); } catch { return checks(); }
   const currentIntent = cachedLaunchIntent(contextJob.result?.intent ?? sourceJob.result?.intent ?? project.intent);
+  const currentProduct = contextJob.result?.productBlueprint ?? sourceJob.result?.productBlueprint;
   if (!currentIntent || intentHasOpenParts(currentIntent) || currentIntent.id !== project.intent.id
+    || currentProduct?.id !== project.productBlueprintId
     || currentIntent.revision !== selected.intentRevision || project.intent.revision !== selected.intentRevision
     || project.chainId !== selected.chainId || project.hash !== selected.projectHash
     || canonicalBrowserSha256V2("programmable.general-check-intent.v1", currentIntent) !== declared.blueprint.intentHash) return changed();

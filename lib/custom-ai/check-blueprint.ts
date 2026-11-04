@@ -22,6 +22,7 @@ export type GeneralCheckBlueprint = {
   scenarios: GeneralCheckScenarios;
   production?: LaunchProductionContext;
   deployment?: GeneralDeploymentBlueprint;
+  productBlueprintId?: `sha256:${string}`;
 };
 const fail=(reason="invalid-blueprint"):never=>{throw new TypeError(`Declare complete contract scenarios before generating source. Validation: ${reason}.`);};
 
@@ -45,8 +46,9 @@ export const generalCheckGraphRules=[checkInstructions.scope,checkInstructions.c
 export const generalCheckPlanningRules=`For action build on custom-contract, generalChecks is a JSON-encoded string declaring independent contract examples before source generation. Otherwise generalChecks=null. Never derive expected values from proposed implementation code.
 ${generalCheckLogicalRules}`;
 
-export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,chainId:BuilderChainId,evmVersion:"paris"|"cancun",production?:LaunchProductionContext,previousCompiler?:ContractProject["compiler"]):GeneralCheckBlueprint {
+export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,chainId:BuilderChainId,evmVersion:"paris"|"cancun",production?:LaunchProductionContext,previousCompiler?:ContractProject["compiler"],productBlueprintId?:`sha256:${string}`):GeneralCheckBlueprint {
   builderChain(chainId);
+  if(productBlueprintId!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(productBlueprintId))return fail("product-identity");
   if(!intent?.id||!/^[a-f0-9]{64}$/.test(intent.revision)||intentHasOpenParts(intent)||!intent.requirements.length||intent.requirements.length>64
     ||!["paris","cancun"].includes(evmVersion)||!value||typeof value!=="object"||Array.isArray(value)
     ||![Object.prototype,null].includes(Object.getPrototypeOf(value))||new TextEncoder().encode(JSON.stringify(value)).length>96_000)return fail();
@@ -89,7 +91,7 @@ export function createGeneralCheckBlueprint(value:unknown,intent:LaunchIntent,ch
   }
   const compiler=createProjectCompiler(Object.hasOwn(raw,"compilerProfile")?raw.compilerProfile:previousCompiler?projectCompilerProfile(previousCompiler):newProjectCompilerProfile(production),evmVersion);
   const body={version:1 as const,intentId:intent.id,intentRevision:intent.revision,intentHash:canonicalBrowserSha256V2("programmable.general-check-intent.v1",intent),chainId,
-    compiler,entrypoints,scenarios,...(production?{production:checkedLaunchProductionContext(production,chainId)}:{}),...(deployment?{deployment}:{})};
+    compiler,entrypoints,scenarios,...(production?{production:checkedLaunchProductionContext(production,chainId)}:{}),...(deployment?{deployment}:{}),...(productBlueprintId?{productBlueprintId}:{})};
   return structuredClone({...body,id:canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body)});
 }
 
@@ -103,7 +105,7 @@ export function generalCheckBlueprintInput(value:GeneralCheckBlueprint) {
 
 export function checkedGeneralCheckBlueprint(value:GeneralCheckBlueprint,intent:LaunchIntent):GeneralCheckBlueprint {
   if(!value||value.version!==1||!value.scenarios||!Array.isArray(value.entrypoints))return fail();
-  const parsed=createGeneralCheckBlueprint(generalCheckBlueprintInput(value),intent,value.chainId,value.compiler?.evmVersion,value.production);
+  const parsed=createGeneralCheckBlueprint(generalCheckBlueprintInput(value),intent,value.chainId,value.compiler?.evmVersion,value.production,undefined,value.productBlueprintId);
   // Reconstruct all fields; extra or changed metadata cannot inherit an ID.
   const {id,...body}=value;
   if(id!==parsed.id||id!==canonicalBrowserSha256V2("programmable.general-check-blueprint.v1",body))return fail();
@@ -114,6 +116,7 @@ export function bindGeneralCheckBlueprint(blueprint:GeneralCheckBlueprint,projec
   projectCompilerInput(project);
   const checked=checkedGeneralCheckBlueprint(blueprint,project.intent);
   if(checked.chainId!==project.chainId||checked.compiler.version!==project.compiler.version||checked.compiler.evmVersion!==project.compiler.evmVersion
+    ||checked.productBlueprintId!==project.productBlueprintId
     ||checked.production?.id!==project.production?.id
     ||checked.deployment?.id!==project.deployment?.id
     ||checked.compiler.optimizerRuns!==project.compiler.optimizerRuns||checked.compiler.viaIR!==project.compiler.viaIR

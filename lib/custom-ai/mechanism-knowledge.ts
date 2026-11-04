@@ -1,5 +1,6 @@
 import type { LaunchIntent } from "./launch-intent";
 import { PROTOCOL_TOPICS, type ProtocolTopic } from "./protocol-knowledge";
+import { productDesignKnowledge } from "./product/design-knowledge";
 
 /** Select reviewed guidance, not facts or instructions from the design text. */
 export function mechanismTopics(intent?: Pick<LaunchIntent, "requirements">, message = "") {
@@ -17,5 +18,5 @@ export function mechanismTopics(intent?: Pick<LaunchIntent, "requirements">, mes
 }
 
 export function mechanismKnowledge(intent?: Pick<LaunchIntent, "requirements">, message = "") {
-  return mechanismTopics(intent,message).map(topic => `${PROTOCOL_TOPICS[topic].title}: ${PROTOCOL_TOPICS[topic].facts}`).join("\n");
+  return [...mechanismTopics(intent,message).map(topic => `${PROTOCOL_TOPICS[topic].title}: ${PROTOCOL_TOPICS[topic].facts}`),productDesignKnowledge(intent,message)].filter(Boolean).join("\n");
 }
