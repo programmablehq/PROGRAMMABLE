@@ -19,6 +19,7 @@ export type NativeFeedConstructorRead = {
 export type ObservedConstructorDependencies = { observation: LaunchDependencyObservation; read: NativeFeedConstructorRead };
 const invalid = (): never => { throw new TypeError("The native feed state witness is incomplete or inconsistent."); };
 const address = /^0x(?!0{40}$)[a-f0-9]{40}$/iu, word = /^0x[a-f0-9]{64}$/iu;
+const ARBOS_ACCOUNTING = "0xa4b05fffffffffffffffffffffffffffffffffff";
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return invalid();
   return value as Record<string, unknown>;
@@ -27,7 +28,7 @@ const object = (value: unknown): Record<string, unknown> => {
 /** Only code and explicitly observed storage are admitted. Balance/nonce-only
  * trace entries are irrelevant because the isolated reader forbids those
  * dependencies. An omitted storage slot is never interpreted as observed zero. */
-export function dependencyWitnessAccounts(raw: unknown): DependencyWitnessAccount[] {
+export function dependencyWitnessAccounts(raw: unknown, chainId?: LaunchDependencyObservation["chainId"]): DependencyWitnessAccount[] {
   const entries = Object.entries(object(raw));
   if (!entries.length || entries.length > 16) return invalid();
   const seen = new Set<string>(); let bytes = 0, slots = 0;
@@ -41,15 +42,23 @@ export function dependencyWitnessAccounts(raw: unknown): DependencyWitnessAccoun
     if (account.codeHash !== undefined && (typeof account.codeHash !== "string" || !word.test(account.codeHash)
       || account.codeHash.toLowerCase() !== keccak256(code as Hex))) return invalid();
     const storage = Object.entries(object(account.storage ?? {}));
-    if (code === "0x") { if (storage.length) return invalid(); continue; }
-    if (!address.test(key)) return invalid();
-    bytes += (code.length - 2) / 2; slots += storage.length;
-    if (bytes > 131_072 || slots > 64) return invalid();
     const observed = new Set<string>();
     const words = storage.map(([slot, value]) => {
       if (!word.test(slot) || typeof value !== "string" || !word.test(value) || observed.has(slot.toLowerCase())) return invalid();
       observed.add(slot.toLowerCase()); return { slot: slot.toLowerCase() as Hex, value: value.toLowerCase() as Hex };
     }).sort((a, b) => a.slot.localeCompare(b.slot));
+    slots += storage.length;
+    if (slots > 64) return invalid();
+    if (code === "0x") {
+      // Nitro includes fee-accounting storage in prestate traces. It has no
+      // EVM code and is never supplied to the isolated read. Calls or storage
+      // reads outside the retained witness still fail in the VM.
+      if (storage.length && !(chainId === 4663 && key.toLowerCase() === ARBOS_ACCOUNTING)) return invalid();
+      continue;
+    }
+    if (!address.test(key)) return invalid();
+    bytes += (code.length - 2) / 2;
+    if (bytes > 131_072) return invalid();
     accounts.push({ address: key.toLowerCase() as Address, runtimeCode: code.toLowerCase() as Hex, runtimeCodeHash: keccak256(code as Hex), storage: words });
   }
   if (!accounts.length || accounts.length > 8) return invalid();
@@ -69,7 +78,7 @@ export function createNativeFeedConstructorWitness(observation: LaunchDependency
   first: unknown, second: unknown, now: number): NativeFeedConstructorWitness {
   checkNativeFeedObservation(observation, caller, now);
   const id = observation.id;
-  const firstAccounts = dependencyWitnessAccounts(first), other = new Map(dependencyWitnessAccounts(second).map(account => [account.address, account]));
+  const firstAccounts = dependencyWitnessAccounts(first, observation.chainId), other = new Map(dependencyWitnessAccounts(second, observation.chainId).map(account => [account.address, account]));
   // Tracers can include unrelated fee-recipient accounts or extra untouched
   // slots. Only common, identical observations enter the witness. The VM then
   // refuses any actual read that this intersection cannot substantiate.
