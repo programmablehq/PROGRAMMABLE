@@ -35,6 +35,7 @@ import {editSourceFoundation} from "./source-editor.server";
 import {repairCompilerSource} from "./source-repair.server";
 import {canonicalBrowserJsonV2} from "@/lib/custom-launch/browser-authority-v2";
 import {checkedProductBlueprint,type ProductBlueprint} from "./product/blueprint";
+import {checkedProductBindings} from "./product/bindings";
 
 const sourceSchema = { type: "object", properties: { path: { type: "string", maxLength: 180 }, content: { type: "string", maxLength: 96_000 } },
   required: ["path", "content"], additionalProperties: false };
@@ -85,6 +86,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
   const productBlueprint=input.productBlueprint?checkedProductBlueprint(input.productBlueprint,intent,chainId):undefined;
   const blueprint=input.blueprint?checkedGeneralCheckBlueprint(input.blueprint,intent):undefined;
   if(blueprint&&blueprint.productBlueprintId!==productBlueprint?.id)throw new CustomAIError("behavior-context","The product plan changed. Keep its source and checks on the same saved revision.",409);
+  if(blueprint?.productBindings&&productBlueprint)checkedProductBindings(blueprint.productBindings,blueprint.scenarios,blueprint.entrypoints,productBlueprint);
   const production=input.production?checkedLaunchProductionContext(input.production,chainId):undefined;
   if(blueprint&&blueprint.production?.id!==production?.id)throw new CustomAIError("behavior-context","Keep the source and declared checks on their saved launch configuration.",409);
   if(blueprint&&(blueprint.chainId!==chainId||blueprint.compiler.evmVersion!==input.evmVersion))throw new CustomAIError("behavior-context","Keep the declared contract checks on their saved network and compiler target.",409);

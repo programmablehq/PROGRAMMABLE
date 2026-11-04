@@ -268,6 +268,15 @@
 
 .coinForm > .preparationStatus { margin: 16px 0 0; }
 .ruleReview .note { margin: 12px 0 0; }
+.executionPreview > ol { list-style: none; padding: 0; margin: 16px 0; }
+.executionPreview > ol > li { margin-top: 20px; }
+.executionStepTitle { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.executionStepTitle strong { color: #f4f1eb; font-weight: 500; }
+.executionStepTitle > span { color: #aaa69f; font-size: 12px; }
+.executionPreview dl { margin: 8px 0; font-variant-numeric: tabular-nums; }
+.executionPreview dl > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.executionPreview dt { color: #aaa69f; }
+.executionPreview dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .ruleReview .ruleTimeline { list-style: none; padding: 0; margin: 16px 0; }
 .ruleTimeline li { padding: 0 0 18px 16px; border-inline-start: 1px solid #686057; }
 .ruleTimeline li:last-child { padding-bottom: 0; }

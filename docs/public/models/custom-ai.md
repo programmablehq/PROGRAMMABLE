@@ -48,6 +48,8 @@ These percentages divide collected project fees. They do not set a 70% swap tax 
 
 The expandable **Product plan** records the parts needed by your design: contracts, money flows, external services and interface actions. It belongs to the saved design and remains available after reloading or restoring a version. The chat can calculate a specific allocation example without querying a price provider. The example preserves any unassigned share and rounding; it does not claim that a swap, buyback or payout has executed.
 
+For new contract builds, the plan can link actions such as deposits, claims and balance reads to specific functions in the declared contract interface. The builder checks those links against the compiled ABI and the corresponding local examples. **Contract actions** shows the linked functions inside the product plan. These source links do not activate a service or submit a transaction.
+
 You can also ask for different product ideas without replacing the current coin. The chat considers execution rules, incentives, liquidity, external events and treasury mechanics. Selecting a design is separate from exploring it. A planned service is not automatically hosted or funded by adding it to the plan.
 
 For weather or other API-driven rules, describe the trigger and result in ordinary language. Keep private keys and API credentials out of the chat. The builder identifies the required integration and preserves the rule if that integration is not connected; research results alone do not activate it.
@@ -59,6 +61,8 @@ For a public JSON source with documented fields and a timestamp, the chat can pr
 You can develop contract source for Ethereum, Robinhood, Base and HyperEVM in the same chat. The project keeps its source files, compiler settings, requirements and declared behavior checks together. An edit retains existing files unless the response explicitly replaces their contents. The builder can use the supplied OpenZeppelin and Uniswap v4 libraries without downloading packages during your request.
 
 Declared event checks compare the logs emitted by the actual local contract calls, including the emitting contract, values, order and count. A public counter or an event in the contract's ABI does not prove that the expected event was emitted. These checks are local examples, not evidence of a live launch.
+
+Expand **Simulation** to inspect the actual return values, events and native balance changes recorded during those calls. A failed expectation still shows the value the contract returned. The preview uses local test balances, raw units and no gas charges. It records bounded details from the existing execution, without another model call or blockchain transaction. Asking about a different scenario does not by itself execute that scenario.
 
 General projects also follow the selected network's mandatory Custom Launch policy. Temporary buyer limits count cumulative buys, and temporary recipient limits count cumulative token inflows, including wallet-to-wallet transfers. Sending tokens out does not restore that allowance. Tax-exempt wallets remain capped during the launch window; their exemption applies to the additional opening surcharge. The chat includes these fixed rules when you ask for normal ERC20 transfers and explains any explicit conflict in your design.
 

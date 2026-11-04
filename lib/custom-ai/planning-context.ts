@@ -8,6 +8,11 @@ import {dependencySourceContext} from "./dependency-source-context";
 import type {LaunchProductionContext} from "./launch-production";
 import type {ProductBlueprint} from "./product/blueprint";
 import {reviewProductEconomics} from "./product/economics";
+import {executionContext} from "./execution-trace";
+
+export function plannerNeedsExecution(request:ChatRequest) {
+  return /\d|\b(simulat\w*|scenarios?|examples?|balances?|claims?|payouts?|rewards?|receipts?|results?|beispiele?|szenari\w*|guthaben|auszahl\w*|ergebn\w*)\b/i.test(request.messages.at(-1)?.content??"");
+}
 
 /** Policy and known infrastructure are relevant to a conversation. The full
  * execution graph is retained by the server and supplied to source planning. */
@@ -29,7 +34,7 @@ export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:Gen
     &&Array.isArray(draft.verification.checks)&&draft.verification.checks.length>0;
   return !checked||inspection;
 }
-export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;productBlueprint?:ProductBlueprint;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView;canonicalSources?:ContractProject["sources"]},includeSource:boolean){
+export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;productBlueprint?:ProductBlueprint;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView;canonicalSources?:ContractProject["sources"];includeExecution?:boolean},includeSource:boolean){
   const {draft,intent,generalProject}=input;
   const projectView=generalProject?generalProjectView(generalProject):input.generalProjectView;
   const original=includeSource&&generalProject?generalProject.project.sources:undefined;
@@ -48,7 +53,9 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
       sourceIncluded:includeSource}:null,
     ...(projectView?{generalProject:{projectHash:projectView.projectHash,chainId:projectView.chainId,summary:projectView.summary,
       entrypoints:projectView.entrypoints,compiler:projectView.compiler,compiled:projectView.compiled,
+      ...(projectView.implementation?{boundSourceActions:{evidence:projectView.implementation.evidence,deployed:false,actions:projectView.implementation.actions}}:{}),
       ...(projectView.blueprintId?{declaredChecks:{blueprintId:projectView.blueprintId,...(projectView.scenarios?{scope:projectView.scenarios.scope,passed:projectView.scenarios.passed,cases:projectView.scenarios.cases,failures:projectView.scenarios.failures}:{state:"pending"})}}:{}),
+      ...(input.includeExecution&&projectView.scenarios?.execution?{simulation:executionContext(projectView.scenarios.execution)}:{}),
       verification:"not-run",sourceIncluded:includeSource&&Boolean(generalProject),...(sources&&generalProject?{sources,
         ...(dependencies&&Object.keys(fixed!).length?{dependencyView:dependencies.view}:{}),
         ...(generalProject.project.deployment?{deployment:generalProject.project.deployment}:{})}:{})}}:{}),

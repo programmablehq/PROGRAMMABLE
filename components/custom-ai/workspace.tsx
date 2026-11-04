@@ -661,7 +661,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     finally{coinTransition.current=false;setSwitchingCoin(false);}
   }
 
-  const productPanel=productBlueprint&&productBlueprint.chainId===settings.chainId&&productBlueprint.intentRevision===intent?.revision&&<ProductPlan blueprint={productBlueprint}/>;
+  const productPanel=productBlueprint&&productBlueprint.chainId===settings.chainId&&productBlueprint.intentRevision===intent?.revision&&<ProductPlan blueprint={productBlueprint} implementation={generalProject?.implementation}/>;
   const sourcePanel=sourceRecovery&&<ProjectSource key={sourceRecovery.requestId} source={sourceRecovery} chainId={settings.chainId} account={owner} conversationId={conversationId} headers={headers}
     disabled={busy||Boolean(recoveryRequest)||switchingCoin||!restored||launchLocked||saveFailed||Boolean(conflict)} recovery
     onCompile={source=>void retryCompilation(source)} onEdit={source=>void editSavedSource(source)}/>;

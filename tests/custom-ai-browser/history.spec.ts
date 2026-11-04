@@ -12,6 +12,8 @@ import type { GeneralProjectView } from "../../lib/custom-ai/project-view";
 import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
 import { overviewFromView } from "../../lib/custom-ai/project-overview";
 import { createProductBlueprint } from "../../lib/custom-ai/product/blueprint";
+import { canonicalBrowserSha256V2 } from "../../lib/custom-launch/browser-authority-v2";
+import type { ProductImplementation } from "../../lib/custom-ai/product/implementation";
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
@@ -29,6 +31,62 @@ function checkedFixture(revision=1,passed=true){
   scenarios:{scope:"isolated-declared-scenarios-v1" as const,hash:`sha256:${"3".repeat(64)}` as const,planHash:`sha256:${"4".repeat(64)}` as const,passed,cases:5,
     failures:passed?[]:[{caseId:"increment-one",code:"return-value",message:"The declared increment did not match."}]}}};
 }
+
+test("source-linked product actions remain inspectable after reload",async({page},info)=>{
+ const f=await fixture(page),result=checkedFixture();
+ const product=createProductBlueprint({components:[{id:"counter",kind:"adapter",name:"Counter",purpose:"Track the counter",requirementIds:["counter"],dependsOn:[]}],assets:[],flows:[],services:[],
+   interfaceActions:[{id:"read-counter",target:"counter",kind:"inspect",requirementIds:["counter"]}]},result.intent,1);
+ const body:Omit<ProductImplementation,"id">={version:1,productBlueprintId:product.id,projectHash:result.generalProject.projectHash,artifactHash:result.generalProject.artifactHash,
+   checkBlueprintId:result.generalProject.blueprintId,intentRevision:result.intent.revision,evidence:"declared-scenarios-passed",deployed:false,
+   components:[{id:"counter",fixture:"counter",source:"Counter.sol",contract:"Counter"}],actions:[{id:"read-counter",target:"counter",fixture:"counter",signature:"value()",mutability:"view"}]};
+ const implementation={...body,id:canonicalBrowserSha256V2("programmable.product-implementation.v1",body)};
+ f.control.respond=()=>({...result,productBlueprint:product,generalProject:{...result.generalProject,productBlueprintId:product.id,implementation}});
+ await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await box.fill("Build the counter");await box.press("Enter");
+ const summary=page.locator("summary").filter({hasText:/^Product plan/});await summary.click();
+ const actions=page.getByRole("region",{name:"Linked contract actions"});
+ await expect(actions).toBeVisible();await expect(actions.getByText("value()",{exact:true})).toBeVisible();
+ await page.setViewportSize({width:360,height:900});
+ const toggle=page.getByRole("button",{name:"Coin preview and details",exact:true});
+ if(await toggle.getAttribute("aria-expanded")==="false")await toggle.click();
+ await actions.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath("product-functions-360.png"),fullPage:true});
+ await page.setViewportSize({width:1440,height:900});await page.reload();await summary.click();
+ await expect(actions.getByText("value()",{exact:true})).toBeVisible();
+ expect(f.calls).toHaveLength(1);
+});
+
+test("observed simulation is readable by keyboard and survives reload without extra requests",async({page},info)=>{
+ const f=await fixture(page),result=checkedFixture();
+ const execution={version:1 as const,environment:"isolated-declared-fixtures" as const,networkAccess:false as const,gasFeesCharged:false as const,
+   plannedSteps:2,executedSteps:2,detailsComplete:true,steps:[
+     {id:"send-payment",contract:"main",signature:"pay()",from:"trader-a" as const,afterSeconds:0,value:"1000",read:false,status:"success" as const,
+       outputs:[],events:[],nativeChanges:[{account:"account/creator",before:"1000000000000000000000000",after:"1000000000000000000001000"}],detailsComplete:true},
+     {id:"read-count",contract:"main",signature:"value()",from:"trader-a" as const,afterSeconds:0,value:"0",read:true,status:"success" as const,
+       outputs:[{name:"value",type:"uint256",value:"1",truncated:false}],events:[],nativeChanges:[],detailsComplete:true},
+   ]};
+ f.control.respond=()=>({...result,generalProject:{...result.generalProject,scenarios:{...result.generalProject.scenarios,execution}}});
+ await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await box.fill("Build my payment hook");await box.press("Enter");
+ const summary=page.locator("summary").filter({hasText:/^Simulation/});
+ await summary.focus();await page.keyboard.press("Enter");
+ const observed=page.getByRole("region",{name:"Observed contract simulation"});
+ await expect(observed).toBeVisible();await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
+ await expect(observed.getByText("Local simulation with test balances.",{exact:false})).toBeVisible();
+ for(const width of [360,1440]){
+   await page.setViewportSize({width,height:900});
+   const toggle=page.getByRole("button",{name:"Coin preview and details",exact:true});
+   if(width===360&&await toggle.getAttribute("aria-expanded")==="false")await toggle.click();
+   await expect(observed).toBeVisible();await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
+   await observed.scrollIntoViewIfNeeded();
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+   await page.screenshot({path:info.outputPath(`simulation-${width}.png`),fullPage:true});
+ }
+ await page.reload();await expect(summary).toBeVisible();await summary.click();
+ await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
+ expect(f.calls).toHaveLength(1);
+});
 
 for(const width of [360,1440])test(`first visit explains wallet access without exposing unavailable editor controls at ${width}px`,async({page},info)=>{
  const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1');
