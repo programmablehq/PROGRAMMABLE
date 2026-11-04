@@ -6,6 +6,7 @@ import type {TradeRpcV1} from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 import {CustomAIError} from "../types";
 import type {ProductRuntimeSource} from "./runtime-source.server";
 import type {ProductRuntime} from "./runtime";
+import {automaticProductRead,productActionFunction} from "./action-automatic";
 
 const graphAbi=parseAbi([
   "event ProgrammableLaunchStampedV1(bytes32 indexed launchId,address indexed token,address indexed hook,address poolManager,bytes32 poolId,bytes32 stampHash)",
@@ -112,6 +113,12 @@ export async function observeProductRuntime(source:ProductRuntimeSource,anchor:{
     implementationId:source.implementationId,chainId:source.chainId,transactionHash:anchor.transactionHash,launchId:results[0].launchId,
     checkedAt:new Date(now()).toISOString(),block:{number:height.toString(),hash:ref.blockHash},providerCount:2,
     components:components.map(({id,name,address,runtimeCodeHash})=>({id,name,address,runtimeCodeHash})),
-    actions:source.implementation.actions.map(action=>({id:action.id,kind:source.product.interfaceActions.find(item=>item.id===action.id)!.kind,
-      address:source.components.find(item=>item.id===action.target)!.address,signature:action.signature,mutability:action.mutability}))};
+    actions:source.implementation.actions.map(action=>{
+      const component=source.implementation.components?.find(item=>item.id===action.target);
+      const contract=component&&source.contracts?.find(item=>item.source===component.source&&item.contract===component.contract);
+      const fn=contract&&productActionFunction(contract.abi,action.signature),readInput=fn&&automaticProductRead(fn);
+      return {id:action.id,kind:source.product.interfaceActions.find(item=>item.id===action.id)!.kind,
+        address:source.components.find(item=>item.id===action.target)!.address,signature:action.signature,mutability:action.mutability,
+        ...(readInput?{readInput}:{})};
+    })};
 }

@@ -1,16 +1,11 @@
 import {authorizeCustomAI} from "@/lib/custom-ai/auth.server";
-import {createCustomAIBackendLaunchBridge} from "@/lib/custom-ai/backend-launch.server";
-import {createProductionDependencyRpcs} from "@/lib/custom-ai/dependency-rpc.server";
 import {aiError,aiHeaders} from "@/lib/custom-ai/http.server";
-import {createProductRuntimeReader} from "@/lib/custom-ai/product/runtime-service.server";
+import {readProductionProductRuntime as read} from "@/lib/custom-ai/product/runtime-production.server";
 import {productionAIStore} from "@/lib/custom-ai/store.server";
 import {CustomAIError} from "@/lib/custom-ai/types";
 
 export const runtime="nodejs";
 export const maxDuration=60;
-const read=createProductRuntimeReader({store:productionAIStore,rpcs:createProductionDependencyRpcs({productRuntime:true}),
-  bridge:()=>createCustomAIBackendLaunchBridge({backendBaseUrl:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL!,
-    websiteToken:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN!,assertionKey:process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2!,fetchBackend:fetch})});
 export async function GET(request:Request){
   try{
     if(process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED!=="true")throw new CustomAIError("unavailable","Product contracts are not available here yet.",404);

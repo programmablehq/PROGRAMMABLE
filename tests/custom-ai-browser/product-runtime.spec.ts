@@ -16,19 +16,31 @@ test.beforeAll(async()=>{
 });
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
 for(const width of [1440,360])test(`requested contract snapshot stays usable at ${width}px`,async({page},testInfo)=>{
-  await page.setViewportSize({width,height:900});let reads=0,wrongSource=false;const errors:string[]=[];
+  await page.setViewportSize({width,height:900});let reads=0,values=0,wrongSource=false;const errors:string[]=[];
   page.on("pageerror",error=>errors.push(error.message));
+  const runtime=()=>({version:1,state:"contracts-observed",providerCount:2,sourceBinding:`sha256:${"1".repeat(64)}`,implementationId:`sha256:${"2".repeat(64)}`,
+    preparationId:"runtime-preparation-0001",sourceId:wrongSource?"another-product":"runtime-source-0001",chainId:1,transactionHash:`0x${"a".repeat(64)}`,launchId:`0x${"b".repeat(64)}`,
+    checkedAt:"2026-11-04T12:00:00.000Z",block:{number:"100",hash:`0x${"c".repeat(64)}`},components:[{id:"vault",name:"Holder reward vault",address:`0x${"9".repeat(40)}`,runtimeCodeHash:`0x${"d".repeat(64)}`}],
+    actions:[{id:"inspect",kind:"inspect",address:`0x${"9".repeat(40)}`,signature:"claimable(address)",mutability:"view",readInput:"wallet"}]});
   await page.route("**/api/custom-ai/product-runtime?*",async route=>{
     reads++;expect(route.request().method()).toBe("GET");expect(route.request().headers().authorization).toBe("synthetic-local-session");
-    await route.fulfill({json:{runtime:{version:1,state:"contracts-observed",providerCount:2,sourceBinding:`sha256:${"1".repeat(64)}`,implementationId:`sha256:${"2".repeat(64)}`,
-      preparationId:"runtime-preparation-0001",sourceId:wrongSource?"another-product":"runtime-source-0001",chainId:1,transactionHash:`0x${"a".repeat(64)}`,launchId:`0x${"b".repeat(64)}`,
-      checkedAt:"2026-11-04T12:00:00.000Z",block:{number:"100",hash:`0x${"c".repeat(64)}`},components:[{id:"vault",name:"Holder reward vault",address:`0x${"9".repeat(40)}`,runtimeCodeHash:`0x${"d".repeat(64)}`}],actions:[]}}});
+    await route.fulfill({json:{runtime:runtime()}});
+  });
+  await page.route("**/api/custom-ai/product-value?*",async route=>{
+    values++;expect(new URL(route.request().url()).searchParams.get("action")).toBe("inspect");expect(route.request().method()).toBe("GET");
+    const snapshot=runtime();
+    await route.fulfill({json:{runtime:snapshot,value:{state:"value-observed",actionId:"inspect",callId:`sha256:${"4".repeat(64)}`,
+      sourceBinding:snapshot.sourceBinding,chainId:1,caller:`0x${"1".repeat(40)}`,target:`0x${"9".repeat(40)}`,signature:"claimable(address)",
+      block:snapshot.block,snapshotAt:snapshot.checkedAt,observedAt:"2026-11-04T12:00:02.000Z",outputs:[{name:"amount",type:"uint256",value:"900719925474099312345"}],authorized:false}}});
   });
   await page.goto(origin);const summary=page.locator("summary").filter({hasText:"Deployed contracts"});await expect(summary).toBeVisible();expect(reads).toBe(0);
   await summary.focus();await page.keyboard.press("Enter");await expect(page.getByRole("button",{name:"Check contracts",exact:true})).toBeVisible();expect(reads).toBe(0);
   await page.getByRole("button",{name:"Check contracts",exact:true}).click();await expect(page.getByText("Holder reward vault",{exact:true})).toBeVisible();expect(reads).toBe(1);
+  await page.locator("summary").filter({hasText:"Contract values"}).click();expect(values).toBe(0);
+  await page.getByRole("button",{name:"Read claimable for your wallet",exact:true}).click();
+  await expect(page.getByText("900719925474099312345 (contract units)",{exact:true})).toBeInViewport();expect(values).toBe(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath(`product-runtime-${width}.png`),fullPage:true});
   wrongSource=true;await page.getByRole("button",{name:"Refresh contracts",exact:true}).click();await expect(page.getByRole("alert")).toContainText("does not match the saved product");
-  await page.reload();await expect(summary).toBeVisible();expect(reads).toBe(2);expect(errors).toEqual([]);
+  await page.reload();await expect(summary).toBeVisible();expect(reads).toBe(2);expect(values).toBe(1);expect(errors).toEqual([]);
 });

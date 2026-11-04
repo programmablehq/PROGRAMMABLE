@@ -2,7 +2,7 @@ import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
 const mock=vi.hoisted(()=>({authorize:vi.fn(),read:vi.fn(),consume:vi.fn()}));
 vi.mock("../lib/custom-ai/auth.server",()=>({authorizeCustomAI:mock.authorize}));
-vi.mock("../lib/custom-ai/product/runtime-service.server",()=>({createProductRuntimeReader:()=>mock.read}));
+vi.mock("../lib/custom-ai/product/runtime-production.server",()=>({readProductionProductRuntime:mock.read}));
 vi.mock("../lib/custom-ai/store.server",()=>({productionAIStore:()=>({consume:mock.consume})}));
 import {GET} from "../app/api/custom-ai/product-runtime/route";
 const id="runtime-preparation-0001",auth={kind:"account",owner:"private-owner",principal:{wallets:[]}};

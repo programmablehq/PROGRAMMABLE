@@ -7,7 +7,7 @@ export class AIRequestError extends Error {
     readonly code = "", readonly requestState?: "failed") { super(message); }
 }
 
-const requestTimeout = (path: string) => /^\/product-runtime(?:\?|$)/.test(path) ? 55_000
+const requestTimeout = (path: string) => /^\/product-(?:runtime|value)(?:\?|$)/.test(path) ? 55_000
   : /^\/(launch|general-launch|trade)(?:\?|$)/.test(path) ? 130_000
   : /^\/(readiness|preview|quote|tokens)(?:\?|$)/.test(path) ? 70_000 : 30_000;
 
