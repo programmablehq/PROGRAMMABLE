@@ -86,6 +86,8 @@ Pair tokens must be compatible ERC20 tokens on the selected chain with a support
 
 The coin appears in Explore after finality and indexing. Its coin page provides swaps and creator-fee claims. Claims pay the recipients fixed in the contracts.
 
+For a saved product with bound contract actions, open **Deployed contracts** to check its deployed code. **Contract values** can then read supported values on request, including functions with no inputs and values scoped to the launch wallet. The result shows its block and observation time. A finalized value may lag recent activity and does not guarantee a later claim. Contract units are shown exactly; the chat does not guess a token denomination. This view does not send transactions or run continuous background checks.
+
 The [Custom AI catalog](https://programmable.market/api/custom-ai/tokens) provides finalized launch records and its indexing status. Chat, draft and wallet-operation APIs require an authenticated website account; a Custom Launch API key does not replace that session.
 
 ### Working in the chat

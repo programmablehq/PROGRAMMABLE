@@ -8,7 +8,7 @@ export type ProductRuntime = {
   transactionHash:Hex; launchId:Hex; checkedAt:string;
   block:{number:string;hash:Hex}; providerCount:2;
   components:{id:string;name:string;address:Address;runtimeCodeHash:Hex}[];
-  actions:{id:string;kind:string;address:Address;signature:string;mutability:"pure"|"view"|"nonpayable"|"payable"}[];
+  actions:{id:string;kind:string;address:Address;signature:string;mutability:"pure"|"view"|"nonpayable"|"payable";readInput?:"none"|"wallet"}[];
 };
 
 export function readProductRuntime(value:unknown,expected:{preparationId:string;sourceId:string;chainId:number}):ProductRuntime{
@@ -21,6 +21,7 @@ export function readProductRuntime(value:unknown,expected:{preparationId:string;
     ||!Array.isArray(view.components)||view.components.length<1||view.components.length>64||view.components.some(item=>!item||!text(item.id,64)||!text(item.name,600)||!hex(item.address,40)||!hex(item.runtimeCodeHash,64))
     ||!Array.isArray(view.actions)||view.actions.length>64||view.actions.some(item=>!item||!text(item.id,64)||!["claim","deposit","withdraw","vote","inspect"].includes(item.kind)
       ||!hex(item.address,40)||!view.components.some(component=>component.address.toLowerCase()===item.address.toLowerCase())
-      ||!text(item.signature,800)||!["pure","view","nonpayable","payable"].includes(item.mutability)))throw Error("This contract snapshot does not match the saved product.");
+      ||!text(item.signature,800)||!["pure","view","nonpayable","payable"].includes(item.mutability)
+      ||item.readInput!==undefined&&(!["none","wallet"].includes(item.readInput)||!["view","pure"].includes(item.mutability))))throw Error("This contract snapshot does not match the saved product.");
   return view;
 }
