@@ -64,7 +64,9 @@ describe("a production deployment declared before source", () => {
     const cycle = raw(); (cycle.targets[0].constructorArguments as unknown[]) = [{ target: "liquidity" }]; cases.push(cycle);
     for (const value of cases) expect(() => declare(value)).toThrow();
     const rh = raw(); (rh.targets[1].constructorArguments as unknown[]) = [{ binding: "graph-factory" }];
-    expect(() => declare(rh, 4663)).toThrow();
+    expect(() => declare(rh, 4663)).toThrow("use {binding:'launch-executor'}");
+    (rh.targets[1].constructorArguments as unknown[]) = [{ binding: "launch-executor" }];
+    expect(declare(rh,4663).targets[1].constructorArguments).toEqual([{binding:"launch-executor"}]);
   });
   it("allows an explicitly requested external address without turning it into a live-dependency assertion", () => {
     const value = raw(), address = `0x${"22".repeat(20)}`;

@@ -43,7 +43,7 @@ import { CONTINUE_SAVED_BUILD } from "@/lib/custom-ai/build-command";
 import { ChatProgressIndicator } from "./chat-progress";
 import { BuildOutcome } from "./build-outcome";
 import { ImageAttachments } from "./image-attachments";
-import { imageMessageURL } from "@/lib/custom-ai/image-message";
+import { imageMessageURL, explicitImageMessageURL } from "@/lib/custom-ai/image-message";
 import { directLaunchCommand } from "@/lib/custom-ai/launch-command";
 import type { CoinDetailsControls } from "./coin-details";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
@@ -598,7 +598,12 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       if (updated) {
         setInput(current => current.trim() === content ? "" : current);
         setMessages(current => [...current, {role:"user",content}, {role:"assistant",content:/\b(?:bild|nimm|nutze|verwende|ändere|ersetze|bitte)\b/iu.test(content) ? "Das neue Bild ist gespeichert. Deine Regeln bleiben unverändert." : "The new image is saved. Your rules are unchanged."}]);
-      }
+      } else setInputError("That image could not be loaded. Use a direct image link or upload the file. Your message is still here.");
+      return;
+    }
+    const requestedImage=explicitImageMessageURL(content);
+    if(requestedImage&&!await attachImageURL(requestedImage)){
+      setInputError("That image could not be loaded. Use a direct image link or upload the file. Your message is still here.");
       return;
     }
     const base:RetryBase={messages,pendingChange};
