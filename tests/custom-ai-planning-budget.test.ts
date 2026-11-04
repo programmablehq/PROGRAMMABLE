@@ -1,9 +1,12 @@
-import {describe,expect,it,vi} from "vitest";
+import {afterEach,describe,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
 import {runCustomAI} from "../lib/custom-ai/service.server";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import {designOnlyRequest} from "../lib/custom-ai/build-command";
 import {prepareSurplusSchema} from "../lib/custom-ai/surplus-schema.server";
+import {callSurplus} from "../lib/custom-ai/surplus.server";
+
+afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 
 const content="Design a coin called River (RIV) on Ethereum. Split collected project fees: 30% into liquidity, 30% into an equal-claim pool for eligible holders, and 40% into a reserve vault. Holders become eligible after holding for one day; use daily snapshots and one claim per wallet per day. Keep mandatory platform fees separate. Any rounding stays in the reserve. I only want to shape the design now, not build or launch it. Propose the complete product, including anything needed offchain, and ask only for decisions that affect how it works.";
 describe("planning request size",()=>{
@@ -25,10 +28,13 @@ describe("planning request size",()=>{
     expect(call).toHaveBeenCalledOnce();expect(captured?.task).toBe("planning");
     expect(captured!.system.length+JSON.stringify(captured!.schema).length).toBeLessThan(36000);
     expect(captured!.effort).toBe("low");
+    expect(captured!.structuredTransport).toBeUndefined();
+    expect(captured!.system).toContain("one complete JSON object");
     const properties=(captured!.schema as {properties:Record<string,unknown>}).properties;
     expect(properties.action).toEqual({type:"string",enum:["answer","clarify"]});
     expect(properties).not.toHaveProperty("feeChecks");expect(properties).not.toHaveProperty("composable");
     expect(captured!.maxTokens).toBe(8000);
+    expect(()=>prepareSurplusSchema(captured!.schema,true).decode("River splits fees between liquidity, holders and reserves.")).toThrow();
 
   });
   it("keeps the entire proposed product and applies metadata without compiling source",async()=>{
@@ -46,7 +52,15 @@ describe("planning request size",()=>{
       const value={reply:"River keeps a reserve and pays eligible holders daily. We can settle the snapshot mechanism before building.",replyLocale:"en",executionRoute:"custom-contract",intentMode:"revise",intentRequirements:requirements,
         productPlan,ruleEdits:[],action:"answer",memory:"River. Design only.",launchRequested:false,reviseChecks:false,
         setupPatch:{name:"River",symbol:"RIV",chainId:1,pairToken:null,initialBuy:null,description:null,website:null,x:null,socialPost:null},lookups:[]};
-      const text=prepareSurplusSchema(input.schema,true).decode(JSON.stringify(value));return {text,inputTokens:1,outputTokens:1};
+      vi.stubEnv("SURPLUS_API_KEY","synthetic-test-only");
+      const fetcher=vi.fn(async(_url:unknown,options?:RequestInit)=>{
+        const wire=JSON.parse(String(options?.body));
+        expect(wire.response_format).toMatchObject({type:"json_schema",json_schema:{strict:true}});
+        expect(wire.messages[0].content).toContain("one complete JSON object");
+        return Response.json({choices:[{message:{content:JSON.stringify(value)},finish_reason:"stop"}],usage:{prompt_tokens:1,completion_tokens:1}});
+      });
+      vi.stubGlobal("fetch",fetcher);
+      const reply=await callSurplus(input);expect(fetcher).toHaveBeenCalledOnce();return reply;
     });
     const result=await runCustomAI({id:"planning-product-00001",intent:"chat",messages:[{role:"user",content}]},undefined,{call,compile});
     expect(result.productBlueprint?.components).toHaveLength(3);expect(result.productBlueprint?.flows).toHaveLength(4);
