@@ -10,6 +10,7 @@ import type { BlueprintCheckpoint, ProjectCheckpoint } from "./project-store.ser
 import type { Conversation } from "./conversation";
 import type { StudioState } from "./studio";
 import {checkedGeneralSourceAudit} from "./source-audit.server";
+import { cachedExecutionTrace } from "./execution-trace";
 
 export type GeneralLaunchSourceSelection = {
   id: string; account: string; conversation: string; studioRevision: number; chainId: BuilderChainId;
@@ -74,6 +75,7 @@ export function checkedGeneralLaunchSource(owner: string, selected: GeneralLaunc
     || scenarios.version !== plan.version || scenarios.scope !== `isolated-declared-scenarios-v${plan.version}` || scenarios.launchReady !== false || scenarios.failures.length !== 0
     || scenarios.projectHash !== project.hash || scenarios.artifactHash !== artifactHash || scenarios.planHash !== plan.id
     || scenarios.cases !== generalCheckCaseCount(plan)
+    || scenarios.execution && (!cachedExecutionTrace(scenarios.execution,plan) || scenarios.execution.executedSteps !== plan.steps.length)
     || JSON.stringify(scenarios.requirementIds) !== JSON.stringify(project.intent.requirements.map(rule => rule.id).sort())
     || canonicalBrowserSha256V2(`programmable.general-scenario-report.v${plan.version}`, report) !== scenarioHash
     || view?.projectHash !== project.hash || view.artifactHash !== artifactHash || view.intentRevision !== currentIntent.revision) return checks();

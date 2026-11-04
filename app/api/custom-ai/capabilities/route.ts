@@ -22,6 +22,8 @@ export function GET() {
       allocationExamples: "exact-integer-arithmetic", contractExecution: "separate-verification", serviceDeployment: "not-automatic" },
     dataAdapters: { state:"private-observation-readers", format:"public-https-json", requiresSession:true, credentials:false, generatedCodeExecution:false, automaticOnchainPublication:false,
       maximumToolCalls:AI_CONFIG.maximumLookups,maximumResponseBytes:128000,sharedCacheSeconds:10 },
+    executionPreview: { state:"saved-declared-scenarios", environment:"isolated-declared-fixtures", requiresSession:true,
+      observations:["return-values","events","native-balance-changes"], maximumRecordedSteps:24, networkRequests:0, additionalExecutions:0, arbitraryScenarioExecution:false },
     sourceProjects: { chains: builderChains.map(chain => chain.id), requiresSession: true, state: "source-draft", recovery:"complete-file-checkpoints", sourceOutputBudget:AI_CONFIG.maximumContractTokens,
       launchPreparation: process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true" ? "requires-current-review-and-preparation" : "not-enabled" },
     capabilities: builderCapabilities({ events: process.env.CUSTOM_AI_EVENTS_ENABLED === "true", programs: process.env.CUSTOM_AI_PROGRAMS_ENABLED === "true", generalSources: true }),

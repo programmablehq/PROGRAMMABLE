@@ -36,7 +36,10 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("independent examples for o
     return checkGeneralScenarios(project, await compileContractProject(project), bindGeneralCheckBlueprint(declared, project));
   }
   it("calls the actual nested instances and verifies all interfaces and all three constructors", async () => {
-    expect(await report(content)).toMatchObject({ version: 2, passed: true, cases: 10, launchReady: false });
+    const actual=await report(content);
+    expect(actual).toMatchObject({ version: 2, passed: true, cases: 10, launchReady: false });
+    expect(actual.execution?.steps).toHaveLength(4);
+    expect(actual.execution?.steps[0].outputs[0].value).toMatch(/^0x[a-f0-9]{40}$/i);
   });
   it("forwards the one declared root amount through both child constructors", async () => {
     const raw = declaration();
