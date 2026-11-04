@@ -1,3 +1,4 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only",()=>({}));
@@ -8,7 +9,7 @@ vi.mock("../lib/server/creator-article/wallet-principal.server",()=>({
 import {createAIStore,CUSTOM_AI_SCHEMA,type AIStore} from "../lib/custom-ai/store.server";
 import {generalPackFixture} from "./fixtures/custom-ai-general-pack";
 import {packGeneralGraph} from "../lib/custom-ai/general-pack.server";
-import {generalProjectView} from "../lib/custom-ai/project-view";
+import {generalProjectView,generalCoinPreparationEligibility} from "../lib/custom-ai/project-view";
 import {selectExecutionRoute} from "../lib/custom-ai/execution-routing";
 import {conversationStorageId} from "../lib/custom-ai/conversation.server";
 import {generalPreparationView,type GeneralPackedLaunch,type GeneralPreparation} from "../lib/custom-ai/general-preparation-store.server";
@@ -74,7 +75,7 @@ beforeAll(async()=>{
   await seed.projects.complete(owner,sourceId,reserved.lease!,fixture.source.compilation);
   await seed.projects.saveScenarios(owner,sourceId,reserved.lease!,fixture.source.scenarios);
   await seed.projects.saveSourceAudit(owner,sourceId,reserved.lease!,await auditGeneralSource(fixture.source.project,undefined,{
-    call:async()=>({text:JSON.stringify({reviewedRequirementIds:fixture.source.project.intent.requirements.map(rule=>rule.id),findings:[]}),inputTokens:1,outputTokens:1})}));
+    call:async()=>sourceAuditModelReply(fixture.source.project)}));
   const view=generalProjectView({version:1,reply:"Source checked",summary:"Marker",project:fixture.source.project,compilation:fixture.source.compilation,
     scenarios:fixture.source.scenarios,blueprintId:fixture.source.blueprint.id,selection:selectExecutionRoute(fixture.source.project.intent,1),requirementCoverage:"proposed",launchReady:false});
   await seed.finish(owner,sourceId,reserved.lease!,{reply:"Source checked",generalProject:view,intent:fixture.source.project.intent,change:"applied"});
@@ -100,6 +101,23 @@ beforeEach(async()=>{
 afterEach(async()=>{await database?.close();vi.restoreAllMocks();vi.unstubAllEnvs();vi.clearAllMocks();});
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch preparation",()=>{
+  it("derives coin eligibility from checked source and the bound deployment graph",()=>{
+    expect(generalCoinPreparationEligibility(fixture.source)).toEqual({eligible:true,missing:[]});
+    for(const patch of [
+      {deployment:undefined},
+      {deployment:{...fixture.source.project.deployment!,pool:{...fixture.source.project.deployment!.pool,token:"missing"}}},
+      {deployment:{...fixture.source.project.deployment!,productionId:`sha256:${"f".repeat(64)}` as const}},
+    ])expect(generalCoinPreparationEligibility({...fixture.source,project:{...fixture.source.project,...patch}}))
+      .toEqual({eligible:false,missing:["coin-deployment"]});
+    expect(generalCoinPreparationEligibility({...fixture.source,sourceAudit:undefined}))
+      .toEqual({eligible:false,missing:["source-review"]});
+  });
+  it("refuses a new preparation with no source audit before reserving another identity",async()=>{
+    await database.query("UPDATE programmable_custom_ai_v1.objects SET value=value-'sourceAudit' WHERE owner=$1 AND kind='contract-project' AND id=$2",
+      [owner,selected().id]);
+    await expect(store.projects.preparations.reserve(owner,nextTicket,selected(),"1")).rejects.toMatchObject({code:"launch-source-checks"});
+    expect(await store.projects.preparations.read(owner,nextTicket)).toBeNull();
+  });
   it("reads the immutable submitted runtime pack after a new draft and signing-window expiry",async()=>{
     const saved=await stage();
     await expect(store.projects.preparations.readRuntimeInputs(owner,ticket)).rejects.toThrow();
@@ -245,6 +263,20 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable general launch pre
     const results=await Promise.all([store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId),store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId)]);
     expect(results.filter(result=>result.lease)).toHaveLength(1);expect(results.map(result=>result.record.idempotencyKey)).toEqual([record.idempotencyKey,record.idempotencyKey]);
     expect(generalPreparationView(results[1].record,clock).submission?.state).toBe("sending");
+  });
+  it.each([422,409])("does not release an HTTP %i rejection without explicit no-resource proof",async status=>{
+    await stage();
+    const transport=vi.fn().mockResolvedValue(Response.json({schemaVersion:"programmable.api-error.v1",
+      error:{code:status===409?"IDEMPOTENCY_CONFLICT":"PROFILE_INVALID",retryable:false}},{status}));
+    const f=service(transport),current=await request();
+    await expect(f.instance.exchange(current.req,current.authority,ticket,"create")).rejects.toMatchObject({code:"launch-submission"});
+    const rejected=(await store.projects.preparations.read(owner,ticket))!;
+    expect(rejected.submission).toMatchObject({state:"rejected",httpStatus:status});
+    await expect(store.projects.preparations.reserve(owner,nextTicket,selected(),"1")).rejects.toMatchObject({code:"launch-preparation-changed"});
+    const replay=await store.projects.preparations.claimExchange(owner,ticket,"create",record.productionId);
+    expect(replay.pack?.requestBody).toBe(pack.requestBody);
+    expect(replay.record.idempotencyKey).toBe(record.idempotencyKey);
+    expect(replay.record.identity).toEqual(record.identity);
   });
   it("persists unknown sends and retries exact bytes and idempotency only after a fresh explicit action",async()=>{
     await stage();await markPreflight();

@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { getAddress, isAddress } from "viem";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
+import { tryParseViewChainId } from "@/lib/view-chain";
 import { createPrivyWalletPrincipalAuthenticatorV1, WalletPrincipalAuthenticationErrorV1, type WalletPrincipalAuthenticatorV1 } from "../creator-article/wallet-principal.server";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "./wallet-admin-bff-assertion-v2";
 
@@ -36,7 +37,8 @@ export function createManualReviewStartBridgeV1(input: { authenticator: WalletPr
       try { value = JSON.parse(await readBoundedBody(request, 1024)); }
       catch (error) { if (error instanceof StartInputError) throw error; throw new StartInputError(400); }
       if (!value || Array.isArray(value) || Object.keys(value).sort().join(",") !== "chainId,launchId,walletAddress"
-        || !["1", "4663"].includes(value.chainId) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value.launchId)
+        || typeof value.chainId !== "string" || tryParseViewChainId(value.chainId) === null
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value.launchId)
         || typeof value.walletAddress !== "string" || !isAddress(value.walletAddress)) return respond(400, { error: "Invalid launch request." });
       if (!principal.wallets.some(wallet => wallet.toLowerCase() === value.walletAddress.toLowerCase())) return respond(403, { error: "Connect the wallet that submitted this launch." });
       const target = new URL("/v1/wallet-admin/custom-launch-reviews/start", base);

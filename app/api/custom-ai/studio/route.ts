@@ -12,6 +12,7 @@ import type { ImageReceipt, StudioState } from "@/lib/custom-ai/studio";
 import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
 import { migrateLaunchIntent } from "@/lib/custom-ai/launch-intent.server";
 import { restoredProductBlueprint } from "@/lib/custom-ai/product/blueprint";
+import { generalCoinPreparationEligibility } from "@/lib/custom-ai/project-view";
 
 export const runtime = "nodejs";
 async function context(request: Request, accountValue: unknown, conversationValue: unknown) {
@@ -42,8 +43,20 @@ export async function GET(request: Request) {
       unresolved: latest?.result?.unresolved ?? job?.result?.unresolved, requestId: saved.value.contextId ?? saved.value.draftId,
     });
     const productBlueprint=restoredProductBlueprint(latest?.result?.productBlueprint??job?.result?.productBlueprint,intent,saved.value.settings.chainId);
+    let generalProject=job?.result?.generalProject;
+    if(generalProject&&!generalProject.coinPreparation&&saved.value.draftId){
+      // Old compact views predate coin eligibility. Derive it from the owned
+      // checkpoint once requested, without rebuilding or exposing its source.
+      const source=await store.projects.read(owner,saved.value.draftId);
+      if(source?.compilation&&source.project.hash===generalProject.projectHash
+        &&source.compilation.artifactHash===generalProject.artifactHash){
+        generalProject={...generalProject,coinPreparation:generalCoinPreparationEligibility({
+          project:source.project,compilation:source.compilation,sourceAudit:source.sourceAudit,scenarios:source.scenarios,
+        })};
+      }
+    }
     return Response.json({ revision: saved.revision, state: saved.value, ...(active?.request&&active.state!=="failed"?{activeRequest:active.request}:{}), draft: job?.result?.draft,
-      generalProject: job?.result?.generalProject, ...(sourceRecovery ? { sourceRecovery } : {}),
+      generalProject, ...(sourceRecovery ? { sourceRecovery } : {}),
       ...(latest?.result?.buildIssue ? { buildIssue: latest.result.buildIssue } : {}),
       ...(productBlueprint ? { productBlueprint } : {}), intent }, { headers: aiHeaders });
   } catch (error) { return aiError(error); }

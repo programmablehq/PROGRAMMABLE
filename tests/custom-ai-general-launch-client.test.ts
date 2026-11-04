@@ -25,6 +25,16 @@ function fixture() {
 }
 
 describe("explicit general launch client", () => {
+  it.each([422,409,503])("keeps an HTTP %i rejection without no-resource proof on exact-ticket recovery",async httpStatus=>{
+    const f=fixture(),rejected=record({submission:{state:"rejected",httpStatus}});
+    await f.load(rejected);
+    const corrected=vi.fn(async()=>({...input,selection:{...input.selection,id:"corrected-source-client-0002"}}));
+    await f.client.submit(corrected);
+    expect(corrected).not.toHaveBeenCalled();expect(f.posts()).toHaveLength(0);
+    f.request.mockResolvedValueOnce({preparation:rejected}).mockResolvedValueOnce({preparation:rejected});
+    await f.client.recover();
+    expect(f.posts().map(call=>call[2])).toEqual([{action:"create",id:rejected.id}]);
+  });
   it("prepares ahead without publishing or submitting, then reuses the server-bound package on launch", async () => {
     const f = fixture(); await f.load();
     f.request.mockResolvedValueOnce({ preparation: record() });

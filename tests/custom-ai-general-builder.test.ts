@@ -1,3 +1,4 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { buildGeneralContract } from "../lib/custom-ai/general-builder.server";
@@ -76,7 +77,7 @@ describe("general project generation inside the owned AI job", () => {
     const events:string[]=[];let release!:()=>void;const waiting=new Promise<void>(resolve=>{release=resolve;});
     const input=request();input.saveProject.mockImplementation(async()=>{events.push("saved");});
     const auditSource=vi.fn(async(p:ContractProject)=>{
-      events.push("audit");return auditGeneralSource(p,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["counter","no-admin"],findings:[]}),inputTokens:1,outputTokens:1})});
+      events.push("audit");return auditGeneralSource(p,undefined,{call:async()=>sourceAuditModelReply(p)});
     });
     const pending=buildGeneralContract({...input,auditSource},undefined,{call:async()=>response(),compile:async p=>{
       events.push("compile");await waiting;return {...await incompleteBuild(p),compiled};

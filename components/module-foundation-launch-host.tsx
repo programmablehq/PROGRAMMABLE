@@ -284,7 +284,7 @@ export function ModuleFoundationLaunchHost({ layout = "form", chainId = 4663 }: 
               onChange={() => startNetworkChange(() => router.push(`/launch/modules/foundation?chainId=${network.id}`, { scroll: false }))} />
             <span><span aria-hidden="true"><ChainMark chainId={network.id} /></span>{network.name}</span>
           </label>)}
-      </fieldset><Link className={styles.customLaunchLink} href={`/developers/api-keys?start=custom&chainId=${chainId}`}>Build a custom hook</Link></div>
+      </fieldset><Link className={styles.customLaunchLink} href="/launch/custom-ai">AI Chat</Link><Link className={styles.customLaunchLink} href={`/developers/api-keys?start=custom&chainId=${chainId}`}>Build a custom hook with API</Link></div>
     } recoveryAction={inlineRecovery ? sessionStatus : undefined} previousLaunchAction={previousLaunchAction} availability={session.availability} contextKey={session.contextKey}
     platformFeeBps={foundationPlatformFeeBps(session.envelope?.binding ?? {})}
     factoryVersion={session.envelope?.binding ? session.envelope.binding.factoryVersion ?? "v1" : undefined}

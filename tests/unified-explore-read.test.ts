@@ -88,7 +88,7 @@ describe("Unified verified source adapter", () => {
     expect(sources.rh).not.toHaveBeenCalled();
     expect(sources.base).not.toHaveBeenCalled();
     expect(sources.rhMarkets).not.toHaveBeenCalled();
-    expect(sources.ai).not.toHaveBeenCalled();
+    expect(sources.ai).toHaveBeenCalledTimes(1);
   });
 
   it("does not mix a recent Robinhood receipt into an Ethereum filter", async () => {
@@ -105,6 +105,42 @@ describe("Unified verified source adapter", () => {
     expect(recent).not.toHaveBeenCalled();
     expect(sources.eth).not.toHaveBeenCalled();
     expect(sources.rh).not.toHaveBeenCalled();
+    expect(sources.ai).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 4663, "all"] as const)("filters Custom AI identities and market reads for chain %s", async chain => {
+    const owner = `0x${"33".repeat(20)}`;
+    const coins = ([1, 4663] as const).map(chainId => ({ ...rh, chainId, tokenAddress: other,
+      creator: owner, sourceKind: "custom-ai-v1", mode: "custom", category: "custom", imageUrl: "", description: "" }));
+    sources.ai.mockResolvedValue({ status: "ready", updatedAt: null, items: coins });
+    sources.rh.mockResolvedValue({ status: "ready", updatedAt: null, items: [], sourceEvidence: null });
+    sources.eth.mockResolvedValue({ status: "ready", updatedAt: null, entries: [], sourceEvidence: null });
+    const result = await readUnifiedLaunches(1, "", { sort: "highest", mode: "all", chain }, 10, undefined, owner);
+    const expected = chain === "all" ? [1, 4663] : [chain];
+    expect(result.items.map(row => row.chainId).sort()).toEqual(expected);
+    expect(result.presentations.map(row => row.chainId).sort()).toEqual(expected);
+    expect(result.sources.customAI).toBe("ready");
+    expect(sources.ai).toHaveBeenCalledTimes(1);
+    expect(sources.ethMarkets.mock.calls.map(call => call[1])).toEqual(expected.includes(1) ? [1] : []);
+    expect(sources.rhMarkets).toHaveBeenCalledTimes(expected.includes(4663) ? 1 : 0);
+  });
+
+  it.each([1, 4663] as const)("includes failed AI discovery in chain %s completeness", async chain => {
+    sources.ai.mockRejectedValue(new Error("unavailable"));
+    expect(await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain }))
+      .toMatchObject({ status: "partial", sources: { customAI: "unavailable" } });
+  });
+
+  it.each([8453, 999] as const)("propagates partial chain %s quality to the combined catalog", async chain => {
+    const source = chain === 8453 ? sources.base : sources.hyperevm;
+    source.mockResolvedValue({ status: "partial", updatedAt: null, items: [], presentations: [],
+      sourceEvidence: { quality: { status: "partial", quarantinedRowCount: 1 } } });
+    for (const filter of [chain, "all"] as const) {
+      const result = await readUnifiedLaunches(1, "", { sort: "newest", mode: "all", chain: filter });
+      expect(result.status).toBe("partial");
+      expect(result.sourceEvidence[chain === 8453 ? "base" : "hyperevm"])
+        .toMatchObject({ quality: { status: "partial", quarantinedRowCount: 1 } });
+    }
   });
 
   it("defensively removes owner-hidden Robinhood identities from the merged feed", async () => {

@@ -1,3 +1,4 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
 import {beforeEach,describe,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
 vi.mock("../lib/custom-ai/source-foundation.server",()=>({sourceFoundation:vi.fn()}));
@@ -20,7 +21,7 @@ const blueprint=createGeneralCheckBlueprint({contracts:[{id:"counter",source:"Co
 ]},intent,999,"paris");
 const reply=(value:unknown)=>({text:JSON.stringify(value),inputTokens:1,outputTokens:100});
 const compiled=async(project:ContractProject):Promise<CompiledProject>=>({version:1,projectHash:project.hash,artifactHash:`sha256:${"b".repeat(64)}`,compiler:GENERAL_PROJECT_COMPILER,compiled:!project.sources["Counter.sol"].content.includes("missing"),diagnostics:project.sources["Counter.sol"].content.includes("missing")?[{severity:"error",message:"DeclarationError: undeclared identifier\n --> Counter.sol:1:71"}]:[],contracts:[],verification:"not-run",launchReady:false});
-const audit=(project:ContractProject,findings:SourceAuditFinding[]=[])=>auditGeneralSource(project,undefined,{call:async()=>reply({reviewedRequirementIds:["counter"],findings})});
+const audit=(project:ContractProject,findings:SourceAuditFinding[]=[])=>auditGeneralSource(project,undefined,{call:async()=>sourceAuditModelReply(project,{findings})});
 function input(events:string[]=[]){
   let saved:ContractProject|undefined;
   return {intent,chainId:999 as const,evmVersion:"paris" as const,blueprint,messages:[{role:"user" as const,content:"Build the exact saved counter."}],

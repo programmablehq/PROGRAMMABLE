@@ -1,4 +1,4 @@
-import type { ContractProject } from "./contract-project";
+import { GENERAL_PROJECT_LIMITS, type ContractProject } from "./contract-project";
 import type { CompiledProject } from "./contract-project.server";
 import type { GeneralProjectView } from "./project-view";
 import { cachedScenarioOverview, scenarioOverview, type ScenarioOverview } from "./scenario-overview";
@@ -46,7 +46,7 @@ export function cachedProjectOverview(value:unknown):ProjectOverview|undefined {
   const scenarios=v.scenarios?cachedScenarioOverview(v.scenarios):undefined;
   if(typeof v.requestId!=="string"||!/^[a-zA-Z0-9-]{16,64}$/.test(v.requestId)||typeof v.projectHash!=="string"||!/^sha256:[a-f0-9]{64}$/.test(v.projectHash)
     ||![1,4663,8453,999].includes(v.chainId)||typeof v.intentRevision!=="string"||!/^[a-f0-9]{64}$/.test(v.intentRevision)
-    ||!Number.isInteger(v.sourceFiles)||v.sourceFiles<1||v.sourceFiles>48||!Number.isInteger(v.sourceBytes)||v.sourceBytes<1||v.sourceBytes>384_000
+    ||!Number.isInteger(v.sourceFiles)||v.sourceFiles<1||v.sourceFiles>GENERAL_PROJECT_LIMITS.files||!Number.isInteger(v.sourceBytes)||v.sourceBytes<1||v.sourceBytes>GENERAL_PROJECT_LIMITS.sourceBytes
     ||!approvedProjectCompiler(c)
     ||!["pending","compiled","diagnostics"].includes(v.compilation)||v.artifactHash!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.artifactHash)
     ||v.compilation!=="pending"&&!v.artifactHash||!Array.isArray(v.diagnostics)||v.diagnostics.length>24

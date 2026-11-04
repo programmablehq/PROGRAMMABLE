@@ -130,7 +130,8 @@ test('editing an idea after cancelling sign-in revokes its earlier pending hando
 });
 test("a plain launch request uses the checked source without another model call", async ({page}) => {
  const f=await fixture(page),result=checkedFixture();
- f.control.respond=()=>({...result,generalProject:{...result.generalProject,sourceReview:"passed"}});
+ f.control.respond=()=>({...result,generalProject:{...result.generalProject,sourceReview:"passed",coinPreparation:{eligible:true,missing:[]},
+   entrypoints:[{source:"Token.sol",contract:"Token",role:"token"},{source:"Hook.sol",contract:"Hook",role:"hook"},{source:"Initializer.sol",contract:"Initializer",role:"liquidity"}]}});
  const launchWrites:unknown[]=[];
  await page.route("**/api/custom-ai/general-launch**",async route=>{
   if(route.request().method()!=="GET")launchWrites.push(route.request().postDataJSON());

@@ -1,0 +1,9 @@
+.customEntry { position: relative; z-index: 1; width: min(560px, calc(100% - 32px)); margin: 0 auto; padding: 32px; top: clamp(24px, 12vh, 120px); border-radius: 16px; background: rgb(16 18 22 / .82); color: #f4f1eb; box-shadow: 0 12px 36px rgb(0 0 0 / .16); }
+.customEntry h1 { margin: 0 0 16px; font-size: clamp(24px, 3vw, 32px); font-weight: 500; line-height: 1.25; letter-spacing: -.025em; }
+.customEntry p { margin: 0 0 24px; max-width: 42ch; color: #c7c2ba; font-size: 16px; line-height: 1.6; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.actions a { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px 18px; border-radius: 10px; background: #ede7dc; color: #22201c; font-size: 14px; font-weight: 500; text-decoration: none; }
+.actions a + a { border: 1px solid rgb(255 255 255 / .24); background: transparent; color: #f4f1eb; }
+.moduleLink { display: inline-flex; align-items: center; min-height: 44px; margin-top: 16px; color: #c7c2ba; font-size: 13px; text-underline-offset: 4px; }
+.customEntry a:focus-visible { outline: 2px solid #ede7dc; outline-offset: 4px; }
+@media (max-width: 420px) { .customEntry { padding: 24px; } .actions { flex-direction: column; } }

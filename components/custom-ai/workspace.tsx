@@ -551,7 +551,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     },true);
   },[restored,recoveryRequest,conflict,applyReply,restoreFailedReply,replySettled]);
 
-  const generalBuilt = generalProject?.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
+  const generalBuilt = generalProject?.coinPreparation?.eligible === true && generalProject.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
     && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision
     && generalProject.productBlueprintId === productBlueprint?.id && generalLaunchEnabled;
   const feeBuilt = builderChain(settings.chainId).feeCore && (!draft?.program || draft.program.chainId === settings.chainId)
@@ -683,6 +683,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   };
 
   return <div ref={workspaceElement} className={styles.workspace}>
+    <div className={styles.pageBackdrop} aria-hidden="true" />
     <div className={styles.studio} data-guest={signedOut||undefined}>
     <section className={styles.conversation} aria-label="Build your coin" data-chat-state={signedOut?"wallet-required":activity.id}
       data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}

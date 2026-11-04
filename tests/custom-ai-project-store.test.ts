@@ -1,3 +1,4 @@
+import {sourceAuditModelReply} from "./fixtures/custom-ai-source-audit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only", () => ({}));
@@ -137,7 +138,7 @@ describe("owned general contract checkpoints", () => {
   });
   it("stores and reuses one source-bound audit without changing the code or claiming a launch",async()=>{
     const attempt=await reserve(),p=project();await store.projects.save("alice",id,attempt.lease!,p);
-    const audit=await auditGeneralSource(p,undefined,{call:async()=>({text:JSON.stringify({reviewedRequirementIds:["no-mint"],findings:[]}),inputTokens:1,outputTokens:1})});
+    const audit=await auditGeneralSource(p,undefined,{call:async()=>sourceAuditModelReply(p)});
     const first=await store.projects.saveSourceAudit("alice",id,attempt.lease!,audit);
     expect(first.sourceAudit?.status).toBe("passed");expect(first.sourceAudit?.launchReady).toBe(false);
     expect((await store.projects.saveSourceAudit("alice",id,attempt.lease!,audit)).sourceAudit).toEqual(audit);

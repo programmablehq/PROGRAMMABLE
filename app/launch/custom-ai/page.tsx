@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CustomAIWorkspace } from "@/components/custom-ai/workspace";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Custom AI · Programmable",
+export const metadata: Metadata = { title: "AI Chat · Programmable",
   description: process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true"
     ? "Build and review a custom hook, then prepare its launch on Ethereum, Robinhood, Base or HyperEVM."
     : "Describe your coin's fee rules, review its hook and launch on Ethereum or Robinhood.",

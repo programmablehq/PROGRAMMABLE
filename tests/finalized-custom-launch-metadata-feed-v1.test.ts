@@ -8,6 +8,7 @@ import {
   FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS,
   FINALIZED_CUSTOM_LAUNCH_METADATA_FEED_URL,
   FINALIZED_CUSTOM_LAUNCH_METADATA_LKG_TTL_MS,
+  FINALIZED_CUSTOM_LAUNCH_METADATA_MAXIMUM_PAGE_BYTES,
   readFinalizedCustomLaunchMetadataPagesV1,
 } from "../lib/server/custom-launch/finalized-custom-launch-metadata-feed-v1";
 import { canonicalSha256 } from "../lib/server/projection-target/hashing";
@@ -361,6 +362,85 @@ describe("finalized Custom launch metadata feed v1", () => {
 
     expect(feed.launches).toHaveLength(1);
     expect(feed.launches[0]?.routerLaunchId).toBe(launch.routerLaunchId);
+    expect(feed.quality).toMatchObject(quality);
+  });
+
+  it("traverses quarantined-only pages and aggregates quality with absolute row indexes", async () => {
+    const fetchFeed = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(feedPage([], PAGE_CURSOR, partialFeedQuality(0))))
+      .mockResolvedValueOnce(jsonResponse(feedPage([launchFixture()], null, partialFeedQuality(1))));
+    const feed = await readFinalizedCustomLaunchMetadataPagesV1({ fetchFeed, now: () => NOW, timeoutMs: 50 });
+    expect(fetchFeed).toHaveBeenCalledTimes(2);
+    expect(new URL(String(fetchFeed.mock.calls[1][0])).searchParams.get("cursor")).toBe(PAGE_CURSOR);
+    expect(feed.launches).toHaveLength(1);
+    expect(feed.quality).toEqual({ status: "partial", sourceRowCount: 3, publishedRowCount: 1, quarantinedRowCount: 2,
+      diagnostics: [{ rowIndex: 0, code: "FINALIZED_ROW_QUARANTINED" }, { rowIndex: 2, code: "FINALIZED_ROW_QUARANTINED" }] });
+  });
+
+  it.each(["cycle", "page bound", "empty"])("keeps the %s guard for quarantined traversal", async guard => {
+    const fetchFeed = vi.fn(async () => jsonResponse(feedPage([], PAGE_CURSOR,
+      guard === "empty" ? completeFeedQuality(0) : partialFeedQuality(0))));
+    await expect(readFinalizedCustomLaunchMetadataPagesV1({ fetchFeed, now: () => NOW, timeoutMs: 50,
+      maximumPages: guard === "page bound" ? 1 : 3 })).rejects.toThrow(guard === "page bound" ? /page bound/ : /cursor is invalid/);
+    expect(fetchFeed).toHaveBeenCalledTimes(guard === "cycle" ? 2 : 1);
+  });
+
+  it("keeps the time limit while traversing quarantined-only pages", async () => {
+    const fetchFeed = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(feedPage([], PAGE_CURSOR, partialFeedQuality(0))))
+      .mockImplementation(() => new Promise<Response>(() => {}));
+    await expect(readFinalizedCustomLaunchMetadataPagesV1({ fetchFeed, now: () => NOW, timeoutMs: 50 }))
+      .rejects.toMatchObject({ name: "TimeoutError" });
+    expect(fetchFeed).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the byte limit after a quarantined-only page", async () => {
+    const oversized = jsonResponse({});
+    oversized.headers.set("content-length", String(FINALIZED_CUSTOM_LAUNCH_METADATA_MAXIMUM_PAGE_BYTES + 1));
+    const fetchFeed = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(feedPage([], PAGE_CURSOR, partialFeedQuality(0))))
+      .mockResolvedValueOnce(oversized);
+    await expect(readFinalizedCustomLaunchMetadataPagesV1({ fetchFeed, now: () => NOW, timeoutMs: 50 }))
+      .rejects.toThrow(/response size is invalid/);
+    expect(fetchFeed).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains verified identities during partial refreshes and replaces them on complete recovery", async () => {
+    let now = NOW;
+    const first = launchFixture();
+    const second = launchFixture({ resourceId: "123e4567-e89b-42d3-a456-426614174001", routerLaunchId: hex32("45"),
+      tokenAddress: `0x${"66".repeat(20)}`, createdAt: "2026-08-25T04:59:00.000Z" });
+    const fetchFeed = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(feedPage([first])))
+      .mockResolvedValueOnce(jsonResponse(feedPage([second], null, partialFeedQuality(1))))
+      .mockResolvedValueOnce(jsonResponse(feedPage([first, second], null, completeFeedQuality(2))));
+    const read = createFinalizedCustomLaunchMetadataFeedReaderV1({ fetchFeed, now: () => now, timeoutMs: 50 });
+    await read();
+    now += FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS + 1;
+    const partial = await read();
+    expect(partial).toMatchObject({ status: "current", retainedRowCount: 1, quality: { status: "partial", publishedRowCount: 1 } });
+    expect(partial.launches.map(row => row.token)).toEqual([first.token, second.token]);
+    now += FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS + 1;
+    const recovered = await read();
+    expect(recovered).toMatchObject({ retainedRowCount: 0, quality: { status: "complete" } });
+    expect(recovered.launches.map(row => row.token)).toEqual([first.token, second.token]);
+  });
+
+  it("does not extend retained identity expiry through repeated partial refreshes or fallback", async () => {
+    let now = NOW;
+    const fetchFeed = vi.fn().mockResolvedValueOnce(jsonResponse(feedPage([launchFixture()])))
+      .mockImplementation(async () => jsonResponse({ ...feedPage([], null, partialFeedQuality(0)), generatedAt: new Date(now).toISOString() }));
+    const read = createFinalizedCustomLaunchMetadataFeedReaderV1({ fetchFeed, now: () => now, timeoutMs: 50 });
+    await read();
+    now += FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS + 1;
+    expect((await read()).launches).toHaveLength(1);
+    now = NOW + FINALIZED_CUSTOM_LAUNCH_METADATA_LKG_TTL_MS - 1;
+    expect((await read()).launches).toHaveLength(1);
+    now += 2;
+    fetchFeed.mockRejectedValueOnce(new Error("unavailable"));
+    expect(await read()).toMatchObject({ status: "last-known-good", launches: [], retainedRowCount: 0, quality: { status: "partial" } });
+    now += FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS + 1;
+    expect(await read()).toMatchObject({ launches: [], quality: { status: "partial" } });
   });
 
   it("keeps the legacy list page without quality compatible", async () => {

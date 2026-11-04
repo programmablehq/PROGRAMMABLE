@@ -221,11 +221,21 @@ export type FinalizedCustomLaunchMetadataV1 = Readonly<{
   finalizedAt: string;
 }>;
 
+export type FinalizedCustomLaunchMetadataQualityV1 = Readonly<{
+  status: "complete" | "partial";
+  sourceRowCount: number;
+  publishedRowCount: number;
+  quarantinedRowCount: number;
+  diagnostics: readonly Readonly<{ rowIndex: number; code: "FINALIZED_ROW_QUARANTINED" }>[];
+}>;
+
 export type FinalizedCustomLaunchMetadataFeedV1 = Readonly<{
   schemaVersion: typeof FINALIZED_CUSTOM_LAUNCH_METADATA_LIST_SCHEMA_V1;
   status: "current" | "last-known-good";
   generatedAt: string;
   launches: readonly FinalizedCustomLaunchMetadataV1[];
+  quality: FinalizedCustomLaunchMetadataQualityV1;
+  retainedRowCount: number;
 }>;
 
 type FeedPageV1 = Readonly<{
@@ -233,6 +243,7 @@ type FeedPageV1 = Readonly<{
   generatedAt: string;
   launches: readonly FinalizedCustomLaunchMetadataV1[];
   nextCursor: string | null;
+  quality: FinalizedCustomLaunchMetadataQualityV1;
 }>;
 
 export type RouterCustomMetadataOverlayBindingV1 = Readonly<{
@@ -317,6 +328,8 @@ export function createFinalizedCustomLaunchMetadataFeedReaderV1(
     feed: FinalizedCustomLaunchMetadataFeedV1;
   }> | null = null;
   let inFlight: Promise<FinalizedCustomLaunchMetadataFeedV1> | null = null;
+  // A partial refresh cannot extend the lifetime of identities it did not verify.
+  let verified = new Map<string, { launch: FinalizedCustomLaunchMetadataV1; until: number }>();
 
   return async function readFinalizedCustomLaunchMetadataFeedV1() {
     const startedAt = now();
@@ -329,17 +342,43 @@ export function createFinalizedCustomLaunchMetadataFeedReaderV1(
       maximumPages,
     }).then((feed) => {
       const loadedAt = now();
+      const identity = (launch: FinalizedCustomLaunchMetadataV1) => `${launch.chainId}:${launch.token.toLowerCase()}`;
+      const next = new Map(feed.launches.map(launch => [identity(launch), {
+        launch, until: loadedAt + FINALIZED_CUSTOM_LAUNCH_METADATA_LKG_TTL_MS,
+      }]));
+      const publishedIds = new Set(feed.launches.flatMap(launch => [launch.resourceId, launch.routerLaunchId]));
+      const retained: FinalizedCustomLaunchMetadataV1[] = [];
+      if (feed.quality.status === "partial") {
+        for (const [key, entry] of verified) {
+          if (entry.until > loadedAt && !next.has(key)
+            && !publishedIds.has(entry.launch.resourceId) && !publishedIds.has(entry.launch.routerLaunchId)) {
+            next.set(key, entry);
+            retained.push(entry.launch);
+          }
+        }
+      }
+      if (next.size > FINALIZED_CUSTOM_LAUNCH_METADATA_MAXIMUM_RECORDS) {
+        throw new Error("Finalized Custom metadata feed exceeds its record bound");
+      }
+      verified = next;
+      const result = retained.length ? deepFreeze({ ...feed, retainedRowCount: retained.length,
+        launches: [...feed.launches, ...retained].sort(compareLaunchOrderV1),
+      }) : feed;
       cached = Object.freeze({
-        freshUntil: loadedAt + FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS,
+        freshUntil: Math.min(loadedAt + FINALIZED_CUSTOM_LAUNCH_METADATA_CACHE_TTL_MS, ...[...next.values()].map(entry => entry.until)),
         lkgUntil: loadedAt + FINALIZED_CUSTOM_LAUNCH_METADATA_LKG_TTL_MS,
-        feed,
+        feed: result,
       });
-      return feed;
+      return result;
     }).catch((error: unknown) => {
       if (cached && cached.lkgUntil > now()) {
+        const launches = cached.feed.launches.filter(launch =>
+          (verified.get(`${launch.chainId}:${launch.token.toLowerCase()}`)?.until ?? 0) > now());
         return Object.freeze({
           ...cached.feed,
           status: "last-known-good" as const,
+          launches: launches.length === cached.feed.launches.length ? cached.feed.launches : Object.freeze(launches),
+          retainedRowCount: Math.max(0, cached.feed.retainedRowCount - (cached.feed.launches.length - launches.length)),
         });
       }
       throw error;
@@ -379,6 +418,9 @@ export async function readFinalizedCustomLaunchMetadataPagesV1(input: Readonly<{
   let cursor: string | null = null;
   let firstGeneratedAt: string | null = null;
   let previous: FinalizedCustomLaunchMetadataV1 | null = null;
+  let sourceRowCount = 0;
+  let quarantinedRowCount = 0;
+  const diagnostics: { rowIndex: number; code: "FINALIZED_ROW_QUARANTINED" }[] = [];
 
   for (let pageNumber = 0; pageNumber < maximumPages; pageNumber += 1) {
     const url = new URL(input.chainId && input.chainId !== "1" ? `https://api.programmable.market/v4/chains/${input.chainId}/finalized-custom-launches` : FINALIZED_CUSTOM_LAUNCH_METADATA_FEED_URL);
@@ -405,6 +447,11 @@ export async function readFinalizedCustomLaunchMetadataPagesV1(input: Readonly<{
       input.chainId ?? "1",
     );
     firstGeneratedAt ??= page.generatedAt;
+    diagnostics.push(...page.quality.diagnostics.map(diagnostic => ({
+      ...diagnostic, rowIndex: sourceRowCount + diagnostic.rowIndex,
+    })));
+    sourceRowCount += page.quality.sourceRowCount;
+    quarantinedRowCount += page.quality.quarantinedRowCount;
     for (const launch of page.launches) {
       if (
         resourceIds.has(launch.resourceId)
@@ -425,9 +472,12 @@ export async function readFinalizedCustomLaunchMetadataPagesV1(input: Readonly<{
         status: "current",
         generatedAt: firstGeneratedAt,
         launches,
+        quality: { status: quarantinedRowCount ? "partial" : "complete", sourceRowCount,
+          publishedRowCount: launches.length, quarantinedRowCount, diagnostics },
+        retainedRowCount: 0,
       });
     }
-    if (page.launches.length === 0 || cursors.has(page.nextCursor)) {
+    if (page.quality.sourceRowCount === 0 || cursors.has(page.nextCursor)) {
       throw new Error("Finalized Custom metadata feed cursor is invalid");
     }
     cursors.add(page.nextCursor);
@@ -696,19 +746,23 @@ function parseFeedPageV1(value: JsonValue, now: number, chainId: "1" | "8453" | 
     generatedAtMs > now + MAXIMUM_FUTURE_SKEW_MS
     || now - generatedAtMs > MAXIMUM_GENERATED_AGE_MS
   ) throw new Error("Finalized Custom metadata list is stale");
-  if (hasQuality) parseFeedQualityV1(record.quality, record.launches.length);
+  const quality = hasQuality ? parseFeedQualityV1(record.quality, record.launches.length) : {
+    status: "complete" as const, sourceRowCount: record.launches.length,
+    publishedRowCount: record.launches.length, quarantinedRowCount: 0, diagnostics: [],
+  };
   return deepFreeze({
     schemaVersion: FINALIZED_CUSTOM_LAUNCH_METADATA_LIST_SCHEMA_V1,
     generatedAt,
     launches: record.launches.map(value => parseLaunchV1(value, chainId)),
     nextCursor: record.nextCursor as string | null,
+    quality,
   });
 }
 
 function parseFeedQualityV1(
   value: JsonValue | undefined,
   publishedLaunchCount: number,
-) {
+): FinalizedCustomLaunchMetadataQualityV1 {
   const record = exactRecord(value, [
     "status", "sourceRowCount", "publishedRowCount",
     "quarantinedRowCount", "diagnostics",
@@ -741,6 +795,7 @@ function parseFeedQualityV1(
   ) throw new Error("Finalized Custom metadata quality is invalid");
 
   const rowIndexes = new Set<number>();
+  const diagnostics: { rowIndex: number; code: "FINALIZED_ROW_QUARANTINED" }[] = [];
   for (const value of record.diagnostics) {
     const diagnostic = exactRecord(value, [
       "rowIndex", "code",
@@ -756,7 +811,10 @@ function parseFeedQualityV1(
       || rowIndexes.has(diagnostic.rowIndex)
     ) throw new Error("Finalized Custom metadata quality diagnostic is invalid");
     rowIndexes.add(diagnostic.rowIndex);
+    diagnostics.push({ rowIndex: diagnostic.rowIndex, code: diagnostic.code });
   }
+  return { status: record.status, sourceRowCount: record.sourceRowCount,
+    publishedRowCount: record.publishedRowCount, quarantinedRowCount: record.quarantinedRowCount, diagnostics };
 }
 
 function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" | "999" = "1"): FinalizedCustomLaunchMetadataV1 {

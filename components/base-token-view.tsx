@@ -14,7 +14,7 @@ export function BaseTokenView({ address, token, presentation, status, chainId = 
   token: BaseExploreToken | HyperEvmExploreToken | null;
   chainId?: EvmCustomChainId;
   presentation: RobinhoodCoinPresentation | null;
-  status: "ready" | "stale";
+  status: "ready" | "stale" | "partial";
 }) {
   const network=EVM_CUSTOM_CHAINS[chainId];
   if (!token) return <div className={`${styles.page} page-width`}>
