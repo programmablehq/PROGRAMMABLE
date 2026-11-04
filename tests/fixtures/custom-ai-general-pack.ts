@@ -16,11 +16,24 @@ import { createGeneralPublicSource, generalSourcePublicUri } from "../../lib/cus
 import type { LaunchIntent } from "../../lib/custom-ai/launch-intent";
 import type { GeneralPackInput } from "../../lib/custom-ai/general-pack-config.server";
 import type { LaunchProductionContext } from "../../lib/custom-ai/launch-production";
+import {createProductBlueprint} from "../../lib/custom-ai/product/blueprint";
+import {createProductImplementation} from "../../lib/custom-ai/product/implementation.server";
+
+export function generalPackProduct(intent:LaunchIntent,withChildren:boolean,chain:BuilderChainId=1){
+  return createProductBlueprint({components:[
+    {id:"token",kind:"token",name:"Token",purpose:"Project token",requirementIds:["surface"],dependsOn:[]},
+    {id:"hook",kind:"hook",name:"Hook",purpose:"Project behavior",requirementIds:intent.requirements.map(rule=>rule.id),dependsOn:["token"]},
+    {id:"initializer",kind:"adapter",name:"Initializer",purpose:"Initialize the project",requirementIds:["surface"],dependsOn:["hook"]},
+    ...(withChildren?[{id:"vault",kind:"vault",name:"Vault",purpose:"Constructor child",requirementIds:["children"],dependsOn:["hook"]},
+      {id:"module",kind:"adapter",name:"Module",purpose:"Vault adapter",requirementIds:["children"],dependsOn:["vault"]},
+      {id:"opening",kind:"vault",name:"Opening",purpose:"Second constructor child",requirementIds:["children"],dependsOn:["hook"]}]:[]),
+  ],assets:[],flows:[],services:[],interfaceActions:[{id:"inspect-marker",target:"hook",kind:"inspect",requirementIds:["marker"]}]},intent,chain);
+}
 
 /** Actual compiler + isolated declared examples, never an LP, fee, protected
  * review or mainnet acceptance fixture. It intentionally lacks those proofs. */
 export async function generalPackFixture(chain: BuilderChainId = 1, unstable = false, extraTargets = 0, withChildren = false, productionOverride?: LaunchProductionContext,
-  opening?: { supply: string; targetFdvUsd: string; actualSupply?: string }): Promise<GeneralPackInput> {
+  opening?: { supply: string; targetFdvUsd: string; actualSupply?: string },withProduct=false): Promise<GeneralPackInput> {
   if(!Number.isSafeInteger(extraTargets)||extraTargets<0||extraTargets>(withChildren?10:13))throw Error("Bounded fixture target count exceeded");
   const owner = "pack-fixture-owner", controller = `0x${"11".repeat(20)}` as const, conversation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", id = "general-pack-source-00001";
   const production = productionOverride ?? projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains], chain, protection);
@@ -59,6 +72,7 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
     contracts.push({id:`aux${index}`,source:"Project.sol",contract:`Aux${index}`,role:"auxiliary",arguments:[],functions:[],allowReceive:false,allowFallback:false,surfaceRequirements:["surface"]});
   }
   const blueprint = createGeneralCheckBlueprint({ compilerProfile: "standard-v1", contracts, allowedCalls: [], deployment: declaration,...(children?{constructorChildren:children}:{}),
+    ...(withProduct?{productBindings:{version:1,components:[...contracts,...(children??[])].map(contract=>({component:contract.id,contract:contract.id})),actions:[{action:"inspect-marker",contract:"hook",signature:"arbitraryProjectMethod()"}]}}:{}),
     ...(productionOverride?{world:{kind:"v4-protected-native-token-v1",token:"token",hook:"hook",initializer:"initializer",hookPermissions:8192,fee:0,tickSpacing:60,sqrtPriceX96:(1n<<96n).toString(),nativeUsdAnswer:(10n**BigInt(chain===999?18:8)).toString()}}:{}),steps: [
     { id: "marker", contract: "hook", signature: "arbitraryProjectMethod()", arguments: [], from: "trader-a", afterSeconds: 0, value: "0", read: true,
       requirementIds: ["marker"], expect: { status: "success", returns: ["42"] } },
@@ -70,7 +84,7 @@ export async function generalPackFixture(chain: BuilderChainId = 1, unstable = f
       ]),
       {id:"module-vault",contract:"module",signature:"vault()",arguments:[],from:"creator",afterSeconds:0,value:"0",read:true,requirementIds:["children"],expect:{status:"success",returns:[{contract:"vault"}]}},
     ]:[]),
-  ] }, intent, chain, evmVersion, production);
+  ] }, intent, chain, evmVersion, production,undefined,withProduct?generalPackProduct(intent,withChildren,chain).id:undefined);
   const content = `pragma solidity 0.8.26;
 contract Token { string public name; string public symbol; address public immutable controller;
 ${unstable ? "uint256 public immutable start;" : ""}
@@ -87,18 +101,18 @@ ${productionOverride?"interface Feed {function decimals() external view returns(
 contract Initializer { ${productionOverride?"uint8 public immutable precision; constructor(Feed feed){precision=feed.decimals();}":""} function initialize(${opening?"int24":""}) external payable {} }
 `+Array.from({length:extraTargets},(_,index)=>`contract Aux${index} {}\n`).join("");
   const project = createContractProject({ compiler: { version: GENERAL_PROJECT_COMPILER, optimizerRuns: 1000, viaIR: false, evmVersion },
-    sources: { "Project.sol": { content } }, entrypoints: blueprint.entrypoints }, intent, chain, production, blueprint.deployment);
+    sources: { "Project.sol": { content } }, entrypoints: blueprint.entrypoints }, intent, chain, production, blueprint.deployment,withProduct?generalPackProduct(intent,withChildren,chain).id:undefined);
   const compilation = await compileContractProject(project);
   if (!compilation.compiled) throw Error("Pack fixture did not compile");
   const scenarios = await checkGeneralScenarios(project, compilation, bindGeneralCheckBlueprint(blueprint, project));
   if (!scenarios.passed) throw Error(`Pack fixture examples failed: ${scenarios.failures.map(f => f.code).join()}`);
   const view = generalProjectView({ version: 1, reply: "Fixture source saved", summary: "Declared marker", project, compilation, scenarios,
-    blueprintId: blueprint.id, selection: selectExecutionRoute(intent, chain), requirementCoverage: "proposed", launchReady: false });
+    blueprintId: blueprint.id, selection: selectExecutionRoute(intent, chain), requirementCoverage: "proposed", launchReady: false },withProduct?createProductImplementation(generalPackProduct(intent,withChildren,chain),blueprint,project,compilation,scenarios):undefined);
   const imageBytes = await sharp({ create: { width: 8, height: 8, channels: 4, background: "#607050" } }).webp().toBuffer();
   const hash = createHash("sha256").update(imageBytes).digest("hex"), imageId = createHash("sha256").update(`${owner}:${hash}`).digest("hex");
   const settings = applyCoinSetupPatch(EMPTY_COIN_SETUP, { chainId: chain, name: "Pack Fixture", symbol: "PACK", initialBuy: "0.01",
     description: "An exact-source local compiler and package fixture.", website: "https://example.com/", x: "https://x.com/fixture_coin" });
-  const result = { reply: "Fixture source saved", intent, generalProject: view, change: "applied" as const }, request = { id, intent: "build" as const,
+  const result = { reply: "Fixture source saved", intent, generalProject: view, change: "applied" as const,...(withProduct?{productBlueprint:generalPackProduct(intent,withChildren,chain)}:{}) }, request = { id, intent: "build" as const,
     conversation: { id: conversation, account: controller, revision: 1 }, coin: settings, messages: [{ role: "user" as const, content: "Private packing fixture request must not be public" }] };
   const source = checkedGeneralLaunchSource(owner, { id, account: controller, conversation, studioRevision: 1, chainId: chain,
     projectHash: project.hash, artifactHash: compilation.artifactHash, intentRevision: intent.revision }, {

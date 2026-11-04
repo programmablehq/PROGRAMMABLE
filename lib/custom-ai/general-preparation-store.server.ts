@@ -74,7 +74,22 @@ function exactPack(pack: GeneralPackedLaunch, record: GeneralPreparation, comple
     || fileSha256V2(Buffer.from(pack.requestBody)) !== pack.requestSha256) throw corrupt();
   if(record.openingPrice && pack.version!==3)throw corrupt();
   const construction=pack.route==="plan-v1"?pack.runtimeMaterialization:pack.constructorMaterialization;
-  if(pack.version===1&&(pack.route==="plan-v1"?construction?.version!==1:construction!==undefined))throw corrupt();
+  if(pack.version===1&&construction&&construction.version!==1||pack.version===1&&pack.route==="plan-v1"&&!construction)throw corrupt();
+  if(pack.version===1&&pack.route==="graph-v3"&&construction){
+    const {hash:runtimeHash,...runtimeBody}=construction;
+    if(construction.scope!=="isolated-constructor-runtime-v1"||construction.status!=="materialized"||construction.passes!==2||construction.launchReady!==false
+      ||construction.projectHash!==pack.projectHash||construction.artifactHash!==pack.artifactHash||construction.productionId!==pack.productionId
+      ||construction.chainId!==record.chainId||typeof construction.controller!=="string"||construction.controller.toLowerCase()!==record.account.toLowerCase()
+      ||!Array.isArray(construction.failures)||!Array.isArray(construction.targets)||!Array.isArray(construction.contracts)
+      ||construction.failures.length!==0||construction.targets.length<1||construction.targets.length>16
+      ||construction.contracts.length!==construction.targets.length||(construction.children?.length??0)!==0
+      ||canonicalBrowserSha256V2("programmable.custom-ai-runtime-materialization.v1",runtimeBody)!==runtimeHash)throw corrupt();
+    const ids=new Set(construction.targets.map(target=>target.id));
+    if(ids.size!==construction.targets.length||construction.targets.some(target=>{
+      const contract=construction.contracts.find(item=>item.id===target.id),final=pack.runtimeMaterialization.targets.find(item=>item.targetId===target.id);
+      return !/^0x[a-f0-9]{40}$/iu.test(target.address)||!contract||!final||keccak256(contract.runtimeCode)!==contract.runtimeCodeHash||contract.runtimeCodeHash!==final.runtimeCodeHash;
+    }))throw corrupt();
+  }
   if(pack.version>=2) {
     const runtime=construction;
     if(!runtime||runtime.version!==pack.version||runtime.scope!==(pack.version===3?"observed-constructor-runtime-v3":"isolated-constructor-runtime-v2")||runtime.status!=="materialized"||runtime.launchReady!==false
@@ -206,6 +221,14 @@ export function createGeneralPreparationStore(transaction: Transaction, sources:
   }
   return {
     read: (owner: string,id: string) => transaction(db=>readIn(db,owner,id)),
+    /** Historical inspection is bound to the immutable submitted pack. A new
+     * active chat, expired signing window or edited draft must not rewrite it. */
+    readRuntimeInputs: (owner:string,id:string) => transaction(async db=>{
+      const record=await readIn(db,owner,id);
+      if(!record||record.packState!=="complete"||record.submission?.state!=="completed"||!record.submission.resourceId)throw conflict();
+      const pack=await readPackIn(db,owner,record);
+      return {record,pack};
+    }),
     readAutomaticInputs: (owner:string,id:string) => transaction(async db=>{
       const record=await readIn(db,owner,id);
       if(!record||record.packState!=="complete"||record.submission?.state!=="completed"||!record.submission.resourceId

@@ -14,6 +14,7 @@ import { useGeneralLaunch } from "./use-general-launch";
 import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 const GeneralLaunchWallet = lazy(() => import("./general-launch-wallet"));
+const ProductRuntimePanel=lazy(()=>import("./product-runtime"));
 
 function currentStatusMessage(status: string, automaticApproved: boolean): string {
   if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return automaticApproved
@@ -139,6 +140,9 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
         prepareCommand={launch.automatic?.state==="approved"&&launchCommand&&launchCommand.sourceId===draftId?launchCommand.id:undefined} />
     </Suspense>}
     {accepted && href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}
+    {accepted&&saved&&project?.implementation&&launch.currentStatus&&["completed","confirmed","final","finalized","source_verified","indexed","publicly_visible"].includes(launch.currentStatus.status)&&
+      <Suspense fallback={null}><ProductRuntimePanel key={`${saved.id}:${account.toLowerCase()}`} preparationId={saved.id} sourceId={saved.sourceId}
+        chainId={saved.chainId} headers={headers}/></Suspense>}
     {accepted&&["interrupted","not_started"].includes(launch.automatic?.state??"")&&<button type="button" className={styles.createButton}
       disabled={launch.busy||disabled} onClick={()=>{void launch.check();}}>Continue check<ArrowRight size={16} aria-hidden="true" /></button>}
     {accepted&&launch.automatic?.state==="changes_required"&&launch.automatic.findings.map(finding=><p className={styles.error} key={finding.code} role="status">{finding.message}</p>)}
