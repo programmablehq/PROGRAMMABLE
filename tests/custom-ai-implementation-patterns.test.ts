@@ -5,7 +5,7 @@ import type {GeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 
 function fixture(){
   const contracts=pattern.contracts.map((entry,index)=>({id:entry.id,source:`generated/C${index}.sol`,contract:`Custom${index}`,role:entry.role,
-    arguments:Array(entry.argumentCount).fill("0"),functions:entry.functions,
+    arguments:Array(entry.argumentCount).fill("0"),functions:entry.functions,allowReceive:entry.allowReceive,allowFallback:entry.allowFallback,
     ...("parent" in entry?{parent:entry.parent,nonce:entry.nonce}: {})}));
   const blueprint={chainId:8453,entrypoints:contracts.map(({source,contract,role})=>({source,contract,role})),scenarios:{contracts:contracts.filter(x=>!("parent" in x)),constructorChildren:contracts.filter(x=>"parent" in x)}} as unknown as GeneralCheckBlueprint;
   return {blueprint,paths:contracts.map(x=>x.source)};
@@ -26,6 +26,12 @@ describe("editable fee-flow implementation reference",()=>{
   expect(matchImplementationPattern(missing,paths)).toBeUndefined();
   const wrongRole=structuredClone(blueprint);wrongRole.entrypoints[0].role="auxiliary";
   expect(matchImplementationPattern(wrongRole,paths)).toBeUndefined();
+  const wrongReceive=structuredClone(blueprint);wrongReceive.scenarios.constructorChildren![0].allowReceive=true;
+  expect(matchImplementationPattern(wrongReceive,paths)).toBeUndefined();
+  const wrongFallback=structuredClone(blueprint);wrongFallback.scenarios.contracts[0].allowFallback=true;
+  expect(matchImplementationPattern(wrongFallback,paths)).toBeUndefined();
+  const additionalFunction=structuredClone(blueprint);additionalFunction.scenarios.contracts[0].functions.push("function extra() view returns(uint256)");
+  expect(matchImplementationPattern(additionalFunction,paths)).toBeUndefined();
  });
  it("matches equivalent ABI spelling while keeping return types and mutability exact",()=>{
   const {blueprint,paths}=fixture();

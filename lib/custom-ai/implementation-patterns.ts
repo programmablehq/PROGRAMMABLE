@@ -48,7 +48,9 @@ export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths
   const mapping=new Map<string,typeof targets[number]>();
   for(const entry of feeFlow.contracts){
     const matches=targets.filter(target=>paths.includes(target.source)&&blueprint.entrypoints.some(point=>point.source===target.source&&point.contract===target.contract&&point.role===entry.role)
-      &&target.arguments.length===entry.argumentCount&&entry.functions.every(fn=>{const key=interfaceKey(fn);return key!==undefined&&functions.get(target)!.has(key);}));
+      &&target.arguments.length===entry.argumentCount&&target.allowReceive===entry.allowReceive&&target.allowFallback===entry.allowFallback
+      &&functions.get(target)!.size===entry.functions.length
+      &&entry.functions.every(fn=>{const key=interfaceKey(fn);return key!==undefined&&functions.get(target)!.has(key);}));
     if(matches.length!==1)return;
     mapping.set(entry.id,matches[0]);
   }
