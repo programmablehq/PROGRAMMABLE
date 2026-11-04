@@ -146,8 +146,9 @@ describe("Claude planning and generation", () => {
   });
   it("rejects a truncated provider answer", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-only");
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ stop_reason: "max_tokens", content: [{ type: "text", text: "{}" }] })));
-    await expect(callClaude({ model: MODELS.chat, system: "test", messages: request.messages, schema: {}, maxTokens: 10 })).rejects.toThrow("cut short");
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ stop_reason: "max_tokens", content: [{ type: "text", text: "{}" }], usage: {input_tokens:4,output_tokens:10} })));
+    await expect(callClaude({ model: MODELS.chat, system: "test", messages: request.messages, schema: {}, maxTokens: 10 }))
+      .rejects.toMatchObject({code:"incomplete",failure:"output-limit",usage:{inputTokens:4,outputTokens:10}});
   });
   it("never relays a raw provider error or its secrets", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-only");

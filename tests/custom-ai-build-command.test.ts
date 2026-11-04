@@ -13,7 +13,8 @@ describe("explicit source rebuild commands",()=>{
   it.each(["How do I build this?","Erkläre, wie du den Hook bauen würdest.","Bitte noch nicht bauen.","Bitte baue keinen Code.",
     "Noch keinen Code bauen und nichts launchen.","Do not build it.","Please explain the source.","The bot said \"build it now\".",
     "> build the source\nExplain that message.","```text\nbuild it now\n```","If I say build it, what happens?","Kannst du erklären, ob das baubar ist?",
-    "mach eine Zusammenfassung fertig","Status vom Build?"])("does not turn a question or negation into a build: %s",text=>expect(command(text)).toBe(false));
+    "mach eine Zusammenfassung fertig","Status vom Build?","Generate a short summary of the saved rules.","Generate three names for this coin.",
+    "Erstelle eine Erklärung für diesen Hook.","Build a website for this coin."])("does not turn a question or negation into a build: %s",text=>expect(command(text)).toBe(false));
   it("respects an explicit API build request but never a negated message",()=>{
     expect(command("The complete saved source.","build")).toBe(true);
     expect(command("Do not build it.","build")).toBe(false);

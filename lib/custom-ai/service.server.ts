@@ -155,7 +155,7 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const savedIntent = context.intent ?? context.generalProject?.project.intent ?? migrateLaunchIntent({ draft: context.draft, ruleSpec: previousSpec,
     requestId: request.contextId ?? request.draftId, unresolved: context.unresolved });
   const previousIntent = savedIntent ? normalizeLaunchIntentQuestions(savedIntent) : undefined;
-  const previousProduct = restoredProductBlueprint(context.productBlueprint, previousIntent, request.coin?.chainId ?? 1);
+  const previousProduct = restoredProductBlueprint(context.productBlueprint, previousIntent, context.productBlueprint?.chainId ?? request.coin?.chainId ?? 1);
   capabilityContext.productBlueprint = previousProduct;
   const savedDesignQuestion = Boolean(previousIntent?.requirements.length && isSavedDesignQuestion(request));
   const replyOnly = isBriefChat(request) || savedDesignQuestion;
@@ -337,8 +337,9 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     proposed, unresolved: plan.unresolved, edits, request, target: request.editTarget }) : undefined;
   const intent = revised?.intent ?? previousIntent;
   const coin = applyCoinSetupPatch(request.coin ?? EMPTY_COIN_SETUP, update.setupPatch ?? {});
-  if (intent && (interpreted.productPlan != null || context.productPlanIncomplete) && (revising || plan.action === "build")) {
-    update.productBlueprint = await resolveProductPlan({ value: interpreted.productPlan, intent, chainId: coin.chainId, model: MODELS.chat, signal }, dependencies.call);
+  const needsProductRevision = previousProduct && (previousProduct.intentRevision !== intent?.revision || previousProduct.chainId !== coin.chainId);
+  if (intent && (interpreted.productPlan != null || context.productPlanIncomplete || needsProductRevision) && (revising || plan.action === "build")) {
+    update.productBlueprint = await resolveProductPlan({ value: interpreted.productPlan, previous: previousProduct, intent, chainId: coin.chainId, model: MODELS.chat, signal }, dependencies.call);
     if (!update.productBlueprint) return { reply: "Your full design is saved. I couldn't finish organizing its components yet. You can keep refining it or retry the build.", ...update,
       intent, memory: plan.memory, change: "blocked", buildIssue: {stage:"product",code:"incomplete-plan"}, ...(researched ? {chargedAs:"research",sources} : {}) };
   } else if (intent && previousProduct?.intentRevision === intent.revision && previousProduct.chainId === coin.chainId) {

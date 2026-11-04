@@ -31,6 +31,18 @@ function fixture() {
   return {read, runtime, rpcs, advance: (ms: number) => {time += ms;}};
 }
 describe("requested product values", () => {
+  it("keeps a shared value read alive when its first caller leaves",async()=>{
+    const f=fixture();let finish!:(value:unknown)=>void,signal!:AbortSignal;
+    mock.read.mockImplementation((_source,_runtime,_request,_rpcs,options)=>{signal=options.signal;return new Promise((resolve,reject)=>{
+      finish=resolve;signal.addEventListener("abort",()=>reject(signal.reason),{once:true});
+    });});
+    const controller=new AbortController();
+    const first=f.read(new Request(request(),{signal:controller.signal}),auth,id,"inspect").catch(error=>error),second=f.read(request(),auth,id,"inspect");
+    await vi.waitFor(()=>expect(mock.read).toHaveBeenCalledOnce());controller.abort();
+    expect((await first).name).toBe("AbortError");expect(signal.aborted).toBe(false);
+    finish({state:"value-observed",outputs:[]});await expect(second).resolves.toHaveProperty("value.state","value-observed");
+    await f.read(request(),auth,id,"inspect");expect(mock.read).toHaveBeenCalledOnce();
+  });
   it("binds the caller and function, coalesces concurrent reads and keeps fresh snapshots separate", async () => {
     const f = fixture();
     const [a, b] = await Promise.all([f.read(request(), auth, id, "inspect"), f.read(request(), auth, id, "inspect")]);

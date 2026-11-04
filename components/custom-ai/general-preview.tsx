@@ -23,6 +23,7 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
 }) {
   const ownEditor=useRef<CoinDetailsControls>(null),editor=editorControls??ownEditor;
   const [imageBusy,setImageBusy]=useState(false),[launchBusy,setLaunchBusy]=useState(false);
+  const [pairPending,setPairPending]=useState(false);
   const imageStatus=useCallback((busy:boolean)=>{setImageBusy(busy);onImageBusy?.(busy);},[onImageBusy]);
   const enabled=generalLaunchEnabled&&!localPreview&&/^0x[a-f0-9]{40}$/iu.test(account);
   const lock=useCallback((locked:boolean)=>{setLaunchBusy(locked);onLaunchLocked?.(locked);},[onLaunchLocked]);
@@ -30,13 +31,14 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
   return <aside className={styles.coinPanel} aria-label="Coin preview and details">
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled||launchBusy} headers={headers}
       localPreview={localPreview} cacheKey={cacheKey} imageReceipt={imageReceipt} onImageReceipt={onImageReceipt} onImage={()=>undefined} controlsRef={editor} onImageBusy={imageStatus}
-      stage={!project?"Contract design":project.sourceReview==="changes_required"?"Source needs changes":project.scenarios?.passed===false?"Contract checks failed":project.compiled?"Source compiled":"Source needs changes"} description={project?.summary} feeCore={false}/>
+      onPairPending={setPairPending} stage={!project?"Contract design":project.sourceReview==="changes_required"?"Source needs changes":project.scenarios?.passed===false?"Contract checks failed":project.compiled?"Source compiled":"Source needs changes"} description={project?.summary} feeCore={false}/>
+    {pairPending&&<p className={styles.note} role="status">Finish the pair token address or select the native token.</p>}
     {!enabled&&<section className={styles.generalLaunch} aria-label="Launch your coin">
       <button type="button" className={styles.createButton} disabled aria-describedby="general-launch-not-ready">Launch coin</button>
       <p id="general-launch-not-ready" className={styles.note} role="status">{!project?intent?.requirements.length?"Your design is saved. Ask the chat to build its source.":"Describe your coin in the chat to get started.":!matches?"Your design changed. Ask the chat to update the source.":project.sourceReview==="changes_required"?"Ask the chat to fix the source review findings.":project.scenarios?.passed?"The declared checks passed. Launch preparation is not available yet.":project.scenarios?.passed===false?"Ask the chat to fix the remaining contract check.":project.compiled?"Ask the chat to finish checking this source.":"Ask the chat to fix the source before launching."}</p>
     </section>}
     <GeneralLaunchControls enabled={enabled} account={account} conversationId={conversationId} scope={cacheKey} headers={headers}
-      project={project} intent={intent} draftId={draftId} settings={settings} imageId={imageReceipt?.id} disabled={disabled||imageBusy}
+      project={project} intent={intent} draftId={draftId} settings={settings} imageId={imageReceipt?.id} disabled={disabled||imageBusy||pairPending}
       pendingChange={pendingChange} editor={editor} flush={flush??(async()=>undefined)} onLaunchLocked={lock} launchCommand={launchCommand}/>
     {intent&&<Disclosure className={`${styles.ruleReview} ${styles.coinRules}`}>
       <summary>Coin rules<span>{intent.requirements.length}</span></summary>

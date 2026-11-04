@@ -5,7 +5,7 @@ import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
 import type {CheckDiagnostic} from "../lib/custom-ai/check-diagnostic";
-import {checkContextHash} from "../lib/custom-ai/check-diagnostic";
+import {checkContextHash,checkLaunchInputsHash,reusableCheckProgress} from "../lib/custom-ai/check-diagnostic";
 
 const intent:LaunchIntent={version:1,id:"counter-design",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
   {id:"counter",kind:"behavior",text:"Anyone can increment from zero by one",open:null,origin:{kind:"legacy"}},
@@ -22,6 +22,27 @@ const response=(body:unknown)=>({text:JSON.stringify(body),inputTokens:1,outputT
 const input={intent,chainId:1 as const,evmVersion:"paris" as const,model:"test-model"};
 
 describe("bounded independent check declaration",()=>{
+  it("binds completed checks and partial progress to the opening amount and pair",async()=>{
+    const coin={name:"Counter",symbol:"CNT",pairToken:"ETH",initialBuy:"0.01"};
+    const complete={...declaration,steps},call=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(complete)}));
+    const cached=await declareGeneralChecks({...input,coin},call);call.mockClear();
+    expect(cached.launchInputsHash).toBe(checkLaunchInputsHash(coin));
+    await declareGeneralChecks({...input,coin:{...coin,initialBuy:"0.010"},cached},call);expect(call).not.toHaveBeenCalled();
+    const changed={...coin,initialBuy:"0.000000000000001001"};
+    const rebuilt=await declareGeneralChecks({...input,coin:changed,cached},call);expect(call).toHaveBeenCalledOnce();expect(rebuilt.id).not.toBe(cached.id);
+    const diagnostic={version:1 as const,contextHash:checkContextHash({...input,coin}),failures:[],progress:{interface:"{}",steps:[]}};
+    expect(reusableCheckProgress(diagnostic,{...input,coin:changed})).toBeUndefined();
+    expect(checkLaunchInputsHash({...coin,pairToken:`0x${"1".repeat(40)}`})).not.toBe(cached.launchInputsHash);
+  });
+  it("keeps full provenance in storage without copying it into every model rule",async()=>{
+    const quote="Original private instruction "+"x".repeat(7000);
+    const original={...intent,requirements:intent.requirements.map(rule=>({...rule,origin:{kind:"message" as const,quote,requestId:"request-original-0001",messageIndex:0}}))};
+    const call=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify({...declaration,steps})}));
+    await declareGeneralChecks({...input,intent:original},call);
+    expect(call.mock.calls[0][0].system).not.toContain(quote);
+    for(const rule of intent.requirements)expect(call.mock.calls[0][0].system).toContain(rule.text);
+    expect(original.requirements[0].origin.quote).toBe(quote);
+  });
   it("splits interface and scenarios while retaining complete semantic validation",async()=>{
     const call=vi.fn(async(request:ClaudeInput)=>call.mock.calls.length===1?
       response({generalChecks:JSON.stringify(declaration)}):response({steps:JSON.stringify(steps)}));

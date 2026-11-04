@@ -4,7 +4,7 @@ import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { AI_CONFIG } from "./ai-config";
 import { readServerEvents } from "./events";
-import { modelResponseLimits, reportedTokenCount, type ModelResponseProfile } from "./model-response";
+import { ModelResponseError, modelResponseLimits, reportedTokenCount, type ModelResponseProfile } from "./model-response";
 
 export const MODELS = AI_CONFIG.models;
 export type Model = string;
@@ -19,15 +19,21 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
   const limits = modelResponseLimits(input.responseProfile);
   const timeout = AbortSignal.timeout(limits.timeoutMs);
   const signal = input.signal ? AbortSignal.any([timeout, input.signal]) : timeout;
+  let text = "", inputTokens: number | null = null, outputTokens: number | null = null;
+  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0]) => new ModelResponseError(failure,
+    {inputTokens,outputTokens},input.captureIncompleteDeclaration?text:undefined);
+  const stream = Boolean(input.onText) || input.responseProfile === "contract";
   let response: Response;
   try {
     response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", redirect: "error", cache: "no-store", signal,
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: input.model, max_tokens: input.maxTokens, system: input.system, stream: Boolean(input.onText),
+      body: JSON.stringify({ model: input.model, max_tokens: input.maxTokens, system: input.system, stream,
         messages: input.messages, output_config: { effort: input.effort ?? "medium", format: { type: "json_schema", schema: input.schema } } }),
     });
   } catch {
+    input.signal?.throwIfAborted();
+    if(timeout.aborted)throw incomplete("timeout");
     throw new CustomAIError("connection", "The reply did not arrive. Your draft is still here; try again shortly.", 503);
   }
   if (!response.ok) {
@@ -42,8 +48,8 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
     await health.fail(failure);
     throw providerError(failure);
   }
-  if (input.onText && response.headers.get("content-type")?.includes("text/event-stream")) {
-    let text = "", inputTokens: number | null = null, outputTokens: number | null = null, stopReason: unknown, stopped = false;
+  if (stream && response.headers.get("content-type")?.includes("text/event-stream")) {
+    let stopReason: unknown, stopped = false;
     try {
       for await (const event of readServerEvents(response, { signal })) {
         signal.throwIfAborted();
@@ -64,8 +70,8 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
           const delta = event.delta as { type?: string; text?: string } | undefined;
           if (delta?.type === "text_delta") text += delta.text ?? "";
         }
-        if (text.length > limits.maximumCharacters) throw new CustomAIError("response", "The reply is too large. Try a smaller change.", 502);
-        if (event.type === "content_block_delta" || event.type === "content_block_start") input.onText(text);
+        if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
+        if (event.type === "content_block_delta" || event.type === "content_block_start") input.onText?.(text);
         if (event.type === "message_delta") {
           stopReason = (event.delta as { stop_reason?: string } | undefined)?.stop_reason;
           outputTokens = reportedTokenCount((event.usage as { output_tokens?: number } | undefined)?.output_tokens) ?? outputTokens;
@@ -74,17 +80,23 @@ export async function callClaude(input: ClaudeInput): Promise<ClaudeResult> {
       }
     } catch (error) {
       if (error instanceof CustomAIError) throw error;
-      throw new CustomAIError("connection", "The reply was interrupted. Your draft is still saved; try again.", 503);
+      input.signal?.throwIfAborted();
+      throw incomplete(timeout.aborted?"timeout":"missing-end");
     }
-    if (!stopped || stopReason !== "end_turn" || !text) throw new CustomAIError("incomplete", "The answer was cut short. Try a smaller change to your draft.", 502);
+    if(stopReason==="max_tokens")throw incomplete("output-limit");
+    if (!stopped || stopReason !== "end_turn") throw incomplete("missing-end");
+    if(!text)throw incomplete("empty-response");
     return { text, inputTokens, outputTokens };
   }
-  const value = await response.json();
-  if (value.stop_reason !== "end_turn" || !Array.isArray(value.content)) {
-    throw new CustomAIError("incomplete", "The answer was cut short. Try a smaller change to your draft.", 502);
-  }
-  const text = value.content.filter((block: { type: string }) => block.type === "text")
+  let value;
+  try {value=await response.json();} catch {input.signal?.throwIfAborted();throw incomplete(timeout.aborted?"timeout":"missing-end");}
+  inputTokens=reportedTokenCount(value.usage?.input_tokens);outputTokens=reportedTokenCount(value.usage?.output_tokens);
+  if (!Array.isArray(value.content)) throw incomplete("missing-end");
+  text = value.content.filter((block: { type: string }) => block.type === "text")
     .map((block: { text: string }) => block.text).join("");
-  if (!text || text.length > limits.maximumCharacters) throw new CustomAIError("response", "The builder returned an incomplete answer.", 502);
-  return { text, inputTokens: reportedTokenCount(value.usage?.input_tokens), outputTokens: reportedTokenCount(value.usage?.output_tokens) };
+  if(value.stop_reason==="max_tokens")throw incomplete("output-limit");
+  if(value.stop_reason!=="end_turn")throw incomplete("missing-end");
+  if(!text)throw incomplete("empty-response");
+  if(text.length>limits.maximumCharacters)throw incomplete("response-too-large");
+  return { text, inputTokens, outputTokens };
 }

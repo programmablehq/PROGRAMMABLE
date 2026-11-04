@@ -34,6 +34,10 @@ export function plannerNeedsSource(request:ChatRequest,draft?:Draft,project?:Gen
     &&Array.isArray(draft.verification.checks)&&draft.verification.checks.length>0;
   return !checked||inspection;
 }
+export function modelIntentContext(intent:LaunchIntent) {
+  return {version:intent.version,id:intent.id,revision:intent.revision,parentRevision:intent.parentRevision,
+    requirements:intent.requirements.map(({id,text,kind,open})=>({id,text,kind,open})),unresolved:intent.unresolved};
+}
 export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;productBlueprint?:ProductBlueprint;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView;canonicalSources?:ContractProject["sources"];includeExecution?:boolean},includeSource:boolean){
   const {draft,intent,generalProject}=input;
   const projectView=generalProject?generalProjectView(generalProject):input.generalProjectView;
@@ -46,8 +50,7 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
     ...(input.productBlueprint?{productEconomics:reviewProductEconomics(input.productBlueprint)}:{}),
     // Full provenance and change history stay in the server-owned revision.
     // The model needs every stable rule and open choice, not repeated quotes.
-    intent:intent?{version:intent.version,id:intent.id,revision:intent.revision,parentRevision:intent.parentRevision,
-      requirements:intent.requirements.map(({id,text,kind,open})=>({id,text,kind,open})),unresolved:intent.unresolved}:undefined,
+    intent:intent?modelIntentContext(intent):undefined,
     currentDraft:draft?{sourceHash:draft.sourceHash,...(includeSource?{source:draft.source}:{}),hookSummary:draft.hookSummary,
       requirements:draft.verification?.requirements,feeChecks:draft.verification?.checks,program:draft.program?.spec,eventRule:draft.feed?.rule,
       sourceIncluded:includeSource}:null,

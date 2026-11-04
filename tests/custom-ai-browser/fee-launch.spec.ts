@@ -55,3 +55,40 @@ test('a missing coin name opens the editor instead of preparing a wallet request
   await expect(page.getByRole('textbox',{name:'Name',exact:true})).toBeFocused();
   expect(f.posts).toEqual([]);expect(f.wallet).toBe(0);expect(f.errors).toEqual([]);
 });
+test('an unfinished custom pair cannot prepare the old native pair',async({page})=>{
+  const f=await fixture(page);await page.goto(origin);
+  await page.locator('summary').filter({hasText:'Coin details'}).click();
+  await page.getByRole('button',{name:'Pair ETH',exact:true}).click();await page.getByRole('option',{name:'Token address',exact:true}).click();
+  const launch=page.getByRole('button',{name:'Launch coin',exact:true});await expect(launch).toBeDisabled();
+  await page.getByRole('textbox',{name:'Token address',exact:true}).fill('0x123');await page.getByRole('textbox',{name:'Initial buy',exact:true}).focus();
+  await expect(launch).toBeDisabled();await expect(page.getByText('Enter a valid token address',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Ask to launch in chat'}).click();expect(f.posts).toEqual([]);expect(f.wallet).toBe(0);
+  await page.getByRole('button',{name:'Pair Token address',exact:true}).click();await page.getByRole('option',{name:'ETH',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Continue in wallet',exact:true})).toBeEnabled();
+  expect(f.posts).toHaveLength(1);expect(f.posts[0]).toMatchObject({action:'create',settings:{quote:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'}});
+  expect(f.wallet).toBe(0);expect(f.errors).toEqual([]);
+});
+test('a restored custom pair stays complete without another edit',async({page})=>{
+  const f=await fixture(page);await page.goto(origin+'/?custom-pair');
+  await page.locator('summary').filter({hasText:'Coin details'}).click();
+  await expect(page.getByRole('textbox',{name:'Token address',exact:true})).toHaveValue('0x'+'4'.repeat(40));
+  await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Ask to launch in chat'}).click();
+  await expect.poll(()=>f.posts.length).toBe(1);expect(f.posts[0].action).toBe('create');expect(f.wallet).toBe(0);expect(f.errors).toEqual([]);
+});
+test('a completed launch stays with its original coin',async({page})=>{
+  const f=await fixture(page);f.ready.session.state='confirmed';f.saved=f.ready;await page.goto(origin);
+  await expect(page.getByText('Published coin',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Open second coin'}).click();
+  await expect(page.getByText('Published coin',{exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Second coin'})).toBeVisible();expect(f.posts).toEqual([]);expect(f.wallet).toBe(0);
+  await page.getByRole('button',{name:'Open original coin'}).click();await expect(page.getByText('Published coin',{exact:true})).toBeVisible();
+  expect(f.errors).toEqual([]);
+});
+test('another pending launch is explicitly identified and remains recoverable',async({page})=>{
+  const f=await fixture(page);f.saved=f.ready;await page.goto(origin);await expect(page.getByRole('button',{name:'Continue in wallet',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Open second coin'}).click();
+  const recovery=page.getByRole('region',{name:'Saved launch recovery'});
+  await expect(recovery.getByText('Finish the saved launch for Fee fixture before starting this coin.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Second coin'})).toBeVisible();await expect(recovery.getByRole('button',{name:'Continue in wallet',exact:true})).toBeEnabled();
+  expect(f.posts).toEqual([]);expect(f.wallet).toBe(0);expect(f.errors).toEqual([]);
+});

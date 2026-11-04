@@ -23,4 +23,50 @@ describe("one saved product read RPC boundary",()=>{
     await expect(rpcs(8453)[0]("eth_call",[{...params[0],data:"0x12345678"},ref])).rejects.toMatchObject({code:"launch-dependency"});
     expect(()=>rpcs(1)).toThrow();expect(fetcher).toHaveBeenCalledOnce();
   });
+  it("keeps provider cooldown when a second scoped action creates a fresh client",async()=>{
+    const env={BASE_RPC_PRIMARY_URL:`https://lb.drpc.live/base/${"a".repeat(20)}`,BASE_RPC_SECONDARY_URL:`https://base-mainnet.g.alchemy.com/v2/${"b".repeat(20)}`};
+    let calls=0;
+    const fetcher=vi.fn(async(_url:URL|string|Request,init?:RequestInit)=>{
+      const body=JSON.parse(String(init?.body));
+      return ++calls===1?new Response(null,{status:429}):Response.json({jsonrpc:"2.0",id:body.id,result:"0x2105"});
+    });
+    const now=()=>1000;
+    const first=createProductionDependencyRpcs({productActionRead:call,env,fetcher,now})(8453)[0];
+    await expect(first("eth_chainId",[])).rejects.toThrow();
+    const second=createProductionDependencyRpcs({productActionRead:{...call,data:"0x18160ddd"},env,fetcher,now})(8453)[0];
+    await expect(second("eth_chainId",[])).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("shares the in-flight provider bound across independently scoped calls",async()=>{
+    const env={BASE_RPC_PRIMARY_URL:`https://lb.drpc.live/base/${"c".repeat(20)}`,BASE_RPC_SECONDARY_URL:`https://base-mainnet.g.alchemy.com/v2/${"d".repeat(20)}`};
+    const finish:(()=>void)[]=[];
+    const fetcher=vi.fn((_url:URL|string|Request,init?:RequestInit)=>new Promise<Response>(resolve=>{
+      const body=JSON.parse(String(init?.body));finish.push(()=>resolve(Response.json({jsonrpc:"2.0",id:body.id,result:"0x2105"})));
+    }));
+    const requests=Array.from({length:5},()=>createProductionDependencyRpcs({productActionRead:call,env,fetcher,now:()=>1000})(8453)[0]("eth_chainId",[]));
+    const settled=Promise.allSettled(requests);finish.forEach(done=>done());const results=await settled;
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(results.filter(result=>result.status==="rejected")).toHaveLength(1);
+  });
+  it("shares only provider pressure while retaining separate call permissions",async()=>{
+    const env={BASE_RPC_PRIMARY_URL:`https://lb.drpc.live/base/${"e".repeat(20)}`,BASE_RPC_SECONDARY_URL:`https://base-mainnet.g.alchemy.com/v2/${"f".repeat(20)}`};
+    const fetcher=vi.fn(async(_url:URL|string|Request,init?:RequestInit)=>Response.json({jsonrpc:"2.0",id:JSON.parse(String(init?.body)).id,result:"0x"}));
+    const first=createProductionDependencyRpcs({productActionRead:call,env,fetcher})(8453)[0];
+    const other={...call,data:"0x18160ddd" as const};
+    const second=createProductionDependencyRpcs({productActionRead:other,env,fetcher})(8453)[0];
+    await expect(first("eth_call",[{from:other.from,to:other.to,data:other.data,gas:"0x7a120"},ref])).rejects.toThrow();
+    await expect(second("eth_call",[{from:other.from,to:other.to,data:other.data,gas:"0x7a120"},ref])).resolves.toBe("0x");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it("aborts stalled provider calls and releases their slots",async()=>{
+    const env={BASE_RPC_PRIMARY_URL:`https://lb.drpc.live/base/${"g".repeat(20)}`,BASE_RPC_SECONDARY_URL:`https://base-mainnet.g.alchemy.com/v2/${"h".repeat(20)}`};
+    const signals:AbortSignal[]=[];
+    const fetcher=vi.fn((_url:URL|string|Request,init?:RequestInit)=>new Promise<Response>((_resolve,reject)=>{
+      const signal=init!.signal!;signals.push(signal);signal.addEventListener("abort",()=>reject(signal.reason),{once:true});
+    }));
+    const rpc=createProductionDependencyRpcs({productActionRead:call,env,fetcher})(8453)[0],controller=new AbortController();
+    const pending=Promise.allSettled(Array.from({length:4},()=>rpc("eth_chainId",[],controller.signal)));
+    controller.abort();await pending;expect(signals.every(signal=>signal.aborted)).toBe(true);
+    const next=new AbortController(),again=rpc("eth_chainId",[],next.signal).catch(()=>undefined);expect(fetcher).toHaveBeenCalledTimes(5);next.abort();await again;
+  });
 });

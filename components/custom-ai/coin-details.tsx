@@ -21,10 +21,10 @@ export type CoinDetailsControls = {
   chooseImage: (file: File) => Promise<boolean>;
   imageFromURL: (url: string) => Promise<boolean>;
 };
-export function CoinDetails({settings,onChange,chatRevision,disabled,headers,localPreview,cacheKey,imageReceipt,onImageReceipt,onImage,onImageBusy,controlsRef,stage,summary,description,imageURI,feeCore=true}:{
+export function CoinDetails({settings,onChange,chatRevision,disabled,headers,localPreview,cacheKey,imageReceipt,onImageReceipt,onImage,onImageBusy,onPairPending,controlsRef,stage,summary,description,imageURI,feeCore=true}:{
   settings:CoinSetup;onChange:(patch:CoinSetupPatch)=>void;chatRevision:number;disabled:boolean;
   headers:AISessionHeaders;localPreview:boolean;cacheKey:string;imageReceipt?:ImageReceipt;
-  onImageReceipt:(receipt:ImageReceipt|undefined)=>void;onImage:(image:CoinEditorImage|undefined)=>void;onImageBusy?:(busy:boolean)=>void;
+  onImageReceipt:(receipt:ImageReceipt|undefined)=>void;onImage:(image:CoinEditorImage|undefined)=>void;onImageBusy?:(busy:boolean)=>void;onPairPending?:(pending:boolean)=>void;
   controlsRef?:Ref<CoinDetailsControls>;stage:string;summary?:string;description?:string;imageURI?:string;feeCore?:boolean;
 }) {
   const [detailsOpen,setDetailsOpen]=useState(false);
@@ -36,14 +36,17 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
   const [imageBusy, setImageBusy] = useState(false);
   useEffect(()=>{onImageBusy?.(imageBusy);},[imageBusy,onImageBusy]);
   const [imageError, setImageError] = useState("");
-  const [customPair, setCustomPair] = useState(false);
-  const [pairInput, setPairInput] = useState("");
+  const [customPair, setCustomPair] = useState(() => settings.pairToken !== builderChain(settings.chainId).currency);
+  const [pairInput, setPairInput] = useState(() => settings.pairToken === builderChain(settings.chainId).currency ? "" : settings.pairToken);
   const [pairError, setPairError] = useState("");
   const [buyTouched, setBuyTouched] = useState(false);
   const [presentationTouched, setPresentationTouched] = useState<Partial<Record<"description" | "website" | "x" | "socialPost", boolean>>>({});
   const native=builderChain(settings.chainId).currency;
   const isNative = settings.pairToken === native;
   const hasCustomPair = customPair || !isNative;
+  const pairPending = hasCustomPair && (!isAddress(pairInput.trim()) || BigInt(pairInput.trim()) < 3n
+    || pairInput.trim().toLowerCase() !== settings.pairToken.toLowerCase());
+  useLayoutEffect(()=>{onPairPending?.(pairPending);},[pairPending,onPairPending]);
   const lastSettings = useRef(settings);
   const lastChatRevision = useRef(chatRevision);
 

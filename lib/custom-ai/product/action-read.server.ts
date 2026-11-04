@@ -1,6 +1,6 @@
 import "server-only";
 import {decodeFunctionResult,keccak256,toFunctionSignature,toHex,type Hex} from "viem";
-import type {TradeRpcV1} from "@/lib/server/custom-launch/routed-trade-rpc-v1";
+import type {ProductReadRpc} from "./read-rpc";
 import {CustomAIError} from "../types";
 import {prepareProductActionInput} from "./action-prepare.server";
 import type {ProductRuntimeSource} from "./runtime-source.server";
@@ -15,7 +15,7 @@ const record=(v:unknown):Record<string,unknown>=>v&&typeof v==="object"&&!Array.
  * its independently observed runtime, plus the configured provider pair.
  * It never sends transactions or declares an action executable. */
 export async function readProductAction(source:ProductRuntimeSource,runtime:ProductRuntime,
-  request:{id:string;caller:`0x${string}`;arguments:unknown},rpcs:readonly[TradeRpcV1,TradeRpcV1],
+  request:{id:string;caller:`0x${string}`;arguments:unknown},rpcs:readonly[ProductReadRpc,ProductReadRpc],
   options:{signal:AbortSignal;now?:()=>number}){
   const now=options.now??Date.now,age=now()-Date.parse(runtime.checkedAt);
   if(runtime.state!=="contracts-observed"||runtime.providerCount!==2||runtime.sourceBinding!==source.id
@@ -34,7 +34,7 @@ export async function readProductAction(source:ProductRuntimeSource,runtime:Prod
   const stopped=new AbortController(),signal=AbortSignal.any([options.signal,stopped.signal,AbortSignal.timeout(15_000)]);
   const ref={blockHash:runtime.block.hash,requireCanonical:true},height=toHex(BigInt(runtime.block.number));
   const results=await Promise.all(rpcs.map(async rpc=>{
-    const read=async(method:string,params:readonly unknown[])=>{signal.throwIfAborted();const value=await rpc(method,params);signal.throwIfAborted();return value;};
+    const read=async(method:string,params:readonly unknown[])=>{signal.throwIfAborted();const value=await rpc(method,params,signal);signal.throwIfAborted();return value;};
     if(await read("eth_chainId",[])!==toHex(source.chainId))return unavailable();
     const block=record(await read("eth_getBlockByNumber",[height,false]));
     if(!same(block.hash,ref.blockHash)||block.number!==height)return unavailable();

@@ -222,8 +222,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     if(data.change==="applied")setEditTarget(undefined);
     if(data.setupPatch){setSettings(current=>applyCoinSetupPatch(current,data.setupPatch!));setChatRevision(value=>value+1);}
     setContextId(request.id);
+    setPendingChange(data.change==="applied"?undefined:request.intent==="compile"?previousPending:data.change==="blocked"?request.messages.at(-1)?.content:previousPending);
     if(request.intent==="compile"){setNotice(data.reply);return;}
-    setPendingChange(data.change==="applied"?undefined:data.change==="blocked"?request.messages.at(-1)!.content:previousPending);
     const sources=safeKnowledgeSources(data.sources);
     const completed:ChatMessage[]=[...submitted,{role:"assistant",content:data.reply,...(sources.length?{sources}:{})}];
     const kept=conversationWindow(completed,40,30_000);setMessages(kept);
@@ -554,7 +554,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const generalBuilt = generalProject?.compiled && generalProject.sourceReview === "passed" && generalProject.scenarios?.passed === true
     && generalProject.chainId === settings.chainId && generalProject.intentRevision === intent?.revision
     && generalProject.productBlueprintId === productBlueprint?.id && generalLaunchEnabled;
-  const feeBuilt = draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
+  const feeBuilt = builderChain(settings.chainId).feeCore && (!draft?.program || draft.program.chainId === settings.chainId)
+    && draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
     && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
   const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
   const openCoinPanel = useCallback(() => {
