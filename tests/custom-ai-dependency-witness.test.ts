@@ -36,6 +36,19 @@ describe("bounded original prestate witness", () => {
       [`0x${"00".repeat(20)}`]: { balance: "0x0" } });
     expect(accounts).toHaveLength(1); expect(accounts[0].storage).toEqual([{ slot: toHex(1, { size: 32 }), value: toHex(0, { size: 32 }) }]);
   });
+  it("excludes Robinhood Nitro accounting storage without admitting arbitrary unobserved state", () => {
+    const arbos = "0xa4b05fffffffffffffffffffffffffffffffffff";
+    const accounting = { storage: { [toHex(1, { size: 32 })]: toHex(7, { size: 32 }) } };
+    const state = { ...trace(), [arbos]: accounting };
+    expect(dependencyWitnessAccounts(state, 4663).map(account => account.address)).toEqual([FEED]);
+    expect(() => dependencyWitnessAccounts(state, 1)).toThrow();
+    expect(() => dependencyWitnessAccounts({ ...trace(), [IMPLEMENTATION]: accounting }, 4663)).toThrow();
+    expect(() => dependencyWitnessAccounts({ ...trace(), [arbos]: { storage: { "0x1": "0x0" } } }, 4663)).toThrow();
+    const { id: ignored, ...body } = observation(); void ignored;
+    const observedBody = { ...body, chainId: 4663 as const };
+    const observed = { ...observedBody, id: canonicalBrowserSha256V2("programmable.custom-ai-dependency-observation.v1", observedBody) };
+    expect(createNativeFeedConstructorWitness(observed, CALLER, state, state, NOW).accounts.map(account => account.address)).toEqual([FEED]);
+  });
   it("refuses changed code or disagreeing provider storage", () => {
     expect(() => createNativeFeedConstructorWitness(observation(), CALLER, trace(STORAGE), trace(STORAGE), NOW)).toThrow();
     const one = trace(STORAGE, { [toHex(1, { size: 32 })]: toHex(7, { size: 32 }) }), other = trace(STORAGE, { [toHex(1, { size: 32 })]: toHex(8, { size: 32 }) });

@@ -44,12 +44,13 @@ export async function packGeneralRobinhoodPlan(input:GeneralPackInput,controller
   for(const target of values.targets) {
     const artifact=source.compilation.contracts.find(c=>c.source===target.source&&c.contract===target.contract)!;
     const initCode=encodeDeployData({abi:artifact.abi,bytecode:artifact.creationBytecode,args:target.constructorArguments.map(resolve)});
+    const initCodeHash=keccak256(initCode);
     let found:Prediction|undefined;
     for(let attempt=0;attempt<(target.role==="hook"?262144:1);attempt++) {
       if(attempt%512===0){stop.throwIfAborted();await new Promise<void>(done=>setImmediate(done));}
       const salt=keccak256(encodeAbiParameters(parseAbiParameters("uint256,address,bytes32,string,uint256"),
         [4663n,base.controller,identity.nonce,target.id,BigInt(attempt)]));
-      const address=getCreate2Address({from:ROBINHOOD_PLAN_DEPLOYER.address,salt,bytecodeHash:keccak256(initCode)});
+      const address=getCreate2Address({from:ROBINHOOD_PLAN_DEPLOYER.address,salt,bytecodeHash:initCodeHash});
       if(target.role!=="hook"||Number(BigInt(address)&16383n)===target.hookPermissions) {
         found={targetId:target.id,predictedAddress:address,effectiveSalt:salt,applicantSalt:salt,initCode,
           resolvedConstructorArguments:`0x${initCode.slice(artifact.creationBytecode.length)}`};break;
