@@ -62,18 +62,24 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   useEffect(() => {
     if (!enabled || !launch.loaded || launch.busy || uncertain || accepted || disabled || detail || !complete
       || !project || !intent || !draftId || !conversationId || warmed.current === warmKey
+      || sameSource && saved?.packState === "complete" && saved.expiresAt > Date.now() + 5000
       || settings.chainId === 4663 && controllerKind !== "eoa") return;
-    warmed.current = warmKey;
-    void launch.prepare(async signal => {
-      const studio = await flush(); signal.throwIfAborted();
-      if (!studio || studio.revision < 1) throw Error("Save this design before preparing its launch.");
-      return { selection: { id: draftId, account, conversation: conversationId, studioRevision: studio.revision,
-        chainId: settings.chainId, projectHash: project.projectHash, artifactHash: project.artifactHash, intentRevision: intent.revision },
-        ...(settings.chainId === 4663 ? { controllerKind: "eoa" as const } : {}) };
-    });
+    // Let a short burst of editing settle before packaging the latest values.
+    // An explicit launch proceeds immediately and cancels this background work.
+    const timer = setTimeout(() => {
+      warmed.current = warmKey;
+      void launch.prepare(async signal => {
+        const studio = await flush(); signal.throwIfAborted();
+        if (!studio || studio.revision < 1) throw Error("Save this design before preparing its launch.");
+        return { selection: { id: draftId, account, conversation: conversationId, studioRevision: studio.revision,
+          chainId: settings.chainId, projectHash: project.projectHash, artifactHash: project.artifactHash, intentRevision: intent.revision },
+          ...(settings.chainId === 4663 ? { controllerKind: "eoa" as const } : {}) };
+      });
+    }, 600);
+    return () => clearTimeout(timer);
   }, [enabled, launch, uncertain, accepted, disabled, detail, complete, project, intent, draftId, conversationId,
-    warmKey, flush, account, settings.chainId, controllerKind]);
-  const detailLabel = detail ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image", description: "Add description", website: "Add project link", x: "Add X profile", socialPost: "Check X post link" }[detail.field] : "";
+    warmKey, flush, account, settings.chainId, controllerKind, sameSource, saved]);
+  const detailLabel = detail ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image", initialBuy: "Check initial buy", description: "Add description", website: "Add project link", x: "Add X profile", socialPost: "Check X post link" }[detail.field] : "";
   const checking = saved?.submission?.state === "sending";
   const label = !launch.loaded ? "Check saved submission" : uncertain ? checking ? "Check submission" : "Recover submission"
     : detail ? detailLabel : "Launch coin";

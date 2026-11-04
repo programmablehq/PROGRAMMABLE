@@ -9,6 +9,7 @@ let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createGeneralLaunchServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing local renderer");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
 
+async function pauseTime(page:Page){const now=new Date();await page.clock.install({time:now});await page.clock.pauseAt(new Date(now.getTime()+1));}
 test('a chat launch request prepares its exact source once; stale requests and reloads do not submit',async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  await expect.poll(()=>f.posts.length).toBe(1);
@@ -47,18 +48,22 @@ test('an unbuilt chat keeps another coin in history without showing its launch a
 });
 
 test('Plan source verification remains confirmed and stops automatic status reads',async({page})=>{
- const f=await fixture(page);f.currentStatus='source_verified';await page.clock.install();await page.goto(origin+'/?chain=4663');
+ const f=await fixture(page);f.currentStatus='source_verified';await pauseTime(page);await page.goto(origin+'/?chain=4663');
  await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByText('Your launch transactions are confirmed.',{exact:false})).toBeVisible();
  expect(f.statusReads).toBe(1);await page.clock.runFor(150000);expect(f.statusReads).toBe(1);
- expect(f.posts.map(value=>value.action)).toEqual(['prepare','prepare','create']);expect(f.errors).toEqual([]);
+ expect(f.posts.map(value=>value.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
 });
 async function fixture(page:Page){
- const control={saved:null as GeneralPreparationView|null,posts:[] as {action:string;id:string;selection?:Record<string,unknown>}[],saves:[] as {settings:CoinSetup;image:{id:string}}[],reads:0,statusReads:0,currentStatus:"pending_review",statusFailure:false,lostCreate:false,beforePrepare:undefined as undefined|(()=>Promise<void>),beforeRead:undefined as undefined|(()=>Promise<void>),beforeStatus:undefined as undefined|(()=>Promise<void>),errors:[] as string[]};
+ const control={saved:null as GeneralPreparationView|null,posts:[] as {action:string;id:string;selection?:Record<string,unknown>}[],saves:[] as {settings:CoinSetup;image:{id:string}}[],reads:0,statusReads:0,imageUploads:0,currentStatus:"pending_review",statusFailure:false,lostCreate:false,beforeImage:undefined as undefined|(()=>Promise<void>),beforePrepare:undefined as undefined|(()=>Promise<void>),beforeRead:undefined as undefined|(()=>Promise<void>),beforeStatus:undefined as undefined|(()=>Promise<void>),errors:[] as string[]};
  page.on('pageerror',error=>control.errors.push(error.message));
  await page.route('**/fixture-studio',async route=>{control.saves.push(route.request().postDataJSON());await route.fulfill({json:{revision:33}});});
  await page.route('**/api/**',async route=>{
   const request=route.request(),url=new URL(request.url());
+  if(url.pathname==="/api/custom-ai/image"){
+   control.imageUploads++;await control.beforeImage?.();
+   return route.fulfill({json:{id:'f'.repeat(64),hash:'e'.repeat(64),url:'/late-upload.svg'}}).catch(()=>undefined);
+  }
   if(url.pathname!=="/api/custom-ai/general-launch")throw Error("Unexpected API call: "+url.pathname);
   if(request.method()==="GET"){
    if(url.searchParams.get('view')==='status'){
@@ -87,16 +92,56 @@ async function fixture(page:Page){
  });return control;
 }
 
+test('quick detail edits warm only their final values and reload reuses that preparation',async({page})=>{
+ const f=await fixture(page);await page.goto(origin);await expect.poll(()=>f.posts.length).toBe(1);
+ await page.locator('summary').filter({hasText:'Coin details'}).click();
+ const description=page.getByRole('textbox',{name:'Public description',exact:true});
+ await description.fill('A changed custom contract description');
+ await description.fill('A final custom contract description');
+ await expect.poll(()=>f.posts.length).toBe(2);
+ expect(f.saves.at(-1)?.settings.description).toBe('A final custom contract description');
+ await page.reload();await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toBeVisible();
+ await page.clock.install();await page.clock.runFor(2000);
+ expect(f.posts).toHaveLength(2);expect(f.posts.every(post=>post.action==='prepare')).toBe(true);expect(f.errors).toEqual([]);
+});
+
+test('a partial amount does not start preparation and launch points at the amount field',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?missing');
+ await page.locator('summary').filter({hasText:'Coin details'}).click();
+ await page.getByRole('textbox',{name:'Initial buy',exact:true}).fill('0.');
+ await page.getByRole('textbox',{name:'Public description',exact:true}).fill('A declared custom launch');
+ await page.getByRole('button',{name:'Check initial buy',exact:true}).click();
+ await expect(page.getByRole('textbox',{name:'Initial buy',exact:true})).toBeFocused();
+ expect(f.posts).toEqual([]);
+ await page.getByRole('textbox',{name:'Initial buy',exact:true}).fill('0.02');
+ await expect.poll(()=>f.posts.length).toBe(1);expect(f.saves[0].settings.initialBuy).toBe('0.02');expect(f.errors).toEqual([]);
+});
+
+for(const action of ['cancel','timeout'] as const)test(`a stalled image ${action} keeps the previous image and unlocks editing`,async({page})=>{
+ const f=await fixture(page);let release=()=>{};f.beforeImage=()=>new Promise<void>(resolve=>{release=resolve;});
+ await page.goto(origin+'/?missing');await page.clock.install();
+ const png=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=256;return canvas.toDataURL('image/png').split(',')[1];});
+ await page.getByLabel('Coin image file',{exact:true}).setInputFiles({name:'coin.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+ await expect.poll(()=>f.imageUploads).toBe(1);
+ await expect(page.getByRole('button',{name:'Change coin image',exact:true})).toBeDisabled();
+ if(action==='cancel')await page.getByRole('button',{name:'Cancel image upload',exact:true}).click();
+ else await page.clock.runFor(30_001);
+ await expect(page.getByRole('button',{name:'Change coin image',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Cancel image upload',exact:true})).toHaveCount(0);
+ release();await expect(page.getByRole('img',{name:'Original coin preview'})).toHaveAttribute('src','/fixture-image.svg');
+ expect(f.imageUploads).toBe(1);expect(f.errors).toEqual([]);
+});
+
 for(const chainId of [1,4663,8453,999])test(`one explicit submission on chain ${chainId} survives reload without another POST`,async({page})=>{
- const f=await fixture(page);await page.goto(origin+`/?chain=${chainId}`);
+ const f=await fixture(page);await pauseTime(page);await page.goto(origin+`/?chain=${chainId}`);
  const region=page.getByRole('region',{name:'Launch submission'}),button=region.getByRole('button',{name:'Launch coin'});
  await expect(region.getByLabel('Launch wallet type')).toHaveCount(0);
  await expect(button).toBeEnabled();await expect(region.getByText('Submitting publishes this contract’s source.',{exact:false})).toBeVisible();
  await button.evaluate(element=>{(element as HTMLButtonElement).click();(element as HTMLButtonElement).click();});
  await expect(region.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
- expect(f.posts.map(body=>body.action)).toEqual(['prepare','prepare','create']);expect(f.saves).toHaveLength(2);
+ expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.saves).toHaveLength(1);
  await page.reload();await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
- expect(f.posts).toHaveLength(3);expect(f.errors).toEqual([]);await expect(page.getByLabel('Chat editing')).toHaveText('Available');
+ expect(f.posts).toHaveLength(2);expect(f.errors).toEqual([]);await expect(page.getByLabel('Chat editing')).toHaveText('Available');
 });
 
 test('the first missing detail opens and focuses its editor without any POST',async({page})=>{
@@ -151,18 +196,18 @@ test('a slow read of the saved journal does not lock chat or coin editing',async
  await expect.poll(()=>f.posts.map(body=>body.action)).toEqual(['prepare']);
 });
 test('current status updates the original accepted submission without repeating prepare or create',async({page})=>{
- const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
+ await pauseTime(page);const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
  f.currentStatus='wallet_action_ready';await page.getByRole('button',{name:'Check current status'}).click();
- await expect(page.getByText('Your submission has wallet steps to review.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','prepare','create']);
+ await expect(page.getByText('Your submission has wallet steps to review.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);
  await expect(page.getByLabel('Chat editing')).toHaveText('Available');expect(f.errors).toEqual([]);
 });
 test('a failed current-status read preserves the accepted link and can be checked explicitly',async({page})=>{
- await page.clock.install({time:new Date()});const f=await fixture(page);f.statusFailure=true;await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
+ await pauseTime(page);const f=await fixture(page);f.statusFailure=true;await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByText('The current status could not be refreshed. Your saved submission is still available.',{exact:true})).toBeVisible();
- await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(3);
+ await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
  f.statusFailure=false;await page.clock.runFor(2000);await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();
- expect(f.posts).toHaveLength(3);expect(f.errors).toEqual([]);
+ expect(f.posts).toHaveLength(2);expect(f.errors).toEqual([]);
 });
 test('status polling stops after twenty reads and does not catch up after laptop sleep',async({page})=>{
  // Keep the clock paused between explicit ticks, including asynchronous HTTP
@@ -178,12 +223,12 @@ test('status polling stops after twenty reads and does not catch up after laptop
   await expect(page.getByText(count%2===0?'Your launch preparation is in progress.':'Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();
   expect(f.statusReads).toBe(count);
  }
- await page.clock.fastForward(3600000);expect(f.statusReads).toBe(20);expect(f.posts.map(body=>body.action)).toEqual(['prepare','prepare','create']);expect(f.errors).toEqual([]);
+ await page.clock.fastForward(3600000);expect(f.statusReads).toBe(20);expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
 });
 test('a terminal stored status stops background reads and keeps its original link',async({page})=>{
- await page.clock.install({time:new Date()});const f=await fixture(page);f.currentStatus='expired';await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
+ await pauseTime(page);const f=await fixture(page);f.currentStatus='expired';await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByText('This submission expired. Open its details to continue.',{exact:true})).toBeVisible();
- await page.clock.fastForward(3600000);expect(f.statusReads).toBe(1);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(3);
+ await page.clock.fastForward(3600000);expect(f.statusReads).toBe(1);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
 });
 test('a late status from the previous wallet cannot appear in the newly selected wallet',async({page})=>{
  const f=await fixture(page);let release:()=>void=()=>{};f.beforeStatus=()=>new Promise<void>(resolve=>{release=resolve;});
@@ -198,7 +243,7 @@ for(const width of [360,1440])test(`submission controls render and remain keyboa
  const f=await fixture(page);await page.setViewportSize({width,height:1000});await page.goto(origin);
  const button=page.getByRole('button',{name:'Launch coin',exact:true});await expect(button).toBeEnabled();await button.focus();await expect(button).toBeFocused();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:testInfo.outputPath(`general-launch-${width}.png`),fullPage:true});expect(f.errors).toEqual([]);expect(f.posts.map(body=>body.action)).toEqual(['prepare']);
+ await page.screenshot({path:testInfo.outputPath(`general-launch-${width}.png`),fullPage:true});expect(f.errors).toEqual([]);await expect.poll(()=>f.posts.map(body=>body.action)).toEqual(['prepare']);
 });
 
 test('background preparation keeps keyboard focus and cannot submit before it completes',async({page})=>{
