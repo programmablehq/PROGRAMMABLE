@@ -28,6 +28,39 @@ function checkedFixture(revision=1,passed=true){
   scenarios:{scope:"isolated-declared-scenarios-v1" as const,hash:`sha256:${"3".repeat(64)}` as const,planHash:`sha256:${"4".repeat(64)}` as const,passed,cases:5,
     failures:passed?[]:[{caseId:"increment-one",code:"return-value",message:"The declared increment did not match."}]}}};
 }
+test("a plain launch request uses the checked source without another model call", async ({page}) => {
+ const f=await fixture(page),result=checkedFixture();
+ f.control.respond=()=>({...result,generalProject:{...result.generalProject,sourceReview:"passed"}});
+ const launchWrites:unknown[]=[];
+ await page.route("**/api/custom-ai/general-launch**",async route=>{
+  if(route.request().method()!=="GET")launchWrites.push(route.request().postDataJSON());
+  await route.fulfill({json:{preparation:null}});
+ });
+ await page.goto(origin+"?launch");
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await box.fill("Build my hook");await box.press("Enter");
+ await expect(page.getByRole("region",{name:"Your built hook"})).toBeVisible();
+ await box.fill("Okay, launch it");await box.press("Enter");
+ await expect(page.getByText("I’m preparing your checked hook for launch.",{exact:false})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Add coin name",exact:true})).toBeVisible();
+ await expect(page.getByRole("textbox",{name:"Name",exact:true})).toBeFocused();
+ await expect(box).toHaveValue("");
+ await expect.poll(()=>[...f.studios.values()].some(saved=>saved.state.messages.at(-1)?.content.startsWith("I’m preparing your checked hook"))).toBe(true);
+ expect(f.calls).toHaveLength(1);expect(launchWrites).toEqual([]);
+ expect([...f.studios.values()].at(-1)?.state.draftId).toBe(f.calls[0].id);
+});
+
+test("a changed or unfinished design still sends launch requests through the planner", async ({page}) => {
+ const f=await fixture(page),result=checkedFixture(1,false);
+ f.control.respond=()=>result;
+ await page.goto(origin+"?launch");
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
+ await box.fill("Build my hook");await box.press("Enter");
+ await expect(page.getByText(result.reply,{exact:true})).toBeVisible();
+ await box.fill("Launch it");await box.press("Enter");
+ await expect.poll(()=>f.calls.length).toBe(2);
+ expect(f.calls[1].messages.at(-1)?.content).toBe("Launch it");
+});
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
  const calls:ChatRequest[]=[],control={delay:false,lostCreates:0,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};

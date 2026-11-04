@@ -109,6 +109,7 @@ test('unknown create recovers the original coin after the current draft changes'
  await page.getByRole('button',{name:'Launch coin',exact:true}).click();await expect(page.getByRole('button',{name:'Recover submission',exact:true})).toBeEnabled();
  await page.getByRole('button',{name:'Change sample coin'}).click();await expect(page.getByText(/Saved submission: Original coin on Ethereum/)).toBeVisible();
  await page.getByRole('button',{name:'Recover submission',exact:true}).click();
+ await page.getByText('Earlier submission',{exact:true}).click();
  await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();
  const submissions=f.posts.filter(body=>body.action==='create');expect(submissions).toHaveLength(2);
  expect(submissions[1]).toEqual(submissions[0]);expect(f.errors).toEqual([]);
@@ -124,6 +125,8 @@ test('completed submission details stay distinct when the coin is edited',async(
  const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();await page.getByRole('button',{name:'Change sample coin'}).click();
  await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toBeEnabled();
+ await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeHidden();
+ await page.getByText('Earlier submission',{exact:true}).click();
  await expect(page.getByRole('link',{name:'Open Original coin submission',exact:true})).toBeVisible();expect(f.posts.filter(body=>body.action==='create')).toHaveLength(1);
 });
 test('Robinhood infers a standard wallet and never reuses a prior wallet submission',async({page})=>{
