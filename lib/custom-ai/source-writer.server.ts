@@ -26,9 +26,14 @@ export async function writeSourceParts(input: {
     : { version: 1, contextHash: input.contextHash, files: {}, reply: "", summary: "" };
   let remaining = input.request.maxTokens, inputTokens = 0, outputTokens = 0, calls = 0;
   const deadline = Date.now() + 180_000;
+  // A package with five small files should not need another user request just
+  // because it has five files. Keep the original total token/time ceilings and
+  // a bounded allowance for split sections, including resumed partial files.
+  const pendingFiles = input.paths.filter(path=>!Object.hasOwn(progress.files,path)).length;
+  const maximumCalls = Math.min(16, pendingFiles + 3);
   while(input.paths.some(path=>!Object.hasOwn(progress.files,path))) {
     input.request.signal?.throwIfAborted();
-    if (calls >= 4 || remaining < 1024 || Date.now() >= deadline - 30_000) throw new SourceProgressPending(Object.keys(progress.files).length, input.paths.length);
+    if (calls >= maximumCalls || remaining < 1024 || Date.now() >= deadline - 30_000) throw new SourceProgressPending(Object.keys(progress.files).length, input.paths.length);
     const path = progress.partial?.path??input.paths.find(path=>!Object.hasOwn(progress.files,path))!;
     const prefix=progress.partial?.content??"", maxTokens = Math.min(16000,remaining);
     const maxPartChars=Math.min(32000,(maxTokens-512)*2);

@@ -8,6 +8,27 @@ const hash=`sha256:${"a".repeat(64)}` as const;
 const request:ClaudeInput={model:"local-fixture",system:"frozen intent",messages:[{role:"user",content:"build"}],schema:{},maxTokens:16000};
 function response(path:string){return {text:JSON.stringify({reply:"Written.",summary:"Complete file",sourceFiles:[{path,content:`pragma solidity 0.8.26; contract ${path[0]} {}`}]}),inputTokens:10,outputTokens:100};}
 describe("bounded source parts",()=>{
+ it("finishes five small components within one original budget and request",async()=>{
+  const paths=["A.sol","B.sol","C.sol","D.sol","E.sol"],saved:SourceProgress[]=[];let index=0;
+  const call=vi.fn(async()=>response(paths[index++]));
+  const result=await writeSourceParts({request,paths,contextHash:hash,save:async p=>{saved.push(p);}},call);
+  expect(call).toHaveBeenCalledTimes(5);
+  expect(result.outputTokens).toBe(500);
+  expect(JSON.parse(result.text).sourceFiles.map((f:{path:string})=>f.path)).toEqual(paths);
+  expect(Object.keys(saved.at(-1)!.files)).toEqual(paths);
+ });
+ it("still stops when the original shared token budget is exhausted",async()=>{
+  const paths=["A.sol","B.sol","C.sol","D.sol","E.sol"],saved:SourceProgress[]=[];let index=0;
+  const call=vi.fn(async()=>({...response(paths[index++]),outputTokens:8000}));
+  await expect(writeSourceParts({request,paths,contextHash:hash,save:async p=>{saved.push(p);}},call)).rejects.toBeInstanceOf(SourceProgressPending);
+  expect(call).toHaveBeenCalledTimes(2);
+  expect(Object.keys(saved.at(-1)!.files)).toEqual(paths.slice(0,2));
+ });
+ it("does not loop indefinitely when a provider keeps returning tiny partials",async()=>{
+  const call=vi.fn(async()=>({text:JSON.stringify({reply:"Writing",summary:"A",sourceFiles:[{path:"A.sol",content:"// partial\n",complete:false}]}),inputTokens:1,outputTokens:1}));
+  await expect(writeSourceParts({request,paths:["A.sol"],contextHash:hash,save:async()=>{}},call)).rejects.toBeInstanceOf(SourceProgressPending);
+  expect(call).toHaveBeenCalledTimes(4);
+ });
  it("passes completed sibling code to the next component without another model call",async()=>{
   const contexts: Record<string,{content:string}>[]=[];let next=0;
   const paths=["A.sol","B.sol"];
