@@ -33,6 +33,8 @@ Before source generation, a completed but invalid independent check declaration 
 
 ## Layout and access
 
+The signed-out entry shows the idea composer and an explicit wallet connection action. It does not expose coin metadata or image edits that cannot be saved to an owned chat. A submitted idea crosses sign-in only through the bounded, owner-bound prompt handoff; editing that idea revokes the earlier handoff. The authenticated toolbar shows the selected wallet and opens the existing wallet controls. Wallet signing readiness remains separate from chat access.
+
 The desktop conversation keeps most of the width. A compact preview precedes a collapsible settings editor and saved rules. On narrow screens the preview follows the conversation in normal document order. No setting is duplicated in the Options panel. Controls use native buttons/disclosures, visible focus and labels. Streaming text is not repeatedly announced; phase changes and completed messages are.
 
 This flow describes the product interface. It does not certify a new contract, chain, feed or execution service. Capability activation continues to require its own evidence.

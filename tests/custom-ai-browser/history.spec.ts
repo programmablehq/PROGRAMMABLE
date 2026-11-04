@@ -28,6 +28,47 @@ function checkedFixture(revision=1,passed=true){
   scenarios:{scope:"isolated-declared-scenarios-v1" as const,hash:`sha256:${"3".repeat(64)}` as const,planHash:`sha256:${"4".repeat(64)}` as const,passed,cases:5,
     failures:passed?[]:[{caseId:"increment-one",code:"return-value",message:"The declared increment did not match."}]}}};
 }
+
+for(const width of [360,1440])test(`first visit explains wallet access without exposing unavailable editor controls at ${width}px`,async({page},info)=>{
+ const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1');
+ await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeEnabled();
+ await expect(page.getByRole('region',{name:'Build your coin'})).toHaveAttribute('data-chat-state','wallet-required');
+ await expect(page.getByText('Connect your wallet to build and save your hook. You can write your idea first.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Coin preview and details'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Attach image',exact:true})).toHaveCount(0);
+ await expect(page.getByLabel('Chat options',{exact:true})).toHaveCount(0);
+ const connect=page.getByRole('button',{name:'Connect wallet',exact:true});await connect.focus();await expect(connect).toBeFocused();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(f.calls).toEqual([]);expect(f.chats.size).toBe(0);
+ await page.screenshot({path:info.outputPath(`guest-entry-${width}.png`),fullPage:true});
+});
+
+test('the visible connect action accepts an empty idea and exposes the active wallet after sign-in',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?signed-out=1');
+ await page.getByRole('button',{name:'Connect wallet',exact:true}).click();await expect(page.getByRole('alert')).toHaveCount(0);
+ await page.getByRole('button',{name:'Finish sample connection',exact:true}).click();
+ await expect(page.getByRole('button',{name:/^Connected wallet 0x[a]+\. Manage wallet$/})).toBeVisible();
+ await expect(page.getByRole('textbox',{name:'Describe your coin or ask a question'})).toHaveValue('');
+ expect(f.calls).toEqual([]);
+});
+
+test('the visible connect action preserves the current idea without calling the model',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?signed-out=1');
+ const box=page.getByRole('textbox',{name:'Describe your coin or ask a question'});
+ await expect(box).toBeEditable();await box.fill('Build my hook on Base after I sign in');
+ await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+ await page.getByRole('button',{name:'Finish sample connection',exact:true}).click();
+ await expect(box).toHaveValue('Build my hook on Base after I sign in');expect(f.calls).toEqual([]);
+});
+
+test('editing an idea after cancelling sign-in revokes its earlier pending handoff',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?signed-out=1');const box=page.getByRole('textbox',{name:'Describe your coin or ask a question'});
+ await expect(box).toBeEditable();await box.fill('Earlier abandoned idea');await box.press('Enter');
+ await box.fill('New unsent idea');
+ await page.getByRole('button',{name:'Finish sample connection',exact:true}).click();
+ await expect(box).toHaveValue('');expect(f.calls).toEqual([]);
+ expect([...f.studios.values()].every(studio=>!studio.state.input)).toBe(true);
+});
 test("a plain launch request uses the checked source without another model call", async ({page}) => {
  const f=await fixture(page),result=checkedFixture();
  f.control.respond=()=>({...result,generalProject:{...result.generalProject,sourceReview:"passed"}});
@@ -373,7 +414,7 @@ test("a rate-limited optional identity endpoint does not block an authenticated 
 });
 test("initial chat reads wait for the wallet session to finish restoring",async({page})=>{
  const f=await fixture(page);await page.goto(origin+"/?session-loading=1");
- await expect(page.getByRole("status").filter({hasText:"Restoring your wallet session"})).toBeVisible();expect(f.chats.size).toBe(0);expect(f.calls).toHaveLength(0);
+ await expect(page.getByRole("status").filter({hasText:"Checking your wallet connection"})).toBeVisible();expect(f.chats.size).toBe(0);expect(f.calls).toHaveLength(0);
  await page.getByRole("button",{name:"Restore sample session",exact:true}).click();
  await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();expect(f.chats.size).toBe(1);expect(f.calls).toHaveLength(0);
 });
