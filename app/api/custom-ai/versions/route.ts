@@ -28,7 +28,8 @@ export async function GET(request:Request){
         ||(!draft&&!generalProject)||(draft?.sourceHash??generalProject?.projectHash)!==v.sourceHash)throw new CustomAIError("version","That version needs to be checked again before use.",409);
       const context=v.state.contextId===v.state.draftId?undefined:v.state.contextId?(await store.read(auth.owner,v.state.contextId))?.result:undefined;
       const intent=context?.intent??job.result?.intent??draft?.intent;
-      const productBlueprint=restoredProductBlueprint(context?.productBlueprint??job.result?.productBlueprint,intent,v.state.settings.chainId);
+      const chainId=v.state.settings?.chainId??generalProject?.chainId;
+      const productBlueprint=chainId?restoredProductBlueprint(context?.productBlueprint??job.result?.productBlueprint,intent,chainId):undefined;
       return Response.json({state:v.state,draft,generalProject,intent,...(productBlueprint?{productBlueprint}:{})},{headers:aiHeaders});
     }
     const rows=await store.draftVersions(auth.owner,studioId);
