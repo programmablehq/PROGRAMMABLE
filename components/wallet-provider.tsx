@@ -3326,7 +3326,7 @@ function PrivyWalletBridge({
         execute: async () => {
           try {
             const fresh = await prepareLaunchPlanTradeWalletV1(provider, account, input); assertCurrentSession();
-            if (fresh.binding !== review.binding || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The exact trade changed. Refresh the review.");
+            if (fresh.binding !== review.binding || BigInt(fresh.maxGasCostWei) > BigInt(input.reviewed!.maxGasCostWei)) throw new Error("The exact trade changed. Refresh the review.");
             walletRequestAttempted = true;
             return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
           } catch (caught) {
@@ -3408,8 +3408,13 @@ function PrivyWalletBridge({
     return runWithBrowserWalletRequestLock({ sessionSubject, account: controller, chainId: "4663",
       requestSubject: JSON.stringify(["launch-claim-wallet-v1", review.binding]), assertCurrentSession,
       execute: async () => {
-        const fresh = await prepareLaunchClaimWalletV1(provider, controller, input); assertCurrentSession();
-        if (fresh.binding !== review.binding || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The claim changed. Refresh the exact wallet review.");
+        let fresh: Awaited<ReturnType<typeof prepareLaunchClaimWalletV1>>;
+        try {
+          fresh = await prepareLaunchClaimWalletV1(provider, controller, input); assertCurrentSession();
+          if (fresh.binding !== review.binding || BigInt(fresh.maxGasCostWei) > BigInt(input.reviewed!.maxGasCostWei)) throw new Error("The claim changed. Refresh the exact wallet review.");
+        } catch (error) {
+          throw new WalletRequestNotSubmittedError(error instanceof Error ? error.message : "The current claim review is unavailable.");
+        }
         return parseSubmittedTransactionHash(await provider.request({ method: "eth_sendTransaction", params: [fresh.transaction] }));
       } });
   }, [connectedWallet, user, wallet]);
@@ -3466,7 +3471,7 @@ function PrivyWalletBridge({
           fresh = await prepareUniversalLaunchWalletV1(provider, controller, input);
           assertCurrentSession();
           if (fresh.binding !== review.binding || JSON.stringify(fresh.transaction) !== JSON.stringify(review.transaction)
-            || BigInt(fresh.maxGasCostWei) > BigInt(review.maxGasCostWei)) throw new Error("The wallet review changed. Review the current transaction before sending.");
+            || BigInt(fresh.maxGasCostWei) > BigInt(input.reviewed!.maxGasCostWei)) throw new Error("The wallet review changed. Review the current transaction before sending.");
         } catch (error) { throw new WalletRequestNotSubmittedError(error instanceof Error ? error.message : "The current wallet review is unavailable."); }
         let attempt;
         try { attempt = beginLaunchSendV1(fresh); }
