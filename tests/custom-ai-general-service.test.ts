@@ -170,13 +170,14 @@ it("binds the first design after a greeting to the real design message",async()=
  expect(value.intent?.requirements[0].origin).toEqual({kind:"message",requestId:request.id,messageIndex:2,quote:instruction});
  expect(value.intent?.unresolved).toEqual(["Choose the starting value"]);
 });
-it("still requires exact source quotes when several substantive design messages exist",async()=>{
+it("binds the first saved design after an earlier idea to the current authoring request",async()=>{
  const call=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
   {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"",open:"Choose the starting value"},
  ]}));
- await expect(runCustomAI({...request,messages:[{role:"user",content:"Start the counter at five"},
+ const value=await runCustomAI({...request,messages:[{role:"user",content:"Start the counter at five"},
   {role:"assistant",content:"Saved that choice."},{role:"user",content:instruction}]},undefined,
-  {call,compile:vi.fn()},{saveProject:vi.fn()})).rejects.toMatchObject({code:"intent"});
+  {call,compile:vi.fn()},{saveProject:vi.fn()});
+ expect(value.intent?.requirements[0].origin).toEqual({kind:"message",requestId:request.id,messageIndex:2,quote:instruction});
 });
 it("repairs an invalid planning envelope once within the same output allowance",async()=>{
  const failure=new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens:1200});

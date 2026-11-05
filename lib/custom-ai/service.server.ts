@@ -161,8 +161,7 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const savedDesignQuestion = Boolean(previousIntent?.requirements.length && isSavedDesignQuestion(request));
   const replyOnly = isBriefChat(request) || savedDesignQuestion;
   const discussionOnly=designOnlyRequest(request)&&!request.editTarget;
-  const firstDesign=!previousIntent&&!replyOnly&&request.messages.at(-1)?.role==="user"
-    &&request.messages.filter(message=>message.role==="user"&&!isBriefChat({id:request.id,intent:"chat",messages:[message]})).length===1;
+  const firstDesign=!previousIntent&&!replyOnly&&request.messages.at(-1)?.role==="user";
   const topics=mechanismTopics(previousIntent,request.messages.at(-1)?.content);
   const capabilities=getCapabilities(capabilityContext).filter(tool=>tool.ref.id!=="plan_fee_flow"||topics.includes("fee-flows")&&!discussionOnly);
   const previousProjectView=context.generalProject?generalProjectView(context.generalProject):context.generalProjectView;
@@ -289,8 +288,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       throw new CustomAIError("intent", "The requested design change could not be read. Your saved rules are kept.", 502);
     if(value.action === "answer" && value.intentRequirements === undefined && value.implementedRequirementIds === undefined)return [];
     const proposed=parseIntentRequirements(value.intentRequirements);
-    // On the first substantive design, the server already owns the exact
-    // originating user text. Greetings and idea questions are not prior designs.
+    // On the first canonical design, the server already owns the exact
+    // authoring request and its history. Earlier conversation is not a saved design.
     // Bind omitted excerpts to that real message rather
     // than asking the model to quote it again. This is provenance, not approval;
     // open choices stay open and existing-design edits keep their strict quotes.
