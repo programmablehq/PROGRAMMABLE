@@ -86,7 +86,8 @@ export function parseRulePlan(value: Record<string, unknown>, availableTools: Re
         || item.kind !== "contract" && !item.query.trim()))) {
     throw new CustomAIError("lookup", "The requested lookup could not be read.", 502);
   }
-  const composable = value.composable ? normalizeRuleSpec(typeof value.composable === "string" ? JSON.parse(value.composable) : value.composable) : undefined;
+  const rawComposable = typeof value.composable === "string" && value.composable ? JSON.parse(value.composable) : value.composable;
+  const composable = rawComposable == null || rawComposable === "" ? undefined : normalizeRuleSpec(rawComposable);
   const eventRule = parseEventRule(value.eventRule);
   if (composable && (eventRule || value.program)) throw new CustomAIError("plan", "Keep every requested action in the combined rule before building.", 502);
   const feeChecks = value.feeChecks;

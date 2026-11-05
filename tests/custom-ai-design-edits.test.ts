@@ -38,6 +38,24 @@ describe("editing a complete hook design", () => {
       expect(reviewRuleEdits(previous, next, [edit]).complete).toBe(false);
     }
   });
+  it("allows only timing in an explicitly edited shared phase and keeps its funding and rates fixed", () => {
+    const shared=structuredClone(previous);
+    shared.phases[0].requirementIds.push("weather");
+    const timed=structuredClone(shared);
+    timed.phases[0].endsAtSeconds=300;
+    if(timed.phases[0].fee.kind!=="ramp")throw Error("Expected saved ramp");
+    timed.phases[0].fee.durationSeconds=300;
+    expect(reviewRuleEdits(shared,timed,[edit]).complete).toBe(true);
+    for(const mutate of [
+      (next:typeof timed)=>{if(next.phases[0].fee.kind==="ramp")next.phases[0].fee.fromBuyBps=800;},
+      (next:typeof timed)=>{next.creatorShareBps=1000;},
+      (next:typeof timed)=>{next.actions[0].recipient="0x1111111111111111111111111111111111111111";},
+      (next:typeof timed)=>{next.phases[0].requirementIds=["decay"];},
+    ]){
+      const next=structuredClone(timed);mutate(next);
+      expect(reviewRuleEdits(shared,next,[edit]).complete).toBe(false);
+    }
+  });
   it("allows an explicit removal while preserving the remaining behavior", () => {
     const next = structuredClone(previous);
     next.requirements = next.requirements.filter(rule => rule.id !== "liquidity");
