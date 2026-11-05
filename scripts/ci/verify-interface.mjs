@@ -38,7 +38,10 @@ if (mode === "browser-build") {
   // Browser/client dependency tracing also selects the owned-source fixture,
   // which compiles one contract using the default pinned toolchain directory.
   // Provision that dependency without enabling unrelated compiler suites.
-  if (plan.customAICompiler || plan.customAI) {
+  // Explore visibility also selects the owned-source fixture through its
+  // imports. It needs the default toolchain, without enabling all compiler suites.
+  const ownedSourceFixture = paths?.includes("lib/explore-public-visibility.ts");
+  if (plan.customAICompiler || plan.customAI || ownedSourceFixture) {
     run("node", ["scripts/custom-ai/install-toolchain.mjs"]);
   }
   if (plan.customAICompiler) {
