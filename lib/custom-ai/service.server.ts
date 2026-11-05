@@ -496,7 +496,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     context.onProgress?.({ type: "phase", phase: attempt ? "repairing" : "building" });
     const answer = feed ? { reply: plan.reply, source: eventModuleSource(feed), hookSummary: `switches buy/sell fees from ${feed.rule.belowBuyBps/100}%/${feed.rule.belowSellBps/100}% to ${feed.rule.aboveBuyBps/100}%/${feed.rule.aboveSellBps/100}% at ${feed.rule.threshold} ${feed.unit.slice(0,25)}, falling back to 0.5% when data is stale` } : parseAnswer((await dependencies.call({ ...modelTask(attempt === 2 ? "fee-escalation" : "fee-source",MODELS),
       system: `${systemFor(true)}\n\n${BUILD_RULES}\n${programRules}\n\nExact core interfaces:\n${sourceContext}`, messages,
-      schema: buildSchema, maxTokens: 6000, effort: "high", signal })).text);
+      schema: buildSchema, signal })).text);
     if (typeof answer.source !== "string") throw new CustomAIError("response", "The module source is missing.", 502);
     // Compiler retries repair source only. They must not discard coin details
     // from the original answer or introduce new changes to the user's order.

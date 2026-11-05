@@ -84,6 +84,7 @@ describe("Claude planning and generation", () => {
     const compile=vi.fn(async()=>draft(true));
     const answer=await runCustomAI(request,undefined,{call,compile});
     expect(call.mock.calls.map(([input])=>input.task)).toEqual(["planning","fee-source"]);
+    expect(call.mock.calls[1][0]).toMatchObject({effort:"low",maxTokens:6000,responseProfile:"contract"});
     expect(answer.productBlueprint).toMatchObject({state:"defined",execution:"not-certified",services:[],flows:[]});
     expect(answer.productBlueprint?.components[0].requirementIds).toEqual(answer.intent?.requirements.map(rule=>rule.id));
     expect(compile).toHaveBeenCalledWith("contract GeneratedFeeModule {}",undefined,checks,undefined);
