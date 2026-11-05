@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isDiscoveryQuestion } from "../lib/custom-ai/discovery-question";
-import { isBriefChat, type ChatRequest } from "../lib/custom-ai/types";
+import type { ChatRequest } from "../lib/custom-ai/types";
+import { isBriefChat } from "../lib/custom-ai/reply-mode";
 
 const request = (content: string): ChatRequest => ({ id: "discovery-question-test", intent: "chat", messages: [{ role: "user", content }] });
 

@@ -1,3 +1,4 @@
+import { isBriefChat } from "./reply-mode";
 import "server-only";
 import { modelDesignContext, plannerNeedsSource, plannerNeedsExecution, planningProductionContext } from "./planning-context";
 import {requestedVerification,interruptedVerification} from "./verification-request";
@@ -7,7 +8,7 @@ import { configuredProvider, researchAvailable } from "./provider-config.server"
 import { compileLaunchDraft } from "./lifecycle.server";
 import core from "./core-sources.json";
 import { BRIEF_REPLY_RULES, BUILD_RULES, FOUNDATION, GENERAL_CONTRACT_VOICE, GENERAL_ROUTE_RULES,MECHANISM_CONVERSATION_RULES,FEE_FLOW_CONVERSATION_RULES,INTEGRATION_CONVERSATION_RULES } from "./prompt";
-import { CustomAIError, isBriefChat, type ChatProgress, type ChatRequest, type ChatResult, type Draft, type FeeExpectation } from "./types";
+import { CustomAIError, type ChatProgress, type ChatRequest, type ChatResult, type Draft, type FeeExpectation } from "./types";
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "./coin-setup";
 import { lookupRules, parseRulePlan, planningRules } from "./rules";
 import { partialReply } from "./conversation";
