@@ -33,13 +33,15 @@ export function explicitSourceBuild(request: Pick<ChatRequest,"intent"|"messages
   if(message?.role!=="user")return false;
   const text=message.content.normalize("NFKC").replace(/```[\s\S]*?```/g," ")
     .replace(/^\s*>.*$/gm," ").replace(/"[^"\n]*"|„[^“\n]*“|“[^”\n]*”|`[^`\n]*`/g," ").trim().toLowerCase();
-  if(!text||/\b(?:no|without|kein(?:e[nmrs]?)?)\s+(?:code|source|quellcode|contracts?)\b/.test(text)
+  if(!text||/\b(?:don't|don’t)\s+(?:build|rebuild|generate|compile|make)\b/.test(text)
+    ||/\b(?:no|without|kein(?:e[nmrs]?)?)\s+(?:code|source|quellcode|contracts?)\b/.test(text)
     ||/\b(?:not|never|nicht|keinen|noch nicht)\b[^.!?\n]{0,24}\b(?:build|rebuild|generate|compile|bauen|baue|erstellen|erzeuge|kompilieren)\b/.test(text)
     ||/\b(?:build|rebuild|generate|compile|baue?|erstelle?|erzeuge?|kompiliere?)\s+(?:not|nicht|keinen)\b/.test(text))return false;
   if(request.intent==="build")return true;
   const polite=text.replace(/^(?:(?:ok(?:ay)?|hey|bitte|please|jetzt|now|go|guck mal|schau mal|ja|yes)[\s,!.:]*)+/,"");
   const modal=/^(?:(?:can|could|would) you|(?:kannst|könntest|koenntest|würdest|wuerdest) du)\s+(?:please\s+|bitte\s+)?/;
   const command=polite.replace(modal,"");
+  if(/^(?:do|make)(?: me)? (?:a|an|the|this|my) (?:hook|coin|token|contract)\s+(?:where|that|which|with)\b/.test(command))return true;
   if(/^(?:build|rebuild|generate|compile|implement|baue?|erstelle?|erzeuge?|kompiliere?|implementiere?)\b/.test(command)) {
     if(/\b(?:summary|summaries|explanation|names?|list|ideas?|image|logo|website|zusammenfassung|erklärung|erklaerung|namen|liste|ideen|bild)\b/.test(command))return false;
     return /\b(?:source|code|contracts?|hook|design|coin|token|project|quellcode|entwurf|vertrag|projekt|it|this|ihn|es|das)\b/.test(command.slice(0,180));

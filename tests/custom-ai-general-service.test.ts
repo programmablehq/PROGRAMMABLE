@@ -160,6 +160,46 @@ it("binds a first design's missing quote to its actual user message while retain
  expect(value.intent?.unresolved).toEqual(["Choose the starting value"]);expect(value.change).toBe("blocked");
  expect(compiler).not.toHaveBeenCalled();expect(value.nextAction).toBeUndefined();
 });
+it("binds the first design after a greeting to the real design message",async()=>{
+ const call=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"",open:"Choose the starting value"},
+ ]}));
+ const value=await runCustomAI({...request,messages:[{role:"user",content:"yo"},
+  {role:"assistant",content:"What would you like to build?"},{role:"user",content:instruction}]},undefined,
+  {call,compile:vi.fn()},{saveProject:vi.fn()});
+ expect(value.intent?.requirements[0].origin).toEqual({kind:"message",requestId:request.id,messageIndex:2,quote:instruction});
+ expect(value.intent?.unresolved).toEqual(["Choose the starting value"]);
+});
+it("binds the first saved design after an earlier idea to the current authoring request",async()=>{
+ const call=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
+  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"",open:"Choose the starting value"},
+ ]}));
+ const value=await runCustomAI({...request,messages:[{role:"user",content:"Start the counter at five"},
+  {role:"assistant",content:"Saved that choice."},{role:"user",content:instruction}]},undefined,
+  {call,compile:vi.fn()},{saveProject:vi.fn()});
+ expect(value.intent?.requirements[0].origin).toEqual({kind:"message",requestId:request.id,messageIndex:2,quote:instruction});
+});
+it("repairs an invalid planning envelope once within the same output allowance",async()=>{
+ const failure=new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens:1200});
+ const call=vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(plan({action:"clarify"}));
+ const compile=vi.fn(),value=await runCustomAI(request,undefined,{call,compile},{saveProject:vi.fn()});
+ expect(call).toHaveBeenCalledTimes(2);
+ expect(call.mock.calls[0][0]).toMatchObject({task:"planning",maxTokens:8000,structuredTransport:undefined});
+ expect(call.mock.calls[1][0]).toMatchObject({task:"planning",maxTokens:6800,structuredTransport:undefined,messages:request.messages});
+ expect(value.intent?.requirements).toHaveLength(2);expect(compile).not.toHaveBeenCalled();
+});
+it.each([null,8000])("does not restart planning with unknown or exhausted usage: %s",async outputTokens=>{
+ const failure=new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens});
+ const call=vi.fn().mockRejectedValue(failure);
+ await expect(runCustomAI(request,undefined,{call,compile:vi.fn()})).rejects.toBe(failure);
+ expect(call).toHaveBeenCalledOnce();
+});
+it("stops after one unsuccessful format repair",async()=>{
+ const failure=new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens:1200});
+ const call=vi.fn().mockRejectedValue(failure);
+ await expect(runCustomAI(request,undefined,{call,compile:vi.fn()})).rejects.toBe(failure);
+ expect(call).toHaveBeenCalledTimes(2);
+});
 it("does not replace an invented quote or attach a blank new rule to an existing design",async()=>{
  const wrong=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
   {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"not in this request",open:"Choose a value"},
