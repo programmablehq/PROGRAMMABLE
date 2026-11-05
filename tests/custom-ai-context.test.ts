@@ -4,6 +4,7 @@ import {runCustomAI} from "../lib/custom-ai/service.server";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import type {Draft} from "../lib/custom-ai/types";
+import {modelDesignContext} from "../lib/custom-ai/planning-context";
 const answer={reply:"The ten minute phase ends before the weather rule starts.",action:"answer",memory:"Existing design is unchanged.",intentRequirements:[],requirements:[],feeChecks:[],setupPatch:{},lookups:[],program:null,eventRule:null,composable:null,ruleEdits:[]};
 const checked:Draft={source:"EXACT_PRIVATE_SOURCE_"+"x".repeat(20000),sourceHash:"a".repeat(64),compiled:true,diagnostics:[],hookSummary:"Ten minute fee schedule",verification:{status:"passed",sourceHash:"a".repeat(64),requirements:["Fall from 10% to 1% over ten minutes","No transfer tax"],checks:[{afterSeconds:0,buy:true,totalFeeBps:1000},{afterSeconds:600,buy:true,totalFeeBps:100}],cases:8}};
 async function question(text:string,draft:Draft|undefined=checked){
@@ -12,6 +13,13 @@ async function question(text:string,draft:Draft|undefined=checked){
  return {call,compile,reply,input:call.mock.calls[0][0]};
 }
 describe("Custom AI context budget",()=>{
+ it("reports the recorded build checks without sending source or treating them as a launch",()=>{
+  const current=modelDesignContext({draft:checked},false).currentDraft;
+  expect(current).toMatchObject({compiled:true,verification:"passed",sourceIncluded:false});
+  expect(current?.source).toBeUndefined();
+  expect(modelDesignContext({draft:{...checked,verification:{...checked.verification!,sourceHash:"stale"}}},false).currentDraft?.verification).toBe("not-run");
+  expect(modelDesignContext({draft:{...checked,compiled:false,verification:undefined}},false).currentDraft).toMatchObject({compiled:false,verification:"not-run"});
+ });
  it("bounds a normal checked-draft explanation without sending its full source or repeating provenance",async()=>{
   const {input,call,compile,reply}=await question("Explain the timing without changing any rule");
   expect(call).toHaveBeenCalledTimes(1);expect(compile).not.toHaveBeenCalled();expect(reply.change).toBe("unchanged");

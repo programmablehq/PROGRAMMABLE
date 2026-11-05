@@ -80,6 +80,24 @@ const plan = (action = "build", extra: { requirements?: string[]; unresolved?: s
 const generated = () => result({ reply: "The coin charges 3% on buys and sells.", source: "contract GeneratedFeeModule {}", hookSummary: "charges 3% on buys and sells" });
 
 describe("Claude planning and generation", () => {
+  it("keeps the recent explanation available for a brief follow-up without another planning pass",async()=>{
+    const messages:ChatRequest["messages"]=[
+      {role:"user",content:"An old unrelated idea"},{role:"assistant",content:"Old answer"},
+      {role:"user",content:"Give me ideas involving buybacks"},{role:"assistant",content:"We could send fees to buyback and burn, or grow liquidity."},
+      {role:"user",content:"What else could we build?"},
+    ];
+    const call=vi.fn().mockResolvedValue(result({reply:"Another option is rewards for holders."})),compile=vi.fn();
+    const answer=await runCustomAI({...request,messages},undefined,{call,compile});
+    expect(call).toHaveBeenCalledOnce();expect(call.mock.calls[0][0].messages).toEqual(messages.slice(-3));
+    expect(answer.change).toBe("unchanged");expect(compile).not.toHaveBeenCalled();
+  });
+  it("asks the first actual open question instead of promising a build or listing every decision",async()=>{
+    const questions=["Who should receive the rewards?","How often should rewards be distributed?"];
+    const call=vi.fn().mockResolvedValue(plan("build",{reply:"I am building your hook now.",unresolved:questions,feeChecks:[]})),compile=vi.fn();
+    const answer=await runCustomAI(request,undefined,{call,compile});
+    expect(answer.reply).toBe(questions[0]);expect(answer.unresolved).toEqual(questions);
+    expect(answer.change).toBe("blocked");expect(compile).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
+  });
   it("derives the known fee-core architecture without another planning call and still verifies the source", async () => {
     const call=vi.fn().mockResolvedValueOnce(plan("build",{executionRoute:"fee-module",productPlan:{components:[],assets:[],flows:[],services:[],interfaceActions:[]}})).mockResolvedValueOnce(generated());
     const compile=vi.fn(async()=>draft(true));
