@@ -1,9 +1,57 @@
 import type { RuleSpecV2 } from "./rule-spec";
 import { CustomAIError } from "./types";
-import { MAX_INTENT_REQUIREMENTS } from "./launch-intent";
+import { MAX_INTENT_REQUIREMENTS, type LaunchIntent } from "./launch-intent";
 
 export type RuleEdit = { requirementId: string; operation: "replace" | "remove"; instruction: string };
 export type EditTarget = { sourceHash: string; requirementId: string };
+
+/** A model may label a replacement with its new duration. Preserve the saved
+ * identity only for an unambiguous, explicitly quoted remove/replace + add.
+ * All ordinary quote, target, coverage and executable checks still follow. */
+export function stablePlannedRuleIds(value: Record<string, unknown>, previous: LaunchIntent | undefined, latest: string): Record<string, unknown> {
+  if (!previous || !Array.isArray(value.intentRequirements) || !Array.isArray(value.ruleEdits)) return value;
+  const rules = value.intentRequirements as Array<Record<string, unknown>>;
+  const edits = value.ruleEdits as Array<Record<string, unknown>>;
+  if (rules.some(rule => !rule || typeof rule !== "object") || edits.some(edit => !edit || typeof edit !== "object")) return value;
+  const prior = new Map(previous.requirements.map(rule => [rule.id, rule]));
+  const removed = edits.filter(edit => typeof edit.requirementId === "string" && prior.has(edit.requirementId)
+    && !rules.some(rule => rule.id === edit.requirementId) && ["remove", "replace"].includes(String(edit.operation))
+    && typeof edit.instruction === "string" && edit.instruction.trim() && latest.includes(edit.instruction));
+  const aliases = new Map<string, string>();
+  for (const edit of removed) {
+    const before = prior.get(String(edit.requirementId))!;
+    if (removed.filter(other => other.instruction === edit.instruction && prior.get(String(other.requirementId))?.kind === before.kind).length !== 1) continue;
+    const added = rules.filter(rule => typeof rule.id === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(rule.id) && !prior.has(rule.id)
+      && rule.kind === before.kind && rule.instruction === edit.instruction);
+    if (added.length !== 1) continue;
+    const alias = String(added[0].id);
+    const redundant = edits.filter(other => other.requirementId === alias);
+    if (redundant.length > 1 || redundant.some(other => other.operation !== "replace" || other.instruction !== edit.instruction)) continue;
+    aliases.set(alias, before.id);
+  }
+  if (!aliases.size) return value;
+  const ids = (items: unknown) => Array.isArray(items) ? items.map(id => typeof id === "string" ? aliases.get(id) ?? id : id) : items;
+  const references = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(references);
+    if (!item || typeof item !== "object") return item;
+    return Object.fromEntries(Object.entries(item).map(([key, data]) => [key, key === "requirementIds" ? ids(data) : references(data)]));
+  };
+  let composable = value.composable;
+  if (composable) {
+    let data: unknown;
+    try { data = typeof composable === "string" ? JSON.parse(composable) : composable; } catch { return value; }
+    if (data && typeof data === "object" && Array.isArray((data as Record<string,unknown>).requirements)) {
+      const spec = references(data) as Record<string,unknown>;
+      spec.requirements = (spec.requirements as Array<Record<string,unknown>>).map(rule => ({...rule,id:aliases.get(String(rule.id))??rule.id}));
+      composable = typeof composable === "string" ? JSON.stringify(spec) : spec;
+    }
+  }
+  return {...value,composable,productPlan:references(value.productPlan),implementedRequirementIds:ids(value.implementedRequirementIds),
+    intentRequirements:rules.map(rule=>({...rule,id:aliases.get(String(rule.id))??rule.id})),
+    ruleEdits:edits.filter(edit=>!aliases.has(String(edit.requirementId))).map(edit=>({...edit,
+      operation:[...aliases.values()].includes(String(edit.requirementId))?"replace":edit.operation})),
+  };
+}
 
 export const editPlanningRules = `For any saved design, ruleEdits declares ONLY the saved requirements the user explicitly wants replaced or removed.
 Each entry is {requirementId,operation:"replace"|"remove",instruction}. Copy instruction verbatim from the latest user message as evidence; never use an earlier turn or a lookup as permission.

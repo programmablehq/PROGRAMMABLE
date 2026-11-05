@@ -96,9 +96,11 @@ describe("structured fee schedules",()=>{
   next.phases[0].endsAtSeconds=43200;
   if(next.phases[0].fee.kind!=="ramp")throw Error("Expected ramp");
   next.phases[0].fee.durationSeconds=43200;next.phases[1].startsAtSeconds=43200;
-  const call=vi.fn(async()=>plan({composable:JSON.stringify(next),implementedRequirementIds:["fee","recipient"],
-   intentRequirements:next.requirements.map(r=>({...r,kind:"behavior",instruction:r.id==="fee"?content:"",open:null})),
-   ruleEdits:[{requirementId:"fee",operation:"replace",instruction:content}],
+  const relabeled=structuredClone(next);relabeled.requirements[0].id="fee-12h";
+  relabeled.phases.forEach(phase=>phase.requirementIds=phase.requirementIds.map(id=>id==="fee"?"fee-12h":id));
+  const call=vi.fn(async()=>plan({composable:JSON.stringify(relabeled),implementedRequirementIds:["fee-12h","recipient"],
+   intentRequirements:relabeled.requirements.map(r=>({...r,kind:"behavior",instruction:r.id==="fee-12h"?content:"",open:null})),
+   ruleEdits:[{requirementId:"fee",operation:"remove",instruction:content},{requirementId:"fee-12h",operation:"replace",instruction:content}],
    feeChecks:[...checks.slice(0,2),{afterSeconds:21600,buy:true,totalFeeBps:125},{afterSeconds:43200,buy:false,totalFeeBps:50}]}));
   const result=await runCustomAI({...initialRequest,id:"shared-phase-edit-01",contextId:initialRequest.id,draftId:initialRequest.id,
    messages:[...initialRequest.messages,{role:"user",content}]},undefined,{call,compile:vi.fn()},

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import fixture from "./fixtures/custom-ai/london-liquidity-v2.json";
 import { normalizeRuleSpec } from "../lib/custom-ai/rule-spec";
-import { parseRuleEdits, reviewRuleEdits } from "../lib/custom-ai/design-edits";
+import { parseRuleEdits, reviewRuleEdits, stablePlannedRuleIds } from "../lib/custom-ai/design-edits";
+import { migrateLaunchIntent } from "../lib/custom-ai/launch-intent.server";
 import { parseChatRequest, type ChatRequest } from "../lib/custom-ai/types";
 import { runCustomAI } from "../lib/custom-ai/service.server";
 
@@ -21,6 +22,26 @@ const revised = () => {
 };
 
 describe("editing a complete hook design", () => {
+  it("keeps identities across a single quoted replacement without accepting ambiguous aliases",()=>{
+    const intent=migrateLaunchIntent({ruleSpec:previous})!;
+    const quote="make that 12 hours";
+    const added={id:"decay-12h",text:"New duration",kind:"behavior",open:null,instruction:quote};
+    const plan={intentRequirements:[added,...intent.requirements.slice(1).map(r=>({...r,instruction:""}))],
+      ruleEdits:[{requirementId:"decay",operation:"remove",instruction:quote},{requirementId:"decay-12h",operation:"replace",instruction:quote}],
+      implementedRequirementIds:["decay-12h","weather","liquidity"],composable:JSON.stringify({requirements:[{id:"decay-12h",text:added.text}],phases:[{requirementIds:["decay-12h","weather"]}]}),
+      productPlan:{components:[{requirementIds:["decay-12h"]}]} };
+    const fixed=stablePlannedRuleIds(plan,intent,quote);
+    expect((fixed.intentRequirements as Array<{id:string}>)[0].id).toBe("decay");
+    expect(fixed.ruleEdits).toEqual([{requirementId:"decay",operation:"replace",instruction:quote}]);
+    expect(JSON.parse(String(fixed.composable)).phases[0].requirementIds).toEqual(["decay","weather"]);
+    expect(fixed.productPlan).toEqual({components:[{requirementIds:["decay"]}]});
+    expect(plan.intentRequirements[0].id).toBe("decay-12h");
+    expect(stablePlannedRuleIds(plan,intent,"keep everything")).toBe(plan);
+    const ambiguous={...plan,intentRequirements:[...plan.intentRequirements,{...added,id:"other-new-rule"}]};
+    expect(stablePlannedRuleIds(ambiguous,intent,quote)).toBe(ambiguous);
+    const different={...plan,intentRequirements:plan.intentRequirements.map(r=>r.id===added.id?{...r,kind:"constraint"}:r)};
+    expect(stablePlannedRuleIds(different,intent,quote)).toBe(different);
+  });
   it("keeps untouched configurations, not merely their ids", () => {
     const next = revised();
     expect(reviewRuleEdits(previous, next, [])).toMatchObject({ complete: false, missing: [previous.requirements[0].text] });
