@@ -35,12 +35,12 @@ if (mode === "browser-build") {
   if (plan.customAI) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.custom-ai.config.ts"]);
   npm("build");
 } else {
+  const files = execFileSync("git", ["ls-files"], { encoding: "utf8" }).trim().split("\n");
+  const inputs = paths ? relatedInputs(paths, files) : [];
   // Browser/client dependency tracing also selects the owned-source fixture,
   // which compiles one contract using the default pinned toolchain directory.
   // Provision that dependency without enabling unrelated compiler suites.
-  // Explore visibility also selects the owned-source fixture through its
-  // imports. It needs the default toolchain, without enabling all compiler suites.
-  const ownedSourceFixture = paths?.includes("lib/explore-public-visibility.ts");
+  const ownedSourceFixture = inputs.includes("tests/custom-ai-general-launch-source.test.ts");
   if (plan.customAICompiler || plan.customAI || ownedSourceFixture) {
     run("node", ["scripts/custom-ai/install-toolchain.mjs"]);
   }
@@ -62,8 +62,6 @@ if (mode === "browser-build") {
         && file !== "scripts/security/gitleaks-policy.test.mjs");
       if (selected.length) run("node", ["--test", ...selected]);
     }
-    const files = execFileSync("git", ["ls-files"], { encoding: "utf8" }).trim().split("\n");
-    const inputs = relatedInputs(paths, files);
     // Deleted files cannot be resolved by Vite; the changed-source mode keeps
     // importers covered even when an old module has just been removed.
     if (paths.some(file => !existsSync(file))) run("npx", ["--no-install", "vitest", "run",

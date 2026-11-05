@@ -25,7 +25,7 @@ function callbackSource(name: string): string {
   }).outputText;
 }
 
-function harness(kind: "legacy" | "launch-plan", failure: "preflight" | "gas" | "ambiguous-send" | "rejection" | "success") {
+function harness(kind: "legacy" | "launch-plan" | "claim" | "launch", failure: "preflight" | "gas" | "ambiguous-send" | "rejection" | "success" | "gas-rebound" | "binding" | "transaction") {
   const values = new Map<string, string>();
   const storage = { getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) };
@@ -33,10 +33,14 @@ function harness(kind: "legacy" | "launch-plan", failure: "preflight" | "gas" | 
   let preparations = 0;
   const prepare = vi.fn(async () => {
     preparations++;
-    if (kind === "launch-plan" && preparations === 1) return review;
+    if (failure === "gas-rebound") return { ...review, maxGasCostWei: preparations === 1 ? "900" : "950" };
+    if (kind !== "legacy" && preparations === 1) return review;
     if (failure === "preflight") throw new Error("Quote is no longer available");
+    if (failure === "binding") return { ...review, binding: "changed-transaction" };
+    if (failure === "transaction") return { ...review, transaction: { ...review.transaction, data: "0x5678" } };
     return failure === "gas" ? { ...review, maxGasCostWei: "1001" } : review;
   });
+  const beginLaunchSend = vi.fn(() => ({ binding: review.binding }));
   const send = vi.fn(async () => {
     if (failure === "rejection") throw Object.assign(new Error("User rejected the request"), { code: 4001 });
     if (failure === "ambiguous-send") throw new Error("Wallet connection interrupted");
@@ -47,7 +51,9 @@ function harness(kind: "legacy" | "launch-plan", failure: "preflight" | "gas" | 
     crypto: { subtle: webcrypto.subtle, getRandomValues: (array: Uint8Array) => webcrypto.getRandomValues(array as Uint8Array<ArrayBuffer>) },
     locks: { request: async <Result>(name: string, _options: unknown, work: (lock: { name: string }) => Promise<Result>) => work({ name }) } };
   const callbackModule = { exports: undefined as unknown };
-  runInNewContext(callbackSource(kind === "legacy" ? "sendCustomV4SwapWalletAction" : "sendLaunchPlanTradeWalletAction"), {
+  const callbacks = { legacy: "sendCustomV4SwapWalletAction", "launch-plan": "sendLaunchPlanTradeWalletAction",
+    claim: "sendLaunchClaimWalletAction", launch: "sendUniversalLaunchWalletAction" };
+  runInNewContext(callbackSource(callbacks[kind]), {
     module: callbackModule, connectedWallet, wallet: { account, chainId: "0x1237" }, user: { id: "fixture-session" },
     walletSessionGenerationRef: { current: 1 },
     walletRequestSessionRef: { current: { authenticated: true, privyUserId: "fixture-session", account, walletCapability: connectedWallet } },
@@ -61,12 +67,17 @@ function harness(kind: "legacy" | "launch-plan", failure: "preflight" | "gas" | 
     require: (name: string) => {
       if (name === "@/lib/swap/custom-v4") return { prepareCustomV4SwapWallet: prepare };
       if (name === "@/lib/custom-launch/routed-trade-wallet-v1") return { prepareLaunchPlanTradeWalletV1: prepare };
+      if (name === "@/lib/custom-launch/claim-handoff-v1") return { prepareLaunchClaimWalletV1: prepare };
+      if (name === "@/lib/custom-launch/wallet-handoff-plan-v1") return { prepareUniversalLaunchWalletV1: prepare };
+      if (name === "@/lib/custom-launch/launch-send-journal-v1") return {
+        beginLaunchSendV1: beginLaunchSend, rememberLaunchHashV1: vi.fn(), rejectLaunchSendV1: vi.fn(),
+      };
       throw new Error(`Unexpected callback import ${name}`);
     },
   });
   const invoke = () => (callbackModule.exports as (input: unknown) => Promise<string>)({ action: "submit", reviewed: review });
   const lease = () => storage.getItem(`programmable:wallet-request:v1:4663:${account}`);
-  return { invoke, lease, send };
+  return { invoke, lease, send, beginLaunchSend };
 }
 
 describe.each(["legacy", "launch-plan"] as const)("%s swap preflight wallet locking", kind => {
@@ -99,4 +110,29 @@ describe.each(["legacy", "launch-plan"] as const)("%s swap preflight wallet lock
     expect(test.send).toHaveBeenCalledOnce();
     expect(test.lease()).toBeNull();
   });
+});
+
+describe.each(["launch-plan", "claim", "launch"] as const)("%s reviewed gas ceiling", kind => {
+  it("accepts a rebound below the amount the user reviewed", async () => {
+    const test = harness(kind, "gas-rebound");
+    await expect(test.invoke()).resolves.toBe(hash);
+    expect(test.send).toHaveBeenCalledOnce();
+    expect(test.lease()).toBeNull();
+  });
+
+  it.each(["gas", "binding"] as const)("rejects changed %s before sending and releases the request", async failure => {
+    const test = harness(kind, failure);
+    await expect(test.invoke()).rejects.toThrow();
+    expect(test.send).not.toHaveBeenCalled();
+    expect(test.beginLaunchSend).not.toHaveBeenCalled();
+    expect(test.lease()).toBeNull();
+  });
+});
+
+it("rejects changed launch calldata even when its binding and cost are unchanged", async () => {
+  const test = harness("launch", "transaction");
+  await expect(test.invoke()).rejects.toThrow("wallet review changed");
+  expect(test.send).not.toHaveBeenCalled();
+  expect(test.beginLaunchSend).not.toHaveBeenCalled();
+  expect(test.lease()).toBeNull();
 });
