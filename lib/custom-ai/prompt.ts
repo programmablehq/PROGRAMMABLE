@@ -274,6 +274,8 @@ Use no constructor parameters. Embed the agreed configuration in the source; use
 launch-relative schedule. The module can be deployed well before the coin: never use constructor
 block.timestamp to start a launch-relative schedule. Set configurationHash to keccak256(abi.encode(T.VERSION_ID, ...)), directly
 including every other immutable variable. Constants are bound by the source and bytecode as well.
+Use the immutable variable names themselves in that hash, never repeated literals or equivalent expressions.
+For example, after assigning startAdditionalBps and rampSeconds, hash abi.encode(T.VERSION_ID, startAdditionalBps, rampSeconds).
 The current validator supports self-contained expressions, time schedules and internal pure/view helpers.
 No loops, assembly, extra contracts, custom modifiers, external or indirect calls, msg/tx dependencies,
 or block fields other than timestamp and chainid. External data needs a separately connected adapter.

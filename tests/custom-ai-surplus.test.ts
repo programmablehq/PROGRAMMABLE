@@ -344,4 +344,11 @@ describe("Surplus planner schema transport", () => {
     expect(() => format.decode('{"count":3,"name":"ok"}')).toThrow();
     expect(() => format.decode('{"count":2,"name":"long"}')).toThrow();
   });
+
+  it("accepts canonical strings in a string/null union while retaining the original constraints", () => {
+    const format=prepareSurplusSchema({type:"object",properties:{group:{anyOf:[{type:"string",pattern:"^[a-z-]+$"},{type:"null"}]}},required:["group"],additionalProperties:false});
+    expect(JSON.parse(format.decode('{"group":"fee-budget"}'))).toEqual({group:"fee-budget"});
+    expect(JSON.parse(format.decode('{"group":"null"}'))).toEqual({group:null});
+    for(const group of ["", "bad group", "{}", "[]"])expect(()=>format.decode(JSON.stringify({group}))).toThrow();
+  });
 });

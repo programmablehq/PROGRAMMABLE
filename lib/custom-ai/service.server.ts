@@ -56,7 +56,7 @@ import {mechanismKnowledge,mechanismTopics} from "./mechanism-knowledge";
 import {SourceProgressPending} from "./source-writer.server";
 import {isSavedDesignQuestion} from "./design-question";
 import type {SourceProgress} from "./source-progress";
-import { restoredProductBlueprint, productPlanSchema, PRODUCT_PLANNING_RULES, type ProductBlueprint } from "./product/blueprint";
+import { createProductBlueprint, restoredProductBlueprint, productPlanSchema, PRODUCT_PLANNING_RULES, type ProductBlueprint } from "./product/blueprint";
 import { resolveProductPlan } from "./product/planning.server";
 import { PRODUCT_ECONOMIC_RULES, productDecisionQuestions } from "./product/economics";
 import {productDesignKnowledge} from "./product/design-knowledge";
@@ -354,17 +354,25 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     proposed, unresolved: plan.unresolved, edits, request, target: request.editTarget }) : undefined;
   const intent = revised?.intent ?? previousIntent;
   const coin = applyCoinSetupPatch(request.coin ?? EMPTY_COIN_SETUP, update.setupPatch ?? {});
+  const implementationGaps = plan.action === "build" && intent && plan.executionRoute !== "custom-contract" ? intentImplementationGaps(intent,
+    plan.composable?.requirements ?? plan.requirements.map(text => ({ text }))) : [];
+  const selection=plan.action==="build"&&intent?selectExecutionRoute(intent,coin.chainId,{route:generalOnly?"custom-contract":plan.executionRoute,requirementIds:implementationGaps.length?[]:intent.requirements.map(rule=>rule.id),missingCapabilities:implementationGaps}):undefined;
+  const fixedFeePlan=selection?.route==="fee-module"&&selection.state==="selected"&&!plan.program&&!plan.eventRule&&!plan.composable
+    &&(!previousProduct||previousProduct.components.every(component=>component.id==="fixed-fee-module"));
   const needsProductRevision = previousProduct && (previousProduct.intentRevision !== intent?.revision || previousProduct.chainId !== coin.chainId);
-  if (intent && (interpreted.productPlan != null || context.productPlanIncomplete || needsProductRevision) && (revising || plan.action === "build")) {
+  if(intent&&fixedFeePlan){
+    // The fixed core already supplies this architecture. Replanning vaults,
+    // services or payouts adds no authority or source verification here.
+    update.productBlueprint=createProductBlueprint({components:[{id:"fixed-fee-module",kind:"hook",name:"Swap fee rule",
+      purpose:"Returns swap fees to the fixed platform core.",requirementIds:intent.requirements.map(rule=>rule.id),dependsOn:[]}],
+      assets:[],flows:[],services:[],interfaceActions:[]},intent,coin.chainId);
+  } else if (intent && (interpreted.productPlan != null || context.productPlanIncomplete || needsProductRevision) && (revising || plan.action === "build")) {
     update.productBlueprint = await resolveProductPlan({ value: interpreted.productPlan, previous: previousProduct, intent, chainId: coin.chainId, model: MODELS.chat, signal }, dependencies.call);
     if (!update.productBlueprint) return { reply: "Your full design is saved. I couldn't finish organizing its components yet. You can keep refining it or retry the build.", ...update,
       intent, memory: plan.memory, change: "blocked", buildIssue: {stage:"product",code:"incomplete-plan"}, ...(researched ? {chargedAs:"research",sources} : {}) };
   } else if (intent && previousProduct?.intentRevision === intent.revision && previousProduct.chainId === coin.chainId) {
     update.productBlueprint = previousProduct;
   }
-  const implementationGaps = plan.action === "build" && intent && plan.executionRoute !== "custom-contract" ? intentImplementationGaps(intent,
-    plan.composable?.requirements ?? plan.requirements.map(text => ({ text }))) : [];
-  const selection=plan.action==="build"&&intent?selectExecutionRoute(intent,coin.chainId,{route:generalOnly?"custom-contract":plan.executionRoute,requirementIds:implementationGaps.length?[]:intent.requirements.map(rule=>rule.id),missingCapabilities:implementationGaps}):undefined;
   const open = [...new Set([...(intent?.unresolved ?? []), ...(revised?.problems ?? []), ...(!context.saveProject?implementationGaps:[]),
     ...(update.productBlueprint?productDecisionQuestions(update.productBlueprint):[])])];
   const launchAction=(sourceId:string|undefined,ready:boolean):Pick<ChatResult,"nextAction">=>interpreted.launchRequested===true&&ready&&sourceId&&!open.length

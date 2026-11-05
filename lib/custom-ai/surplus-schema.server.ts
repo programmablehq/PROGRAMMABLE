@@ -100,7 +100,15 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
       // string. This is only null for an object/null union, never a missing
       // required object, malformed configuration or arbitrary tool input.
       if (value === "" && nullableObject(node)) return null;
-      return typeof value === "string" ? JSON.parse(value) : value;
+      if (typeof value !== "string") return value;
+      try { return JSON.parse(value); }
+      catch (error) {
+        // A gateway may return a canonical string from a string/null union,
+        // just as it already returns canonical objects. The original schema
+        // still validates its pattern, enum and length below.
+        if (node.anyOf?.some(branch => branch.type === "string")) return value;
+        throw error;
+      }
     }
     if (Array.isArray(value) && node.items) return value.map((item,index) => {
       const schema=Array.isArray(node.items)?node.items[index]:node.items;return schema?restore(item,schema):item;
