@@ -17,6 +17,7 @@ Run `npm run verify:interface:plan -- --base <full-sha> --head <full-sha>` to se
   the conservative set. Changes to the Interface selector run its own regression
   checks alongside the affected application checks. Deleted modules and unknown build inputs use
   the full application suite.
+- Pure discovery/reply classifiers have a closed set of intent, service and request-charging tests. A mixed service, wallet, contract or unknown change immediately returns to dependency-based coverage. These rules live in `discovery-question.ts` and `reply-mode.ts`, separate from shared contract types.
 - Browser suites follow the changed feature: trading, wallet sessions, module
   launches, profiles, navigation or Explore. A metadata-only change does not
   run wallet or migration fixtures. Chat shell changes use the conversation and saved-history browser files; unknown or financial chat paths retain the complete chat suite.

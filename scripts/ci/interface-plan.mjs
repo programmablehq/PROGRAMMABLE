@@ -78,6 +78,17 @@ function customAIBrowserSuites(paths, full) {
   return [...suites];
 }
 
+const replySources = new Set(["lib/custom-ai/discovery-question.ts", "lib/custom-ai/reply-mode.ts"]);
+const replyTests = ["tests/custom-ai-discovery-question.test.ts", "tests/custom-ai.test.ts", "tests/custom-ai-store.test.ts"];
+
+/** These pure reply classifiers cannot generate or submit a contract. Verify
+ * their intent boundary, service behavior and request charging directly. */
+export function ownedInterfaceTests(paths) {
+  return paths?.some(path => replySources.has(path))
+    && paths.every(path => replySources.has(path) || replyTests.includes(path))
+    ? [...replyTests] : null;
+}
+
 export function interfacePlan(paths, { customAITracingOnly = false,
   baseSha = process.env.PROGRAMMABLE_CI_BASE_SHA, headSha = process.env.PROGRAMMABLE_CI_HEAD_SHA,
   readChange, validateFile } = {}) {

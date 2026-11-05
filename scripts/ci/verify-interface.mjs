@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { changedPaths, interfacePlan, relatedInputs } from "./interface-plan.mjs";
+import { changedPaths, interfacePlan, relatedInputs, ownedInterfaceTests } from "./interface-plan.mjs";
 import { isCustomAITracingOnlyChange } from "./classify-verify-paths.mjs";
 
 const mode = process.argv[2];
@@ -53,7 +53,8 @@ if (mode === "browser-build") {
   else { typecheck(); console.log("Interface typecheck passed. The publisher performs the production build once before promotion."); }
 } else {
   const files = execFileSync("git", ["ls-files"], { encoding: "utf8" }).trim().split("\n");
-  const inputs = paths ? relatedInputs(paths, files) : [];
+  const ownedTests = paths ? ownedInterfaceTests(paths) : null;
+  const inputs = paths ? ownedTests ?? relatedInputs(paths, files) : [];
   // Browser/client dependency tracing also selects the owned-source fixture,
   // which compiles one contract using the default pinned toolchain directory.
   // Provision that dependency without enabling unrelated compiler suites.
@@ -83,6 +84,7 @@ if (mode === "browser-build") {
     // importers covered even when an old module has just been removed.
     if (paths.some(file => !existsSync(file))) run("npx", ["--no-install", "vitest", "run",
       ...excluded.flatMap(file => ["--exclude", file])]);
+    else if (ownedTests) run("npx", ["--no-install", "vitest", "run", ...ownedTests]);
     else if (inputs.length) run("npx", ["--no-install", "vitest", "related", "--run", "--passWithNoTests", ...inputs,
       ...excluded.flatMap(file => ["--exclude", file])]);
   }
