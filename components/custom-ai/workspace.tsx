@@ -2,7 +2,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, Square, Wallet, X } from "lucide-react";
-import { parseChatRequest, type AIUsage, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
+import { parseChatRequest, type ChatMessage, type ChatProgress, type ChatRequest, type ChatResult, type Draft } from "@/lib/custom-ai/types";
 import { CustomAILaunchPreview } from "./launch-preview";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import { useWallet } from "@/components/wallet-provider";
@@ -13,10 +13,7 @@ import { createLatestSaveQueue } from "@/lib/custom-ai/latest-save-queue";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { conversationWindow } from "@/lib/custom-ai/conversation";
 import { safeKnowledgeSources } from "@/lib/custom-ai/knowledge";
-import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
-import { DraftVersions } from "./draft-versions";
-import { RequestInsights } from "./request-insights";
 import { starterIdeas } from "@/lib/custom-ai/builder-capabilities";
 import type { EditTarget } from "@/lib/custom-ai/design-edits";
 import { WorkspaceTools } from "./workspace-tools";
@@ -37,7 +34,6 @@ import { restoredProductBlueprint, type ProductBlueprint } from "@/lib/custom-ai
 import { ProjectSource } from "./project-source";
 import { builderChain } from "@/lib/custom-ai/execution-routing";
 import { CHAT_MESSAGE_LIMIT, pastedMessageFits, workspaceState } from "@/lib/custom-ai/workspace-state";
-import { passiveRefresh } from "@/lib/custom-ai/passive-refresh";
 import { SessionLoading } from "./session-loading";
 import { CONTINUE_SAVED_BUILD } from "@/lib/custom-ai/build-command";
 import { ChatProgressIndicator } from "./chat-progress";
@@ -93,7 +89,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const cacheScope=library?.cacheScope;
   const headers: AISessionHeaders=useCallback(async():Promise<Record<string,string>>=>({...await sessionHeaders(),...(cacheScope?{"X-Custom-AI-Cache-Scope":cacheScope}:{})}),[sessionHeaders,cacheScope]);
   type RetryBase = { messages: ChatMessage[]; pendingChange?: string };
-  type PreviousCoin = StudioState & { draft?: Draft; generalProject?:GeneralProjectView;sourceRecovery?:ProjectOverview;intent?: LaunchIntent; productBlueprint?:ProductBlueprint; imageBlob?: Blob; input?: string; editTarget?: EditTarget; request?: ChatRequest; retryBase?: RetryBase };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -102,7 +97,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [changingCoin, setSwitchingCoin] = useState(false);
   const switchingCoin=changingCoin||Boolean(navigation?.pending);
   const coinTransition = useRef(false);
-  const [metricsRevision, setMetricsRevision] = useState(0);
   const [revealing, setRevealing] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [inputError, setInputError] = useState("");
@@ -120,8 +114,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [contextId, setContextId] = useState<string>();
   const [pendingChange, setPendingChange] = useState<string>();
   const [editTarget, setEditTarget] = useState<EditTarget>();
-  const [usage, setUsage] = useState<AIUsage>();
-  const [previousCoin, setPreviousCoin] = useState<PreviousCoin>();
   const [phase, setPhase] = useState<ChatProgress & { type: "phase" }>({ type: "phase", phase: "thinking" });
   const [imageReceipt, setImageReceipt] = useState<ImageReceipt>();
   const [imageBusy,setImageBusy]=useState(false);
@@ -247,7 +239,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     }
   },[localPreview,owner,conversationId]);
   const replySettled=useCallback((focus:boolean)=>{
-    setRecoveryRequest(undefined);setMetricsRevision(value=>value+1);
+    setRecoveryRequest(undefined);
     if(focus)requestAnimationFrame(()=>{
       const element=textarea.current;
       if(element&&document.getSelection()?.isCollapsed!==false&&(document.activeElement===document.body||document.activeElement?.closest("form")===element.form))element.focus();
@@ -422,26 +414,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     setConflict(null); setNotice(""); setSaveRevision(value => value + 1);
   }
 
-  useEffect(() => {
-    let active = true;
-    void readDraftCache<PreviousCoin>(`${storageKey}:previous`).then(value => {
-      if (active && value && Array.isArray(value.messages) && value.settings) setPreviousCoin(value);
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, [storageKey]);
-  useEffect(() => {
-    if (localPreview || owner === "signed-out") return;
-    const controller = new AbortController();
-    const polling = passiveRefresh(() => aiRequest<AIUsage>("/usage", () => headersRef.current(), undefined, controller.signal)
-      .then(value => { if (!controller.signal.aborted) setUsage(value); }),
-      () => document.visibilityState === "visible" && navigator.onLine && !replyRef.current.isActive());
-    const refresh = () => { void polling.refresh().catch(() => undefined); };
-    refresh();
-    const timer = setInterval(refresh, 60_000);
-    document.addEventListener("visibilitychange", refresh); window.addEventListener("online", refresh);
-    return () => { clearInterval(timer); polling.dispose(); controller.abort();
-      document.removeEventListener("visibilitychange", refresh); window.removeEventListener("online", refresh); };
-  }, [owner, localPreview]);
 
   async function flushCurrent(forSend=false){
     if(localPreview||owner==="signed-out")return;
@@ -467,7 +439,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     const previous = { messages, settings, draft, generalProject,sourceRecovery,intent,productBlueprint, draftId, contextId, pendingChange, image: imageReceipt, input, editTarget, request: retry.current ?? undefined,retryBase:retryBase.current,
       imageBlob: await readDraftCache<Blob>(`${storageKey}:image`) ?? undefined };
     await writeDraftCache(`${storageKey}:previous`, previous);
-    setPreviousCoin(previous);
     await writeDraftCache(`${storageKey}:image`, null);
     setMessages([]); setSettings(EMPTY_COIN_SETUP); setDraft(undefined);setGeneralProject(undefined);setSourceRecovery(undefined); setIntent(undefined);setProductBlueprint(undefined); setDraftId(undefined);
     setBuildIssue(undefined);
@@ -477,43 +448,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     setInput(""); setError(""); setNotice(""); setPreviewRevision(value => value + 1);
     textarea.current?.focus();
     } finally { coinTransition.current = false; setSwitchingCoin(false); }
-  }
-  async function restorePrevious() {
-    if (!previousCoin || coinTransition.current || busy || recoveryRequest || !restored || launchLocked) return;
-    setLaunchCommand(undefined);
-    coinTransition.current = true; setSwitchingCoin(true);
-    try {
-    await writeDraftCache(`${storageKey}:image`, previousCoin.imageBlob ?? null);
-    setMessages(previousCoin.messages); setSettings(previousCoin.settings); setDraft(previousCoin.draft);
-    setGeneralProject(previousCoin.generalProject);setSourceRecovery(previousCoin.sourceRecovery);
-    setBuildIssue(undefined);
-    setIntent(previousCoin.intent ?? previousCoin.draft?.intent);
-    setProductBlueprint(restoredProductBlueprint(previousCoin.productBlueprint,previousCoin.intent??previousCoin.draft?.intent,previousCoin.settings.chainId));
-    setDraftId(previousCoin.draftId); setContextId(previousCoin.contextId); setPendingChange(previousCoin.pendingChange);
-    setImageReceipt(previousCoin.image); retry.current = previousCoin.request ?? null; setInput(previousCoin.input ?? ""); setError("");
-    retryBase.current=previousCoin.retryBase??{messages:previousCoin.messages,pendingChange:previousCoin.pendingChange};recovered.current=undefined;setRecoveryRequest(previousCoin.request);
-    setEditTarget(previousCoin.editTarget);
-    setNotice("Previous coin restored."); setPreviewRevision(value => value + 1);
-    textarea.current?.focus();
-    } finally { coinTransition.current = false; setSwitchingCoin(false); }
-  }
-  async function restoreVersion(version:Pick<StoredStudio,"state"|"draft"|"generalProject"|"intent"|"productBlueprint">){
-    if(busy||recoveryRequest||coinTransition.current||launchLocked||!version.draft&&!version.generalProject)return;
-    setLaunchCommand(undefined);
-    coinTransition.current=true;setSwitchingCoin(true);
-    try{
-    await writeDraftCache(`${storageKey}:image`,null);
-    const state=version.state;
-    setMessages(state.messages);setSettings(state.settings);setDraft(version.draft);setDraftId(state.draftId);
-    setGeneralProject(version.generalProject);setSourceRecovery(undefined);
-    setBuildIssue(undefined);
-    setIntent(version.intent ?? version.draft?.intent);
-    setProductBlueprint(restoredProductBlueprint(version.productBlueprint,version.intent??version.draft?.intent,version.state.settings.chainId));
-    setContextId(state.contextId);setPendingChange(state.pendingChange);setImageReceipt(state.image);
-    retry.current=null;setInput("");setError("");setNotice("Saved rules restored.");setPreviewRevision(v=>v+1);
-    setRecoveryRequest(undefined);retryBase.current=undefined;recovered.current=undefined;
-    setEditTarget(undefined);
-    }finally{coinTransition.current=false;setSwitchingCoin(false);}
   }
   useLayoutEffect(() => {
     const resize = () => {
@@ -656,13 +590,13 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
 
   async function editSavedSource(source:ProjectOverview){
     if(busy||recoveryRequest||coinTransition.current||!restored||launchLocked||saveFailed||conflict)return;
-    if(source.chainId!==settings.chainId||source.intentRevision!==intent?.revision){setError("Your design or network changed. Restore the source version you want to edit first.");return;}
+    if(source.chainId!==settings.chainId||source.intentRevision!==intent?.revision){setError("Your design or network changed. Build the current design before editing its source.");return;}
     coinTransition.current=true;setSwitchingCoin(true);setError("");
     try{
       const job=await aiRequest<{result?:ChatResult}>(`?id=${encodeURIComponent(source.requestId)}`,()=>headersRef.current(),undefined,lifetime.current!.signal);
       if(!job.result?.generalProject||job.result.generalProject.projectHash!==source.projectHash||job.result.intent?.revision!==source.intentRevision)throw Error("This source needs its saved build result before it can be edited here.");
       setDraft(undefined);setGeneralProject(job.result.generalProject);setDraftId(source.requestId);setSourceRecovery(undefined);
-      setEditTarget(undefined);setNotice("Editing the saved source. Your earlier draft remains in Versions.");textarea.current?.focus();
+      setEditTarget(undefined);setNotice("Editing your saved source.");textarea.current?.focus();
     }catch(cause){if(!lifetime.current?.signal.aborted)setError(cause instanceof Error?cause.message:"The saved source could not be selected.");}
     finally{coinTransition.current=false;setSwitchingCoin(false);}
   }
@@ -688,35 +622,18 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   };
 
   return <div ref={workspaceElement} className={styles.workspace}>
-    <div className={styles.pageBackdrop} aria-hidden="true" />
     <div className={styles.studio} data-guest={signedOut||undefined}>
     <section className={styles.conversation} aria-label="Build your coin" data-chat-state={signedOut?"wallet-required":activity.id}
       data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}
       onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
       onDrop={event => { const file = event.dataTransfer.files[0]; if (file) { event.preventDefault(); void attachImage(file); } }}>
-      <WorkspaceTools name={settings.name} hasDraft={Boolean(draft||generalProject)} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored || launchLocked}
-        guest={signedOut} access={!localPreview&&<button type="button" className={styles.walletAccess} aria-haspopup="dialog"
-          aria-label={signedOut?"Connect wallet":`Connected wallet ${owner}. Manage wallet`}
-          disabled={launchLocked||switchingCoin||!restored} onClick={()=>signedOut?connectCurrentIdea():wallet.openWallet()}>
-          <Wallet size={16} aria-hidden="true"/>{signedOut?"Connect wallet":`${owner.slice(0,6)}…${owner.slice(-4)}`}
+      <WorkspaceTools name={settings.name}
+        access={!localPreview&&!signedOut&&<button type="button" className={styles.walletAccess} aria-haspopup="dialog"
+          aria-label={`Connected wallet ${owner}. Manage wallet`}
+          disabled={launchLocked||switchingCoin||!restored} onClick={()=>wallet.openWallet()}>
+          <Wallet size={16} aria-hidden="true"/>{`${owner.slice(0,6)}…${owner.slice(-4)}`}
         </button>}
-        navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)}
-        canClear={Boolean(messages.length)} hasPrevious={(!navigation||conversationId===LEGACY_CONVERSATION)&&Boolean(previousCoin)}
-        onNewCoin={() => { void startAnother().catch(() => setError("Your current coin could not be saved. Try again.")); }}
-        onRestorePrevious={() => { void restorePrevious().catch(() => setError("The previous coin could not be restored.")); }}
-        onClearMessages={() => {
-          setMessages([]); setInput(""); setEditTarget(undefined); retry.current = null; setError("");
-          setNotice(`Messages cleared. You’re still editing ${settings.name.trim() || "this coin"}; its rules and open changes are kept.`); textarea.current?.focus();
-        }}>
-        {!localPreview&&owner!=="signed-out"&&<DraftVersions account={owner} conversationId={conversationId} headers={headers} disabled={busy||switchingCoin||launchLocked||!restored||saveFailed||Boolean(conflict)} currentDraftId={draftId} onRestore={restoreVersion}/>}
-        {!localPreview&&owner!=="signed-out"&&<RequestInsights headers={headers} refreshKey={metricsRevision}/>}
-        {usage && <Disclosure className={styles.toolSection}><summary>Usage</summary><div>
-          <p>{usage.hourly.remaining} of {usage.hourly.limit} credits left this hour · {usage.daily.remaining} of {usage.daily.limit} left today</p>
-          <p>Replies and rebuilding saved source use 1 credit. AI builds and live research use 5. An interrupted AI attempt may use up to 5.</p>
-          <p>Hourly reset: {new Date(usage.hourly.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Daily reset: {new Date(usage.daily.resetsAt).toLocaleString()}.</p>
-          {usage.resumesAt > 0 && <p>Available again at {new Date(usage.resumesAt).toLocaleString()}.</p>}
-        </div></Disclosure>}
-      </WorkspaceTools>
+        navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)} />
       <div ref={transcript} className={styles.transcript} role="log" aria-label="Conversation" aria-busy={busy}
         aria-live="polite" aria-relevant="additions" onScroll={event => {
           const element = event.currentTarget;
@@ -724,9 +641,17 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           setShowLatest(!followReply.current);
         }}>
         {!messages.length && !busy && <div className={styles.empty}>
-          <h2>{draft||generalProject ? "Keep shaping your coin" : "What are we building?"}</h2>
-          <p>{signedOut?"Connect your wallet to build and save your hook. You can write your idea first."
-            :draft||generalProject ? "Your saved rules are still here. Tell me what you’d like to change." : "Describe your idea. Shape the rules here, then launch from your wallet."}</p>
+          {signedOut ? <div className={styles.walletWelcome}>
+            <span className={styles.srOnly}>Custom AI</span>
+            <h2>What are we building?</h2>
+            <p>Hey, connect your wallet and tell me your idea. I’ll help you build it.</p>
+            <button type="button" className={styles.connectWallet} aria-haspopup="dialog" onClick={()=>connectCurrentIdea()}>
+              <Wallet size={18} aria-hidden="true" />Connect wallet
+            </button>
+          </div> : <>
+            <h2>{draft||generalProject ? "Keep shaping your coin" : "What are we building?"}</h2>
+            <p>{draft||generalProject ? "Your rules are saved. What would you like to change?" : "Tell me your idea. We’ll shape it here, then you can launch it."}</p>
+          </>}
           <div className={styles.starterIdeas} aria-label="Ideas to get started">
             {starterIdeas.map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked}
               onClick={() => { setInput(idea.prompt); onGuestInput?.(idea.prompt); textarea.current?.focus(); }}>{idea.title}<ArrowUp size={15} aria-hidden="true" /></button>)}

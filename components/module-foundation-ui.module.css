@@ -443,6 +443,8 @@
 .inlineRecovery .savedResult summary { min-height: 32px; font-size: 13px; }
 .inlineRecovery .savedResult p { margin: 8px 0; }
 .inlineRecovery button { width: 100%; min-height: 44px; }
-.launchRoutes { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
-.customLaunchLink { display: inline-flex; align-items: center; min-height: 44px; color: inherit; font-size: .8125rem; text-underline-offset: 4px; }
-.customLaunchLink:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; border-radius: 2px; }
+.launchRoutes { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.customLaunchLink { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid rgb(255 255 255 / .14); border-radius: 12px; background: rgb(255 255 255 / .04); color: inherit; font-size: .8125rem; line-height: 1.5; text-align: center; text-decoration: none; transition: background-color 150ms ease-out, border-color 150ms ease-out; }
+.customLaunchLink:hover { background: rgb(255 255 255 / .09); border-color: rgb(255 255 255 / .28); }
+.customLaunchLink:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .customLaunchLink { transition: none; } }

@@ -6,6 +6,7 @@ import { type ConversationItem, type ConversationPage } from "@/lib/custom-ai/co
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
 import styles from "./workspace.module.css";
+import { WorkspacePending } from "./workspace-pending";
 type Flush=()=>Promise<unknown>;
 export type ChatNavigation={pending:boolean;tools:(locked:boolean)=>ReactNode;newChat:()=>Promise<void>;registerFlush:(flush:Flush)=>()=>void};
 const LibraryContext=createContext<{id:string;cacheScope:string;navigation:ChatNavigation}|undefined>(undefined);
@@ -135,6 +136,6 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       {error&&<p role="alert">{error}</p>}
     </section>
   </div>;
-  if(!selected||!cacheScope)return <div className={styles.libraryEmpty}>{panel(transitioning)}{error&&<><p role="alert">{error}</p><button type="button" onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}{!error&&!open&&<p role="status">Loading your chats…</p>}</div>;
+  if(!selected||!cacheScope)return <WorkspacePending status={!error&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning)}>{error&&<><p role="alert">{error}</p><button type="button" className={styles.textButton} onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
   return <LibraryContext.Provider value={{id:selected,cacheScope,navigation:{pending:transitioning,tools:panel,newChat,registerFlush}}}><Fragment key={selected}>{children}</Fragment></LibraryContext.Provider>;
 }

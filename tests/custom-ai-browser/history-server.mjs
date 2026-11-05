@@ -11,9 +11,9 @@ export async function createHistoryServer(){
  ].map(([path,type])=>[path,{type,body:readFileSync(root+"/public"+path)}]));
  const bundled=await build({stdin:{contents:`
  import React,{createContext,useContext,useState} from 'react';import{createRoot}from'react-dom/client';
- import{CustomAIWorkspace}from'./components/custom-ai/workspace';import{FixtureProvider}from'fixture-wallet';
+ import{CustomAIWorkspace}from'./components/custom-ai/workspace';import CustomAILayout from'./app/launch/custom-ai/layout';import{FixtureProvider}from'fixture-wallet';
  import'./app/globals.css';import'./app/interface.css';import'./app/programmable-experience.css';import'./app/webde-final-ui.css';import'./app/surfaces.css';
- createRoot(document.getElementById('root')).render(<FixtureProvider><main style={{maxWidth:1200,margin:'auto',padding:20}}><CustomAIWorkspace generalLaunchEnabled={new URL(location.href).searchParams.has('launch')}/></main></FixtureProvider>);
+ createRoot(document.getElementById('root')).render(<FixtureProvider><div className="app-frame"><main style={{maxWidth:1200,margin:'auto',padding:20}}><CustomAILayout><CustomAIWorkspace generalLaunchEnabled={new URL(location.href).searchParams.has('launch')}/></CustomAILayout></main></div></FixtureProvider>);
  `,loader:"tsx",resolveDir:root},bundle:true,format:"esm",platform:"browser",write:false,outdir:"/fixture-output",jsx:"automatic",define:{"process.env.NODE_ENV":'"production"',"process.env":"{}"},plugins:[{name:"history-boundaries",setup(p){
  p.onResolve({filter:/^(?:fixture-wallet)$|(?:^|\/)wallet-provider$/},()=>({path:"wallet",namespace:"fixture"}));
  p.onResolve({filter:/^\/brand\//},a=>({path:a.path,external:true}));

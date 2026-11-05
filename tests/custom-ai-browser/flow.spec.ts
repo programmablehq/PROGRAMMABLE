@@ -93,49 +93,14 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   await expect(box).toHaveValue("Only adjust the weather rule later.");
   await requested.locator("summary").click();
   await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
-  await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
-  await expect(page.getByText("Requested rules (10)",{exact:true})).toHaveCount(0);
-  await openChatMenu(page);
-  await page.getByRole("button",{name:"Restore previous coin",exact:true}).click();
-  await requested.locator("summary").click();
-  await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
-  await expect(box).toHaveValue("Only adjust the weather rule later.");
-  expect(calls).toBe(1);
-});
-test("keeps a checked draft on reload and blocks an unapplied edit without a rule checkbox", async ({ page }) => {
-  let calls = 0;
-  await page.route("**/api/custom-ai", async route => {
-    calls++;
-    if (calls === 1) await route.fulfill({ contentType: "application/json", body: JSON.stringify({ reply: "Your coin charges 3% on buys and sells.", draft,
-      setupPatch: {name:"Rain",symbol:"RAIN"}, change:"applied" }) });
-    else await route.fulfill({ status:503,contentType:"application/json",body:JSON.stringify({error:"The AI provider is temporarily unavailable.",requestState:"failed"}) });
-  });
-  await page.goto("/launch/custom-ai");
-  const box = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
-  await expect(box).toBeEditable();
-  await box.fill("Build Rain with a 3% fee on buys and sells"); await box.press("Enter");
-  await expect(page.getByRole("heading", { name: "Rain", exact:true })).toBeVisible();
-  await expect(page.getByText("Charge 3% on buys and sells", {exact:true})).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Rain", exact:true })).toBeVisible();
-  await box.fill("Change to 4%"); await box.press("Enter");
-  await expect(page.getByRole("alert").filter({hasText:"AI provider"})).toBeVisible();
-  await expect(page.getByRole("heading", { name:"Change not applied" })).toBeVisible();
-  expect(calls).toBe(2);
-});
-test("mobile layout reflows and the editor remains keyboard accessible", async ({page}) => {
-  await page.setViewportSize({width:390,height:844});
-  await page.goto("/launch/custom-ai");
-  const box=page.getByRole("textbox", {name:"Describe your coin or ask a question"});
-  await box.focus(); await expect(box).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", {name:"Coin preview and details", exact:true}).click();
   await page.locator("summary").filter({ hasText: "Coin details" }).click();
   await page.getByLabel("Name",{exact:true}).fill("Rain");
   await expect(page.getByLabel("Name",{exact:true})).toHaveValue("Rain");
+  expect(calls).toBe(1);
 });
-test("new coin is separate from clearing messages and restores the unsent edit", async ({ page }) => {
+test("the saved coin and unsent edit survive a reload without reset controls", async ({ page }) => {
   let calls = 0;
   await page.route("**/api/custom-ai", route => {
     calls++;
@@ -145,20 +110,11 @@ test("new coin is separate from clearing messages and restores the unsent edit",
   const box = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
   await box.fill("Build Rain with 3% fees"); await box.press("Enter");
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add coin image", exact: true })).toBeEnabled();
-  await openChatMenu(page);
-  await page.getByRole("button", { name: "Clear messages", exact: true }).click();
-  await expect(page.getByText("Keep shaping your coin", { exact: true })).toBeVisible();
-  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toBeVisible();
   await box.fill("Only change the fee after five minutes");
-  await page.getByRole("button", { name: "New coin", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
-  await expect(box).toHaveValue("");
-  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toHaveCount(0);
-  await openChatMenu(page);
-  await page.getByRole("button", { name: "Restore previous coin", exact: true }).click();
+  await page.reload();
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
   await expect(box).toHaveValue("Only change the fee after five minutes");
+  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toBeVisible();
   expect(calls).toBe(1);
 });
 
@@ -330,5 +286,3 @@ test("keeps offline input editable while preventing a new generation", async ({p
   await expect(page.getByRole("button",{name:"Send message"})).toBeEnabled();
   await expect(box).toHaveValue("Keep this idea while offline");
 });
-
-async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat options",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}

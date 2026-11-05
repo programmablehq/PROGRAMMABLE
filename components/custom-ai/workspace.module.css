@@ -1,12 +1,12 @@
 .workspace { box-sizing: border-box; width: min(1280px, 100%); height: calc(var(--custom-ai-viewport, 100dvh) - var(--header-height, 64px)); margin: 0 auto; padding: 16px 24px; color: #f4f1eb; }
-:global(body):has(.workspace) { --header-height: calc(64px + env(safe-area-inset-top)); background: #111110; }
+:global(body):has(.workspace, .pageBackdrop) { --header-height: calc(64px + env(safe-area-inset-top)); background: #111110; }
 .pageBackdrop { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(rgb(0 0 0 / .30), rgb(0 0 0 / .42)), url("/brand/atmosphere/programmable-floral-foreground-v1.avif") center bottom / cover no-repeat; }
-:global(body):has(.workspace) :global(.site-header[data-custom-ai="true"]) { --webde-ink: #f4f1eb; height: var(--header-height); min-height: var(--header-height); background: linear-gradient(rgb(8 11 15 / .60), rgb(8 11 15 / .08)); }
-:global(body):has(.workspace) :global(.app-frame > main) { padding: 0; }
-:global(body):has(.workspace) :global(.site-header[data-custom-ai="true"] h1) { font-size: 18px; line-height: 24px; letter-spacing: 0; }
-:global(body):has(.workspace) :global(.atmosphere-backdrop),
-:global(body):has(.workspace) :global([data-site-footer]),
-:global(body):has(.workspace) :global(.mobile-nav) { display: none; }
+:global(body):has(.workspace, .pageBackdrop) :global(.site-header[data-custom-ai="true"]) { --webde-ink: #f4f1eb; height: var(--header-height); min-height: var(--header-height); background: linear-gradient(rgb(8 11 15 / .60), rgb(8 11 15 / .08)); }
+:global(body):has(.workspace, .pageBackdrop) :global(.app-frame > main) { padding: 0; }
+:global(body):has(.workspace, .pageBackdrop) :global(.site-header[data-custom-ai="true"] h1) { font-size: 18px; line-height: 24px; letter-spacing: 0; }
+:global(body):has(.workspace, .pageBackdrop) :global(.atmosphere-backdrop),
+:global(body):has(.workspace, .pageBackdrop) :global([data-site-footer]),
+:global(body):has(.workspace, .pageBackdrop) :global(.mobile-nav) { display: none; }
 .studio { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; height: 100%; min-height: 0; align-items: stretch; }
 .studio[data-guest="true"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); max-width: 820px; margin-inline: auto; }
 .conversation { position: relative; display: flex; flex-direction: column; box-sizing: border-box; min-width: 0; min-height: 0; height: 100%; padding: 8px 16px 16px; border: 1px solid rgb(255 255 255 / .08); border-radius: 16px; background: rgb(16 18 22 / .82); box-shadow: 0 12px 36px rgb(0 0 0 / .16); }
@@ -14,6 +14,14 @@
 .empty { min-height: 100%; display: grid; align-content: center; text-align: center; padding: 24px; }
 .empty h2 { margin: 0; font-size: clamp(25px, 3vw, 30px); line-height: 1.25; font-weight: 400; letter-spacing: -.035em; text-wrap: balance; }
 .empty > p { margin: 16px auto 24px; max-width: 32ch; color: #b8b4ad; font-size: 15px; line-height: 1.6; }
+.walletWelcome { margin-bottom: 24px; }
+.walletWelcome p { max-width: 34ch; margin: 16px auto; color: #b8b4ad; font-size: 15px; line-height: 1.6; }
+.connectWallet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 12px 20px; border: 0; border-radius: 12px; background: #ede7dc; color: #22201c; font: inherit; font-size: 14px; cursor: pointer; }
+.connectWallet:hover { background: #fff8ed; }
+.pendingBody { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; color: #b8b4ad; text-align: center; }
+.pendingBody p { margin: 0; max-width: 36ch; font-size: 14px; line-height: 1.6; }
+.pendingComposer { height: 50px; flex: 0 0 auto; border: 1px solid #3a3935; border-radius: 12px; background: rgb(23 23 22 / .6); }
+.pendingPreview { min-height: 0; border: 1px solid rgb(255 255 255 / .08); border-radius: 16px; background: rgb(16 18 22 / .82); }
 .starterIdeas { display: grid; gap: 8px; width: min(100%, 360px); margin-inline: auto; }
 .starterIdeas button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 12px 16px; border: 1px solid #343431; border-radius: 12px; background: #171716; color: #e2ddd4; font: inherit; font-size: 14px; text-align: start; cursor: pointer; }
 .starterIdeas button:hover { background: #242320; border-color: #77736b; }
@@ -368,7 +376,8 @@
 
 .toolbarActions .tools > summary { width: 40px; min-width: 40px; min-height: 44px; padding: 8px; border: 0; background: transparent; }
 @media (min-width: 561px) { .toolbarActions .toolsPanel { right: 0; left: auto; } }
-@media (min-width: 741px) { :global(body):has(.workspace) { overflow: hidden; } }
+@media (min-width: 741px) { :global(body):has(.workspace, .pageBackdrop) { overflow: hidden; } }
+@media (max-width: 740px) { .pendingPreview { height: 64px; } }
 
 .messageText p { margin: 0; white-space: pre-wrap; }
 .messageText p + p, .messageText h3, .messageText blockquote, .messageText ul, .messageText ol { margin-block: 12px; }
