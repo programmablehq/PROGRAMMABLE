@@ -35,7 +35,7 @@ import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, nor
 import { bindIntentImplementation } from "./intent-coverage.server";
 import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
 import { buildGeneralContract, type GeneralProjectDraft } from "./general-builder.server";
-import { generalBuildReply, unfinishedBuildReply, buildReplyLocale, BUILD_REPLY_LOCALES } from "./build-result";
+import { completedBuildReply, generalBuildReply, unfinishedBuildReply, buildReplyLocale, BUILD_REPLY_LOCALES } from "./build-result";
 import {auditGeneralSource,type GeneralSourceAudit} from "./source-audit.server";
 import { compileContractProject } from "./contract-project.server";
 import type { ContractProject } from "./contract-project";
@@ -492,7 +492,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       context.onProgress?.({ type: "phase", phase: "checking" });
       const checked = await compileRuleSpec(ruleSpec, coreChainId, feeds, signal, feeds.length?undefined:plan.feeChecks);
       if (checked.validation?.status !== "passed" || checked.lifecycle?.status !== "passed") throw new CustomAIError("rules", "The complete rule could not be verified yet. Your design is saved.", 422);
-      return { reply: plan.reply, intent, ruleSpec, draft: bindCandidateIntent(intent!, { ...checked, hookSummary: ruleSpec.requirements.map(r => r.text).join("; ").slice(0, 220) }, context.draft),
+      return { reply: completedBuildReply(update.replyLocale), intent, ruleSpec, draft: bindCandidateIntent(intent!, { ...checked, hookSummary: ruleSpec.requirements.map(r => r.text).join("; ").slice(0, 220) }, context.draft),
         memory: plan.memory, change: "applied", chargedAs: "build", ...update,...launchAction(request.id,true) };
     } catch (error) {
       signal?.throwIfAborted();
@@ -535,7 +535,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
         throw new CustomAIError("response", "The coin description was incomplete. Please try again.", 502);
       }
       // A bio belongs to this exact successful source, never a later failed edit.
-      return { reply: `${answer.reply as string}${feed && process.env.CUSTOM_AI_EVENTS_ENABLED !== "true" ? " The event rule is prepared for testing; public event launches are not enabled yet." : ""}${program && !program.available ? " The funded program is prepared for testing; public launch of this new program is not enabled yet." : ""}`, intent, draft: bindCandidateIntent(intent!, { ...draft, ...(program ? { program } : {}), ...(summary ? { hookSummary: String(summary).trim() } : {}),
+      return { reply: `${completedBuildReply(update.replyLocale)}${feed && process.env.CUSTOM_AI_EVENTS_ENABLED !== "true" ? " The event rule is prepared for testing; public event launches are not enabled yet." : ""}${program && !program.available ? " The funded program is prepared for testing; public launch of this new program is not enabled yet." : ""}`, intent, draft: bindCandidateIntent(intent!, { ...draft, ...(program ? { program } : {}), ...(summary ? { hookSummary: String(summary).trim() } : {}),
         verification: { status: "passed", sourceHash: draft.sourceHash, previousSourceHash: context.draft?.sourceHash,
           requirements: plan.requirements, checks: plan.feeChecks, cases: draft.validation.expectationCases } }, context.draft),
       ...update,...launchAction(request.id,true), memory: plan.memory, change: "applied", chargedAs: "build", ...(sources.length ? { sources } : {}) };
