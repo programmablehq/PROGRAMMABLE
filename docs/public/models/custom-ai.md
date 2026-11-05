@@ -22,7 +22,7 @@ Initial one-sided liquidity stays locked. Buys and sells change the pool reserve
 
 The current builder creates immutable fee rules and schedules, including different buy and sell fees and changes over time. For example, a coin can charge a 3% total fee for its first day, then 1%. The schedule starts when the coin launches.
 
-Edits use the saved contract and show whether the requested change was applied. Checked fee examples show the expected buy and sell fees over time. **New coin** starts a separate saved design; its previous conversation and unsent message remain in **Chats**. Under **Options**, **Clear messages** clears the conversation view while retaining the current coin and its rules. Options also contains saved versions, request details and remaining generation credits. Known provider outages preserve your design; a rejected provider request returns your generation allowance. A lost connection checks the saved request instead of generating it again.
+Edits use the saved contract and show whether the requested change was applied. Checked fee examples show the expected buy and sell fees over time. Open **Chats**, then **New chat**, to start a separate saved design. Your other chats and their unsent messages remain saved; you can reopen, rename or archive them from the same list. Known provider outages preserve your design; a rejected provider request returns your generation allowance. A lost connection checks the saved request instead of generating it again.
 
 Checked fee drafts, composed designs and general projects support editing individual saved rules. Select
 **Edit** beside a rule and describe the change in the chat. The composer shows
@@ -102,6 +102,6 @@ For larger source projects, the builder saves completed files and private work i
 
 Changes to an existing project keep the rest of its source intact. The builder applies exact edits to the saved files, then runs the compiler and independent checks again. If an edit cannot be applied unambiguously, the earlier source stays saved.
 
-The conversation and coin details share the available screen. Open **Chat options** for versions and usage. On mobile, expand the coin row when you need its details. A submission from another chat stays under **Earlier submission**; its launch controls do not replace the current design's next step.
+The conversation and coin details share the available screen. Open **Chats** to return to a saved conversation. On mobile, expand the coin row when you need its details. A submission from another chat stays under **Earlier submission**; its launch controls do not replace the current design's next step.
 
 If a provider interrupts a check, the complete saved steps can be reused after validation. Continuing requests only the remaining work. A saved partial check plan is never reported as a completed contract or launch approval.
