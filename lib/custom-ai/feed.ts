@@ -20,6 +20,7 @@ Data-dependent fees always fall back to 0.5% total when observations are stale, 
 For event rules, feeChecks includes feedValue as integer string and feedFresh boolean. Cover threshold-1, threshold,
 threshold+1 in BOTH directions while fresh, plus BOTH directions while stale with totalFeeBps=50.
 Set afterSeconds=0 for those examples. For ordinary time rules set feedValue=null and feedFresh=null.
-Time schedules combined with event rules are not yet supported: ask before simplifying. The fixed event template
-implements the fees, so no arbitrary generated external calls are accepted. Include source, threshold, freshness
+For combined time and event rules, use a supported composed-module rule with the configured feed, or the custom-contract
+route when required. Keep both mechanisms; this single-event template's limits are not platform-wide limits.
+The fixed event template implements the fees, so no arbitrary generated external calls are accepted. Include source, threshold, freshness
 fallback and fees in requirements. A signed observation establishes who reported a value, not that it is true.`;
