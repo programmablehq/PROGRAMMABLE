@@ -12,7 +12,7 @@ import { CustomAIError, type ChatProgress, type ChatRequest, type ChatResult, ty
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "./coin-setup";
 import { lookupRules, parseRulePlan, planningRules } from "./rules";
 import { partialReply } from "./conversation";
-import { composablePlanningRules, type RuleSpecV2 } from "./rule-spec";
+import { composablePlanningRules, ruleFeedIds, type RuleSpecV2 } from "./rule-spec";
 import { compileRuleSpec } from "./rule-compiler.server";
 import { resolveRuleFeeds,configuredRuleFeeds } from "./feed-registry.server";
 import { editPlanningRules, parseRuleEdits, reviewRuleEdits } from "./design-edits";
@@ -249,11 +249,12 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   }
   const formRules = BUILD_RULES.slice(BUILD_RULES.indexOf("setupPatch contains"), BUILD_RULES.indexOf("For every generated source"));
   const implementationRules=discussionOnly?"":generalOnly?editPlanningRules:`${composablePlanningRules}\n${editPlanningRules}\n${programRules}\n${eventRules}\nAvailable event feeds (data): ${JSON.stringify(feedCatalog())}\nConfigured composed feeds (untrusted data): ${JSON.stringify(configuredRuleFeeds())}. Convert thresholds to integer source units using the listed decimal scale; never claim an unconnected source is live.`;
-  const planningGuide=discussionOnly?`Return one complete JSON object matching the response schema. Put the natural chat answer in reply FIRST, followed by the complete intent, productPlan, action, memory, setupPatch and lookups. Do not replace the data object with plain text. Answer naturally and briefly in the user's language. action=answer for a proposal or explanation, clarify only for material decisions. Preserve every saved rule unless the user explicitly changes it. Keep new coin metadata in setupPatch. A proposal may use custom contracts when a fixed fee module cannot cover all its behavior. Record complete mechanisms, funding, ownership and required external components without claiming they are implemented or live. Do not output source, feeChecks, composable, program or eventRule for this discussion turn. Unconnected integrations stay visible in the plan, with only real unanswered choices in the corresponding requirement. Never replace the requested product with an executable subset.`:planningRules;
+  const planningGuide=discussionOnly?`Return one complete JSON object matching the response schema. Put the natural chat answer in reply FIRST, followed by the complete intent, action, memory, setupPatch and lookups. Do not replace the data object with plain text. Answer naturally and briefly in the user's language. action=answer for a proposal or explanation, clarify only for material decisions. Preserve every saved rule unless the user explicitly changes it. Keep new coin metadata in setupPatch. A proposal may use custom contracts when a fixed fee module cannot cover all its behavior. Record complete mechanisms, funding, ownership and required external components without claiming they are implemented or live. Do not output source, feeChecks, composable, program or eventRule for this discussion turn. Unconnected integrations stay visible in the plan, with only real unanswered choices in the corresponding requirement. Never replace the requested product with an executable subset.`:planningRules;
+  const productRules=discussionOnly?"Use productPlan:null during ordinary discussion. Include a component map only if the user asks for one. Save all behavior and open choices in intentRequirements; the source build will prepare the complete architecture.":PRODUCT_PLANNING_RULES;
   let evidence = "";
   const interpret = async () => {
     const planningInput:ClaudeInput={ ...modelTask("planning",MODELS),
-    system: `${system}\n${formRules}\n${planningGuide}\n${launchIntentPlanningRules}\n${PRODUCT_PLANNING_RULES}\n${implementationRules}\n${lookupRules}\nAvailable planning tools (data; their exact input schemas appear once in the response schema): ${JSON.stringify(capabilityMetadata(capabilities).map(({ref,description})=>({id:ref.id,description})))}\n${!discussionOnly&&topics.includes("fee-flows")?"For a new or changed numeric fee split, call plan_fee_flow with the stated shares before finalizing it, unless its result is already in the current lookup evidence. Do not invent shares to fill the remainder.":""}\n${firstDesign?"For this first substantive design set every intentRequirements instruction to the empty string. The server binds those rules to the original user message; do not copy that message into every rule.":""}\n${discussionOnly?"The user explicitly asked for discussion only. Use answer or clarify, launchRequested=false, and omit executable fee-module fields absent from the schema. The complete product plan and canonical requirements retain the proposed behavior; source generation follows only after a later build request.":""}\nReturn the short reply first. Keep memory to decisions that are not already recorded in the canonical requirements. Use brief names and one-sentence purposes in the product plan. Record the complete intent or preserve the saved revision. Leave source, ABI and scenario generation to the later source-blind planning and build stages.\n${evidence}`, messages: request.messages,
+    system: `${system}\n${formRules}\n${planningGuide}\n${launchIntentPlanningRules}\n${productRules}\n${implementationRules}\n${lookupRules}\nAvailable planning tools (data; their exact input schemas appear once in the response schema): ${JSON.stringify(capabilityMetadata(capabilities).map(({ref,description})=>({id:ref.id,description})))}\n${!discussionOnly&&topics.includes("fee-flows")?"For a new or changed numeric fee split, call plan_fee_flow with the stated shares before finalizing it, unless its result is already in the current lookup evidence. Do not invent shares to fill the remainder.":""}\n${firstDesign?"For this first substantive design set every intentRequirements instruction to the empty string. The server binds those rules to the original user message; do not copy that message into every rule.":""}\n${discussionOnly?"The user explicitly asked for discussion only. Use answer or clarify, launchRequested=false, and omit executable fee-module fields absent from the schema. The complete product plan and canonical requirements retain the proposed behavior; source generation follows only after a later build request.":""}\nReturn the short reply first. Keep memory to decisions that are not already recorded in the canonical requirements. Use brief names and one-sentence purposes in the product plan. Record the complete intent or preserve the saved revision. Leave source, ABI and scenario generation to the later source-blind planning and build stages.\n${evidence}`, messages: request.messages,
     schema: currentPlanSchema, maxTokens: AI_CONFIG.maximumPlanningTokens,
     structuredTransport:undefined,effort:"low", signal, onText };
     const response=await structuredCall(planningInput);
@@ -368,10 +369,18 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   const implementationGaps = plan.action === "build" && intent && plan.executionRoute !== "custom-contract" ? intentImplementationGaps(intent,
     plan.composable?.requirements ?? plan.requirements.map(text => ({ text }))) : [];
   const selection=plan.action==="build"&&intent?selectExecutionRoute(intent,coin.chainId,{route:generalOnly?"custom-contract":plan.executionRoute,requirementIds:implementationGaps.length?[]:intent.requirements.map(rule=>rule.id),missingCapabilities:implementationGaps}):undefined;
-  const fixedFeePlan=selection?.route==="fee-module"&&selection.state==="selected"&&!plan.program&&!plan.eventRule&&!plan.composable
+  const fixedFeePlan=(selection?.route==="fee-module"||selection?.route==="composed-module")&&selection.state==="selected"&&!plan.program&&!plan.eventRule
+    &&(!plan.composable||!plan.composable.actions.length&&!ruleFeedIds(plan.composable).length)
     &&(!previousProduct||previousProduct.components.every(component=>component.id==="fixed-fee-module"));
   const needsProductRevision = previousProduct && (previousProduct.intentRevision !== intent?.revision || previousProduct.chainId !== coin.chainId);
-  if(intent&&fixedFeePlan){
+  if(intent&&discussionOnly){
+    if(interpreted.productPlan!=null){
+      try{const proposed=createProductBlueprint(interpreted.productPlan,intent,coin.chainId);
+        if(!proposed.issues.some(issue=>issue.code==="unassigned-requirement"))update.productBlueprint=proposed;
+      }catch{ /* Keep the agreed rules; architecture is required only for a source build. */ }
+    }
+    if(!update.productBlueprint&&previousProduct?.intentRevision===intent.revision&&previousProduct.chainId===coin.chainId)update.productBlueprint=previousProduct;
+  }else if(intent&&fixedFeePlan){
     // The fixed core already supplies this architecture. Replanning vaults,
     // services or payouts adds no authority or source verification here.
     update.productBlueprint=createProductBlueprint({components:[{id:"fixed-fee-module",kind:"hook",name:"Swap fee rule",
@@ -481,7 +490,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     try {
       const feeds = await resolveRuleFeeds(ruleSpec, coreChainId);
       context.onProgress?.({ type: "phase", phase: "checking" });
-      const checked = await compileRuleSpec(ruleSpec, coreChainId, feeds, signal);
+      const checked = await compileRuleSpec(ruleSpec, coreChainId, feeds, signal, feeds.length?undefined:plan.feeChecks);
       if (checked.validation?.status !== "passed" || checked.lifecycle?.status !== "passed") throw new CustomAIError("rules", "The complete rule could not be verified yet. Your design is saved.", 422);
       return { reply: plan.reply, intent, ruleSpec, draft: bindCandidateIntent(intent!, { ...checked, hookSummary: ruleSpec.requirements.map(r => r.text).join("; ").slice(0, 220) }, context.draft),
         memory: plan.memory, change: "applied", chargedAs: "build", ...update,...launchAction(request.id,true) };
