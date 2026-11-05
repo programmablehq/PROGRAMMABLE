@@ -102,6 +102,7 @@ describe("Claude planning and generation", () => {
     await runCustomAI(request, undefined, { call, compile });
     expect(call).toHaveBeenCalledTimes(1); expect(call.mock.calls[0][0].model).toBe(MODELS.chat);
     expect(call.mock.calls[0][0].structuredTransport).toBeUndefined();
+    expect(call.mock.calls[0][0].effort).toBe("low");
     expect(compile).not.toHaveBeenCalled();
   });
   it("interprets a confirmation before generation and checks its independent examples", async () => {
