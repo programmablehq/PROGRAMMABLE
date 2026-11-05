@@ -52,8 +52,8 @@ export function RuleReview({ draft, intent, pendingChange, disabled, onKeepRules
         </ol>
         <h4>Where fees go</h4>
         <ul className={styles.ruleAllocations}>{summary.allocations.map(action => <li key={action.id}><strong>{action.title}</strong><p>{action.detail}</p></li>)}</ul>
-        <p>{summary.dataNotice}</p>
-        <p>Automatic execution also depends on a running service and its available budget.</p>
+        {Boolean(draft?.composable?.feeds.length) && <p>{summary.dataNotice}</p>}
+        {Boolean(draft?.composable?.spec.actions.length) && <p>Automatic execution also depends on a running service and its available budget.</p>}
       </>}
       {draft?.feed && <p>Data source: <a href={draft.feed.sourceUrl} target="_blank" rel="noopener noreferrer">{draft.feed.title}</a>. Stale or unavailable observations reduce total fees to 0.5%.</p>}
       {draft?.program && <p>{draft.program.spec.rewardShareBps / 100}% of additional fees fund {draft.program.spec.kind}.
