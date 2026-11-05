@@ -96,7 +96,13 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       if(result.id!==pendingCreate.current)throw Error("The new chat could not be confirmed. Try opening it again.");
       if(result.archived){pendingCreate.current=undefined;throw Error("That chat was archived. Create a new chat to continue.");}
       await writeDraftCache(key.current,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);pendingCreate.current=undefined;
-    }catch(cause){setOpen(true);setError(cause instanceof Error?cause.message:"A new chat could not be opened.");}finally{transition.current=false;setTransitioning(false);setLoading(false);}
+    }catch(cause){
+      setOpen(true);
+      // Creation may have succeeded before its response was lost. Refresh even
+      // when the library is already open, so the saved chat can be recovered.
+      await load(query.current.search,query.current.archived);
+      setError(cause instanceof Error?cause.message:"A new chat could not be opened.");
+    }finally{transition.current=false;setTransitioning(false);setLoading(false);}
   }
   async function update(chat:ConversationItem,patch:{title?:string;archived?:boolean},flush:Flush){
     if(transition.current)return;transition.current=true;setTransitioning(true);
