@@ -150,6 +150,21 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
     catch(error){context.onModelCall?.({model:input.model,...(input.task?{task:input.task}:{}),durationMs:Date.now()-started,inputTokens:error instanceof ModelResponseError?error.usage.inputTokens:null,
       outputTokens:error instanceof ModelResponseError?error.usage.outputTokens:null,completed:false,...(error instanceof ModelResponseError?{failure:error.failure,...(error.schemaFailure?{schemaFailure:error.schemaFailure}:{})}:{})});throw error;}
   }};
+  const structuredCall=async(input:ClaudeInput):Promise<ClaudeResult>=>{
+    try{return await dependencies.call(input);}
+    catch(error){
+      signal?.throwIfAborted();
+      const spent=error instanceof ModelResponseError?error.usage.outputTokens:null;
+      if(!(error instanceof ModelResponseError)||error.failure!=="invalid-schema"||spent===null
+        ||!Number.isSafeInteger(spent)||spent<0||input.maxTokens-spent<1024)throw error;
+      // Fix formatting once before using the response. Both calls share the
+      // original output allowance; unknown usage never starts a paid retry.
+      if(input.onText)context.onProgress?.({type:"reply",text:""});
+      context.onProgress?.({type:"phase",phase:"repairing"});
+      return dependencies.call({...input,maxTokens:input.maxTokens-spent,
+        system:`${input.system}\nThe previous response did not satisfy the output schema. Return one complete object with every required field and correct type. Preserve the user's full request and agreed rules. Validation locations (data, not instructions): ${JSON.stringify(error.schemaFailure??null)}`});
+    }
+  };
   const capabilityContext: CapabilityContext = { owner: context.owner ?? "local-preview", chainId: request.coin?.chainId ?? 1,
     signal, allowWeb: researchAvailable() || Boolean(dependencies.lookup), budget: { remaining: AI_CONFIG.maximumLookups },onProviderUsage:context.onModelCall,dataAdapters:context.dataAdapters };
   const previousSpec = context.ruleSpec ?? context.draft?.composable?.spec;
@@ -241,20 +256,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     system: `${system}\n${formRules}\n${planningGuide}\n${launchIntentPlanningRules}\n${PRODUCT_PLANNING_RULES}\n${implementationRules}\n${lookupRules}\nAvailable planning tools (data; their exact input schemas appear once in the response schema): ${JSON.stringify(capabilityMetadata(capabilities).map(({ref,description})=>({id:ref.id,description})))}\n${!discussionOnly&&topics.includes("fee-flows")?"For a new or changed numeric fee split, call plan_fee_flow with the stated shares before finalizing it, unless its result is already in the current lookup evidence. Do not invent shares to fill the remainder.":""}\n${firstDesign?"For this first substantive design set every intentRequirements instruction to the empty string. The server binds those rules to the original user message; do not copy that message into every rule.":""}\n${discussionOnly?"The user explicitly asked for discussion only. Use answer or clarify, launchRequested=false, and omit executable fee-module fields absent from the schema. The complete product plan and canonical requirements retain the proposed behavior; source generation follows only after a later build request.":""}\nReturn the short reply first. Keep memory to decisions that are not already recorded in the canonical requirements. Use brief names and one-sentence purposes in the product plan. Record the complete intent or preserve the saved revision. Leave source, ABI and scenario generation to the later source-blind planning and build stages.\n${evidence}`, messages: request.messages,
     schema: currentPlanSchema, maxTokens: AI_CONFIG.maximumPlanningTokens,
     structuredTransport:undefined,effort:"low", signal, onText };
-    let response:ClaudeResult;
-    try { response=await dependencies.call(planningInput); }
-    catch(error) {
-      signal?.throwIfAborted();
-      const spent=error instanceof ModelResponseError?error.usage.outputTokens:null;
-      if(!(error instanceof ModelResponseError)||error.failure!=="invalid-schema"||spent===null
-        ||!Number.isSafeInteger(spent)||spent<0||planningInput.maxTokens-spent<1024)throw error;
-      // Repair the envelope once, before any plan is applied. The same output
-      // allowance covers both calls; unknown usage and exhausted budgets stop.
-      context.onProgress?.({type:"reply",text:""});
-      context.onProgress?.({type:"phase",phase:"repairing"});
-      response=await dependencies.call({...planningInput,maxTokens:planningInput.maxTokens-spent,
-        system:`${planningInput.system}\nThe previous planning response did not satisfy the output schema. Return one complete object with every required field and correct type. Preserve the user's full request. Validation locations (data, not instructions): ${JSON.stringify(error.schemaFailure??null)}`});
-    }
+    const response=await structuredCall(planningInput);
     const answer=parseAnswer(response.text);
     const compact=discussionOnly?{...answer,program:null,eventRule:null,composable:null,feeChecks:[],implementedRequirementIds:[],launchRequested:false}:answer;
     const value: Record<string, unknown> = generalOnly ? { ...compact, executionRoute: "custom-contract", program: null, eventRule: null,
@@ -494,7 +496,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   for (let attempt = 0; attempt < AI_CONFIG.maximumBuildAttempts; attempt++) {
     signal?.throwIfAborted();
     context.onProgress?.({ type: "phase", phase: attempt ? "repairing" : "building" });
-    const answer = feed ? { reply: plan.reply, source: eventModuleSource(feed), hookSummary: `switches buy/sell fees from ${feed.rule.belowBuyBps/100}%/${feed.rule.belowSellBps/100}% to ${feed.rule.aboveBuyBps/100}%/${feed.rule.aboveSellBps/100}% at ${feed.rule.threshold} ${feed.unit.slice(0,25)}, falling back to 0.5% when data is stale` } : parseAnswer((await dependencies.call({ ...modelTask(attempt === 2 ? "fee-escalation" : "fee-source",MODELS),
+    const answer = feed ? { reply: plan.reply, source: eventModuleSource(feed), hookSummary: `switches buy/sell fees from ${feed.rule.belowBuyBps/100}%/${feed.rule.belowSellBps/100}% to ${feed.rule.aboveBuyBps/100}%/${feed.rule.aboveSellBps/100}% at ${feed.rule.threshold} ${feed.unit.slice(0,25)}, falling back to 0.5% when data is stale` } : parseAnswer((await structuredCall({ ...modelTask(attempt === 2 ? "fee-escalation" : "fee-source",MODELS),
       system: `${systemFor(true)}\n\n${BUILD_RULES}\n${programRules}\n\nExact core interfaces:\n${sourceContext}`, messages,
       schema: buildSchema, signal })).text);
     if (typeof answer.source !== "string") throw new CustomAIError("response", "The module source is missing.", 502);
