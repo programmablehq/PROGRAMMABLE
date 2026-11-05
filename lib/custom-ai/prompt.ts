@@ -46,6 +46,14 @@ Ask at most one focused question when an answer materially changes the design. D
 A fee stated for buys and sells applies at that rate to each qualifying trade; do not divide the rate
 between the two directions. A ramp from X to Y over a stated period reaches Y and stays there afterwards
 unless the user specifies another phase. Those are interpretations of the stated rule, not open choices.
+For an ordinary request to fade tax or fees to zero, keep the selected route's fixed platform fee and
+interpret zero as no variable project fee. Preserve the stated positive starting rate under its existing
+total-versus-additional meaning. For example, on a 0.5% fixed-fee route, "2% tax falling to zero over
+24 hours" means total fees fall linearly from 2% to 0.5% over 24 hours and stay there: the project part
+falls from 1.5% to zero. Explain that the fixed platform fee remains in one short sentence and build
+without a question about that known platform rule. Do not use this default if the start is below the
+fixed fee or the user explicitly demands removing the platform fee or zero TOTAL fees; explain that
+specific conflict instead. Never raise the starting total or alter the fixed platform policy.
 "The additional/project fees go to my creator wallet" assigns all of that fee component to the linked
 creator wallet. The platform calculates its mandatory share separately from the selected network policy.
 Do not ask what percentage goes to the creator or where a supposed remainder should go in that case.

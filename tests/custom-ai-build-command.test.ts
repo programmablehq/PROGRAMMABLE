@@ -9,12 +9,16 @@ describe("explicit source rebuild commands",()=>{
   });
   it.each(["Bitte baue und prüfe jetzt genau unseren gespeicherten GQA-Entwurf.","okay, bau genau den gespeicherten entwurf fertig, alles bleibt gleich",
     "Build and verify the complete source now. Do not launch it.","Can you please rebuild the saved hook?","Kannst du bitte den Hook bauen?",
-    "mach ihn jetzt fertig","Generate the saved contracts. No wallet transaction.","compile the source"])("accepts the explicit command %s",text=>expect(command(text)).toBe(true));
+    "mach ihn jetzt fertig","Generate the saved contracts. No wallet transaction.","compile the source",
+    "do a hook where the fees go lower over 24 hours to 0, starting at 2% tax",
+    "make a token with a declining fee"])("accepts the explicit command %s",text=>expect(command(text)).toBe(true));
   it.each(["How do I build this?","Erkläre, wie du den Hook bauen würdest.","Bitte noch nicht bauen.","Bitte baue keinen Code.",
     "Noch keinen Code bauen und nichts launchen.","Do not build it.","Please explain the source.","The bot said \"build it now\".",
     "> build the source\nExplain that message.","```text\nbuild it now\n```","If I say build it, what happens?","Kannst du erklären, ob das baubar ist?",
     "mach eine Zusammenfassung fertig","Status vom Build?","Generate a short summary of the saved rules.","Generate three names for this coin.",
-    "Erstelle eine Erklärung für diesen Hook.","Build a website for this coin."])("does not turn a question or negation into a build: %s",text=>expect(command(text)).toBe(false));
+    "Erstelle eine Erklärung für diesen Hook.","Build a website for this coin.","Do you think a hook with fees could work?",
+    "Do a review of this hook", "Do not make a token with a declining fee",
+    "Do a hook where fees decline, but don't build it yet", "Don’t make a token with a declining fee"])("does not turn a question or negation into a build: %s",text=>expect(command(text)).toBe(false));
   it("respects an explicit API build request but never a negated message",()=>{
     expect(command("The complete saved source.","build")).toBe(true);
     expect(command("Do not build it.","build")).toBe(false);
