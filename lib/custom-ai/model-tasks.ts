@@ -13,8 +13,8 @@ export const MODEL_TASKS = {
   // A frozen architecture shares one bounded output budget across source parts.
   "source-implementation": { role: "build", effort: "low", maxTokens: 16_000 },
   "source-edit": { role: "chat", effort: "low", maxTokens: 4000 },
-  "fee-source": { role: "build", effort: "high", maxTokens: 6000 },
-  "fee-escalation": { role: "escalation", effort: "high", maxTokens: 6000 },
+  "fee-source": { role: "build", effort: "low", maxTokens: 6000, responseProfile: "contract" },
+  "fee-escalation": { role: "escalation", effort: "high", maxTokens: 6000, responseProfile: "contract" },
   "source-audit": { role: "escalation", effort: "low", maxTokens: 3500 },
 } as const;
 /** The combined scenario ceiling remains 12,000 output tokens per request. */
