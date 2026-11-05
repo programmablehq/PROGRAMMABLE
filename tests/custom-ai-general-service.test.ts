@@ -254,15 +254,16 @@ it("builds the complete saved design when a casual request explicitly preserves 
  expect(call.mock.calls[1][0].system).toContain("counter");expect(call.mock.calls[1][0].system).toContain("no-owner");
 });
 
-it("dispatches an explicit unchanged build even when the planner only repeats the previous failure status",async()=>{
+it.each(["Bitte baue und prüfe jetzt genau den gespeicherten Entwurf. Nichts launchen.","Create the saved hook and give it the name Bloom"])("dispatches an explicit unchanged build instead of another status answer: %s",async content=>{
  const previous=prior(),save=vi.fn(async()=>{}),compiler=vi.fn(compile),call=vi.fn()
-  .mockResolvedValueOnce(plan({action:"answer",intentMode:"preserve",intentRequirements:[],requirements:[],reply:"Checks have not finished yet."}))
+  .mockResolvedValueOnce(plan({action:"answer",intentMode:"preserve",intentRequirements:[],requirements:[],reply:"Checks have not finished yet.",setupPatch:content.includes("Bloom")?{name:"Bloom"}:{}}))
   .mockResolvedValueOnce(generated());
- const value=await runCustomAI({...request,messages:[{role:"user",content:"Bitte baue und prüfe jetzt genau den gespeicherten Entwurf. Nichts launchen."}]},undefined,
+ const value=await runCustomAI({...request,messages:[{role:"user",content}]},undefined,
   {call,compile:vi.fn(),compileProject:compiler},{intent:previous.project.intent,saveProject:save});
  expect(value.generalProject).toBeDefined();expect(value.intent).toEqual(previous.project.intent);
  expect(call).toHaveBeenCalledTimes(2);expect(compiler).toHaveBeenCalledOnce();expect(save).toHaveBeenCalledOnce();
  expect(value.nextAction).toBeUndefined();
+ if(content.includes("Bloom"))expect(value.setupPatch?.name).toBe("Bloom");
 });
 
 it.each(["Bitte noch nicht bauen.","Wie würdest du den gespeicherten Entwurf bauen?","Der Bot schrieb: \"Build now\"."])("keeps an explanation out of the source builder: %s",async content=>{

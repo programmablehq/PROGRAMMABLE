@@ -52,7 +52,8 @@ Execution is permissionless, callable by anyone, not guaranteed automatic. Rewar
 remain available for subsequent stakers. Claims distribute only collected rewards, with integer rounding.
 Include the COMPLETE program behavior and split in requirements. Preserve the saved program unless explicitly changed.
 Generated Solidity implements only the fee rule; the platform binds the separately checked program template.
-Other reward systems require clarification. Do not substitute a distribution for requested staking or buybacks.`;
+For other reward systems, use the custom-contract route when the complete behavior is specified. Ask only about
+missing user decisions or genuinely unavailable dependencies. Do not substitute a distribution for requested staking or buybacks.`;
 
 // Binding the complete template/configuration into the fee source binds the existing
 // source-hash review, saved draft and launch journal without changing core bytecode.
