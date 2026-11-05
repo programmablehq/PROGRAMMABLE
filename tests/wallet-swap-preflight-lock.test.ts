@@ -30,11 +30,8 @@ function harness(kind: "legacy" | "launch-plan" | "claim" | "launch", failure: "
   const storage = { getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) };
   const review = { binding: "exact-trade", maxGasCostWei: "1000", transaction: { from: account, to: account, data: "0x1234" } };
-  let preparations = 0;
   const prepare = vi.fn(async () => {
-    preparations++;
-    if (failure === "gas-rebound") return { ...review, maxGasCostWei: preparations === 1 ? "900" : "950" };
-    if (kind !== "legacy" && preparations === 1) return review;
+    if (failure === "gas-rebound") return { ...review, maxGasCostWei: "950" };
     if (failure === "preflight") throw new Error("Quote is no longer available");
     if (failure === "binding") return { ...review, binding: "changed-transaction" };
     if (failure === "transaction") return { ...review, transaction: { ...review.transaction, data: "0x5678" } };
@@ -77,7 +74,7 @@ function harness(kind: "legacy" | "launch-plan" | "claim" | "launch", failure: "
   });
   const invoke = () => (callbackModule.exports as (input: unknown) => Promise<string>)({ action: "submit", reviewed: review });
   const lease = () => storage.getItem(`programmable:wallet-request:v1:4663:${account}`);
-  return { invoke, lease, send, beginLaunchSend };
+  return { invoke, lease, send, beginLaunchSend, prepare };
 }
 
 describe.each(["legacy", "launch-plan"] as const)("%s swap preflight wallet locking", kind => {
@@ -108,6 +105,7 @@ describe.each(["legacy", "launch-plan"] as const)("%s swap preflight wallet lock
     const test = harness(kind, "success");
     await expect(test.invoke()).resolves.toBe(hash);
     expect(test.send).toHaveBeenCalledOnce();
+    expect(test.prepare).toHaveBeenCalledOnce();
     expect(test.lease()).toBeNull();
   });
 });
@@ -117,6 +115,7 @@ describe.each(["launch-plan", "claim", "launch"] as const)("%s reviewed gas ceil
     const test = harness(kind, "gas-rebound");
     await expect(test.invoke()).resolves.toBe(hash);
     expect(test.send).toHaveBeenCalledOnce();
+    expect(test.prepare).toHaveBeenCalledOnce();
     expect(test.lease()).toBeNull();
   });
 
