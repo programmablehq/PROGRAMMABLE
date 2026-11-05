@@ -52,6 +52,9 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
     // The model needs every stable rule and open choice, not repeated quotes.
     intent:intent?modelIntentContext(intent):undefined,
     currentDraft:draft?{sourceHash:draft.sourceHash,...(includeSource?{source:draft.source}:{}),hookSummary:draft.hookSummary,
+      compiled:draft.compiled,validation:draft.validation?.status??"not-run",
+      verification:draft.compiled&&draft.verification?.sourceHash===draft.sourceHash?draft.verification.status:"not-run",
+      ...(draft.lifecycle?{lifecycle:{status:draft.lifecycle.status,scope:draft.lifecycle.scope}}:{}),
       requirements:draft.verification?.requirements,feeChecks:draft.verification?.checks,program:draft.program?.spec,eventRule:draft.feed?.rule,
       sourceIncluded:includeSource}:null,
     ...(projectView?{generalProject:{projectHash:projectView.projectHash,chainId:projectView.chainId,summary:projectView.summary,

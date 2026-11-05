@@ -7,6 +7,10 @@ export function isDiscoveryQuestion(request: Pick<ChatRequest, "intent" | "messa
   if (request.intent !== "chat" || request.editTarget || last?.role !== "user") return false;
   const text = last.content.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
   if (!text || text.length > 600 || /https?:\/\/|0x[0-9a-f]{10}|[`{}\[\]]/u.test(text)) return false;
+  // Current-world questions need the planner's evidence tools. An idea-only
+  // reply has no lookup stage and must not invent a price, event or observation.
+  if (/\b(?:current|latest|today(?:'s)?|right now|live|aktuell\w*|heute|gerade)\b/u.test(text)
+    && /\b(?:price\w*|market\w*|weather|news|volume|gas|preis\w*|markt\w*|wetter|nachrichten|volumen)\b/u.test(text)) return false;
   const question = text.replace(/^(?:(?:hey|hi|hello|hallo|moin)[,.!:\s]+)+/u, "");
   const capability = [
     /^(?:what|which)\b[^.!?;,\n]{0,70}?\b(?:can|could|should)\b[^.!?;,\n]{0,70}?\b(?:build|make|create|do|hooks?)\b/u,

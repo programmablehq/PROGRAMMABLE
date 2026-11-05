@@ -41,18 +41,19 @@ export type ProductBlueprint = ProductPlan & {
 const textSchema = { type: "string", minLength: 1, maxLength: 600 };
 const idSchema = { type: "string", pattern: "^[a-z][a-z0-9-]{0,63}$" };
 const idsSchema = { type: "array", maxItems: 64, uniqueItems: true, items: idSchema };
+const requirementIdsSchema = {...idsSchema,minItems:1};
 const records = (properties: Record<string, unknown>, maxItems = 64) => ({
   type: "array", maxItems, items: { type: "object", properties, required: Object.keys(properties), additionalProperties: false },
 });
 export const productPlanSchema = {
   type: "object", properties: {
-    components: records({ id: idSchema, kind: { enum: PRODUCT_COMPONENT_KINDS }, name: textSchema, purpose: textSchema, requirementIds: idsSchema, dependsOn: idsSchema }),
+    components: records({ id: idSchema, kind: { enum: PRODUCT_COMPONENT_KINDS }, name: textSchema, purpose: textSchema, requirementIds: requirementIdsSchema, dependsOn: idsSchema }),
     assets: records({ id: idSchema, kind: { enum: ["native", "launch-token", "external-token"] }, name: textSchema }, 32),
     flows: records({ id: idSchema, source: idSchema, target: idSchema, asset: idSchema, trigger: { enum: PRODUCT_TRIGGERS }, purpose: textSchema,
-      requirementIds: idsSchema, allocationGroup: { anyOf: [idSchema, { type: "null" }] }, shareBps: { type: ["integer", "null"], minimum: 0, maximum: 10000 } }, 128),
+      requirementIds: requirementIdsSchema, allocationGroup: { anyOf: [idSchema, { type: "null" }] }, shareBps: { type: ["integer", "null"], minimum: 0, maximum: 10000 } }, 128),
     services: records({ component: idSchema, capability: idSchema, trigger: { enum: ["time", "external-event", "onchain-event"] },
-      failurePolicy: { enum: ["retain-funds", "pause-action", "bounded-retry", "undecided"] }, requirementIds: idsSchema }, 32),
-    interfaceActions: records({ id: idSchema, target: idSchema, kind: { enum: ["claim", "deposit", "withdraw", "vote", "inspect"] }, requirementIds: idsSchema }, 64),
+      failurePolicy: { enum: ["retain-funds", "pause-action", "bounded-retry", "undecided"] }, requirementIds: requirementIdsSchema }, 32),
+    interfaceActions: records({ id: idSchema, target: idSchema, kind: { enum: ["claim", "deposit", "withdraw", "vote", "inspect"] }, requirementIds: requirementIdsSchema }, 64),
   }, required: ["components", "assets", "flows", "services", "interfaceActions"], additionalProperties: false,
 };
 
@@ -156,7 +157,7 @@ export function restoredProductBlueprint(value: unknown, intent: LaunchIntent | 
   try { return checkedProductBlueprint(value as ProductBlueprint, intent, chainId); } catch { return undefined; }
 }
 
-export const PRODUCT_PLANNING_RULES = `Keep a single productPlan for a new or revised design. Its components describe the token, hook, helper contracts, adapters, automation, index and interface actually needed by the saved rules. Link each component, flow, service and interface action to canonical requirement IDs. Preserve every rule; architectural suggestions never silently become user decisions.
-Flows name their source, target, asset and trigger. Actor endpoints are creator, trader, holders, community, protocol and burn; other endpoints must be declared components. An allocationGroup divides one specific source of funds in one asset. Shares are basis points of that budget, not a swap fee or a percentage of token price. Use null for undecided shares, and keep an unassigned remainder explicit. Do not normalize an incomplete split or count the same funds twice.
-Services identify needed capabilities and failure behavior. They are requirements, not proof that a feed, keeper, protocol adapter or credential exists. No URLs, keys or invented deployment addresses belong in this plan. A defined plan does not certify execution, tests, funding, deployment or launch readiness.
-For questions and brainstorming preserve the current productPlan; return null rather than replacing it with the example. For a genuine design change produce the complete new plan with the revised requirement IDs. Keep the conversation short and about the user's behavior and choices; the structure is internal.`;
+export const PRODUCT_PLANNING_RULES = `Return one complete productPlan for a new/revised design, including an answer resolving an open choice or a plan-only update even with action=answer. Preserve unaffected parts and apply confirmed shares, recipients and timing. Pure questions or brainstorming return null and keep the saved plan.
+Declare only needed components. Each component, flow, service and interface action needs at least one canonical requirementId; helpers link to the rules they support. dependsOn may be empty. Never silently turn architectural suggestions into user decisions.
+Flows specify source, target, asset and trigger. Actor endpoints: creator, trader, holders, community, protocol, burn; others must be components. Each allocationGroup divides one source's funds in one asset. shareBps is allocation, not tax or price; null is undecided. Keep remainders explicit, never normalize shares or double-count funds.
+Services reference only adapter, automation or indexer components, with capability and failure behavior. Hook/token/vault contract logic is not an external service or an open failure-policy choice. Do not invent URLs, credentials, deployments or connected services. A plan certifies no execution, funding, checks or launch readiness. Keep this structure internal and replies focused on user choices.`;

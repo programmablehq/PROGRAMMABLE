@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { checkedProductBlueprint, createProductBlueprint, type ProductPlan } from "../lib/custom-ai/product/blueprint";
+import { checkedProductBlueprint, createProductBlueprint, productPlanSchema, type ProductPlan } from "../lib/custom-ai/product/blueprint";
+import Ajv from "ajv";
 import type { LaunchIntent } from "../lib/custom-ai/launch-intent";
 import { projectAllocation, reviewProductEconomics } from "../lib/custom-ai/product/economics";
 
@@ -29,6 +30,13 @@ function plan(): ProductPlan {
 }
 
 describe("canonical product blueprint", () => {
+  it("rejects unbound model components in the response schema as well as the saved plan",()=>{
+    const validate=new Ajv({strict:false}).compile(productPlanSchema),candidate=plan();
+    expect(validate(candidate)).toBe(true);
+    candidate.components[0].requirementIds=[];
+    expect(validate(candidate)).toBe(false);
+    expect(()=>createProductBlueprint(candidate,intent,8453)).toThrow();
+  });
   it("keeps every atom accounted for without fabricating investment returns", () => {
     const product = createProductBlueprint(plan(), intent, 8453);
     for (const amountAtoms of ["0", "1", "7", "101", "1000000000000000001"]) {

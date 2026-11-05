@@ -18,6 +18,10 @@ describe("read-only builder questions", () => {
     expect(isBriefChat(request(content))).toBe(true);
   });
   it.each([
+    "What can you build around today's ETH price? What is the price right now?",
+    "What can you build with the current weather in London?",
+    "Was können wir mit dem aktuellen ETH-Preis bauen?",
+    "What can you do with the latest market news?",
     "What can you build? Then launch it.", "Was kannst du? Jetzt launche den Coin.", "Give me ideas and build the first one.", "How can you help? Sign this transaction.",
     "Was kannst du bauen? Ändere die Gebühren auf 2%.", "Gib mir Ideen und erstelle meinen Coin.",
     "What can you build? Could you change my fee to 3%?",

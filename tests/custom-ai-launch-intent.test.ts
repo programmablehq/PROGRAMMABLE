@@ -36,7 +36,7 @@ describe("complete launch intent and source revisions", () => {
     expect(result.intent?.requirements).toHaveLength(10);
     expect(result.unresolved).toEqual([...questions, ...texts.slice(6)]);
     expect(result.change).toBe("blocked");
-    expect(result.reply).toContain("before I can build");
+    expect(result.reply).toBe(questions[0]);
     expect(result.reply).not.toContain("build has started");
     expect(result.draft).toBeUndefined();
     expect(compile).not.toHaveBeenCalled(); expect(call).toHaveBeenCalledTimes(1);
