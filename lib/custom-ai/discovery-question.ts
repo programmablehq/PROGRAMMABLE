@@ -24,8 +24,8 @@ export function isDiscoveryQuestion(request: Pick<ChatRequest, "intent" | "messa
   const polite = String.raw`(?:(?:please|now|bitte|jetzt|noch)\s+)*`;
   const modal = String.raw`(?:(?:can|could|would|will)\s+you|(?:kannst|konntest|wurdest|willst)\s+du|(?:konnt|konntet|wurdet|wollt)\s+ihr|(?:konnen|konnten|wollen|sollen)\s+wir)\s+`;
   const action = String.raw`(?:build|make|create|launch\w*|deploy\w*|change|update|add|remove|set|send|transfer|withdraw|deposit|mint|burn|rename|buy|sell|swap|claim|approve|sign|use|switch|give|gib|mach\w*|signier\w*|kauf\w*|verkauf\w*|bau\w*|erstell\w*|ander\w*|fug\w*|entfern\w*|setz\w*|sende\w*|zahl\w*|benenn\w*|nenn\w*|nutze\w*|verwend\w*|wechsel\w*)\b`;
-  // A polite question may still request an edit. Keep the complete message
-  // with the planner, including German clauses whose action comes last.
+  // A second substantive question may request work with an unfamiliar verb.
+  // Preserve it in the planner instead of guessing that it is read-only.
   return !new RegExp(`${followup}${polite}(?:${modal}${polite})?${action}`, "u").test(commands)
-    && !new RegExp(`${followup}${polite}${modal}[^.!?;]{0,180}\\b${action}`, "u").test(commands);
+    && !new RegExp(`${followup}${polite}${modal}\\S`, "u").test(commands);
 }
