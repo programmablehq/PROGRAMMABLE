@@ -1,6 +1,6 @@
-.workspace { box-sizing: border-box; width: min(1280px, 100%); height: calc(var(--custom-ai-viewport, 100dvh) - var(--header-height, 64px)); margin: 0 auto; padding: 16px 24px; color: #f4f1eb; }
+.workspace { position: relative; z-index: 1; box-sizing: border-box; width: min(1280px, 100%); height: calc(var(--custom-ai-viewport, 100dvh) - var(--header-height, 64px)); margin: 0 auto; padding: 16px 24px; color: #f4f1eb; }
 :global(body):has(.workspace, .pageBackdrop) { --header-height: calc(64px + env(safe-area-inset-top)); background: #111110; }
-.pageBackdrop { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(rgb(0 0 0 / .30), rgb(0 0 0 / .42)), url("/brand/atmosphere/programmable-floral-foreground-v1.avif") center bottom / cover no-repeat; }
+.pageBackdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(rgb(0 0 0 / .30), rgb(0 0 0 / .42)), url("/brand/atmosphere/programmable-floral-foreground-v1.avif") center bottom / cover no-repeat; }
 :global(body):has(.workspace, .pageBackdrop) :global(.site-header[data-custom-ai="true"]) { --webde-ink: #f4f1eb; height: var(--header-height); min-height: var(--header-height); background: linear-gradient(rgb(8 11 15 / .60), rgb(8 11 15 / .08)); }
 :global(body):has(.workspace, .pageBackdrop) :global(.app-frame > main) { padding: 0; }
 :global(body):has(.workspace, .pageBackdrop) :global(.site-header[data-custom-ai="true"] h1) { font-size: 18px; line-height: 24px; letter-spacing: 0; }

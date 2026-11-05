@@ -1,4 +1,5 @@
 import { validConversationId } from "./conversation";
+import { isDiscoveryQuestion } from "./discovery-question";
 import { EMPTY_COIN_SETUP, applyCoinSetupPatch, parseCoinSetupPatch, type CoinSetup, type CoinSetupPatch } from "./coin-setup";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string; sources?: import("./knowledge").KnowledgeSource[] };
@@ -81,6 +82,7 @@ export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: s
   sources?: import("./knowledge").KnowledgeSource[] };
 
 export function isBriefChat(request: ChatRequest): boolean {
+  if (isDiscoveryQuestion(request)) return true;
   // In an existing design, "okay" can accept a pending economic decision.
   // Leave those confirmations to the planner; greetings and thanks are inert.
   if ((request.contextId || request.draftId || request.messages.length > 1)

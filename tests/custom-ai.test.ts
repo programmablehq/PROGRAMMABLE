@@ -79,6 +79,19 @@ const plan = (action = "build", extra: { requirements?: string[]; unresolved?: s
 const generated = () => result({ reply: "The coin charges 3% on buys and sells.", source: "contract GeneratedFeeModule {}", hookSummary: "charges 3% on buys and sells" });
 
 describe("Claude planning and generation", () => {
+  it("answers a request for ideas once without a contract plan, chain reads or compilation", async () => {
+    const call = vi.fn().mockResolvedValue(result({ reply: "Eine fallende Startgebühr oder Gebühren für Liquidität und Buybacks." }));
+    const compile = vi.fn(), load = vi.fn();
+    const answer = await runCustomAI({ ...request, messages: [{ role: "user", content:
+      "Hey, was könnte ich hier bauen? Erstmal nur Ideen, bitte noch nichts bauen." }] }, undefined,
+    { call, compile }, { loadProductionContext: load });
+    expect(answer).toMatchObject({ change: "unchanged" });
+    expect(answer.draft).toBeUndefined(); expect(answer.intent).toBeUndefined(); expect(answer.setupPatch).toBeUndefined();
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call.mock.calls[0][0]).toMatchObject({ task: "conversation", maxTokens: 800 });
+    expect(call.mock.calls[0][0].schema.required).toEqual(["reply"]);
+    expect(load).not.toHaveBeenCalled(); expect(compile).not.toHaveBeenCalled();
+  });
   it("uses only Haiku for a greeting and never compiles it", async () => {
     const call = vi.fn().mockResolvedValue(result({ reply: "What should your coin do?" })); const compile = vi.fn();
     expect(await runCustomAI({ ...request, messages: [{ role: "user", content: "Hi!" }] }, undefined, { call, compile })).toMatchObject({ reply: "What should your coin do?", change: "unchanged" });
