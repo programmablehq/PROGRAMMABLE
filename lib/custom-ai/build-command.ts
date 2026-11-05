@@ -10,7 +10,7 @@ export function designOnlyRequest(request:Pick<ChatRequest,"intent"|"messages">)
     .replace(/^\s*>.*$/gm," ").replace(/"[^"\n]*"|„[^“\n]*“|“[^”\n]*”|`[^`\n]*`/g," ").toLowerCase();
   if(/\b(?:do not|don't)\s+(?:just|only)\s+(?:want\s+to\s+)?(?:plan|discuss|design)\b/.test(text))return false;
   return /\b(?:do not|don't|not)\s+(?:build|generate|deploy)(?:\s+or\s+launch)?\s+(?:it|this|anything)?\s*(?:yet\b|now\b|[.!?]|$)/.test(text)
-    ||/\bnoch\s+nicht\s+(?:bauen|generieren|deployen|veröffentlichen)\b/.test(text)
+    ||/\bnoch\s+nicht(?:s)?\s+(?:bauen|generieren|deployen|veröffentlichen)\b/.test(text)
     ||/\b(?:only|just)\s+(?:want\s+to\s+)?(?:discuss|plan|explore|brainstorm|shape|design)\b/.test(text)
     ||/\b(?:erstmal|zuerst|nur)\s+(?:besprechen|planen|überlegen|brainstormen)\b/.test(text);
 }

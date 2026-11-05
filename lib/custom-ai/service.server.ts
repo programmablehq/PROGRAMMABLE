@@ -1,3 +1,4 @@
+import { isBriefChat } from "./reply-mode";
 import "server-only";
 import { modelDesignContext, plannerNeedsSource, plannerNeedsExecution, planningProductionContext } from "./planning-context";
 import {requestedVerification,interruptedVerification} from "./verification-request";
@@ -6,8 +7,8 @@ import { callModel } from "./model-provider.server";
 import { configuredProvider, researchAvailable } from "./provider-config.server";
 import { compileLaunchDraft } from "./lifecycle.server";
 import core from "./core-sources.json";
-import { BUILD_RULES, FOUNDATION, GENERAL_CONTRACT_VOICE, GENERAL_ROUTE_RULES,MECHANISM_CONVERSATION_RULES,FEE_FLOW_CONVERSATION_RULES,INTEGRATION_CONVERSATION_RULES } from "./prompt";
-import { CustomAIError, isBriefChat, type ChatProgress, type ChatRequest, type ChatResult, type Draft, type FeeExpectation } from "./types";
+import { BRIEF_REPLY_RULES, BUILD_RULES, FOUNDATION, GENERAL_CONTRACT_VOICE, GENERAL_ROUTE_RULES,MECHANISM_CONVERSATION_RULES,FEE_FLOW_CONVERSATION_RULES,INTEGRATION_CONVERSATION_RULES } from "./prompt";
+import { CustomAIError, type ChatProgress, type ChatRequest, type ChatResult, type Draft, type FeeExpectation } from "./types";
 import { applyCoinSetupPatch, EMPTY_COIN_SETUP, parseCoinSetupPatch, setupQuoteAddress } from "./coin-setup";
 import { lookupRules, parseRulePlan, planningRules } from "./rules";
 import { partialReply } from "./conversation";
@@ -227,7 +228,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   context.onProgress?.({ type: "phase", phase: "thinking" });
   if (replyOnly) {
     const answer = parseAnswer((await dependencies.call({ ...modelTask("conversation",MODELS),
-      system: `${system}\n${savedDesignQuestion ? "Answer this question briefly using only the saved design. Explain configured rules without claiming completed code, tests or a launch. Do not edit rules or metadata, start work, request a wallet action or invent live information." : "For this greeting or acknowledgement, answer naturally in one short sentence. Do not ask a follow-up question or begin work."} Return your reply as JSON.`, messages: request.messages.slice(-1), schema: chatSchema,
+      system: `${system}\n${savedDesignQuestion ? "Answer this question briefly using only the saved design. Explain configured rules without claiming completed code, tests or a launch. Do not edit rules or metadata, start work, request a wallet action or invent live information." : BRIEF_REPLY_RULES} Return your reply as JSON.`, messages: request.messages.slice(-1), schema: chatSchema,
       maxTokens: 800, effort: "low", signal, onText })).text);
     return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", replyLocale:context.replyLocale, ...(context.verificationInstruction?{verificationInstruction:context.verificationInstruction}:{}), ...(previousIntent ? { intent: previousIntent } : {}), ...(previousProduct ? {productBlueprint:previousProduct} : {}), ...(previousSpec?{ruleSpec:previousSpec}:{}) };
   }

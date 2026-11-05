@@ -1,7 +1,8 @@
+import { isBriefChat } from "./reply-mode";
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { CHAT_PHASES, CustomAIError, isBriefChat, type AIUsage, type ChatPhase, type ChatRequest, type ChatResult } from "./types";
+import { CHAT_PHASES, CustomAIError, type AIUsage, type ChatPhase, type ChatRequest, type ChatResult } from "./types";
 import type { ExecutionProfile } from "./ai-config";
 import { refundsProviderFailure } from "./provider-errors";
 import { bindConversationJob, createConversationStore, updateConversationStudio } from "./conversation.server";
