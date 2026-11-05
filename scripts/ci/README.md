@@ -8,10 +8,9 @@ binds the exact source commit, workflow, run, attempt, and closed job inventory.
 
 ## Interface
 
-Run `npm run verify:interface:plan` with `PROGRAMMABLE_CI_BASE_SHA` and
-`PROGRAMMABLE_CI_HEAD_SHA` to see the checks selected for a change.
+Run `npm run verify:interface:plan -- --base <full-sha> --head <full-sha>` to see the checks selected for a change. CI also accepts `PROGRAMMABLE_CI_BASE_SHA` and `PROGRAMMABLE_CI_HEAD_SHA`. Invalid or partial explicit ranges stop rather than silently selecting everything.
 
-- CSS, images and proven copy edits use the existing presentation publisher.
+- CSS, images and proven copy edits use the existing presentation publisher. In mixed changes, CSS and syntax-proven copy or read-only entry navigation do not add unrelated wallet/module tests. Navigation exceptions are limited to local Docs, AI Chat and API setup routes; event handlers, signing routes, external URLs and executable template expressions remain checked.
 - Application changes lint affected files and run related Vitest tests. The
   dependency graph includes literal file references. Tests that read known source
   files follow those dependencies; only unresolved filesystem readers stay in
@@ -20,7 +19,7 @@ Run `npm run verify:interface:plan` with `PROGRAMMABLE_CI_BASE_SHA` and
   the full application suite.
 - Browser suites follow the changed feature: trading, wallet sessions, module
   launches, profiles, navigation or Explore. A metadata-only change does not
-  run wallet or migration fixtures.
+  run wallet or migration fixtures. Chat shell changes use the conversation and saved-history browser files; unknown or financial chat paths retain the complete chat suite.
 - Module SDK/CLI checks run for those tools. Historical API activation audits
   run for release, binding or activation changes, not ordinary page changes.
 - Verification-only maintenance runs the pipeline's own regression checks.
@@ -36,8 +35,7 @@ indexer, read-model and Custom V2 releases retain fresh verification. The source
 record is stored in the PR run's `interface-source-*` artifact; the production
 run links the reused run in its summary.
 
-The production build and bundle credential checks remain. Custom V2 plus
-Interface still selects full application coverage before sharing results.
+Ordinary interface CI generates Next route types and runs TypeScript checking. The publisher performs the production build and bundle checks once before public promotion. Shared signing, contract generation, activation, read-model, dependency and unknown changes retain their CI build. Custom V2 plus Interface still selects full application coverage before sharing results. The existing workflow already cancels superseded runs; do not start replacement deploys just to wait for a build.
 
 For changes limited to `package.json` and `package-lock.json`, the trusted-base
 classifier can prove that only installed ESLint, Vitest, Playwright or

@@ -391,16 +391,16 @@ jobs:
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run verify:interface:browser-build:ci
 
-      - name: Build the complete production interface for guide URL changes
+      - name: Typecheck guide navigation changes
         if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true')
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: npm run build
+        run: npm run verify:interface:typecheck
 
-      - name: Build presentation changes
+      - name: Typecheck presentation changes
         if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only == 'true')
-        run: npm run build
+        run: npm run verify:interface:typecheck
 
       - name: Require complete Git history for the V4 release audit
         if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_activation == 'true')
