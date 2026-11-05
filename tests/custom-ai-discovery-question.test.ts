@@ -29,6 +29,9 @@ describe("read-only builder questions", () => {
     "What can you build? Please switch my coin to Base.",
     "What can you build? Give me a token named Ideas.",
     "What can you do? Give me ideas and set my coin name to Ideas.",
+    "What can you build could you change my fee to 3%",
+    "Hast du Ideen kannst du den Coin auf Base bauen",
+    "Was kannst du? Kannst du meinen Coin bauen?",
     "Build a hook with 3% fees", "What can you build with https://example.com?",
     "What can you build with `run()`?", "Continue building", "okay",
   ])("keeps explicit work and mixed commands in the planner: %s", content => {
