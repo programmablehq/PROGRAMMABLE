@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
@@ -206,5 +207,16 @@ test("independent declaration changes provision the pinned contract checker", ()
     assert.equal(plan.customAICompiler, true, path);
     assert.equal(plan.activation, false, path);
     assert.deepEqual(plan.browser, [], path);
+  }
+});
+
+test("the public plan command honors explicit revisions and rejects incomplete ranges", () => {
+  const sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const result = spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", "--base", sha, "--head", sha], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).full, false);
+  assert.deepEqual(JSON.parse(result.stdout).paths, []);
+  for (const args of [["--base", sha], ["--head", "bad"], ["--unknown", sha]]) {
+    assert.notEqual(spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", ...args], { encoding: "utf8" }).status, 0);
   }
 });
