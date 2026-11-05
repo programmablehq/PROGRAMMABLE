@@ -486,7 +486,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     const implementationEdits = edits.filter(edit => previousSpec?.requirements.some(rule => rule.id === edit.requirementId));
     const coverage = reviewRuleEdits(previousSpec, ruleSpec, implementationEdits, request.editTarget);
     if (!coverage.complete) return { reply: "That edit left out part of your saved design. Keep or explicitly revise the missing rules first.",
-      intent, ruleSpec: previousSpec, change: "blocked", unresolved: coverage.missing, memory: plan.memory, ...update };
+      intent: previousIntent ?? intent, ruleSpec: previousSpec, change: "blocked", unresolved: coverage.missing, memory: context.memory ?? plan.memory, ...update };
     try {
       const feeds = await resolveRuleFeeds(ruleSpec, coreChainId);
       context.onProgress?.({ type: "phase", phase: "checking" });

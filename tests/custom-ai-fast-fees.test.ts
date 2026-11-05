@@ -6,6 +6,7 @@ import {normalizeRuleSpec} from "../lib/custom-ai/rule-spec";
 import {ruleExpectations,compileRuleSpec} from "../lib/custom-ai/rule-compiler.server";
 import {runCustomAI} from "../lib/custom-ai/service.server";
 import {completedBuildReply} from "../lib/custom-ai/build-result";
+import {parseRulePlan} from "../lib/custom-ai/rules";
 const rule={id:"fee",text:"Fees fall from 2% to 0.5% over one day, then stay at 0.5%."};
 const spec=normalizeRuleSpec({version:2,requirements:[rule],creatorShareBps:10000,actions:[],phases:[
  {id:"fall",startsAtSeconds:0,endsAtSeconds:86400,fee:{kind:"ramp",fromBuyBps:200,toBuyBps:50,fromSellBps:200,toSellBps:50,durationSeconds:86400},requirementIds:["fee"]},
@@ -68,13 +69,63 @@ describe("structured fee schedules",()=>{
   const first=await runCustomAI(initialRequest,undefined,{call:async()=>plan(),compile:vi.fn()});
   mocks.compile.mockClear();
   const call=vi.fn(async()=>plan({reply:"Renamed to Daylight.",action:"answer",intentMode:"preserve",intentRequirements:[],
-   implementedRequirementIds:[],feeChecks:[],composable:null,setupPatch:{name:"Daylight"}}));
+   implementedRequirementIds:[],feeChecks:[],composable:"null",setupPatch:{name:"Daylight"}}));
   const result=await runCustomAI({...initialRequest,id:"structured-fees-name-01",contextId:initialRequest.id,draftId:initialRequest.id,
    messages:[...initialRequest.messages,{role:"user",content:"Call it Daylight instead"}]},undefined,{call,compile:vi.fn()},
    {intent:first.intent,draft:first.draft,productBlueprint:first.productBlueprint});
   expect(result.setupPatch).toEqual({name:"Daylight"});expect(result.intent).toBe(first.intent);
   expect(result.ruleSpec).toEqual(first.ruleSpec);expect(result.draft).toBeUndefined();
   expect(call).toHaveBeenCalledOnce();expect(mocks.compile).not.toHaveBeenCalled();
+ });
+ it("does not treat a serialized null program as a complete build",()=>{
+  expect(()=>parseRulePlan({reply:"Building",action:"build",memory:"",requirements:[rule.text],
+   unresolved:[],lookups:[],feeChecks:[],composable:"null"})).toThrow("Both buy and sell rules");
+ });
+ it("updates shared fee-phase timing while preserving the recipient without an extra model call",async()=>{
+  const shared=structuredClone(spec);
+  const recipient={id:"recipient",text:"Additional fees go to the linked creator wallet."};
+  shared.requirements.push(recipient);
+  shared.phases.forEach(phase=>phase.requirementIds.push(recipient.id));
+  const declared=shared.requirements.map(r=>({...r,kind:"behavior",instruction:initialContent,open:null}));
+  const first=await runCustomAI(initialRequest,undefined,{call:async()=>plan({composable:JSON.stringify(shared),
+   intentRequirements:declared,implementedRequirementIds:["fee","recipient"]}),compile:vi.fn()});
+  mocks.compile.mockClear();
+  const content="make that 12 hours";
+  const next=structuredClone(shared);
+  next.requirements[0].text="Fees fall from 2% to 0.5% over 12 hours, then stay at 0.5%.";
+  next.phases[0].endsAtSeconds=43200;
+  if(next.phases[0].fee.kind!=="ramp")throw Error("Expected ramp");
+  next.phases[0].fee.durationSeconds=43200;next.phases[1].startsAtSeconds=43200;
+  const call=vi.fn(async()=>plan({composable:JSON.stringify(next),implementedRequirementIds:["fee","recipient"],
+   intentRequirements:next.requirements.map(r=>({...r,kind:"behavior",instruction:r.id==="fee"?content:"",open:null})),
+   ruleEdits:[{requirementId:"fee",operation:"replace",instruction:content}],
+   feeChecks:[...checks.slice(0,2),{afterSeconds:21600,buy:true,totalFeeBps:125},{afterSeconds:43200,buy:false,totalFeeBps:50}]}));
+  const result=await runCustomAI({...initialRequest,id:"shared-phase-edit-01",contextId:initialRequest.id,draftId:initialRequest.id,
+   messages:[...initialRequest.messages,{role:"user",content}]},undefined,{call,compile:vi.fn()},
+   {intent:first.intent,draft:first.draft,productBlueprint:first.productBlueprint});
+  expect(call).toHaveBeenCalledOnce();expect(mocks.compile).toHaveBeenCalledOnce();
+  expect(result.change).toBe("applied");expect(result.ruleSpec).toEqual(next);
+  expect(result.intent?.changes.map(change=>change.requirementId)).toEqual(["fee"]);
+ });
+ it("keeps the last accepted intent when an edit changes an unrelated saved phase",async()=>{
+  const saved=structuredClone(spec);
+  saved.requirements.push({id:"later",text:"Keep the later fee phase unchanged."});
+  saved.phases[1].requirementIds=["later"];
+  const first=await runCustomAI(initialRequest,undefined,{call:async()=>plan({composable:JSON.stringify(saved),
+   intentRequirements:saved.requirements.map(r=>({...r,kind:"behavior",instruction:initialContent,open:null})),
+   implementedRequirementIds:["fee","later"]}),compile:vi.fn()});
+  const next=structuredClone(saved);next.phases[1].startsAtSeconds=90000;next.phases[0].endsAtSeconds=90000;
+  if(next.phases[0].fee.kind!=="ramp")throw Error("Expected ramp");
+  next.phases[0].fee.durationSeconds=90000;
+  next.requirements[0].text="Extend the first phase.";
+  const content="Extend the first phase";
+  const result=await runCustomAI({...initialRequest,id:"rejected-edit-0001",contextId:initialRequest.id,draftId:initialRequest.id,
+   messages:[...initialRequest.messages,{role:"user",content}]},undefined,{call:async()=>plan({composable:JSON.stringify(next),
+    intentRequirements:next.requirements.map(r=>({...r,kind:"behavior",instruction:r.id==="fee"?content:"",open:null})),
+    ruleEdits:[{requirementId:"fee",operation:"replace",instruction:content}],implementedRequirementIds:["fee","later"]}),compile:vi.fn()},
+   {intent:first.intent,draft:first.draft,productBlueprint:first.productBlueprint});
+  expect(result.change).toBe("blocked");expect(result.intent?.revision).toBe(first.intent?.revision);
+  expect(result.ruleSpec).toEqual(saved);expect(result.draft).toBeUndefined();
  });
  it("does not turn failed source checks into a completion message",async()=>{
   mocks.compile.mockResolvedValueOnce({source:"invalid",sourceHash:"a".repeat(64),compiled:false,diagnostics:["Invalid fee curve"],validation:{status:"failed"}});
