@@ -142,6 +142,7 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     {walletSubject && <Suspense fallback={<p className={styles.note} role="status">Loading launch controls…</p>}>
       <GeneralLaunchWallet key={JSON.stringify([scope, account.toLowerCase(), walletSubject.chainId, walletSubject.resourceId, walletSubject.requestHash])}
         subject={walletSubject} name={saved?.coin?.name ?? "Your saved coin"} headers={headers} disabled={disabled || launch.busy} onStatus={() => launch.refreshStatus()}
+        preparing={walletSubject.chainId === 4663 && launch.currentStatus?.status === "analysis_pending"}
         prepareCommand={launch.automatic?.state==="approved"&&launchCommand&&launchCommand.sourceId===draftId?launchCommand.id:undefined} />
     </Suspense>}
     {accepted && href && <button type="button" className={styles.textButton} disabled={launch.busy} onClick={() => { void launch.refreshStatus(); }}>Check current status</button>}

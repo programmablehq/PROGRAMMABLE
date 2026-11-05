@@ -19,9 +19,9 @@ import styles from "./workspace.module.css";
 
 type Recovery = { graph?: GraphWalletAttempt[]; plan?: LaunchSendAttemptV1 | null; error?: string };
 type Review = { kind: "graph"; value: GeneralGraphWalletReview } | { kind: "plan"; value: UniversalLaunchWalletReviewV1 };
-export default function GeneralLaunchWallet({ subject, name, headers, disabled, onStatus, prepareCommand }: {
+export default function GeneralLaunchWallet({ subject, name, headers, disabled, onStatus, prepareCommand, preparing = false }: {
   subject: GeneralWalletSubject; name: string; headers: AISessionHeaders; disabled: boolean; onStatus(): unknown;
-  prepareCommand?:string;
+  prepareCommand?:string; preparing?: boolean;
 }) {
   const wallet = useWallet(), lifetime = useRef<AbortController | null>(null), inFlight = useRef(false), recoveryId = useId();
   const [resource, setResource] = useState<GeneralWalletResource>(), [review, setReview] = useState<Review>();
@@ -106,7 +106,7 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
     const value: unknown = await response.json(); assertCurrent(); return value;
   }
   async function run(label: string, action: () => Promise<void>) {
-    if (inFlight.current || disabled) return;
+    if (inFlight.current || disabled || preparing) return;
     inFlight.current = true; setBusy(label); setError("");
     try { assertCurrent(); await action(); }
     catch (caught) { if (lifetime.current && !lifetime.current.signal.aborted) setError(caught instanceof Error ? caught.message : "The wallet step could not finish. Your submission is saved."); }
@@ -179,11 +179,11 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
     else await prepare(fresh);
   });};});
   useEffect(()=>{
-    if(!prepareCommand||handledCommand.current===prepareCommand||disabled||ownAttempt||otherPending||recovery.error||finalized)return;
+    if(!prepareCommand||handledCommand.current===prepareCommand||disabled||preparing||ownAttempt||otherPending||recovery.error||finalized)return;
     handledCommand.current=prepareCommand;automaticPrepare.current();
-  },[prepareCommand,disabled,ownAttempt,otherPending,recovery.error,finalized]);
+  },[prepareCommand,disabled,preparing,ownAttempt,otherPending,recovery.error,finalized]);
 
-  return <section className={styles.generalWallet} aria-label="Wallet step" aria-busy={Boolean(busy)}>
+  return <section className={styles.generalWallet} aria-label="Wallet step" aria-busy={Boolean(busy) || preparing}>
     <p className={styles.note}>{name} · {builderChain(subject.chainId).name}</p>
     {recovery.error && <p className={styles.error} role="alert">{recovery.error}</p>}
     {otherPending && <p className={styles.note}>An earlier launch transaction needs recovery before another one can be sent. Open its original submission to continue.</p>}
@@ -194,7 +194,8 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
       <label htmlFor={recoveryId}>Original transaction ID</label><input id={recoveryId} value={recoveryHash} maxLength={66} onChange={event => setRecoveryHash(event.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} required />
       <button type="submit" className={styles.textButton} disabled={Boolean(busy) || disabled}>Recover transaction</button></form>}
     {!hash && ownAttempt && <button type="button" className={styles.textButton} disabled={Boolean(busy) || disabled} onClick={() => { void run("Checking confirmation…", async () => { await load(); await onStatus(); }); }}>Check launch confirmation</button>}
-    {!ownAttempt && !otherPending && !recovery.error && !finalized && <>
+    {preparing && <p className={styles.note} role="status">Preparing your wallet step…</p>}
+    {!preparing && !ownAttempt && !otherPending && !recovery.error && !finalized && <>
       {needsStart ? <button type="button" className={styles.createButton} disabled={Boolean(busy) || disabled} onClick={() => { void run("Preparing approved launch…", async () => {
         setReview(undefined); await startGeneralWalletLaunch(subject, headers, lifetime.current!.signal); assertCurrent(); await load(); await onStatus();
       }); }}>Prepare approved launch</button>
