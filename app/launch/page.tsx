@@ -30,8 +30,8 @@ export default async function LaunchPage() {
       <h1>Launch on {network.name}</h1>
       <p>Describe your hook in AI Chat, or build a Custom Launch with the API.</p>
       <div className={styles.actions}>
-        <Link href="/launch/custom-ai">Open AI Chat</Link>
-        <Link href={`/developers/api-keys?start=custom&chainId=${network.id}`}>Build with API</Link>
+        <Link href="/launch/custom-ai">AI Chat</Link>
+        <Link href={`/developers/api-keys?guide=custom-hook&chainId=${network.id}`}>Custom Contract with API</Link>
       </div>
       <Link className={styles.moduleLink} href="/launch/modules/foundation?chainId=4663">Module Mode on Robinhood or Ethereum</Link>
     </section></div>;

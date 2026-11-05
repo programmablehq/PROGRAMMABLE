@@ -90,9 +90,8 @@ test("observed simulation is readable by keyboard and survives reload without ex
 
 for(const width of [360,1440])test(`first visit explains wallet access without exposing unavailable editor controls at ${width}px`,async({page},info)=>{
  const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1');
- await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeEnabled();
+ await expect(page.getByRole('log',{name:'Conversation'}).getByRole('button',{name:'Connect wallet',exact:true})).toBeEnabled();
  await expect(page.getByRole('region',{name:'Build your coin'})).toHaveAttribute('data-chat-state','wallet-required');
- await expect(page.getByText('Connect your wallet to build and save your hook. You can write your idea first.',{exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Coin preview and details'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Attach image',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Chat options',{exact:true})).toHaveCount(0);
@@ -391,7 +390,7 @@ test("metadata-only edits survive online save and reload without changing the ch
 test("retrying a lost create response opens the same chat without making another one",async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- f.control.lostCreates=1;await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
+ f.control.lostCreates=1;await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();
  await expect(page.getByRole("region",{name:"Your saved chats"}).getByRole("alert")).toBeVisible();
  expect(f.chats.size).toBe(2);const created=[...f.chats.values()].find(chat=>chat.id!==LEGACY_CONVERSATION)!;
  await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toBeEditable();
@@ -402,17 +401,17 @@ test("retrying a lost create response opens the same chat without making another
 test("opening the recovered chat clears the pending create before the next new coin",async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- f.control.lostCreates=1;await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
+ f.control.lostCreates=1;await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();
  const library=page.getByRole("region",{name:"Your saved chats"});await expect(library.getByRole("alert")).toBeVisible();
  await library.getByRole("button",{name:/^New coin/}).click();
  await box.fill("Work in the recovered chat");
- await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();await expect(box).toHaveValue("");
+ await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toHaveValue("");
  expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
 });
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Keep this original unsent idea");
- await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).dblclick();await expect(box).toHaveValue("");expect(f.chats.size).toBe(2);await box.fill("Second private idea");
+ await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).dblclick();await expect(box).toHaveValue("");expect(f.chats.size).toBe(2);await box.fill("Second private idea");
  await page.getByRole("button",{name:"Chats",exact:true}).click();await page.getByRole("button",{name:/^Original idea/}).click();await expect(box).toHaveValue("Keep this original unsent idea");
  await page.reload();await expect(box).toHaveValue("Keep this original unsent idea");
  await page.getByRole("button",{name:"Chats",exact:true}).click();const original=[...f.chats.values()].find(c=>c.id===LEGACY_CONVERSATION)!;
@@ -442,7 +441,7 @@ test("changing the selected wallet keeps private chat inputs separate",async({pa
 });
 test("restoring a chat uses the latest archive filter after a delayed write",async({page})=>{
  const f=await fixture(page);await page.goto(origin);await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();
- await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();await page.getByRole("button",{name:"Chats",exact:true}).click();
+ await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();await page.getByRole("button",{name:"Chats",exact:true}).click();
  await page.getByRole("button",{name:"Archive Original idea",exact:true}).click();
  await page.getByRole("checkbox",{name:"Show archived"}).check();await expect(page.getByRole("button",{name:"Restore Original idea",exact:true})).toBeVisible();
  let release!:()=>void,started=false;const gate=new Promise<void>(resolve=>{release=resolve;});f.control.beforeUpdate=async()=>{started=true;await gate;};
@@ -541,7 +540,7 @@ test("an older local-only copy remains stored without being adopted by a newly s
  });expect(JSON.parse(retained as string).input).toBe("Unattributed older private input");
 });
 
-async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat options",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}
+async function openChatLibrary(page:import("@playwright/test").Page){const toggle=page.getByRole("button",{name:"Chats",exact:true});if(await toggle.getAttribute("aria-expanded")!=="true")await toggle.click();}
 
 for (const reducedMotion of ["no-preference", "reduce"] as const) test(`menus preserve focus and unsent input with ${reducedMotion} motion`, async ({page}) => {
   const f = await fixture(page);

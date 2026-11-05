@@ -6,6 +6,7 @@ import { type ConversationItem, type ConversationPage } from "@/lib/custom-ai/co
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
 import styles from "./workspace.module.css";
+import { WorkspacePending } from "./workspace-pending";
 type Flush=()=>Promise<unknown>;
 export type ChatNavigation={pending:boolean;tools:(locked:boolean)=>ReactNode;newChat:()=>Promise<void>;registerFlush:(flush:Flush)=>()=>void};
 const LibraryContext=createContext<{id:string;cacheScope:string;navigation:ChatNavigation}|undefined>(undefined);
@@ -95,7 +96,13 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       if(result.id!==pendingCreate.current)throw Error("The new chat could not be confirmed. Try opening it again.");
       if(result.archived){pendingCreate.current=undefined;throw Error("That chat was archived. Create a new chat to continue.");}
       await writeDraftCache(key.current,result.id);setSelected(result.id);setOpen(false);filter("",false);setEditing(undefined);pendingCreate.current=undefined;
-    }catch(cause){setOpen(true);setError(cause instanceof Error?cause.message:"A new chat could not be opened.");}finally{transition.current=false;setTransitioning(false);setLoading(false);}
+    }catch(cause){
+      setOpen(true);
+      // Creation may have succeeded before its response was lost. Refresh even
+      // when the library is already open, so the saved chat can be recovered.
+      await load(query.current.search,query.current.archived);
+      setError(cause instanceof Error?cause.message:"A new chat could not be opened.");
+    }finally{transition.current=false;setTransitioning(false);setLoading(false);}
   }
   async function update(chat:ConversationItem,patch:{title?:string;archived?:boolean},flush:Flush){
     if(transition.current)return;transition.current=true;setTransitioning(true);
@@ -135,6 +142,6 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       {error&&<p role="alert">{error}</p>}
     </section>
   </div>;
-  if(!selected||!cacheScope)return <div className={styles.libraryEmpty}>{panel(transitioning)}{error&&<><p role="alert">{error}</p><button type="button" onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}{!error&&!open&&<p role="status">Loading your chats…</p>}</div>;
+  if(!selected||!cacheScope)return <WorkspacePending status={!error&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning)}>{error&&<><p role="alert">{error}</p><button type="button" className={styles.textButton} onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
   return <LibraryContext.Provider value={{id:selected,cacheScope,navigation:{pending:transitioning,tools:panel,newChat,registerFlush}}}><Fragment key={selected}>{children}</Fragment></LibraryContext.Provider>;
 }

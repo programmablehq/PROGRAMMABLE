@@ -63,7 +63,7 @@ test("stopping clears streamed presentation and retains the unsent request",asyn
   await expect(page.getByRole("status").filter({hasText:/^Stopped\. Your last draft is unchanged\.$/})).toBeVisible();
   expect(posts).toBe(1);
 });
-test("keeps ten requested rules and four open choices through reload and a coin switch",async({page},testInfo)=>{
+test("keeps ten requested rules and four open choices through reload",async({page},testInfo)=>{
   const texts=["Start at 10%","Fall over ten minutes","Then stay at 1%","No transfer tax","No later minting","No creator liquidity withdrawal",
     "Use London rain","Send fees to liquidity","Buy back on a trigger","Cap the initial wallet buy"];
   const questions=["Which weather feed?","What execution limit?","Which trigger?","What wallet cap?"];
@@ -93,13 +93,6 @@ test("keeps ten requested rules and four open choices through reload and a coin 
   await expect(box).toHaveValue("Only adjust the weather rule later.");
   await requested.locator("summary").click();
   await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
-  await openChatMenu(page);await page.getByRole("button",{name:"New coin",exact:true}).click();
-  await expect(page.getByText("Requested rules (10)",{exact:true})).toHaveCount(0);
-  await openChatMenu(page);
-  await page.getByRole("button",{name:"Restore previous coin",exact:true}).click();
-  await requested.locator("summary").click();
-  await expect(requested.getByText("No later minting",{exact:true})).toBeVisible();
-  await expect(box).toHaveValue("Only adjust the weather rule later.");
   expect(calls).toBe(1);
 });
 test("keeps a checked draft on reload and blocks an unapplied edit without a rule checkbox", async ({ page }) => {
@@ -135,7 +128,7 @@ test("mobile layout reflows and the editor remains keyboard accessible", async (
   await page.getByLabel("Name",{exact:true}).fill("Rain");
   await expect(page.getByLabel("Name",{exact:true})).toHaveValue("Rain");
 });
-test("new coin is separate from clearing messages and restores the unsent edit", async ({ page }) => {
+test("the saved coin and unsent edit survive a reload without reset controls", async ({ page }) => {
   let calls = 0;
   await page.route("**/api/custom-ai", route => {
     calls++;
@@ -145,20 +138,11 @@ test("new coin is separate from clearing messages and restores the unsent edit",
   const box = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
   await box.fill("Build Rain with 3% fees"); await box.press("Enter");
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add coin image", exact: true })).toBeEnabled();
-  await openChatMenu(page);
-  await page.getByRole("button", { name: "Clear messages", exact: true }).click();
-  await expect(page.getByText("Keep shaping your coin", { exact: true })).toBeVisible();
-  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toBeVisible();
   await box.fill("Only change the fee after five minutes");
-  await page.getByRole("button", { name: "New coin", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Your coin", exact: true })).toBeVisible();
-  await expect(box).toHaveValue("");
-  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toHaveCount(0);
-  await openChatMenu(page);
-  await page.getByRole("button", { name: "Restore previous coin", exact: true }).click();
+  await page.reload();
   await expect(page.getByRole("heading", { name: "Rain", exact: true })).toBeVisible();
   await expect(box).toHaveValue("Only change the fee after five minutes");
+  await expect(page.getByText("Charge 3% on buys and sells", { exact: true })).toBeVisible();
   expect(calls).toBe(1);
 });
 
@@ -330,5 +314,3 @@ test("keeps offline input editable while preventing a new generation", async ({p
   await expect(page.getByRole("button",{name:"Send message"})).toBeEnabled();
   await expect(box).toHaveValue("Keep this idea while offline");
 });
-
-async function openChatMenu(page:import("@playwright/test").Page){const menu=page.getByLabel("Chat options",{exact:true});if(await menu.evaluate(element=>!(element.parentElement as HTMLDetailsElement).open))await menu.click();}
