@@ -3318,9 +3318,12 @@ function PrivyWalletBridge({
       if (wallet.chainId !== robinhoodChainHex) { await connectedWallet.switchChain(robinhoodChain.id); assertCurrentSession(); }
       const provider = await connectedWallet.getEthereumProvider();
       const { prepareLaunchPlanTradeWalletV1 } = await import("@/lib/custom-launch/routed-trade-wallet-v1");
-      const review = await prepareLaunchPlanTradeWalletV1(provider, account, input); assertCurrentSession();
-      if (input.action === "review") return review;
-      if (!input.reviewed || input.reviewed.binding !== review.binding || BigInt(review.maxGasCostWei) > BigInt(input.reviewed.maxGasCostWei)) throw new Error("The exact trade or gas cost changed. Review it again.");
+      if (input.action === "review") {
+        const review = await prepareLaunchPlanTradeWalletV1(provider, account, input); assertCurrentSession();
+        return review;
+      }
+      const review = input.reviewed;
+      if (!review) throw new Error("Review the exact trade before continuing.");
       return await runWithBrowserWalletRequestLock({ sessionSubject, account, chainId: "4663",
         requestSubject: JSON.stringify(["launch-plan-trade-wallet-v1", review.binding]), assertCurrentSession,
         execute: async () => {
@@ -3401,10 +3404,13 @@ function PrivyWalletBridge({
     if (wallet.chainId !== robinhoodChainHex) { await connectedWallet.switchChain(robinhoodChain.id); assertCurrentSession(); }
     const provider = await connectedWallet.getEthereumProvider();
     const { prepareLaunchClaimWalletV1 } = await import("@/lib/custom-launch/claim-handoff-v1");
-    const review = await prepareLaunchClaimWalletV1(provider, controller, input);
-    assertCurrentSession();
-    if (input.action === "review") return review;
-    if (!input.reviewed || review.binding !== input.reviewed.binding || BigInt(review.maxGasCostWei) > BigInt(input.reviewed.maxGasCostWei)) throw new Error("The claim or gas estimate changed. Review it again.");
+    if (input.action === "review") {
+      const review = await prepareLaunchClaimWalletV1(provider, controller, input);
+      assertCurrentSession();
+      return review;
+    }
+    const review = input.reviewed;
+    if (!review) throw new Error("Review the exact claim before continuing.");
     return runWithBrowserWalletRequestLock({ sessionSubject, account: controller, chainId: "4663",
       requestSubject: JSON.stringify(["launch-claim-wallet-v1", review.binding]), assertCurrentSession,
       execute: async () => {
@@ -3455,14 +3461,13 @@ function PrivyWalletBridge({
       rememberLaunchHashV1(attempt, hash);
       return hash;
     }
-    const review = await prepareUniversalLaunchWalletV1(provider, controller, input);
-    assertCurrentSession();
-    if (input.action === "review" || input.action === "switch_chain") return review;
-    if (!input.reviewed || input.reviewed.binding !== review.binding
-      || JSON.stringify(input.reviewed.transaction) !== JSON.stringify(review.transaction)
-      || BigInt(review.maxGasCostWei) > BigInt(input.reviewed.maxGasCostWei)) {
-      throw new Error("The transaction or gas estimate changed. Review the current cost before sending.");
+    if (input.action === "review" || input.action === "switch_chain") {
+      const review = await prepareUniversalLaunchWalletV1(provider, controller, input);
+      assertCurrentSession();
+      return review;
     }
+    const review = input.reviewed;
+    if (!review) throw new Error("Review the current wallet transaction before sending.");
     return runWithBrowserWalletRequestLock({ sessionSubject, account: controller, chainId: "4663",
       requestSubject: JSON.stringify(["custom-launch-plan-wallet-v1", review.binding]), assertCurrentSession,
       execute: async () => {
