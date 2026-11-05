@@ -90,7 +90,9 @@ New approvals on Ethereum Mainnet and Robinhood require **30 bps (0.3%)** for Pr
 
 The [Ethereum Native30 reference source and compiler inputs](https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts/ethereum-native30-v3) bind Ethereum and its PoolManager. They charge the gross native ETH leg, round up per trade and accrue backed native claims to a fixed-recipient vault. For a gross trade of 1 ETH, the platform accrual is 0.003 ETH. Custom implementations must provide equivalent fee evidence; a routing surcharge alone is insufficient.
 
-Native20 and Native30 are historical contracts. Their deployed rates remain unchanged; copying them does not meet the current approval requirement.
+Older Native20 and Native30 releases retain their deployed rates and recipients. Use the exact current Native30 source above, or provide equivalent evidence for a custom implementation. A historical contract with a different recipient does not satisfy the current approval requirement.
+
+For Ethereum profile 3.6, the default website trading route rounds its platform fee down once per swap. The recognized Native30 pool-fee mechanism rounds up per trade and can replace the routed fee only after the server verifies the exact hook and vault runtime and actual accrual. A custom fee transfer or a review approval alone does not grant that waiver. Read the live `programmableTradeFeePolicy` and settle the collection path before relying on a zero additional routed fee.
 
 Set creator buy and sell fees explicitly. Zero creator fees produce no Creator Rewards from those trades. Historical Ethereum contracts retain their own fee policy.
 
