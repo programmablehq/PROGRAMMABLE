@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
-import { interfacePlan, relatedInputs, runtimeDependencySource } from "./interface-plan.mjs";
+import { interfacePlan, relatedInputs, runtimeDependencySource, ownedInterfaceTests } from "./interface-plan.mjs";
 import { GENERAL_CONSTRUCTOR_WORKERS, GENERAL_BEHAVIOR_WORKERS } from "./classify-verify-paths.mjs";
 
 test("runtime test selection ignores type-only edges and retains mixed/runtime imports",()=>{
@@ -219,4 +219,13 @@ test("the public plan command honors explicit revisions and rejects incomplete r
   for (const args of [["--base", sha], ["--head", "bad"], ["--unknown", sha]]) {
     assert.notEqual(spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", ...args], { encoding: "utf8" }).status, 0);
   }
+});
+
+test("pure reply classifiers use focused intent, service and charging tests", () => {
+  const owned = ownedInterfaceTests(["lib/custom-ai/discovery-question.ts"]);
+  assert.deepEqual(owned, ["tests/custom-ai-discovery-question.test.ts", "tests/custom-ai.test.ts", "tests/custom-ai-store.test.ts"]);
+  assert.deepEqual(ownedInterfaceTests(["lib/custom-ai/reply-mode.ts", "tests/custom-ai-discovery-question.test.ts"]), owned);
+  for (const extra of ["lib/custom-ai/service.server.ts", "lib/custom-ai/store.server.ts", "contracts/src/Hook.sol", "components/wallet-provider.tsx", "lib/custom-ai/new-feature.ts"])
+    assert.equal(ownedInterfaceTests(["lib/custom-ai/discovery-question.ts", extra]), null, extra);
+  assert.equal(ownedInterfaceTests(null), null);
 });
