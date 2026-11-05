@@ -28,6 +28,11 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe("one version-bound launch preparation", () => {
+  it("keeps a saved plan distinct from a checked hook without asking to describe it again",()=>{
+    expect(designReadiness({checked:false,hasDesign:true,name:"",symbol:"",image:false,connected:true}))
+      .toMatchObject({state:"needs-input",message:expect.stringContaining("build your hook")});
+    expect(designReadiness({checked:false,hasDesign:true,openRequirements:true,name:"",symbol:"",image:false,connected:true}).state).toBe("blocked");
+  });
   it("requests only missing coin details and keeps their focus order", () => {
     const base = { sourceHash, checked: true, name: "Rain", symbol: "RAIN", image: true, connected: false };
     expect(designReadiness({ ...base, image: false })).toMatchObject({ message: "Add your coin’s image.", missingFields: ["image"] });

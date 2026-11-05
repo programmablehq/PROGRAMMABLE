@@ -46,31 +46,35 @@ describe("product blueprint in the existing chat pipeline", () => {
     expect(result.buildIssue).toEqual({stage:"product",code:"incomplete-plan"});expect(build).not.toHaveBeenCalled();
     expect(call.mock.calls.some(([input])=>input.task==="product-repair"&&input.system.includes(initial.productBlueprint!.id))).toBe(true);
   });
-  it("repairs a malformed architecture once without asking the user to repeat the design", async () => {
+  it("keeps a plan-only conversation moving without an architecture repair call", async () => {
     const bad = structuredClone(productPlan); bad.interfaceActions[0].target = "missing";
     const call = vi.fn(async (input:ClaudeInput)=>response(input.task==="product-repair"?{productPlan}:envelope({productPlan:bad})));
     const result = await runCustomAI(request,undefined,{call,compile});
-    expect(result.productBlueprint?.interfaceActions[0].target).toBe("counter");
-    expect(call).toHaveBeenCalledTimes(2);
+    expect(result.productBlueprint).toBeUndefined();
+    expect(result.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","page"]);
+    expect(result.change).toBe("applied");
+    expect(call).toHaveBeenCalledOnce();
     expect(result.buildIssue).toBeUndefined();
   });
-  it("saves the complete intent when the single structural repair fails", async () => {
+  it("defers an incomplete architecture until a source build is requested", async () => {
     const bad = {...productPlan,components:[]};
     const call=vi.fn(async(input:ClaudeInput)=>response(input.task==="product-repair"?{productPlan:bad}:envelope({productPlan:bad})));
     const result=await runCustomAI(request,undefined,{call,compile});
     expect(result.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","page"]);
     expect(result.productBlueprint).toBeUndefined();
-    expect(result.buildIssue).toEqual({stage:"product",code:"incomplete-plan"});
-    expect(call).toHaveBeenCalledTimes(2);
+    expect(result.buildIssue).toBeUndefined();
+    expect(result.change).toBe("applied");
+    expect(call).toHaveBeenCalledOnce();
   });
   it("does not turn a structural repair into a new financial allocation",async()=>{
     const original={...productPlan,assets:[{id:"funds",kind:"native",name:"ETH"}],flows:[{id:"fee-share",source:"creator",target:"missing",asset:"funds",trigger:"deposit",purpose:"Fund the counter",requirementIds:["counter"],allocationGroup:"initial-funds",shareBps:5000}]};
     const repaired={...original,flows:[{...original.flows[0],target:"counter",shareBps:10000}]};
     const call=vi.fn(async(input:ClaudeInput)=>response(input.task==="product-repair"?{productPlan:repaired}:envelope({productPlan:original})));
     const result=await runCustomAI(request,undefined,{call,compile});
-    expect(result.buildIssue?.stage).toBe("product");
+    expect(result.buildIssue).toBeUndefined();
     expect(result.productBlueprint).toBeUndefined();
     expect(result.intent?.requirements).toHaveLength(2);
+    expect(call).toHaveBeenCalledOnce();
   });
   it("returns a saved-rule-bound product plan from the ordinary planner call", async () => {
     const call = vi.fn(async () => response(envelope()));

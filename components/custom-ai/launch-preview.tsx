@@ -50,7 +50,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
     pairToken: bound.settings.quote.toLowerCase() === setupQuoteAddress({ ...editingSettings, chainId: bound.chainId, pairToken: "ETH" }).toLowerCase() ? "ETH" : bound.settings.quote } : editingSettings, [bound, editingSettings]);
   const imageURL = bound?.settings.imageURI ?? imageReceipt?.url ?? image?.url;
   useEffect(() => { onLaunchLocked(launch.locked); }, [launch.locked, onLaunchLocked]);
-  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), pendingChange, pairPending, openRequirements: intent ? intentHasOpenParts(intent) : false,
+  const readiness = designReadiness({ sourceHash: draft?.sourceHash, checked: Boolean(reviewedSourceHash), hasDesign: Boolean(intent?.requirements.length), pendingChange, pairPending, openRequirements: intent ? intentHasOpenParts(intent) : false,
     name: settings.name, symbol: settings.symbol, image: Boolean(imageURL), connected: Boolean(account) });
   useEffect(() => {
     if (localPreview || !account || !draftId || !reviewedSourceHash || !imageReceipt || disabled || pairPending || launch.locked || !editingSettings.name.trim() || !editingSettings.symbol.trim()) return;

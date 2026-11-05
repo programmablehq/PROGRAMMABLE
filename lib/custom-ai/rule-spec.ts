@@ -75,15 +75,16 @@ export function ruleFeedIds(spec: RuleSpecV2): string[] {
     if (o.kind === "feed") result.add(String(o.feedId)); Object.values(o).forEach(v => Array.isArray(v) ? v.forEach(walk) : walk(v)); };
   walk(spec); return [...result].sort();
 }
-export const composablePlanningRules = `For combined time/event rules or adding fees as locked liquidity, return composable as a JSON string of a complete version-2 rule specification; otherwise null.
+export const composablePlanningRules = `Prefer composable for complete fixed-fee schedules, linear ramps and timed phases: the platform compiles this structured specification directly, without another model generating the same code. Also use it for supported combined time/event rules or locked-liquidity actions. Return a complete version-2 rule specification as a JSON string; use null when it cannot express every requested rule.
 The specification has version:2, requirements:[{id,text}], phases:[{id,startsAtSeconds,endsAtSeconds,fee,requirementIds}], creatorShareBps and actions.
 Phases start at zero, are contiguous and ordered, and the final endsAtSeconds is null. Rates are TOTAL integer bps (50..1500).
 fee is {kind:"fixed",buyBps,sellBps}, {kind:"ramp",fromBuyBps,toBuyBps,fromSellBps,toSellBps,durationSeconds}, or {kind:"conditional",when,then,otherwise}.
+Ramp fees are start + trunc((end-start)*elapsed/duration) in integer bps; clamp elapsed at duration. Use the same rounding for the independently stated fee examples.
 when is {kind:"feed",feedId,operator:"lt"|"gte"|"eq"|"changed",value:integer-string}, or {kind:"all"|"any",conditions:[when,...]}.
 Missing/stale data in a required condition falls back to 50 total bps. An unused future feed does not affect an earlier time phase.
 Each action is {id,kind:"liquidity"|"distribution"|"staking"|"buyback",shareBps,startsAtSeconds,intervalSeconds,maximumQuote:decimal-string,maximumPriceDeviationBps,priceMaxAgeSeconds,minimumObservations,minimumTokensPerQuote:decimal-string,when:null|condition,recipient,requirementIds}.
 startsAtSeconds is elapsed time after launch; use it to keep an event-gated liquidity action inactive until the requested countdown ends. Liquidity priceMaxAgeSeconds must be at least 60 to cover its required history.
 Liquidity/staking recipient is empty; distribution/buyback recipient is creator or an explicitly supplied address. Creator share plus action shares is 10000. No actions means creatorShareBps=10000. maximumQuote is positive for liquidity/buyback and zero for distribution/staking. Event conditions on actions currently apply only to liquidity.
-Preserve the saved requirement ids and unchanged rules on edits. Every requirement must be covered by phase/action requirementIds.
+Preserve the saved requirement ids and unchanged rules on edits. Every requirement must be covered by phase/action requirementIds. For fee-only rules, include all applicable fee and explicitly requested core-guarantee IDs in each phase.
 Do not invent financial allocations, price limits or data feeds. Ask one focused question for missing material choices. A desired feed can be described as unconnected; that design is not launch ready.
-Use this specification for the COMPLETE requested behavior, including combined phases. Never replace requested liquidity with buyback. Existing simple fee generation remains available.`;
+Use this specification for the COMPLETE requested behavior, including combined phases. Never replace requested liquidity with buyback. Arbitrary fee formulas still use source generation when they do not fit these expressions.`;
