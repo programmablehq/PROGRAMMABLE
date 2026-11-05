@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { parseChatRequest, type ChatRequest, type Draft } from "../lib/custom-ai/types";
 import { runCustomAI } from "../lib/custom-ai/service.server";
 import { callClaude, MODELS } from "../lib/custom-ai/claude.server";
+import { ModelResponseError } from "../lib/custom-ai/model-response";
 import { allowLocalPreview, createPreviewBudget, readPreviewBody } from "../lib/custom-ai/access.server";
 import core from "../lib/custom-ai/core-sources.json";
 
@@ -89,6 +90,25 @@ describe("Claude planning and generation", () => {
     expect(answer.productBlueprint?.components[0].requirementIds).toEqual(answer.intent?.requirements.map(rule=>rule.id));
     expect(compile).toHaveBeenCalledWith("contract GeneratedFeeModule {}",undefined,checks,undefined);
     expect(answer.draft?.verification).toMatchObject({status:"passed",checks,cases:8});
+  });
+  it("repairs a source-format failure once within the original allowance before compiling",async()=>{
+    const call=vi.fn().mockResolvedValueOnce(plan()).mockRejectedValueOnce(new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens:1600})).mockResolvedValueOnce(generated());
+    const compile=vi.fn(async()=>draft(true));
+    const answer=await runCustomAI(request,undefined,{call,compile});
+    expect(call.mock.calls.map(([input])=>input.task)).toEqual(["planning","fee-source","fee-source"]);
+    expect(call.mock.calls[2][0].maxTokens).toBe(4400);
+    expect(call.mock.calls[2][0].schema).toEqual(call.mock.calls[1][0].schema);
+    expect(compile).toHaveBeenCalledOnce();expect(answer.draft?.verification?.status).toBe("passed");
+  });
+  it.each([null,5200])("does not retry a source-format failure with unavailable allowance %s",async outputTokens=>{
+    const call=vi.fn().mockResolvedValueOnce(plan()).mockRejectedValue(new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens}));
+    const compile=vi.fn();await expect(runCustomAI(request,undefined,{call,compile})).rejects.toMatchObject({failure:"invalid-schema"});
+    expect(call).toHaveBeenCalledTimes(2);expect(compile).not.toHaveBeenCalled();
+  });
+  it("stops after the single source-format correction fails",async()=>{
+    const call=vi.fn().mockResolvedValueOnce(plan()).mockRejectedValue(new ModelResponseError("invalid-schema",{inputTokens:500,outputTokens:1200}));
+    const compile=vi.fn();await expect(runCustomAI(request,undefined,{call,compile})).rejects.toMatchObject({failure:"invalid-schema"});
+    expect(call).toHaveBeenCalledTimes(3);expect(compile).not.toHaveBeenCalled();
   });
   it("answers a request for ideas once without a contract plan, chain reads or compilation", async () => {
     const call = vi.fn().mockResolvedValue(result({ reply: "Eine fallende Startgebühr oder Gebühren für Liquidität und Buybacks." }));
