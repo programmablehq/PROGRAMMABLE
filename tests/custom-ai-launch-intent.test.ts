@@ -22,6 +22,27 @@ const plan = (extra = {}) => response({ reply: "Four choices remain open.", acti
   intentRequirements: proposed, requirements: texts.slice(0, 6), unresolved: questions, feeChecks: [true, false].map(buy => ({ afterSeconds: 0, buy, totalFeeBps: 1000 })), setupPatch: {}, ...extra });
 
 describe("complete launch intent and source revisions", () => {
+  it.each(["",questions[0]])("binds an answer to an existing open choice to the actual user message: %s",async instruction=>{
+    const previous=initial(),content="Use London's rain for the weather condition.";
+    const next=previous.requirements.map(rule=>({id:rule.id,text:rule.text,kind:rule.kind,open:rule.open,instruction:""}));
+    next[6]={...next[6],text:"Use London's rain for the weather condition.",open:null,instruction};
+    const result=await runCustomAI({...request,messages:[{role:"user",content}]},undefined,
+      {call:async()=>plan({action:"answer",intentMode:"revise",intentRequirements:next,unresolved:questions.slice(1),requirements:[],feeChecks:[]}),compile:vi.fn()},
+      {intent:previous});
+    expect(result.intent?.requirements[6]).toMatchObject({text:content,open:null,origin:{kind:"message",quote:content}});
+    expect(result.intent?.requirements.slice(0,6)).toEqual(previous.requirements.slice(0,6));
+    expect(result.intent?.unresolved).toEqual(questions.slice(1));
+  });
+  it("does not report an unaccepted change as saved",async()=>{
+    const previous=initial();
+    const next=previous.requirements.map(rule=>({id:rule.id,text:rule.text,kind:rule.kind,open:rule.open,instruction:""}));
+    next[6]={...next[6],text:"A different weather rule",open:null,instruction:"an invented quotation"};
+    const result=await runCustomAI({...request,messages:[{role:"user",content:"Keep the other rules."}]},undefined,
+      {call:async()=>plan({action:"answer",intentMode:"revise",reply:"All changes saved.",intentRequirements:next,unresolved:questions.slice(1),requirements:[],feeChecks:[]}),compile:vi.fn()},
+      {intent:previous});
+    expect(result.change).toBe("blocked");expect(result.reply).toBe(questions[0]);
+    expect(result.intent?.requirements[6]).toEqual(previous.requirements[6]);
+  });
   it("preserves all ten requirements, four open parts and three negative constraints", () => {
     const intent = initial();
     expect(intent.requirements.map(rule => rule.text)).toEqual(texts);

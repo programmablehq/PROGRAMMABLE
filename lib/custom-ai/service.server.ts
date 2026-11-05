@@ -295,8 +295,17 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     // Bind omitted excerpts to that real message rather
     // than asking the model to quote it again. This is provenance, not approval;
     // open choices stay open and existing-design edits keep their strict quotes.
-    const first=firstDesign?request.messages.at(-1):undefined;
-    return !previousIntent&&first?proposed.map(rule=>rule.instruction.trim()?rule:{...rule,instruction:first.content}):proposed;
+    const author=request.messages.at(-1);
+    if(author?.role!=="user")return proposed;
+    return proposed.map(rule=>{
+      const before=previousIntent?.requirements.find(saved=>saved.id===rule.id);
+      // The server owns provenance. A missing quote or a copied pending
+      // question is not evidence; bind only that existing answer to its user.
+      // Closed rules and unrelated/invalid quotations keep their normal gates.
+      const openAnswer=before?.open!=null&&before.kind===rule.kind&&(before.text!==rule.text||before.open!==rule.open)
+        &&(!rule.instruction.trim()||rule.instruction.trim()===before.open.trim());
+      return (firstDesign&&!previousIntent&&!rule.instruction.trim()||openAnswer)?{...rule,instruction:author.content}:rule;
+    });
   };
   // Open questions have one authority: their canonical requirement. Do not
   // make the model repeat them in a second list and compare paraphrases.
@@ -381,7 +390,9 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     ?{nextAction:{kind:"prepare-launch",sourceId}}:{};
   if (plan.action === "build" && (open.length || intent && intentHasOpenParts(intent))) return { reply: open.find(question=>/[?？]\s*$/u.test(question))??"Your complete design is saved. The open items below still need resolving before I can build the source.", ...update, ruleSpec: previousSpec ?? plan.composable,
     intent, memory: plan.memory, change: "blocked", unresolved: open, ...(researched ? { chargedAs: "research", sources } : {}) };
-  if (plan.action !== "build") return { reply: plan.reply, ...update, memory: plan.memory,
+  if (plan.action !== "build") return { reply: revised?.problems.length
+    ?open.find(question=>/[?？]\s*$/u.test(question))??"Part of that change could not be applied. Your saved rules are kept."
+    :plan.reply, ...update, memory: plan.memory,
     ...launchAction(request.draftId,plan.action==="answer"&&intent?.revision===previousIntent?.revision&&Boolean(previousProjectView?.compiled&&previousProjectView.scenarios?.passed&&previousProjectView.productBlueprintId===update.productBlueprint?.id||context.draft?.compiled&&context.draft.validation?.status==="passed")),
     ...(intent ? { intent } : {}),
     ...(previousSpec ? { ruleSpec: previousSpec } : {}),
