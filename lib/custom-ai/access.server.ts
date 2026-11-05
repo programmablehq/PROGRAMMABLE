@@ -1,6 +1,7 @@
+import { isBriefChat } from "./reply-mode";
 import "server-only";
 import { createHash } from "node:crypto";
-import { CustomAIError, isBriefChat, type ChatRequest, type ChatResult } from "./types";
+import { CustomAIError, type ChatRequest, type ChatResult } from "./types";
 
 // Local preview only. Public rollout requires shared account quotas and the
 // existing wallet-authenticated API; an in-memory guard is not a public quota.
