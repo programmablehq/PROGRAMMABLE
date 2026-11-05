@@ -316,10 +316,24 @@ describe("Surplus planner schema transport", () => {
     expect(format.schema.properties?.program.type).toBe("string");
     expect(JSON.parse(format.decode('{"program":"null"}'))).toEqual({ program: null });
     expect(JSON.parse(format.decode('{"program":null}'))).toEqual({program:null});
+    expect(JSON.parse(format.decode('{"program":""}'))).toEqual({program:null});
     expect(JSON.parse(format.decode('{"program":{"interval":600}}'))).toEqual({program:{interval:600}});
     for(const value of [{},{interval:"600"},{interval:600,hidden:true}])expect(()=>format.decode(JSON.stringify({program:value}))).toThrow();
     expect(JSON.parse(format.decode(JSON.stringify({ program: '{"interval":600}' })))).toEqual({ program: { interval: 600 } });
     expect(() => format.decode(JSON.stringify({ program: '{}' }))).toThrow();
+  });
+
+  it("does not turn blank required objects or malformed optional configuration into null", () => {
+    const required = { type: ["object"], properties: { interval: { type: "integer" } }, required: ["interval"], additionalProperties: false };
+    const optional = { ...required, type: ["object", "null"] };
+    for (const schema of [required, optional]) {
+      const format=prepareSurplusSchema({type:"object",properties:{program:schema},required:["program"],additionalProperties:false});
+      for (const program of [" ","{}",'{"interval":"600"}','{"interval":600,"hidden":true}'])
+        expect(()=>format.decode(JSON.stringify({program}))).toThrow();
+      expect(()=>format.decode('{}')).toThrow();
+    }
+    const format=prepareSurplusSchema({type:"object",properties:{program:required},required:["program"],additionalProperties:false});
+    expect(()=>format.decode('{"program":""}')).toThrow();
   });
 
   it("keeps unsupported length and number constraints enforced locally", () => {
@@ -329,5 +343,12 @@ describe("Surplus planner schema transport", () => {
     expect(JSON.parse(format.decode('{"count":2,"name":"ok"}'))).toEqual({ count: 2, name: "ok" });
     expect(() => format.decode('{"count":3,"name":"ok"}')).toThrow();
     expect(() => format.decode('{"count":2,"name":"long"}')).toThrow();
+  });
+
+  it("accepts canonical strings in a string/null union while retaining the original constraints", () => {
+    const format=prepareSurplusSchema({type:"object",properties:{group:{anyOf:[{type:"string",pattern:"^[a-z-]+$"},{type:"null"}]}},required:["group"],additionalProperties:false});
+    expect(JSON.parse(format.decode('{"group":"fee-budget"}'))).toEqual({group:"fee-budget"});
+    expect(JSON.parse(format.decode('{"group":"null"}'))).toEqual({group:null});
+    for(const group of ["", "bad group", "{}", "[]"])expect(()=>format.decode(JSON.stringify({group}))).toThrow();
   });
 });

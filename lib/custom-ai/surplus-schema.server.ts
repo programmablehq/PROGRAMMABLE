@@ -64,10 +64,12 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
   let changed = false;
   const validationOnly = new Set(["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "minLength", "maxLength", "pattern", "format", "minItems", "maxItems", "uniqueItems", "minProperties", "maxProperties"]);
   const needsEncoding = (node: Schema) => Boolean(node.anyOf || Array.isArray(node.type) && node.type.includes("object"));
+  const nullableObject = (node: Schema) => Array.isArray(node.type) && node.type.includes("object") && node.type.includes("null")
+    && node.type.every(type => type === "object" || type === "null");
   function transport(node: Schema): Schema {
     if (needsEncoding(node)) {
       changed = true;
-      return { type: "string", description: `A JSON-encoded value matching this exact schema. Encode the complete value as a JSON string: ${JSON.stringify(node)}` };
+      return { type: "string", description: `A JSON-encoded value matching this exact schema. Encode the complete value as a JSON string: ${JSON.stringify(node)}${nullableObject(node) ? ' For an absent optional object, return the string "null".' : ""}` };
     }
     const wire = { ...node };
     const constraints = Object.fromEntries(Object.entries(node).filter(([key]) => validationOnly.has(key)));
@@ -94,7 +96,19 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
       // The gateway may already return the canonical object or null instead
       // of its string transport form. Preserve it and validate the entire
       // response against the unchanged original schema below.
-      return typeof value === "string" ? JSON.parse(value) : value;
+      // Some sellers serialize an absent optional object as an empty wire
+      // string. This is only null for an object/null union, never a missing
+      // required object, malformed configuration or arbitrary tool input.
+      if (value === "" && nullableObject(node)) return null;
+      if (typeof value !== "string") return value;
+      try { return JSON.parse(value); }
+      catch (error) {
+        // A gateway may return a canonical string from a string/null union,
+        // just as it already returns canonical objects. The original schema
+        // still validates its pattern, enum and length below.
+        if (node.anyOf?.some(branch => branch.type === "string")) return value;
+        throw error;
+      }
     }
     if (Array.isArray(value) && node.items) return value.map((item,index) => {
       const schema=Array.isArray(node.items)?node.items[index]:node.items;return schema?restore(item,schema):item;

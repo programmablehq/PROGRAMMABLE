@@ -54,6 +54,11 @@ falls from 1.5% to zero. Explain that the fixed platform fee remains in one shor
 without a question about that known platform rule. Do not use this default if the start is below the
 fixed fee or the user explicitly demands removing the platform fee or zero TOTAL fees; explain that
 specific conflict instead. Never raise the starting total or alter the fixed platform policy.
+For a fee-only schedule on a fixed-core route, the platform already sends all additional fees to the
+linked creator wallet unless the user explicitly requests another allocation or funded program. Use
+that existing default and build; do not ask the user to confirm its recipient or turn it into an open
+requirement. This is a known core rule, not a newly chosen money destination. Other routes and explicit
+splits still need their stated recipients and shares.
 "The additional/project fees go to my creator wallet" assigns all of that fee component to the linked
 creator wallet. The platform calculates its mandatory share separately from the selected network policy.
 Do not ask what percentage goes to the creator or where a supposed remainder should go in that case.
@@ -269,6 +274,8 @@ Use no constructor parameters. Embed the agreed configuration in the source; use
 launch-relative schedule. The module can be deployed well before the coin: never use constructor
 block.timestamp to start a launch-relative schedule. Set configurationHash to keccak256(abi.encode(T.VERSION_ID, ...)), directly
 including every other immutable variable. Constants are bound by the source and bytecode as well.
+Use the immutable variable names themselves in that hash, never repeated literals or equivalent expressions.
+For example, after assigning startAdditionalBps and rampSeconds, hash abi.encode(T.VERSION_ID, startAdditionalBps, rampSeconds).
 The current validator supports self-contained expressions, time schedules and internal pure/view helpers.
 No loops, assembly, extra contracts, custom modifiers, external or indirect calls, msg/tx dependencies,
 or block fields other than timestamp and chainid. External data needs a separately connected adapter.

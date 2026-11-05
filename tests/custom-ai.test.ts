@@ -79,6 +79,16 @@ const plan = (action = "build", extra: { requirements?: string[]; unresolved?: s
 const generated = () => result({ reply: "The coin charges 3% on buys and sells.", source: "contract GeneratedFeeModule {}", hookSummary: "charges 3% on buys and sells" });
 
 describe("Claude planning and generation", () => {
+  it("derives the known fee-core architecture without another planning call and still verifies the source", async () => {
+    const call=vi.fn().mockResolvedValueOnce(plan("build",{executionRoute:"fee-module",productPlan:{components:[],assets:[],flows:[],services:[],interfaceActions:[]}})).mockResolvedValueOnce(generated());
+    const compile=vi.fn(async()=>draft(true));
+    const answer=await runCustomAI(request,undefined,{call,compile});
+    expect(call.mock.calls.map(([input])=>input.task)).toEqual(["planning","fee-source"]);
+    expect(answer.productBlueprint).toMatchObject({state:"defined",execution:"not-certified",services:[],flows:[]});
+    expect(answer.productBlueprint?.components[0].requirementIds).toEqual(answer.intent?.requirements.map(rule=>rule.id));
+    expect(compile).toHaveBeenCalledWith("contract GeneratedFeeModule {}",undefined,checks,undefined);
+    expect(answer.draft?.verification).toMatchObject({status:"passed",checks,cases:8});
+  });
   it("answers a request for ideas once without a contract plan, chain reads or compilation", async () => {
     const call = vi.fn().mockResolvedValue(result({ reply: "Eine fallende Startgebühr oder Gebühren für Liquidität und Buybacks." }));
     const compile = vi.fn(), load = vi.fn();
