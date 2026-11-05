@@ -11,6 +11,8 @@ describe("read-only builder questions", () => {
     "Was kannst du bauen?", "Was kannst du?", "Was geht hier so?", "Was ist hier möglich?", "Hast du Ideen?", "Welche Hooks könnte ich erstellen?", "Was können wir hier machen?",
     "What can you build here?", "What should we build?", "Any ideas?", "What could we make? Please don't build anything yet.",
     "Give me some ideas for a hook", "Show me examples", "Gib mir ein paar Ideen", "Zeig mir Beispiele",
+    "What could we make? Please don’t build anything yet.",
+    "Was kannst du bauen? Nenn mir drei Ideen.", "What can you do? Give me some examples.",
   ])("uses the small reply schema for %s", content => {
     expect(isDiscoveryQuestion(request(content))).toBe(true);
     expect(isBriefChat(request(content))).toBe(true);
@@ -18,6 +20,15 @@ describe("read-only builder questions", () => {
   it.each([
     "What can you build? Then launch it.", "Was kannst du? Jetzt launche den Coin.", "Give me ideas and build the first one.", "How can you help? Sign this transaction.",
     "Was kannst du bauen? Ändere die Gebühren auf 2%.", "Gib mir Ideen und erstelle meinen Coin.",
+    "What can you build? Could you change my fee to 3%?",
+    "What can you build, and would you please make my coin now?",
+    "Was kannst du bauen? Kannst du den Namen in Blau ändern?",
+    "Was kannst du bauen? Könnten wir die Gebühren auf 2% setzen?",
+    "Was kannst du bauen? Gib dem Coin den Namen Test.",
+    "What can you build? Give the token a new name.",
+    "What can you build? Please switch my coin to Base.",
+    "What can you build? Give me a token named Ideas.",
+    "What can you do? Give me ideas and set my coin name to Ideas.",
     "Build a hook with 3% fees", "What can you build with https://example.com?",
     "What can you build with `run()`?", "Continue building", "okay",
   ])("keeps explicit work and mixed commands in the planner: %s", content => {
@@ -26,5 +37,9 @@ describe("read-only builder questions", () => {
   it("never consumes build intent or a selected rule edit", () => {
     expect(isDiscoveryQuestion({ ...request("What can you build?"), intent: "build" })).toBe(false);
     expect(isDiscoveryQuestion({ ...request("What can you build?"), editTarget: { requirementId: "fee", sourceHash: "a".repeat(64) } })).toBe(false);
+  });
+  it("treats a casual greeting as a reply without accepting a pending decision", () => {
+    expect(isBriefChat(request("yo"))).toBe(true);
+    expect(isBriefChat({ ...request("okay"), contextId: "saved-design" })).toBe(false);
   });
 });

@@ -17,7 +17,15 @@ export function isDiscoveryQuestion(request: Pick<ChatRequest, "intent" | "messa
   ].some(pattern => pattern.test(question));
   if (!capability) return false;
   const commands = question
-    .replace(/\b(?:please\s+)?(?:do not|don't)\s+(?:build|create|launch|deploy)(?:\s+anything)?(?:\s+yet)?\b/gu, "")
-    .replace(/\b(?:bitte\s+)?(?:noch\s+)?nicht(?:s)?\s+(?:bauen|erstellen|launchen|deployen)\b/gu, "");
-  return !/(?:[.!?;,]\s*|\b(?:and|then|also|und|dann|danach)\s+)(?:(?:please|now|bitte|jetzt)\s+)?(?:build|create|launch\w*|deploy\w*|change|add|remove|set|send|withdraw|mint|rename|buy|sell|swap|claim|approve|sign|mach\w*|signier\w*|kauf\w*|verkauf\w*|bau\w*|erstell\w*|ander\w*|fug\w*|entfern\w*|setz\w*|sende\w*|zahl\w*)\b/u.test(commands);
+    .replace(/\b(?:please\s+)?(?:do not|don['’]t)\s+(?:build|create|launch|deploy)(?:\s+anything)?(?:\s+yet)?\b/gu, "")
+    .replace(/\b(?:bitte\s+)?(?:noch\s+)?nicht(?:s)?\s+(?:bauen|erstellen|launchen|deployen)\b/gu, "")
+    .replace(/\b(?:give me|gib mir|nenne? mir)\s+(?:(?:please|some|more|a few|two|three|bitte|ein paar|noch|mehr|zwei|drei|\d+)\s+)*(?:ideas?|examples?|ideen|beispiele)\b/gu, "");
+  const followup = String.raw`(?:[.!?;,]\s*|\b(?:and|then|also|und|dann|danach)\s+)`;
+  const polite = String.raw`(?:(?:please|now|bitte|jetzt|noch)\s+)*`;
+  const modal = String.raw`(?:(?:can|could|would|will)\s+you|(?:kannst|konntest|wurdest|willst)\s+du|(?:konnt|konntet|wurdet|wollt)\s+ihr|(?:konnen|konnten|wollen|sollen)\s+wir)\s+`;
+  const action = String.raw`(?:build|make|create|launch\w*|deploy\w*|change|update|add|remove|set|send|transfer|withdraw|deposit|mint|burn|rename|buy|sell|swap|claim|approve|sign|use|switch|give|gib|mach\w*|signier\w*|kauf\w*|verkauf\w*|bau\w*|erstell\w*|ander\w*|fug\w*|entfern\w*|setz\w*|sende\w*|zahl\w*|benenn\w*|nenn\w*|nutze\w*|verwend\w*|wechsel\w*)\b`;
+  // A polite question may still request an edit. Keep the complete message
+  // with the planner, including German clauses whose action comes last.
+  return !new RegExp(`${followup}${polite}(?:${modal}${polite})?${action}`, "u").test(commands)
+    && !new RegExp(`${followup}${polite}${modal}[^.!?;]{0,180}\\b${action}`, "u").test(commands);
 }
