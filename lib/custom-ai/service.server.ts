@@ -15,7 +15,7 @@ import { partialReply } from "./conversation";
 import { composablePlanningRules, ruleFeedIds, type RuleSpecV2 } from "./rule-spec";
 import { compileRuleSpec } from "./rule-compiler.server";
 import { resolveRuleFeeds,configuredRuleFeeds } from "./feed-registry.server";
-import { editPlanningRules, parseRuleEdits, reviewRuleEdits } from "./design-edits";
+import { editPlanningRules, parseRuleEdits, reviewRuleEdits, stablePlannedRuleIds } from "./design-edits";
 import { builderCapabilities } from "./builder-capabilities";
 import { AI_CONFIG } from "./ai-config";
 import { getCapabilities, capabilityMetadata } from "./capabilities/registry.server";
@@ -271,7 +271,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       context.onProgress?.({type:"reply",text:""});
       return {...value,action:"build",launchRequested:false};
     }
-    return value;
+    return stablePlannedRuleIds(value, previousIntent, request.messages.at(-1)!.content);
   };
   // A continuation selects the existing canonical intent. There is no new
   // design choice for a model to infer, repeat or silently change.
