@@ -97,7 +97,7 @@ export async function createLaunchSession(store: AIStore, owner: string, wallets
     || input.reviewedSourceHash !== draft.sourceHash) {
     throw new CustomAIError("rules", "Finish checking this exact draft in the chat before launching.", 422);
   }
-  if (draft.composable) await assertComposableAvailable(draft.composable);
+  if (draft.composable && (draft.composable.feeds.length || draft.composable.spec.actions.length)) await assertComposableAvailable(draft.composable);
   if (draft.feed) {
     if (draft.feed.chainId !== settings.chainId) throw new CustomAIError("feed", "Recheck the event rule after changing its network.", 422);
     if (process.env.CUSTOM_AI_EVENTS_ENABLED !== "true"
