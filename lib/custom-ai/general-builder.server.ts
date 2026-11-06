@@ -240,11 +240,12 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
   const cached=progressContext?await input.loadSourceProgress?.(progressContext):undefined;
   const catalog=blueprint?canonicalInterfaceContext(chainId):undefined;
   const foundationCandidate=blueprint&&!input.previous?sourceFoundation(blueprint,paths,dependencyContext.complete,catalog!.contracts):null;
-  // Enable only the pattern with complete independent runtime qualification.
-  // Other shapes retain their existing writer until separately qualified.
-  const foundation=foundationCandidate?.completeReference?foundationCandidate:null;
+  // A compatible pinned implementation is also a useful editable starting
+  // point for novel mechanics. Only a complete reference may skip edits;
+  // every other seed must implement the frozen design before normal checks.
+  const foundation=foundationCandidate;
   let referenceFindings:GeneralSourceAudit["findings"]|undefined;
-  if(foundation&&blueprint&&input.auditSource&&!cached){
+  if(foundation?.completeReference&&blueprint&&input.auditSource&&!cached){
     const roots=Object.fromEntries(blueprint.entrypoints.flatMap(entry=>librarySources[entry.source]?[[entry.source,librarySources[entry.source]]]:[]));
     const candidate=createContractProject({compiler,sources:resolveInlineLibraries({...dependencySources,...roots,...foundation.sources},librarySources,compiler),entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment,productBlueprint?.id);
     input.onProgress?.({type:"phase",phase:"checking"});

@@ -32,6 +32,24 @@ function input(events:string[]=[]){
 beforeEach(()=>vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code}},completeReference:true}));
 
 describe("qualified foundations inside the immutable project job",()=>{
+  it("edits a compatible incomplete reference before compiling or auditing it",async()=>{
+    vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code.replace("= 0","= 2")}},completeReference:false});
+    const request=input(),compile=vi.fn(compiled),auditSource=vi.fn((project:ContractProject)=>audit(project));
+    const call=vi.fn(async(request:ClaudeInput)=>"properties" in request.schema&&Object.hasOwn(request.schema.properties as object,"steps")
+      ?reply({steps:[{path:"Counter.sol",instruction:"Implement the saved zero initial value."}]})
+      :reply({reply:"Counter starts at zero.",summary:"Saved counter implemented",changes:[{path:"Counter.sol",before:"= 2",after:"= 0"}]}));
+    const result=await buildGeneralContract({...request,auditSource},undefined,{call,compile});
+    expect(call).toHaveBeenCalledTimes(2);expect(compile).toHaveBeenCalledOnce();expect(auditSource).toHaveBeenCalledOnce();
+    expect(result.project.sources["Counter.sol"].content).toBe(code);
+    expect(request.saveProject).toHaveBeenCalledOnce();expect(result.launchReady).toBe(false);
+  });
+  it("never treats an incomplete seed and an empty edit plan as finished source",async()=>{
+    vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code}},completeReference:false});
+    const request=input(),compile=vi.fn(compiled),auditSource=vi.fn((project:ContractProject)=>audit(project)),call=vi.fn(async()=>reply({steps:[]}));
+    await expect(buildGeneralContract({...request,auditSource},undefined,{call,compile})).rejects.toMatchObject({code:"source-pending"});
+    expect(call).toHaveBeenCalledOnce();expect(compile).not.toHaveBeenCalled();expect(auditSource).not.toHaveBeenCalled();
+    expect(request.saveProject).not.toHaveBeenCalled();
+  });
   it("keeps a matching implementation unchanged with one compile and one audit, then persists in order",async()=>{
     const events:string[]=[],request=input(events),call=vi.fn(),compile=vi.fn(async(project:ContractProject)=>{events.push("compile");return compiled(project);});
     const auditSource=vi.fn(async(project:ContractProject)=>{events.push("audit");return audit(project);});
