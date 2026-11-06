@@ -81,6 +81,44 @@ describe("qualified foundations inside the immutable project job",()=>{
     expect(events).toEqual(["compile","audit","project","saved-audit"]);
     expect(result.project.sources["Counter.sol"].content).toBe(code);expect(result.launchReady).toBe(false);
   });
+  it("starts both reference checks together and waits for both before saving",async()=>{
+    const request=input(),call=vi.fn();
+    let finishCompile!:()=>void,finishAudit!:()=>void;
+    const compiling=new Promise<void>(resolve=>{finishCompile=resolve;});
+    const reviewing=new Promise<void>(resolve=>{finishAudit=resolve;});
+    const compile=vi.fn(async(project:ContractProject)=>{await compiling;return compiled(project);});
+    const auditSource=vi.fn(async(project:ContractProject)=>{await reviewing;return audit(project);});
+    const pending=buildGeneralContract({...request,auditSource},undefined,{call,compile});
+    await vi.waitFor(()=>{expect(compile).toHaveBeenCalledOnce();expect(auditSource).toHaveBeenCalledOnce();});
+    expect(request.saveProject).not.toHaveBeenCalled();
+    finishCompile();await compiling;await Promise.resolve();
+    expect(request.saveProject).not.toHaveBeenCalled();
+    finishAudit();const result=await pending;
+    expect(result.compilation.compiled).toBe(true);expect(result.sourceAudit?.status).toBe("passed");
+    expect(request.saveProject).toHaveBeenCalledOnce();expect(request.saveAudit).toHaveBeenCalledOnce();expect(call).not.toHaveBeenCalled();
+  });
+  it("cancels the speculative reference audit after a failed compile before trying edits",async()=>{
+    const request=input(),events:string[]=[];
+    const auditSource=vi.fn((project:ContractProject,signal?:AbortSignal)=>new Promise<Awaited<ReturnType<typeof audit>>>((resolve)=>{
+      signal!.addEventListener("abort",()=>{events.push("audit-cancelled");void audit(project).then(resolve);},{once:true});
+    }));
+    const compile=vi.fn(async(project:ContractProject)=>({...await compiled(project),compiled:false}));
+    const call=vi.fn(async()=>{events.push("edits");throw new Error("stop after cancelled audit");});
+    await expect(buildGeneralContract({...request,auditSource},undefined,{call,compile})).rejects.toThrow("stop after cancelled audit");
+    expect(events).toEqual(["audit-cancelled","edits"]);expect(compile).toHaveBeenCalledOnce();expect(auditSource).toHaveBeenCalledOnce();
+    expect(request.saveProject).not.toHaveBeenCalled();expect(request.saveAudit).not.toHaveBeenCalled();
+  });
+  it("propagates cancellation to both reference checks without persisting an incomplete result",async()=>{
+    const request=input(),controller=new AbortController(),signals:AbortSignal[]=[];
+    const waiting=(signal:AbortSignal)=>new Promise<never>((_,reject)=>{signals.push(signal);signal.addEventListener("abort",()=>reject(signal.reason),{once:true});});
+    const compile=vi.fn((_project:ContractProject,signal?:AbortSignal)=>waiting(signal!));
+    const auditSource=vi.fn((_project:ContractProject,signal?:AbortSignal)=>waiting(signal!));
+    const pending=buildGeneralContract({...request,auditSource},controller.signal,{call:vi.fn(),compile});
+    const rejected=expect(pending).rejects.toThrow("cancelled");
+    await vi.waitFor(()=>expect(signals).toHaveLength(2));controller.abort(new Error("cancelled"));await rejected;
+    expect(signals.every(signal=>signal.aborted)).toBe(true);
+    expect(request.saveProject).not.toHaveBeenCalled();expect(request.saveAudit).not.toHaveBeenCalled();
+  });
   it("corrects a concrete reference finding before the single immutable project save",async()=>{
     vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code.replace("= 0","= 2")}},completeReference:true});
     const events:string[]=[],request=input(events);let audits=0;

@@ -261,12 +261,23 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     const roots=Object.fromEntries(blueprint.entrypoints.flatMap(entry=>librarySources[entry.source]?[[entry.source,librarySources[entry.source]]]:[]));
     const candidate=createContractProject({compiler,sources:resolveInlineLibraries({...dependencySources,...roots,...foundation.sources},librarySources,compiler),entrypoints:blueprint.entrypoints},intent,chainId,production,blueprint.deployment,productBlueprint?.id);
     input.onProgress?.({type:"phase",phase:"checking"});
-    const compilation=await compile(structuredClone(candidate),signal);
-    if(compilation.compiled){
-      const sourceAudit=checkedGeneralSourceAudit(await input.auditSource(structuredClone(candidate),signal),candidate);
-      if(sourceAudit.status==="passed")return finish(candidate,"The existing implementation matches your saved design. I have kept its contract code and checked it against your requirements.","Existing implementation matched to the saved design",{compilation,sourceAudit});
-      referenceFindings=sourceAudit.findings;
-    }
+    // The complete reference is fixed before either check starts. Compile and
+    // source review can overlap; neither result permits a save on its own.
+    // Novel or edited source still compiles first to avoid auditing syntax errors.
+    const controller=new AbortController(),scope=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+    const compilationPending=Promise.resolve().then(()=>compile(structuredClone(candidate),scope));
+    const reviewPending=Promise.resolve().then(()=>input.auditSource!(structuredClone(candidate),scope))
+      .then(value=>({value}),error=>({error}));
+    try{
+      const compilation=await compilationPending;
+      if(compilation.compiled){
+        const reviewed=await reviewPending;
+        if("error" in reviewed)throw reviewed.error;
+        const sourceAudit=checkedGeneralSourceAudit(reviewed.value,candidate);
+        if(sourceAudit.status==="passed")return finish(candidate,"The existing implementation matches your saved design. I have kept its contract code and checked it against your requirements.","Existing implementation matched to the saved design",{compilation,sourceAudit});
+        referenceFindings=sourceAudit.findings;
+      }
+    }finally{controller.abort();await reviewPending;}
     input.onProgress?.({type:"phase",phase:"building"});
   }
   correctionPolicy.deferredSave=Boolean(input.saveSourceProgress&&(foundation||input.compilerErrors?.some(error=>error.severity==="error")));
