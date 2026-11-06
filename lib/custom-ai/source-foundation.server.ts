@@ -13,6 +13,10 @@ export function sourceFoundation(blueprint: GeneralCheckBlueprint, paths: readon
   dependencies: ContractProject["sources"], references: readonly Reference[]): {sources:ContractProject["sources"];completeReference:boolean} | null {
   const pattern=matchImplementationPattern(blueprint,paths,{sources:dependencies,references});
   if(pattern)return {sources:pattern,completeReference:true};
+  // A design using a smaller surface can still edit the established fee-flow
+  // implementation. Extra methods are unfinished work, never a ready result.
+  const editablePattern=matchImplementationPattern(blueprint,paths,{sources:dependencies,references},true);
+  if(editablePattern)return {sources:editablePattern,completeReference:false};
   const seeds: ContractProject["sources"] = {};
   let recognized = 0;
   for (const path of paths) {

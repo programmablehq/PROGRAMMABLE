@@ -34,7 +34,7 @@ export function implementationPatternReferences(chainId:number){
  * review and independent behavior checks; matching an ABI grants no approval. */
 export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths:readonly string[],canonical?:{
   sources:ContractProject["sources"];references:readonly {source:string;contract:string}[];
-}):ContractProject["sources"]|undefined {
+},allowAdditionalInterface=false):ContractProject["sources"]|undefined {
   if(![1,4663,8453,999].includes(blueprint.chainId)||paths.length!==feeFlow.contracts.length)return;
   const kernel=canonical?.references.find(item=>item.contract.endsWith("ProtectedNative30HookV1"));
   const protection=canonical?.references.find(item=>item.contract.endsWith("LaunchProtectionModuleV1"));
@@ -47,10 +47,12 @@ export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths
   const functions=new Map(targets.map(target=>[target,new Set(target.functions.map(interfaceKey))]));
   const mapping=new Map<string,typeof targets[number]>();
   for(const entry of feeFlow.contracts){
+    const referenceFunctions=new Set(entry.functions.map(interfaceKey));
     const matches=targets.filter(target=>paths.includes(target.source)&&blueprint.entrypoints.some(point=>point.source===target.source&&point.contract===target.contract&&point.role===entry.role)
       &&target.arguments.length===entry.argumentCount&&target.allowReceive===entry.allowReceive&&target.allowFallback===entry.allowFallback
-      &&functions.get(target)!.size===entry.functions.length
-      &&entry.functions.every(fn=>{const key=interfaceKey(fn);return key!==undefined&&functions.get(target)!.has(key);}));
+      &&(allowAdditionalInterface
+        ?functions.get(target)!.size>0&&[...functions.get(target)!].every(key=>key!==undefined&&referenceFunctions.has(key))
+        :functions.get(target)!.size===entry.functions.length&&entry.functions.every(fn=>{const key=interfaceKey(fn);return key!==undefined&&functions.get(target)!.has(key);})));
     if(matches.length!==1)return;
     mapping.set(entry.id,matches[0]);
   }

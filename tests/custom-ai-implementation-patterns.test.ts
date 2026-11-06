@@ -1,16 +1,34 @@
-import {describe,it,expect} from "vitest";
+import {describe,it,expect,vi} from "vitest";
+vi.mock("server-only",()=>({}));
 import pattern from "../lib/custom-ai/implementation-patterns/base-fee-flow-v1.json";
 import {matchImplementationPattern} from "../lib/custom-ai/implementation-patterns";
 import type {GeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
+import {sourceFoundation} from "../lib/custom-ai/source-foundation.server";
 
 function fixture(){
   const contracts=pattern.contracts.map((entry,index)=>({id:entry.id,source:`generated/C${index}.sol`,contract:`Custom${index}`,role:entry.role,
-    arguments:Array(entry.argumentCount).fill("0"),functions:entry.functions,allowReceive:entry.allowReceive,allowFallback:entry.allowFallback,
+    arguments:Array(entry.argumentCount).fill("0"),functions:[...entry.functions],allowReceive:entry.allowReceive,allowFallback:entry.allowFallback,
     ...("parent" in entry?{parent:entry.parent,nonce:entry.nonce}: {})}));
   const blueprint={chainId:8453,entrypoints:contracts.map(({source,contract,role})=>({source,contract,role})),scenarios:{contracts:contracts.filter(x=>!("parent" in x)),constructorChildren:contracts.filter(x=>"parent" in x)}} as unknown as GeneralCheckBlueprint;
   return {blueprint,paths:contracts.map(x=>x.source)};
 }
 describe("editable fee-flow implementation reference",()=>{
+ it("reuses the fee-flow code for a smaller interface only as an unfinished edit foundation",()=>{
+  const {blueprint,paths}=fixture();
+  blueprint.scenarios.contracts[0].functions=blueprint.scenarios.contracts[0].functions.slice(0,20);
+  expect(matchImplementationPattern(blueprint,paths)).toBeUndefined();
+  const editable=sourceFoundation(blueprint,paths,{},[]);
+  expect(editable?.completeReference).toBe(false);
+  expect(editable?.sources[paths[1]].content).toContain("function executeBuyback");
+  const original=fixture();expect(sourceFoundation(original.blueprint,original.paths,{},[])?.completeReference).toBe(true);
+ });
+ it("still rejects unknown functions and changed constructor bindings in partial references",()=>{
+  const {blueprint,paths}=fixture();
+  blueprint.scenarios.contracts[0].functions.push("function withdrawEverything() external");
+  expect(matchImplementationPattern(blueprint,paths,undefined,true)).toBeUndefined();
+  const moved=fixture();moved.blueprint.scenarios.constructorChildren![0].nonce="5";
+  expect(matchImplementationPattern(moved.blueprint,moved.paths,undefined,true)).toBeUndefined();
+ });
  it("rebinds all source paths and contract references together",()=>{
   const {blueprint,paths}=fixture(),sources=matchImplementationPattern(blueprint,paths)!;
   expect(Object.keys(sources)).toEqual(paths);
