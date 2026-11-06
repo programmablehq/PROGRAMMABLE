@@ -87,6 +87,20 @@ describe("qualified foundations inside the immutable project job",()=>{
     expect(request.saveProject).toHaveBeenCalledOnce();expect(request.saveProject.mock.calls[0][0].hash).toBe(result.project.hash);
     expect(result.project.sources["Counter.sol"].content).toBe(code);expect(result.compilation.compiled).toBe(true);
   });
+  it("fixes a second revealed compiler error inside the original output budget",async()=>{
+    vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code.replace("= 0","= missing")}},completeReference:true});
+    const request=input();let calls=0;
+    const call=vi.fn(async(input:ClaudeInput)=>{
+      expect(input.maxTokens).toBeLessThanOrEqual(calls?3000:2000);
+      if(calls++===0)return reply({steps:[]});
+      return reply({reply:"Fixed the compiler error.",summary:"Counter starts at zero",changes:[{path:"Counter.sol",before:calls===2?"= missing":"= missingAgain",after:calls===2?"= missingAgain":"= 0"}]});
+    });
+    const compile=vi.fn(compiled);
+    const result=await buildGeneralContract({...request,auditSource:(project:ContractProject)=>audit(project)},undefined,{call,compile});
+    expect(call).toHaveBeenCalledTimes(3);expect(compile).toHaveBeenCalledTimes(4);
+    expect(request.saveProject).toHaveBeenCalledOnce();expect(result.compilation.compiled).toBe(true);
+    expect(result.project.sources["Counter.sol"].content).toBe(code);
+  });
   it("never persists or accepts an audit that belongs to another source hash",async()=>{
     const request=input(),call=vi.fn();
     await expect(buildGeneralContract({...request,auditSource:async project=>({...await audit(project),projectHash:`sha256:${"c".repeat(64)}`})},undefined,{call,compile:compiled}))

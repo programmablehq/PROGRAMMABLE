@@ -117,15 +117,12 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
     let compilation:CompiledProject,sourceAudit:GeneralSourceAudit|undefined;
     try{
       compilation=precomputed?.compilation??await compile(structuredClone(project),scope);
-      if(!compilation.compiled&&correctionPolicy.repair){
+      for(let corrections=0;!compilation.compiled&&correctionPolicy.repair&&corrections<2;corrections++){
         const corrected=await correctionPolicy.repair(project,compilation);
-        if(corrected){
-          if(blueprint)bindGeneralCheckBlueprint(blueprint,corrected);
-          project=corrected;
-          await input.saveProject(structuredClone(project));
-          saved=true;
-          compilation=await compile(structuredClone(project),scope);
-        }
+        if(!corrected||corrected.hash===project.hash)break;
+        if(blueprint)bindGeneralCheckBlueprint(blueprint,corrected);
+        project=corrected;
+        compilation=await compile(structuredClone(project),scope);
       }
       if(!saved)await input.saveProject(structuredClone(project));
       // Failed syntax/types already give an exact repair target. Do not pay for
@@ -305,11 +302,14 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     sources[file.path] = { content: file.content };
   }
   const project = createContractProject({ compiler, sources: resolveInlineLibraries(sources, librarySources, compiler), entrypoints: answer.entrypoints }, intent, chainId, production, blueprint?.deployment,productBlueprint?.id);
+  let remainingSourceTokens=Math.max(0,AI_CONFIG.maximumContractTokens-(response.outputTokens??AI_CONFIG.maximumContractTokens));
   if(correctionPolicy.deferredSave)correctionPolicy.repair=async(current,compilation)=>{
     const repaired=await repairCompilerSource({project:current,compilation,
       request:{...generation,...modelTask("source-edit",configuredProvider().models)},
-      remainingTokens:Math.max(0,AI_CONFIG.maximumContractTokens-(response.outputTokens??AI_CONFIG.maximumContractTokens)),
-      immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)])},call);
+      remainingTokens:remainingSourceTokens,
+      immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)])},async request=>{
+        const result=await call(request);remainingSourceTokens-=result.outputTokens??request.maxTokens;return result;
+      });
     return repaired?createContractProject({compiler,sources:repaired,entrypoints:current.entrypoints},intent,chainId,production,blueprint?.deployment,productBlueprint?.id):undefined;
   };
   return finish(project,answer.reply as string,answer.summary as string);
