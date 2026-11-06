@@ -77,7 +77,7 @@ test("keeps ten requested rules and four open choices through reload",async({pag
   await page.goto("/launch/custom-ai");
   const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
   await box.fill(`Build this: ${texts.join(". ")}`);await box.press("Enter");
-  const requested=page.locator("details").filter({has:page.locator("summary",{hasText:"Requested rules (10)"})});
+  const requested=page.locator("details").filter({has:page.locator(":scope > summary",{hasText:"Requested rules (10)"})});
   await expect(requested).toBeVisible();
   await expect(requested.getByText(texts[0],{exact:true})).not.toBeVisible();
   await requested.locator("summary").click();

@@ -142,7 +142,7 @@ for(const chainId of [1,4663,8453,999])test(`one explicit submission on chain ${
  const f=await fixture(page);await pauseTime(page);await page.goto(origin+`/?chain=${chainId}`);
  const region=page.getByRole('region',{name:'Launch submission'}),button=region.getByRole('button',{name:'Launch coin'});
  await expect(region.getByLabel('Launch wallet type')).toHaveCount(0);
- await expect(button).toBeEnabled();await expect(region.getByText('Submitting publishes this contract’s source.',{exact:false})).toBeVisible();
+ await expect(button).toBeEnabled();await expect(region.getByText('Publishing makes your contract code public.',{exact:false})).toBeVisible();
  await button.evaluate(element=>{(element as HTMLButtonElement).click();(element as HTMLButtonElement).click();});
  await expect(region.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();
  expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.saves).toHaveLength(1);
@@ -203,7 +203,7 @@ test('a slow read of the saved journal does not lock chat or coin editing',async
 });
 test('current status updates the original accepted submission without repeating prepare or create',async({page})=>{
  await pauseTime(page);const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
- await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
+ await expect(page.getByText('Preparing your coin for launch.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
  f.currentStatus='wallet_action_ready';await page.getByRole('button',{name:'Check current status'}).click();
  await expect(page.getByText('Review the next step in your wallet.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);
  await expect(page.getByLabel('Chat editing')).toHaveText('Available');expect(f.errors).toEqual([]);
@@ -212,21 +212,21 @@ test('a failed current-status read preserves the accepted link and can be checke
  await pauseTime(page);const f=await fixture(page);f.statusFailure=true;await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByText('The current status could not be refreshed. Your saved submission is still available.',{exact:true})).toBeVisible();
  await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
- f.statusFailure=false;await page.clock.runFor(2000);await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();
+ f.statusFailure=false;await page.clock.runFor(2000);await expect(page.getByText('Preparing your coin for launch.',{exact:true})).toBeVisible();
  expect(f.posts).toHaveLength(2);expect(f.errors).toEqual([]);
 });
 test('status polling stops after twenty reads and does not catch up after laptop sleep',async({page})=>{
  // Keep the clock paused between explicit ticks, including asynchronous HTTP
  // completion. Real-time drift must not start a second interval mid-response.
  const start=new Date('2030-01-01T12:00:00Z');await page.clock.install({time:start});await page.clock.pauseAt(new Date(start.getTime()+1000));const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
- await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
+ await expect(page.getByText('Preparing your coin for launch.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
  for(let count=2;count<=20;count++){
   // A request reaching the route does not mean the browser has consumed it.
   // Alternate non-terminal states and await the rendered response before the
   // next clock tick, so a still-active read cannot consume a polling attempt.
   f.currentStatus=count%2===0?'validating':'pending_review';
   await page.clock.runFor(count<=10?2000:5000);
-  await expect(page.getByText(count%2===0?'Your launch preparation is in progress.':'Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();
+  await expect(page.getByText(count%2===0?'Preparing your launch.':'Preparing your coin for launch.',{exact:true})).toBeVisible();
   expect(f.statusReads).toBe(count);
  }
  await page.clock.fastForward(3600000);expect(f.statusReads).toBe(20);expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);expect(f.errors).toEqual([]);
@@ -242,7 +242,7 @@ test('a late status from the previous wallet cannot appear in the newly selected
  await page.getByRole('button',{name:'Switch sample wallet'}).click();release();
  await expect(page.getByRole('button',{name:'Launch coin',exact:true})).toBeEnabled();
  await expect(page.getByRole('link',{name:'Open submission',exact:true})).toHaveCount(0);
- await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toHaveCount(0);expect(f.posts.filter(body=>body.action==='create')).toHaveLength(1);expect(f.errors).toEqual([]);
+ await expect(page.getByText('Preparing your coin for launch.',{exact:true})).toHaveCount(0);expect(f.posts.filter(body=>body.action==='create')).toHaveLength(1);expect(f.errors).toEqual([]);
 });
 
 for(const width of [360,1440])test(`submission controls render and remain keyboard accessible at ${width}px`,async({page},testInfo)=>{
