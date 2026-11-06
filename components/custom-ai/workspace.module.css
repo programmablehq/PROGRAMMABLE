@@ -88,6 +88,7 @@
 .outcomeLaunch:hover:not(:disabled) { background: #fff8ed; }
 .buildOutcome > small { display: block; margin-top: 12px; color: #aaa69f; font-size: 12px; line-height: 1.5; }
 .outcomeSummary { padding-inline-start: 18px; margin-block: 16px; color: #d6d2ca; font-size: 15px; line-height: 1.6; }
+.outcomeSummary > li { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .outcomeSummary li + li { margin-top: 6px; }
 .buildOutcome > .outcomeDetail { margin: 12px 0; color: #c7c2ba; }
 .buildNotes { color: #aaa69f; font-size: 13px; }
