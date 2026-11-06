@@ -61,6 +61,21 @@ describe("native independent declaration transport",()=>{
     expect(call.mock.calls[1][0].schema.properties).not.toHaveProperty("deploymentJson");
     expect(call.mock.calls[2][0].schema.properties.steps.type).toBe("array");
   });
+  it("continues complete scenario rows after an output limit without rebuilding the graph",async()=>{
+    const {contract,signature,...first}=steps[0];
+    const partial='{"steps":['+JSON.stringify([first.id,`${contract}:${signature}`,first.argumentsJson,first.from,
+      first.afterSeconds,first.value,first.read,first.requirementIds,first.expect])+',["read","main:count()","';
+    const call=vi.fn().mockResolvedValueOnce(response(graph))
+      .mockResolvedValueOnce(response({interfaces:interfaces.interfaces,deployment:null}))
+      .mockRejectedValueOnce(new ModelResponseError("output-limit",{inputTokens:10,outputTokens:4000},partial))
+      .mockResolvedValueOnce(response({steps:[steps[1]],complete:true}));
+    const result=await declareGeneralChecks({intent,chainId:8453,evmVersion:"cancun",model:"test-model"},call);
+    expect(result.scenarios.steps.map(step=>step.id)).toEqual(["increment","read"]);
+    expect(result.scenarios.steps[0].expect).toMatchObject({status:"success"});
+    expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","scenarios","scenarios"]);
+    expect(call.mock.calls[3][0].system).toContain('"id":"increment"');
+    expect(call.mock.calls[3][0].maxTokens).toBe(4000);
+  });
   it("declares a small graph's interfaces and production values once and preserves them on interruption",async()=>{
     const production=projectLaunchProductionContext(captured.chains["1"],1);
     const deployment={format:"fixture-refs-v2",targets:[{id:"main",argumentsJson:"[]",initializerFunction:null,
