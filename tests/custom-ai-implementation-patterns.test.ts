@@ -1,18 +1,28 @@
 import {describe,it,expect,vi} from "vitest";
 vi.mock("server-only",()=>({}));
 import pattern from "../lib/custom-ai/implementation-patterns/base-fee-flow-v1.json";
+import nativeFeeSplit from "../lib/custom-ai/implementation-patterns/native-fee-split-v1.json";
 import {matchImplementationPattern} from "../lib/custom-ai/implementation-patterns";
 import type {GeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 import {sourceFoundation} from "../lib/custom-ai/source-foundation.server";
 
-function fixture(){
-  const contracts=pattern.contracts.map((entry,index)=>({id:entry.id,source:`generated/C${index}.sol`,contract:`Custom${index}`,role:entry.role,
+function fixture(reference:{chainId:number;contracts:typeof pattern.contracts}=pattern){
+  const contracts=reference.contracts.map((entry,index)=>({id:entry.id,source:`generated/C${index}.sol`,contract:`Custom${index}`,role:entry.role,
     arguments:Array(entry.argumentCount).fill("0"),functions:[...entry.functions],allowReceive:entry.allowReceive,allowFallback:entry.allowFallback,
     ...("parent" in entry?{parent:entry.parent,nonce:entry.nonce}: {})}));
-  const blueprint={chainId:8453,entrypoints:contracts.map(({source,contract,role})=>({source,contract,role})),scenarios:{contracts:contracts.filter(x=>!("parent" in x)),constructorChildren:contracts.filter(x=>"parent" in x)}} as unknown as GeneralCheckBlueprint;
+  const blueprint={chainId:reference.chainId,entrypoints:contracts.map(({source,contract,role})=>({source,contract,role})),scenarios:{contracts:contracts.filter(x=>!("parent" in x)),constructorChildren:contracts.filter(x=>"parent" in x)}} as unknown as GeneralCheckBlueprint;
   return {blueprint,paths:contracts.map(x=>x.source)};
 }
 describe("editable fee-flow implementation reference",()=>{
+ it("matches the smaller plain-token reference and resolves imports after renaming",()=>{
+  const {blueprint,paths}=fixture(nativeFeeSplit);
+  const reference=sourceFoundation(blueprint,paths,{},[]);
+  expect(reference?.completeReference).toBe(true);
+  expect(reference?.sources[paths[0]].content).toContain('from "src/launch-protection/ProtectedLaunchTokenV1.sol"');
+  expect(reference?.sources[paths[1]].content).toContain('from "generated/C2.sol"');
+  expect(reference?.sources[paths[1]].content).not.toContain('.bindHook(address(this))');
+  expect(matchImplementationPattern({...blueprint,chainId:8453},paths)).toBeUndefined();
+ });
  it("reuses the fee-flow code for a smaller interface only as an unfinished edit foundation",()=>{
   const {blueprint,paths}=fixture();
   blueprint.scenarios.contracts[0].functions=blueprint.scenarios.contracts[0].functions.slice(0,20);
