@@ -67,7 +67,7 @@ export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths
 function matchPattern(pattern:ImplementationPattern,blueprint:GeneralCheckBlueprint,paths:readonly string[],canonical:{
   sources:ContractProject["sources"];references:readonly {source:string;contract:string}[];
 }|undefined,allowAdditionalInterface:boolean):ContractProject["sources"]|undefined {
-  if(paths.length!==pattern.contracts.length||pattern!==feeFlow&&blueprint.chainId!==pattern.chainId)return;
+  if(!paths.length||paths.length>pattern.contracts.length||pattern!==feeFlow&&blueprint.chainId!==pattern.chainId)return;
   const kernel=canonical?.references.find(item=>item.contract.endsWith("ProtectedNative30HookV1"));
   const protection=canonical?.references.find(item=>item.contract.endsWith("LaunchProtectionModuleV1"));
   const canonicalSource=kernel&&canonical?.sources[kernel.source]?.content;
@@ -80,7 +80,9 @@ function matchPattern(pattern:ImplementationPattern,blueprint:GeneralCheckBluepr
   const mapping=new Map<string,typeof targets[number]>();
   for(const entry of pattern.contracts){
     const referenceFunctions=new Set(entry.functions.map(interfaceKey));
-    const matches=targets.filter(target=>paths.includes(target.source)&&blueprint.entrypoints.some(point=>point.source===target.source&&point.contract===target.contract&&point.role===entry.role)
+    const matches=targets.filter(target=>(paths.includes(target.source)||Boolean(canonical?.sources[target.source]
+      &&canonical.references.some(reference=>reference.source===target.source&&reference.contract===target.contract)))
+      &&blueprint.entrypoints.some(point=>point.source===target.source&&point.contract===target.contract&&point.role===entry.role)
       &&target.arguments.length===entry.argumentCount&&target.allowReceive===entry.allowReceive&&target.allowFallback===entry.allowFallback
       &&(allowAdditionalInterface
         ?functions.get(target)!.size>0&&[...functions.get(target)!].every(key=>key!==undefined&&referenceFunctions.has(key))
@@ -88,7 +90,8 @@ function matchPattern(pattern:ImplementationPattern,blueprint:GeneralCheckBluepr
     if(matches.length!==1)return;
     mapping.set(entry.id,matches[0]);
   }
-  if(new Set([...mapping.values()].map(target=>target.source)).size!==paths.length)return;
+  const mappedSources=new Set([...mapping.values()].map(target=>target.source));
+  if(mappedSources.size!==pattern.contracts.length||paths.some(path=>!mappedSources.has(path)))return;
   for(const entry of pattern.contracts){
     if(!entry.parent)continue;
     const target=mapping.get(entry.id)!;
@@ -96,6 +99,9 @@ function matchPattern(pattern:ImplementationPattern,blueprint:GeneralCheckBluepr
   }
   const output:ContractProject["sources"]={};
   for(const entry of pattern.contracts){
+    // A compatible canonical component is already fixed in the compiler
+    // input. Reuse its identity for bindings without returning editable bytes.
+    if(!paths.includes(mapping.get(entry.id)!.source))continue;
     // Relative imports resolve from the reference file, not from a generated
     // user's renamed directory.
     let content=pattern.sources[entry.source].content
