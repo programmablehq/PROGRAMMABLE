@@ -136,10 +136,29 @@ describe("Surplus model routing", () => {
     expect(body.tool_choice).toBe("none");expect(body.provider).toBeUndefined();expect(body.provider_order).toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("keeps reading split empty transport tags before a complete checked source reply",async()=>{
+    useSurplus();
+    const schema={type:"object",properties:{reply:{type:"string"},sourceFiles:{type:"array",minItems:1,items:{type:"string"}}},required:["reply","sourceFiles"],additionalProperties:false};
+    const value={reply:"Source saved",sourceFiles:["pragma solidity 0.8.26;"]};
+    const pieces=['\n<invoke name="bash_tool_placeholder">\n<','/invoke>\n<invoke name="x"></inv','oke>\nSorry, here is the actual response:\n',JSON.stringify(value)];
+    const events=[...pieces.map(content=>({choices:[{index:0,delta:{content}}]})),
+      {choices:[{index:0,delta:{content:""},finish_reason:"stop"}]}];
+    const fetcher=vi.fn(async()=>new Response(events.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")+"data: [DONE]\n\n",{headers:{"content-type":"text/event-stream"}}));
+    vi.stubGlobal("fetch",fetcher);
+    expect(JSON.parse((await callSurplus({...input,schema,structuredTransport:"json-object",responseProfile:"contract"})).text)).toEqual(value);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it("still requires complete data after empty tags and keeps the structured data envelope",async()=>{
+    const format=prepareSurplusSchema({type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false},true);
+    const empty='<invoke name="sourceFiles"> </invoke>\n';
+    expect(format.decode(empty+'<invoke name="structured_output"><parameter name="count">2</parameter></invoke>')).toBe('{"count":2}');
+    expect(()=>format.decode(empty)).toThrow();
+    expect(()=>format.decode(empty+'{"count":"2"}')).toThrow();
+  });
   it("cancels an unexpected textual tool envelope before reading the rest of a paid stream",async()=>{
     useSurplus();const cancel=vi.fn();
     const fetcher=vi.fn(async()=>new Response(new ReadableStream({start(controller){
-      controller.enqueue(new TextEncoder().encode('data: '+JSON.stringify({choices:[{index:0,delta:{content:'\n<invoke name="bash">'}}]})+'\n\n'));
+      controller.enqueue(new TextEncoder().encode('data: '+JSON.stringify({choices:[{index:0,delta:{content:'\n<invoke name="bash">echo forbidden'}}]})+'\n\n'));
     },cancel}),{headers:{"content-type":"text/event-stream"}}));
     vi.stubGlobal("fetch",fetcher);
     await expect(callSurplus({...input,responseProfile:"contract"})).rejects.toMatchObject({failure:"refused"});
