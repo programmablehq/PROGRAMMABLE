@@ -44,7 +44,8 @@ export function checkedProductBindings(value: unknown, scenarios: GeneralCheckSc
     let signature = item.signature.trim();
     if (signature.startsWith("function ")) {
       try {
-        const [declared] = parseAbi([signature]);
+        const declarations: readonly string[] = [signature];
+        const [declared] = parseAbi(declarations);
         if (!declared || declared.type !== "function") return fail("action signature");
         signature = toFunctionSignature(declared);
       } catch { return fail("action signature"); }
