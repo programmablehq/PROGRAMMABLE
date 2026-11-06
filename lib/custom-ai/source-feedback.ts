@@ -17,6 +17,7 @@ export function sourceCorrectionFeedback(blueprint:GeneralCheckBlueprint|undefin
       if(!declared||!observed||["contract","signature","from","afterSeconds","read","value"].some(key=>
         declared[key as keyof typeof declared]!==observed[key as keyof typeof observed]))return failure;
       const evidence={contract:declared.contract,call:declared.signature,from:declared.from,afterSeconds:declared.afterSeconds,
+        arguments:declared.arguments,
         expected:declared.expect,observed:{status:observed.status,outputs:observed.outputs,
           nativeChanges:observed.nativeChanges,detailsComplete:observed.detailsComplete}};
       const detail=JSON.stringify(evidence);

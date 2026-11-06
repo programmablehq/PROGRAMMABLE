@@ -6,6 +6,7 @@ import {PROTOCOL_TOPICS} from "../lib/custom-ai/protocol-knowledge";
 import {getCapabilities} from "../lib/custom-ai/capabilities/registry.server";
 import {dispatchTool} from "../lib/custom-ai/capabilities/dispatch.server";
 import {modelTask} from "../lib/custom-ai/model-tasks";
+import {parseAbi} from "viem";
 
 describe("protocol knowledge and model routing",()=>{
   it("keeps the local interface catalog identical to the pinned source artifacts",()=>{
@@ -33,6 +34,14 @@ describe("protocol knowledge and model routing",()=>{
     expect(hook.callbackDeclarations.some(item=>item.includes("_afterSwap"))).toBe(true);
     expect(hook.initializationSources.some(item=>item.includes("permissions.beforeSwapReturnDelta = true"))).toBe(true);
     expect(context.construction.find(item=>item.contract==="BaseProtectedNativeInitializerV1")?.initializationSources.some(item=>item.includes("msg.sender != graphFactory"))).toBe(true);
+  });
+  it.each([1,4663,8453,999] as const)("keeps fee quote argument and result names in the reference on %i",chainId=>{
+    const hook=canonicalInterfaceContext(chainId).contracts.find(contract=>contract.contract.endsWith("ProtectedNative30HookV1"))!;
+    const quote=parseAbi(hook.functions).find(item=>item.type==="function"&&item.name==="quoteFees");
+    expect(quote?.type).toBe("function");
+    if(quote?.type!=="function")throw new Error("Missing canonical fee quote");
+    expect(quote.inputs.map(parameter=>parameter.name)).toEqual(["amount","amountIsNet","isBuy"]);
+    expect(quote.outputs.map(parameter=>parameter.name)).toEqual(["gross","platformFee","creatorFee"]);
   });
   it.each([1,4663,8453,999] as const)("provides every protocol topic on %i without external requests",async chainId=>{
     const fetcher=vi.spyOn(globalThis,"fetch");

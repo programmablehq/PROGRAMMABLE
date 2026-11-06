@@ -6,6 +6,8 @@ import type {GeneralCheckBlueprint} from "./check-blueprint";
 import type {ContractProject} from "./contract-project";
 import type {ContractCheckFixture,ConstructorCheckChild} from "./behavior-checks";
 
+const nativeFeeQuoteSemantics="The canonical quoteFees(amount, amountIsNet, isBuy) returns [gross, platformFee, creatorFee], not [platformFee, creatorFee, totalFee]. amountIsNet=false means amount is the gross native trade value; true means amount is net and must be grossed up. isBuy=true selects creatorBuyFeeBps, false selects creatorSellFeeBps. For a 2% total fee and 1 ETH gross input, call quoteFees(1000000000000000000,false,true): the return is [1000000000000000000,3000000000000000,17000000000000000]. The total fee is the sum of the last two values and is not a returned field. Net quotes round the gross up; each platform charge also rounds up. previewTradeFees uses the same argument order and returns [gross,platformFee,creatorFee,openingTax]. These statements describe the canonical reference, not arbitrary custom methods with the same name.";
+
 export function interfaceKey(declaration:string):string|undefined {
   try{
     const abi=parseAbiItem(declaration);
@@ -21,6 +23,7 @@ export function implementationPatternReferences(chainId:number){
     description:"Reference architecture for collected-fee allocation to creator-owned liquidity, buyback and burn, daily top-ten holder claims and a fixed creator. All shares, rates, timing, eligibility and failure behavior still come from the saved intent.",
     contracts:feeFlow.contracts,
     semantics:{
+      feeQuotes:nativeFeeQuoteSemantics,
       observations:"A complete price interval spans at least 3600 seconds. Let a price-moving funding trade settle for a complete stable interval before a small observation trade and a positive execution case.",
       executeLiquidity:"Returns false when funds, price history, current price, hourly timing or execution are ineligible. Success creates real creator-owned liquidity, may retain unspent reserve, and can collect fresh project fees through its internal swap.",
       executeBuyback:"Returns false when ineligible. Success spends collected fees through the bound executor and burns received tokens. Its swap pays platform and project fees, so other reserve buckets can receive fresh funds.",
@@ -34,6 +37,7 @@ export function implementationPatternReferences(chainId:number){
     description:"Smaller reference for project fees split between locked liquidity, buyback and burn, and a fixed creator. Uses the plain protected launch token without holder snapshots. Requested rates, shares, timing and limits still come from the saved intent.",
     contracts:nativeFeeSplit.contracts,
     semantics:{
+      feeQuotes:nativeFeeQuoteSemantics,
       observations:"A complete price interval spans at least 3600 seconds. Let a price-moving funding trade settle for a complete stable interval before a small observation trade and a positive execution case.",
       executeLiquidity:"The vault owns the locked v4 position; owner() is the fixed recipient of earned position fees. liquidityPositionOwner() returns the vault. No principal withdrawal exists. The reference limits successful executions to one per elapsed 24 hours and spends only funded project-fee reserves.",
       executeBuyback:"Spends the funded buyback reserve through the separate vault and burns actual received tokens. It has a separate elapsed-24-hour limit. A failed swap reverts funding and execution together. A callable action is not proof that a scheduled executor is connected.",

@@ -40,3 +40,16 @@ it("passes the actual failed call and expected value to the repair without mutat
   const unrelated={...execution!,steps:[{...execution!.steps[0],afterSeconds:7200}]};
   expect(sourceCorrectionFeedback(blueprint,{contracts:[]} as unknown as CompiledProject,[failure],unrelated)[0]).toBe(failure);
 });
+
+it("keeps fee quote booleans and amount available when diagnosing a return mismatch",()=>{
+  const step={id:"quote-buy-fees",contract:"hook",signature:"quoteFees(uint256,bool,bool)",arguments:["1000000000000000000",true,false],
+    from:"trader-a",afterSeconds:400,value:"0",read:true,expect:{status:"success",returns:["3000000000000000","17000000000000000","20000000000000000"]}};
+  const blueprint={scenarios:{contracts:[],steps:[step]}} as unknown as GeneralCheckBlueprint;
+  const execution={steps:[{...step,status:"success",outputs:[{name:"gross",type:"uint256",value:"1020408163265306123",truncated:false}],nativeChanges:[],detailsComplete:true}]} as unknown as GeneralScenarioReport["execution"];
+  const failure={caseId:step.id,code:"return-value",message:"The declared return value did not match."};
+  const original=JSON.stringify({blueprint,execution,failure});
+  const [feedback]=sourceCorrectionFeedback(blueprint,{contracts:[]} as unknown as CompiledProject,[failure],execution);
+  expect(feedback.message).toContain('"arguments":["1000000000000000000",true,false]');
+  expect(feedback.message).toContain('"value":"1020408163265306123"');
+  expect(JSON.stringify({blueprint,execution,failure})).toBe(original);
+});
