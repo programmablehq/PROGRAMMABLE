@@ -249,7 +249,9 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
   // A compatible pinned implementation is also a useful editable starting
   // point for novel mechanics. Only a complete reference may skip edits;
   // every other seed must implement the frozen design before normal checks.
-  const foundation=foundationCandidate;
+  const foundation=input.previous&&semanticRepair&&paths.length
+    ?{sources:Object.fromEntries(paths.map(path=>[path,previousSources[path]])),completeReference:false}
+    :foundationCandidate;
   let referenceFindings:GeneralSourceAudit["findings"]|undefined;
   if(foundation?.completeReference&&blueprint&&input.auditSource&&!cached){
     const roots=Object.fromEntries(blueprint.entrypoints.flatMap(entry=>librarySources[entry.source]?[[entry.source,librarySources[entry.source]]]:[]));
@@ -267,17 +269,20 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
   const systemForPath=(path:string,completed:ContractProject["sources"],integrating=false)=>{
     const component=sourceImplementationContext({blueprint:blueprint!,dependencies:dependencyContext.complete,
       references:catalog!.contracts,construction:catalog!.construction,includeTemplateBodies:!integrating},path,completed);
-    return system(JSON.stringify({...commonContext,...component}),Boolean(foundation))
+    // The editor supplies the active file and exact siblings once. Repeating
+    // previous.sources here doubles large contracts in every small edit.
+    const previousMetadata=previous?Object.fromEntries(Object.entries(previous).filter(([key])=>key!=="sources")):null;
+    return system(JSON.stringify({...commonContext,previous:previousMetadata,...component}),Boolean(foundation))
       +(referenceFindings?`\nRequired semantic corrections from the independent reference review: ${JSON.stringify(referenceFindings)}`:"")
       + (integrating?"\nAll supplied project draft sources are editable for final integration. Their frozen interfaces and deployment remain unchanged.":"\nOnly activeSource is being written in this response. Other frozen entrypoints are separate files; preserve their declared interfaces. Sibling code is the current integration input; later planned steps may extend it.")
       + " The full independent scenario plan remains on the server and its ID is unchanged.";
   };
-  const response = blueprint&&input.previous
-    ? await writeSourceEdits({request:generation,previous:previousSources,immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)]),
-      requireChange:input.previous.intent.revision!==intent.revision},call)
-    : blueprint&&input.saveSourceProgress&&paths.length&&foundation&&!cached?.partial
+  const response = blueprint&&input.saveSourceProgress&&paths.length&&foundation&&!cached?.partial
     ? await editSourceFoundation({request:{...generation,system:system(context,true)+(referenceFindings?`\nRequired semantic corrections from the independent reference review: ${JSON.stringify(referenceFindings)}`:"")},patchTask:modelTask("source-edit",configuredProvider().models),seeds:foundation.sources,allowUnchanged:foundation.completeReference&&!referenceFindings?.length,paths,contextHash:progressContext!,cached,
       save:input.saveSourceProgress,systemForPath},call)
+    : blueprint&&input.previous
+    ? await writeSourceEdits({request:generation,previous:previousSources,immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)]),
+      requireChange:input.previous.intent.revision!==intent.revision},call)
     : blueprint&&input.saveSourceProgress&&paths.length
     ? await writeSourceParts({request:generation,paths,contextHash:progressContext!,
       cached,save:input.saveSourceProgress,systemForPath},call)
