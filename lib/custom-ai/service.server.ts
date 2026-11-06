@@ -33,7 +33,7 @@ import { ModelResponseError } from "./model-response";
 import { intentRequirementSchema, launchIntentPlanningRules, intentHasOpenParts, intentMatchesCandidate, MAX_INTENT_REQUIREMENTS, type LaunchIntent } from "./launch-intent";
 import { bindCandidateIntent, intentImplementationGaps, migrateLaunchIntent, normalizeLaunchIntentQuestions, parseIntentRequirements, reviseLaunchIntent } from "./launch-intent.server";
 import { bindIntentImplementation } from "./intent-coverage.server";
-import { builderChain, feeCoreChainId, selectExecutionRoute } from "./execution-routing";
+import { builderChain, feeCoreChainId, selectExecutionRoute, type RouteSelection } from "./execution-routing";
 import { buildGeneralContract, type GeneralProjectDraft } from "./general-builder.server";
 import { completedBuildReply, generalBuildReply, unfinishedBuildReply, buildReplyLocale, BUILD_REPLY_LOCALES } from "./build-result";
 import {auditGeneralSource,type GeneralSourceAudit} from "./source-audit.server";
@@ -95,6 +95,7 @@ const planSchema = { type: "object", properties: {
 }, required: ["reply", "replyLocale", "executionRoute", "intentRequirements", "intentMode", "action", "launchRequested", "reviseChecks", "memory", "implementedRequirementIds", "feeChecks", "setupPatch", "lookups", "program", "eventRule", "composable", "ruleEdits"], additionalProperties: false };
 type Dependencies = { call: (input: ClaudeInput) => Promise<ClaudeResult>; compile: (source: string, signal?: AbortSignal, expectations?: FeeExpectation[], feed?: FeedBinding) => Promise<Draft>; compileProject?: typeof compileContractProject;checkProject?:typeof checkGeneralScenarios; feed?: typeof prepareEventFeed; lookup?: typeof readLiveKnowledge };
 export type AIContext = { intent?: LaunchIntent; unresolved?: string[]; ruleSpec?: RuleSpecV2; owner?: string; draft?: Draft; generalProject?: GeneralProjectDraft; generalProjectView?: GeneralProjectView; loadGeneralProject?:()=>Promise<GeneralProjectDraft>; memory?: string; onProgress?: (event: ChatProgress) => void; onModelCall?:(call:ModelCallMetric)=>void;
+  selection?: RouteSelection;
   productBlueprint?: ProductBlueprint;
   productPlanIncomplete?: boolean;
   dataAdapters?: import("./feed-adapters/library.server").DataAdapterLibrary;
@@ -180,7 +181,10 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const topics=mechanismTopics(previousIntent,request.messages.at(-1)?.content);
   const capabilities=getCapabilities(capabilityContext).filter(tool=>tool.ref.id!=="plan_fee_flow"||topics.includes("fee-flows")&&!discussionOnly);
   const previousProjectView=context.generalProject?generalProjectView(context.generalProject):context.generalProjectView;
-  const generalOnly=!builderChain(request.coin?.chainId??1).feeCore||Boolean(previousProjectView);
+  const savedGeneralContinuation=unchangedBuildCommand(request)&&context.selection?.route==="custom-contract"
+    &&context.selection.state==="selected"&&context.selection.intentRevision===previousIntent?.revision
+    &&context.selection.chainId===(request.coin?.chainId??1);
+  const generalOnly=!builderChain(request.coin?.chainId??1).feeCore||Boolean(previousProjectView)||savedGeneralContinuation;
   if(previousProjectView&&!previousIntent)throw new CustomAIError("project-context","Your complete saved design could not be loaded. Reload before continuing.",409);
   const editableRequirements = previousProjectView ? previousIntent?.requirements : previousSpec?.requirements
     ?? (context.draft && intentMatchesCandidate(previousIntent, context.draft) ? previousIntent?.requirements : undefined);

@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const previousRead=readResult(input.contextId);
     const [previous,current]=await Promise.all([previousRead,input.draftId===input.contextId?previousRead:readResult(input.draftId)]);
     const context: AIContext = { owner: authority.kind === "account" ? authority.owner : "local-preview", memory: previous?.memory, verificationRefreshRequested:previous?.verificationRefreshRequested, verificationInstruction:previous?.verificationInstruction, replyLocale:previous?.replyLocale,
-      intent: previous?.intent ?? current?.intent, productBlueprint: previous?.productBlueprint ?? current?.productBlueprint, productPlanIncomplete: previous?.buildIssue?.stage === "product", unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
+      intent: previous?.intent ?? current?.intent, selection: previous?.selection ?? current?.selection, productBlueprint: previous?.productBlueprint ?? current?.productBlueprint, productPlanIncomplete: previous?.buildIssue?.stage === "product", unresolved: previous?.unresolved, ruleSpec: previous?.ruleSpec, draft: current?.draft, generalProjectView: current?.generalProject };
     if(store&&authority.kind==="account")context.dataAdapters=createDataAdapterLibrary(store,authority.owner);
     if(current?.generalProject&&store&&authority.kind==="account"&&input.draftId){
       const view=current.generalProject;
