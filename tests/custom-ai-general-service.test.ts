@@ -44,6 +44,20 @@ it("continues the complete saved design without another interpretation call",asy
  expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledTimes(1);
  expect(value.nextAction).toBeUndefined();expect(value.generalProject?.launchReady).toBe(false);
 });
+it("retains the saved general route when source generation stopped before creating a file",async()=>{
+ const previous=prior(),saveProject=vi.fn(async()=>{}),call=vi.fn(async()=>generated());
+ const value=await runCustomAI({...request,messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,
+  {call,compile:vi.fn(),compileProject:compile},{intent:previous.project.intent,selection:previous.selection,saveProject});
+ expect(call).toHaveBeenCalledOnce();expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source");
+ expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledOnce();
+});
+it.each(["intent","chain"])("does not reuse a saved general route from another %s",async changed=>{
+ const previous=prior(),selection={...previous.selection,...(changed==="intent"?{intentRevision:"b".repeat(64)}:{chainId:999 as const})};
+ const call=vi.fn().mockResolvedValueOnce(plan({action:"answer",intentMode:"preserve",intentRequirements:[],requirements:[]})).mockResolvedValueOnce(generated());
+ await runCustomAI({...request,messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,
+  {call,compile:vi.fn(),compileProject:compile},{intent:previous.project.intent,selection,saveProject:async()=>{}});
+ expect(call.mock.calls[0][0].task).toBe("planning");
+});
 it("answers a saved-design question with one reply-only call and no production read or edit",async()=>{
  const intent=prior().project.intent,loadProductionContext=vi.fn(),saveProject=vi.fn(),compiler=vi.fn();
  const call=vi.fn(async()=>result({reply:"The saved fees remain unchanged."}));
