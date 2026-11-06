@@ -22,6 +22,18 @@ const revised = () => {
 };
 
 describe("editing a complete hook design", () => {
+  it("collapses only a complete unchanged preserve echo",()=>{
+    const intent=migrateLaunchIntent({ruleSpec:previous})!;
+    const rules=intent.requirements.map(rule=>({id:rule.id,text:rule.text,kind:rule.kind,open:rule.open,instruction:""}));
+    const value={intentMode:"preserve",intentRequirements:rules,ruleEdits:rules.map(rule=>({requirementId:rule.id,operation:"replace",instruction:"Build the saved design"}))};
+    expect(stablePlannedRuleIds(value,intent,"Build the saved design")).toMatchObject({intentRequirements:[],ruleEdits:[]});
+    for(const changed of [
+      {...value,intentRequirements:rules.slice(1)},
+      {...value,intentRequirements:[rules[0],rules[0],rules[2]]},
+      {...value,intentRequirements:rules.map((rule,index)=>index?rule:{...rule,text:"Changed fee"})},
+      {...value,ruleEdits:[{requirementId:rules[0].id,operation:"remove",instruction:"Build the saved design"}]},
+    ])expect(stablePlannedRuleIds(changed,intent,"Build the saved design")).toBe(changed);
+  });
   it("keeps identities across a single quoted replacement without accepting ambiguous aliases",()=>{
     const intent=migrateLaunchIntent({ruleSpec:previous})!;
     const quote="make that 12 hours";
