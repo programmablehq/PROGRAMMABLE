@@ -4,7 +4,7 @@ import type {GeneralCheckBlueprint} from "./check-blueprint";
 import type {ContractProject} from "./contract-project";
 import type {ContractCheckFixture,ConstructorCheckChild} from "./behavior-checks";
 
-function interfaceKey(declaration:string):string|undefined {
+export function interfaceKey(declaration:string):string|undefined {
   try{
     const abi=parseAbiItem(declaration);
     if(abi.type!=="function")return;

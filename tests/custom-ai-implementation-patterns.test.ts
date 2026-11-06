@@ -29,6 +29,15 @@ describe("editable fee-flow implementation reference",()=>{
   const moved=fixture();moved.blueprint.scenarios.constructorChildren![0].nonce="5";
   expect(matchImplementationPattern(moved.blueprint,moved.paths,undefined,true)).toBeUndefined();
  });
+ it("uses an exact simple token instead of retaining an unwanted holder registry",()=>{
+  const {blueprint,paths}=fixture(),token=blueprint.scenarios.contracts[0];
+  token.functions=token.functions.slice(0,20);
+  const source="canonical/SimpleToken.sol",content="pragma solidity 0.8.26; contract SimpleToken {}";
+  const selected=sourceFoundation(blueprint,paths,{[source]:{content}},[{source,contract:"SimpleToken",functions:[...token.functions]}]);
+  expect(selected?.completeReference).toBe(false);
+  expect(selected?.sources[paths[0]].content).toBe("pragma solidity 0.8.26; contract Custom0 {}");
+  expect(selected?.sources[paths[0]].content).not.toContain("bindHook");
+ });
  it("rebinds all source paths and contract references together",()=>{
   const {blueprint,paths}=fixture(),sources=matchImplementationPattern(blueprint,paths)!;
   expect(Object.keys(sources)).toEqual(paths);
