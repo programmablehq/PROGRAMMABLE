@@ -141,6 +141,21 @@ describe("Claude planning and generation", () => {
     expect(call.mock.calls[0][0].schema.required).toEqual(["reply"]);
     expect(load).not.toHaveBeenCalled(); expect(compile).not.toHaveBeenCalled();
   });
+  it("keeps idea replies on the selected network without sending contract source to the conversation model", async () => {
+    const call = vi.fn().mockResolvedValue(result({ reply: "A timed fee is one option." })), compile = vi.fn();
+    const answer = await runCustomAI({ ...request, coin: { name: "Idea", symbol: "IDEA", chainId: 8453, pairToken: "ETH", initialBuy: "", description: "", website: "", x: "", socialPost: "" },
+      messages: [{ role: "user", content: "What could we build here? Give me three different, concrete coin ideas." }] }, undefined,
+    { call, compile }, { draft: { ...draft(true), source: "PRIVATE_SAVED_CONTRACT_SOURCE" }, saveProject: vi.fn() });
+    expect(call).toHaveBeenCalledOnce();
+    const input = call.mock.calls[0][0];
+    expect(input.system).toContain('"network":"Base"');
+    expect(input.system).toContain("source-draft");
+    expect(input.system).not.toContain("PRIVATE_SAVED_CONTRACT_SOURCE");
+    expect(input.system).not.toContain("GeneratedFeeModule");
+    expect(input.system.length).toBeLessThan(6500);
+    expect(answer.change).toBe("unchanged");
+    expect(compile).not.toHaveBeenCalled();
+  });
   it("uses only Haiku for a greeting and never compiles it", async () => {
     const call = vi.fn().mockResolvedValue(result({ reply: "What should your coin do?" })); const compile = vi.fn();
     expect(await runCustomAI({ ...request, messages: [{ role: "user", content: "Hi!" }] }, undefined, { call, compile })).toMatchObject({ reply: "What should your coin do?", change: "unchanged" });
