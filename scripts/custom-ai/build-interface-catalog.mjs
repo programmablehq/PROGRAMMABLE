@@ -6,6 +6,9 @@ import { resolve } from "node:path";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const type = p => p.type.startsWith("tuple") ? `(${p.components.map(type).join(",")})${p.type.slice(5)}` : p.type;
 const parameters = values => (values ?? []).map(type).join(",");
+// The selector uses types only, but the planner also needs parameter meaning.
+// Keep compiler-issued top-level names, especially adjacent bool/uint fields.
+const namedParameters = values => (values ?? []).map(p => `${type(p)}${p.name ? ` ${p.name}` : ""}`).join(",");
 const groups = [
   ["launch-protection-v1", ["ProtectedNativeInitializerV1", "ProtectedLaunchTokenV1", "ProtectedNative30HookV1", "EthereumNativeFeeVaultV3", "LaunchProtectionModuleV1"]],
   ["base-launch-protection-v1", ["BaseProtectedNativeInitializerV1", "ProtectedLaunchTokenV1", "BaseProtectedNative30HookV1", "EthereumNativeFeeVaultV3", "BaseLaunchProtectionModuleV1"]],
@@ -21,7 +24,7 @@ for (const [family, names] of groups) {
       source: artifact.sourcePath, contract: artifact.contractName,
       sourceSha256: createHash("sha256").update(sources[artifact.sourcePath].content).digest("hex"),
       constructor: parameters(artifact.abi.find(f => f.type === "constructor")?.inputs),
-      functions: artifact.abi.filter(f => f.type === "function").map(f => `function ${f.name}(${parameters(f.inputs)})${f.stateMutability === "nonpayable" ? "" : ` ${f.stateMutability}`}${f.outputs?.length ? ` returns (${parameters(f.outputs)})` : ""}`),
+      functions: artifact.abi.filter(f => f.type === "function").map(f => `function ${f.name}(${namedParameters(f.inputs)})${f.stateMutability === "nonpayable" ? "" : ` ${f.stateMutability}`}${f.outputs?.length ? ` returns (${namedParameters(f.outputs)})` : ""}`),
       events: artifact.abi.filter(f => f.type === "event").map(f => `event ${f.name}(${f.inputs.map(p => `${type(p)}${p.indexed ? " indexed" : ""}`).join(",")})`),
       allowReceive: artifact.abi.some(f => f.type === "receive"), allowFallback: artifact.abi.some(f => f.type === "fallback"),
     };
