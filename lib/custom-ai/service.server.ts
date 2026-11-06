@@ -407,7 +407,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       purpose:"Returns swap fees to the fixed platform core.",requirementIds:intent.requirements.map(rule=>rule.id),dependsOn:[]}],
       assets:[],flows:[],services:[],interfaceActions:[]},intent,coin.chainId);
   } else if (intent && (interpreted.productPlan != null || context.productPlanIncomplete || needsProductRevision) && (revising || plan.action === "build")) {
-    if(selection?.route==="custom-contract"&&context.saveProject){
+    if(selection?.route==="custom-contract"&&context.saveProject&&!previousProduct){
       // This optional interface map is not the contract architecture. The
       // source-blind check planner below still receives every canonical rule
       // and must declare the complete graph, source audit and runtime cases.
