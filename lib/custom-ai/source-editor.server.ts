@@ -49,7 +49,10 @@ export async function editSourceFoundation(input: {
     while(progress.editing&&progress.editing.next<progress.editing.steps.length){
       input.request.signal?.throwIfAborted();
       if(calls>=8||remaining<1024||Date.now()>=deadline-30_000)throw pending();
-      const edit=progress.editing,step=edit.steps[edit.next],maxTokens=Math.min(4000,remaining);
+      // The plan targets small edits, but a complete Solidity function can
+      // exceed that estimate. Use headroom from the same total build budget
+      // instead of truncating and regenerating an otherwise valid edit.
+      const edit=progress.editing,step=edit.steps[edit.next],maxTokens=Math.min(8000,remaining);
       const working={...progress.files,...edit.sources};
       const integrating=edit.next===edit.steps.length-1;
       const allowed=new Set(integrating?Object.keys(edit.sources):[step.path]);
