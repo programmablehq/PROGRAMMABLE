@@ -49,7 +49,7 @@ export async function repairMalformedInterfaces(proposal:Graph,options:{
     const key=JSON.stringify([edit.id,edit.before]);
     if(changed.has(key)||!invalid.some(item=>item.id===edit.id&&item.before===edit.before)||typeof edit.after!=="string"
       ||!methodName(edit.before)||methodName(edit.after)!==methodName(edit.before))throw new TypeError("Keep the malformed method's original identity.");
-    const parsed=parseAbi([edit.after]);
+    const signature:string[]=[edit.after],parsed=parseAbi(signature);
     if(parsed.length!==1||parsed[0].type!=="function")throw new TypeError("Return one corrected public function declaration.");
     const target=functions(fixtures(next).find(item=>item.id===edit.id)!);
     if(target.filter(value=>value===edit.before).length!==1)throw new TypeError("Keep unambiguous interface corrections.");
