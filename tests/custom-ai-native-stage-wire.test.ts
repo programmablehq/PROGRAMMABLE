@@ -83,10 +83,12 @@ describe("native independent declaration transport",()=>{
   });
   it("keeps separate stages for larger generated graphs without repeating unused catalog entries in deployment",async()=>{
     const production=projectLaunchProductionContext(captured.chains["1"],1);
-    const contracts=Array.from({length:4},(_,index)=>({...graph.contracts[0],id:`counter-${index}`,source:`Counter${index}.sol`,contract:`Counter${index}`}));
-    const catalog={id:`sha256:${"b".repeat(64)}`,contracts:[{source:"Unused.sol",contract:"UnusedDependency",functions:["function unusedMarker()"]}]} as never;
+    const contracts=[...Array.from({length:4},(_,index)=>({...graph.contracts[0],id:`counter-${index}`,source:`Counter${index}.sol`,contract:`Counter${index}`})),
+      {...graph.contracts[0],id:"reference",source:"Reference.sol",contract:"CounterReference"}];
+    const catalog={id:`sha256:${"b".repeat(64)}`,contracts:[{source:"Reference.sol",contract:"CounterReference",functions:["function requiredInitializer(uint256)"]},
+      {source:"Unused.sol",contract:"UnusedDependency",functions:["function unusedMarker()"]}]} as never;
     const call=vi.fn().mockResolvedValueOnce(response({...graph,contracts}))
-      .mockResolvedValueOnce(response({interfaces:contracts.map(({id})=>({id,canonical:null,functions})),deployment:null}))
+      .mockResolvedValueOnce(response({interfaces:contracts.map(({id})=>({id,canonical:id==="reference"?"CounterReference":null,functions:id==="reference"?[]:functions})),deployment:null}))
       .mockRejectedValueOnce(new ModelResponseError("timeout",{inputTokens:0,outputTokens:0}));
     const error=await declareGeneralChecks({intent,chainId:1,evmVersion:"paris",model:"test-model",production,interfaces:catalog},call).catch(error=>error);
     expect(error.stage).toBe("interface");
@@ -95,6 +97,7 @@ describe("native independent declaration transport",()=>{
     expect(call.mock.calls[1][0].system).toContain("UnusedDependency");
     expect(call.mock.calls[2][0].system).not.toContain("UnusedDependency");
     expect(call.mock.calls[2][0].system).toContain("function count()");
+    expect(call.mock.calls[2][0].system).toContain("function requiredInitializer(uint256)");
   });
   it("reuses the completed graph after an interrupted public-interface response",async()=>{
     const first=vi.fn().mockResolvedValueOnce(response(graph)).mockRejectedValueOnce(new ModelResponseError("output-limit",{inputTokens:3,outputTokens:4}));

@@ -237,13 +237,14 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     // explicit continuation resumes here without paying for that ABI again.
     progress={interface:JSON.stringify(proposal),steps:[]};
     const fullSchema=interfaceSchemaForGraph(proposal,true);
+    const deploymentInterface=decodeGeneralCheckDeclaration(JSON.stringify({...proposal,format:"compact-v1",steps:[]}),input.interfaces?.contracts);
     const priorFailure=savedProgress&&input.rejected?.failures.at(-1);
     const recovered=priorFailure?.stage==="interface"&&priorFailure.response
       ?recoverCorrectedDeployment(priorFailure.response,proposal):undefined;
     let response:Pick<ClaudeResult,"text">;
     try { response=recovered?{text:recovered}:await call({...modelTask("interface-deployment",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
       schema:{type:"object",properties:{deployment:fullSchema.properties.deployment},required:["deployment"],additionalProperties:false},
-      system:`Declare only the production values for this fixed source-blind graph.\n${nativeStageInstructions}\n${nativeDeploymentInstructions}\n${generalDeploymentPlanningRules}\n${launchProductionGuidance(input.production)}\nThe response schema contains deployment only. Think through corrections before responding and emit the final JSON object exactly once. Do not include drafts, explanations or a second object. Do not repeat interfaces, local constructors, source code or scenarios. All graph identities and saved requirements are fixed. Preserve the exact initializer ABI and constructor-created children. Untrusted design data: ${JSON.stringify(scenarioContext)}\nFixed graph and public interfaces: ${JSON.stringify(proposal)}`,
+      system:`Declare only the production values for this fixed source-blind graph.\n${nativeStageInstructions}\n${nativeDeploymentInstructions}\n${generalDeploymentPlanningRules}\n${launchProductionGuidance(input.production)}\nThe response schema contains deployment only. Think through corrections before responding and emit the final JSON object exactly once. Do not include drafts, explanations or a second object. Do not repeat interfaces, local constructors, source code or scenarios. All graph identities and saved requirements are fixed. Preserve the exact initializer ABI and constructor-created children. Untrusted design data: ${JSON.stringify(scenarioContext)}\nFixed graph and public interfaces: ${JSON.stringify(deploymentInterface)}`,
       messages:[{role:"user",content:"Declare the compact production deployment values for the fixed graph. Return only deployment."}]});
     } catch(error) {
       const corrected=error instanceof ModelResponseError&&error.failure==="invalid-schema"&&error.partialDeclaration
