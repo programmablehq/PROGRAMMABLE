@@ -3,6 +3,7 @@ vi.mock("server-only",()=>({}));
 import {settledDesignReply,withoutSaveConfirmation} from "../lib/custom-ai/reply-mode";
 import {runCustomAI} from "../lib/custom-ai/service.server";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
+import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 
 describe("saved design replies",()=>{
   it.each([
@@ -71,5 +72,16 @@ describe("saved design replies",()=>{
     const result=await runCustomAI({id:"saved-design-material-question-01",intent:"chat",messages:[{role:"user",content:"Discuss first: where should the remaining 30% go?"}]},undefined,{call,compile:vi.fn()});
     expect(result.reply).toBe(question);expect(result.unresolved).toEqual([question]);
     expect(result.intent?.requirements[0].open).toBe(question);
+  });
+  it("also removes a save question when briefly explaining an existing saved design",async()=>{
+    const intent:LaunchIntent={version:1,id:"saved-fees",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
+      {id:"fees",text:"Fees decrease over one day.",kind:"behavior",open:null,origin:{kind:"legacy"}}]};
+    const reply="The fee decreases over one day. Should I save this plan?",progress:string[]=[];
+    const call=vi.fn(async(input:ClaudeInput)=>{input.onText?.(JSON.stringify({reply}));return {text:JSON.stringify({reply}),inputTokens:1,outputTokens:1};});
+    const result=await runCustomAI({id:"saved-design-explanation-01",intent:"chat",messages:[{role:"user",content:"What are the rules of the saved design?"}]},undefined,{call,compile:vi.fn()},
+      {intent,onProgress:event=>{if(event.type==="reply")progress.push(event.text);}});
+    expect(result.reply).toBe("The fee decreases over one day.");
+    expect(progress).toEqual(["The fee decreases over one day."]);expect(result.intent).toEqual(intent);
+    expect(result.change).toBe("unchanged");expect(call).toHaveBeenCalledOnce();
   });
 });
