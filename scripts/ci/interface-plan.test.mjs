@@ -212,13 +212,19 @@ test("independent declaration changes provision the pinned contract checker", ()
 
 test("the public plan command honors explicit revisions and rejects incomplete ranges", () => {
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  const result = spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", "--base", sha, "--head", sha], { encoding: "utf8" });
+  const env = { ...process.env, PROGRAMMABLE_VERIFY_FULL_INTERFACE: "false", PROGRAMMABLE_VERIFY_MAINTENANCE: "false" };
+  const result = spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", "--base", sha, "--head", sha], { encoding: "utf8", env });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).full, false);
   assert.deepEqual(JSON.parse(result.stdout).paths, []);
   for (const args of [["--base", sha], ["--head", "bad"], ["--unknown", sha]]) {
-    assert.notEqual(spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", ...args], { encoding: "utf8" }).status, 0);
+    assert.notEqual(spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", ...args], { encoding: "utf8", env }).status, 0);
   }
+  const forced = spawnSync(process.execPath, ["scripts/ci/verify-interface.mjs", "plan", "--base", sha, "--head", sha],
+    { encoding: "utf8", env: { ...env, PROGRAMMABLE_VERIFY_FULL_INTERFACE: "true" } });
+  assert.equal(forced.status, 0, forced.stderr);
+  assert.equal(JSON.parse(forced.stdout).full, true);
+  assert.equal(JSON.parse(forced.stdout).paths, null);
 });
 
 test("pure reply classifiers use focused intent, service and charging tests", () => {
