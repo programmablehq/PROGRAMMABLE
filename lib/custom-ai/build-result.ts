@@ -10,14 +10,14 @@ export function buildReplyLocale(value: unknown): BuildReplyLocale {
 }
 
 const completed: Record<BuildReplyLocale, string> = {
-  en: "Your hook is built and checked. You can prepare the launch below or ask for a change.",
-  de: "Dein Hook ist fertig und geprüft. Unten kannst du den Launch vorbereiten oder mir eine Änderung nennen.",
-  fr: "Ton hook est prêt et vérifié. Tu peux préparer le lancement ci-dessous ou me demander une modification.",
-  es: "Tu hook está creado y revisado. Puedes preparar el lanzamiento abajo o pedirme un cambio.",
-  it: "Il tuo hook è pronto e verificato. Puoi preparare il lancio qui sotto o chiedermi una modifica.",
-  pt: "O teu hook está pronto e verificado. Podes preparar o lançamento abaixo ou pedir uma alteração.",
-  nl: "Je hook is gebouwd en gecontroleerd. Je kunt hieronder de lancering voorbereiden of om een wijziging vragen.",
-  tr: "Hook hazır ve kontrol edildi. Aşağıdan lansmanı hazırlayabilir veya bir değişiklik isteyebilirsin.",
+  en: "Built and checked. Your coin and its rules are below.",
+  de: "Fertig und geprüft. Deinen Coin und seine Regeln findest du unten.",
+  fr: "Créé et vérifié. Ton coin et ses règles sont ci-dessous.",
+  es: "Creado y revisado. Tu coin y sus reglas están abajo.",
+  it: "Creato e verificato. Il tuo coin e le sue regole sono qui sotto.",
+  pt: "Criado e verificado. O teu coin e as regras estão abaixo.",
+  nl: "Gebouwd en gecontroleerd. Je coin en de regels staan hieronder.",
+  tr: "Hazır ve kontrol edildi. Coin ve kuralları aşağıda.",
 };
 
 /** Call only after the route's source and behavior checks have succeeded. */

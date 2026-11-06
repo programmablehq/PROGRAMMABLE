@@ -7,7 +7,7 @@ export function WorkspaceTools({ name, navigation, access }: {
   access?: ReactNode;
 }) {
   return <header className={styles.chatToolbar}>
-    <div className={styles.chatIdentity}><p>{name.trim() || "New hook"}</p></div>
+    <div className={styles.chatIdentity}><p>{name.trim() || "New coin"}</p></div>
     <div className={styles.toolbarActions}>{access}{navigation}</div>
   </header>;
 }

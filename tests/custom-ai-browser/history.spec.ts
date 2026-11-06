@@ -43,7 +43,7 @@ test("source-linked product actions remain inspectable after reload",async({page
  f.control.respond=()=>({...result,productBlueprint:product,generalProject:{...result.generalProject,productBlueprintId:product.id,implementation}});
  await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await box.fill("Build the counter");await box.press("Enter");
- const summary=page.locator("summary").filter({hasText:/^Product plan/});await summary.click();
+ const summary=page.locator("summary").filter({hasText:/^How it works/});await summary.click();
  const actions=page.getByRole("region",{name:"Linked contract actions"});
  await expect(actions).toBeVisible();await expect(actions.getByText("value()",{exact:true})).toBeVisible();
  await page.setViewportSize({width:360,height:900});
@@ -163,11 +163,11 @@ test("a plain launch request uses the checked source without another model call"
  await box.fill("Build my hook");await box.press("Enter");
  await expect(page.getByRole("region",{name:"Your built hook"})).toBeVisible();
  await box.fill("Okay, launch it");await box.press("Enter");
- await expect(page.getByText("I’m preparing your checked hook for launch.",{exact:false})).toBeVisible();
+ await expect(page.getByText("Add a coin name to continue.",{exact:false})).toBeVisible();
  await expect(page.getByRole("button",{name:"Add coin name",exact:true})).toBeVisible();
  await expect(page.getByRole("textbox",{name:"Name",exact:true})).toBeFocused();
  await expect(box).toHaveValue("");
- await expect.poll(()=>[...f.studios.values()].some(saved=>saved.state.messages.at(-1)?.content.startsWith("I’m preparing your checked hook"))).toBe(true);
+ await expect.poll(()=>[...f.studios.values()].some(saved=>saved.state.messages.at(-1)?.content.startsWith("Add a coin name"))).toBe(true);
  expect(f.calls).toHaveLength(1);expect(launchWrites).toEqual([]);
  expect([...f.studios.values()].at(-1)?.state.draftId).toBe(f.calls[0].id);
 });
@@ -182,6 +182,33 @@ test("a changed or unfinished design still sends launch requests through the pla
  await box.fill("Launch it");await box.press("Enter");
  await expect.poll(()=>f.calls.length).toBe(2);
  expect(f.calls[1].messages.at(-1)?.content).toBe("Launch it");
+});
+
+test("one result shows the exact fee curve and opens the actual missing detail", async ({page}, info) => {
+ const f=await fixture(page),hash="a".repeat(64),text="Fees fall from 2% to 0.5% over 24 hours";
+ const intent:LaunchIntent={version:1,id:"polished-fee",revision:"b".repeat(64),requirements:[{id:"fee",kind:"behavior",text,open:null,origin:{kind:"legacy",sourceHash:hash}}],changes:[],unresolved:[]};
+ f.control.respond=()=>({reply:"Long build notes stay available without repeating the result.",intent,change:"applied",setupPatch:{symbol:"FLOW"},draft:{source:"synthetic source",sourceHash:hash,compiled:true,diagnostics:[],
+   composable:{chainId:1,specHash:"c".repeat(64),feeds:[],spec:{version:2,requirements:[{id:"fee",text}],creatorShareBps:10000,actions:[],phases:[
+     {id:"fade",startsAtSeconds:0,endsAtSeconds:86400,fee:{kind:"ramp",fromBuyBps:200,toBuyBps:50,fromSellBps:200,toSellBps:50,durationSeconds:86400},requirementIds:["fee"]},
+     {id:"after",startsAtSeconds:86400,endsAtSeconds:null,fee:{kind:"fixed",buyBps:50,sellBps:50},requirementIds:["fee"]}]}},
+   validation:{version:"self-contained-fee-v1",status:"passed",artifactHash:hash,cases:1,samples:[],deployments:[]},verification:{status:"passed",sourceHash:hash,requirements:[text],checks:[],cases:1}}});
+ const writes:unknown[]=[];let savedLaunch:unknown=null;
+ await page.route("**/api/custom-ai/launch**",async route=>{if(route.request().method()==="POST")writes.push(route.request().postDataJSON());await route.fulfill({json:savedLaunch});});
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await box.fill("Build the 24-hour fee curve");await box.press("Enter");
+ const result=page.getByRole("region",{name:"Your built hook"});await expect(result).toBeVisible();
+ await expect(result.getByRole("img",{name:/Buys: 2% to 0.5%/})).toBeVisible();
+ await expect(page.getByText("Long build notes stay available without repeating the result.",{exact:true})).toBeHidden();
+ await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Add coin name",exact:true}).click();await expect(page.getByRole("textbox",{name:"Name",exact:true})).toBeFocused();
+ await page.getByRole("textbox",{name:"Name",exact:true}).fill("River");
+ await expect(page.getByRole("button",{name:"Add coin image",exact:true})).toHaveCount(1);
+ for(const width of [390,1440]){await page.setViewportSize({width,height:900});await result.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`single-result-${width}.png`),fullPage:true});}
+ expect(f.calls).toHaveLength(1);expect(writes).toEqual([]);
+ savedLaunch={revision:1,session:{id:"confirmed-local-coin",account:"0x"+"a".repeat(40),chainId:1,draftId:f.calls[0].id,sourceHash:hash,
+   settings:{name:"River",symbol:"FLOW",quote:"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",imageURI:"/image.svg",initialBuy:"0.01"},state:"confirmed",steps:[],token:"0x"+"b".repeat(40)}};
+ await page.reload();await expect(page.getByText("Published coin",{exact:true})).toBeVisible();
+ await expect(result).toHaveCount(0);await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toHaveCount(0);
+ expect(writes).toEqual([]);expect(f.calls).toHaveLength(1);
 });
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
@@ -291,10 +318,10 @@ test("general source restores compactly and reads complete code only when explic
  const f=await fixture(page),result=generalFixture();f.control.respond=()=>result;let sourceReads=0;
  await page.route("**/api/custom-ai/projects?**",route=>{sourceReads++;return route.fulfill({json:{version:1,requestId:f.calls[0].id,project:{hash:result.generalProject.projectHash,sources:{"Counter.sol":{content:"pragma solidity 0.8.26; contract Counter { uint256 public value; }"}}}}});});
  await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- await box.fill("Build a general counter contract");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Build a general counter contract");await box.press("Enter");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toBeDisabled();expect(sourceReads).toBe(0);
  await box.fill("Keep this unsent source edit");await expect.poll(()=>[...f.studios.values()].some(s=>s.state.input==="Keep this unsent source edit")).toBe(true);
- f.control.otherReads=[];await page.reload();await expect(box).toHaveValue("Keep this unsent source edit");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ f.control.otherReads=[];await page.reload();await expect(box).toHaveValue("Keep this unsent source edit");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  expect(f.calls).toHaveLength(1);expect(sourceReads).toBe(0);expect(f.control.otherReads.filter(path=>path.endsWith("/launch")||path.endsWith("/readiness"))).toHaveLength(0);
  const source=page.getByRole("region",{name:"Contract source",exact:true});await source.locator("summary",{hasText:"View saved source"}).click();
  await expect(source.getByText("Counter.sol",{exact:true})).toBeVisible();expect(sourceReads).toBe(1);
@@ -307,7 +334,7 @@ test("compile-only recovery keeps the working source, unsent text and pending re
  f.control.respond=request=>{if(request.intent==="compile"){f.control.failure="";return second;}inferenceRequests++;if(inferenceRequests===1)return first;f.control.failure="project-compiler";return undefined;};
  await page.route("**/api/custom-ai/projects?**",route=>route.fulfill({json:{requestId:f.calls[1].id,projectHash:second.generalProject.projectHash,chainId:1,intentRevision:second.intent.revision,compiler:second.generalProject.compiler,sourceFiles:1,sourceBytes:240,compilation:"pending",diagnostics:[]}}));
  await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- await box.fill("Build a general counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Build a general counter");await box.press("Enter");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  const change="Add a read helper";await box.fill(change);await box.press("Enter");
  const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();await expect(box).toHaveValue(change);
  expect([...f.studios.values()][0].state.draftId).toBe(f.calls[0].id);
@@ -317,7 +344,7 @@ test("compile-only recovery keeps the working source, unsent text and pending re
  expect(f.calls[2]).toMatchObject({intent:"compile",messages:[],compilationOf:{id:f.calls[1].id,projectHash:second.generalProject.projectHash}});
  expect([...f.studios.values()][0].state.pendingChange).toBeUndefined();
  expect([...f.studios.values()][0].state.messages).toEqual([{role:"user",content:"Build a general counter"},{role:"assistant",content:first.reply}]);
- await page.reload();await expect(box).toHaveValue("Keep this other unsent change");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await page.reload();await expect(box).toHaveValue("Keep this other unsent change");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  expect(inferenceRequests).toBe(2);expect(f.calls).toHaveLength(3);
 });
 test("changing a checked fee draft to another route removes its ready card",async({page})=>{
@@ -336,22 +363,22 @@ test("changing a checked fee draft to another route removes its ready card",asyn
 test("general source diagnostics stay a separate proposal until explicitly selected for editing",async({page})=>{
  const f=await fixture(page);let n=0;f.control.respond=()=>++n===1?generalFixture():generalFixture(2,false);
  await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- await box.fill("Build a general counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Build a general counter");await box.press("Enter");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  await box.fill("Add a read helper");await box.press("Enter");const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();
  await expect.poll(()=>[...f.studios.values()][0].state.sourceId).toBe(f.calls[1].id);expect([...f.studios.values()][0].state.draftId).toBe(f.calls[0].id);
  await expect(recovery.getByRole("button",{name:"Retry saved build"})).toHaveCount(0);
- await recovery.getByRole("button",{name:"Edit this source"}).click();await expect(recovery).toHaveCount(0);await expect(page.getByText("Source needs changes",{exact:true})).toBeVisible();
+ await recovery.getByRole("button",{name:"Edit this source"}).click();await expect(recovery).toHaveCount(0);await expect(page.getByText("Needs an update",{exact:true})).toBeVisible();
  await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[1].id);expect(f.calls).toHaveLength(2);
 });
 test("a failed declared contract check preserves the working source and can be explicitly edited",async({page})=>{
  const f=await fixture(page);let n=0;f.control.respond=()=>++n===1?checkedFixture():checkedFixture(2,false);
  await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
- await box.fill("Build the complete counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await box.fill("Build the complete counter");await box.press("Enter");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  await box.fill("Add a read helper");await box.press("Enter");const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();
  await expect.poll(()=>[...f.studios.values()][0].state.sourceId).toBe(f.calls[1].id);expect([...f.studios.values()][0].state.draftId).toBe(f.calls[0].id);
  await expect(recovery.getByRole("button",{name:"Resume contract checks"})).toHaveCount(0);await recovery.locator("summary",{hasText:"A declared contract check failed"}).click();await expect(recovery.getByText("The declared increment did not match.",{exact:true})).toBeVisible();
  await page.reload();await expect(recovery).toBeVisible();expect(f.calls).toHaveLength(2);
- await recovery.getByRole("button",{name:"Edit this source"}).click();await expect(recovery).toHaveCount(0);await expect(page.getByText("Contract checks failed",{exact:true})).toBeVisible();
+ await recovery.getByRole("button",{name:"Edit this source"}).click();await expect(recovery).toHaveCount(0);await expect(page.getByText("Needs an update",{exact:true})).toBeVisible();
  await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[1].id);expect(f.calls).toHaveLength(2);
 });
 test("resuming saved contract checks preserves the unsent input and does not request another generation",async({page})=>{
@@ -359,7 +386,7 @@ test("resuming saved contract checks preserves the unsent input and does not req
  f.control.respond=request=>{if(request.intent==="compile"){f.control.failure="";return checkedFixture(2);}if(++modelRequests===1)return checkedFixture();f.control.failure="behavior-worker";return undefined;};
  await page.route("**/api/custom-ai/projects?**",route=>route.fulfill({json:{requestId:f.calls[1].id,projectHash:generalFixture(2).generalProject.projectHash,chainId:1,intentRevision:generalFixture(2).intent.revision,
   compiler:generalFixture(2).generalProject.compiler,sourceFiles:1,sourceBytes:240,compilation:"compiled",artifactHash:generalFixture(2).generalProject.artifactHash,blueprintId:checkedFixture().generalProject.blueprintId,diagnostics:[]}}));
- await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Build the complete counter");await box.press("Enter");await expect(page.getByText("Source compiled",{exact:true})).toBeVisible();
+ await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();await box.fill("Build the complete counter");await box.press("Enter");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  await box.fill("Add a read helper");await box.press("Enter");const recovery=page.getByRole("region",{name:"Saved source recovery"});await expect(recovery).toBeVisible();
  await box.fill("Keep this newer unsent idea");await recovery.getByRole("button",{name:"Resume contract checks"}).click();await expect(recovery).toHaveCount(0);await expect(box).toHaveValue("Keep this newer unsent idea");
  await expect.poll(()=>[...f.studios.values()][0].state.draftId).toBe(f.calls[2].id);expect(f.calls[2]).toMatchObject({intent:"compile",messages:[]});expect(modelRequests).toBe(2);expect(f.calls).toHaveLength(3);
@@ -370,7 +397,7 @@ test("four-chain source settings retain native currency and never load a foreign
  await page.locator("summary").filter({hasText:"Coin details"}).click();
  for(const name of ["Ethereum","Robinhood","Base","HyperEVM"])await expect(page.getByRole("button",{name,exact:true})).toBeVisible();
  await page.getByRole("textbox",{name:"Initial buy",exact:true}).fill("2");f.control.otherReads=[];
- await page.getByRole("button",{name:"Base",exact:true}).click();await expect(page.getByText("Contract design",{exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Base",exact:true}).click();await expect(page.locator("summary").filter({hasText:"Coin details"})).toContainText("Base");
  // Changing from the fixed core to the general preview remounts its details.
  await page.locator("summary").filter({hasText:"Coin details"}).click();await expect(page.getByRole("button",{name:"Pair ETH",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"HyperEVM",exact:true}).click();await expect(page.getByRole("button",{name:"Pair HYPE",exact:true})).toBeVisible();
@@ -380,7 +407,7 @@ test("four-chain source settings retain native currency and never load a foreign
  await page.getByRole("textbox",{name:"Project website",exact:true}).fill(metadata.website);
  await page.getByRole("textbox",{name:"X profile",exact:true}).fill(metadata.x);
  await expect.poll(()=>[...f.studios.values()][0]?.state.settings).toMatchObject({chainId:999,pairToken:"HYPE",initialBuy:"0.2",...metadata});
- await page.reload();await expect(box).toBeEditable();await expect(page.getByText("Contract design",{exact:true})).toBeVisible();
+ await page.reload();await expect(box).toBeEditable();await expect(page.locator("summary").filter({hasText:"Coin details"})).toContainText("HyperEVM");
  await page.locator("summary").filter({hasText:"Coin details"}).click();await expect(page.getByRole("button",{name:"Pair HYPE",exact:true})).toBeVisible();
  await expect(page.getByRole("textbox",{name:"Initial buy",exact:true})).toHaveValue("0.2");
  await expect(page.getByRole("textbox",{name:"Public description",exact:true})).toHaveValue(metadata.description);
@@ -601,7 +628,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) test(`menus pr
   await page.goto(origin);
   const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
   await box.fill("Plan a counter with a small page, without building yet.");await box.press("Enter");
-  const summary=page.locator("summary").filter({hasText:"Product plan"});await expect(summary).toBeVisible();
+  const summary=page.locator("summary").filter({hasText:"How it works"});await expect(summary).toBeVisible();
   await summary.click();await expect(page.getByText("Counter page",{exact:true})).toBeVisible();
   await box.fill("Keep this next idea unsent");
   await expect.poll(()=>[...f.studios.values()].some(studio=>studio.state.input==="Keep this next idea unsent")).toBe(true);

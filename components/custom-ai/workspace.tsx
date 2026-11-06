@@ -43,6 +43,9 @@ import { ImageAttachments } from "./image-attachments";
 import { imageMessageURL, explicitImageMessageURL } from "@/lib/custom-ai/image-message";
 import { directLaunchCommand } from "@/lib/custom-ai/launch-command";
 import type { CoinDetailsControls } from "./coin-details";
+import { COIN_DETAIL_ACTION, coinDetailReply, feeLaunchDetailIssue } from "@/lib/custom-ai/coin-next-detail";
+import { generalLaunchDetailIssue } from "@/lib/custom-ai/general-details";
+import { Disclosure } from "@/components/disclosure";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
 
 export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
@@ -128,6 +131,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const [restored, setRestored] = useState(false);
   const [launchLocked, setLaunchLocked] = useState(false);
   const [launchCommand,setLaunchCommand]=useState<{id:string;sourceId:string}>();
+  const [resolvedLaunchSource,setResolvedLaunchSource]=useState<string>();
+  const markLaunchResolved=useCallback((id:string)=>setResolvedLaunchSource(id),[]);
   const [coinPanelOpen,setCoinPanelOpen]=useState(false);
   const [buildIssue,setBuildIssue]=useState<ChatResult["buildIssue"]>();
   const retry = useRef<ChatRequest | null>(null);
@@ -495,7 +500,11 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const feeBuilt = builderChain(settings.chainId).feeCore && (!draft?.program || draft.program.chainId === settings.chainId)
     && draft?.compiled && draft.validation?.status === "passed" && draft.verification?.status === "passed"
     && draft.verification.sourceHash === draft.sourceHash && intentMatchesCandidate(intent, draft);
-  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && (generalBuilt || feeBuilt));
+  const showOutcome = Boolean(!busy && !pendingChange && intent && !intentHasOpenParts(intent) && draftId && draftId!==resolvedLaunchSource && (generalBuilt || feeBuilt));
+  const outcomeDetail = showOutcome ? generalBuilt ? generalLaunchDetailIssue(settings, Boolean(imageReceipt)) : feeLaunchDetailIssue(settings, Boolean(imageReceipt)) : null;
+  const showCoinPanel = Boolean(messages.length || settings.name || intent || draft || generalProject || sourceRecovery || imageReceipt || coinPanelOpen);
+  const lastUserMessage = messages.findLast(message => message.role === "user")?.content;
+  const lastTurnWasLocal = Boolean(lastUserMessage && (directLaunchCommand(lastUserMessage) || imageMessageURL(lastUserMessage)));
   const openCoinPanel = useCallback(() => {
     setCoinPanelOpen(true);
     requestAnimationFrame(() => {
@@ -506,8 +515,9 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   const launchFromMessage = useCallback(() => {
     if (!draftId || !showOutcome || activity.blocked || imageBusy) return;
     openCoinPanel();
+    if (outcomeDetail) { coinEditor.current?.focus(outcomeDetail.field); return; }
     setLaunchCommand({ id: crypto.randomUUID(), sourceId: draftId });
-  }, [draftId, showOutcome, activity.blocked, imageBusy, openCoinPanel]);
+  }, [draftId, showOutcome, activity.blocked, imageBusy, openCoinPanel, outcomeDetail]);
 
   async function send(contentOverride?:string) {
     if (replyRef.current.isActive() || coinTransition.current || activity.blocked || imageBusy) return;
@@ -523,9 +533,9 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     if (launchLocale && showOutcome && !retry.current && !recoveryRequest) {
       followReply.current = true; setShowLatest(false); setInput("");
       setMessages(current => conversationWindow([...current, { role: "user", content }, {
-        role: "assistant", content: launchLocale === "de"
-          ? "Ich bereite deinen geprüften Hook für den Launch vor. Fehlende Coin-Details kannst du direkt ergänzen; die Transaktion bestätigst du in deiner Wallet."
-          : "I’m preparing your checked hook for launch. You can fill in any missing coin details here, then confirm the transaction in your wallet.",
+        role: "assistant", content: outcomeDetail
+          ? coinDetailReply(outcomeDetail.field, launchLocale)
+          : launchLocale === "de" ? "Ich öffne deinen Launch." : "Opening your launch.",
       }], 40, 30_000));
       launchFromMessage();
       return;
@@ -626,7 +636,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   };
 
   return <div ref={workspaceElement} className={styles.workspace}>
-    <div className={styles.studio} data-guest={signedOut||undefined}>
+    <div className={styles.studio} data-guest={signedOut||undefined} data-empty={!signedOut && !showCoinPanel || undefined}>
     <section className={styles.conversation} aria-label="Build your coin" data-chat-state={signedOut?"wallet-required":activity.id}
       data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}
       onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
@@ -647,14 +657,14 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         {!messages.length && !busy && <div className={styles.empty}>
           {signedOut ? <div className={styles.walletWelcome}>
             <span className={styles.srOnly}>Custom AI</span>
-            <h2>What are we building?</h2>
-            <p>Hey, connect your wallet and tell me your idea. I’ll help you build it.</p>
+            <h2>What should your coin do?</h2>
+            <p>Describe its rules in your own words. Connect your wallet to start building.</p>
             <button type="button" className={styles.connectWallet} aria-haspopup="dialog" onClick={()=>connectCurrentIdea()}>
               <Wallet size={18} aria-hidden="true" />Connect wallet
             </button>
           </div> : <>
-            <h2>{draft||generalProject ? "Keep shaping your coin" : "What are we building?"}</h2>
-            <p>{draft||generalProject ? "Your rules are saved. What would you like to change?" : "Tell me your idea. We’ll shape it here, then you can launch it."}</p>
+            <h2>{draft||generalProject ? "What would you like to change?" : "What should your coin do?"}</h2>
+            <p>{draft||generalProject ? "Your current rules are saved." : "Describe the rules. Build your coin here, without writing code."}</p>
           </>}
           <div className={styles.starterIdeas} aria-label="Ideas to get started">
             {starterIdeas.map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked}
@@ -663,14 +673,19 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         </div>}
         {messages.map((message, index) => <article className={styles.message} key={index} data-role={message.role}>
           <span className={styles.srOnly}>{message.role === "user" ? "You" : "Custom AI"}</span>
-          <MessageContent content={message.content} assistant={message.role === "assistant"} />
+          {(showOutcome || Boolean(draftId && draftId===resolvedLaunchSource)) && contextId === draftId && !lastTurnWasLocal && message.role === "assistant" && index === messages.length - 1
+            ? <Disclosure className={styles.buildNotes}><summary>Build notes</summary><MessageContent content={message.content} assistant /></Disclosure>
+            : <MessageContent content={message.content} assistant={message.role === "assistant"} />}
           {message.role === "assistant" && message.sources?.length ? <ul className={styles.sources} aria-label="Sources">
             {safeKnowledgeSources(message.sources).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}
           </ul> : null}
           {message.role === "assistant" && <CopyButton compact label="Copy answer" value={message.content} />}
         </article>)}
         {showOutcome && intent && <BuildOutcome name={settings.name} symbol={settings.symbol} network={builderChain(settings.chainId).name}
-          rules={intent.requirements} onLaunch={launchFromMessage} disabled={activity.blocked || imageBusy} />}
+          rules={intent.requirements} spec={feeBuilt ? draft?.composable?.spec : undefined}
+          product={productBlueprint?.chainId===settings.chainId&&productBlueprint.intentRevision===intent.revision?productBlueprint:undefined}
+          actionLabel={outcomeDetail ? COIN_DETAIL_ACTION[outcomeDetail.field] : "Launch coin"} detail={outcomeDetail?.message}
+          actionVisible={!launchCommand && !launchLocked} onLaunch={launchFromMessage} disabled={activity.blocked || imageBusy} />}
         {revealing !== null && <StreamingReply text={revealing} onAdvance={followLatest} />}
       </div>
       {showLatest && messages.length > 0 && <button type="button" className={styles.jumpToLatest} onClick={() => {
@@ -740,7 +755,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       <p className={styles.srOnly} id="custom-ai-help">Enter to send. Shift + Enter for a new line. {editTarget && "Escape returns to the whole design and keeps your message. "}Messages are processed by the configured AI provider.</p>
     </section>
 
-    {!signedOut&&<div className={styles.coinFrame} data-expanded={coinPanelOpen}>
+    {!signedOut&&<div className={styles.coinFrame} data-expanded={coinPanelOpen} data-empty={!showCoinPanel || undefined}>
     <button type="button" className={styles.coinPanelToggle} aria-label="Coin preview and details" aria-expanded={coinPanelOpen} aria-controls="custom-ai-coin-panel"
       onClick={() => setCoinPanelOpen(current => !current)}>
       <span><strong>{settings.name || "Your coin"}</strong><small>{settings.symbol ? `$${settings.symbol} · ` : ""}{builderChain(settings.chainId).name}</small></span>
@@ -753,6 +768,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       editorControls={coinEditor} onImageBusy={setImageBusy}
       generalLaunchEnabled={generalLaunchEnabled} pendingChange={pendingChange} flush={()=>flushCurrent(true)} onLaunchLocked={setLaunchLocked}
       launchCommand={launchCommand}
+      summarized={showOutcome && !launchCommand && !launchLocked}
+      onLaunchResolved={markLaunchResolved}
       onEditRule={requirementId=>{if(generalProject&&!busy&&!launchLocked){setEditTarget({sourceHash:generalProject.projectHash.slice(7),requirementId});textarea.current?.focus();}}}>
       {productPanel}{sourcePanel}
     </GeneralProjectPreview>:<CustomAILaunchPreview key={previewRevision} draft={draft} intent={intent} disabled={busy || Boolean(recoveryRequest) || switchingCoin || !restored} settings={settings} chatRevision={chatRevision} onChange={changeSettings}
@@ -760,6 +777,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       imageReceipt={imageReceipt} onImageReceipt={updateImageReceipt} pendingChange={busy ? undefined : pendingChange}
       editorControls={coinEditor} onImageBusy={setImageBusy}
       launchCommand={launchCommand}
+      summarized={showOutcome && !launchCommand && !launchLocked}
+      onLaunchResolved={markLaunchResolved}
       onKeepRules={() => {
         setIntent(draft?.intent);
         setProductBlueprint(current=>restoredProductBlueprint(current,draft?.intent,settings.chainId));

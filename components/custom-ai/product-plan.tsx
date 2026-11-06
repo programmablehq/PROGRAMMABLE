@@ -20,14 +20,13 @@ export function ProductPlan({ blueprint, implementation }: { blueprint: ProductB
   const economics = reviewProductEconomics(blueprint);
   const linked=implementation?.productBlueprintId===blueprint.id&&implementation.intentRevision===blueprint.intentRevision?implementation:undefined;
   return <Disclosure className={`${styles.ruleReview} ${styles.coinRules}`}>
-    <summary>Product plan<span>{blueprint.components.length}</span></summary>
-    <p className={styles.note}>The parts of your design. Implementation and launch are checked separately.</p>
+    <summary>How it works<span>{blueprint.components.length}</span></summary>
     <ul>
       {blueprint.components.map(component => <li key={component.id}><strong>{component.name}</strong><br />{component.purpose}</li>)}
     </ul>
     {linked&&linked.actions.length>0&&<section aria-label="Linked contract actions">
       <h3>Contract actions</h3>
-      <p className={styles.note}>{linked.evidence==="declared-scenarios-passed"?"Linked to the source and checked locally.":"Linked to the compiled source."}</p>
+      <p className={styles.note}>{linked.evidence==="declared-scenarios-passed"?"Checked with this saved code.":"Included in this saved code."}</p>
       <ul>{linked.actions.map(action=><li key={action.id}>{names.get(action.target)} · <code>{action.signature}</code></li>)}</ul>
     </section>}
     {blueprint.flows.length > 0 && <>
