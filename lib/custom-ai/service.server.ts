@@ -1,4 +1,4 @@
-import { BRIEF_REPLY_RULES, IDEA_REPLY_CONTEXT, ideaReplyMessages, isBriefChat } from "./reply-mode";
+import { BRIEF_REPLY_RULES, IDEA_REPLY_CONTEXT, ideaReplyMessages, isBriefChat, settledDesignReply, withoutSaveConfirmation } from "./reply-mode";
 import { isDiscoveryQuestion } from "./discovery-question";
 import {sourceCorrectionFeedback} from "./source-feedback";
 import {hasConflictingFeeMeaning,hasInventedPlatformRate,hasInventedFeeFloor} from "./planning-policy";
@@ -257,7 +257,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   if(system.length>160_000)throw new CustomAIError("project-context","Focus this source inspection on a smaller saved project. Your complete source is kept.",422);
   const onText = (text: string) => {
     const reply = partialReply(text);
-    if (reply !== undefined) context.onProgress?.({ type: "reply", text: reply });
+    if (reply !== undefined) context.onProgress?.({ type: "reply", text: discussionOnly?withoutSaveConfirmation(reply):reply });
   };
   context.onProgress?.({ type: "phase", phase: "thinking" });
   if (replyOnly) {
@@ -491,7 +491,7 @@ Use action=answer for proposals or explanations, clarify for a missing material 
     intent, memory: plan.memory, change: "blocked", unresolved: open, ...(researched ? { chargedAs: "research", sources } : {}) };
   if (plan.action !== "build") return { reply: revised?.problems.length
     ?open.find(question=>/[?？]\s*$/u.test(question))??"Part of that change could not be applied. Your saved rules are kept."
-    :plan.reply, ...update, memory: plan.memory,
+    :discussionOnly&&intent?settledDesignReply(plan.reply,update.replyLocale):plan.reply, ...update, memory: plan.memory,
     ...launchAction(request.draftId,plan.action==="answer"&&intent?.revision===previousIntent?.revision&&Boolean(previousProjectView?.compiled&&previousProjectView.scenarios?.passed&&previousProjectView.productBlueprintId===update.productBlueprint?.id||context.draft?.compiled&&context.draft.validation?.status==="passed")),
     ...(intent ? { intent } : {}),
     ...(previousSpec ? { ruleSpec: previousSpec } : {}),
