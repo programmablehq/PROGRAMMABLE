@@ -94,7 +94,6 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   type RetryBase = { messages: ChatMessage[]; pendingChange?: string };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  useEffect(()=>{if(signedOut){const saved=readGuestDraft();if(saved)setInput(current=>current||saved);}},[signedOut]);
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [requestSaved,setRequestSaved]=useState(false);
@@ -272,6 +271,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         }
       }
       if (cancelled) return;
+      if(owner==="signed-out"){const saved=readGuestDraft();if(saved)setInput(current=>current||saved);}
       setBuildIssue(undefined);
       if (typeof raw === "string" && raw.length < 400_000) {
         const saved = JSON.parse(raw);
