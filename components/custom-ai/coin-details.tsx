@@ -6,9 +6,9 @@ import { isAddress, parseEther } from "viem";
 import { prepareTokenImage, TOKEN_IMAGE_ACCEPT } from "@/lib/token-image";
 import { ChainMark } from "@/components/chain-mark";
 import { builderChain, builderChains } from "@/lib/custom-ai/execution-routing";
-import { coinBio, coinPresentationIssue, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
+import { coinBio, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import { aiImageRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
-import type { GeneralDetailField } from "@/lib/custom-ai/general-details";
+import { generalPresentationIssue, type GeneralDetailField } from "@/lib/custom-ai/general-details";
 import type { ImageReceipt } from "@/lib/custom-ai/studio";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { CoinSelect } from "./coin-select";
@@ -139,7 +139,8 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
     const frame=requestAnimationFrame(()=>document.getElementById(`custom-ai-${focusRequest.field === "initialBuy" ? "buy" : focusRequest.field}`)?.focus());
     return()=>cancelAnimationFrame(frame);
   },[detailsOpen,focusRequest]);
-  const presentationError = (field: "description" | "website" | "x" | "socialPost") => presentationTouched[field] ? coinPresentationIssue(settings, field) : "";
+  const planPresentation=settings.chainId===4663;
+  const presentationError = (field: "description" | "website" | "x" | "socialPost") => presentationTouched[field] ? generalPresentationIssue(settings, field) : "";
   return <>
     <section className={styles.coinPreview} aria-label="Coin preview">
       <div className={styles.coinHeading}>
@@ -209,7 +210,8 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
         </label>
         <p className={buyError ? styles.error : styles.note} id="custom-ai-buy-help">{buyError || (feeCore ? isNative ? "Minimum 0.01 ETH" : "Minimum 0.01 ETH equivalent" : "The selected launch route confirms the required amount.")}</p>
         {!feeCore && <>
-          <label htmlFor="custom-ai-description">Public description
+          <p className={styles.note}>{planPresentation?"Add at least one public project or social link. A description is optional.":"A public description, project website and X profile are required for this launch."}</p>
+          <label htmlFor="custom-ai-description">Public description{planPresentation?" (optional)":""}
             <textarea id="custom-ai-description" value={settings.description ?? ""} maxLength={4096} rows={3}
               placeholder="What does your coin do?" autoComplete="off" aria-describedby="custom-ai-description-help"
               aria-invalid={Boolean(presentationError("description")) || undefined}
@@ -220,7 +222,7 @@ export function CoinDetails({settings,onChange,chatRevision,disabled,headers,loc
             {presentationError("description") || "Shown publicly with your coin. You can also write it in the chat."}
           </p>
           {(["website", "x", "socialPost"] as const).map(field => <div key={field} className={styles.presentationField}>
-            <label htmlFor={`custom-ai-${field}`}>{field === "website" ? "Project website" : field === "x" ? "X profile" : "X post (optional)"}
+            <label htmlFor={`custom-ai-${field}`}>{field === "website" ? `Project website${planPresentation?" (optional)":""}` : field === "x" ? `X profile${planPresentation?" (optional)":""}` : "X post (optional)"}
               <input id={`custom-ai-${field}`} name={field} type="url" inputMode="url" value={settings[field] ?? ""}
                 placeholder={field === "website" ? "https://your-project.com" : field === "x" ? "https://x.com/your_coin" : "https://x.com/your_coin/status/…"}
                 maxLength={2048} autoComplete="off" autoCapitalize="none" spellCheck={false}

@@ -7,12 +7,14 @@ export const CONTINUE_SAVED_BUILD = "Build and verify the current saved design. 
 export function designOnlyRequest(request:Pick<ChatRequest,"intent"|"messages">):boolean{
   if(request.intent!=="chat"||request.messages.at(-1)?.role!=="user")return false;
   const text=request.messages.at(-1)!.content.normalize("NFKC").replace(/```[\s\S]*?```/g," ")
-    .replace(/^\s*>.*$/gm," ").replace(/"[^"\n]*"|„[^“\n]*“|“[^”\n]*”|`[^`\n]*`/g," ").toLowerCase();
+    .replace(/^\s*>.*$/gm," ").replace(/"[^"\n]*"|„[^“\n]*“|“[^”\n]*”|`[^`\n]*`/g," ").replace(/[’‘]/g,"'").toLowerCase();
   if(/\b(?:do not|don't)\s+(?:just|only)\s+(?:want\s+to\s+)?(?:plan|discuss|design)\b/.test(text))return false;
-  return /\b(?:do not|don't|not)\s+(?:build|generate|deploy)(?:\s+or\s+launch)?\s+(?:it|this|anything)?\s*(?:yet\b|now\b|[.!?]|$)/.test(text)
-    ||/\bnoch\s+nicht(?:s)?\s+(?:bauen|generieren|deployen|veröffentlichen)\b/.test(text)
+  return /\b(?:do not|don't|not|no)\s+(?:build|generate|deploy)(?:\s+or\s+launch)?\s*(?:(?:it|this|anything)\b\s*)?(?:yet\b|now\b|[.!?;,:]|$)/.test(text)
+    ||/\bnoch\s+(?:nicht(?:s)?|nix)\s+(?:bauen|generieren|deployen|veröffentlichen)\b/.test(text)
     ||/\b(?:only|just)\s+(?:want\s+to\s+)?(?:discuss|plan|explore|brainstorm|shape|design)\b/.test(text)
-    ||/\b(?:erstmal|zuerst|nur)\s+(?:besprechen|planen|überlegen|brainstormen)\b/.test(text);
+    ||/\b(?:discuss|plan|explore|brainstorm|design)\s+(?:it\s+)?first\b/.test(text)
+    ||/\bfirst[,;:]?\s+(?:let's\s+|let us\s+)?(?:discuss|plan|explore|brainstorm)\b/.test(text)
+    ||/\b(?:erst|erstmal|zuerst|nur)\s+(?:besprechen|reden|planen|überlegen|brainstormen)\b/.test(text);
 }
 
 /** Exact continuation commands only. Changes, questions and quoted instructions
@@ -31,6 +33,7 @@ export function unchangedBuildCommand(request:Pick<ChatRequest,"intent"|"message
  * It grants no edits, launch, signature or verification and ignores quotations.
  * Other phrasing is still interpreted by the normal planner. */
 export function explicitSourceBuild(request: Pick<ChatRequest,"intent"|"messages">): boolean {
+  if(designOnlyRequest(request))return false;
   const message=request.messages.at(-1);
   if(message?.role!=="user")return false;
   const text=message.content.normalize("NFKC").replace(/```[\s\S]*?```/g," ")

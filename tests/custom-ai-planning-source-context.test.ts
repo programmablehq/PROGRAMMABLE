@@ -1,6 +1,7 @@
 import {describe,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
-import {modelDesignContext} from "../lib/custom-ai/planning-context";
+import {modelDesignContext,plannerNeedsExecution,planningProductionContext} from "../lib/custom-ai/planning-context";
+import {createLaunchProductionContext} from "../lib/custom-ai/launch-production";
 import {canonicalGeneralSourceCatalog} from "../lib/custom-ai/canonical-dependencies.server";
 import {createContractProject} from "../lib/custom-ai/contract-project";
 import {createProjectCompiler} from "../lib/custom-ai/compiler-profile";
@@ -19,6 +20,21 @@ function source(edited=false):GeneralProjectDraft{
   selection:selectExecutionRoute(intent,8453,{route:"custom-contract",requirementIds:["counter"],missingCapabilities:[]}),requirementCoverage:"proposed",launchReady:false};
 }
 describe("saved project context",()=>{
+ it("only loads recorded executions for a question about those results",()=>{
+  const request=(content:string)=>({intent:"chat" as const,id:"context-size-001",messages:[{role:"user" as const,content}]});
+  expect(plannerNeedsExecution(request("Change the project fee to 2% over 24 hours."))).toBe(false);
+  expect(plannerNeedsExecution(request("Send 30% to holder rewards."))).toBe(false);
+  expect(plannerNeedsExecution(request("Show the recorded simulation results for the holder payouts."))).toBe(true);
+ });
+ it("keeps policy data in planning without deployment addresses or bytecode bindings",()=>{
+  const context=createLaunchProductionContext({version:1,chainId:1,route:"graph-v3",profileVersion:"3.6.0",
+   poolManager:{address:`0x${"1".repeat(40)}`,runtimeCodeHash:`0x${"2".repeat(64)}`},executor:{address:`0x${"3".repeat(40)}`,runtimeCodeHash:`0x${"4".repeat(64)}`},
+   graphProfile:{},manifestDigest:null,tradeFee:{policyVersion:"test.v1",ratePpm:3000,recipient:`0x${"5".repeat(40)}`,collection:"programmable-routed-native"},protections:null});
+  const planning=planningProductionContext(context);
+  expect(planning).toMatchObject({chainId:1,tradeFee:{ratePpm:3000}});
+  expect(JSON.stringify(planning)).not.toContain("0x");
+  expect(context.executor.address).toBe(`0x${"3".repeat(40)}`);
+ });
  it("fits canonical code and unchanged custom code without modifying the saved project",()=>{
   const original=source(),before=JSON.stringify(original.project);
   const result=modelDesignContext({generalProject:original,canonicalSources:canonicalGeneralSourceCatalog(original.project,8453)},true);
