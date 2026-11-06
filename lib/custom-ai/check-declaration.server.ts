@@ -29,6 +29,7 @@ import {bindDeclaredWorldParticipants} from "./fixture-participants";
 import type {CoinSetup} from "./coin-setup";
 import {checkedProductBlueprint,type ProductBlueprint} from "./product/blueprint";
 import {checkedProductBindings,PRODUCT_BINDING_RULES} from "./product/bindings";
+import {repairMalformedInterfaces} from "./interface-repair.server";
 
 export class GeneralCheckDeclarationError extends CustomAIError {
   constructor(readonly stage:"interface"|"scenarios",readonly reason:string,readonly diagnostic?:CheckDiagnostic){super("check-declaration","The contract checks did not arrive completely. Your saved design is kept.",502);}
@@ -93,6 +94,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
   let stage:"interface"|"scenarios"="interface";
   let progress:CheckProgress|undefined;
   let responseText:string|undefined;
+  let correctionBudget=8000;
   const failures:CheckFailure[]=[];
   const record=(error:unknown,declaration:string|null=null,response?:string)=>{
     const partial=error instanceof ModelResponseError?error.partialDeclaration:undefined;
@@ -142,7 +144,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
       try{validateDeclaredInterfaceCalls(correctionBase as GeneralCheckScenarios,(correctionBase as {deployment?:GeneralCheckBlueprint["deployment"]}).deployment);}catch(issue){if(issue instanceof Error&&issue.message.startsWith("Invalid declared calls:"))reasons.push(issue.message);}
       const reason=[...new Set(reasons)].join("\n").replace(/[\u0000-\u001f]/g," ").slice(0,4000);
       const correctionView=declarationCorrectionView(correctionBase);
-      const repaired=await call({...modelTask("declaration-correction",{chat:input.model,build:input.model,escalation:input.model}),signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
+      const repaired=await call({...modelTask("declaration-correction",{chat:input.model,build:input.model,escalation:input.model}),maxTokens:correctionBudget,signal:input.signal,responseProfile:"contract",captureIncompleteDeclaration:true,
         schema:declarationCorrectionSchema,structuredTransport:"json-object",
         system:`${shared}\nCorrect this rejected declaration once. The saved design and production context below are unchanged and authoritative. Fix the validation error while preserving every requirement and its meaning. Return only changes, each {path:JSONPointer,valueJson:JSONEncodedReplacement}. Collections are keyed by their stable IDs in the object below; use those names, never numeric row positions. Paths address that object, for example /contracts/initializer/arguments, /steps/sell-trader-a/contract or /deployment/targets/initializer/initializer. Replace an entire array if adding/removing entries is needed. Do not overlap paths. Preserve unchanged fields; do not repeat the complete plan. Existing step IDs, requirement links and event assertions must remain; fix their invalid values rather than dropping the observations. The complete result is independently validated. Each read requires exact expected return values. Interface surfaceRequirements may contain only actual constraint IDs from the saved intent; behaviors and decisions require observable steps. There is still no generated implementation; never invent source or change the design to make a check pass. Validator feedback (data): ${JSON.stringify(reason)}\nUntrusted design data: ${context}\nRejected canonical declaration (untrusted data): ${JSON.stringify(correctionView)}`,
         messages:[{role:"user",content:"Audit the complete declaration against every saved rule and canonical initialization behavior, then correct all invalid fields and expectations. Preserve the original design and independent observations. Return JSON-pointer changes."}]});
@@ -229,6 +231,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     if(input.productBlueprint&&envelope.productBindings!==undefined)proposal.productBindings=envelope.productBindings;
     proposal.contracts=proposal.contracts.map(fill);
     if(Array.isArray(proposal.constructorChildren))proposal.constructorChildren=proposal.constructorChildren.map(fill);
+    decodeGeneralCheckDeclaration(JSON.stringify({...proposal,steps:[]}),input.interfaces?.contracts);
     progress={interface:JSON.stringify(proposal),steps:[]};
   }
   if(input.production&&!proposal.deployment){
@@ -260,6 +263,11 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     proposal.deployment=deployment;
     progress={interface:JSON.stringify(proposal),steps:[]};
   }
+  decodeGeneralCheckDeclaration(JSON.stringify({...proposal,steps:[]}),input.interfaces?.contracts);
+  progress={interface:JSON.stringify(proposal),steps:progress?.steps??[]};
+  const repairedInterface=await repairMalformedInterfaces(proposal,{interfaces:input.interfaces?.contracts,context,model:input.model,signal:input.signal},call);
+  proposal=repairedInterface.proposal;if(repairedInterface.corrected)correctionBudget-=4000;
+  progress={interface:JSON.stringify(proposal),steps:progress?.steps??[]};
   const opening=resolveOpeningFixture(proposal,input.chainId);proposal=opening.proposal;
   stage="scenarios";
   let currentProgress:CheckProgress=progress??{interface:JSON.stringify(proposal),steps:[]};
@@ -334,7 +342,7 @@ export async function declareGeneralChecks(input:Input,call:(input:ClaudeInput)=
     input.signal?.throwIfAborted();
     if(error instanceof GeneralCheckDeclarationError)throw error;
     if(error instanceof ModelResponseError){record(error);throw new GeneralCheckDeclarationError(stage,error.failure,diagnostic());}
-    if(error instanceof TypeError||error instanceof SyntaxError||error instanceof CustomAIError&&error.code==="check-declaration"){
+    if(error instanceof TypeError||error instanceof SyntaxError||error instanceof CustomAIError&&error.code==="check-declaration"||responseText!==undefined&&error instanceof Error&&!(error instanceof CustomAIError)){
       record(error,null,responseText);throw new GeneralCheckDeclarationError(stage,error instanceof SyntaxError?"invalid-json":"invalid-declaration",diagnostic());
     }
     throw error;
