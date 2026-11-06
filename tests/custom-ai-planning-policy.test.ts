@@ -4,6 +4,14 @@ import {hasInventedPlatformRate} from "../lib/custom-ai/planning-policy";
 import {runCustomAI} from "../lib/custom-ai/service.server";
 import {createLaunchProductionContext} from "../lib/custom-ai/launch-production";
 import {EMPTY_COIN_SETUP} from "../lib/custom-ai/coin-setup";
+import {requiresCustomFeeContract} from "../lib/custom-ai/mechanism-knowledge";
+
+it("uses the general route for requested buyback-and-burn without changing a plain fee request",()=>{
+ expect(requiresCustomFeeContract("20% to buying back and burning this coin")).toBe(true);
+ expect(requiresCustomFeeContract("20% buyback and burn, 80% to me")).toBe(true);
+ expect(requiresCustomFeeContract("2% falling to zero in 24 hours")).toBe(false);
+ expect(requiresCustomFeeContract("No buyback and burn; only pay my creator wallet")).toBe(false);
+});
 
 it("detects a copied platform default without treating an explicit user rate as an assumption",()=>{
  expect(hasInventedPlatformRate(["Total swap fee is 2%, with the fixed 0.5% platform fee included."],"Use 2% total fees",3000)).toBe(true);
@@ -50,4 +58,24 @@ it("keeps the complete custom design when a model also emits unused fixed-core f
   {call,compile:vi.fn()},{loadProductionContext:async()=>production});
  expect(call).toHaveBeenCalledTimes(1);expect(result.selection?.route).toBe("custom-contract");
  expect(result.intent?.requirements.map(rule=>rule.text)).toEqual(value.intentRequirements.map(rule=>rule.text));
+});
+
+it("omits the competing fee-module schema from a fresh stateful build",async()=>{
+ const call=vi.fn().mockResolvedValue({text:JSON.stringify(plan("0.3","1.7")),outputTokens:300,inputTokens:1});
+ await runCustomAI({id:"platform-policy-request-04",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:user}]},undefined,
+  {call,compile:vi.fn()},{loadProductionContext:async()=>production});
+ expect(call).toHaveBeenCalledTimes(1);
+ expect(call.mock.calls[0][0].schema.properties).not.toHaveProperty("composable");
+ expect(call.mock.calls[0][0].schema.properties).not.toHaveProperty("feeChecks");
+ expect(call.mock.calls[0][0].system).not.toContain("Platform fee: 50 bps");
+});
+
+it("binds a first design to its owned message even when the model paraphrases a quote",async()=>{
+ const value=plan("0.3","1.7");
+ value.intentRequirements=value.intentRequirements.map(rule=>({...rule,instruction:"A paraphrase of the user's request."}));
+ const call=vi.fn().mockResolvedValue({text:JSON.stringify(value),outputTokens:300,inputTokens:1});
+ const result=await runCustomAI({id:"platform-policy-request-05",intent:"chat",coin:EMPTY_COIN_SETUP,messages:[{role:"user",content:user}]},undefined,
+  {call,compile:vi.fn()},{loadProductionContext:async()=>production});
+ for(const rule of result.intent!.requirements)expect(rule.origin).toMatchObject({kind:"message",quote:user});
+ expect(call).toHaveBeenCalledTimes(1);
 });

@@ -54,7 +54,7 @@ import type {CheckDiagnostic} from "./check-diagnostic";
 import {canonicalGeneralSourceCatalog,canonicalInterfaceContext} from "./canonical-dependencies.server";
 import {uniswapRoutingContext} from "./uniswap-routing";
 import {designOnlyRequest,explicitSourceBuild,unchangedBuildCommand} from "./build-command";
-import {mechanismKnowledge,mechanismTopics} from "./mechanism-knowledge";
+import {mechanismKnowledge,mechanismTopics,requiresCustomFeeContract} from "./mechanism-knowledge";
 import {SourceProgressPending} from "./source-writer.server";
 import {isSavedDesignQuestion} from "./design-question";
 import type {SourceProgress} from "./source-progress";
@@ -186,7 +186,8 @@ export async function runCustomAI(request: ChatRequest, signal?: AbortSignal,
   const savedGeneralContinuation=unchangedBuildCommand(request)&&context.selection?.route==="custom-contract"
     &&context.selection.state==="selected"&&context.selection.intentRevision===previousIntent?.revision
     &&context.selection.chainId===(request.coin?.chainId??1);
-  const generalOnly=!builderChain(request.coin?.chainId??1).feeCore||Boolean(previousProjectView)||savedGeneralContinuation;
+  const generalOnly=!builderChain(request.coin?.chainId??1).feeCore||Boolean(previousProjectView)||savedGeneralContinuation
+    ||firstDesign&&requiresCustomFeeContract(request.messages.at(-1)?.content??"");
   if(previousProjectView&&!previousIntent)throw new CustomAIError("project-context","Your complete saved design could not be loaded. Reload before continuing.",409);
   const editableRequirements = previousProjectView ? previousIntent?.requirements : previousSpec?.requirements
     ?? (context.draft && intentMatchesCandidate(previousIntent, context.draft) ? previousIntent?.requirements : undefined);
@@ -299,8 +300,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     const proposed=parseIntentRequirements(value.intentRequirements);
     // On the first canonical design, the server already owns the exact
     // authoring request and its history. Earlier conversation is not a saved design.
-    // Bind omitted excerpts to that real message rather
-    // than asking the model to quote it again. This is provenance, not approval;
+    // Bind first-design provenance to that real message rather than relying
+    // on the model to repeat an exact substring. This is provenance, not approval;
     // open choices stay open and existing-design edits keep their strict quotes.
     const author=request.messages.at(-1);
     if(author?.role!=="user")return proposed;
@@ -311,7 +312,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       // Closed rules and unrelated/invalid quotations keep their normal gates.
       const openAnswer=before?.open!=null&&before.kind===rule.kind&&(before.text!==rule.text||before.open!==rule.open)
         &&(!rule.instruction.trim()||rule.instruction.trim()===before.open.trim());
-      return (firstDesign&&!previousIntent&&!rule.instruction.trim()||openAnswer)?{...rule,instruction:author.content}:rule;
+      return (firstDesign&&!previousIntent||openAnswer)?{...rule,instruction:author.content}:rule;
     });
   };
   // Open questions have one authority: their canonical requirement. Do not

@@ -216,11 +216,12 @@ it("stops after one unsuccessful format repair",async()=>{
  expect(call).toHaveBeenCalledTimes(2);
 });
 it("does not replace an invented quote or attach a blank new rule to an existing design",async()=>{
+ const previous=prior();
  const wrong=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
-  {id:"counter",text:"Anyone can increment the counter",kind:"behavior",instruction:"not in this request",open:"Choose a value"},
+  {id:"counter",text:"Only the creator can increment the counter",kind:"behavior",instruction:"not in this request",open:"Choose a value"},
  ]}));
- await expect(runCustomAI(request,undefined,{call:wrong,compile:vi.fn()})).rejects.toMatchObject({code:"intent"});
- const previous=prior(),changed=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[...requirements,
+ await expect(runCustomAI(request,undefined,{call:wrong,compile:vi.fn()},{intent:previous.project.intent})).rejects.toMatchObject({code:"intent"});
+ const changed=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[...requirements,
   {id:"new-rule",text:"A new reward",kind:"behavior",instruction:"",open:"Choose its recipient"},
  ]}));
  await expect(runCustomAI(request,undefined,{call:changed,compile:vi.fn()},{intent:previous.project.intent})).rejects.toMatchObject({code:"intent"});
