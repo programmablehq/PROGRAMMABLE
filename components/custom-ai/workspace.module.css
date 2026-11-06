@@ -305,7 +305,7 @@
 .operationStatus small { display: block; margin-top: 10px; }
 @media (max-width: 740px) {
   .pageBackdrop { background-image: linear-gradient(rgb(0 0 0 / .30), rgb(0 0 0 / .42)), url("/brand/atmosphere/programmable-floral-foreground-mobile-v1.avif"); }
-  .workspace { padding: 8px 12px 12px; }
+  .workspace { padding: 8px 12px max(12px, env(safe-area-inset-bottom)); }
   .conversation { padding: 8px 12px 12px; }
   .studio { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .coinPanel { box-sizing: border-box; }
@@ -355,7 +355,7 @@
 .libraryEmpty .libraryPanel { right:auto; left:0; }
 
 @media (max-width:1100px) {
-  .libraryPanel, .libraryEmpty .libraryPanel { position:fixed; inset-inline:16px; top:auto; bottom:16px; width:auto; max-height:min(70dvh,560px); overflow-y:auto; }
+  .libraryPanel, .libraryEmpty .libraryPanel { position:fixed; inset-inline:16px; top:auto; bottom:calc(16px + env(safe-area-inset-bottom)); width:auto; max-height:min(70dvh,560px); overflow-y:auto; }
 }
 @media (max-width:560px) {
   .chatIdentity { flex:1 1 auto; }

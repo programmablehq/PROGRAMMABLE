@@ -5,6 +5,7 @@ vi.mock("../scripts/custom-ai/artifact-hash.mjs", () => ({ artifactHash: () => "
 vi.mock("../lib/custom-ai/launch.server", () => ({ checkedDeployment: vi.fn(async () => ({})), launchPrice: vi.fn(async () => ({ checked: { expiresAt: Date.now()/1000+60, quote: { decimals: 18, initialBuyRaw: "1000" } } })) }));
 vi.mock("../lib/custom-ai/quote.server", () => ({ inspectCustomAIQuote: vi.fn(async () => ({ status: "compatible", decimals: 18 })) }));
 vi.mock("../lib/custom-ai/transaction.server", () => ({ makeStep: vi.fn(async () => ({ transaction: { gas: "0x5208" } })) }));
+vi.mock("../lib/custom-ai/composable-release.server", () => ({ assertComposableAvailable: vi.fn(async () => { throw Error("External execution is unavailable"); }) }));
 const wallet = "0x1000000000000000000000000000000000000001" as const;
 vi.mock("../lib/custom-ai/chain.server", () => ({ customAIChain: vi.fn(async () => ({
   profile: { wrappedEth: { address: "0x2000000000000000000000000000000000000002" } }, reference: "latest",
@@ -14,11 +15,13 @@ import { prepareLaunch, assertReadyTicket, type LaunchInputs } from "../lib/cust
 import { CUSTOM_AI_BUNDLE_HASH } from "../lib/custom-ai/launch-plan";
 import { designReadiness } from "../lib/custom-ai/readiness";
 import type { AIStore } from "../lib/custom-ai/store.server";
+import { assertComposableAvailable } from "../lib/custom-ai/composable-release.server";
 const sourceHash = createHash("sha256").update("source").digest("hex");
 const input: LaunchInputs = { draftId: "draft-fixture-0001", imageId: "image-fixture-0001", account: wallet,
   settings: { name: "Example", symbol: "EX", chainId: 1, quote: "0x2000000000000000000000000000000000000002", initialBuy: "0.01", imageURI: "https://example.com/image.webp" } };
 let values: Map<string, unknown>; let store: AIStore;
 beforeEach(() => {
+  vi.clearAllMocks();
   values = new Map();
   store = { read: async () => ({ state: "completed", result: { draft: { source: "source", sourceHash, artifact: { initCode: "0x1234" }, validation: { status: "passed", artifactHash: "artifact" },
     verification: { status: "passed", sourceHash }, lifecycle: { status: "passed", bundleHash: CUSTOM_AI_BUNDLE_HASH } } } }),
@@ -28,6 +31,28 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe("one version-bound launch preparation", () => {
+  it("prepares a fee-only timeline without requiring an external execution release", async () => {
+    const original = store.read;
+    store.read = async (...args) => {
+      const job = await original(...args);
+      Object.assign(job!.result!.draft!, { composable: { chainId: 1, feeds: [], spec: { actions: [], creatorShareBps: 10000 } } });
+      return job;
+    };
+    expect((await prepareLaunch(store, "alice", input)).state).toBe("ready");
+    expect(assertComposableAvailable).not.toHaveBeenCalled();
+  });
+  it.each(["feed", "action"])("retains the external release check for a %s", async kind => {
+    const original = store.read;
+    store.read = async (...args) => {
+      const job = await original(...args);
+      Object.assign(job!.result!.draft!, { composable: { chainId: 1,
+        feeds: kind === "feed" ? [{ id: "london-rain" }] : [],
+        spec: { actions: kind === "action" ? [{ kind: "liquidity" }] : [] } } });
+      return job;
+    };
+    await expect(prepareLaunch(store, "alice", input)).rejects.toThrow("External execution is unavailable");
+    expect(assertComposableAvailable).toHaveBeenCalledOnce();
+  });
   it("keeps a saved plan distinct from a checked hook without asking to describe it again",()=>{
     expect(designReadiness({checked:false,hasDesign:true,name:"",symbol:"",image:false,connected:true}))
       .toMatchObject({state:"needs-input",message:expect.stringContaining("build your hook")});

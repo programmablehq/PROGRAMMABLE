@@ -14,6 +14,12 @@ export function stablePlannedRuleIds(value: Record<string, unknown>, previous: L
   const edits = value.ruleEdits as Array<Record<string, unknown>>;
   if (rules.some(rule => !rule || typeof rule !== "object") || edits.some(edit => !edit || typeof edit !== "object")) return value;
   const prior = new Map(previous.requirements.map(rule => [rule.id, rule]));
+  // Some planners echo the entire unchanged design instead of its compact
+  // preserve form. Collapse only an exact, complete echo; never hide edits.
+  if (value.intentMode === "preserve" && rules.length === prior.size && new Set(rules.map(rule => rule.id)).size === prior.size
+    && rules.every(rule => { const saved = prior.get(String(rule.id)); return saved && saved.text === rule.text && saved.kind === rule.kind && saved.open === rule.open; })
+    && edits.every(edit => edit.operation === "replace" && prior.has(String(edit.requirementId))))
+    return { ...value, intentRequirements: [], ruleEdits: [] };
   const removed = edits.filter(edit => typeof edit.requirementId === "string" && prior.has(edit.requirementId)
     && !rules.some(rule => rule.id === edit.requirementId) && ["remove", "replace"].includes(String(edit.operation))
     && typeof edit.instruction === "string" && edit.instruction.trim() && latest.includes(edit.instruction));

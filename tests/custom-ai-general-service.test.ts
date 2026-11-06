@@ -273,8 +273,19 @@ it.each(["Bitte noch nicht bauen.","Wie würdest du den gespeicherten Entwurf ba
  expect(value.change).toBe("unchanged");expect(compiler).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
 });
 
+it("dispatches the saved build when a status answer repeats the complete unchanged design",async()=>{
+ const previous=prior(),save=vi.fn(async()=>{}),compiler=vi.fn(compile),content="Build the complete saved design now";
+ const call=vi.fn().mockResolvedValueOnce(plan({action:"answer",intentMode:"preserve",
+  intentRequirements:previous.project.intent.requirements.map(({id,text,kind,open})=>({id,text,kind,open,instruction:""})),
+  ruleEdits:[{requirementId:"counter",operation:"replace",instruction:content}],reply:"The design is saved."})).mockResolvedValueOnce(generated());
+ const value=await runCustomAI({...request,messages:[{role:"user",content}]},undefined,
+  {call,compile:vi.fn(),compileProject:compiler},{intent:previous.project.intent,saveProject:save});
+ expect(value.generalProject).toBeDefined();expect(value.intent).toEqual(previous.project.intent);
+ expect(call).toHaveBeenCalledTimes(2);expect(compiler).toHaveBeenCalledOnce();expect(save).toHaveBeenCalledOnce();
+});
+
 it.each([
- {intentRequirements:requirements,ruleEdits:[]},
+ {intentRequirements:requirements.map((rule,index)=>index===0?{...rule,text:"Only the owner can increment the counter"}:rule),ruleEdits:[]},
  {intentRequirements:[],ruleEdits:[{requirementId:"counter",operation:"remove",instruction:"remove counter"}]},
 ])("never hides additions or removals inside an unchanged build: %j",async patch=>{
  const previous=prior(),compiler=vi.fn(),call=vi.fn().mockResolvedValue(plan({intentMode:"preserve",...patch}));

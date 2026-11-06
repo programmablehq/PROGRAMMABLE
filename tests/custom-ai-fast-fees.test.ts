@@ -43,6 +43,18 @@ describe("structured fee schedules",()=>{
   expect(result.productBlueprint?.components.map(component=>component.id)).toEqual(["fixed-fee-module"]);
   expect(result.reply).toBe(completedBuildReply());
  });
+ it("builds an unchanged saved design when the planner repeats all of its rules",async()=>{
+  const first=await runCustomAI(initialRequest,undefined,{call:async()=>plan(),compile:vi.fn()});
+  mocks.compile.mockClear();const content="Build the saved design";
+  const call=vi.fn(async()=>plan({intentMode:"preserve",intentRequirements:first.intent!.requirements.map(rule=>({
+   id:rule.id,text:rule.text,kind:rule.kind,open:rule.open,instruction:""})),
+   ruleEdits:[{requirementId:"fee",operation:"replace",instruction:content}]}));
+  const result=await runCustomAI({...initialRequest,id:"unchanged-build-0001",contextId:initialRequest.id,draftId:initialRequest.id,
+   messages:[...initialRequest.messages,{role:"user",content}]},undefined,{call,compile:vi.fn()},
+   {intent:first.intent,draft:first.draft,productBlueprint:first.productBlueprint});
+  expect(result.change).toBe("applied");expect(result.intent?.revision).toBe(first.intent?.revision);
+  expect(call).toHaveBeenCalledOnce();expect(mocks.compile).toHaveBeenCalledOnce();
+ });
  it("applies a short timer edit to the saved curve including its final phase",async()=>{
   const first=await runCustomAI(initialRequest,undefined,{call:async()=>plan(),compile:vi.fn()});
   mocks.compile.mockClear();

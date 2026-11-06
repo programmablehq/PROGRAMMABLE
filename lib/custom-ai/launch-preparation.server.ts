@@ -24,7 +24,7 @@ export async function prepareLaunch(store: AIStore, owner: string, input: Launch
     || draft.lifecycle.bundleHash !== CUSTOM_AI_BUNDLE_HASH || draft.verification.sourceHash !== draft.sourceHash
     || artifactHash(draft.artifact) !== draft.validation.artifactHash || hashSource(draft.source) !== draft.sourceHash) throw new CustomAIError("rules", "Finish checking this design in the chat first.", 422);
   if (!intentMatchesCandidate(draft.intent, draft)) throw new CustomAIError("intent", "The complete design does not match this contract revision.", 422);
-  if (draft.composable) await assertComposableAvailable(draft.composable);
+  if (draft.composable && (draft.composable.feeds.length || draft.composable.spec.actions.length)) await assertComposableAvailable(draft.composable);
   if (draft.feed && process.env.CUSTOM_AI_EVENTS_ENABLED !== "true" || draft.program && process.env.CUSTOM_AI_PROGRAMS_ENABLED !== "true") throw new CustomAIError("deployment", "This design needs a capability that is not active on this network yet.", 503);
   const image = await store.readObject<{ url: string }>(owner, "image", input.imageId);
   if (image?.value.url !== settings.imageURI) throw new CustomAIError("image", "Choose a coin image first.", 422);

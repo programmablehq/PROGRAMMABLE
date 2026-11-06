@@ -260,8 +260,8 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     const response=await structuredCall(planningInput);
     const answer=parseAnswer(response.text);
     const compact=discussionOnly?{...answer,program:null,eventRule:null,composable:null,feeChecks:[],implementedRequirementIds:[],launchRequested:false}:answer;
-    const value: Record<string, unknown> = generalOnly ? { ...compact, executionRoute: "custom-contract", program: null, eventRule: null,
-      composable: null, feeChecks: [], implementedRequirementIds: [] } : compact;
+    const value = stablePlannedRuleIds(generalOnly ? { ...compact, executionRoute: "custom-contract", program: null, eventRule: null,
+      composable: null, feeChecks: [], implementedRequirementIds: [] } : compact, previousIntent, request.messages.at(-1)!.content);
     if(discussionOnly&&value.action==="build")throw new CustomAIError("plan","This turn is for the design only. Your existing source is kept.",502);
     if(value.action==="answer"&&value.intentMode==="preserve"&&previousIntent?.requirements.length
       &&!intentHasOpenParts(previousIntent)&&!request.editTarget
@@ -271,7 +271,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       context.onProgress?.({type:"reply",text:""});
       return {...value,action:"build",launchRequested:false};
     }
-    return stablePlannedRuleIds(value, previousIntent, request.messages.at(-1)!.content);
+    return value;
   };
   // A continuation selects the existing canonical intent. There is no new
   // design choice for a model to infer, repeat or silently change.
