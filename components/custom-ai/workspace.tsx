@@ -26,6 +26,7 @@ import { useChatLibrary } from "./chat-library";
 import { useAIReply } from "./use-ai-reply";
 import { canMigrateLegacyCache, scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
 import { bindPromptHandoff, createPromptHandoff, type PromptHandoff } from "@/lib/custom-ai/prompt-handoff";
+import {clearGuestDraft,readGuestDraft,writeGuestDraft} from "@/lib/custom-ai/guest-draft";
 import { cachedGeneralProjectView, type GeneralProjectView } from "@/lib/custom-ai/project-view";
 import { cachedProjectOverview, overviewFromView, type ProjectOverview } from "@/lib/custom-ai/project-overview";
 import { GeneralProjectPreview } from "./general-preview";
@@ -52,6 +53,7 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
   // transaction connector here can hide the chat while its signer reconnects.
   // WalletProvider still enforces that connector for all signing operations.
   const authReady=wallet.authReady!==false;
+  useEffect(()=>{if(!localPreview&&authReady&&owner!=="signed-out")clearGuestDraft();},[localPreview,authReady,owner]);
   // Adjust this transient state before committing children for a changed
   // identity. A subsequent account must never mount with the prior prompt.
   if(pendingPrompt&&!localPreview&&authReady){
@@ -65,10 +67,11 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
   const acceptPrompt=(id:string)=>setPendingPrompt(current=>current?.id===id?undefined:current);
   const boundPrompt=pendingPrompt?.principal===wallet.sessionOwner&&pendingPrompt?.account===owner?pendingPrompt:undefined;
   const connectPrompt=(content:string)=>{
+    writeGuestDraft(content);
     setPendingPrompt(content.trim()?createPromptHandoff(content):undefined);
     wallet.openWallet();
   };
-  const invalidatePrompt=(content:string)=>setPendingPrompt(current=>current&&current.content!==content.trim()?undefined:current);
+  const invalidatePrompt=(content:string)=>{writeGuestDraft(content);setPendingPrompt(current=>current&&current.content!==content.trim()?undefined:current);};
   const headers: AISessionHeaders = async (): Promise<Record<string, string>> => {
     if (localPreview) return {};
     const access = await wallet.getAccessToken();
@@ -91,6 +94,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
   type RetryBase = { messages: ChatMessage[]; pendingChange?: string };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  useEffect(()=>{if(signedOut){const saved=readGuestDraft();if(saved)setInput(current=>current||saved);}},[signedOut]);
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [requestSaved,setRequestSaved]=useState(false);

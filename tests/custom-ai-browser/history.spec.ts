@@ -119,6 +119,28 @@ test('the visible connect action preserves the current idea without calling the 
  await expect(box).toHaveValue('Build my hook on Base after I sign in');expect(f.calls).toEqual([]);
 });
 
+test('a guest idea survives reload and then moves through the explicit sign-in handoff',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?signed-out=1');
+ const box=page.getByRole('textbox',{name:'Describe your coin or ask a question'});
+ await box.fill('A fee that falls over 24 hours');await page.reload();
+ await expect(box).toHaveValue('A fee that falls over 24 hours');
+ await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+ await page.getByRole('button',{name:'Finish sample connection',exact:true}).click();
+ await expect(box).toHaveValue('A fee that falls over 24 hours');
+ expect(await page.evaluate(()=>sessionStorage.getItem('programmable.custom-ai.guest-input.v1'))).toBeNull();
+ expect(f.calls).toEqual([]);
+});
+
+test('an unsubmitted guest idea is not adopted by a newly signed-in account',async({page})=>{
+ const f=await fixture(page);await page.goto(origin+'/?signed-out=1');
+ const box=page.getByRole('textbox',{name:'Describe your coin or ask a question'});
+ await box.fill('Not submitted to this account');
+ await page.getByRole('button',{name:'Finish sample connection',exact:true}).click();
+ await expect(box).toHaveValue('');
+ expect(await page.evaluate(()=>sessionStorage.getItem('programmable.custom-ai.guest-input.v1'))).toBeNull();
+ expect(f.calls).toEqual([]);
+});
+
 test('editing an idea after cancelling sign-in revokes its earlier pending handoff',async({page})=>{
  const f=await fixture(page);await page.goto(origin+'/?signed-out=1');const box=page.getByRole('textbox',{name:'Describe your coin or ask a question'});
  await expect(box).toBeEditable();await box.fill('Earlier abandoned idea');await box.press('Enter');

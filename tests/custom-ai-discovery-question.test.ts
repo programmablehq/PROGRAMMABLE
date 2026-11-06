@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 import { isDiscoveryQuestion } from "../lib/custom-ai/discovery-question";
 import type { ChatRequest } from "../lib/custom-ai/types";
 import { isBriefChat } from "../lib/custom-ai/reply-mode";
+import {starterIdeas} from "../lib/custom-ai/builder-capabilities";
 
 const request = (content: string): ChatRequest => ({ id: "discovery-question-test", intent: "chat", messages: [{ role: "user", content }] });
 
 describe("read-only builder questions", () => {
+  it("routes the visible Explore ideas starter to the brief reply",()=>{
+    const prompt=starterIdeas.find(idea=>idea.title==="Explore ideas")!.prompt;
+    expect(isDiscoveryQuestion(request(prompt))).toBe(true);
+    expect(isBriefChat(request(prompt))).toBe(true);
+  });
   it.each([
     "Hey, was könnte ich hier bauen? Erstmal nur Ideen, bitte noch nichts bauen.",
     "Was kannst du bauen?", "Was kannst du?", "Was geht hier so?", "Was ist hier möglich?", "Hast du Ideen?", "Welche Hooks könnte ich erstellen?", "Was können wir hier machen?",
@@ -13,6 +19,8 @@ describe("read-only builder questions", () => {
     "Give me some ideas for a hook", "Show me examples", "Gib mir ein paar Ideen", "Zeig mir Beispiele",
     "What could we make? Please don’t build anything yet.",
     "Was kannst du bauen? Nenn mir drei Ideen.", "What can you do? Give me some examples.",
+    "What can we build? Give me three different, concrete coin ideas.",
+    "Was kann ich bauen? Gib mir drei konkrete Coin-Ideen.",
   ])("uses the small reply schema for %s", content => {
     expect(isDiscoveryQuestion(request(content))).toBe(true);
     expect(isBriefChat(request(content))).toBe(true);
@@ -33,6 +41,7 @@ describe("read-only builder questions", () => {
     "What can you build? Please switch my coin to Base.",
     "What can you build? Give me a token named Ideas.",
     "What can you do? Give me ideas and set my coin name to Ideas.",
+    "What can we build? Give me three different, concrete coin ideas and build the first one.",
     "What can you build could you change my fee to 3%",
     "Hast du Ideen kannst du den Coin auf Base bauen",
     "Was kannst du? Kannst du meinen Coin bauen?",
