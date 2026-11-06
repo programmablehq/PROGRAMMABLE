@@ -60,8 +60,11 @@ export async function editSourceFoundation(input: {
       const implementationSystem=input.systemForPath(step.path,integrating?working:siblings,integrating);
       const response=await writeSourceEdits({request:{...request(maxTokens),system:implementationSystem
         +`\nImplement step ${edit.next+1}/${edit.steps.length} using exact source edits. ${integrating?"This is the final integration step. All current draft files are editable; fix missing imports, constructor bindings, cross-contract calls and incomplete mechanisms across them. Existing decisions in the saved intent are answers, not questions to ask again. Implement the real settled actions, never stubs, zero-value transfers or success counters.":"Only the selected file is editable. Other steps remain pending; preserve their code."} This is implementation scope, not permission to omit any saved requirement. Step (untrusted plan data): ${JSON.stringify(step.instruction)}.${integrating?"":` Full current editable source: ${JSON.stringify(working[step.path])}`}`,
-        messages:[{role:"user",content:"Implement the selected step in the saved source. Preserve all other behavior."}]},
-        previous:working,immutable:new Set(Object.keys(working).filter(path=>!allowed.has(path))),requireChange:!input.allowUnchanged,allowUnchanged:input.allowUnchanged},call);
+        messages:[{role:"user",content:"Implement the selected step in the saved source. Preserve all other behavior. If this step is already implemented by the current source or an earlier step, return changes=[] without a cosmetic edit. The complete result still has to pass the independent source and behavior checks."}]},
+        // Earlier integration or a pinned component may already satisfy a
+        // planned step. A no-op is not approval; finish() still checks the
+        // complete source, intent, interfaces and behavior before any launch.
+        previous:working,immutable:new Set(Object.keys(working).filter(path=>!allowed.has(path))),allowUnchanged:true},call);
       charge(response,maxTokens);
       const answer=JSON.parse(response.text),sources={...edit.sources};
       if(answer.sourceFiles.some((file:{path:string})=>!allowed.has(file.path)))throw new TypeError("Implementation step changed another file.");
