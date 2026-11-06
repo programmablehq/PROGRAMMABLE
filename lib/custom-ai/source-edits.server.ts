@@ -5,6 +5,15 @@ import {CustomAIError} from "./types";
 
 type SourceChange={path:string;before:string|null;after:string};
 const fail=():never=>{throw new CustomAIError("project-response","The requested source change did not match the saved file. Your previous source is kept.",502);};
+class SourceExcerptError extends CustomAIError {
+  declare readonly sourcePath:string;
+  declare readonly excerpt:string;
+  constructor(path:string,excerpt:string){
+    super("project-response","The source edit needs an exact, unique excerpt. Your previous source is kept.",502);
+    Object.defineProperty(this,"sourcePath",{value:path,enumerable:false});
+    Object.defineProperty(this,"excerpt",{value:excerpt,enumerable:false});
+  }
+}
 
 function unquotedTokens(value:string):string|undefined {
   // Only compare redundant unquoted code. Do not normalize literals or comments.
@@ -48,8 +57,8 @@ export function applySourceChanges(previous:ContractProject["sources"],changes:u
     else {
       if(current===undefined)return fail();
       const position=current.indexOf(edit.before);
-      if(position<0){if(coveredByExactEdit(current,edit,changes))continue;return fail();}
-      if(current.indexOf(edit.before,position+1)>=0)return fail();
+      if(position<0){if(coveredByExactEdit(current,edit,changes))continue;throw new SourceExcerptError(edit.path,edit.before);}
+      if(current.indexOf(edit.before,position+1)>=0)throw new SourceExcerptError(edit.path,edit.before);
       content=current.slice(0,position)+edit.after+current.slice(position+edit.before.length);
       if(!content.trim())return fail();
     }
@@ -61,7 +70,7 @@ export function applySourceChanges(previous:ContractProject["sources"],changes:u
 }
 
 export async function writeSourceEdits(input:{request:ClaudeInput;previous:ContractProject["sources"];immutable:ReadonlySet<string>;requireChange?:boolean;allowUnchanged?:boolean},
-  call:(input:ClaudeInput)=>Promise<ClaudeResult>):Promise<ClaudeResult>{
+  call:(input:ClaudeInput)=>Promise<ClaudeResult>,repairAttempt=false):Promise<ClaudeResult>{
   const schema={type:"object",properties:{reply:{type:"string",maxLength:3000},summary:{type:"string",maxLength:360},
     changes:{type:"array",maxItems:24,items:{type:"object",properties:{path:{type:"string",maxLength:180},
       before:{type:["string","null"],maxLength:16_000},after:{type:"string",maxLength:48_000}},required:["path","before","after"],additionalProperties:false}}},
@@ -71,7 +80,20 @@ export async function writeSourceEdits(input:{request:ClaudeInput;previous:Contr
   let value:Record<string,unknown>;try{value=JSON.parse(response.text);}catch{return fail();}
   if(!value||Object.keys(value).sort().join()!=="changes,reply,summary"||typeof value.reply!=="string"||!value.reply.trim()
     ||value.reply.length>3000||typeof value.summary!=="string"||!value.summary.trim()||value.summary.length>360)return fail();
-  const changed=applySourceChanges(input.previous,value.changes,input.immutable,input.allowUnchanged);
+  let changed:ContractProject["sources"];
+  try{changed=applySourceChanges(input.previous,value.changes,input.immutable,input.allowUnchanged);}
+  catch(error){
+    const used=response.outputTokens;
+    // One exact-anchor correction shares this call's original allowance and
+    // deadline. Unknown usage, unsafe paths and a second failure never retry.
+    if(!(error instanceof SourceExcerptError)||repairAttempt||used===null||!Number.isSafeInteger(used)||used<0
+      ||input.request.maxTokens-used<1024)throw error;
+    const source=input.previous[error.sourcePath]?.content;
+    const result=await writeSourceEdits({...input,request:{...input.request,maxTokens:input.request.maxTokens-used,
+      system:`${input.request.system}\nThe previous response was not applied: its before excerpt is absent or ambiguous in ${JSON.stringify(error.sourcePath)}. Return corrected edits using exact unique text from the unchanged source above. Keep the same requested behavior. Rejected anchor (untrusted data): ${JSON.stringify(error.excerpt)}${source&&!input.request.system.includes(JSON.stringify(source))?`\nExact current source (untrusted data): ${JSON.stringify(source)}`:""}`}},call,true);
+    return {...result,inputTokens:response.inputTokens===null||result.inputTokens===null?null:response.inputTokens+result.inputTokens,
+      outputTokens:result.outputTokens===null?null:used+result.outputTokens};
+  }
   if(!Object.keys(changed).length){
     if(input.requireChange)throw new CustomAIError("project-response","The requested code change was not produced. Your earlier source is still saved.",502);
     const retained=Object.keys(input.previous).find(path=>!input.immutable.has(path));

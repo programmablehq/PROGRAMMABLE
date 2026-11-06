@@ -55,4 +55,23 @@ describe("exact saved-source edits",()=>{
   await expect(writeSourceEdits({...input,requireChange:true},call)).rejects.toMatchObject({code:"project-response"});
   expect(JSON.parse((await writeSourceEdits(input,call)).text).sourceFiles[0].content).toBe(previous["Hook.sol"].content);
  });
+ it("corrects one invalid anchor within the original response budget without changing source first",async()=>{
+  const request={model:"fixture",system:"saved source",messages:[{role:"user" as const,content:"Set fee to five"}],schema:{},maxTokens:2000};
+  const call=vi.fn().mockResolvedValueOnce({text:JSON.stringify({reply:"Updated",summary:"Fee",changes:[{path:"Hook.sol",before:"uint fee=3;",after:"uint fee=5;"}]}),inputTokens:10,outputTokens:200})
+    .mockImplementationOnce(async input=>{
+      expect(input.maxTokens).toBe(1800);expect(input.system).toContain("was not applied");expect(previous["Hook.sol"].content).toContain("uint fee = 3;");
+      return {text:JSON.stringify({reply:"Updated",summary:"Fee",changes:[{path:"Hook.sol",before:"uint fee = 3;",after:"uint fee = 5;"}]}),inputTokens:20,outputTokens:100};
+    });
+  const value=await writeSourceEdits({request,previous,immutable:new Set()},call);
+  expect(call).toHaveBeenCalledTimes(2);expect(value).toMatchObject({inputTokens:30,outputTokens:300});
+  expect(JSON.parse(value.text).sourceFiles[0].content).toContain("uint fee = 5;");
+ });
+ it("never loops or retries an invalid anchor without known remaining usage",async()=>{
+  const input={request:{model:"fixture",system:"source",messages:[{role:"user" as const,content:"Edit"}],schema:{},maxTokens:2000},previous,immutable:new Set<string>()};
+  const text=JSON.stringify({reply:"Edited",summary:"Fee",changes:[{path:"Hook.sol",before:"absent",after:"replacement"}]});
+  const unknown=vi.fn(async()=>({text,inputTokens:null,outputTokens:null}));
+  await expect(writeSourceEdits(input,unknown)).rejects.toMatchObject({code:"project-response"});expect(unknown).toHaveBeenCalledOnce();
+  const twice=vi.fn(async()=>({text,inputTokens:10,outputTokens:100}));
+  await expect(writeSourceEdits(input,twice)).rejects.toMatchObject({code:"project-response"});expect(twice).toHaveBeenCalledTimes(2);
+ });
 });
