@@ -481,13 +481,14 @@ Use action=answer for proposals or explanations, clarify for a missing material 
         change:"blocked",pendingRevision:pending,unresolved:[...new Set([...previousIntent.unresolved,...pending.issues])]};
     }
   }
-  const update: Pick<ChatResult,"setupPatch"|"replyLocale"|"verificationInstruction"|"productBlueprint"> = { ...coinUpdate(interpreted, request), replyLocale:buildReplyLocale(interpreted.replyLocale ?? context.replyLocale),
+  const update: Pick<ChatResult,"setupPatch"|"replyLocale"|"verificationInstruction"|"productBlueprint"|"pendingRevision"> = { ...coinUpdate(interpreted, request), replyLocale:buildReplyLocale(interpreted.replyLocale ?? context.replyLocale),
     ...(context.verificationInstruction?{verificationInstruction:context.verificationInstruction}:{}) };
   const intent = revised?.intent ?? previousIntent;
   const pendingRuleIds=previousIntent?.requirements.filter(rule=>pendingRevision?.issues.includes(rule.text)).map(rule=>rule.id)??[];
   const resolvedPending=Boolean(revised&&revised.intent.revision!==previousIntent?.revision&&!revised.problems.length
     &&pendingRuleIds.every(id=>revised.intent.changes.some(change=>change.requirementId===id)));
   const retainedPending=pendingRevision&&!resolvedPending?pendingRevision:undefined;
+  if(retainedPending)update.pendingRevision=retainedPending;
   const coin = applyCoinSetupPatch(request.coin ?? EMPTY_COIN_SETUP, update.setupPatch ?? {});
   const implementationGaps = plan.action === "build" && intent && plan.executionRoute !== "custom-contract" ? intentImplementationGaps(intent,
     plan.composable?.requirements ?? plan.requirements.map(text => ({ text }))) : [];
@@ -534,7 +535,7 @@ Use action=answer for proposals or explanations, clarify for a missing material 
     ?{nextAction:{kind:"prepare-launch",sourceId}}:{};
   if (plan.action === "build" && (open.length || intent && intentHasOpenParts(intent))) return { reply: open.find(question=>/[?？]\s*$/u.test(question))??"Your complete design is saved. The open items below still need resolving before I can build the source.", ...update, ruleSpec: previousSpec ?? plan.composable,
     intent, memory: plan.memory, change: "blocked", unresolved: open, ...(researched ? { chargedAs: "research", sources } : {}) };
-  if (plan.action !== "build") return { ...(retainedPending?{pendingRevision:retainedPending}:{}),reply: revised?.problems.length
+  if (plan.action !== "build") return { reply: revised?.problems.length
     ?open.find(question=>/[?？]\s*$/u.test(question))??"Part of that change could not be applied. Your saved rules are kept."
     :discussionOnly&&intent?settledDesignReply(plan.reply,update.replyLocale):plan.reply, ...update, memory: plan.memory,
     ...launchAction(request.draftId,plan.action==="answer"&&intent?.revision===previousIntent?.revision&&Boolean(previousProjectView?.compiled&&previousProjectView.scenarios?.passed&&previousProjectView.productBlueprintId===update.productBlueprint?.id||context.draft?.compiled&&context.draft.validation?.status==="passed")),

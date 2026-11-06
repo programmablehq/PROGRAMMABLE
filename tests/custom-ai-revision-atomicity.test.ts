@@ -117,4 +117,16 @@ describe("atomic saved-design revisions", () => {
       {call,compile:vi.fn()},{...context(),pendingRevision});
     expect(result.pendingRevision).toEqual(pendingRevision);expect(result.unresolved).toContain(previous.requirements[0].text);
   });
+  it("retains a pending validation error when a conversational build is blocked, including after reload",async()=>{
+    const pendingRevision={instruction,issues:["Every changed closed rule needs its original ID."]};
+    const call=vi.fn().mockResolvedValue(response({...proposal(true),action:"build",intentMode:"preserve",setupPatch:{},ruleEdits:[],
+      intentRequirements:previous.requirements.map(({id,text,kind,open})=>({id,text,kind,open,instruction:""}))}));
+    const result=await runCustomAI({...request,messages:[{role:"user",content:"Please turn the current rules into source."}]},undefined,
+      {call,compile:vi.fn()},{...context(),pendingRevision});
+    expect(result.change).toBe("blocked");expect(result.pendingRevision).toEqual(pendingRevision);
+    const reloadCall=vi.fn();
+    const reloaded=await runCustomAI({...request,intent:"build"},undefined,{call:reloadCall,compile:vi.fn()},
+      {...context(),intent:result.intent,pendingRevision:result.pendingRevision,unresolved:result.unresolved});
+    expect(reloadCall).not.toHaveBeenCalled();expect(reloaded.pendingRevision).toEqual(pendingRevision);
+  });
 });
