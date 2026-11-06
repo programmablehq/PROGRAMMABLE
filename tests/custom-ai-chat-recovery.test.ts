@@ -79,6 +79,25 @@ describe("durable chat retry and streaming", () => {
     const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...request,draftId:prior.id,contextId:prior.id})}));
     expect(response.status).toBe(200);expect(read.mock.calls.filter(([,id])=>id===prior.id)).toHaveLength(1);expect(runtime.run).toHaveBeenCalledTimes(1);
   });
+  it("retains the saved independent source findings when resuming a source draft",async()=>{
+    const store=runtime.store as ReturnType<typeof createAIStore>,prior={...request,id:"previous-source-audit-01"};
+    const lease=(await store.reserve(runtime.owner,prior)).lease!;
+    const project=createContractProject({compiler:{version:GENERAL_PROJECT_COMPILER,optimizerRuns:1000,viaIR:false,evmVersion:"cancun"},
+      sources:{"Hook.sol":{content:"pragma solidity 0.8.26; contract Hook {}"}},entrypoints:[{source:"Hook.sol",contract:"Hook",role:"hook"}]},
+      {version:1,id:"design",revision:"a".repeat(64),requirements:[{id:"fees",text:"Use only collected fees",kind:"constraint",open:null,origin:{kind:"legacy"}}],changes:[],unresolved:[]},1);
+    const projectHash=project.hash,artifactHash=`sha256:${"b".repeat(64)}` as const;
+    const sourceAudit={status:"changes_required",projectHash,findings:[{code:"FEE_ACCOUNTING",requirementId:"fees",message:"Keep paid fees separate from outstanding reserves."}]};
+    await store.finish(runtime.owner,prior.id,lease,{reply:"Source saved",generalProject:{projectHash,artifactHash,summary:"Fee split"}} as never);
+    vi.spyOn(store.projects,"read").mockResolvedValueOnce({project,compilation:{artifactHash},sourceAudit} as never);
+    runtime.run.mockImplementationOnce(async(_input,_signal,_deps,context)=>{
+      const draft=await context.loadGeneralProject();
+      expect(draft.sourceAudit).toEqual(sourceAudit);
+      return {reply:"The saved correction is retained",change:"unchanged"};
+    });
+    const response=await POST(new Request("https://programmable.market/api/custom-ai",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({...request,draftId:prior.id,contextId:prior.id})}));
+    expect(response.status,await response.text()).toBe(200);expect(runtime.run).toHaveBeenCalledTimes(1);
+  });
   it("does not dispatch when cancellation wins immediately after reservation",async()=>{
     const store=runtime.store as ReturnType<typeof createAIStore>,reserve=store.reserve;
     vi.spyOn(store,"reserve").mockImplementationOnce(async(owner,input,profile)=>{

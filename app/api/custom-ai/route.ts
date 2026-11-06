@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       context.loadGeneralProject=async()=>{
         const saved=await store.projects.read(authority.owner,input.draftId!);
         if(!saved?.compilation||saved.project.hash!==view.projectHash||saved.compilation.artifactHash!==view.artifactHash)throw new CustomAIError("project-context","Your saved contract source could not be found. Reload it before continuing.",409);
-        return {version:1,reply:current.reply,summary:view.summary,project:saved.project,compilation:saved.compilation,...(saved.blueprintId?{blueprintId:saved.blueprintId}:{}),...(saved.scenarios?{scenarios:saved.scenarios}:{}),
+        return {version:1,reply:current.reply,summary:view.summary,project:saved.project,compilation:saved.compilation,...(saved.blueprintId?{blueprintId:saved.blueprintId}:{}),...(saved.sourceAudit?{sourceAudit:saved.sourceAudit}:{}),...(saved.scenarios?{scenarios:saved.scenarios}:{}),
           selection:selectExecutionRoute(saved.project.intent,saved.project.chainId,{route:"custom-contract",requirementIds:saved.project.intent.requirements.map(rule=>rule.id),missingCapabilities:[]}),requirementCoverage:"proposed",launchReady:false};
       };
     }
