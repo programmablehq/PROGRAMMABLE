@@ -23,11 +23,11 @@ export function isDiscoveryQuestion(request: Pick<ChatRequest, "intent" | "messa
   const commands = question.slice(capability[0].length)
     .replace(/\b(?:please\s+)?(?:do not|don['’]t)\s+(?:build|create|launch|deploy)(?:\s+anything)?(?:\s+yet)?\b/gu, "")
     .replace(/\b(?:bitte\s+)?(?:noch\s+)?nicht(?:s)?\s+(?:bauen|erstellen|launchen|deployen)\b/gu, "")
-    .replace(/\b(?:give me|gib mir|nenne? mir)\s+(?:(?:please|some|more|a few|two|three|bitte|ein paar|noch|mehr|zwei|drei|\d+)\s+)*(?:ideas?|examples?|ideen|beispiele)\b/gu, "");
+    .replace(/\b(?:give me|gib mir|nenne? mir)\s+(?:(?:please|some|more|a few|two|three|different|concrete|creative|simple|practical|bitte|ein paar|noch|mehr|zwei|drei|verschiedene|konkrete|kreative|einfache|\d+)[\s,]+)*(?:(?:coin|token|hook)[-\s]+)?(?:ideas?|examples?|ideen|beispiele)\b/gu, "");
   const followup = String.raw`(?:^\s*|[.!?;,]\s*|\b(?:and|then|also|und|dann|danach)\s+)`;
   const polite = String.raw`(?:(?:please|now|bitte|jetzt|noch)\s+)*`;
   const modal = String.raw`(?:(?:can|could|would|will)\s+you|(?:kannst|konntest|wurdest|willst)\s+du|(?:konnt|konntet|wurdet|wollt)\s+ihr|(?:konnen|konnten|wollen|sollen)\s+wir)\s+`;
-  const action = String.raw`(?:build|make|create|launch\w*|deploy\w*|change|update|add|remove|set|send|transfer|withdraw|deposit|mint|burn|name|rename|buy|sell|swap|claim|approve|sign|use|switch|give|gib|mach\w*|signier\w*|kauf\w*|verkauf\w*|bau\w*|erstell\w*|ander\w*|fug\w*|entfern\w*|setz\w*|sende\w*|zahl\w*|benenn\w*|nenn\w*|nutze\w*|verwend\w*|wechsel\w*)\b`;
+  const action = String.raw`(?:build|make|create|launch\w*|deploy\w*|change|update|adjust|increase|decrease|raise|lower|reduce|add|remove|set|send|transfer|withdraw|deposit|mint|burn|name|rename|buy|sell|swap|claim|approve|sign|use|switch|give|gib|mach\w*|signier\w*|kauf\w*|verkauf\w*|bau\w*|erstell\w*|ander\w*|erho\w*|senk\w*|reduzier\w*|fug\w*|entfern\w*|setz\w*|sende\w*|zahl\w*|benenn\w*|nenn\w*|nutze\w*|verwend\w*|wechsel\w*)\b`;
   // A second substantive question may request work with an unfamiliar verb.
   // Preserve it in the planner instead of guessing that it is read-only.
   return !new RegExp(`${followup}${polite}(?:${modal}${polite})?${action}`, "u").test(commands)
