@@ -98,20 +98,22 @@ describe("production context in the existing owned generation handoff", () => {
     }), call = vi.fn(async () => plan({ setupPatch: { chainId: 999 } })), compiler = vi.fn();
     const result = await runCustomAI(request, undefined, { call, compile: vi.fn(), compileProject: compiler }, { ...context(), loadProductionContext: load });
     expect(result.change).toBe("blocked"); expect(result.intent?.requirements).toHaveLength(2);
-    expect(result.setupPatch?.chainId).toBe(999); expect(call).toHaveBeenCalledTimes(1); expect(compiler).not.toHaveBeenCalled();
+    expect(result.setupPatch?.chainId).toBe(999); expect(call).toHaveBeenCalledTimes(2); expect(compiler).not.toHaveBeenCalled();
+    expect(load.mock.calls.map(([chain])=>chain)).toEqual([1,999]);
   });
   it("declares fresh source-blind checks for a network changed in this turn", async () => {
     const load = vi.fn(async (chain: BuilderChainId) => production(chain)), saved: ContractProject[] = [];
     const call = vi.fn(async (input: ClaudeInput) => {
       if (call.mock.calls.length === 1) return plan({ setupPatch: { chainId: 999 } });
       expect(input.system).toContain(production(999).id);
-      if (call.mock.calls.length === 2) { expect(input.system).not.toContain("pragma solidity"); return response({ generalChecks: JSON.stringify(declaration) }); }
+      if (call.mock.calls.length === 2) { expect(input.task).toBe("planning"); return plan({setupPatch:{chainId:999}}); }
+      if (call.mock.calls.length === 3) { expect(input.system).not.toContain("pragma solidity"); return response({ generalChecks: JSON.stringify(declaration) }); }
       return generated();
     });
     await runCustomAI(request, undefined, { call, compile: vi.fn(), compileProject: compile }, { ...context(), loadProductionContext: load,
       saveBlueprint: async blueprint => { expect(blueprint.chainId).toBe(999); expect(blueprint.production?.id).toBe(production(999).id); },
       saveProject: async project => { saved.push(project); } });
-    expect(load.mock.calls.map(([chain]) => chain)).toEqual([1, 999]); expect(call).toHaveBeenCalledTimes(3);
+    expect(load.mock.calls.map(([chain]) => chain)).toEqual([1, 999]); expect(call).toHaveBeenCalledTimes(4);
     expect(saved[0].production?.chainId).toBe(999); expect(saved[0].chainId).toBe(999);
   });
 });

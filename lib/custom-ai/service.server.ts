@@ -502,7 +502,7 @@ Use action=answer for proposals or explanations, clarify for a missing material 
     const previous=previousProjectView?await loadPreviousProject():undefined;
     const evmVersion=previous?.project.compiler.evmVersion??context.projectCompilerTarget??"cancun";
     let selectedProduction=production;
-    if(context.loadProductionContext&&selectedProduction?.chainId!==coin.chainId){
+    if(context.loadProductionContext&&planningChain!==coin.chainId){
       selectedProduction=undefined;
       try{selectedProduction=checkedLaunchProductionContext(await context.loadProductionContext(coin.chainId,signal),coin.chainId);}
       catch(error){signal?.throwIfAborted();if(!(error instanceof CustomAIError)||error.code!=="launch-context")throw error;}

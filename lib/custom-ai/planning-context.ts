@@ -25,7 +25,7 @@ export function simpleFeePlanning(request:ChatRequest,intent?:LaunchIntent) {
 /** Policy and known infrastructure are relevant to a conversation. The full
  * execution graph is retained by the server and supplied to source planning. */
 export function planningProductionContext(context:LaunchProductionContext) {
-  return {version:context.version,chainId:context.chainId,route:context.route,profileVersion:context.profileVersion,
+  return {version:context.version,id:context.id,chainId:context.chainId,route:context.route,profileVersion:context.profileVersion,
     tradeFee:{policyVersion:context.tradeFee.policyVersion,ratePpm:context.tradeFee.ratePpm,collection:context.tradeFee.collection},
     protections:context.protections,
     ...(context.protectionPolicy?{protectionPolicy:{required:context.protectionPolicy.required,appliesTo:context.protectionPolicy.appliesTo}}:{}),
