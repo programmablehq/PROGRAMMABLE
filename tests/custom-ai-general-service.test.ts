@@ -220,7 +220,8 @@ it("does not replace an invented quote or attach a blank new rule to an existing
  const wrong=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[
   {id:"counter",text:"Only the creator can increment the counter",kind:"behavior",instruction:"not in this request",open:"Choose a value"},
  ]}));
- await expect(runCustomAI(request,undefined,{call:wrong,compile:vi.fn()},{intent:previous.project.intent})).rejects.toMatchObject({code:"intent"});
+ const blocked=await runCustomAI(request,undefined,{call:wrong,compile:vi.fn()},{intent:previous.project.intent});
+ expect(blocked.change).toBe("blocked");expect(blocked.intent?.requirements).toEqual(previous.project.intent.requirements);
  const changed=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[...requirements,
   {id:"new-rule",text:"A new reward",kind:"behavior",instruction:"",open:"Choose its recipient"},
  ]}));
