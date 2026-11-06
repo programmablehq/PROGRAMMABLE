@@ -31,6 +31,17 @@ type Schema = {
   items?: Schema | Schema[];
 };
 
+/** Empty transport tags contain no arguments or action. Keep every nonempty
+ * envelope for the normal rejection/validation path. Never run its contents. */
+export function stripEmptyToolEnvelopes(text: string): string {
+  for (let count = 0; count < 8; count++) {
+    const next = text.replace(/^\s*<invoke\s+name="[A-Za-z][A-Za-z0-9_-]{0,79}"\s*>\s*<\/invoke>\s*/u, "");
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
 /** Some sellers serialize their structured response as a named parameter
  * envelope. Read only data fields from that exact envelope; never execute
  * a tool, accept an unknown field, or infer missing values. */
@@ -119,6 +130,7 @@ export function prepareSurplusSchema(original: object, validateOriginal = false)
     return value;
   }
   return { schema, decode(text: string) {
+    text = stripEmptyToolEnvelopes(text);
     const parameters = structuredParameters(text,schema);
     if (parameters !== undefined) {
       text = parameters;

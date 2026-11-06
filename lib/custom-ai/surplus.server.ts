@@ -4,14 +4,19 @@ import { CustomAIError } from "./types";
 import { classifyProviderFailure, providerError } from "./provider-errors";
 import { providerHealth } from "./provider-health.server";
 import { readServerEvents } from "./events";
-import { prepareSurplusSchema, SurplusSchemaError } from "./surplus-schema.server";
+import { prepareSurplusSchema, stripEmptyToolEnvelopes, SurplusSchemaError } from "./surplus-schema.server";
 import { ModelResponseError, modelResponseLimits, reportedTokenCount } from "./model-response";
 import { AI_CONFIG } from "./ai-config";
 
 const endpoint = "https://api.surplusintelligence.ai/v1";
-const unexpectedToolEnvelope = (text: string) => {
-  const call = /^\s*<invoke\s+name="([^"]+)"/u.exec(text);
-  return Boolean(call && call[1] !== "structured_output");
+const unexpectedToolEnvelope = (text: string, complete = false) => {
+  const content = stripEmptyToolEnvelopes(text);
+  const call = /^\s*<invoke\s+name="([^"]+)"\s*>/u.exec(content);
+  if (!call || call[1] === "structured_output") return false;
+  const body = content.slice(call[0].length).trimStart();
+  // A streamed closing tag can arrive in several chunks. Decide as soon as
+  // actual content appears; an unfinished response remains rejected at EOF.
+  return complete || body.length > 0 && !"</invoke>".startsWith(body);
 };
 export async function boundedProviderJSON(response: Response, maximum = 512_000) {
   const reader = response.body?.getReader();
@@ -125,7 +130,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   if (finish === "length" || finish === "max_tokens") throw incomplete("output-limit");
   if (finish !== "stop") throw incomplete("missing-end");
   if (!text) throw incomplete("empty-response");
-  if (unexpectedToolEnvelope(text)) throw incomplete("refused");
+  if (unexpectedToolEnvelope(text, true)) throw incomplete("refused");
   if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
   try{return { text: format.decode(text), inputTokens, outputTokens };}
   catch(error){throw new ModelResponseError("invalid-schema",{inputTokens,outputTokens},input.captureIncompleteDeclaration?text:undefined,
