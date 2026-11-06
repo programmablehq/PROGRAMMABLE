@@ -41,10 +41,18 @@ export function checkedProductBindings(value: unknown, scenarios: GeneralCheckSc
   });
   const actions = value.actions.map(item => {
     if (!object(item, ["action", "contract", "signature"]) || !id(item.action) || !id(item.contract) || typeof item.signature !== "string" || item.signature.length > 800) return fail("action reference");
+    let signature = item.signature.trim();
+    if (signature.startsWith("function ")) {
+      try {
+        const [declared] = parseAbi([signature]);
+        if (!declared || declared.type !== "function") return fail("action signature");
+        signature = toFunctionSignature(declared);
+      } catch { return fail("action signature"); }
+    }
     const fixture = fixtures.get(item.contract);
-    const fn = fixture && parseAbi(fixture.functions).find(fn => fn.type === "function" && toFunctionSignature(fn) === item.signature);
+    const fn = fixture && parseAbi(fixture.functions).find(fn => fn.type === "function" && toFunctionSignature(fn) === signature);
     if (!fn || fn.type !== "function") return fail(`action ${item.action} is absent from its declared interface`);
-    return { action: item.action, contract: item.contract, signature: item.signature };
+    return { action: item.action, contract: item.contract, signature };
   });
   if (new Set(components.map(item => item.component)).size !== components.length || new Set(actions.map(item => item.action)).size !== actions.length) return fail("duplicate identity");
   if (product) {
@@ -71,4 +79,4 @@ export function checkedProductBindings(value: unknown, scenarios: GeneralCheckSc
   return { version: 1, components, actions };
 }
 
-export const PRODUCT_BINDING_RULES = `When the saved productBlueprint is present, productBindings links each token, hook and vault component to one fixed graph contract id. Also bind adapter components that have an onchain contract; offchain readers stay unbound. Several product components may share a contract. Map every contract-targeted interface action to its component's same contract and one exact public function signature. Inspect actions are view/pure; claim, deposit, withdraw and vote actions change state. Include a successful example of each bound action with that action's requirement IDs. These bindings are source interfaces, not live addresses, approvals or service deployment. External services and interface-only components do not acquire contract bindings.`;
+export const PRODUCT_BINDING_RULES = `When the saved productBlueprint is present, productBindings links each token, hook and vault component to one fixed graph contract id. Also bind adapter components that have an onchain contract; offchain readers stay unbound. Several product components may share a contract. Map every contract-targeted interface action to its component's same contract and one exact public function signature, such as liquidity() or balanceOf(address), without the function prefix, return values or mutability keywords. Inspect actions are view/pure; claim, deposit, withdraw and vote actions change state. Include a successful example of each bound action with that action's requirement IDs. These bindings are source interfaces, not live addresses, approvals or service deployment. External services and interface-only components do not acquire contract bindings.`;

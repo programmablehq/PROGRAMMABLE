@@ -60,12 +60,21 @@ describe("product actions bound to independently declared contract functions",()
     expect(schema.required).toContain("productBindings");
     expect(interfaceSchemaForGraph({contracts:declaration.contracts},false).required).not.toContain("productBindings");
   });
+  it("normalizes complete function declarations to the same checked action bindings",()=>{
+    const verbose={...bindings,actions:bindings.actions.map((action,index)=>({...action,signature:declaration.contracts[0].functions[index]}))};
+    expect(checkedProductBindings(verbose,blueprint.scenarios,blueprint.entrypoints,product)).toEqual(bindings);
+    const normalized=createGeneralCheckBlueprint({...declaration,productBindings:verbose},intent,999,"cancun",undefined,undefined,product.id);
+    expect(normalized.id).toBe(blueprint.id);
+    expect(normalized.productBindings).toEqual(bindings);
+  });
   it("rejects an invented method, missing action, wrong component and read/write substitution",()=>{
     for(const edit of [
       (b:typeof bindings)=>{b.actions[1].signature="steal()";},
       (b:typeof bindings)=>{b.actions.pop();},
       (b:typeof bindings)=>{b.components[0].component="other";},
       (b:typeof bindings)=>{b.actions[1].signature="balances(address)";},
+      (b:typeof bindings)=>{b.actions[1].signature="function balances(address) view returns (uint256)";},
+      (b:typeof bindings)=>{b.actions[2].signature="function balances(uint256) view returns (uint256)";},
     ]){const b=structuredClone(bindings);edit(b);expect(()=>checkedProductBindings(b,blueprint.scenarios,blueprint.entrypoints,product)).toThrow();}
     const missing={...blueprint.scenarios,steps:blueprint.scenarios.steps.filter(step=>step.id!=="claim")};
     expect(()=>checkedProductBindings(bindings,missing,blueprint.entrypoints,product)).toThrow(/successful example/);
