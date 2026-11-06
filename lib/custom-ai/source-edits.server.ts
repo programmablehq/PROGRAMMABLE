@@ -6,6 +6,30 @@ import {CustomAIError} from "./types";
 type SourceChange={path:string;before:string|null;after:string};
 const fail=():never=>{throw new CustomAIError("project-response","The requested source change did not match the saved file. Your previous source is kept.",502);};
 
+function unquotedTokens(value:string):string|undefined {
+  // Only compare redundant unquoted code. Do not normalize literals or comments.
+  if(/["'`]|\/\/|\/\*|\*\//u.test(value))return undefined;
+  const tokens=value.match(/[A-Za-z_$][A-Za-z0-9_$]*|0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?|>>=|<<=|\+\+|--|\*\*|&&|\|\||==|!=|<=|>=|<<|>>|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|=>|\S/gu);
+  return tokens?.length?`\0${tokens.join("\0")}\0`:undefined;
+}
+
+function coveredByExactEdit(current:string,edit:SourceChange,changes:unknown[]):boolean {
+  if(edit.before===null)return false;
+  const before=unquotedTokens(edit.before),after=unquotedTokens(edit.after);
+  if(!before||!after)return false;
+  const containsOnce=(text:string|undefined,part:string)=>text!==undefined&&text.indexOf(part)>=0&&text.indexOf(part)===text.lastIndexOf(part);
+  return changes.some(value=>{
+    const other=value as SourceChange;
+    if(!other||other===edit||other.path!==edit.path||typeof other.before!=="string"||!other.before||typeof other.after!=="string")return false;
+    const at=current.indexOf(other.before);
+    // The replacement still uses exact bytes at one unique source location.
+    // A second model suggestion can only be skipped if this exact edit already
+    // contains the same before/after token sequence. Never fuzzy-match source.
+    return at>=0&&current.indexOf(other.before,at+1)<0&&containsOnce(unquotedTokens(other.before),before)
+      &&containsOnce(unquotedTokens(other.after),after);
+  });
+}
+
 /** Apply all edits to a private copy. A before excerpt must identify exactly
  * one location in the current file; immutable dependency paths never change. */
 export function applySourceChanges(previous:ContractProject["sources"],changes:unknown,immutable:ReadonlySet<string>,allowUnchanged=false):ContractProject["sources"] {
@@ -24,7 +48,8 @@ export function applySourceChanges(previous:ContractProject["sources"],changes:u
     else {
       if(current===undefined)return fail();
       const position=current.indexOf(edit.before);
-      if(position<0||current.indexOf(edit.before,position+1)>=0)return fail();
+      if(position<0){if(coveredByExactEdit(current,edit,changes))continue;return fail();}
+      if(current.indexOf(edit.before,position+1)>=0)return fail();
       content=current.slice(0,position)+edit.after+current.slice(position+edit.before.length);
       if(!content.trim())return fail();
     }
