@@ -10,6 +10,10 @@ describe("saved design replies",()=>{
     ["Die Regeln bleiben gleich. Möchtest du, dass ich den Plan speichere?","Die Regeln bleiben gleich."],
     ["The project fee stays separate. Shall I save this as the plan?","The project fee stays separate."],
     ["The rule is clear. Would you like me to save this design?","The rule is clear."],
+    ["Der Plan steht. Sollen wir das so speichern?","Der Plan steht."],
+    ["Die Regeln bleiben gleich. Möchtest du den Entwurf so speichern?","Die Regeln bleiben gleich."],
+    ["The plan is clear. Shall we save it?","The plan is clear."],
+    ["The rule is clear. Do you want this plan saved?","The rule is clear."],
     ["Which recipient gets the rest?\nShould I save the plan?","Which recipient gets the rest?"],
   ])("removes only the redundant save question: %s",(reply,expected)=>{
     expect(withoutSaveConfirmation(reply)).toBe(expected);
@@ -24,6 +28,8 @@ describe("saved design replies",()=>{
     "Soll ich die restlichen 30 % an dich senden?",
     "Which wallet should receive the project fees?",
     "The draft is saved. Should I save",
+    "Can I record you?",
+    "Do you want me saved?",
   ])("preserves a real choice, quotation or partial question: %s",reply=>{
     expect(withoutSaveConfirmation(reply)).toBe(reply);
   });

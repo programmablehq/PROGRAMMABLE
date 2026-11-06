@@ -2,13 +2,14 @@ import type { ChatMessage, ChatRequest } from "./types";
 import { isDiscoveryQuestion } from "./discovery-question";
 
 const saveQuestions = [
-  {start:/^(?:soll(?:te)?|darf|kann) ich\b|^(?:möchtest|willst) du,? dass ich\b/u,
+  {start:/^(?:soll(?:te)?|darf|kann) ich\b|^(?:sollen|sollten|wollen|dürfen|können) wir\b|^(?:möchtest|willst) du\b/u,
     verbs:new Set(["speichern","speichere","abspeichern","abspeichere","festhalten","festhalte","notieren","notiere"]),
-    words:new Set("soll sollte darf kann ich das es den die diesen diese so als plan entwurf design regeln idee für dich jetzt unverändert bitte genau speichern speichere abspeichern abspeichere festhalten festhalte notieren notiere möchtest willst du dass".split(" "))},
-  {start:/^(?:shall|should|can|may) i\b|^(?:would you like|do you want|want) me to\b/u,
-    verbs:new Set(["save","record","store"]),
-    words:new Set("shall should can may would you like do want me to i save record store this that it these those the current agreed plan design rules idea as your for now so just please unchanged without building".split(" "))},
+    words:new Set("soll sollte darf kann ich sollen sollten wollen dürfen können wir das es den die diesen diese so als plan entwurf design regeln idee für dich jetzt unverändert bitte genau speichern speichere abspeichern abspeichere festhalten festhalte notieren notiere möchtest willst du dass".split(" "))},
+  {start:/^(?:shall|should|can|may) (?:i|we)\b|^(?:would you like|do you want|want)\b/u,
+    verbs:new Set(["save","saved","record","recorded","store","stored"]),
+    words:new Set("shall should can may would you like do want me us to i we save saved record recorded store stored this that it these those the current agreed plan design rules idea as your for now so just please unchanged without building".split(" "))},
 ];
+const designReferences=new Set("das es plan entwurf design regeln idee this that it these those rules idea".split(" "));
 
 /** Saving a canonical design is a server operation, not a model-authored
  * permission question. Match only a trailing question made entirely from
@@ -20,6 +21,7 @@ export function withoutSaveConfirmation(reply:string):string {
   const question=match[2].normalize("NFKC").trim().toLowerCase();
   if(!/^[\p{L}\s,?]+$/u.test(question))return reply;
   const words=question.match(/\p{L}+/gu)??[];
+  if(!words.some(word=>designReferences.has(word)))return reply;
   if(!saveQuestions.some(rule=>rule.start.test(question)&&words.some(word=>rule.verbs.has(word))&&words.every(word=>rule.words.has(word))))return reply;
   return (reply.slice(0,match.index)+match[1]).trimEnd();
 }
