@@ -23,6 +23,16 @@ describe("editable fee-flow implementation reference",()=>{
   expect(reference?.sources[paths[1]].content).not.toContain('.bindHook(address(this))');
   expect(matchImplementationPattern({...blueprint,chainId:8453},paths)).toBeUndefined();
  });
+ it("reuses a fee-flow hook when the token is already a pinned canonical component",()=>{
+  const {blueprint,paths}=fixture(nativeFeeSplit),token=blueprint.scenarios.contracts[0];
+  const editable=paths.filter(path=>path!==token.source),content="pragma solidity 0.8.26; contract PinnedToken {}";
+  const canonical={sources:{[token.source]:{content}},references:[{source:token.source,contract:token.contract}]};
+  const result=matchImplementationPattern(blueprint,editable,canonical);
+  expect(Object.keys(result!)).toEqual(editable);
+  expect(result![editable[0]].content).toContain("function executeBuyback");
+  expect(result).not.toHaveProperty(token.source);
+  expect(matchImplementationPattern(blueprint,editable,{...canonical,references:[]})).toBeUndefined();
+ });
  it("reuses the fee-flow code for a smaller interface only as an unfinished edit foundation",()=>{
   const {blueprint,paths}=fixture();
   blueprint.scenarios.contracts[0].functions=blueprint.scenarios.contracts[0].functions.slice(0,20);

@@ -35,10 +35,29 @@ function prior():GeneralProjectDraft{
  return {version:1,reply:"Saved",summary:"Counter",project,compilation:{version:1,projectHash:project.hash,artifactHash:`sha256:${"b".repeat(64)}`,compiled:true,compiler:GENERAL_PROJECT_COMPILER,diagnostics:[],contracts:[],verification:"not-run",launchReady:false},selection:selectExecutionRoute(intent,1),requirementCoverage:"proposed",launchReady:false};
 }
 
-it("continues the complete saved design without another interpretation call",async()=>{
+it("continues to the complete source with malformed optional display metadata without a repair call",async()=>{
+ const call=vi.fn().mockResolvedValueOnce(plan({productPlan:{components:"not a component map"}})).mockResolvedValueOnce(generated());
+ const saveProject=vi.fn(async()=>{}),compiler=vi.fn(compile);
+ const value=await runCustomAI(request,undefined,{call,compile:vi.fn(),compileProject:compiler},{saveProject});
+ expect(call).toHaveBeenCalledTimes(2);expect(saveProject).toHaveBeenCalledOnce();expect(compiler).toHaveBeenCalledOnce();
+ expect(value.intent?.requirements.map(rule=>rule.id)).toEqual(["counter","no-owner"]);
+ expect(value.generalProject).toMatchObject({compiled:false});expect(value.productBlueprint).toBeUndefined();
+ expect(value.change).toBe("blocked");expect(value.nextAction).toBeUndefined();
+});
+
+it("keeps material allocation questions even when an optional map misses another requirement",async()=>{
+ const productPlan={components:[{id:"counter",kind:"hook",name:"Counter",purpose:"Receives fees",requirementIds:["counter"],dependsOn:[]}],
+  assets:[{id:"native",kind:"native",name:"ETH"}],flows:[{id:"half",source:"trader",target:"counter",asset:"native",trigger:"swap",purpose:"Half the fees",requirementIds:["counter"],allocationGroup:"fees",shareBps:5000}],services:[],interfaceActions:[]};
+ const call=vi.fn().mockResolvedValueOnce(plan({productPlan})),saveProject=vi.fn();
+ const value=await runCustomAI(request,undefined,{call,compile:vi.fn()},{saveProject});
+ expect(value.change).toBe("blocked");expect(value.unresolved?.join(" ")).toContain("remaining 50%");
+ expect(saveProject).not.toHaveBeenCalled();expect(call).toHaveBeenCalledOnce();
+});
+
+it.each([false,true])("continues the complete saved design without another interpretation call (optional map incomplete: %s)",async(productPlanIncomplete)=>{
  const previous=prior(),saveProject=vi.fn(async()=>{}),call=vi.fn(async()=>generated());
  const value=await runCustomAI({...request,messages:[{role:"user",content:CONTINUE_SAVED_BUILD}]},undefined,{call,compile:vi.fn(),compileProject:compile},
-  {generalProject:previous,saveProject});
+  {generalProject:previous,saveProject,productPlanIncomplete});
  expect(call).toHaveBeenCalledTimes(1);
  expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source");
  expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledTimes(1);
