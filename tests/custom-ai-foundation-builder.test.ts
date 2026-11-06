@@ -5,7 +5,7 @@ vi.mock("../lib/custom-ai/source-foundation.server",()=>({sourceFoundation:vi.fn
 import {buildGeneralContract} from "../lib/custom-ai/general-builder.server";
 import {sourceFoundation} from "../lib/custom-ai/source-foundation.server";
 import {createGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
-import {GENERAL_PROJECT_COMPILER,type ContractProject} from "../lib/custom-ai/contract-project";
+import {createContractProject,GENERAL_PROJECT_COMPILER,type ContractProject} from "../lib/custom-ai/contract-project";
 import type {CompiledProject} from "../lib/custom-ai/contract-project.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import {auditGeneralSource,type SourceAuditFinding} from "../lib/custom-ai/source-audit.server";
@@ -86,6 +86,14 @@ describe("qualified foundations inside the immutable project job",()=>{
     expect(call).toHaveBeenCalledTimes(2);expect(compile).toHaveBeenCalledTimes(3);
     expect(request.saveProject).toHaveBeenCalledOnce();expect(request.saveProject.mock.calls[0][0].hash).toBe(result.project.hash);
     expect(result.project.sources["Counter.sol"].content).toBe(code);expect(result.compilation.compiled).toBe(true);
+  });
+  it("also corrects a newly revealed error while resuming existing source",async()=>{
+    const previous=createContractProject({compiler:blueprint.compiler,sources:{"Counter.sol":{content:code.replace("= 0","= missing")}},entrypoints:blueprint.entrypoints},intent,999);
+    const request=input();let calls=0;
+    const call=vi.fn(async()=>{calls++;return reply({reply:"Fixed the compiler error.",summary:"Counter starts at zero",changes:[{path:"Counter.sol",before:calls===1?"= missing":"= missingAgain",after:calls===1?"= missingAgain":"= 0"}]});});
+    const result=await buildGeneralContract({...request,previous,compilerErrors:[{severity:"error",message:"Original compiler error"}],auditSource:(project:ContractProject)=>audit(project)},undefined,{call,compile:compiled});
+    expect(call).toHaveBeenCalledTimes(2);expect(result.compilation.compiled).toBe(true);
+    expect(request.saveProject).toHaveBeenCalledOnce();expect(result.project.sources["Counter.sol"].content).toBe(code);
   });
   it("fixes a second revealed compiler error inside the original output budget",async()=>{
     vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code.replace("= 0","= missing")}},completeReference:true});

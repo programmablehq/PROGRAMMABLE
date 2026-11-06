@@ -256,7 +256,7 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
     }
     input.onProgress?.({type:"phase",phase:"building"});
   }
-  correctionPolicy.deferredSave=Boolean(foundation&&input.saveSourceProgress);
+  correctionPolicy.deferredSave=Boolean(input.saveSourceProgress&&(foundation||input.compilerErrors?.some(error=>error.severity==="error")));
   const systemForPath=(path:string,completed:ContractProject["sources"],integrating=false)=>{
     const component=sourceImplementationContext({blueprint:blueprint!,dependencies:dependencyContext.complete,
       references:catalog!.contracts,construction:catalog!.construction,includeTemplateBodies:!integrating},path,completed);
