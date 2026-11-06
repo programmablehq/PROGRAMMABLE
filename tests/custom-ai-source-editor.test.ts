@@ -32,6 +32,15 @@ describe("bounded edits on a complete source foundation",()=>{
   expect(saved[0].files).toEqual({});expect(saved[1].editing?.next).toBe(1);
   expect(saved.at(-1)?.editing).toBeUndefined();expect(saved.at(-1)?.files["A.sol"].content).toContain("uint public value");
  });
+ it("finishes a redundant confirmation step without inventing a cosmetic edit",async()=>{
+  const saved:SourceProgress[]=[];let calls=0;
+  const result=await editSourceFoundation({...input,save:async progress=>{saved.push(progress);}},async()=>
+   [reply({steps}),change("A.sol","A"),reply({reply:"Already implemented",summary:"Existing component retained",changes:[]})][calls++]);
+  expect(calls).toBe(3);expect(saved.at(-1)?.editing).toBeUndefined();
+  expect(JSON.parse(result.text).sourceFiles).toEqual([
+   {path:"A.sol",content:"contract A {uint public value;}"},{path:"B.sol",content:seeds["B.sol"].content},
+  ]);
+ });
  it("resumes an interrupted stage without repeating the plan or prior edit",async()=>{
   let saved:SourceProgress|undefined,n=0;
   await expect(editSourceFoundation({...input,save:async progress=>{saved=progress;}},async()=>{
