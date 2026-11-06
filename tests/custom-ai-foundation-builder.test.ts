@@ -40,6 +40,11 @@ describe("qualified foundations inside the immutable project job",()=>{
       :reply({reply:"Counter starts at zero.",summary:"Saved counter implemented",changes:[{path:"Counter.sol",before:"= 2",after:"= 0"}]}));
     const result=await buildGeneralContract({...request,auditSource},undefined,{call,compile});
     expect(call).toHaveBeenCalledTimes(2);expect(compile).toHaveBeenCalledOnce();expect(auditSource).toHaveBeenCalledOnce();
+    for(const [request] of call.mock.calls){
+      expect(request.system).toContain("smallest exact edits");
+      expect(request.system).not.toContain("return the complete contents of each changed");
+      expect(request.system).not.toContain("Return reply first, summary and sourceFiles only");
+    }
     expect(result.project.sources["Counter.sol"].content).toBe(code);
     expect(request.saveProject).toHaveBeenCalledOnce();expect(result.launchReady).toBe(false);
   });
