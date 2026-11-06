@@ -88,7 +88,9 @@ describe("Claude planning and generation", () => {
     ];
     const call=vi.fn().mockResolvedValue(result({reply:"Another option is rewards for holders."})),compile=vi.fn();
     const answer=await runCustomAI({...request,messages},undefined,{call,compile});
-    expect(call).toHaveBeenCalledOnce();expect(call.mock.calls[0][0].messages).toEqual(messages.slice(-3));
+    expect(call).toHaveBeenCalledOnce();expect(call.mock.calls[0][0].messages.slice(0,-1)).toEqual(messages.slice(-3,-1));
+    expect(call.mock.calls[0][0].messages.at(-1).content).toContain(messages.at(-1)!.content);
+    expect(messages.at(-1)!.content).toBe("What else could we build?");
     expect(answer.change).toBe("unchanged");expect(compile).not.toHaveBeenCalled();
   });
   it("asks the first actual open question instead of promising a build or listing every decision",async()=>{
@@ -140,6 +142,21 @@ describe("Claude planning and generation", () => {
     expect(call.mock.calls[0][0]).toMatchObject({ task: "conversation", maxTokens: 800 });
     expect(call.mock.calls[0][0].schema.required).toEqual(["reply"]);
     expect(load).not.toHaveBeenCalled(); expect(compile).not.toHaveBeenCalled();
+  });
+  it("keeps idea replies on the selected network without sending contract source to the conversation model", async () => {
+    const call = vi.fn().mockResolvedValue(result({ reply: "A timed fee is one option." })), compile = vi.fn();
+    const answer = await runCustomAI({ ...request, coin: { name: "Idea", symbol: "IDEA", chainId: 8453, pairToken: "ETH", initialBuy: "", description: "", website: "", x: "", socialPost: "" },
+      messages: [{ role: "user", content: "What could we build here? Give me three different, concrete coin ideas." }] }, undefined,
+    { call, compile }, { draft: { ...draft(true), source: "PRIVATE_SAVED_CONTRACT_SOURCE" }, saveProject: vi.fn() });
+    expect(call).toHaveBeenCalledOnce();
+    const input = call.mock.calls[0][0];
+    expect(input.system).toContain('"network":"Base"');
+    expect(input.system).toContain("source-draft");
+    expect(input.system).not.toContain("PRIVATE_SAVED_CONTRACT_SOURCE");
+    expect(input.system).not.toContain("GeneratedFeeModule");
+    expect(input.system.length).toBeLessThan(6500);
+    expect(answer.change).toBe("unchanged");
+    expect(compile).not.toHaveBeenCalled();
   });
   it("uses only Haiku for a greeting and never compiles it", async () => {
     const call = vi.fn().mockResolvedValue(result({ reply: "What should your coin do?" })); const compile = vi.fn();

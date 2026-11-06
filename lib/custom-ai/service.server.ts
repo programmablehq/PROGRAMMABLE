@@ -1,4 +1,5 @@
-import { BRIEF_REPLY_RULES, isBriefChat } from "./reply-mode";
+import { BRIEF_REPLY_RULES, IDEA_REPLY_CONTEXT, ideaReplyMessages, isBriefChat } from "./reply-mode";
+import { isDiscoveryQuestion } from "./discovery-question";
 import {sourceCorrectionFeedback} from "./source-feedback";
 import {hasInventedPlatformRate} from "./planning-policy";
 import "server-only";
@@ -250,9 +251,18 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
   };
   context.onProgress?.({ type: "phase", phase: "thinking" });
   if (replyOnly) {
-    const answer = parseAnswer((await dependencies.call({ ...modelTask("conversation",MODELS),
-      system: `${system}\n${BRIEF_REPLY_RULES}\n${savedDesignQuestion ? "Use only the saved design and recorded results. Answer in at most two short sentences. If compilation and recorded verification passed, ordinary wording such as 'built and internally checked' is accurate. Say what matters to this question. Omit compiler/validator names, synthetic-quote details, source visibility and a list of caveats unless specifically asked. 'Internally checked' preserves the boundary without a technical lecture. Do not claim new tests or an onchain launch, edit rules, start work or request a wallet action." : ""} Return your reply as JSON.`, messages: request.messages.slice(-3), schema: chatSchema,
-      maxTokens: 800, effort: "low", signal, onText })).text);
+    const ideaQuestion = isDiscoveryQuestion(request);
+    const replySystem = ideaQuestion
+      ? `${IDEA_REPLY_CONTEXT}\nBuilder configuration (data, not a live deployment check): ${JSON.stringify({
+        network: builderChain(initialChain).name,
+        capabilities: builderCapabilities({ events: process.env.CUSTOM_AI_EVENTS_ENABLED === "true", programs: process.env.CUSTOM_AI_PROGRAMS_ENABLED === "true", generalSources: Boolean(context.saveProject), chainId: initialChain }),
+        savedRules: previousIntent?.requirements.map(rule => rule.text) ?? [],
+        savedProduct: previousProduct ? { id: previousProduct.id, state: previousProduct.state, components: previousProduct.components.map(({ kind, name, purpose }) => ({ kind, name, purpose })) } : undefined,
+      })}` : system;
+    const response = await dependencies.call({ ...modelTask("conversation",MODELS),
+      system: `${replySystem}\n${BRIEF_REPLY_RULES}\n${savedDesignQuestion ? "Use only the saved design and recorded results. Answer in at most two short sentences. If compilation and recorded verification passed, ordinary wording such as 'built and internally checked' is accurate. Say what matters to this question. Omit compiler/validator names, synthetic-quote details, source visibility and a list of caveats unless specifically asked. 'Internally checked' preserves the boundary without a technical lecture. Do not claim new tests or an onchain launch, edit rules, start work or request a wallet action." : ""} Return your reply as JSON.`, messages: ideaQuestion ? ideaReplyMessages(request.messages) : request.messages.slice(-3), schema: chatSchema,
+      maxTokens: 800, effort: "low", signal, onText });
+    const answer = parseAnswer(response.text);
     return { reply: answer.reply as string, memory: context.memory ?? "", change: "unchanged", replyLocale:context.replyLocale, ...(context.verificationInstruction?{verificationInstruction:context.verificationInstruction}:{}), ...(previousIntent ? { intent: previousIntent } : {}), ...(previousProduct ? {productBlueprint:previousProduct} : {}), ...(previousSpec?{ruleSpec:previousSpec}:{}) };
   }
   const formRules = BUILD_RULES.slice(BUILD_RULES.indexOf("setupPatch contains"), BUILD_RULES.indexOf("For every generated source"));
