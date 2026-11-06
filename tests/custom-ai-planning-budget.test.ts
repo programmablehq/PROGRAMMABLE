@@ -19,6 +19,17 @@ describe("planning request size",()=>{
     expect(designOnlyRequest(request("Build a hook, but do not build a separate vault."))).toBe(false);
     expect(designOnlyRequest(request("Build it without building a separate backend."))).toBe(false);
     expect(designOnlyRequest(request("Don't just plan it, build the coin."))).toBe(false);
+    for(const text of ["Discuss first, no build yet.","Don’t build yet; explain it first.","Noch nix bauen, erst reden.","Erst besprechen.","Build the coin later; first let's discuss it."])
+      expect(designOnlyRequest(request(text)),text).toBe(true);
+    for(const text of ['Explain "discuss first, no build yet".',"No build errors so far; build it now.","Build a hook but don't build a separate vault."])
+      expect(designOnlyRequest(request(text)),text).toBe(false);
+  });
+  it("keeps a simple fee schedule below the planning budget",async()=>{
+    let captured:ClaudeInput|undefined;
+    const call=async(input:ClaudeInput)=>{captured=input;throw Error("captured");};
+    await expect(runCustomAI({id:"simple-fee-budget-0001",intent:"chat",messages:[{role:"user",content:"Bau einen Coin mit 2% Gebühr, die in 24 Stunden auf null fällt. Die Projektfees gehen an mich."}]},undefined,
+      {call,compile:vi.fn()})).rejects.toThrow("captured");
+    expect(captured!.system.length+JSON.stringify(captured!.schema).length).toBeLessThan(35000);
   });
   it("captures the real first design envelope without a model or network request",async()=>{
     let captured:ClaudeInput|undefined;

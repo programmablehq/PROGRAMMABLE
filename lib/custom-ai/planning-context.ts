@@ -11,15 +11,25 @@ import {reviewProductEconomics} from "./product/economics";
 import {executionContext} from "./execution-trace";
 
 export function plannerNeedsExecution(request:ChatRequest) {
-  return /\d|\b(simulat\w*|scenarios?|examples?|balances?|claims?|payouts?|rewards?|receipts?|results?|beispiele?|szenari\w*|guthaben|auszahl\w*|ergebn\w*)\b/i.test(request.messages.at(-1)?.content??"");
+  return /\b(simulat\w*|scenarios?|examples?|receipts?|results?|beispiele?|szenari\w*|ergebn\w*)\b/i.test(request.messages.at(-1)?.content??"");
+}
+
+/** Only compact the executable vocabulary for an ordinary rate/schedule.
+ * This does not choose the route or remove any saved requirement. */
+export function simpleFeePlanning(request:ChatRequest,intent?:LaunchIntent) {
+  const text=[request.messages.at(-1)?.content??"",...(intent?.requirements.map(rule=>rule.text)??[])].join(" ");
+  return /\b(?:fees?|tax|geb[uü]hr\w*|projektfees)\b/i.test(text)&&/\d\s*(?:%|percent|prozent|bps)/i.test(text)
+    &&!/(?:oracle|weather|wetter|feed|api\b|snapshot|holder|reward|reinvest|buy.?back|burn|vault|liquidity|liquidit|payout|airdrop|volume|volumen|price|preis|mint|supply|blacklist|whitelist|cap\b|limit|auction|bonding|curve|transfer|vesting|perpetual|funding|loyalty|treue|random|zufall|counter|zähler|zaehler|custom|arbitrary|code|contract|solidity|hookdata|router)/i.test(text);
 }
 
 /** Policy and known infrastructure are relevant to a conversation. The full
  * execution graph is retained by the server and supplied to source planning. */
 export function planningProductionContext(context:LaunchProductionContext) {
-  const {graphProfile,...planning}=context;
-  void graphProfile;
-  return planning;
+  return {version:context.version,id:context.id,chainId:context.chainId,route:context.route,profileVersion:context.profileVersion,
+    tradeFee:{policyVersion:context.tradeFee.policyVersion,ratePpm:context.tradeFee.ratePpm,collection:context.tradeFee.collection},
+    protections:context.protections,
+    ...(context.protectionPolicy?{protectionPolicy:{required:context.protectionPolicy.required,appliesTo:context.protectionPolicy.appliesTo}}:{}),
+    configuredInfrastructure:{poolManager:true,executor:true,protectionBindings:Boolean(context.protectionBindings)}};
 }
 
 /** Source inspection is opt-in for checked drafts. Older drafts without a
