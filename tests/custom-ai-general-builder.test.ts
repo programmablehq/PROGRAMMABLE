@@ -43,7 +43,8 @@ describe("general project generation inside the owned AI job", () => {
     const previous=createContractProject({compiler:blueprint.compiler,sources:{"GeneralHook.sol":{content:source}},entrypoints:blueprint.entrypoints},intent,999);
     const call=vi.fn(async()=>({text:JSON.stringify({reply:"Retained the existing source.",summary:"Same saved hook",changes:[]}),inputTokens:1,outputTokens:1}));
     const latest={role:"user" as const,content:"Build the unchanged saved design now."};
-    const result=await buildGeneralContract({...request(),previous,blueprint,messages:[
+    const compilerErrors=[{severity:"error" as const,message:"TypeError: Member getSlot0 requires the StateLibrary extension."}];
+    const result=await buildGeneralContract({...request(),previous,blueprint,compilerErrors,messages:[
       {role:"user",content:"Old draft request"},{role:"assistant",content:"An old incomplete explanation"},latest]},undefined,{call,compile:incompleteBuild});
     const sourceInput=(call.mock.calls[0] as unknown as [ClaudeInput])[0],system=sourceInput.system;
     expect(sourceInput.messages).toEqual([latest]);
@@ -52,6 +53,8 @@ describe("general project generation inside the owned AI job", () => {
     expect(context.previous.entrypointsSource).toBe("fixedChecks.entrypoints");
     expect(context.fixedChecks.compiler).toEqual(previous.compiler);
     expect(context.fixedChecks.entrypoints).toEqual(previous.entrypoints);
+    expect(context.compilerErrors).toEqual(compilerErrors);
+    expect(system).toContain("smallest exact edits");
     expect(context.intent.requirements).toEqual(previous.intent.requirements.map(({id,text,kind,open})=>({id,text,kind,open})));
     expect(result.project.sources).toEqual(previous.sources);
   });

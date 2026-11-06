@@ -59,6 +59,7 @@ export type GeneralProjectDraft = { version: 1; reply: string; summary: string; 
 type Input = { intent: LaunchIntent; chainId: BuilderChainId; messages: ChatMessage[]; evmVersion: "paris" | "cancun";
   productBlueprint?:ProductBlueprint;
   dependencySources?: ContractProject["sources"]; availableDependencySources?: ContractProject["sources"]; previous?: ContractProject; blueprint?:GeneralCheckBlueprint; onProgress?: (event: ChatProgress) => void;
+  compilerErrors?: CompiledProject["diagnostics"];
   production?: LaunchProductionContext;
   saveProject: (project: ContractProject) => Promise<void>;
   loadSourceProgress?:(hash:string)=>Promise<SourceProgress|undefined>;
@@ -198,6 +199,7 @@ export async function buildGeneralContract(input: Input, signal?: AbortSignal,
       "Using the exact existing contract sources.","Saved design using the existing source library");
   }
   const commonContext = { intent: modelDesignContext({ intent }, false).intent, ...(productBlueprint?{productBlueprint}:{}),
+    ...(input.compilerErrors?.length?{compilerErrors:structuredClone(input.compilerErrors.filter(error=>error.severity==="error").slice(0,8))}:{}),
     dependencySources: dependencyContext.modelSources, dependencySourceView: dependencyContext.view, previous,
     ...(compiler.viaIR?{compilerImportAliases:VIAIR_200_REMAPPINGS}:{}),
     ...(blueprint?{fixedChecks:{...blueprint,...(blueprint.production?{production:{id:blueprint.production.id}}:{})}}:{}),...(production?{production,uniswapRouting:uniswapRoutingContext(production)}:{}) };

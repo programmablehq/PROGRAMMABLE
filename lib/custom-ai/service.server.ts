@@ -458,6 +458,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     }
     let generated:Awaited<ReturnType<typeof buildGeneralContract>>;
     try { generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,productBlueprint:update.productBlueprint,
+      compilerErrors:previous&&!previous.compilation.compiled?previous.compilation.diagnostics:undefined,
       loadSourceProgress:resumeUnchanged?context.loadSourceProgress:undefined,saveSourceProgress:context.saveSourceProgress,
       availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject,
       ...(context.saveSourceAudit?{auditSource:(project:ContractProject,auditSignal?:AbortSignal)=>auditGeneralSource(project,auditSignal,{call:dependencies.call}),
