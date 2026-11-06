@@ -42,6 +42,8 @@ describe("read-only builder questions", () => {
     "What can you build? Give me a token named Ideas.",
     "What can you do? Give me ideas and set my coin name to Ideas.",
     "What can we build? Give me three different, concrete coin ideas and build the first one.",
+    "What can we build? Give me three different, concrete coin ideas and increase the fee to 3%.",
+    "Was können wir bauen? Gib mir drei konkrete Coin-Ideen und erhöhe die Gebühren auf 3%.",
     "What can you build could you change my fee to 3%",
     "Hast du Ideen kannst du den Coin auf Base bauen",
     "Was kannst du? Kannst du meinen Coin bauen?",
