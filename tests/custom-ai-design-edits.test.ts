@@ -49,6 +49,15 @@ describe("editing a complete hook design", () => {
     next.actions[0].maximumQuote = "100";
     expect(reviewRuleEdits(previous, next, [edit]).missing).toContain(previous.requirements[2].text);
   });
+  it("compares persisted JSONB field ordering by values without dropping edits",()=>{
+    const stored=JSON.parse(JSON.stringify(previous,(_key,item)=>item&&typeof item==="object"&&!Array.isArray(item)
+      ?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a.localeCompare(b))):item));
+    expect(JSON.stringify(stored)).not.toBe(JSON.stringify(previous));
+    expect(reviewRuleEdits(stored,previous,[]).complete).toBe(true);
+    expect(reviewRuleEdits(stored,revised(),[edit]).complete).toBe(true);
+    const wrong=revised();wrong.actions[0].maximumQuote="100";
+    expect(reviewRuleEdits(stored,wrong,[edit]).complete).toBe(false);
+  });
   it("blocks a recipient, fee allocation or timing change hidden behind an unrelated edit", () => {
     for (const mutate of [
       (next: typeof previous) => { next.actions[0].shareBps = 9000; next.creatorShareBps = 1000; },

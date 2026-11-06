@@ -104,7 +104,8 @@ describe("structured fee schedules",()=>{
    feeChecks:[...checks.slice(0,2),{afterSeconds:21600,buy:true,totalFeeBps:125},{afterSeconds:43200,buy:false,totalFeeBps:50}]}));
   const result=await runCustomAI({...initialRequest,id:"shared-phase-edit-01",contextId:initialRequest.id,draftId:initialRequest.id,
    messages:[...initialRequest.messages,{role:"user",content}]},undefined,{call,compile:vi.fn()},
-   {intent:first.intent,draft:first.draft,productBlueprint:first.productBlueprint});
+   {intent:first.intent,draft:JSON.parse(JSON.stringify(first.draft,(_key,item)=>item&&typeof item==="object"&&!Array.isArray(item)
+     ?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a.localeCompare(b))):item)),productBlueprint:first.productBlueprint});
   expect(call).toHaveBeenCalledOnce();expect(mocks.compile).toHaveBeenCalledOnce();
   expect(result.change).toBe("applied");expect(result.ruleSpec).toEqual(next);
   expect(result.intent?.changes.map(change=>change.requirementId)).toEqual(["fee"]);

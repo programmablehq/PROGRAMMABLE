@@ -91,10 +91,14 @@ export function parseRuleEdits(value: unknown, latestInstruction: string): RuleE
 }
 
 // Compare executable configuration, not just labels or requirement ids.
+function configurationKey(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left.localeCompare(right))) : item);
+}
 function implementation(spec: RuleSpecV2, requirementId: string): string {
   const parts = [...spec.phases, ...spec.actions].filter(part => part.requirementIds.includes(requirementId))
     .map(({ requirementIds, ...part }) => { void requirementIds; return part; }).sort((a, b) => a.id.localeCompare(b.id));
-  return JSON.stringify({ parts, ...(spec.actions.some(action => action.requirementIds.includes(requirementId)) ? { creatorShareBps: spec.creatorShareBps } : {}) });
+  return configurationKey({ parts, ...(spec.actions.some(action => action.requirementIds.includes(requirementId)) ? { creatorShareBps: spec.creatorShareBps } : {}) });
 }
 
 /** Shared phase labels also carry core guarantees and the creator recipient.
@@ -103,11 +107,11 @@ function implementation(spec: RuleSpecV2, requirementId: string): string {
  * is used only for comparison; the new timer still reaches the compiler. */
 function preservedTimingView(previous: RuleSpecV2 | undefined, next: RuleSpecV2, edits: RuleEdit[]): RuleSpecV2 {
   if (!previous || previous.creatorShareBps !== next.creatorShareBps
-    || JSON.stringify(previous.actions) !== JSON.stringify(next.actions)) return next;
+    || configurationKey(previous.actions) !== configurationKey(next.actions)) return next;
   const replaced = new Set(edits.filter(edit => edit.operation === "replace").map(edit => edit.requirementId));
   const untimed = (phase: RuleSpecV2["phases"][number]) => {
     const fee = phase.fee.kind === "ramp" ? { ...phase.fee, durationSeconds: 0 } : phase.fee;
-    return JSON.stringify({ id: phase.id, fee, requirementIds: [...phase.requirementIds].sort() });
+    return configurationKey({ id: phase.id, fee, requirementIds: [...phase.requirementIds].sort() });
   };
   return { ...next, phases: next.phases.map(phase => {
     const before = previous.phases.find(saved => saved.id === phase.id);
