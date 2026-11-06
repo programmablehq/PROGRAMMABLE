@@ -1,4 +1,5 @@
 import { BRIEF_REPLY_RULES, isBriefChat } from "./reply-mode";
+import {sourceCorrectionFeedback} from "./source-feedback";
 import "server-only";
 import { modelDesignContext, plannerNeedsSource, plannerNeedsExecution, planningProductionContext } from "./planning-context";
 import {requestedVerification,interruptedVerification} from "./verification-request";
@@ -458,6 +459,9 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     }
     let generated:Awaited<ReturnType<typeof buildGeneralContract>>;
     try { generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,productBlueprint:update.productBlueprint,
+      compilerErrors:previous&&!previous.compilation.compiled?previous.compilation.diagnostics:undefined,
+      sourceFindings:previous?.sourceAudit?.status==="changes_required"?previous.sourceAudit.findings:undefined,
+      behaviorFailures:previous?.scenarios?.passed===false?sourceCorrectionFeedback(blueprint,previous.compilation,previous.scenarios.failures):undefined,
       loadSourceProgress:resumeUnchanged?context.loadSourceProgress:undefined,saveSourceProgress:context.saveSourceProgress,
       availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject,
       ...(context.saveSourceAudit?{auditSource:(project:ContractProject,auditSignal?:AbortSignal)=>auditGeneralSource(project,auditSignal,{call:dependencies.call}),
@@ -473,8 +477,10 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
       signal?.throwIfAborted();await context.saveScenarios!(generated.scenarios);
     }
     const passed=generated.compilation.compiled&&generated.scenarios?.passed!==false&&generated.sourceAudit?.status!=="changes_required";
+    const sourceIssue=!generated.compilation.compiled?"compiler":generated.sourceAudit?.status==="changes_required"?"source-review"
+      :generated.scenarios?.passed===false?"behavior":undefined;
     return {reply:generalBuildReply(generated, update.replyLocale),
-      intent,selection:generated.selection,generalProject:generalProjectView(generated,update.productBlueprint&&blueprint?createProductImplementation(update.productBlueprint,blueprint,generated.project,generated.compilation,generated.scenarios):undefined),...update,...(verificationInstruction?{verificationInstruction}:{}),...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
+      intent,selection:generated.selection,generalProject:generalProjectView(generated,update.productBlueprint&&blueprint?createProductImplementation(update.productBlueprint,blueprint,generated.project,generated.compilation,generated.scenarios):undefined),...update,...(verificationInstruction?{verificationInstruction}:{}),...(sourceIssue?{buildIssue:{stage:"source",code:sourceIssue}}:{}),...launchAction(request.id,passed&&generated.scenarios?.passed===true),memory:plan.memory,change:passed?"applied":"blocked",chargedAs:"build",...(sources.length?{sources}:{})};
   }
   const coreChainId=feeCoreChainId(coin.chainId);
   if (previousSpec && !plan.composable) return { reply: "This change left out part of your saved design. Keep the complete rule before building.",

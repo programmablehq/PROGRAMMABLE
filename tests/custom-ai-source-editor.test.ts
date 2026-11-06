@@ -25,7 +25,7 @@ describe("bounded edits on a complete source foundation",()=>{
  it("persists exact stages and promotes files only after all planned edits",async()=>{
   const saved:SourceProgress[]=[];let n=0;
   const result=await editSourceFoundation({...input,save:async progress=>{if(saved.length)expect(sourceProgressExtends(saved.at(-1)!,progress)).toBe(true);saved.push(progress);}},async call=>{
-   expect(call.maxTokens).toBeLessThanOrEqual(n?4000:2000);
+   expect(call.maxTokens).toBeLessThanOrEqual(n?8000:2000);
    return [reply({steps}),change("A.sol","A"),change("B.sol","B")][n++];
   });
   expect(n).toBe(3);expect(result.outputTokens).toBe(300);
@@ -41,6 +41,17 @@ describe("bounded edits on a complete source foundation",()=>{
   const call=vi.fn(async()=>change("B.sol","B"));
   const result=await editSourceFoundation({...input,cached:saved,save:async()=>{}},call);
   expect(call).toHaveBeenCalledOnce();expect(JSON.parse(result.text).sourceFiles).toHaveLength(2);
+ });
+ it("uses the existing total budget when a valid implementation edit exceeds its estimate",async()=>{
+  const calls:ClaudeInput[]=[];
+  const result=await editSourceFoundation({...input,paths:["A.sol"],seeds:{"A.sol":seeds["A.sol"]},save:async()=>{}},async call=>{
+   calls.push(call);
+   if(calls.length===1)return reply({steps:[steps[0]]},1500);
+   expect(call.maxTokens).toBeGreaterThanOrEqual(6000);
+   return {...change("A.sol","A"),outputTokens:6000};
+  });
+  expect(result.outputTokens).toBe(7500);expect(calls).toHaveLength(2);
+  expect(JSON.parse(result.text).sourceFiles[0].content).toContain("uint public value");
  });
  it("keeps other draft files immutable within a selected stage",async()=>{
   let saved:SourceProgress|undefined,n=0;

@@ -6,7 +6,7 @@ import { writeSourceEdits } from "./source-edits.server";
 import { ModelResponseError } from "./model-response";
 import { CustomAIError } from "./types";
 
-/** One compiler-directed correction uses only the generation budget left over.
+/** Each compiler-directed correction uses only the generation budget left over.
  * Dependency errors, missing diagnostics and an exhausted budget are not retried. */
 export async function repairCompilerSource(input:{project:ContractProject;compilation:CompiledProject;
   request:ClaudeInput;remainingTokens:number;immutable:ReadonlySet<string>},call:(input:ClaudeInput)=>Promise<ClaudeResult>) {

@@ -43,6 +43,7 @@ it("continues the complete saved design without another interpretation call",asy
  expect((call.mock.calls[0] as unknown as [ClaudeInput])[0].task).toBe("source");
  expect(value.intent).toEqual(previous.project.intent);expect(saveProject).toHaveBeenCalledTimes(1);
  expect(value.nextAction).toBeUndefined();expect(value.generalProject?.launchReady).toBe(false);
+ expect(value.buildIssue).toEqual({stage:"source",code:"compiler"});
 });
 it("retains the saved general route when source generation stopped before creating a file",async()=>{
  const previous=prior(),saveProject=vi.fn(async()=>{}),call=vi.fn(async()=>generated());
