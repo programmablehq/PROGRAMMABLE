@@ -23,7 +23,7 @@ const response=(body:unknown)=>({text:JSON.stringify(body),inputTokens:1,outputT
 const input={intent,chainId:1 as const,evmVersion:"paris" as const,model:"test-model"};
 
 describe("bounded independent check declaration",()=>{
-  it("keeps separate project and canonical-vault ledgers in both planning stages",async()=>{
+  it("keeps protected launch and separate fee-ledger prerequisites in both planning stages",async()=>{
     const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
       .mockResolvedValueOnce(response({steps:JSON.stringify(steps)}));
     const result=await declareGeneralChecks({...input,interfaces:canonicalInterfaceContext(1)},call);
@@ -33,6 +33,8 @@ describe("bounded independent check declaration",()=>{
       expect(request.system).toContain("recordFees(platformFee,0)");
       expect(request.system).toContain("claimCreatorShare()");
       expect(request.system).toContain("NothingToClaim");
+      expect(request.system).toContain("buyer to equal protection.developer()");
+      expect(request.system).toContain("buyer:{account:'creator'}");
       expect(request.system).not.toContain("pragma solidity");
     }
   });
