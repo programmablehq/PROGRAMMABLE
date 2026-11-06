@@ -57,7 +57,7 @@ describe("protocol knowledge and model routing",()=>{
   });
   it("keeps all task choices inside one configured provider's roles",()=>{
     const models={chat:"provider/planner",build:"provider/builder",escalation:"provider/repair"};
-    expect(modelTask("planning",models)).toMatchObject({model:models.chat,structuredTransport:"json-object"});
+    expect(modelTask("planning",models)).toMatchObject({model:models.build,structuredTransport:"json-object",effort:"medium"});
     expect(modelTask("declaration-correction",models)).toMatchObject({model:models.build,maxTokens:8000});
     expect(modelTask("source-audit",models)).toMatchObject({model:models.escalation,maxTokens:3500});
     expect(modelTask("scenarios",models)).toMatchObject({model:models.escalation,maxTokens:4000});

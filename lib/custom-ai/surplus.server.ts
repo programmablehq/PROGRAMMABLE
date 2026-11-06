@@ -83,7 +83,10 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     // These calls return data only. Lookups are separately bounded server
     // actions; never delegate shell or other tool execution to a seller.
     tool_choice: "none",
-    ...(input.model.startsWith("claude-") ? { provider: AI_CONFIG.surplusClaudeProviders, provider_order: AI_CONFIG.surplusClaudeProviders } : {}),
+    // The low-cost Haiku sellers do not serve every Sonnet/Opus route.
+    // Keep their pin scoped to Haiku; other configured models use Surplus's
+    // authorized routing rather than being rejected by an unrelated pin.
+    ...(input.model.startsWith("claude-haiku-") ? { provider: AI_CONFIG.surplusClaudeProviders, provider_order: AI_CONFIG.surplusClaudeProviders } : {}),
     ...(stream ? { stream_options: { include_usage: true } } : {}),
     messages: [{ role: "system", content: jsonObject?`${input.system}\nReturn exactly one JSON object matching this schema. Every field and type is validated locally; do not use markdown or omit required fields. Schema: ${JSON.stringify(input.schema)}`:input.system }, ...input.messages],
     response_format: jsonObject?{type:"json_object"}:{ type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },

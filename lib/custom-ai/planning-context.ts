@@ -1,4 +1,4 @@
-import type {ChatRequest,Draft} from "./types";
+import type {ChatRequest,ChatResult,Draft} from "./types";
 import type {LaunchIntent} from "./launch-intent";
 import type {RuleSpecV2} from "./rule-spec";
 import type {GeneralProjectDraft} from "./general-builder.server";
@@ -48,7 +48,7 @@ export function modelIntentContext(intent:LaunchIntent) {
   return {version:intent.version,id:intent.id,revision:intent.revision,parentRevision:intent.parentRevision,
     requirements:intent.requirements.map(({id,text,kind,open})=>({id,text,kind,open})),unresolved:intent.unresolved};
 }
-export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;intent?:LaunchIntent;productBlueprint?:ProductBlueprint;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView;canonicalSources?:ContractProject["sources"];includeExecution?:boolean},includeSource:boolean){
+export function modelDesignContext(input:{memory?:string;pendingRevision?:ChatResult["pendingRevision"];ruleSpec?:RuleSpecV2;intent?:LaunchIntent;productBlueprint?:ProductBlueprint;editTarget?:ChatRequest["editTarget"];draft?:Draft;generalProject?:GeneralProjectDraft;generalProjectView?:GeneralProjectView;canonicalSources?:ContractProject["sources"];includeExecution?:boolean},includeSource:boolean){
   const {draft,intent,generalProject}=input;
   const projectView=generalProject?generalProjectView(generalProject):input.generalProjectView;
   const original=includeSource&&generalProject?generalProject.project.sources:undefined;
@@ -56,7 +56,7 @@ export function modelDesignContext(input:{memory?:string;ruleSpec?:RuleSpecV2;in
   const dependencies=fixed?dependencySourceContext(fixed):undefined;
   const sources=original?{...original,...dependencies?.modelSources}:undefined;
   return {
-    memory:input.memory,ruleSpec:input.ruleSpec,editTarget:input.editTarget,productBlueprint:input.productBlueprint,
+    memory:input.memory,pendingRevision:input.pendingRevision,ruleSpec:input.ruleSpec,editTarget:input.editTarget,productBlueprint:input.productBlueprint,
     ...(input.productBlueprint?{productEconomics:reviewProductEconomics(input.productBlueprint)}:{}),
     // Full provenance and change history stay in the server-owned revision.
     // The model needs every stable rule and open choice, not repeated quotes.

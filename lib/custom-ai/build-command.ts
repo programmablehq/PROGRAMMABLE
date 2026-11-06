@@ -1,4 +1,5 @@
 import type { ChatRequest } from "./types";
+import { localizedDiscussionBoundary } from "./discovery-question";
 
 export const CONTINUE_SAVED_BUILD = "Build and verify the current saved design. Keep every saved rule unchanged. Do not launch, send a transaction or prepare a wallet request.";
 
@@ -14,7 +15,8 @@ export function designOnlyRequest(request:Pick<ChatRequest,"intent"|"messages">)
     ||/\b(?:only|just)\s+(?:want\s+to\s+)?(?:discuss|plan|explore|brainstorm|shape|design)\b/.test(text)
     ||/\b(?:discuss|plan|explore|brainstorm|design)\s+(?:it\s+)?first\b/.test(text)
     ||/\bfirst[,;:]?\s+(?:let's\s+|let us\s+)?(?:discuss|plan|explore|brainstorm)\b/.test(text)
-    ||/\b(?:erst|erstmal|zuerst|nur)\s+(?:besprechen|reden|planen|überlegen|brainstormen)\b/.test(text);
+    ||/\b(?:erst|erstmal|zuerst|nur)\s+(?:besprechen|reden|planen|überlegen|brainstormen)\b/.test(text)
+    ||localizedDiscussionBoundary(text);
 }
 
 /** Exact continuation commands only. Changes, questions and quoted instructions

@@ -163,12 +163,12 @@ describe("Claude planning and generation", () => {
     expect(await runCustomAI({ ...request, messages: [{ role: "user", content: "Hi!" }] }, undefined, { call, compile })).toMatchObject({ reply: "What should your coin do?", change: "unchanged" });
     expect(call.mock.calls[0][0].model).toBe(MODELS.chat); expect(compile).not.toHaveBeenCalled();
   });
-  it("answers substantive questions without paying for a code-generation call", async () => {
+  it("uses the planning model for substantive questions without generating source", async () => {
     const call = vi.fn().mockResolvedValue(plan("answer", { feeChecks: [] })); const compile = vi.fn();
     await runCustomAI(request, undefined, { call, compile });
-    expect(call).toHaveBeenCalledTimes(1); expect(call.mock.calls[0][0].model).toBe(MODELS.chat);
-    expect(call.mock.calls[0][0].structuredTransport).toBeUndefined();
-    expect(call.mock.calls[0][0].effort).toBe("low");
+    expect(call).toHaveBeenCalledTimes(1); expect(call.mock.calls[0][0].model).toBe(MODELS.build);
+    expect(call.mock.calls[0][0].structuredTransport).toBe("json-object");
+    expect(call.mock.calls[0][0].effort).toBe("medium");
     expect(compile).not.toHaveBeenCalled();
   });
   it("interprets a confirmation before generation and checks its independent examples", async () => {
@@ -177,7 +177,7 @@ describe("Claude planning and generation", () => {
     const answer = await runCustomAI({ ...request, contextId: "previous-context-001", messages: [
       { role: "assistant", content: "I can build that schedule." }, { role: "user", content: "okay" },
     ] }, undefined, { call, compile });
-    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.chat, MODELS.build]);
+    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.build, MODELS.build]);
     expect(compile).toHaveBeenCalledWith("contract GeneratedFeeModule {}", undefined, checks, undefined);
     expect(answer.draft?.verification).toMatchObject({ status: "passed", checks, cases: 8 });
   });
@@ -200,7 +200,7 @@ describe("Claude planning and generation", () => {
     const call = vi.fn().mockResolvedValueOnce(plan()).mockResolvedValue(generated());
     const compile = vi.fn().mockResolvedValueOnce(draft(false)).mockResolvedValueOnce(draft(false)).mockResolvedValueOnce(draft(true));
     const answer = await runCustomAI({ ...request, intent: "build" }, undefined, { call, compile });
-    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.chat, MODELS.build, MODELS.build, MODELS.escalation]);
+    expect(call.mock.calls.map(([input]) => input.model)).toEqual([MODELS.build, MODELS.build, MODELS.build, MODELS.escalation]);
     expect(compile.mock.calls.every(args => JSON.stringify(args[2]) === JSON.stringify(checks))).toBe(true);
     expect(answer.change).toBe("applied");
   });
