@@ -36,7 +36,8 @@ const pair = (buy: number, sell: number) => buy === sell ? `${feePercent(buy)} o
 export function feeSummary(fee: FeeExpression,feeds:readonly FeedFormat[]=[]): string {
   if (fee.kind === "fixed") return pair(fee.buyBps, fee.sellBps);
   if (fee.kind === "ramp") {
-    const direction = fee.fromBuyBps <= fee.toBuyBps && fee.fromSellBps <= fee.toSellBps ? "rises" : "changes";
+    const direction = fee.fromBuyBps <= fee.toBuyBps && fee.fromSellBps <= fee.toSellBps ? "rises"
+      : fee.fromBuyBps >= fee.toBuyBps && fee.fromSellBps >= fee.toSellBps ? "falls" : "changes";
     return `${pair(fee.fromBuyBps, fee.fromSellBps)} → ${pair(fee.toBuyBps, fee.toSellBps)} over ${ruleDuration(fee.durationSeconds)} (${direction} linearly)`;
   }
   return `If ${conditionSummary(fee.when,feeds)}: ${feeSummary(fee.then,feeds)}. Otherwise: ${feeSummary(fee.otherwise,feeds)}.`;

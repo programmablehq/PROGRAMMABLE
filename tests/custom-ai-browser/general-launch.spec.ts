@@ -205,7 +205,7 @@ test('current status updates the original accepted submission without repeating 
  await pauseTime(page);const f=await fixture(page);await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
  await expect(page.getByText('Checking the saved source and preparing your launch.',{exact:true})).toBeVisible();expect(f.statusReads).toBe(1);
  f.currentStatus='wallet_action_ready';await page.getByRole('button',{name:'Check current status'}).click();
- await expect(page.getByText('Your submission has wallet steps to review.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);
+ await expect(page.getByText('Review the next step in your wallet.',{exact:true})).toBeVisible();expect(f.posts.map(body=>body.action)).toEqual(['prepare','create']);
  await expect(page.getByLabel('Chat editing')).toHaveText('Available');expect(f.errors).toEqual([]);
 });
 test('a failed current-status read preserves the accepted link and can be checked explicitly',async({page})=>{
@@ -233,7 +233,7 @@ test('status polling stops after twenty reads and does not catch up after laptop
 });
 test('a terminal stored status stops background reads and keeps its original link',async({page})=>{
  await pauseTime(page);const f=await fixture(page);f.currentStatus='expired';await page.goto(origin);await page.getByRole('button',{name:'Launch coin',exact:true}).click();
- await expect(page.getByText('This submission expired. Open its details to continue.',{exact:true})).toBeVisible();
+ await expect(page.getByText('This launch request expired. Open its details to continue.',{exact:true})).toBeVisible();
  await page.clock.fastForward(3600000);expect(f.statusReads).toBe(1);await expect(page.getByRole('link',{name:'Open submission',exact:true})).toBeVisible();expect(f.posts).toHaveLength(2);
 });
 test('a late status from the previous wallet cannot appear in the newly selected wallet',async({page})=>{

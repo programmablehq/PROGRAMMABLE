@@ -166,9 +166,9 @@ test("starter ideas fill the composer without spending a request", async ({page}
   let calls=0;
   await page.route("**/api/custom-ai",route=>{calls++;return route.fulfill({json:{reply:"Unexpected request"}});});
   await page.goto("/launch/custom-ai");
-  await page.getByRole("button",{name:"A falling launch fee"}).click();
+  await page.getByRole("button",{name:"A 2% fee that falls over 24 hours"}).click();
   const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});
-  await expect(box).toHaveValue(/5%.*1%.*10 minutes/);
+  await expect(box).toHaveValue(/2%.*0.5%.*24 hours/);
   await expect(box).toBeFocused();
   await expect(page.getByRole("button",{name:"Launch coin"})).toHaveCount(0);
   expect(calls).toBe(0);
@@ -187,6 +187,7 @@ test("checked fee drafts expose source-bound rule editing and retain it after an
   await page.goto("/launch/custom-ai");
   const box = page.locator("#custom-ai-message");
   await box.fill("Build a 3% fee coin with no owner minting"); await box.press("Enter");
+  await page.locator("summary").filter({hasText:/^Details$/}).click();
   await page.getByText("Requested rules (2)", { exact: true }).click();
   await page.getByRole("button", { name: "Edit rule: Charge 3% on buys and sells", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Describe your change to this rule" })).toBeFocused();

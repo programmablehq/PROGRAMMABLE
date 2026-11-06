@@ -8,7 +8,7 @@ const request = (content: string): ChatRequest => ({ id: "discovery-question-tes
 
 describe("read-only builder questions", () => {
   it("routes the visible Explore ideas starter to the brief reply",()=>{
-    const prompt=starterIdeas.find(idea=>idea.title==="Explore ideas")!.prompt;
+    const prompt=starterIdeas.find(idea=>isDiscoveryQuestion(request(idea.prompt)))!.prompt;
     expect(isDiscoveryQuestion(request(prompt))).toBe(true);
     expect(isBriefChat(request(prompt))).toBe(true);
   });

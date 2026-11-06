@@ -19,23 +19,25 @@ const ProductRuntimePanel=lazy(()=>import("./product-runtime"));
 function currentStatusMessage(status: string, automaticApproved: boolean): string {
   if (["pending_review", "review_pending", "awaiting_review"].includes(status)) return automaticApproved
     ? "Automatic checks passed. Continue to prepare your wallet step."
-    : "Checking the saved source and preparing your launch.";
-  if (["action_required", "needs_changes", "changes_requested"].includes(status)) return "Your submission needs an update. Open its details to continue.";
-  if (["authorized", "launch_ready", "wallet_action_ready", "awaiting_wallet_signature", "reserved"].includes(status)) return "Your submission has wallet steps to review.";
+    : "Preparing your coin for launch.";
+  if (["action_required", "needs_changes", "changes_requested"].includes(status)) return "Your coin needs an update. Open the details to continue.";
+  if (["authorized", "launch_ready", "wallet_action_ready", "awaiting_wallet_signature", "reserved"].includes(status)) return "Review the next step in your wallet.";
   if (["submitted", "broadcast", "confirming", "finality_pending"].includes(status)) return "Waiting for the transaction to confirm.";
-  if (["completed", "confirmed", "final", "finalized", "source_verified", "indexed", "publicly_visible"].includes(status)) return "Your launch transactions are confirmed. Open the submission for source verification and Explore status.";
-  if (status === "expired") return "This submission expired. Open its details to continue.";
-  if (["failed", "rejected", "cancelled"].includes(status)) return "Open this submission to see its next step.";
-  return "Your launch preparation is in progress.";
+  if (["completed", "confirmed", "final", "finalized", "source_verified", "indexed", "publicly_visible"].includes(status)) return "Your launch transactions are confirmed. Open the launch for verification and Explore status.";
+  if (status === "expired") return "This launch request expired. Open its details to continue.";
+  if (["failed", "rejected", "cancelled"].includes(status)) return "Open this launch to see its next step.";
+  return "Preparing your launch.";
 }
 
 export function GeneralLaunchControls({ enabled, account, conversationId, scope, headers, project, intent, draftId, settings,
-  imageId, disabled, pendingChange, editor, flush, onLaunchLocked, launchCommand }: {
+  imageId, disabled, pendingChange, editor, flush, onLaunchLocked, launchCommand, summarized=false,onLaunchResolved }: {
   enabled: boolean; account: string; conversationId?: string; scope: string; headers: AISessionHeaders;
   project?: GeneralProjectView; intent?: LaunchIntent; draftId?: string; settings: CoinSetup;
   imageId?: string; disabled: boolean; pendingChange?: string; editor: RefObject<CoinDetailsControls | null>;
   flush: () => Promise<{ revision: number } | undefined>; onLaunchLocked: (locked: boolean) => void;
   launchCommand?:{id:string;sourceId:string};
+  summarized?: boolean;
+  onLaunchResolved?:(sourceId:string)=>void;
 }) {
   const launch = useGeneralLaunch({ enabled, account, scope, headers, observedSource: {
     conversationId, sourceId: draftId, projectHash: project?.projectHash, artifactHash: project?.artifactHash, chainId: settings.chainId,
@@ -52,6 +54,9 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   const href = saved ? generalSubmissionUrl(saved) : undefined, accepted = Boolean(sameSource && href);
   const history = href && !accepted ? saved : !href ? launch.previousSubmission : undefined;
   const historyHref = history ? generalSubmissionUrl(history) : undefined;
+  useEffect(()=>{
+    if(accepted&&draftId&&["completed","confirmed","final","finalized","source_verified","indexed","publicly_visible"].includes(launch.currentStatus?.status??""))onLaunchResolved?.(draftId);
+  },[accepted,draftId,launch.currentStatus?.status,onLaunchResolved]);
   let walletSubject: GeneralWalletSubject | undefined;
   try { if (accepted && saved && launch.currentStatus) walletSubject = generalWalletSubject(saved, launch.currentStatus); }
   catch { /* Keep the original submission link. A mismatched status cannot open a wallet step. */ }
@@ -85,15 +90,15 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
   const checking = saved?.submission?.state === "sending";
   const label = !launch.loaded ? "Check saved submission" : uncertain ? checking ? "Check submission" : "Recover submission"
     : detail ? detailLabel : "Launch coin";
-  const busyLabel = launch.phase === "warming" ? "Preparing launch…" : launch.phase === "preparing" ? "Preparing submission…" : launch.phase === "submitting" ? "Submitting…" : "Checking saved submission…";
-  let status = launch.phase !== "idle" ? busyLabel : !launch.loaded ? "Your saved submission has not been checked yet."
-    : uncertain ? "The original submission is saved. Check its result before starting another one."
-    : accepted ? launch.automatic?.state==="changes_required"?"This source needs the correction shown below. Update it in the chat."
-      :launch.automatic?.state==="interrupted"?"The automatic check stopped. Continue with the same saved source."
-        :launch.currentStatus ? currentStatusMessage(launch.currentStatus.status, launch.automatic?.state === "approved") : "Your source is saved. Preparing the launch."
-    : project?.sourceReview==="changes_required" ? "Ask the chat to fix the source review findings."
-    : detail ? detail.message : !complete ? "Finish the saved contract design in the chat before submitting it."
-    : "Ready to check this source and prepare your launch.";
+  const busyLabel = launch.phase === "warming" ? "Preparing launch…" : launch.phase === "preparing" ? "Preparing launch…" : launch.phase === "submitting" ? "Submitting…" : "Checking saved launch…";
+  let status = launch.phase !== "idle" ? busyLabel : !launch.loaded ? "Loading your saved launch…"
+    : uncertain ? "Your earlier launch is saved. Check its result before starting another."
+    : accepted ? launch.automatic?.state==="changes_required"?"Make the correction shown below in the chat."
+      :launch.automatic?.state==="interrupted"?"The check stopped. Continue your saved launch."
+        :launch.currentStatus ? currentStatusMessage(launch.currentStatus.status, launch.automatic?.state === "approved") : "Your coin is saved. Preparing the launch."
+    : project?.sourceReview==="changes_required" ? "Ask the chat to make the correction."
+    : detail ? detail.message : !complete ? "Finish your coin in the chat before launching."
+    : "Your coin is built. Continue to launch.";
   if (saved && uncertain && !sameSource) status = `Saved submission: ${saved.coin?.name ?? "your previous coin"} on ${builderChain(saved.chainId).name}. ${status}`;
 
   const proceed=useCallback(async()=>{
@@ -127,14 +132,14 @@ export function GeneralLaunchControls({ enabled, account, conversationId, scope,
     </Disclosure>}
   </>;
 
-  return <section className={styles.generalLaunch} aria-label="Launch submission" aria-busy={launch.busy}>
+  return <section className={styles.generalLaunch} aria-label="Launch submission" aria-busy={launch.busy} hidden={summarized && !accepted && !uncertain}>
     <p className={styles.note} role="status">{status}</p>
     {accepted ? <a className={walletSubject ? styles.textButton : styles.createButton} href={href}>Open submission<ArrowRight size={16} aria-hidden="true" /></a>
       : <button type="button" className={styles.createButton} onClick={() => { void proceed(); }}
         aria-disabled={launch.busy || disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}
         disabled={disabled || launch.loaded && !uncertain && !detail && (!complete || !conversationId || settings.chainId === 4663 && controllerKind !== "eoa")}>
         {launch.busy ? busyLabel : label}<ArrowRight size={16} aria-hidden="true" /></button>}
-    {!accepted && !uncertain && <p className={styles.note}>Submitting publishes this contract’s source. Wallet signatures and transactions are confirmed separately.</p>}
+    {!accepted && !uncertain && <p className={styles.note}>Publishing makes your contract code public. You confirm transactions in your wallet.</p>}
     {historyHref && <Disclosure className={styles.previousSubmission}>
       <summary>Earlier submission</summary>
       <a className={styles.textButton} href={historyHref}>Open {history?.coin?.name ?? "previous"} submission</a>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Children, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ArrowRight } from "lucide-react";
 import { setupQuoteAddress, type CoinSetup, type CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import type { Draft } from "@/lib/custom-ai/types";
@@ -14,8 +14,10 @@ import { aiRequest } from "@/lib/custom-ai/client";
 import { designReadiness, type LaunchPreparation } from "@/lib/custom-ai/readiness";
 import { RuleReview } from "./rule-review";
 import { intentHasOpenParts, intentMatchesCandidate, type LaunchIntent } from "@/lib/custom-ai/launch-intent";
+import { COIN_DETAIL_ACTION, feeLaunchDetailIssue } from "@/lib/custom-ai/coin-next-detail";
+import { Disclosure } from "@/components/disclosure";
 
-export function CustomAILaunchPreview({ draft, intent, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule, children,launchCommand,editorControls,onImageBusy }: {
+export function CustomAILaunchPreview({ draft, intent, disabled, settings: editingSettings, chatRevision, onChange, draftId, headers, localPreview, cacheKey, onLaunchLocked, imageReceipt, onImageReceipt, pendingChange, onKeepRules, onStartAnother, onEditRule, children,launchCommand,editorControls,onImageBusy,summarized=false,onLaunchResolved }: {
   draft?: Draft; intent?: LaunchIntent; disabled: boolean; settings: CoinSetup; chatRevision: number; onChange: (patch: CoinSetupPatch) => void;
   draftId?: string; headers: AISessionHeaders; localPreview: boolean;
   cacheKey: string;
@@ -26,6 +28,8 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   children?:ReactNode;
   launchCommand?:{id:string;sourceId:string};
   editorControls?:RefObject<CoinDetailsControls|null>;onImageBusy?:(busy:boolean)=>void;
+  summarized?: boolean;
+  onLaunchResolved?:(sourceId:string)=>void;
 }) {
   const account = useWallet().wallet?.account;
   const [preparation, setPreparation] = useState<LaunchPreparation>();
@@ -44,6 +48,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   const launch = useCustomAILaunch({ settings: editingSettings, draftId, reviewedSourceHash, image: image?.blob, imageReceipt, headers, localPreview, readyTicket: preparation?.inputKey === preparationKey && preparation?.revision === draft?.sourceHash ? preparation?.ticket : undefined });
   const savedSession = launch.saved?.session;
   const bound = savedSession && savedSession.draftId===draftId ? savedSession : undefined;
+  useEffect(()=>{if(bound?.state==="confirmed"&&draftId)onLaunchResolved?.(draftId);},[bound?.state,draftId,onLaunchResolved]);
   const otherLaunch = launch.saved && !bound && launch.saved.session.state!=="confirmed" ? launch.saved.session : undefined;
   const settings: CoinSetup = useMemo(() => bound ? { ...editingSettings, name: bound.settings.name, symbol: bound.settings.symbol,
     chainId: bound.chainId, initialBuy: bound.settings.initialBuy,
@@ -71,8 +76,9 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
   }, [preparation]);
   const currentPreparation = preparation?.inputKey === preparationKey && preparation?.revision === reviewedSourceHash ? preparation : undefined;
   const summary = draft?.validation?.status === "passed" ? draft.hookSummary : undefined;
-  const missingField = readiness.missingFields?.[0];
-  const missingLabel = missingField ? { name: "Add coin name", symbol: "Add ticker", image: "Add coin image" }[missingField] : undefined;
+  const detailIssue = feeLaunchDetailIssue(settings, Boolean(imageURL));
+  const missingField = readiness.missingFields?.[0] ?? detailIssue?.field;
+  const missingLabel = missingField ? COIN_DETAIL_ACTION[missingField] : undefined;
   const addMissingDetail=useCallback(()=>{if(missingField)editor.current?.focus(missingField);},[missingField,editor]);
   useEffect(()=>{
     if(!launchCommand||handledCommand.current===launchCommand.id||launchCommand.sourceId!==draftId||disabled||imageBusy||pairPending||otherLaunch||launch.busy||!launch.loaded)return;
@@ -82,7 +88,7 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
     if(!localPreview&&reviewedSourceHash&&readiness.state==="design-ready"&&!bound)void launch.prepare();
   },[launchCommand,draftId,disabled,imageBusy,pairPending,otherLaunch,launch,missingField,addMissingDetail,localPreview,reviewedSourceHash,readiness.state,bound]);
 
-  return <aside className={styles.coinPanel} aria-label="Coin preview and details">
+  return <aside className={styles.coinPanel} aria-label="Coin preview and details" data-summarized={summarized || undefined}>
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled||launch.locked||launch.busy}
       headers={headers} localPreview={localPreview} cacheKey={cacheKey} imageReceipt={imageReceipt} onImageReceipt={onImageReceipt}
       onImage={setImage} onImageBusy={imageStatus} onPairPending={setPairPending} controlsRef={editor} stage={bound?.state==="confirmed"?"Published coin":reviewedSourceHash?"Checked draft":"Coin preview"}
@@ -93,11 +99,8 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
       {launch.message&&<p className={styles.note} role="status">{launch.message}</p>}
       {launch.error&&<p className={styles.error} role="alert">{launch.error}</p>}
     </section>}
-    {!otherLaunch&&(bound || draft || Boolean(intent?.requirements.length)) && <form className={styles.coinForm} onSubmit={event=>event.preventDefault()}>
-      {!bound && <RuleReview draft={draft} intent={intent} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
-        quoteLabel={settings.pairToken==="ETH" ? "ETH" : "pair tokens"}
-        onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
-      {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{currentPreparation?.message ?? readiness.message}</p>}
+    {!summarized&&!otherLaunch&&(bound || draft || Boolean(intent?.requirements.length)) && <form className={styles.coinForm} onSubmit={event=>event.preventDefault()}>
+      {!bound && <p className={`${styles.note} ${styles.preparationStatus}`} role="status">{detailIssue?.message ?? currentPreparation?.message ?? readiness.message}</p>}
       {bound?.quoteNotice && <p className={styles.note}>{bound.quoteNotice}</p>}
       <button ref={launchButton} type="button" className={styles.createButton} disabled={disabled || imageBusy || !bound && pairPending || launch.busy
         || !missingField && (localPreview || !bound && readiness.state !== "design-ready")}
@@ -107,6 +110,12 @@ export function CustomAILaunchPreview({ draft, intent, disabled, settings: editi
       {bound?.state === "confirmed" && bound.token && <a href={`/token/${bound.token}?chain=${bound.chainId}`} className={styles.note}>View {bound.settings.name}</a>}
       {launch.error && <p className={styles.error} role="alert">{launch.error}</p>}
     </form>}
-    {children}
+    {(draft || intent || Children.toArray(children).length > 0) && <Disclosure className={styles.technicalDetails} open={!summarized || Boolean(pendingChange)}>
+      <summary>Details</summary>
+      {!bound && <RuleReview draft={draft} intent={intent} pendingChange={pendingChange} reviewed={Boolean(reviewedSourceHash)} disabled={disabled}
+        quoteLabel={settings.pairToken==="ETH" ? "ETH" : "pair tokens"}
+        onReview={() => undefined} onKeepRules={onKeepRules} onEditRule={onEditRule} />}
+      {children}
+    </Disclosure>}
   </aside>;
 }

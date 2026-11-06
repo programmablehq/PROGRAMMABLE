@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Children, useCallback, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CoinSetup, CoinSetupPatch } from "@/lib/custom-ai/coin-setup";
 import type { GeneralProjectView } from "@/lib/custom-ai/project-view";
 import { overviewFromView } from "@/lib/custom-ai/project-overview";
@@ -13,13 +13,15 @@ import { RequestedRules } from "./requested-rules";
 import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 
-export function GeneralProjectPreview({project,intent,draftId,account,conversationId,headers,disabled,settings,onChange,chatRevision,localPreview,cacheKey,imageReceipt,onImageReceipt,onEditRule,generalLaunchEnabled=false,pendingChange,flush,onLaunchLocked,children,launchCommand,editorControls,onImageBusy}:{
+export function GeneralProjectPreview({project,intent,draftId,account,conversationId,headers,disabled,settings,onChange,chatRevision,localPreview,cacheKey,imageReceipt,onImageReceipt,onEditRule,generalLaunchEnabled=false,pendingChange,flush,onLaunchLocked,children,launchCommand,editorControls,onImageBusy,summarized=false,onLaunchResolved}:{
   project?:GeneralProjectView;intent?:LaunchIntent;draftId?:string;account:string;conversationId?:string;headers:AISessionHeaders;
   disabled:boolean;settings:CoinSetup;onChange:(patch:CoinSetupPatch)=>void;chatRevision:number;localPreview:boolean;cacheKey:string;
   imageReceipt?:ImageReceipt;onImageReceipt:(receipt:ImageReceipt|undefined)=>void;onEditRule:(id:string)=>void;children?:ReactNode;
   generalLaunchEnabled?:boolean;pendingChange?:string;flush?:()=>Promise<{revision:number}|undefined>;onLaunchLocked?:(locked:boolean)=>void;
   launchCommand?:{id:string;sourceId:string};
   editorControls?:RefObject<CoinDetailsControls|null>;onImageBusy?:(busy:boolean)=>void;
+  summarized?: boolean;
+  onLaunchResolved?:(sourceId:string)=>void;
 }) {
   const ownEditor=useRef<CoinDetailsControls>(null),editor=editorControls??ownEditor;
   const [imageBusy,setImageBusy]=useState(false),[launchBusy,setLaunchBusy]=useState(false);
@@ -28,10 +30,10 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
   const enabled=generalLaunchEnabled&&!localPreview&&/^0x[a-f0-9]{40}$/iu.test(account);
   const lock=useCallback((locked:boolean)=>{setLaunchBusy(locked);onLaunchLocked?.(locked);},[onLaunchLocked]);
   const matches=project?.chainId===settings.chainId&&project?.intentRevision===intent?.revision;
-  return <aside className={styles.coinPanel} aria-label="Coin preview and details">
+  return <aside className={styles.coinPanel} aria-label="Coin preview and details" data-summarized={summarized || undefined}>
     <CoinDetails settings={settings} onChange={onChange} chatRevision={chatRevision} disabled={disabled||launchBusy} headers={headers}
       localPreview={localPreview} cacheKey={cacheKey} imageReceipt={imageReceipt} onImageReceipt={onImageReceipt} onImage={()=>undefined} controlsRef={editor} onImageBusy={imageStatus}
-      onPairPending={setPairPending} stage={!project?"Contract design":project.sourceReview==="changes_required"?"Source needs changes":project.scenarios?.passed===false?"Contract checks failed":project.compiled?"Source compiled":"Source needs changes"} description={project?.summary} feeCore={false}/>
+      onPairPending={setPairPending} stage={!project?"Your coin":project.sourceReview==="changes_required"?"Needs an update":project.scenarios?.passed===false?"Needs an update":project.compiled?"Built":"Needs an update"} description={project?.summary} feeCore={false}/>
     {pairPending&&<p className={styles.note} role="status">Finish the pair token address or select the native token.</p>}
     {!enabled&&<section className={styles.generalLaunch} aria-label="Launch your coin">
       <button type="button" className={styles.createButton} disabled aria-describedby="general-launch-not-ready">Launch coin</button>
@@ -39,7 +41,10 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
     </section>}
     <GeneralLaunchControls enabled={enabled} account={account} conversationId={conversationId} scope={cacheKey} headers={headers}
       project={project} intent={intent} draftId={draftId} settings={settings} imageId={imageReceipt?.id} disabled={disabled||imageBusy||pairPending}
+      summarized={summarized}
+      onLaunchResolved={onLaunchResolved}
       pendingChange={pendingChange} editor={editor} flush={flush??(async()=>undefined)} onLaunchLocked={lock} launchCommand={launchCommand}/>
+    {(intent||project||Children.toArray(children).length>0)&&<Disclosure className={styles.technicalDetails} open={!summarized||Boolean(pendingChange)||project?.sourceReview==="changes_required"||project?.scenarios?.passed===false}><summary>Details</summary>
     {intent&&<Disclosure className={`${styles.ruleReview} ${styles.coinRules}`}>
       <summary>Coin rules<span>{intent.requirements.length}</span></summary>
       <section aria-label="Requested contract rules">
@@ -49,5 +54,6 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
     </Disclosure>}
     {project&&draftId&&<ProjectSource key={draftId} source={overviewFromView(draftId,project)} chainId={settings.chainId} account={account} conversationId={conversationId} headers={headers} disabled={disabled} onCompile={()=>undefined}/>}
     {children}
+    </Disclosure>}
   </aside>;
 }
