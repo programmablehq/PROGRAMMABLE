@@ -257,6 +257,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
         network: builderChain(initialChain).name,
         capabilities: builderCapabilities({ events: process.env.CUSTOM_AI_EVENTS_ENABLED === "true", programs: process.env.CUSTOM_AI_PROGRAMS_ENABLED === "true", generalSources: Boolean(context.saveProject), chainId: initialChain }),
         savedRules: previousIntent?.requirements.map(rule => rule.text) ?? [],
+        savedProduct: previousProduct ? { id: previousProduct.id, state: previousProduct.state, components: previousProduct.components.map(({ kind, name, purpose }) => ({ kind, name, purpose })) } : undefined,
       })}` : system;
     const response = await dependencies.call({ ...modelTask("conversation",MODELS),
       system: `${replySystem}\n${BRIEF_REPLY_RULES}\n${savedDesignQuestion ? "Use only the saved design and recorded results. Answer in at most two short sentences. If compilation and recorded verification passed, ordinary wording such as 'built and internally checked' is accurate. Say what matters to this question. Omit compiler/validator names, synthetic-quote details, source visibility and a list of caveats unless specifically asked. 'Internally checked' preserves the boundary without a technical lecture. Do not claim new tests or an onchain launch, edit rules, start work or request a wallet action." : ""} Return your reply as JSON.`, messages: ideaQuestion ? ideaReplyMessages(request.messages) : request.messages.slice(-3), schema: chatSchema,
