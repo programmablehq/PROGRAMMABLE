@@ -176,6 +176,20 @@ describe("bounded independent check declaration",()=>{
     expect(call.mock.calls.slice(1).every(([request])=>request.maxTokens===4000)).toBe(true);
     expect(checked.scenarios.contracts[0].surfaceRequirements).toEqual(["no-owner"]);
   });
+  it("keeps seventeen ordered observations in one response without increasing its token budget",async()=>{
+    const complete=[steps[0]];
+    for(let count=1;count<=8;count++){
+      complete.push([`increment-${count}`,"main","increment()",[],"trader-a",count,"0",false,[],{status:"success"}],
+        [`count-${count}`,"main","count()",[],"trader-b",count,"0",true,["counter"],{status:"success",returns:[String(count)]}]);
+    }
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(complete),complete:true}));
+    const checked=await declareGeneralChecks(input,call);
+    expect(checked.scenarios.steps.map(step=>step.id)).toEqual(complete.map(step=>step[0]));
+    expect(checked.scenarios.steps.at(-1)?.expect.returns).toEqual(["8"]);
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(call.mock.calls[1][0]).toMatchObject({maxTokens:4000});
+  });
   it("accepts a complete validated plan at the page ceiling even when the model flag stays false",async()=>{
     const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}));
     for(const step of steps)call.mockResolvedValueOnce(response({steps:JSON.stringify([step]),complete:false}));

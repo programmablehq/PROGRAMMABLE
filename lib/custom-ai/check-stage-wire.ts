@@ -32,6 +32,7 @@ const nativeTarget={id:identifier,argumentsJson:string(12000),initializerFunctio
   initializerArgumentsJson:string(12000),deploymentValue:nativeFunding,initializerValue:nativeFunding,
   hookPermissions:{type:["integer","null"],minimum:0,maximum:16383}};
 const nativeChild={id:identifier,argumentsJson:string(12000),value:string(30)};
+export const SCENARIO_PAGE_STEPS = 24;
 /** Keep the production envelope typed as well. A string containing a second
  * schema cannot be validated by the provider adapter before expansion. */
 export function interfaceSchemaForGraph(graph:Record<string,unknown>,production:boolean,product?:ProductBlueprint){
@@ -69,7 +70,7 @@ export function scenarioSchemaForInterface(plan:Record<string,unknown>){
   // providers switch to named fields on later pages; retaining field names
   // must not discard a complete, otherwise identical observation.
   const named=object({...fields,call:admittedCall});
-  return object({steps:array({anyOf:[{type:"array",items:tuple,minItems:9,maxItems:9,additionalItems:false},named]},12),complete:{type:"boolean"}});
+  return object({steps:array({anyOf:[{type:"array",items:tuple,minItems:9,maxItems:9,additionalItems:false},named]},SCENARIO_PAGE_STEPS),complete:{type:"boolean"}});
 }
 const fail=(message:string):never=>{throw new TypeError(`Invalid native check stage: ${message}.`);};
 const shape=(value:unknown,keys:string[])=>{

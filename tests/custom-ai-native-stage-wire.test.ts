@@ -7,6 +7,8 @@ import {createGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 import {declareGeneralChecks} from "../lib/custom-ai/check-declaration.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
+import {projectLaunchProductionContext} from "../lib/custom-ai/launch-production.server";
+import captured from "./fixtures/custom-ai-launch-discovery.json";
 
 const intent:LaunchIntent={version:1,id:"native-counter",revision:"a".repeat(64),unresolved:[],changes:[],requirements:[
   {id:"count",text:"Increment a counter and emit its new value",kind:"behavior",open:null,origin:{kind:"legacy"}},
@@ -58,6 +60,44 @@ describe("native independent declaration transport",()=>{
     expect(call.mock.calls[1][0].schema.properties.deployment.type).toBe("null");
     expect(call.mock.calls[1][0].schema.properties).not.toHaveProperty("deploymentJson");
     expect(call.mock.calls[2][0].schema.properties.steps.type).toBe("array");
+  });
+  it("declares a small graph's interfaces and production values once and preserves them on interruption",async()=>{
+    const production=projectLaunchProductionContext(captured.chains["1"],1);
+    const deployment={format:"fixture-refs-v2",targets:[{id:"main",argumentsJson:"[]",initializerFunction:null,
+      initializerArgumentsJson:"[]",deploymentValue:"0",initializerValue:"0",hookPermissions:null}],constructorChildren:[],
+      pool:{token:"main",hook:"main",initializer:"main",platformFeeBinding:"main",fee:0,tickSpacing:60},fees:null,liquidityModel:null,openingPrice:null};
+    const call=vi.fn().mockResolvedValueOnce(response(graph))
+      .mockResolvedValueOnce(response({interfaces:interfaces.interfaces,deployment}))
+      .mockRejectedValueOnce(new ModelResponseError("timeout",{inputTokens:0,outputTokens:0}));
+    const input={intent,chainId:1 as const,evmVersion:"paris" as const,model:"test-model",production};
+    const error=await declareGeneralChecks(input,call).catch(error=>error);
+    expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","scenarios"]);
+    expect(call.mock.calls[1][0]).toMatchObject({maxTokens:4000});
+    expect(call.mock.calls[1][0].schema.properties.deployment.type).toBe("object");
+    const saved=JSON.parse(error.diagnostic.progress.interface);
+    expect(saved.contracts[0].functions).toEqual(functions);
+    expect(saved.deployment.targets[0]).toMatchObject({id:"main",source:"Counter.sol",contract:"Counter",constructorArguments:[]});
+    const resumed=vi.fn().mockRejectedValue(new ModelResponseError("timeout",{inputTokens:0,outputTokens:0}));
+    await declareGeneralChecks({...input,rejected:error.diagnostic},resumed).catch(()=>undefined);
+    expect(resumed.mock.calls.map(([request])=>request.task)).toEqual(["scenarios"]);
+  });
+  it("keeps separate stages for larger generated graphs without repeating unused catalog entries in deployment",async()=>{
+    const production=projectLaunchProductionContext(captured.chains["1"],1);
+    const contracts=[...Array.from({length:4},(_,index)=>({...graph.contracts[0],id:`counter-${index}`,source:`Counter${index}.sol`,contract:`Counter${index}`})),
+      {...graph.contracts[0],id:"reference",source:"Reference.sol",contract:"CounterReference"}];
+    const catalog={id:`sha256:${"b".repeat(64)}`,contracts:[{source:"Reference.sol",contract:"CounterReference",functions:["function requiredInitializer(uint256)"]},
+      {source:"Unused.sol",contract:"UnusedDependency",functions:["function unusedMarker()"]}]} as never;
+    const call=vi.fn().mockResolvedValueOnce(response({...graph,contracts}))
+      .mockResolvedValueOnce(response({interfaces:contracts.map(({id})=>({id,canonical:id==="reference"?"CounterReference":null,functions:id==="reference"?[]:functions})),deployment:null}))
+      .mockRejectedValueOnce(new ModelResponseError("timeout",{inputTokens:0,outputTokens:0}));
+    const error=await declareGeneralChecks({intent,chainId:1,evmVersion:"paris",model:"test-model",production,interfaces:catalog},call).catch(error=>error);
+    expect(error.stage).toBe("interface");
+    expect(call.mock.calls.map(([request])=>request.task)).toEqual(["interface","interface-abi","interface-deployment"]);
+    expect(call.mock.calls[1][0].schema.properties.deployment.type).toBe("null");
+    expect(call.mock.calls[1][0].system).toContain("UnusedDependency");
+    expect(call.mock.calls[2][0].system).not.toContain("UnusedDependency");
+    expect(call.mock.calls[2][0].system).toContain("function count()");
+    expect(call.mock.calls[2][0].system).toContain("function requiredInitializer(uint256)");
   });
   it("reuses the completed graph after an interrupted public-interface response",async()=>{
     const first=vi.fn().mockResolvedValueOnce(response(graph)).mockRejectedValueOnce(new ModelResponseError("output-limit",{inputTokens:3,outputTokens:4}));
@@ -127,6 +167,14 @@ describe("native independent declaration transport",()=>{
     const tupleSchema=schema.properties.steps.items.anyOf[0] as {items:readonly {enum?:string[]}[]};
     expect(tupleSchema.items[1].enum).toContain("v4-router:nativeBalance(address)");
     expect(tupleSchema.items[1].enum).not.toContain("main:nativeBalance(address)");
+  });
+  it("admits a larger bounded scenario page without changing its values or accepting an oversized page",()=>{
+    const transport=prepareSurplusSchema(scenarioSchemaForInterface({contracts:[{id:"main",functions}]}));
+    const page=Array.from({length:24},(_,index)=>{const {contract,signature,...step}=steps[1];
+      return {...step,id:`read-${index}`,call:`${contract}:${signature}`};});
+    const decoded=JSON.parse(transport.decode(JSON.stringify({steps:page,complete:true})));
+    expect(nativeScenarioRows(decoded.steps)).toEqual(nativeScenarioRows(page));
+    expect(()=>transport.decode(JSON.stringify({steps:[...page,{...page[0],id:"extra"}],complete:true}))).toThrow();
   });
   it("keeps a native correction subject to the same complete validation",()=>{
     const full={...graph,...interfaces,steps};
