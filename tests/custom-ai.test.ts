@@ -88,7 +88,9 @@ describe("Claude planning and generation", () => {
     ];
     const call=vi.fn().mockResolvedValue(result({reply:"Another option is rewards for holders."})),compile=vi.fn();
     const answer=await runCustomAI({...request,messages},undefined,{call,compile});
-    expect(call).toHaveBeenCalledOnce();expect(call.mock.calls[0][0].messages).toEqual(messages.slice(-3));
+    expect(call).toHaveBeenCalledOnce();expect(call.mock.calls[0][0].messages.slice(0,-1)).toEqual(messages.slice(-3,-1));
+    expect(call.mock.calls[0][0].messages.at(-1).content).toContain(messages.at(-1)!.content);
+    expect(messages.at(-1)!.content).toBe("What else could we build?");
     expect(answer.change).toBe("unchanged");expect(compile).not.toHaveBeenCalled();
   });
   it("asks the first actual open question instead of promising a build or listing every decision",async()=>{
