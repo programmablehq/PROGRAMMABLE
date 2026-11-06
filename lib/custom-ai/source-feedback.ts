@@ -8,10 +8,22 @@ const shape=(fn:AbiFunction)=>`${toFunctionSignature(fn)} ${fn.stateMutability} 
 /** Add exact compiler evidence to a correction prompt. The original scenario
  * result, interface requirements and acceptance criteria remain unchanged. */
 export function sourceCorrectionFeedback(blueprint:GeneralCheckBlueprint|undefined,compilation:CompiledProject,
-  failures:GeneralScenarioReport["failures"]):GeneralScenarioReport["failures"] {
+  failures:GeneralScenarioReport["failures"],execution?:GeneralScenarioReport["execution"]):GeneralScenarioReport["failures"] {
   if(!blueprint)return failures;
   return failures.map(failure=>{
-    if(failure.code!=="unexpected-interface"||!failure.caseId.startsWith("surface:"))return failure;
+    if(failure.code!=="unexpected-interface"||!failure.caseId.startsWith("surface:")){
+      const declared=blueprint.scenarios.steps?.find(step=>step.id===failure.caseId);
+      const observed=execution?.steps.find(step=>step.id===failure.caseId);
+      if(!declared||!observed||["contract","signature","from","afterSeconds","read","value"].some(key=>
+        declared[key as keyof typeof declared]!==observed[key as keyof typeof observed]))return failure;
+      const evidence={contract:declared.contract,call:declared.signature,from:declared.from,afterSeconds:declared.afterSeconds,
+        expected:declared.expect,observed:{status:observed.status,outputs:observed.outputs,
+          nativeChanges:observed.nativeChanges,detailsComplete:observed.detailsComplete}};
+      const detail=JSON.stringify(evidence);
+      // Keep only a complete bounded evidence record. Truncated JSON can hide
+      // a real observed value and must not become an invented diagnosis.
+      return detail.length>3500?failure:{...failure,message:`${failure.message} Observed isolated call (data): ${detail}. Correct the implementation; keep the saved intent and checks unchanged.`};
+    }
     const target=[...blueprint.scenarios.contracts,...(blueprint.scenarios.constructorChildren??[])].find(item=>`surface:${item.id}`===failure.caseId);
     const artifact=target&&compilation.contracts.find(item=>item.source===target.source&&item.contract===target.contract);
     if(!target||!artifact)return failure;

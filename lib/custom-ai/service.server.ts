@@ -461,7 +461,7 @@ Current build capabilities (configuration, not proof of launch readiness): ${JSO
     try { generated=await buildGeneralContract({intent,chainId:coin.chainId,messages:request.messages,evmVersion,previous:previous?.project,productBlueprint:update.productBlueprint,
       compilerErrors:previous&&!previous.compilation.compiled?previous.compilation.diagnostics:undefined,
       sourceFindings:previous?.sourceAudit?.status==="changes_required"?previous.sourceAudit.findings:undefined,
-      behaviorFailures:previous?.scenarios?.passed===false?sourceCorrectionFeedback(blueprint,previous.compilation,previous.scenarios.failures):undefined,
+      behaviorFailures:previous?.scenarios?.passed===false?sourceCorrectionFeedback(blueprint,previous.compilation,previous.scenarios.failures,previous.scenarios.execution):undefined,
       loadSourceProgress:resumeUnchanged?context.loadSourceProgress:undefined,saveSourceProgress:context.saveSourceProgress,
       availableDependencySources:context.loadSourceLibraries?.(previous?.project,coin.chainId),blueprint,production:selectedProduction,onProgress:context.onProgress,saveProject:context.saveProject,
       ...(context.saveSourceAudit?{auditSource:(project:ContractProject,auditSignal?:AbortSignal)=>auditGeneralSource(project,auditSignal,{call:dependencies.call}),

@@ -1,4 +1,6 @@
 import feeFlow from "./implementation-patterns/base-fee-flow-v1.json";
+import nativeFeeSplit from "./implementation-patterns/native-fee-split-v1.json";
+import {posix} from "node:path";
 import {parseAbiItem,toFunctionSignature} from "viem";
 import type {GeneralCheckBlueprint} from "./check-blueprint";
 import type {ContractProject} from "./contract-project";
@@ -15,7 +17,7 @@ export function interfaceKey(declaration:string):string|undefined {
 /** ABI and construction knowledge only, never implementation input to the
  * independent scenario planner or a claim that arbitrary shares are supported. */
 export function implementationPatternReferences(chainId:number){
-  return [1,4663,8453,999].includes(chainId)?[{id:"native-fee-flow-with-owned-liquidity-v1",
+  const references=[1,4663,8453,999].includes(chainId)?[{id:"native-fee-flow-with-owned-liquidity-v1",
     description:"Reference architecture for collected-fee allocation to creator-owned liquidity, buyback and burn, daily top-ten holder claims and a fixed creator. All shares, rates, timing, eligibility and failure behavior still come from the saved intent.",
     contracts:feeFlow.contracts,
     semantics:{
@@ -28,25 +30,55 @@ export function implementationPatternReferences(chainId:number){
       holderClaimable:"The view returns zero for an unknown snapshot, ineligible holder or completed claim. This zero-valued view does not mean a claim transaction succeeds.",
     },
     construction:"Keep the canonical initializer and protected token launch sequence. The generated hook creates the fee vault, protection module and opening-tax vault at CREATE nonces 1, 2, 3, then the creator-owned liquidity/execution vault at nonce 4 with (poolManager, hook, token, creator). The hook binds itself to the token during beforeInitialize; the immutable initializer does not call new custom methods. Internal swaps run through the separate execution vault so mandatory hook callbacks still run. Snapshot IDs are zero-based: snapshotCount 1 means completed snapshot ID 0. The observation needs at least one hour of history; a successful action also needs the current price within the slippage band. These are editable source references, not immutable deployed contracts or approval evidence."}]:[];
+  if(chainId===1)references.unshift({id:"native-fee-split-with-locked-liquidity-v1",
+    description:"Smaller reference for project fees split between locked liquidity, buyback and burn, and a fixed creator. Uses the plain protected launch token without holder snapshots. Requested rates, shares, timing and limits still come from the saved intent.",
+    contracts:nativeFeeSplit.contracts,
+    semantics:{
+      observations:"A complete price interval spans at least 3600 seconds. Let a price-moving funding trade settle for a complete stable interval before a small observation trade and a positive execution case.",
+      executeLiquidity:"The vault owns the locked v4 position; owner() is the fixed recipient of earned position fees. liquidityPositionOwner() returns the vault. No principal withdrawal exists. The reference limits successful executions to one per elapsed 24 hours and spends only funded project-fee reserves.",
+      executeBuyback:"Spends the funded buyback reserve through the separate vault and burns actual received tokens. It has a separate elapsed-24-hour limit. A failed swap reverts funding and execution together. A callable action is not proof that a scheduled executor is connected.",
+      snapshots:"Not present in this plain-token reference.",
+      claimCreatorShare:"Permissionless payout of the creator reserve to the fixed creator. An empty reserve reverts. Lifetime collected fees stay cumulative when reserves are paid or spent.",
+      claimHolder:"Not present in this plain-token reference.",
+      holderClaimable:"Not present in this plain-token reference.",
+    },
+    construction:"The hook creates the canonical fee vault, launch-protection module and opening-tax vault at CREATE nonces 1, 2 and 3, followed by the liquidity/execution vault at nonce 4. The plain protected token uses the canonical five constructor arguments and needs no bindHook method. Internal swaps use the separate vault. ABI and construction references are not implementation approval; the complete saved behavior is independently checked."});
+  return references;
 }
+
+type ImplementationPattern={chainId:number;contracts:{id:string;role:string;source:string;contract:string;functions:string[];
+  argumentCount:number;allowReceive:boolean;allowFallback:boolean;parent?:string;nonce?:string}[];sources:ContractProject["sources"]};
 
 /** Reusable editable mechanics. The original intent still has to pass source
  * review and independent behavior checks; matching an ABI grants no approval. */
 export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths:readonly string[],canonical?:{
   sources:ContractProject["sources"];references:readonly {source:string;contract:string}[];
 },allowAdditionalInterface=false):ContractProject["sources"]|undefined {
-  if(![1,4663,8453,999].includes(blueprint.chainId)||paths.length!==feeFlow.contracts.length)return;
+  if(![1,4663,8453,999].includes(blueprint.chainId))return;
+  // Prefer the smaller, complete fee-split reference over trimming a holder
+  // registry that the user never asked for. New references retain their own
+  // chain boundary; only the existing Base reference has cross-chain adapters.
+  for(const pattern of [nativeFeeSplit,feeFlow]){
+    const matched=matchPattern(pattern,blueprint,paths,canonical,allowAdditionalInterface);
+    if(matched)return matched;
+  }
+}
+
+function matchPattern(pattern:ImplementationPattern,blueprint:GeneralCheckBlueprint,paths:readonly string[],canonical:{
+  sources:ContractProject["sources"];references:readonly {source:string;contract:string}[];
+}|undefined,allowAdditionalInterface:boolean):ContractProject["sources"]|undefined {
+  if(paths.length!==pattern.contracts.length||pattern!==feeFlow&&blueprint.chainId!==pattern.chainId)return;
   const kernel=canonical?.references.find(item=>item.contract.endsWith("ProtectedNative30HookV1"));
   const protection=canonical?.references.find(item=>item.contract.endsWith("LaunchProtectionModuleV1"));
   const canonicalSource=kernel&&canonical?.sources[kernel.source]?.content;
   const boundManager=blueprint.production?.version===3?blueprint.production.protectionBindings?.poolManagerAddress:undefined;
   const manager=boundManager&&canonicalSource?.toLowerCase().includes(boundManager.toLowerCase())?boundManager
     :canonicalSource?.match(/CANONICAL_POOL_MANAGER\s*=\s*(0x[a-fA-F0-9]{40})\s*;/)?.[1];
-  if(blueprint.chainId!==feeFlow.chainId&&(!kernel||!protection||!manager))return;
+  if(blueprint.chainId!==pattern.chainId&&(!kernel||!protection||!manager))return;
   const targets:(ContractCheckFixture|ConstructorCheckChild)[]=[...blueprint.scenarios.contracts,...(blueprint.scenarios.constructorChildren??[])];
   const functions=new Map(targets.map(target=>[target,new Set(target.functions.map(interfaceKey))]));
   const mapping=new Map<string,typeof targets[number]>();
-  for(const entry of feeFlow.contracts){
+  for(const entry of pattern.contracts){
     const referenceFunctions=new Set(entry.functions.map(interfaceKey));
     const matches=targets.filter(target=>paths.includes(target.source)&&blueprint.entrypoints.some(point=>point.source===target.source&&point.contract===target.contract&&point.role===entry.role)
       &&target.arguments.length===entry.argumentCount&&target.allowReceive===entry.allowReceive&&target.allowFallback===entry.allowFallback
@@ -57,15 +89,19 @@ export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths
     mapping.set(entry.id,matches[0]);
   }
   if(new Set([...mapping.values()].map(target=>target.source)).size!==paths.length)return;
-  for(const entry of feeFlow.contracts){
-    if(!("parent" in entry))continue;
+  for(const entry of pattern.contracts){
+    if(!entry.parent)continue;
     const target=mapping.get(entry.id)!;
     if(!("parent" in target)||target.parent!==mapping.get(entry.parent!)?.id||target.nonce!==entry.nonce)return;
   }
   const output:ContractProject["sources"]={};
-  for(const entry of feeFlow.contracts){
-    let content=feeFlow.sources[entry.source as keyof typeof feeFlow.sources].content;
-    for(const peer of feeFlow.contracts){
+  for(const entry of pattern.contracts){
+    // Relative imports resolve from the reference file, not from a generated
+    // user's renamed directory.
+    let content=pattern.sources[entry.source].content
+      .replace(/(\bfrom\s*|\bimport\s*)(["'])(\.[^"']+)\2/g,(_match,prefix,quote,relative)=>
+        `${prefix}${quote}${posix.normalize(posix.join(posix.dirname(entry.source),relative))}${quote}`);
+    for(const peer of pattern.contracts){
       const target=mapping.get(peer.id)!;
       content=content.split(peer.source).join(target.source).replace(new RegExp(`\\b${peer.contract}\\b`,"g"),target.contract);
     }
