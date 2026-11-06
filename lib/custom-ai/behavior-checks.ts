@@ -88,8 +88,11 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
     let previousRoot=-1;
     constructorChildren=input.constructorChildren.map(raw=>{
       const v=object(raw,["id","source","contract","arguments","functions","allowReceive","allowFallback","surfaceRequirements","parent","creation","nonce","value"]);
-      if(typeof v.parent!=="string"||!contractIds.has(v.parent)||v.creation!=="create"||typeof v.nonce!=="string"||!/^[1-9][0-9]?$/.test(v.nonce)
-        ||BigInt(v.nonce)!==(nextNonce.get(v.parent)??1n)||typeof v.value!=="string"||!/^(?:0|[1-9][0-9]{0,29})$/.test(v.value)
+      if(typeof v.parent!=="string"||!contractIds.has(v.parent))return bad(`constructor-child:${v.id}:parent-must-be-an-earlier-declared-contract`);
+      if(typeof v.nonce!=="string"||!/^[1-9][0-9]?$/.test(v.nonce))return bad(`constructor-child:${v.id}:nonce-must-be-a-positive-decimal-string`);
+      const expectedNonce=nextNonce.get(v.parent)??1n;
+      if(BigInt(v.nonce)!==expectedNonce)return bad(`constructor-child:${v.id}:nonce-${v.nonce}-expected-${expectedNonce};declare-every-earlier-child-of-${v.parent}-in-creation-order`);
+      if(v.creation!=="create"||typeof v.value!=="string"||!/^(?:0|[1-9][0-9]{0,29})$/.test(v.value)
         ||!entrypoints.some(entry=>entry.source===v.source&&entry.contract===v.contract&&entry.role==="auxiliary"))return bad();
       const root=rootIndex.get(v.parent)??childRoots.get(v.parent);
       if(root===undefined||root<previousRoot)return bad();
