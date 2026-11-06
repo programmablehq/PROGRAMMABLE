@@ -6,6 +6,7 @@ import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
 import type {CheckDiagnostic} from "../lib/custom-ai/check-diagnostic";
 import {checkContextHash,checkLaunchInputsHash,reusableCheckProgress} from "../lib/custom-ai/check-diagnostic";
+import {canonicalInterfaceContext} from "../lib/custom-ai/canonical-dependencies.server";
 
 const intent:LaunchIntent={version:1,id:"counter-design",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
   {id:"counter",kind:"behavior",text:"Anyone can increment from zero by one",open:null,origin:{kind:"legacy"}},
@@ -22,6 +23,19 @@ const response=(body:unknown)=>({text:JSON.stringify(body),inputTokens:1,outputT
 const input={intent,chainId:1 as const,evmVersion:"paris" as const,model:"test-model"};
 
 describe("bounded independent check declaration",()=>{
+  it("keeps separate project and canonical-vault ledgers in both planning stages",async()=>{
+    const call=vi.fn().mockResolvedValueOnce(response({generalChecks:JSON.stringify(declaration)}))
+      .mockResolvedValueOnce(response({steps:JSON.stringify(steps)}));
+    const result=await declareGeneralChecks({...input,interfaces:canonicalInterfaceContext(1)},call);
+    expect(result.scenarios.steps).toHaveLength(3);
+    expect(call).toHaveBeenCalledTimes(2);
+    for(const [request] of call.mock.calls){
+      expect(request.system).toContain("recordFees(platformFee,0)");
+      expect(request.system).toContain("claimCreatorShare()");
+      expect(request.system).toContain("NothingToClaim");
+      expect(request.system).not.toContain("pragma solidity");
+    }
+  });
   it("binds completed checks and partial progress to the opening amount and pair",async()=>{
     const coin={name:"Counter",symbol:"CNT",pairToken:"ETH",initialBuy:"0.01"};
     const complete={...declaration,steps},call=vi.fn().mockResolvedValue(response({generalChecks:JSON.stringify(complete)}));
