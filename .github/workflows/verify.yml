@@ -385,11 +385,24 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Verify interface browser interactions and production build
+        id: browser-verification
         if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_guidance_only != 'true' || needs.scope.outputs.custom_v2 == 'true'))
         env:
           PROGRAMMABLE_CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           PROGRAMMABLE_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run verify:interface:browser-build:ci
+
+      - name: Preserve failed browser interaction evidence
+        if: failure() && steps.browser-verification.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: interface-browser-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/**/trace.zip
+            test-results/**/test-failed-*.png
+            test-results/**/error-context.md
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Typecheck guide navigation changes
         if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_guidance_only == 'true' && needs.scope.outputs.custom_v2 != 'true')
