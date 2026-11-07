@@ -17,7 +17,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   const [selected,setSelected]=useState<string>(),[page,setPage]=useState<ConversationPage>({conversations:[]}),[open,setOpen]=useState(false);
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
   const pendingCreate=useRef<string>(undefined);
-  const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState("");
+  const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState(""),[listError,setListError]=useState("");
   const root=useRef<HTMLDivElement|null>(null);
   const toggle=useRef<HTMLButtonElement|null>(null);
   const close=()=>{setOpen(false);setEditing(undefined);toggle.current?.focus();};
@@ -32,15 +32,16 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   const load=useCallback(async(q:string,archive:boolean,cursor?:string)=>{
     const currentQuery=()=>query.current.search===q&&query.current.archived===archive;
     if(!currentQuery())return null;
-    const seq=++generation.current;listAbort.current?.abort();const controller=new AbortController();listAbort.current=controller;setLoading(true);setError("");
+    const seq=++generation.current;listAbort.current?.abort();const controller=new AbortController();listAbort.current=controller;setLoading(true);setListError("");
     try{
       const result=await aiRequest<ConversationPage>(`/conversations?account=${encodeURIComponent(account)}&q=${encodeURIComponent(q)}&archived=${archive}${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`,scopedHeaders,undefined,controller.signal);
       if(seq===generation.current&&currentQuery())setPage(current=>cursor?{...result,conversations:[...current.conversations,...result.conversations].filter((chat,index,rows)=>rows.findIndex(item=>item.id===chat.id)===index)}:result);
       return result;
-    }catch(cause){if(!controller.signal.aborted&&seq===generation.current&&currentQuery())setError(cause instanceof Error?cause.message:"Your chats could not load.");return null;}
+    }catch(cause){if(!controller.signal.aborted&&seq===generation.current&&currentQuery())setListError(cause instanceof Error?cause.message:"Your chats could not load.");return null;}
     finally{if(seq===generation.current&&currentQuery())setLoading(false);}
   },[account,scopedHeaders]);
   function filter(nextSearch:string,nextArchived:boolean){
+    setError("");setListError("");
     query.current={search:nextSearch,archived:nextArchived};
     ++generation.current;listAbort.current?.abort();setPage({conversations:[]});setLoading(true);
     setSearch(nextSearch);setArchived(nextArchived);
@@ -121,6 +122,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       if(result.archived&&selected===chat.id){const replacement=list?.conversations.find(item=>!item.archived);setSelected(replacement?.id);await writeDraftCache(key.current,replacement?.id??null);setOpen(true);}
     }catch(cause){setError(cause instanceof Error?cause.message:"The chat could not be updated.");}finally{transition.current=false;setTransitioning(false);if(!refreshed)setLoading(false);}
   }
+  const problem=error||listError;
   const panel=(locked:boolean)=><div className={styles.chatLibrary} ref={root} data-custom-ai-library="true">
     <button ref={toggle} type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls={open?"custom-ai-chats":undefined} onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
     <section hidden={!open} inert={!open} id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
@@ -139,9 +141,9 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       </div>
       {page.cursor&&<button type="button" disabled={loading} onClick={()=>void load(search,archived,page.cursor)}>More chats</button>}
       {loading&&<p role="status">Loading chats…</p>}
-      {error&&<p role="alert">{error}</p>}
+      {problem&&<p role="alert">{problem}</p>}
     </section>
   </div>;
-  if(!selected||!cacheScope)return <WorkspacePending status={!error&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning)}>{error&&<><p role="alert">{error}</p><button type="button" className={styles.textButton} onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
+  if(!selected||!cacheScope)return <WorkspacePending status={!problem&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning)}>{problem&&<><p role="alert">{problem}</p><button type="button" className={styles.textButton} onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
   return <LibraryContext.Provider value={{id:selected,cacheScope,navigation:{pending:transitioning,tools:panel,newChat,registerFlush}}}><Fragment key={selected}>{children}</Fragment></LibraryContext.Provider>;
 }

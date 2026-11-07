@@ -34,6 +34,15 @@ authentication method, observed result and cleanup status. Deterministic model
 fixtures, local RPC execution, source compilation and real public behavior are
 different forms of evidence and must remain distinguishable.
 
+Renamed or extended canonical contracts can declare their inherited interface
+through `architecture.canonicalInterfaces` in the initial plan. Each reference
+binds an entry ID to a pinned canonical source and contract. The server adds
+missing methods without replacing existing declarations or changing behavior
+steps, expected results, source files or deployment arguments. Conflicting
+signatures fail closed. A saved reference cannot be swapped while the user's
+requirements remain unchanged. Interface completion is planning evidence;
+compilation, behavior checks and source review still have to pass separately.
+
 ## Current release blockers
 
 - An isolated canonical coin with staged fees passes real model planning,

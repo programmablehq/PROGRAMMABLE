@@ -447,6 +447,17 @@ test("retrying a lost create response opens the same chat without making another
  await expect.poll(()=>[...f.studios.entries()].some(([key,saved])=>key.endsWith(created.id)&&saved.state.input==="This is the retried chat")).toBe(true);
  expect(f.chats.size).toBe(2);expect(f.calls).toHaveLength(0);
 });
+test("a delayed chat list refresh keeps the lost-create recovery error visible",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ const now=new Date();await page.clock.install({time:now});await page.clock.pauseAt(new Date(now.getTime()+1000));
+ const lists=f.control.listQueries.length;f.control.lostCreates=1;
+ await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();
+ const alert=page.getByRole("region",{name:"Your saved chats"}).getByRole("alert");await expect(alert).toBeVisible();
+ await page.clock.runFor(300);await expect.poll(()=>f.control.listQueries.length).toBeGreaterThanOrEqual(lists+2);
+ await expect(alert).toBeVisible();await page.clock.resume();
+ expect(f.chats.size).toBe(2);expect(f.calls).toHaveLength(0);
+});
 test("opening the recovered chat clears the pending create before the next new coin",async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
