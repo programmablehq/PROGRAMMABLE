@@ -23,6 +23,14 @@ export type SandboxProvider = {
 const timeoutMs = 240_000;
 const invalid = () => new ProjectError("sandbox-input", "Choose a valid project command.");
 
+function reportProviderFailure(jobId: string, stage: string, error: unknown) {
+  const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const safe = (item: unknown) => typeof item === "string" && /^[a-zA-Z0-9_.-]{1,80}$/.test(item) ? item : undefined;
+  const status = value.status ?? value.statusCode;
+  console.warn("Project sandbox provider failure", { jobId, stage, name: safe(value.name), code: safe(value.code),
+    status: typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined });
+}
+
 function dependencyPlan(files: Record<string, ProjectFile>, resolve: boolean) {
   if (!files["package.json"]) return false;
   try {
@@ -73,13 +81,15 @@ export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof 
         VALUES($1,$2,$3,$4,$5,$6,'reserved',$7,$8)`, [scope.ownerId, scope.projectId, id, input.revisionId, name, projectHash({ script: input.script, paths, resolve: Boolean(input.resolveDependencies) }), new Date(started).toISOString(), expires]);
       await db.query("INSERT INTO programmable_projects_v1.sandbox_slots(owner,project_id,id,provider_name,expires_at) VALUES($1,$2,$3,$4,$5)", [scope.ownerId, scope.projectId, id, name, expires]);
     });
-    let instance: SandboxInstance | undefined, output: SandboxOutput | undefined, cleaned = false;
+    let instance: SandboxInstance | undefined, output: SandboxOutput | undefined, cleaned = false, stage = "create";
     try {
       instance = await provider.create({ name, timeoutMs, vcpus: 1, network: "deny-all" }, signal);
       await projectTransaction(pool, scope, db => db.query("UPDATE programmable_projects_v1.sandbox_jobs SET state='active' WHERE owner=$1 AND project_id=$2 AND id=$3", [scope.ownerId, scope.projectId, id]));
+      stage = "write-files";
       await instance.writeFiles(revision.document.files, signal);
-      if (install) output = await instance.install(input.resolveDependencies === true, signal);
-      if (!output || output.exitCode === 0) output = await instance.execute(input.script, signal);
+      if (install) { stage = "install"; output = await instance.install(input.resolveDependencies === true, signal); }
+      if (!output || output.exitCode === 0) { stage = "execute"; output = await instance.execute(input.script, signal); }
+      stage = "read-files";
       const files: Record<string, ProjectFile> = {};
       let total = 0;
       for (const path of paths) {
@@ -96,9 +106,10 @@ export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof 
     } catch (error) {
       if (error instanceof ProjectError) throw error;
       if (externalSignal?.aborted) throw new ProjectError("sandbox-cancelled", "The sandbox was stopped.", 409);
+      reportProviderFailure(id, stage, error);
       throw new ProjectError("sandbox-provider", "The sandbox could not finish. Your source revision is saved.", 503);
     } finally {
-      try { if (instance) await instance.close(); else await provider.cleanup(name); cleaned = true; } catch { /* Keep the slot until the provider TTL is guaranteed to have elapsed. */ }
+      try { if (instance) await instance.close(); else await provider.cleanup(name); cleaned = true; } catch (error) { reportProviderFailure(id, "cleanup", error); /* Keep the slot until the provider TTL is guaranteed to have elapsed. */ }
       const duration = cleaned ? Math.min(timeoutMs, Math.max(1, now() - started)) : timeoutMs;
       await projectTransaction(pool, scope, async db => {
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["project-sandbox-quota-v1"]);
