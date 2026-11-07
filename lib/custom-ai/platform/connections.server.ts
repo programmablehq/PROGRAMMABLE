@@ -6,7 +6,7 @@ import { projectTransaction } from "./transaction.server";
 import { projectHash,canonicalProjectJSON } from "./document";
 import { validateConnectorURL } from "./private-http.server";
 import { ProjectError,type ProjectScope,type JsonValue } from "./types";
-export type ConnectionAction={id:string;description:string;method:"GET"|"POST"|"PUT"|"PATCH"|"DELETE";path:string;effect:"read"|"write";inputSchema:object;outputSchema:object;idempotencyHeader?:string};
+export type ConnectionAction={id:string;description:string;method:"GET"|"POST"|"PUT"|"PATCH"|"DELETE";path:string;effect:"read"|"write";inputSchema:object;outputSchema:object;idempotencyHeader?:string;bindings?:{path:string[];query:string[];body:boolean}};
 export type ConnectionManifest={name:string;kind:"http"|"mcp";baseUrl:string;protocol?:"2026-07-28"|"2025-11-25";
   auth:{kind:"none"}|{kind:"api-key";header:string;prefix?:string}|{kind:"oauth2";authorizeUrl:string;tokenUrl:string;clientId:string;scopes:string[]};actions:ConnectionAction[]};
 type Secrets=Record<string,string>;
@@ -31,6 +31,7 @@ export function validateConnectionManifest(input:ConnectionManifest):ConnectionM
     validateConnectorURL(new URL(action.path,base).href);
     if(input.kind==="http"&&action.method!=="GET"&&action.effect!=="write")throw invalid();
     if(action.idempotencyHeader&&!/^[A-Za-z][A-Za-z0-9-]{0,63}$/.test(action.idempotencyHeader))throw invalid();
+    if(action.bindings&&(!Array.isArray(action.bindings.path)||!Array.isArray(action.bindings.query)||typeof action.bindings.body!=="boolean"||[...action.bindings.path,...action.bindings.query].some(key=>!/^[-A-Za-z0-9_]{1,100}$/.test(key))))throw invalid();
     for(const schema of [action.inputSchema,action.outputSchema]){
       if(!schema||typeof schema!=="object"||Array.isArray(schema)||/"\$(?:async|ref)"\s*:\s*(?:true|"(?:https?:|file:))/.test(JSON.stringify(schema)))throw invalid();
       try{new Ajv({strict:false}).compile(schema);}catch{throw invalid();}
@@ -103,7 +104,35 @@ export function createConnectionStore(pool:AIPool,keyring:Keyring,now=Date.now){
     });
   }
   async function finishCall(scope:ProjectScope,id:string,key:string,result:JsonValue|null,failed=false){return projectTransaction(pool,scope,db=>db.query("UPDATE programmable_projects_v1.connector_calls SET state=$5,result=$6::jsonb WHERE owner=$1 AND project_id=$2 AND connection_id=$3 AND request_key=$4 AND state='pending'",[scope.ownerId,scope.projectId,id,key,failed?"unknown":"completed",JSON.stringify(result)]));}
-  async function revoke(scope:ProjectScope,id:string){return projectTransaction(pool,scope,async db=>{await read(db,scope,id,true);await db.query("UPDATE programmable_projects_v1.connections SET state='revoked',allowed_actions='[]'::jsonb,updated_at=$4 WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id,new Date(now()).toISOString()]);await db.query("DELETE FROM programmable_projects_v1.connection_secrets WHERE owner=$1 AND project_id=$2 AND connection_id=$3",[scope.ownerId,scope.projectId,id]);});}
+  async function reconcileCall(scope:ProjectScope,id:string,key:string,hash:string){return projectTransaction(pool,scope,async db=>{
+    const row=(await db.query("SELECT input_hash,state,result FROM programmable_projects_v1.connector_calls WHERE owner=$1 AND project_id=$2 AND connection_id=$3 AND request_key=$4",[scope.ownerId,scope.projectId,id,key])).rows[0];
+    if(!row||row.input_hash!==hash||row.state!=="completed")throw new ProjectError("connection-unknown","No completed receipt exists for this external action. Reconcile it with the provider.",409);
+    return row.result as JsonValue;
+  });}
+  async function privateConnection(scope:ProjectScope,id:string){return projectTransaction(pool,scope,async db=>{
+    const row=await read(db,scope,id);const secret=(await db.query("SELECT key_version,ciphertext FROM programmable_projects_v1.connection_secrets WHERE owner=$1 AND project_id=$2 AND connection_id=$3",[scope.ownerId,scope.projectId,id])).rows[0];
+    return {...present(row),secret:secret?unseal(scope,id,secret):{}};
+  });}
+  async function rotateSecret(scope:ProjectScope,id:string,version:string,secret:Secrets){return projectTransaction(pool,scope,async db=>{
+    const row=await read(db,scope,id,true);if(row.version!==version||row.state==="revoked")throw new ProjectError("connection-revoked","This connection changed or was disconnected.",409);
+    if(Object.values(secret).some(value=>typeof value!=="string"||value.length>16000||/[\r\n\0]/.test(value)))throw invalid();
+    const timestamp=new Date(now()).toISOString();
+    await db.query(`INSERT INTO programmable_projects_v1.connection_secrets(owner,project_id,connection_id,key_version,ciphertext,updated_at) VALUES($1,$2,$3,$4,$5,$6)
+      ON CONFLICT(owner,project_id,connection_id) DO UPDATE SET key_version=$4,ciphertext=$5,updated_at=$6`,[scope.ownerId,scope.projectId,id,keyring.active,seal(scope,id,secret),timestamp]);
+    await db.query("UPDATE programmable_projects_v1.connections SET state='active',updated_at=$4 WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id,timestamp]);
+  });}
+  async function saveOAuthState(scope:ProjectScope,id:string,stateHash:string,payload:Secrets,expiresAt:string){return projectTransaction(pool,scope,async db=>{
+    const row=await read(db,scope,id);if(row.state==="revoked")throw new ProjectError("connection-revoked","Reconnect this API before signing in.",409);
+    await db.query("DELETE FROM programmable_projects_v1.oauth_states WHERE owner=$1 AND expires_at<$2",[scope.ownerId,new Date(now()).toISOString()]);
+    await db.query("INSERT INTO programmable_projects_v1.oauth_states(owner,project_id,connection_id,state_hash,key_version,ciphertext,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[scope.ownerId,scope.projectId,id,stateHash,keyring.active,seal(scope,id,payload),expiresAt]);
+  });}
+  async function consumeOAuthState(ownerId:string,stateHash:string){return projectTransaction(pool,{ownerId,projectId:"00000000-0000-4000-8000-000000000000"},async db=>{
+    const row=(await db.query("UPDATE programmable_projects_v1.oauth_states SET used=true WHERE owner=$1 AND state_hash=$2 AND NOT used AND expires_at>$3 RETURNING *",[ownerId,stateHash,new Date(now()).toISOString()])).rows[0];
+    if(!row)throw new ProjectError("oauth-state","The sign-in link expired or belongs to another account. Start again.",403);
+    const scope={ownerId,projectId:String(row.project_id)},connectionId=String(row.connection_id);
+    return {...scope,connectionId,payload:unseal(scope,connectionId,row)};
+  });}
+  async function revoke(scope:ProjectScope,id:string){return projectTransaction(pool,scope,async db=>{const previous=await read(db,scope,id,true);await db.query("UPDATE programmable_projects_v1.connections SET state='revoked',allowed_actions='[]'::jsonb,updated_at=$4,version=$5 WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id,new Date(now()).toISOString(),projectHash({previous:previous.version,revoked:randomBytes(16).toString("hex")})]);await db.query("DELETE FROM programmable_projects_v1.connection_secrets WHERE owner=$1 AND project_id=$2 AND connection_id=$3",[scope.ownerId,scope.projectId,id]);});}
   const listConnections=(scope:ProjectScope)=>projectTransaction(pool,scope,async db=>(await db.query("SELECT * FROM programmable_projects_v1.connections WHERE owner=$1 AND project_id=$2 ORDER BY created_at",[scope.ownerId,scope.projectId])).rows.map(present));
-  return {saveConnection,authorize,beginCall,finishCall,revoke,listConnections};
+  return {saveConnection,authorize,beginCall,finishCall,reconcileCall,revoke,listConnections,privateConnection,rotateSecret,saveOAuthState,consumeOAuthState};
 }

@@ -5,14 +5,18 @@ vi.mock("server-only",()=>({}));
 import { createPlatformStore } from "../lib/custom-ai/platform/project-store.server";
 import { createConnectionStore, type ConnectionManifest } from "../lib/custom-ai/platform/connections.server";
 import { createConnectionService } from "../lib/custom-ai/platform/connector-service.server";
+import { createConnectionRoutes } from "../lib/custom-ai/platform/connection-http.server";
+import { createProjectOAuth } from "../lib/custom-ai/platform/oauth.server";
+import { createProjectWebhooks } from "../lib/custom-ai/platform/webhooks.server";
+import { CustomAIError } from "../lib/custom-ai/types";
 import { PROJECT_PLATFORM_SCHEMA } from "../lib/custom-ai/platform/schema.generated";
 import type { AIPool } from "../lib/custom-ai/store.server";
 
-let db:PGlite,store:ReturnType<typeof createConnectionStore>;
+let db:PGlite,pool:AIPool,store:ReturnType<typeof createConnectionStore>;
 const scope={ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111"},id="22222222-2222-4222-8222-222222222222";
 const manifest:ConnectionManifest={name:"Scores",kind:"http",baseUrl:"https://api.scores.com",auth:{kind:"api-key",header:"Authorization",prefix:"Bearer "},actions:[{id:"score",description:"Read the score",method:"GET",path:"/score",effect:"read",inputSchema:{type:"object",properties:{},additionalProperties:false},outputSchema:{type:"object"}}]};
 beforeEach(async()=>{
- db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let tail=Promise.resolve();const pool:AIPool={connect:async()=>{const old=tail;let release!:()=>void;tail=new Promise<void>(r=>{release=r});await old;return {query:(s,v)=>db.query<Record<string,unknown>>(s,v),release}}};
+ db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let tail=Promise.resolve();pool={connect:async()=>{const old=tail;let release!:()=>void;tail=new Promise<void>(r=>{release=r});await old;return {query:(s,v)=>db.query<Record<string,unknown>>(s,v),release}}};
  await createPlatformStore(pool).createProject(scope);store=createConnectionStore(pool,{active:"one",keys:{one:randomBytes(32)}});
 });
 afterEach(async()=>{await db.close()});
@@ -47,5 +51,14 @@ describe("private project connections",()=>{
   await expect(service.invoke(scope,input)).rejects.toMatchObject({code:"connection-unknown"});
   await expect(service.invoke(scope,input)).rejects.toMatchObject({code:"connection-unknown"});
   expect(transport).toHaveBeenCalledOnce();
+ });
+ it("keeps credentials and ownership behind authenticated connection routes",async()=>{
+  const routes=createConnectionRoutes({enabled:()=>true,consume:async()=>undefined,authorize:async request=>{const ownerId=request.headers.get("x-test-owner");if(!ownerId)throw new CustomAIError("auth","Sign in",401);return {ownerId};},store:()=>store,service:()=>createConnectionService(store),oauth:()=>createProjectOAuth(store,"https://programmable.market"),webhooks:()=>createProjectWebhooks(pool,store)});
+  const request=(body:unknown,owner="alice")=>new Request("https://programmable.market/api/custom-ai/platform/connections",{method:"POST",headers:{"Content-Type":"application/json","x-test-owner":owner},body:JSON.stringify(body)});
+  const input={action:"save",projectId:scope.projectId,connectionId:id,manifest,allowedActions:["score"],secret:{apiKey:"private-test-secret"}};
+  expect((await routes.POST(request({...input,ownerId:"bob"}))).status).toBe(400);
+  const saved=await routes.POST(request(input));expect(saved.status).toBe(200);expect(await saved.text()).not.toContain("private-test-secret");
+  const list=await routes.GET(new Request(`https://programmable.market/connections?projectId=${scope.projectId}`,{headers:{"x-test-owner":"bob"}}));expect(await list.json()).toEqual({connections:[]});
+  const invoke=await routes.POST(request({action:"invoke",projectId:scope.projectId,connectionId:id,version:"ignored",actionId:"score",input:{},idempotencyKey:"call"},"bob"));expect(invoke.status).toBe(404);
  });
 });

@@ -9,6 +9,8 @@ import { createProjectTools } from "./tools.server";
 import { contractProjectTools } from "./legacy-contract-build.server";
 import { chooseProjectAction } from "./model.server";
 import { createProjectAgent } from "./agent.server";
+import { productionConnections,productionConnectionService } from "./connection-production.server";
+import { connectionTools } from "./connection-tools.server";
 
 export function productionProjectChecks() {
   const projects = productionPlatformStore();
@@ -18,5 +20,5 @@ export function productionProjectAgent() {
   const projects = productionPlatformStore(), checks = productionProjectChecks();
   const sandbox = createSandboxExecutor(productionAIPool(), projects, vercelSandboxProvider);
   return createProjectAgent({ runs: productionRunStore(), projects, choose: chooseProjectAction, assess: checks.assess,
-    tools: [...createProjectTools(projects,sandbox,checks), ...contractProjectTools(productionPlatformArtifacts(),checks)] });
+    tools: [...createProjectTools(projects,sandbox,checks), ...contractProjectTools(productionPlatformArtifacts(),checks),...connectionTools(productionConnections(),productionConnectionService())] });
 }

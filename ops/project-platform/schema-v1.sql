@@ -179,6 +179,24 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.connector_calls (
   PRIMARY KEY(owner,project_id,connection_id,request_key),
   FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
 );
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.oauth_states (
+  owner text NOT NULL, project_id uuid NOT NULL, connection_id uuid NOT NULL,
+  state_hash text NOT NULL, key_version text NOT NULL, ciphertext text NOT NULL,
+  expires_at timestamptz NOT NULL, used boolean NOT NULL DEFAULT false,
+  PRIMARY KEY(owner,state_hash),
+  FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
+);
+-- Private routing lookup used before webhook authentication; never exposed as a list.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.webhook_routes (
+  id uuid PRIMARY KEY, owner text NOT NULL, project_id uuid NOT NULL, connection_id uuid NOT NULL, version text NOT NULL,
+  FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.webhook_inbox (
+  owner text NOT NULL, project_id uuid NOT NULL, connection_id uuid NOT NULL, event_id text NOT NULL,
+  body_hash text NOT NULL, payload jsonb NOT NULL, received_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,connection_id,event_id),
+  FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
+);
 
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
@@ -203,6 +221,10 @@ ALTER TABLE programmable_projects_v1.connection_secrets ENABLE ROW LEVEL SECURIT
 ALTER TABLE programmable_projects_v1.connection_secrets FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.connector_calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.connector_calls FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.oauth_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.oauth_states FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.webhook_inbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.webhook_inbox FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -250,6 +272,12 @@ BEGIN
     CREATE POLICY connection_owner_v1 ON programmable_projects_v1.connections USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
     CREATE POLICY connection_secret_owner_v1 ON programmable_projects_v1.connection_secrets USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
     CREATE POLICY connector_call_owner_v1 ON programmable_projects_v1.connector_calls USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='oauth_states' AND policyname='oauth_state_owner_v1') THEN
+    CREATE POLICY oauth_state_owner_v1 ON programmable_projects_v1.oauth_states USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='webhook_inbox' AND policyname='webhook_inbox_owner_v1') THEN
+    CREATE POLICY webhook_inbox_owner_v1 ON programmable_projects_v1.webhook_inbox USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
   END IF;
 END
 $migration$;
