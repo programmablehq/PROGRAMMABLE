@@ -23,8 +23,8 @@ export function createAppRuntimeRoutes(deps:{enabled:()=>boolean;data:()=>Return
  return {DATA:post("data"),CONNECTOR:post("connector")};
 }
 export function createReleaseRoutes(deps:ProjectAccountDependencies&{releases:()=>ReturnType<typeof createProjectReleases>}){
- const GET=(request:Request)=>executeProjectRequest(deps,request,"read",async ownerId=>{
-  const query=new URL(request.url).searchParams,projectId=query.get("projectId"),releaseId=query.get("releaseId");if(!projectId||[...query.keys()].some(key=>!["projectId","releaseId"].includes(key)))throw new ProjectError("release-input","Choose a project release.");
+ const GET=(request:Request)=>executeProjectRequest(deps,request,new URL(request.url).searchParams.has("releaseId")?"progress":"read",async ownerId=>{
+  const query=new URL(request.url).searchParams,projectId=query.get("projectId"),releaseId=query.get("releaseId");if(!projectId||query.has("releaseId")&&!releaseId||[...query.keys()].some(key=>!["projectId","releaseId"].includes(key)))throw new ProjectError("release-input","Choose a project release.");
   const scope={ownerId,projectId};return Response.json(releaseId?{release:await deps.releases().read(scope,releaseId)}:{releases:await deps.releases().list(scope)},{headers:aiHeaders});
  });
  const POST=(request:Request)=>executeProjectRequest(deps,request,"write",async ownerId=>{

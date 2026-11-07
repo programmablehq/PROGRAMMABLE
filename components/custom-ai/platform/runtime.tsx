@@ -17,7 +17,16 @@ export function ProjectRuntime({project,api,onPrompt,account,headers,generalLaun
   const refresh=useCallback(async(signal?:AbortSignal)=>{const [saved,schedules,checks]=await Promise.all([api<{releases:Release[]}>(`/releases?projectId=${project.projectId}`,{signal}),api<Jobs>(`/jobs?projectId=${project.projectId}`,{signal}),api<Assessment>(`/checks?projectId=${project.projectId}&revisionId=${encodeURIComponent(project.revisionId)}`,{signal})]);setReleases(saved.releases);setJobs(schedules);setAssessment(checks);},[api,project.projectId,project.revisionId]);
   useEffect(()=>{const controller=new AbortController();void Promise.resolve().then(()=>refresh(controller.signal)).catch(cause=>{if(!controller.signal.aborted)setError(cause.message);});return()=>controller.abort();},[refresh]);
   const queued=releases.some(release=>!["published","ready","stopped","failed"].includes(release.state));
-  useEffect(()=>{if(!queued)return;const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;const poll=async()=>{try{await refresh(controller.signal);}catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Progress could not load.");}if(!controller.signal.aborted)timer=setTimeout(poll,10000);};timer=setTimeout(poll,6000);return()=>{clearTimeout(timer);controller.abort();};},[queued,refresh]);
+  const pendingIds=releases.filter(release=>!["published","ready","stopped","failed"].includes(release.state)&&!(release.control?.state==="unknown"&&release.control.attempts>=3)).map(release=>release.id).sort().join(",");
+  useEffect(()=>{
+    if(!pendingIds)return;const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
+    const poll=async()=>{try{
+      const progress=await Promise.all(pendingIds.split(",").map(id=>api<{release:Release}>(`/releases?projectId=${project.projectId}&releaseId=${id}`,{signal:controller.signal})));
+      if(!controller.signal.aborted)setReleases(current=>current.map(release=>progress.find(item=>item.release.id===release.id)?.release??release));
+    }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Progress could not load.");}
+    if(!controller.signal.aborted)timer=setTimeout(poll,10000);};
+    timer=setTimeout(poll,6000);return()=>{clearTimeout(timer);controller.abort();};
+  },[pendingIds,api,project.projectId]);
   async function task(work:()=>Promise<void>){if(busy)return;setBusy(true);setError("");try{await work();}catch(cause){setError(cause instanceof Error?cause.message:"The app could not be updated.");}finally{setBusy(false);}}
   async function publish(){pending.current??={action:"queue",projectId:project.projectId,revisionId:project.revisionId,mode:"preview",idempotencyKey:crypto.randomUUID()};await api("/releases",{body:pending.current});pending.current=undefined;setNotice("Preview queued. You can leave this page while it is built.");await refresh();}
   const stateLabel=(release:Release)=>{

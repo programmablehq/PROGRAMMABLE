@@ -36,16 +36,22 @@ different forms of evidence and must remain distinguishable.
 
 ## Current release blockers
 
-- A basic canonical coin now passes real model planning, compilation, 32 EVM
-  cases, independent source review and source-checkpoint creation. Earlier runs
-  exposed provider-format, copied-context and incomplete-interface failures.
-  The full A1 reference additionally requires staged fees and the deployed user
-  flow; those remain necessary.
+- An isolated canonical coin with staged fees passes real model planning,
+  compilation, 37 EVM cases, independent source review and checkpoint creation.
+  Normal authenticated staging runs have reached saved plans and compilation;
+  the complete A1 and A2 flows still need to finish within their account limits.
 - A real two-release provider probe confirmed that a new preview preserves the
   previous production target, an uncertain promotion closes data access, and an
   exact retry retires the previous live key while preserving data. After fixing
   redundant unpause calls and requiring actual HTTP confirmation, pause and
   resume also passed against that live provider. These isolated checks still
   need to be joined to the deployed product and ordinary-user acceptance.
-- Production migration/grants, worker authentication, the dedicated hosting
-  credential and ordinary-user A1–A6 staging acceptance remain outstanding.
+- The deployed worker accepts an owner/project/run-bound grant and rejects
+  duplicate admission. Two authenticated staging accounts pass ownership,
+  HTTP/MCP connections, OAuth callback/refresh and signed-webhook checks.
+  Browser sign-in on the staging origin still needs the app's domain setting.
+- The hosted sandbox transport has a locally reproduced HTTP-version fix;
+  successful VM execution through the updated deployed worker is still required.
+- The dedicated hosting credential, production migration/grants and complete
+  ordinary-user A1–A6 staging acceptance remain outstanding. The platform has
+  not been enabled for production users.

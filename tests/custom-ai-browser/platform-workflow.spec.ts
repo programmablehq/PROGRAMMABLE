@@ -133,3 +133,19 @@ test("shows a terminal run even when its changed files cannot reload",async({pag
   await request.post(`${origin}/fixture/pause`,{data:{paused:false}});
  }
 });
+test("polls a building release without repeatedly loading checks and jobs",async({page})=>{
+ await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();
+ let progressReads=0,checks=0,jobs=0;
+ const release={id:"11111111-1111-4111-8111-111111111111",revisionId:"sha256:"+"1".repeat(64),state:"building",mode:"preview",url:null,errorCode:null,observedAt:null};
+ await page.route(url=>url.pathname.endsWith("/platform/releases"),route=>{
+  if(new URL(route.request().url()).searchParams.has("releaseId")){progressReads++;return route.fulfill({json:{release:{...release,state:"ready"}}});}
+  return route.fulfill({json:{releases:[release]}});
+ });
+ page.on("request",request=>{if(request.method()!=="GET")return;const path=new URL(request.url()).pathname;if(path.endsWith("/platform/checks"))checks++;if(path.endsWith("/platform/jobs"))jobs++;});
+ await page.getByRole("tab",{name:"Preview & run",exact:true}).click();
+ await expect(page.getByText("Building · earlier version",{exact:true})).toBeVisible();
+ const initial={checks,jobs};
+ await expect.poll(()=>progressReads,{timeout:12000}).toBe(1);
+ await expect(page.getByText("Preview ready · earlier version",{exact:true})).toBeVisible();
+ expect({checks,jobs}).toEqual(initial);
+});
