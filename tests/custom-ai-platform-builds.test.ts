@@ -20,6 +20,54 @@ const document = { requirements: [{ id: "count", text: "Persists a count", kind:
   files: { "app.js": "export const count = 1;" }, architecture: { checks: [{ id: "count-check", requirementIds: ["count"], command: "node --test tests/count.test.mjs", kind: "behavior" }] } };
 
 describe("versioned behavior evidence", () => {
+  it.each([false, true])("uses the latest exact check result after a same-revision rerun (first pass: %s)", async firstPass => {
+    const first = await projects.createProject(scope);
+    const revision = await projects.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "retry", patch: {
+      ...document, architecture: { checks: [{ ...document.architecture.checks[0], requirementIds: ["count", "private"] }] },
+    } });
+    const result = { stdout: "check result", stderr: "", truncated: false, files: {}, revisionId: revision.revisionId, durationMs: 1 };
+    const execute = vi.fn().mockResolvedValueOnce({ ...result, jobId: "first", exitCode: firstPass ? 0 : 1 })
+      .mockResolvedValueOnce({ ...result, jobId: "second", exitCode: firstPass ? 1 : 0 });
+    const checks = createProjectChecks(pool, projects, { execute });
+    const ref = { ...scope, revisionId: revision.revisionId };
+    await checks.verify(ref);
+    await db.query("UPDATE programmable_projects_v1.check_evidence SET created_at='2000-01-01T00:00:00Z'");
+    const repeated = await checks.verify(ref);
+    expect(repeated.assessment.verified).toBe(!firstPass);
+    expect(repeated.assessment.evidence).toHaveLength(1);
+    expect(repeated.assessment.evidence[0].passed).toBe(!firstPass);
+    expect((await db.query("SELECT id FROM programmable_projects_v1.check_evidence")).rows).toHaveLength(2);
+  });
+  it("does not let another declared check erase a failure or omit a required build check", async () => {
+    const first = await projects.createProject(scope);
+    const declarations = [
+      { id: "behavior", requirementIds: ["count", "private"], kind: "behavior", command: "node test.mjs" },
+      { id: "build", requirementIds: [], kind: "build", command: "node build.mjs" },
+    ];
+    const revision = await projects.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "full-plan", patch: { ...document, architecture: { checks: declarations } } });
+    const checks = createProjectChecks(pool, projects, { execute: async () => { throw Error("not used"); } });
+    const ref = { ...scope, revisionId: revision.revisionId };
+    const { projectHash } = await import("../lib/custom-ai/platform/document");
+    await checks.record(ref, { requirementIds: ["count", "private"], passed: true, commandHash: projectHash("node test.mjs"), result: { kind: "behavior", checkId: "behavior" } });
+    expect(await checks.assess(ref)).toMatchObject({ verified: false, missingChecks: ["build"] });
+    await checks.record(ref, { requirementIds: [], passed: false, commandHash: projectHash("node build.mjs"), result: { kind: "build", checkId: "build" } });
+    expect((await checks.assess(ref)).verified).toBe(false);
+    await checks.record(ref, { requirementIds: ["count", "private"], passed: true, commandHash: projectHash("node build.mjs"), result: { kind: "behavior", checkId: "build" } });
+    expect((await checks.assess(ref)).verified).toBe(false);
+  });
+  it("keeps a failure when conflicting exact-check results have the same timestamp", async () => {
+    const first = await projects.createProject(scope);
+    const revision = await projects.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "same-time", patch: {
+      ...document, architecture: { checks: [{ ...document.architecture.checks[0], requirementIds: ["count", "private"] }] },
+    } });
+    let job = 0;
+    const checks = createProjectChecks(pool, projects, { execute: async () => ({ exitCode: job++ === 0 ? 1 : 0, stdout: "", stderr: "", truncated: false, files: {}, revisionId: revision.revisionId, jobId: String(job), durationMs: 1 }) });
+    const ref = { ...scope, revisionId: revision.revisionId };
+    await checks.verify(ref);
+    await checks.verify(ref);
+    await db.query("UPDATE programmable_projects_v1.check_evidence SET created_at='2000-01-01T00:00:00Z'");
+    expect((await checks.assess(ref)).verified).toBe(false);
+  });
   it("requires both app and contract evidence without changing the global requirements",async()=>{
     const first=await projects.createProject(scope),revision=await projects.applyProjectPatch({...scope,expectedRevisionId:first.revisionId,idempotencyKey:"mixed",patch:{...document,architecture:{kind:"contract",application:{framework:"static",dataVersion:1},requirementScopes:{contract:["count"],application:["private"]}}}});
     expect(platformContractIntent(revision).requirements.map(rule=>rule.id)).toEqual(["count"]);

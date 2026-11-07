@@ -65,21 +65,37 @@ export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof cr
   async function assess(reference: Ref) {
     const ref = identity(reference);
     const project = await projects.readRevision(ref, ref.revisionId);
-    const evidence = await projectTransaction(pool, ref, db => db.query("SELECT id,requirement_ids,passed,result FROM programmable_projects_v1.check_evidence WHERE owner=$1 AND project_id=$2 AND revision_id=$3 AND requirements_hash=$4 ORDER BY created_at",
+    const evidence = await projectTransaction(pool, ref, db => db.query("SELECT id,requirement_ids,passed,result,command_hash,EXTRACT(EPOCH FROM created_at)::double precision AS observed_at FROM programmable_projects_v1.check_evidence WHERE owner=$1 AND project_id=$2 AND revision_id=$3 AND requirements_hash=$4 ORDER BY created_at,id",
       [ref.ownerId, ref.projectId, ref.revisionId, project.requirementsHash]));
     const architecture=project.document.architecture;
     const contract=architecture&&typeof architecture==="object"&&!Array.isArray(architecture)&&["contract","legacy-contract"].includes(String(architecture.kind));
     const resultKind=(row:Record<string,unknown>)=>row.result&&typeof row.result==="object"?(row.result as Record<string,unknown>).kind:undefined;
+    const declarations=declaredProjectChecks(architecture,project.document.requirements.map(rule=>rule.id));
+    const currentChecks=new Map<string,Record<string,unknown>>(),otherEvidence:Record<string,unknown>[]=[];
+    const checkKey=(check:Check)=>JSON.stringify([check.id,check.kind,projectHash(check.command)]);
+    for(const row of evidence.rows){
+      const result=row.result&&typeof row.result==="object"?row.result as Record<string,unknown>:{};
+      const check=declarations.find(item=>item.id===result.checkId&&item.kind===result.kind&&projectHash(item.command)===row.command_hash
+        &&projectHash(item.kind==="behavior"?item.requirementIds:[])===projectHash(row.requirement_ids));
+      if(!check){otherEvidence.push(row);continue;}
+      const key=checkKey(check),previous=currentChecks.get(key);
+      // A new execution supersedes only the same declared check. A conflicting
+      // result with an indistinguishable timestamp remains a failure.
+      if(!previous||Number(row.observed_at)>Number(previous.observed_at)
+        ||Number(row.observed_at)===Number(previous.observed_at)&&row.passed!==true)currentChecks.set(key,row);
+    }
+    const activeEvidence=[...otherEvidence,...currentChecks.values()];
     const scopes=projectRequirementScopes(project.document);
-    const contractCovered=new Set(evidence.rows.filter(row=>row.passed===true&&resultKind(row)==="contract-scenarios").flatMap(row=>row.requirement_ids as string[]));
-    const applicationCovered=new Set(evidence.rows.filter(row=>row.passed===true&&resultKind(row)==="behavior").flatMap(row=>row.requirement_ids as string[]));
+    const contractCovered=new Set(activeEvidence.filter(row=>row.passed===true&&resultKind(row)==="contract-scenarios").flatMap(row=>row.requirement_ids as string[]));
+    const applicationCovered=new Set(activeEvidence.filter(row=>row.passed===true&&resultKind(row)==="behavior").flatMap(row=>row.requirement_ids as string[]));
     const missingRequirementIds = project.document.requirements.filter(item => item.open !== null
       ||scopes.contract.includes(item.id)&&!contractCovered.has(item.id)
       ||scopes.application.includes(item.id)&&!applicationCovered.has(item.id)).map(item=>item.id);
-    const missingChecks=contract&&!evidence.rows.some(row=>row.passed===true&&resultKind(row)==="source-audit")?["source-audit"]:[];
-    const verified = project.document.requirements.length > 0 && missingRequirementIds.length === 0 && !missingChecks.length && evidence.rows.length > 0 && evidence.rows.every(row => row.passed === true);
+    const missingChecks=declarations.filter(check=>currentChecks.get(checkKey(check))?.passed!==true).map(check=>check.id);
+    if(contract&&!activeEvidence.some(row=>row.passed===true&&resultKind(row)==="source-audit"))missingChecks.push("source-audit");
+    const verified = project.document.requirements.length > 0 && missingRequirementIds.length === 0 && !missingChecks.length && activeEvidence.length > 0 && activeEvidence.every(row => row.passed === true);
     const level: ProjectLevel = verified ? "verified" : Object.keys(project.document.files).length ? "built" : project.document.requirements.length ? "planned" : "discussed";
-    return { level, verified, missingRequirementIds, missingChecks, evidence: evidence.rows.map(row => ({ id: String(row.id), passed: Boolean(row.passed), requirementIds: row.requirement_ids as string[], result: row.result as JsonValue })) };
+    return { level, verified, missingRequirementIds, missingChecks, evidence: activeEvidence.map(row => ({ id: String(row.id), passed: Boolean(row.passed), requirementIds: row.requirement_ids as string[], result: row.result as JsonValue })) };
   }
   return { verify, assess, record };
 }
