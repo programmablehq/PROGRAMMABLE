@@ -4,6 +4,8 @@ Open [AI Chat](/launch/custom-ai) and connect your existing wallet session. Chec
 
 During a limited rollout, `projectPlatform.rollout` is `pilot` and access depends on your signed-in account. Other accounts keep their existing coin chats and saved work. A `general` rollout makes the workspace available to normal eligible accounts.
 
+If access changes while a page is open, save your current work and reload the page to refresh the available workspace. **Saved coin chats** remains available when a project action reports that your account no longer has access.
+
 ## Describe the result
 
 Create or select a project and use **Message your project** to describe what it should do. Include the rules that must stay in place when you ask for a change. You can use ordinary German or English. The saved requirement list and **Technical plan** show what the chat understood. Answer an open question before treating that requirement as settled.

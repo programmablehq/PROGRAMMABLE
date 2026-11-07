@@ -11,6 +11,7 @@ function policy():Policy {
     if(raw.length>8192)return {kind:"invalid"};
     const owners:unknown=JSON.parse(raw);
     if(!Array.isArray(owners)||owners.length>32||owners.some(owner=>typeof owner!=="string"||!/^[A-Za-z0-9:_-]{1,200}$/.test(owner)))return {kind:"invalid"};
+    if(owners.length===0)return {kind:"disabled"};
     return {kind:"pilot",owners:new Set<string>(owners)};
   } catch {return {kind:"invalid"};}
 }

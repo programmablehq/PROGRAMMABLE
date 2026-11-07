@@ -62,7 +62,7 @@ describe("project platform rollout admission",()=>{
   vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS",value);expect(productionAccountDependencies().enabled()).toBe(false);expect((await productionProjectRoutes().GET(request())).status).toBe(404);
  });
  it("treats an explicit empty pilot roster as admitting nobody",async()=>{
-  vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS","[]");expect((await productionProjectRoutes().GET(request())).status).toBe(403);
+  vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS","[]");expect(productionAccountDependencies().enabled()).toBe(false);expect((await productionProjectRoutes().GET(request())).status).toBe(404);
  });
  it("preserves session authentication before checking pilot admission",async()=>{
   vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS",JSON.stringify([alice]));boundary.authorize.mockRejectedValue(new CustomAIError("auth","Sign in",401));

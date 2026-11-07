@@ -88,6 +88,11 @@ describe("Custom AI capability discovery", () => {
     vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS","invalid-json");
     expect((await GET().json()).projectPlatform).toEqual({version:1,state:"not-enabled"});
   });
+  it("does not advertise an explicitly empty pilot to guests or signed-in accounts",async()=>{
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS","[]");
+    const body=await GET().json();expect(body.projectPlatform).toEqual({version:1,state:"not-enabled"});
+    expect(JSON.stringify(body)).not.toContain('"rollout":"general"');
+  });
 });
 
 const context = () => ({ owner: "test", chainId: 1 as const, allowWeb: false, budget: { remaining: 2 } });

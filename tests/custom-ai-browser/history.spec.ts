@@ -43,6 +43,21 @@ test("pilot admission is reconsidered for a different principal using the same w
  await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();expect(f.calls).toEqual([]);
 });
 
+test("a page reload refreshes pilot admission while preserving the existing coin draft",async({page})=>{
+ const f=await fixture(page),account="0x"+"a".repeat(40),now=new Date().toISOString(),key="alice:"+account+":"+LEGACY_CONVERSATION;
+ f.chats.set(key,{id:LEGACY_CONVERSATION,account,title:"Existing coin",archived:false,revision:1,createdAt:now,updatedAt:now});
+ f.studios.set(key,{revision:1,state:{settings:EMPTY_COIN_SETUP,messages:[{role:"user",content:"Earlier private rules"}],input:"Keep this draft after admission changes"}});
+ let admitted=false;
+ await page.route("**/api/custom-ai/platform/**",route=>admitted?route.fulfill({json:{projects:[]}}):route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
+ await page.goto(origin+"?platform=1");
+ const draft=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});
+ await expect(draft).toHaveValue("Keep this draft after admission changes");
+ admitted=true;await page.reload();
+ await expect(page.getByRole("button",{name:"Create your first project",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Saved coin chats",exact:true}).click();
+ await expect(draft).toHaveValue("Keep this draft after admission changes");expect(f.calls).toEqual([]);
+});
+
 test("pilot denial preserves the explicitly submitted guest idea without starting a model run",async({page})=>{
  const f=await fixture(page);
  await page.route("**/api/custom-ai/platform/**",route=>route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
