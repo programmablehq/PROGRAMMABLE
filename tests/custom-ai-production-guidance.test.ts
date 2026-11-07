@@ -10,7 +10,9 @@ describe("validated platform policy guidance",()=>{
   it.each([1,4663,8453,999] as const)("explains the current cumulative policy for chain %i",chain=>{
     const context=projectLaunchProductionContext(captured.chains[String(chain) as keyof typeof captured.chains],chain,protection);
     const guidance=launchProductionGuidance(context);
-    expect(guidance).toContain("300 seconds");expect(guidance).toContain("99% for 30 seconds");
+    expect(guidance).toContain("300 seconds");expect(guidance).toContain("starts at 99%");
+    expect(guidance).toContain("decreases linearly to zero over 30 seconds");
+    expect(guidance).not.toContain("99% for 30 seconds");
     expect(guidance).toContain("2% recipient cap measures cumulative token inflows");
     expect(guidance).toContain("including wallet-to-wallet transfers");expect(guidance).toContain("Tax-exempt wallets remain subject");
     expect(guidance).toContain("use an empty additionalTaxExemptWallets list");
