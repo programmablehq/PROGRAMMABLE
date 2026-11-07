@@ -319,8 +319,9 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
 
 export type AIStore = ReturnType<typeof createAIStore>;
 let production: AIStore | undefined;
-export function productionAIStore(): AIStore {
-  if (production) return production;
+let productionPool: Pool | undefined;
+export function productionAIPool(): AIPool {
+  if (productionPool) return productionPool;
   const value = process.env.CUSTOM_AI_DATABASE_URL;
   if (!value) throw unavailable();
   const url = new URL(value);
@@ -331,8 +332,13 @@ export function productionAIStore(): AIStore {
     ...(process.env.CUSTOM_AI_DATABASE_CA ? { ca: process.env.CUSTOM_AI_DATABASE_CA } : {}),
   }, max: 4, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000, allowExitOnIdle: true });
   pool.on("error", () => undefined);
+  productionPool = pool;
+  return pool;
+}
+export function productionAIStore(): AIStore {
+  if (production) return production;
   const cap = Number(process.env.CUSTOM_AI_GLOBAL_DAILY_UNITS);
   if (!Number.isSafeInteger(cap) || cap < 5 || cap > 10000) throw unavailable();
-  production = createAIStore(pool, { hourlyUnits: 25, dailyUnits: 100, globalDailyUnits: cap, concurrent: 1 });
+  production = createAIStore(productionAIPool(), { hourlyUnits: 25, dailyUnits: 100, globalDailyUnits: cap, concurrent: 1 });
   return production;
 }
