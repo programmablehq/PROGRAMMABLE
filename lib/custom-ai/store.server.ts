@@ -8,6 +8,7 @@ import { refundsProviderFailure } from "./provider-errors";
 import { bindConversationJob, createConversationStore, updateConversationStudio } from "./conversation.server";
 import type { WalletAction, WalletSession } from "./launch-session";
 import { createProjectStore } from "./project-store.server";
+import { reserveAIUnits, configuredAIAllowance } from "./budget.server";
 
 export interface AIConnection {
   query(sql: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
@@ -103,20 +104,7 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
       if (Number(active.n) >= limits.concurrent) throw new CustomAIError("busy", "Your previous reply is still being prepared.", 429);
       await bindConversationJob(db,owner,request);
       const units = isBriefChat(request) || request.intent === "compile" ? 1 : 5, time = now();
-      const hour = Math.floor(time / 3_600_000), day = Math.floor(time / 86_400_000);
-      for (const [subject, period, limit] of [
-        [`account-hour:${owner}`, hour, limits.hourlyUnits],
-        [`account-day:${owner}`, day, limits.dailyUnits],
-        ["global-day", day, limits.globalDailyUnits],
-      ] as const) {
-        const charged = await db.query(`INSERT INTO programmable_custom_ai_v1.budgets(subject,period,used)
-          VALUES($1,$2,$3) ON CONFLICT(subject,period) DO UPDATE SET used=programmable_custom_ai_v1.budgets.used+$3
-          WHERE programmable_custom_ai_v1.budgets.used+$3 <= $4 RETURNING used`, [subject, period, units, limit]);
-        if (units > limit || !charged.rows.length) {
-          const duration = subject.startsWith("account-hour:") ? 3_600_000 : 86_400_000;
-          throw new CustomAIError("budget", "The current allowance is used up. Your draft is saved; check Usage for the reset time.", 429, (period + 1) * duration - time);
-        }
-      }
+      const { hour, day } = await reserveAIUnits(db, owner, units, limits, time);
       const lease = randomUUID();
       await db.query(`INSERT INTO programmable_custom_ai_v1.jobs(owner,id,payload_hash,request,state,lease,reserved,hour,day)
         VALUES($1,$2,$3,$4,'running',$5,$6,$7,$8)`, [owner, request.id, hash, JSON.stringify({ ...request, ...(profile ? { executionProfile: profile } : {}) }), lease, units, hour, day]);
@@ -319,8 +307,9 @@ export function createAIStore(pool: AIPool, limits: AIBudget, now: () => number 
 
 export type AIStore = ReturnType<typeof createAIStore>;
 let production: AIStore | undefined;
-export function productionAIStore(): AIStore {
-  if (production) return production;
+let productionPool: Pool | undefined;
+export function productionAIPool(): AIPool {
+  if (productionPool) return productionPool;
   const value = process.env.CUSTOM_AI_DATABASE_URL;
   if (!value) throw unavailable();
   const url = new URL(value);
@@ -331,8 +320,11 @@ export function productionAIStore(): AIStore {
     ...(process.env.CUSTOM_AI_DATABASE_CA ? { ca: process.env.CUSTOM_AI_DATABASE_CA } : {}),
   }, max: 4, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000, allowExitOnIdle: true });
   pool.on("error", () => undefined);
-  const cap = Number(process.env.CUSTOM_AI_GLOBAL_DAILY_UNITS);
-  if (!Number.isSafeInteger(cap) || cap < 5 || cap > 10000) throw unavailable();
-  production = createAIStore(pool, { hourlyUnits: 25, dailyUnits: 100, globalDailyUnits: cap, concurrent: 1 });
+  productionPool = pool;
+  return pool;
+}
+export function productionAIStore(): AIStore {
+  if (production) return production;
+  production = createAIStore(productionAIPool(), configuredAIAllowance());
   return production;
 }

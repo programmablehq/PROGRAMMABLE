@@ -1,0 +1,25 @@
+import {randomBytes} from 'node:crypto';
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {PGlite} from '@electric-sql/pglite';
+vi.mock('server-only',()=>({}));
+import {githubConnectionManifest,createGitHubRepositoryClient} from '../lib/custom-ai/platform/github.server';
+import {createConnectionStore} from '../lib/custom-ai/platform/connections.server';
+import {createPlatformStore} from '../lib/custom-ai/platform/project-store.server';
+import {PROJECT_PLATFORM_SCHEMA} from '../lib/custom-ai/platform/schema.generated';
+import type {AIPool} from '../lib/custom-ai/store.server';
+import type {ConnectorTransport} from '../lib/custom-ai/platform/private-http.server';
+let db:PGlite,pool:AIPool;
+const scope={ownerId:'alice',projectId:'11111111-1111-4111-8111-111111111111'},id='22222222-2222-4222-8222-222222222222';
+beforeEach(async()=>{db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let tail=Promise.resolve();pool={connect:async()=>{const old=tail;let release!:()=>void;tail=new Promise<void>(r=>{release=r});await old;return {query:(s,v)=>db.query<Record<string,unknown>>(s,v),release};}};await createPlatformStore(pool).createProject(scope);});
+afterEach(async()=>{await db.close()});
+it('binds a private GitHub token to the approved repository and action',async()=>{
+ const store=createConnectionStore(pool,{active:'test',keys:{test:randomBytes(32)}}),manifest=githubConnectionManifest('example/project');
+ const saved=await store.saveConnection(scope,{id,manifest,allowedActions:['github-commit','github-tree','github-blob'],secret:{apiKey:'fixture-only-secret'}});
+ const transport=vi.fn<ConnectorTransport>(async()=>({status:200,headers:{'content-type':'application/json'},text:JSON.stringify({sha:'a'.repeat(40),commit:{tree:{sha:'b'.repeat(40)}}})}));
+ const client=createGitHubRepositoryClient({scope,repository:'example/project',connection:{id,version:saved.version},store,transport});
+ await client.get('/repos/example/project/commits/main');expect(transport.mock.calls[0][0].headers.Authorization).toBe('Bearer fixture-only-secret');
+ expect(transport.mock.calls[0][0].headers['X-GitHub-Api-Version']).toBe('2026-03-10');
+ await expect(client.get('/repos/other/project/commits/main')).rejects.toMatchObject({code:'github-scope'});
+ await expect(client.post!('/repos/example/project/git/refs',{},'write')).rejects.toMatchObject({code:'connection-action'});expect(transport).toHaveBeenCalledOnce();
+ await store.revoke(scope,id);await expect(client.get('/repos/example/project/commits/main')).rejects.toMatchObject({code:'connection-revoked'});expect(transport).toHaveBeenCalledOnce();
+});

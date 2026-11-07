@@ -17,9 +17,10 @@ export class ModelResponseError extends CustomAIError {
   public readonly usage: { inputTokens: number | null; outputTokens: number | null };
   declare readonly partialDeclaration?: string;
   declare readonly schemaFailure?: ModelSchemaFailure;
+  declare readonly protocolViolation?: true;
   constructor(public failure: NonNullable<ModelCallMetric["failure"]>, usage: {
     inputTokens: number | null; outputTokens: number | null;
-  }, partialDeclaration?:string, schemaFailure?:ModelSchemaFailure) {
+  }, partialDeclaration?:string, schemaFailure?:ModelSchemaFailure, protocolViolation=false) {
     super("incomplete", failure === "timeout"
       ? "The model reached its time limit. Your complete idea is still saved."
       : failure === "output-limit"
@@ -30,5 +31,6 @@ export class ModelResponseError extends CustomAIError {
     this.usage = { inputTokens: reportedTokenCount(usage.inputTokens), outputTokens: reportedTokenCount(usage.outputTokens) };
     if(partialDeclaration!==undefined)Object.defineProperty(this,"partialDeclaration",{value:partialDeclaration.slice(0,96000),enumerable:false});
     if(schemaFailure)Object.defineProperty(this,"schemaFailure",{value:structuredClone(schemaFailure),enumerable:false});
+    if(protocolViolation)Object.defineProperty(this,"protocolViolation",{value:true,enumerable:false});
   }
 }

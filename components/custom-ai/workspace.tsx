@@ -47,11 +47,14 @@ import { COIN_DETAIL_ACTION, coinDetailReply, feeLaunchDetailIssue } from "@/lib
 import { generalLaunchDetailIssue } from "@/lib/custom-ai/general-details";
 import { Disclosure } from "@/components/disclosure";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
+const ProjectWorkspace=lazy(()=>import("./platform/workspace"));
+const LegacyProjectImport=lazy(()=>import("./platform/legacy-import").then(module=>({default:module.LegacyProjectImport})));
 
-export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
+export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false, platformEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean; platformEnabled?: boolean }) {
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
   const [pendingPrompt,setPendingPrompt]=useState<PromptHandoff>();
+  const [legacy,setLegacy]=useState(false);
   // Reading an owned chat needs the confirmed access session. Waiting for a
   // transaction connector here can hide the chat while its signer reconnects.
   // WalletProvider still enforces that connector for all signing operations.
@@ -84,11 +87,13 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
     return { Authorization: `Bearer ${access}` };
   };
   if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <SessionLoading onReconnect={wallet.openWallet}/>;
+  if(platformEnabled&&!localPreview&&owner!=="signed-out"&&!legacy)return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><ProjectWorkspace key={`${wallet.sessionOwner}:${owner}`} account={owner} headers={headers} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt} generalLaunchEnabled={generalLaunchEnabled} onLegacy={()=>setLegacy(true)}/></Suspense>;
+  if(platformEnabled&&!localPreview&&owner!=="signed-out"&&legacy)return <><button type="button" className={styles.textButton} style={{position:"relative",zIndex:2,marginInline:24}} onClick={()=>setLegacy(false)}>Back to projects</button><Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} onPlatformImport={()=>setLegacy(false)}/></AuthenticatedChats></Suspense></>;
   if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
   return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} onConnectPrompt={connectPrompt} onGuestInput={invalidatePrompt}/>;
 }
 
-function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, initialPrompt, onPromptAccepted, onConnectPrompt, onGuestInput }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void; onGuestInput?:(content:string)=>void }) {
+function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, initialPrompt, onPromptAccepted, onConnectPrompt, onGuestInput, onPlatformImport }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void; onGuestInput?:(content:string)=>void; onPlatformImport?:()=>void }) {
   const wallet=useWallet(),signedOut=!localPreview&&owner==="signed-out";
   const incomingPrompt=useRef(initialPrompt?{prompt:initialPrompt,accept:onPromptAccepted}:undefined);
   const library=useChatLibrary(),conversationId=library?.id,navigation=library?.navigation;
@@ -648,6 +653,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
           <Wallet size={16} aria-hidden="true"/>{`${owner.slice(0,6)}…${owner.slice(-4)}`}
         </button>}
         navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)} />
+      {onPlatformImport && conversationId && (generalProject||sourceRecovery) && (sourceId||draftId) && <Suspense fallback={null}><LegacyProjectImport requestId={(sourceId||draftId)!} account={owner} conversationId={conversationId} headers={headers} onImported={onPlatformImport}/></Suspense>}
       <div ref={transcript} className={styles.transcript} role="log" aria-label="Conversation" aria-busy={busy}
         aria-live="polite" aria-relevant="additions" onScroll={event => {
           const element = event.currentTarget;

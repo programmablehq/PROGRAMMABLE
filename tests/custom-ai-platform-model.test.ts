@@ -1,0 +1,18 @@
+import {expect,it,vi} from "vitest";
+vi.mock("server-only",()=>({}));
+const {call}=vi.hoisted(()=>({call:vi.fn()}));
+vi.mock("../lib/custom-ai/model-provider.server",()=>({callModel:call}));
+vi.mock("../lib/custom-ai/provider-config.server",()=>({configuredProvider:()=>({models:{chat:"chat",build:"build",escalation:"audit"}})}));
+import {chooseProjectAction} from "../lib/custom-ai/platform/model.server";
+import {emptyProjectDocument} from "../lib/custom-ai/platform/document";
+it("uses the project action contract and preserves complete library observations",async()=>{
+ call.mockResolvedValue({text:JSON.stringify({kind:"reply",tool:null,input:null,message:"Ready",claim:"discussed"})});
+ const source="x".repeat(25000),context={project:{ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111",revisionId:`sha256:${"a".repeat(64)}`,parentRevisionId:null,ordinal:1,requirementsHash:`sha256:${"b".repeat(64)}`,fileTreeHash:`sha256:${"c".repeat(64)}`,architectureHash:`sha256:${"d".repeat(64)}`,dependencyLockHash:`sha256:${"e".repeat(64)}`,createdAt:new Date().toISOString(),document:emptyProjectDocument()},prompt:`Build a coin for 0x${"a".repeat(40)}. Invalid 0x123.`,operation:"build",tools:[],steps:[{id:"source",cursor:0,capability_id:"contract.library",input:{},state:"completed",result:{source}}],history:[]};
+ await chooseProjectAction(context,AbortSignal.timeout(1000));
+ const input=call.mock.calls[0][0];expect(input.task).toBe("project-action");expect(input.responseProfile).toBe("contract");expect(input.effort).toBe("low");
+ expect(input.schema.properties.input).toEqual({type:["object","null"]});expect(input.schema.properties).not.toHaveProperty("inputJson");
+ expect(JSON.parse(input.messages[0].content).observations[0].result.source).toBe(source);
+ expect(JSON.parse(input.messages[0].content).requestFacts.evmAddresses).toEqual([{value:`0x${"a".repeat(40)}`,valid:true},{value:"0x123",valid:false}]);
+ context.steps[0].capability_id="model.plan";context.steps[0].result={kind:"model-retry"} as never;
+ await chooseProjectAction(context,AbortSignal.timeout(1000));expect(call.mock.calls.at(-1)?.[0].model).toBe("audit");
+});

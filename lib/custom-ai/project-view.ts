@@ -59,6 +59,9 @@ export type GeneralProjectView = {
   scenarios?:ScenarioOverview;
 };
 export function generalProjectView(value: GeneralProjectDraft,implementation?:ProductImplementation): GeneralProjectView {
+  return projectCompilationView(value,implementation);
+}
+export function projectCompilationView(value: Pick<GeneralProjectDraft,"project"|"compilation"|"sourceAudit"|"scenarios"|"summary"|"blueprintId">,implementation?:ProductImplementation): GeneralProjectView {
   const { project, compilation } = value;
   if(implementation&&(!project.productBlueprintId||!cachedProductImplementation(implementation,{projectHash:project.hash,artifactHash:compilation.artifactHash,intentRevision:project.intent.revision,productBlueprintId:project.productBlueprintId})))throw TypeError("Product implementation changed.");
   return { version: 1, projectHash: project.hash, artifactHash: compilation.artifactHash, chainId: project.chainId,
