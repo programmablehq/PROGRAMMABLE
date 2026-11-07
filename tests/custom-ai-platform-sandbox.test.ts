@@ -26,12 +26,22 @@ describe("isolated revision execution", () => {
   it("reports provider failure metadata without logging credentials or request bodies", async () => {
     const revision = await store.createProject(alice), driver = provider();
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const error = Object.assign(new Error("Authorization: Bearer private-token; source=private-source"), { name: "APIError", status: 403, code: "forbidden", request: { authorization: "private-token" } });
+    const error = Object.assign(new TypeError("Authorization: Bearer private-token; source=private-source"), { name: "APIError", status: 403, code: "forbidden", request: { authorization: "private-token" } });
     driver.create.mockRejectedValueOnce(error);
     try {
       await expect(createSandboxExecutor(pool, store, driver).execute({ ...alice, revisionId: revision.revisionId, script: "true", outputPaths: [] })).rejects.toMatchObject({ code: "sandbox-provider" });
       expect(warning).toHaveBeenCalledWith("Project sandbox provider failure", expect.objectContaining({ stage: "create", name: "APIError", status: 403, code: "forbidden" }));
       expect(JSON.stringify(warning.mock.calls)).not.toMatch(/private-token|private-source|Authorization/);
+    } finally { warning.mockRestore(); }
+  });
+  it("identifies a failed runtime call and its safe cause without exposing request data", async () => {
+    const revision = await store.createProject(alice), driver = provider();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    driver.create.mockRejectedValueOnce(new TypeError("fetch failed", { cause: Object.assign(new Error("private request details"), { code: "ECONNRESET" }) }));
+    try {
+      await expect(createSandboxExecutor(pool, store, driver).execute({ ...alice, revisionId: revision.revisionId, script: "true", outputPaths: [] })).rejects.toMatchObject({ code: "sandbox-provider" });
+      expect(warning).toHaveBeenCalledWith("Project sandbox provider failure", expect.objectContaining({ stage: "create", detail: "fetch failed", causeCode: "ECONNRESET" }));
+      expect(JSON.stringify(warning.mock.calls)).not.toContain("private request details");
     } finally { warning.mockRestore(); }
   });
   it("materializes only the owned revision with fixed resource and egress limits", async () => {

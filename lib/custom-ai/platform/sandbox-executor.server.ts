@@ -27,8 +27,12 @@ function reportProviderFailure(jobId: string, stage: string, error: unknown) {
   const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
   const safe = (item: unknown) => typeof item === "string" && /^[a-zA-Z0-9_.-]{1,80}$/.test(item) ? item : undefined;
   const status = value.status ?? value.statusCode;
+  const cause = value.cause && typeof value.cause === "object" ? value.cause as Record<string, unknown> : {};
+  const message = error instanceof TypeError ? error.message : "";
+  const detail = /^[\x20-\x7e]{1,180}$/.test(message) && !/authorization|bearer|password|secret|token|credential|https?:|postgres:|[a-zA-Z0-9_-]{40}/i.test(message) ? message : undefined;
   console.warn("Project sandbox provider failure", { jobId, stage, name: safe(value.name), code: safe(value.code),
-    status: typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined });
+    status: typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined,
+    detail, causeName: safe(cause.name), causeCode: safe(cause.code) });
 }
 
 function dependencyPlan(files: Record<string, ProjectFile>, resolve: boolean) {
