@@ -18,6 +18,16 @@ const project=(increment=1)=>createContractProject({compiler:{version:GENERAL_PR
   entrypoints:[{source:"Counter.sol",contract:"Counter",role:"auxiliary"}]},intent,999);
 
 describe("the source-independent general scenario blueprint",()=>{
+  it("identifies a constructor reference that must be declared earlier",()=>{
+    const raw=declared(),dependency={...raw.contracts[0],id:"dependency",source:"Dependency.sol",contract:"Dependency",arguments:[],functions:[],surfaceRequirements:[]};
+    const main={...raw.contracts[0],arguments:[{contract:"dependency"}]};
+    expect(()=>createGeneralCheckBlueprint({...raw,contracts:[main,dependency]},intent,999,"cancun"))
+      .toThrow("contract-reference:dependency:must-be-declared-earlier");
+    const corrected=createGeneralCheckBlueprint({...raw,contracts:[dependency,main]},intent,999,"cancun");
+    expect(corrected.scenarios.contracts[1].arguments).toEqual([{contract:"dependency"}]);
+    expect(()=>createGeneralCheckBlueprint({...raw,contracts:[{...main,arguments:[{contract:"missing"}]}]},intent,999,"cancun"))
+      .toThrow("contract-reference:missing:must-be-declared-earlier");
+  });
   it("identifies missing constructor children without accepting a nonce gap",()=>{
     const child={...declared().contracts[0],id:"child",source:"Child.sol",contract:"Child",parent:"main",creation:"create",nonce:"1",value:"0"};
     expect(createGeneralCheckBlueprint({...declared(),constructorChildren:[child]},intent,999,"cancun").scenarios.constructorChildren).toHaveLength(1);

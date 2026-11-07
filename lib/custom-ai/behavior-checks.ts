@@ -43,7 +43,7 @@ function values(value:unknown,contracts:ReadonlySet<string>,depth=0,world:readon
     if(Array.isArray(item))return values(item,contracts,depth+1,world);
     if(!item||typeof item!=="object"||![Object.prototype,null].includes(Object.getPrototypeOf(item))||Object.keys(item).length!==1)return bad();
     if(Object.hasOwn(item,"account")){const name=(item as {account:CheckAccount}).account;if(!CHECK_ACCOUNTS.includes(name))return bad();return {account:name};}
-    if(Object.hasOwn(item,"contract")){const id=identifier((item as {contract:unknown}).contract);if(!contracts.has(id))return bad();return {contract:id};}
+    if(Object.hasOwn(item,"contract")){const id=identifier((item as {contract:unknown}).contract);if(!contracts.has(id))return bad(`contract-reference:${id}:must-be-declared-earlier`);return {contract:id};}
     if(world.length&&Object.hasOwn(item,"fixture")){const id=(item as {fixture:V4WorldFixture}).fixture;if(!world.includes(id))return bad();return {fixture:id};}
     if(world.includes("native-usd-feed")&&Object.hasOwn(item,"fixtureHash")){const id=(item as {fixtureHash:V4WorldFixture}).fixtureHash;if(!world.includes(id))return bad();return {fixtureHash:id};}
     if(world.length&&Object.hasOwn(item,"pool")&&(item as {pool:unknown}).pool===true)return {pool:true};
