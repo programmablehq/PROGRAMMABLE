@@ -96,7 +96,7 @@ const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/package.js
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["@vercel/sandbox"],
+  serverExternalPackages: ["@vercel/sandbox", "undici"],
   outputFileTracingIncludes: {
     "/api/custom-ai": customAIWorkerFiles,
     "/api/custom-ai/preview": customAIWorkerFiles,

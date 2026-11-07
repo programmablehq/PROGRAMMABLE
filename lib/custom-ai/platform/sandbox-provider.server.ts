@@ -1,8 +1,13 @@
 import "server-only";
 import { Writable } from "node:stream";
 import { Sandbox } from "@vercel/sandbox";
+import { fetch as undiciFetch } from "undici";
 import type { SandboxInstance, SandboxOutput, SandboxProvider } from "./sandbox-executor.server";
 import { projectFileBytes, projectFilePath } from "./files";
+
+// The SDK's overridden Undici 8 Agent must use matching handlers; Node 24's
+// global fetch still uses Undici 7. Keep this transport local to the SDK.
+const sandboxFetch = undiciFetch as unknown as typeof globalThis.fetch;
 
 function credentials() {
   const token = process.env.PROJECT_SANDBOX_VERCEL_TOKEN, teamId = process.env.PROJECT_SANDBOX_TEAM_ID, projectId = process.env.PROJECT_SANDBOX_PROJECT_ID;
@@ -25,7 +30,7 @@ function collector() {
 
 export const vercelSandboxProvider: SandboxProvider = {
   async create(input, signal) {
-    const box = await Sandbox.create({ ...credentials(), name: input.name, runtime: "node24", persistent: false,
+    const box = await Sandbox.create({ ...credentials(), fetch: sandboxFetch, name: input.name, runtime: "node24", persistent: false,
       region: "fra1", timeout: input.timeoutMs, resources: { vcpus: input.vcpus }, networkPolicy: input.network, env: { CI: "true" }, signal });
     const run = async (cmd: string, args: string[], timeout: number, signal: AbortSignal): Promise<SandboxOutput> => {
       const stdout = collector(), stderr = collector();
@@ -59,7 +64,7 @@ export const vercelSandboxProvider: SandboxProvider = {
     return instance;
   },
   async cleanup(name) {
-    try { await destroy(await Sandbox.get({ ...credentials(), name, signal: AbortSignal.timeout(15_000) })); }
+    try { await destroy(await Sandbox.get({ ...credentials(), fetch: sandboxFetch, name, signal: AbortSignal.timeout(15_000) })); }
     catch (error) { if (!absent(error)) throw error; }
   },
 };
