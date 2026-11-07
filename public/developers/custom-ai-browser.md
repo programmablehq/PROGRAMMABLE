@@ -4,6 +4,8 @@ Open https://programmable.market/launch/custom-ai. This guide covers the website
 
 Read https://programmable.market/api/custom-ai/capabilities for the current chains, buildable behavior and launch-preparation availability. Source generation, compilation, checked examples and a completed wallet launch are separate states. A checked draft is not a launched coin.
 
+If discovery returns `projectPlatform.state: "enabled"`, use the [project workspace guide](/developers/project-platform.md) for persistent projects, files, connections and application previews. Availability is specific to the environment you are using. The coin-chat instructions below remain applicable to **Saved coin chats**.
+
 ## Build or edit a coin
 
 1. If **Connect wallet** is visible, sign in before building or saving a hook. An idea typed before sign-in can be carried over by this button. Coin details and images become available after sign-in. The toolbar shows the active wallet; use it to manage the connection. If session loading takes longer, use **Reconnect wallet**. Keep any sign-in prompts with the user.
