@@ -137,6 +137,10 @@ describe("displayed-coin indexing reset operations", () => {
 
     expect(config.crons).toEqual([
       {
+        path: "/api/ops/project-runtime",
+        schedule: "* * * * *",
+      },
+      {
         path: "/api/ops/custom-ai-index",
         schedule: "* * * * *",
       },
