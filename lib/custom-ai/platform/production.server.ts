@@ -9,6 +9,8 @@ import { createArtifactRoutes } from "./artifact-http.server";
 
 let store: ReturnType<typeof createPlatformStore> | undefined;
 let artifacts: ReturnType<typeof createArtifactStore> | undefined;
+export function productionPlatformStore() { return store ??= createPlatformStore(productionAIPool()); }
+export function productionPlatformArtifacts() { return artifacts ??= createArtifactStore(productionAIPool()); }
 export function productionAccountDependencies(): ProjectAccountDependencies {
   return {
     enabled: () => process.env.CUSTOM_AI_PLATFORM_ENABLED === "true",
@@ -22,8 +24,8 @@ export function productionAccountDependencies(): ProjectAccountDependencies {
   };
 }
 export function productionProjectRoutes() {
-  return createProjectRoutes({ ...productionAccountDependencies(), store: () => store ??= createPlatformStore(productionAIPool()) });
+  return createProjectRoutes({ ...productionAccountDependencies(), store: productionPlatformStore });
 }
 export function productionArtifactRoutes() {
-  return createArtifactRoutes({ ...productionAccountDependencies(), store: () => artifacts ??= createArtifactStore(productionAIPool()) });
+  return createArtifactRoutes({ ...productionAccountDependencies(), store: productionPlatformArtifacts });
 }

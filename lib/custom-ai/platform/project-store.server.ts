@@ -69,13 +69,18 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
     return transaction(scope, db => read(db, scope, revisionId));
   }
 
-  async function applyProjectPatch(input: RevisionPatchInput): Promise<ProjectRevision> {
+  async function applyProjectPatch(input: RevisionPatchInput & { execution?: { runId: string; leaseToken: string } }): Promise<ProjectRevision> {
     const scope = { ownerId: input.ownerId, projectId: input.projectId };
     if (!validRevision(input.expectedRevisionId) || typeof input.idempotencyKey !== "string" || !/^[A-Za-z0-9_.:-]{1,128}$/.test(input.idempotencyKey)) {
       throw new ProjectError("project-input", "This project change is invalid.");
     }
     const requestHash = projectHash({ expectedRevisionId: input.expectedRevisionId, patch: input.patch });
     return transaction(scope, async db => {
+      if (input.execution) {
+        const granted = (await db.query("SELECT id FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 AND id=$3 AND lease_token=$4 AND status='running' AND lease_until>$5 FOR UPDATE",
+          [scope.ownerId, scope.projectId, input.execution.runId, input.execution.leaseToken, new Date(now()).toISOString()])).rows;
+        if (!granted.length) throw new ProjectError("run-lease", "This worker no longer owns the project run.", 409);
+      }
       const locked = await db.query("SELECT current_revision FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2 FOR UPDATE", [scope.ownerId, scope.projectId]);
       if (!locked.rows.length) throw missing();
       const prior = (await db.query("SELECT request_hash,revision_id FROM programmable_projects_v1.idempotency WHERE owner=$1 AND project_id=$2 AND key=$3", [scope.ownerId, scope.projectId, input.idempotencyKey])).rows[0];
@@ -89,6 +94,12 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
       await db.query("INSERT INTO programmable_projects_v1.idempotency(owner,project_id,key,request_hash,revision_id) VALUES($1,$2,$3,$4,$5)",
         [scope.ownerId, scope.projectId, input.idempotencyKey, requestHash, saved.revisionId]);
       return saved;
+    });
+  }
+  async function readPatchReceipt(scope: ProjectScope, idempotencyKey: string): Promise<ProjectRevision | null> {
+    return transaction(scope, async db => {
+      const item = (await db.query("SELECT revision_id FROM programmable_projects_v1.idempotency WHERE owner=$1 AND project_id=$2 AND key=$3", [scope.ownerId, scope.projectId, idempotencyKey])).rows[0];
+      return item ? read(db, scope, String(item.revision_id)) : null;
     });
   }
 
@@ -120,5 +131,5 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
     } });
   }
 
-  return { createProject, readProject, readRevision, applyProjectPatch, listProjects, listRevisions, restoreProjectRevision };
+  return { createProject, readProject, readRevision, applyProjectPatch, readPatchReceipt, listProjects, listRevisions, restoreProjectRevision };
 }

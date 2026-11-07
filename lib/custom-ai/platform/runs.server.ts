@@ -72,10 +72,10 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       const project = (await db.query("SELECT current_revision FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2 FOR SHARE", [scope.ownerId, scope.projectId])).rows[0];
       if (!project) throw missing();
       if (project.current_revision !== input.revisionId) throw new ProjectError("project-conflict", "Start work from the current project revision.", 409);
-      const abandoned = (await db.query("SELECT * FROM programmable_projects_v1.runs WHERE owner=$1 AND status IN ('queued','running','retryable','waiting_user') AND created_at<$2 FOR UPDATE",
+      const abandoned = (await db.query("SELECT * FROM programmable_projects_v1.runs WHERE owner=$1 AND NOT settled AND status IN ('queued','running','retryable','waiting_user') AND created_at<$2 FOR UPDATE",
         [scope.ownerId, new Date(now() - 600_000).toISOString()])).rows;
       for (const previous of abandoned) await expire(db, { ownerId: scope.ownerId, projectId: String(previous.project_id) }, previous);
-      const active = (await db.query("SELECT count(*) AS count FROM programmable_projects_v1.runs WHERE owner=$1 AND status IN ('queued','running','retryable','waiting_user')", [scope.ownerId])).rows[0];
+      const active = (await db.query("SELECT count(*) AS count FROM programmable_projects_v1.runs WHERE owner=$1 AND NOT settled AND status IN ('queued','running','retryable','waiting_user')", [scope.ownerId])).rows[0];
       if (Number(active.count) >= options.allowance.concurrent) throw new ProjectError("run-busy", "Finish or stop your current project run first.", 429);
       const periods = await reserveAIUnits(db, scope.ownerId, input.budgetUnits, options.allowance, now());
       const id = randomUUID(), timestamp = new Date(now()).toISOString();
@@ -122,8 +122,13 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
     return projectTransaction(pool, scope, async db => {
       const run = await leased(db, scope, runId, token);
       const steps = (await db.query("SELECT id,cursor,capability_id,input,result,state,effect,attempts FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 ORDER BY cursor", [scope.ownerId, scope.projectId, runId])).rows;
-      return structuredClone({ run: view(run), prompt: String(run.prompt), operation: run.operation as Operation, steps, policyHash });
+      const history = (await db.query("SELECT prompt,summary FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 AND id<>$3 AND settled ORDER BY created_at DESC LIMIT 6", [scope.ownerId, scope.projectId, runId])).rows.reverse();
+      return structuredClone({ run: view(run), prompt: String(run.prompt), operation: run.operation as Operation, steps, history, policyHash });
     });
+  }
+  async function leaseActive(scope: ProjectScope, runId: string, token: string) {
+    return projectTransaction(pool, scope, async db => (await db.query("SELECT id FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 AND id=$3 AND lease_token=$4 AND status='running' AND lease_until>$5 AND policy_hash=$6",
+      [scope.ownerId, scope.projectId, runId, token, new Date(now()).toISOString(), policyHash])).rows.length === 1);
   }
   async function readProgress(scope: ProjectScope, runId: string, afterCursor: string) {
     if (!/^(?:0|[1-9][0-9]?)$/.test(afterCursor) || Number(afterCursor) > 24) throw invalid();
@@ -192,7 +197,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       return view(updated.rows[0]);
     });
   }
-  async function finishRun(scope: ProjectScope, runId: string, token: string, summary: string): Promise<RunView> {
+  async function finishRun(scope: ProjectScope, runId: string, token: string, summary: string, status: "succeeded" | "waiting_user" = "succeeded"): Promise<RunView> {
     if (typeof summary !== "string" || !summary.trim() || summary.length > 4000) throw invalid();
     return projectTransaction(pool, scope, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
@@ -202,7 +207,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       }
       await settle(db, scope, run);
       await db.query("DELETE FROM programmable_projects_v1.dispatch_outbox WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId]);
-      const saved = await db.query("UPDATE programmable_projects_v1.runs SET status='succeeded',summary=$4,lease_token=NULL,lease_until=NULL,updated_at=$5 WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *", [scope.ownerId, scope.projectId, runId, summary, new Date(now()).toISOString()]);
+      const saved = await db.query("UPDATE programmable_projects_v1.runs SET status=$6,summary=$4,lease_token=NULL,lease_until=NULL,updated_at=$5 WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *", [scope.ownerId, scope.projectId, runId, summary, new Date(now()).toISOString(), status]);
       return view(saved.rows[0]);
     });
   }
@@ -232,5 +237,6 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       return view(saved.rows[0]);
     });
   }
-  return { startRun, readRun, claimRun, heartbeat, readWork, readProgress, resumeRun, beginStep, finishStep, finishRun, cancelRun, failRun };
+  return { startRun, readRun, claimRun, heartbeat, readWork, leaseActive, readProgress, resumeRun, beginStep, finishStep, finishRun, cancelRun, failRun,
+    allowedCapabilities: (operation: Operation) => Object.entries(options.capabilities).filter(([, capability]) => capability.operations.includes(operation)).map(([id]) => id) };
 }

@@ -151,4 +151,15 @@ describe("durable project runs", () => {
     expect((await runs.readProgress(scope, run.runId, "1")).events).toEqual([]);
     await expect(runs.readProgress({ ...scope, ownerId: "bob" }, run.runId, "0")).rejects.toMatchObject({ status: 404 });
   });
+  it("rejects a source write from a worker whose lease was replaced", async () => {
+    const run = await runs.startRun(input());
+    const first = (await runs.claimRun(scope, run.runId, "worker-one"))!;
+    clock += 1001;
+    const second = (await runs.claimRun(scope, run.runId, "worker-two"))!;
+    const projects = createPlatformStore(pool, () => clock);
+    const patch = { ...scope, expectedRevisionId: project.revisionId, idempotencyKey: "worker-write", patch: { title: "New title" } };
+    await expect(projects.applyProjectPatch({ ...patch, execution: { runId: run.runId, leaseToken: first.token } })).rejects.toMatchObject({ code: "run-lease" });
+    const saved = await projects.applyProjectPatch({ ...patch, execution: { runId: run.runId, leaseToken: second.token } });
+    expect((await projects.readPatchReceipt(scope, "worker-write"))?.revisionId).toBe(saved.revisionId);
+  });
 });

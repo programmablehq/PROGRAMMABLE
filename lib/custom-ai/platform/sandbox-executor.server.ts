@@ -87,7 +87,7 @@ export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof 
         files[path] = Buffer.from(text).equals(content) && !text.includes("\0") ? text : { encoding: "base64", content: content.toString("base64"), mediaType: "application/octet-stream" };
       }
       assertExportableFiles(files);
-      return { ...output, files, revisionId: input.revisionId, jobId: id, durationMs: Math.max(0, now() - started) };
+      return { ...output, files, revisionId: input.revisionId, jobId: String(id), durationMs: Math.max(0, now() - started) };
     } catch (error) {
       if (error instanceof ProjectError) throw error;
       if (externalSignal?.aborted) throw new ProjectError("sandbox-cancelled", "The sandbox was stopped.", 409);

@@ -141,6 +141,45 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.sandbox_usage (
   PRIMARY KEY(subject,period)
 );
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.check_evidence (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  id text NOT NULL,
+  revision_id text NOT NULL,
+  requirement_ids jsonb NOT NULL,
+  requirements_hash text NOT NULL,
+  command_hash text NOT NULL,
+  passed boolean NOT NULL,
+  result jsonb NOT NULL,
+  created_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,id),
+  FOREIGN KEY(owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.connections (
+  owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL,
+  version text NOT NULL, manifest jsonb NOT NULL, allowed_actions jsonb NOT NULL,
+  state text NOT NULL CHECK(state IN ('active','pending','revoked')),
+  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,id),
+  FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.connection_secrets (
+  owner text NOT NULL, project_id uuid NOT NULL, connection_id uuid NOT NULL,
+  key_version text NOT NULL, ciphertext text NOT NULL, updated_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,connection_id),
+  FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.connector_calls (
+  owner text NOT NULL, project_id uuid NOT NULL, connection_id uuid NOT NULL,
+  request_key text NOT NULL, input_hash text NOT NULL, effect text NOT NULL CHECK(effect IN ('read','write')),
+  state text NOT NULL CHECK(state IN ('pending','completed','unknown')), result jsonb,
+  attempts integer NOT NULL DEFAULT 1 CHECK(attempts>=1 AND attempts<=3),
+  created_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,connection_id,request_key),
+  FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
+);
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;
@@ -156,6 +195,14 @@ ALTER TABLE programmable_projects_v1.run_steps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.run_steps FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.sandbox_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.sandbox_jobs FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.check_evidence ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.check_evidence FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.connections FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.connection_secrets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.connection_secrets FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.connector_calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.connector_calls FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -193,6 +240,16 @@ BEGIN
     CREATE POLICY sandbox_job_owner_v1 ON programmable_projects_v1.sandbox_jobs
       USING (owner=current_setting('programmable.project_owner',true))
       WITH CHECK (owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='check_evidence' AND policyname='check_evidence_owner_v1') THEN
+    CREATE POLICY check_evidence_owner_v1 ON programmable_projects_v1.check_evidence
+      USING (owner=current_setting('programmable.project_owner',true))
+      WITH CHECK (owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='connections' AND policyname='connection_owner_v1') THEN
+    CREATE POLICY connection_owner_v1 ON programmable_projects_v1.connections USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY connection_secret_owner_v1 ON programmable_projects_v1.connection_secrets USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY connector_call_owner_v1 ON programmable_projects_v1.connector_calls USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
   END IF;
 END
 $migration$;

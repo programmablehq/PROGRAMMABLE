@@ -50,7 +50,7 @@ export function createRunRoutes(dependencies: ProjectAccountDependencies & { sto
 }
 
 export function createWorkerRoutes(dependencies: { enabled: () => boolean; store: () => RunStore; authorize: (request: Request) => Promise<WorkerGrantClaims>;
-  advance?: (grant: WorkerGrantClaims, leaseToken: string) => Promise<unknown> }) {
+  advance?: (grant: WorkerGrantClaims, leaseToken: string, signal?: AbortSignal) => Promise<unknown> }) {
   const POST = async (request: Request) => {
     try {
       if (!dependencies.enabled()) throw new CustomAIError("unavailable", "Project workers are not enabled.", 404);
@@ -66,7 +66,7 @@ export function createWorkerRoutes(dependencies: { enabled: () => boolean; store
       switch (body.action) {
         case "advance": {
           if (!dependencies.advance) throw new CustomAIError("worker-unavailable", "Project execution is not available yet.", 503);
-          return Response.json(await dependencies.advance(grant, token), { headers: aiHeaders });
+          return Response.json(await dependencies.advance(grant, token, request.signal), { headers: aiHeaders });
         }
         case "heartbeat": return Response.json({ active: await store.heartbeat(scope, grant.runId, token) }, { headers: aiHeaders });
         case "read": return Response.json(await store.readWork(scope, grant.runId, token), { headers: aiHeaders });
