@@ -52,7 +52,7 @@ describe("isolated revision execution", () => {
     expect(result.exitCode).toBe(0); expect(result.revisionId).toBe(revision.revisionId);
     expect(driver.create).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 240_000, vcpus: 1, network: "deny-all" }), expect.any(AbortSignal));
     const instance = await driver.create.mock.results[0].value;
-    expect(instance.writeFiles).toHaveBeenCalledWith({ "app.js": "console.log('ok')" }, expect.any(AbortSignal));
+    expect(instance.writeFiles).toHaveBeenCalledWith({ "app.js": "console.log('ok')" }, expect.any(AbortSignal), undefined);
     expect(instance.close).toHaveBeenCalledOnce();
     expect((await db.query("SELECT id FROM programmable_projects_v1.sandbox_slots")).rows).toHaveLength(0);
     expect((await db.query<{ state: string }>("SELECT state FROM programmable_projects_v1.sandbox_jobs")).rows[0].state).toBe("cleaned");
@@ -62,6 +62,19 @@ describe("isolated revision execution", () => {
     await expect(sandbox.execute({ ...alice, ownerId: "bob", revisionId: revision.revisionId, script: "pwd", outputPaths: [] })).rejects.toMatchObject({ status: 404 });
     await expect(sandbox.execute({ ...alice, revisionId: revision.revisionId, script: "pwd", outputPaths: ["../../secret"] })).rejects.toMatchObject({ code: "project-input" });
     expect(driver.create).not.toHaveBeenCalled();
+  });
+  it("forwards the saved import modes with each immutable revision", async () => {
+    const initial = await store.createProject(alice);
+    const files = { "bin/reference.sh": "#!/bin/sh\nprintf 'ok\\n'\n" };
+    const fileModes = { "bin/reference.sh": "100755" };
+    const revision = await store.applyProjectPatch({ ...alice, expectedRevisionId: initial.revisionId, idempotencyKey: "import-modes", patch: {
+      files, architecture: { importProvenance: { kind: "github", fileModes } },
+    } });
+    const driver = provider();
+    const sandbox = createSandboxExecutor(pool, store, driver);
+    await sandbox.execute({ ...alice, revisionId: revision.revisionId, script: "./bin/reference.sh", outputPaths: [] });
+    const instance = await driver.create.mock.results[0].value;
+    expect(instance.writeFiles).toHaveBeenCalledWith(files, expect.any(AbortSignal), fileModes);
   });
   it("requires a pinned registry lock before dependency installation", async () => {
     const initial = await store.createProject(alice), driver = provider(), sandbox = createSandboxExecutor(pool, store, driver);

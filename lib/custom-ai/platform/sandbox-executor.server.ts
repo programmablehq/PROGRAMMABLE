@@ -10,7 +10,7 @@ import { ProjectError, type ProjectScope, type ProjectFile } from "./types";
 export type SandboxOutput = { exitCode: number; stdout: string; stderr: string; truncated: boolean };
 export type SandboxResult=SandboxOutput&{files:Record<string,ProjectFile>;artifacts?:Record<string,string>;revisionId:string;jobId:string;durationMs:number};
 export type SandboxInstance = {
-  writeFiles(files: Record<string, ProjectFile>, signal: AbortSignal): Promise<void>;
+  writeFiles(files: Record<string, ProjectFile>, signal: AbortSignal, fileModes?: Readonly<Record<string, unknown>>): Promise<void>;
   install(resolve: boolean, signal: AbortSignal): Promise<SandboxOutput>;
   execute(script: string, signal: AbortSignal): Promise<SandboxOutput>;
   readFile(path: string, signal: AbortSignal, maxBytes?: number): Promise<Buffer | null>;
@@ -90,7 +90,8 @@ export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof 
       instance = await provider.create({ name, timeoutMs, vcpus: 1, network: "deny-all" }, signal);
       await projectTransaction(pool, scope, db => db.query("UPDATE programmable_projects_v1.sandbox_jobs SET state='active' WHERE owner=$1 AND project_id=$2 AND id=$3", [scope.ownerId, scope.projectId, id]));
       stage = "write-files";
-      await instance.writeFiles(revision.document.files, signal);
+      const provenance = (revision.document.architecture as { importProvenance?: { fileModes?: Readonly<Record<string, unknown>> } } | null)?.importProvenance;
+      await instance.writeFiles(revision.document.files, signal, provenance?.fileModes);
       if (install) { stage = "install"; output = await instance.install(input.resolveDependencies === true, signal); }
       if (!output || output.exitCode === 0) { stage = "execute"; output = await instance.execute(input.script, signal); }
       stage = "read-files";

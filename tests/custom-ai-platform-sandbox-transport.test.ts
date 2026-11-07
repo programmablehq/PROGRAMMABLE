@@ -40,3 +40,25 @@ it("creates and recovers sandboxes with the repository's HTTP dispatcher on Node
   expect(stop).toHaveBeenCalledTimes(2);
   expect(remove).toHaveBeenCalledTimes(2);
 });
+
+it("preserves imported executable modes and binary bytes without accepting special permissions", async () => {
+  const writeFiles = vi.fn(async () => undefined);
+  sdk.create.mockResolvedValueOnce({ writeFiles });
+  const box = await vercelSandboxProvider.create({ name: "file-modes-test", timeoutMs: 240_000, vcpus: 1, network: "deny-all" }, AbortSignal.timeout(5_000));
+  const signal = AbortSignal.timeout(5_000);
+  const bytes = Buffer.from([0, 128, 255, 10]);
+  await box.writeFiles({
+    "bin/reference.sh": "#!/bin/sh\nprintf 'ok\\n'\n",
+    "assets/pixel.bin": { encoding: "base64", content: bytes.toString("base64"), mediaType: "application/octet-stream" },
+    "special.sh": "#!/bin/sh\nexit 0\n",
+    "plain.txt": "unchanged",
+  }, signal, {
+    "bin/reference.sh": "100755", "assets/pixel.bin": "100644", "special.sh": "104755", "missing.sh": "100755",
+  });
+  expect(writeFiles).toHaveBeenCalledExactlyOnceWith([
+    { path: "/vercel/sandbox/bin/reference.sh", content: Buffer.from("#!/bin/sh\nprintf 'ok\\n'\n"), mode: 0o755 },
+    { path: "/vercel/sandbox/assets/pixel.bin", content: bytes, mode: 0o644 },
+    { path: "/vercel/sandbox/special.sh", content: Buffer.from("#!/bin/sh\nexit 0\n"), mode: 0o644 },
+    { path: "/vercel/sandbox/plain.txt", content: Buffer.from("unchanged"), mode: 0o644 },
+  ], { signal });
+});

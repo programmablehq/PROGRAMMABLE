@@ -38,7 +38,12 @@ export const vercelSandboxProvider: SandboxProvider = {
       return { exitCode: result.exitCode, stdout: stdout.text(), stderr: stderr.text(), truncated: stdout.truncated() || stderr.truncated() };
     };
     const instance: SandboxInstance = {
-      writeFiles: async (files, signal) => { await box.writeFiles(Object.entries(files).map(([path, file]) => ({ path: `/vercel/sandbox/${projectFilePath(path)}`, content: projectFileBytes(file) })), { signal }); },
+      writeFiles: async (files, signal, fileModes) => {
+        await box.writeFiles(Object.entries(files).map(([path, file]) => ({
+          path: `/vercel/sandbox/${projectFilePath(path)}`, content: projectFileBytes(file),
+          mode: fileModes?.[path] === "100755" ? 0o755 : 0o644,
+        })), { signal });
+      },
       install: async (resolve, signal) => {
         await box.update({ networkPolicy: { allow: ["registry.npmjs.org"] } }, { signal });
         try { return await run("npm", resolve ? ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"] : ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], 120_000, signal); }
