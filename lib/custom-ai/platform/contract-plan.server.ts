@@ -32,7 +32,7 @@ export function completeCanonicalContractInterfaces(input:JsonValue,chainId:1|46
   return completed;
 }
 
-const interfaceError=()=>new ProjectError("contract-interface","Choose one declared contract and a matching source-verified canonical interface.",409);
+const interfaceError=(detail="")=>new ProjectError("contract-interface",`Choose one declared contract and a matching source-verified canonical interface.${detail?` ${detail}`:""}`,409);
 type CanonicalReference={entryId:string;source:string;contract:string};
 function canonicalReferences(value:JsonValue|undefined):CanonicalReference[]{
   if(value===undefined)return [];
@@ -42,7 +42,8 @@ function canonicalReferences(value:JsonValue|undefined):CanonicalReference[]{
     if(!reference||typeof reference!=="object"||Array.isArray(reference)||Object.keys(reference).sort().join()!=="contract,entryId,source"
       ||typeof reference.entryId!=="string"||!reference.entryId||reference.entryId.length>128
       ||typeof reference.source!=="string"||!reference.source||reference.source.length>512
-      ||typeof reference.contract!=="string"||!reference.contract||reference.contract.length>128||selected.has(reference.entryId))throw interfaceError();
+      ||typeof reference.contract!=="string"||!reference.contract||reference.contract.length>128)throw interfaceError();
+    if(selected.has(reference.entryId))throw interfaceError("Duplicate entryId. Each mapping needs a distinct id from contractChecks.contracts or contractChecks.constructorChildren; a profile id is not a declared contract id.");
     selected.add(reference.entryId);return {entryId:reference.entryId,source:reference.source,contract:reference.contract};
   });
 }
@@ -94,12 +95,12 @@ function mergeCanonicalFunctions(declared:JsonValue,canonical:readonly string[])
 /** Completes known API metadata without learning expectations from generated
  * code or changing a behavior case, deployment argument or source file. */
 export function completeCanonicalContractReference(input:JsonValue,chainId:Parameters<typeof canonicalInterfaceContext>[0],entryId:string,reference:{source:string;contract:string}):JsonValue{
-  const invalid=()=>new ProjectError("contract-interface","Choose one declared contract and a source-verified canonical interface.",409);
+  const invalid=(detail="")=>new ProjectError("contract-interface",`Choose one declared contract and a source-verified canonical interface.${detail?` ${detail}`:""}`,409);
   const known=canonicalInterfaceContext(chainId).contracts.find(item=>item.source===reference.source&&item.contract===reference.contract);
   if(!known||!input||typeof input!=="object"||Array.isArray(input))throw invalid();
   const value=structuredClone(input);
   const entries=["contracts","constructorChildren"].flatMap(field=>Array.isArray(value[field])?value[field].filter(item=>item&&typeof item==="object"&&!Array.isArray(item)&&item.id===entryId):[]);
-  if(entries.length!==1)throw invalid();
+  if(entries.length!==1)throw invalid("entryId must identify exactly one entry in contractChecks.contracts or contractChecks.constructorChildren. Use the id from your declaration, not the profile id from contract.context.");
   const entry=entries[0];
   if(!entry||typeof entry!=="object"||Array.isArray(entry)||!Array.isArray(entry.functions)||entry.functions.some(item=>typeof item!=="string"))throw invalid();
   entry.functions=mergeCanonicalFunctions(entry.functions,known.functions);

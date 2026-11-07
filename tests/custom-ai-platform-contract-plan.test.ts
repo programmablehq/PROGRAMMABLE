@@ -19,6 +19,21 @@ function revision(files:Record<string,string>={},contractChecks:unknown=declared
  return {ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111",revisionId:projectHash(document),parentRevisionId:null,ordinal:1,createdAt:new Date(0).toISOString(),requirementsHash:projectHash(requirements),fileTreeHash:projectHash(files),dependencyLockHash:projectHash({}),architectureHash:projectHash(document.architecture),document};
 }
 describe("platform contract build plan",()=>{
+ it("identifies a reused profile id instead of accepting it as two declared contract ids",()=>{
+  const canonical=canonicalInterfaceContext(4663).contracts[0];
+  const references=[{entryId:"profile-id",source:canonical.source,contract:canonical.contract},{entryId:"profile-id",source:canonical.source,contract:canonical.contract}];
+  const plan={contracts:[{id:"hook",source:"CustomHook.sol",contract:"CustomHook",functions:[]},{id:"token",source:"CustomToken.sol",contract:"CustomToken",functions:[]}]};
+  expect(()=>completeCanonicalContractInterfaces(plan,4663,references)).toThrow(/Duplicate entryId.*contractChecks/);
+  expect(plan.contracts.every(entry=>entry.functions.length===0)).toBe(true);
+ });
+ it("explains a missing declared contract id and accepts its exact corrected mapping",()=>{
+  const canonical=canonicalInterfaceContext(4663).contracts[0],plan={contracts:[{id:"hook",source:"CustomHook.sol",contract:"CustomHook",functions:[]}]};
+  const reference={entryId:"profile-id",source:canonical.source,contract:canonical.contract};
+  expect(()=>completeCanonicalContractInterfaces(plan,4663,[reference])).toThrow(/entryId.*contractChecks/);
+  const completed=completeCanonicalContractInterfaces(plan,4663,[{...reference,entryId:"hook"}]) as typeof plan;
+  expect(completed.contracts[0].functions).toEqual(canonical.functions);
+  expect(plan.contracts[0].functions).toEqual([]);
+ });
  it("completes only pinned canonical interfaces while preserving every declared behavior expectation",()=>{
   const canonical=canonicalInterfaceContext(4663).contracts[0],input={contracts:[{source:canonical.source,contract:canonical.contract,functions:[]},{source:"Custom.sol",contract:"Custom",functions:["function custom()"]}],steps:[{expect:{status:"success",returns:["7"]},requirementIds:["result"]}]};
   const completed=completeCanonicalContractInterfaces(input,4663) as typeof input;
