@@ -11,6 +11,7 @@ import {ProjectError,type ProjectScope,type JsonValue} from "./types";
 import code from "./game-events-code.json";
 
 const artifact=code.artifacts.ProjectGameEventsV1;
+const receiverArtifacts=[artifact,code.artifacts.ProjectPlayerGameEventsV1];
 const json=(value:unknown):JsonValue=>JSON.parse(JSON.stringify(value));
 function wallet(account:Address,linked:readonly string[]){
  if(!linked.some(value=>value.toLowerCase()===account.toLowerCase()))throw new ProjectError("game-wallet","Choose a wallet linked to your current account.",403);
@@ -20,7 +21,7 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
  execution:{makeStep:typeof makeStep;verifiedStepReceipt:typeof verifiedStepReceipt}={makeStep,verifiedStepReceipt}){
  async function inspect(binding:GameBinding,chain:CustomAIChain){
   const runtime=await chain.code(binding.target);
-  if(keccak256(runtime)!==binding.runtimeHash||!matchesRuntime(runtime,{runtimeTemplate:artifact.runtimeTemplate as Hex,immutableReferences:artifact.immutableReferences}))throw new ProjectError("game-code","The deployed game receiver does not match its reviewed code.",409);
+  if(keccak256(runtime)!==binding.runtimeHash||!receiverArtifacts.some(candidate=>matchesRuntime(runtime,{runtimeTemplate:candidate.runtimeTemplate as Hex,immutableReferences:candidate.immutableReferences})))throw new ProjectError("game-code","The deployed game receiver does not match its reviewed code.",409);
   const [id,issuer,maxAge,maximum]=await Promise.all([
    chain.call(binding.target,"function bindingId() view returns(bytes32)"),chain.call(binding.target,"function issuer() view returns(address)"),
    chain.call(binding.target,"function maxAge() view returns(uint64)"),chain.call(binding.target,"function maximumScore() view returns(uint256)"),
@@ -52,7 +53,7 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   if(consumed||BigInt(String(sequence))+1n!==BigInt(saved.event.sequence))throw new ProjectError("game-replay","This event was already applied or is out of order.",409);
   const {event}=saved;
   const data=encodeFunctionData({abi:artifact.abi as Abi,functionName:"submitEvent",args:[{
-   bindingId:id,eventId:event.eventId,playerIdHash:event.playerIdHash,player:event.player,sequence:BigInt(event.sequence),score:BigInt(event.score),observedAt:BigInt(event.observedAt),validUntil:BigInt(event.validUntil),
+   bindingId:saved.binding.id,eventId:event.eventId,playerIdHash:event.playerIdHash,player:event.player,sequence:BigInt(event.sequence),score:BigInt(event.score),observedAt:BigInt(event.observedAt),validUntil:BigInt(event.validUntil),
   },event.signature]});
   const step=await execution.makeStep(chain,{id:randomUUID(),account:sender,chainId:saved.binding.chainId,state:"preparing",steps:[]},"program-action",saved.binding.target,data,0n,Math.min(event.validUntil,Math.floor(Date.now()/1000)+120));
   const receipt=await store.prepared(scope,id,eventId,json(step));return {...receipt,step};

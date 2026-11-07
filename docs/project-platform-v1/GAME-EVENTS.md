@@ -12,6 +12,28 @@ Each `GameEvent` includes the binding ID, event ID, player ID hash, player walle
 
 The reference fee module uses the verified cumulative community score. It does not treat a swap router as an individual player's identity. It proposes an additional fee through the existing narrow interface; the existing hook retains its fee, custody and settlement rules. Expired game observations produce no extra fee. The receiver and module hold no funds.
 
+For an individual-player bonus, the source catalog also provides
+the paired `ProjectPlayerGameEventsV1` and `ProjectPlayerGameFeeModuleV1`.
+The individual receiver enforces one game account per wallet as well as one
+wallet per game account, so scores from different accounts cannot be pooled
+into one bonus. The original community receiver remains available for its
+existing multi-account policy. The individual module rejects that older
+receiver. It reads the signed cumulative score for the
+active initiator reported by one explicitly configured, code-pinned router.
+The hook must supply its actual PoolManager callback sender. Unknown routers,
+changed runtime code, absent actors and failed or malformed lookups retain the
+configured regular fee; they never borrow another player's bonus. The router
+lookup has bounded gas and return data. The bonus only lowers the configured
+additional fee, so core platform fees and caps remain in force.
+
+This individual reference uses persistent earned eligibility. Stale incoming
+results remain invalid, but an already earned bonus does not expire merely
+because another round has not arrived. A three-win fixture sets each result's
+maximum score to one and the threshold to three. Other economics must be
+declared explicitly in the user's project and verified independently. The
+community and individual variants are different policies, not interchangeable
+implementations of the same requirement.
+
 ## Project flow
 
 1. Plan the game policy and include its source in the project. `POST /api/custom-ai/platform/events` with action `plan` returns the project-derived binding ID for the current revision.

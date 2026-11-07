@@ -3,7 +3,7 @@ import {createHash} from "node:crypto";
 import {resolve} from "node:path";
 import {keccak256} from "viem";
 const root=resolve(import.meta.dirname,"../.."),sources={},artifacts={};
-for(const name of ["ProjectGameEventsV1","ProjectGameFeeModuleV1"]){
+for(const name of ["ProjectGameEventsV1","ProjectGameFeeModuleV1","ProjectPlayerGameEventsV1","ProjectPlayerGameFeeModuleV1"]){
  const build=JSON.parse(await readFile(resolve(root,`contracts/out/custom-ai/${name}.sol/${name}.json`),"utf8"));
  if(build.metadata.compiler.version!=="0.8.26+commit.8a97fa7a")throw Error("Unexpected game event compiler");
  for(const [path,metadata]of Object.entries(build.metadata.sources)){
