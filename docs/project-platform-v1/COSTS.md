@@ -24,6 +24,12 @@ usage. None of the values below is a general spending cap.
 | Scheduled tasks | Ten per project, intervals from one minute to one week |
 | Hosting control recovery | At most three automatic attempts for one saved intent |
 
+The chat requests up to 20 AI units per work unit, bounded by the account's
+remaining hourly and daily allowance. It keeps an unsent message when no units
+remain and preserves the exact reservation when retrying a request whose
+response was lost. The server remains authoritative for global limits,
+concurrency and reservations.
+
 Work reserves its allowance before execution. Unused AI reservations are
 refunded on settlement. Sandbox reservations are reconciled against observed
 duration only after cleanup is confirmed. Unknown side effects keep their

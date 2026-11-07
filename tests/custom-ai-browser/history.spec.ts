@@ -88,6 +88,18 @@ test("observed simulation is readable by keyboard and survives reload without ex
  expect(f.calls).toHaveLength(1);
 });
 
+for(const width of [360,1440])test(`platform first visit supports app and API ideas before wallet connection at ${width}px`,async({page})=>{
+ const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1&platform=1');
+ await expect(page.getByRole('heading',{name:'What would you like to build?',exact:true})).toBeVisible();
+ const region=page.getByRole('region',{name:'Build your project',exact:true});await expect(region).toHaveAttribute('data-chat-state','wallet-required');
+ await expect(region.getByText('New project',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'An app with saved data',exact:true}).click();
+ const input=page.getByRole('textbox',{name:'Describe your project or ask a question',exact:true});
+ await expect(input).toHaveValue('Build a shared scoreboard with a frontend, backend and persistent scores.');
+ await page.reload();await expect(input).toHaveValue('Build a shared scoreboard with a frontend, backend and persistent scores.');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(f.calls).toEqual([]);expect(f.chats.size).toBe(0);
+});
+
 for(const width of [360,1440])test(`first visit explains wallet access without exposing unavailable editor controls at ${width}px`,async({page},info)=>{
  const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1');
  await expect(page.getByRole('log',{name:'Conversation'}).getByRole('button',{name:'Connect wallet',exact:true})).toBeEnabled();

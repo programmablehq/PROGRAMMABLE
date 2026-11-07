@@ -59,8 +59,10 @@ compilation, behavior checks and source review still have to pass separately.
   duplicate admission. Two authenticated staging accounts pass ownership,
   HTTP/MCP connections, OAuth callback/refresh and signed-webhook checks.
   Browser sign-in on the staging origin still needs the app's domain setting.
-- The hosted sandbox transport has a locally reproduced HTTP-version fix;
-  successful VM execution through the updated deployed worker is still required.
+- The corrected sandbox transport passes real hosted VM execution for both
+  ordinary staging accounts: private files remain isolated, outbound access
+  is denied by policy, host credentials are absent, and cleanup is confirmed.
+  These staging results do not establish the production environment.
 - The dedicated hosting credential, production migration/grants and complete
   ordinary-user A1–A6 staging acceptance remain outstanding. The platform has
   not been enabled for production users.
