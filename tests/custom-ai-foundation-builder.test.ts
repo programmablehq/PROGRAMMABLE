@@ -10,6 +10,7 @@ import type {CompiledProject} from "../lib/custom-ai/contract-project.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import {auditGeneralSource,type SourceAuditFinding} from "../lib/custom-ai/source-audit.server";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
+import {configuredProvider} from "../lib/custom-ai/provider-config.server";
 
 const intent:LaunchIntent={version:1,id:"qualified-foundation",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
   {id:"counter",text:"Anyone can increment the counter, starting at zero.",kind:"behavior",open:null,origin:{kind:"legacy"}},
@@ -41,6 +42,10 @@ describe("qualified foundations inside the immutable project job",()=>{
       :reply({reply:"Counter starts at zero.",summary:"Saved behavior corrected",changes:[{path:"Counter.sol",before:"= 2",after:"= 0"}]}));
     const result=await buildGeneralContract({...request,previous,sourceFindings:findings,auditSource:(project:ContractProject)=>audit(project)},undefined,{call,compile:compiled});
     expect(call).toHaveBeenCalledTimes(2);expect(request.saveSourceProgress).toHaveBeenCalled();
+    for(const [sourceCall] of call.mock.calls){
+      expect(sourceCall.model).toBe(configuredProvider().models.escalation);
+      expect(sourceCall.messages).toContainEqual(request.messages[0]);
+    }
     expect(result.compilation.compiled).toBe(true);expect(result.project.sources["Counter.sol"].content===initial.replace("= 2","= 0")).toBe(true);
     const step=(call.mock.calls[1] as unknown as [ClaudeInput])[0];
     expect(step.system).toContain("COUNTER_START");
@@ -64,6 +69,13 @@ describe("qualified foundations inside the immutable project job",()=>{
     }
     expect(result.project.sources["Counter.sol"].content).toBe(code);
     expect(request.saveProject).toHaveBeenCalledOnce();expect(result.launchReady).toBe(false);
+  });
+  it("can keep an existing complete source unchanged while checking a stale finding",async()=>{
+    const previous=createContractProject({compiler:blueprint.compiler,sources:{"Counter.sol":{content:code}},entrypoints:blueprint.entrypoints},intent,999);
+    const request=input(),call=vi.fn(async()=>reply({steps:[]}));
+    const result=await buildGeneralContract({...request,previous,sourceFindings:[{code:"OLD_START",requirementId:"counter",message:"An old draft started at two; verify the current source."}],auditSource:(project:ContractProject)=>audit(project)},undefined,{call,compile:compiled});
+    expect(call).toHaveBeenCalledOnce();expect(result.project.hash).toBe(previous.hash);
+    expect(result.sourceAudit?.status).toBe("passed");expect(request.saveProject).toHaveBeenCalledOnce();
   });
   it("never treats an incomplete seed and an empty edit plan as finished source",async()=>{
     vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code}},completeReference:false});

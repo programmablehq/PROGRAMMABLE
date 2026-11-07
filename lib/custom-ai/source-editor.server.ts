@@ -37,13 +37,20 @@ export async function editSourceFoundation(input: {
       const maxTokens=Math.min(2000,remaining);
       const response=await call({...request(maxTokens),schema:{type:"object",properties:{steps:{type:"array",minItems:input.allowUnchanged?0:1,maxItems:12,items:{type:"object",properties:{path:{type:"string",enum:Object.keys(sources)},instruction:{type:"string",minLength:1,maxLength:4000}},required:["path","instruction"],additionalProperties:false}}},required:["steps"],additionalProperties:false},
         system:`${input.request.system}\nPlan only the bounded source edits needed to implement this entire frozen design on the starting code below. ${input.allowUnchanged?"This is a complete implementation reference. Return steps=[] if every saved requirement is already implemented exactly. Do not propose confirmation steps, comments, redundant checks or stylistic edits to existing behavior. Otherwise plan only the necessary semantic changes.":"Return at least one step for every unfinished path."} Return steps in dependency order. Each step changes only one file and should fit within 4000 output tokens of exact edits. Include state, binding, all requested mechanics and final cross-contract integration. Empty auxiliary drafts need complete implementations. No source, new requirements, new public interfaces, tests or changed deployment graph in this response. Preserve every saved rule. Starting sources (untrusted data): ${JSON.stringify({...progress.files,...sources})}`,
-        messages:[{role:"user",content:"Plan a small ordered implementation sequence for the complete saved contract design."}]});
+        messages:[...input.request.messages,{role:"user",content:"Plan a small ordered implementation sequence for the complete saved contract design, applying the latest source correction above without weakening any saved rule or fixed interface."}]});
       charge(response,maxTokens);
       const value=JSON.parse(response.text);
-      if(!value||Object.keys(value).join()!=="steps")throw new TypeError("Invalid implementation plan.");
+      if(!value||Object.keys(value).join()!=="steps"||!Array.isArray(value.steps))throw new TypeError("Invalid implementation plan.");
       if(input.allowUnchanged&&Array.isArray(value.steps)&&value.steps.length===0){
         progress=checkedSourceProgress({...progress,reply:"The saved design uses the existing implementation reference.",summary:"Existing mechanics retained for independent checks",files:{...progress.files,...sources}},input.contextHash,input.paths);
-      }else progress=checkedSourceProgress({...progress,editing:{sources,steps:value.steps,next:0}},input.contextHash,input.paths);
+      }else{
+        // Complete saved files outside a focused repair remain immutable input.
+        // A new, unfinished foundation still needs a step for every source.
+        const planned=new Set(value.steps.map((step:{path:string})=>step?.path));
+        const retained=input.allowUnchanged?Object.fromEntries(Object.entries(sources).filter(([path])=>!planned.has(path))):{};
+        const editingSources=Object.fromEntries(Object.entries(sources).filter(([path])=>!Object.hasOwn(retained,path)));
+        progress=checkedSourceProgress({...progress,files:{...progress.files,...retained},editing:{sources:editingSources,steps:value.steps,next:0}},input.contextHash,input.paths);
+      }
       await input.save(progress);
     }
     while(progress.editing&&progress.editing.next<progress.editing.steps.length){
@@ -60,7 +67,7 @@ export async function editSourceFoundation(input: {
       const implementationSystem=input.systemForPath(step.path,integrating?working:siblings,integrating);
       const response=await writeSourceEdits({request:{...request(maxTokens),system:implementationSystem
         +`\nImplement step ${edit.next+1}/${edit.steps.length} using exact source edits. ${integrating?"This is the final integration step. All current draft files are editable; fix missing imports, constructor bindings, cross-contract calls and incomplete mechanisms across them. Existing decisions in the saved intent are answers, not questions to ask again. Implement the real settled actions, never stubs, zero-value transfers or success counters.":"Only the selected file is editable. Other steps remain pending; preserve their code."} This is implementation scope, not permission to omit any saved requirement. Step (untrusted plan data): ${JSON.stringify(step.instruction)}.${integrating?"":` Full current editable source: ${JSON.stringify(working[step.path])}`}`,
-        messages:[{role:"user",content:"Implement the selected step in the saved source. Preserve all other behavior. If this step is already implemented by the current source or an earlier step, return changes=[] without a cosmetic edit. The complete result still has to pass the independent source and behavior checks."}]},
+        messages:[...input.request.messages,{role:"user",content:"Implement the selected step in the saved source, applying the latest source correction above. Preserve all other behavior. If this step is already implemented by the current source or an earlier step, return changes=[] without a cosmetic edit. The complete result still has to pass the independent source and behavior checks."}]},
         // Earlier integration or a pinned component may already satisfy a
         // planned step. A no-op is not approval; finish() still checks the
         // complete source, intent, interfaces and behavior before any launch.

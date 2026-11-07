@@ -16,11 +16,39 @@ const change=(path:string,name:string)=>reply({reply:"Implemented",summary:"Save
 const input={request,patchTask,seeds,paths:Object.keys(seeds),contextHash,systemForPath:(path:string)=>`Current file ${path}`};
 
 describe("bounded edits on a complete source foundation",()=>{
+ it("keeps the latest source correction and its negative constraints in every planning and edit call",async()=>{
+  const correction={role:"user" as const,content:"Make only the saved getter and quote fixes. Preserve the linear opening surcharge; do not implement the old flat-fee suggestion."};
+  const calls:ClaudeInput[]=[];
+  await editSourceFoundation({...input,request:{...request,messages:[correction]},save:async()=>{}},async call=>{
+   calls.push(call);
+   return [reply({steps}),change("A.sol","A"),change("B.sol","B")][calls.length-1];
+  });
+  expect(calls).toHaveLength(3);
+  for(const call of calls)expect(call.messages).toContainEqual(correction);
+ });
  it("can retain an already implemented reference without a cosmetic source change",async()=>{
   const saved:SourceProgress[]=[];const call=vi.fn(async()=>reply({steps:[]}));
   const result=await editSourceFoundation({...input,allowUnchanged:true,save:async p=>{saved.push(p);}},call);
   expect(call).toHaveBeenCalledOnce();expect(saved.at(-1)?.files).toEqual(seeds);
   expect(JSON.parse(result.text).sourceFiles).toHaveLength(2);
+ });
+ it("retains complete unchanged files when a correction plan targets only one file",async()=>{
+  const saved:SourceProgress[]=[];let calls=0;
+  const result=await editSourceFoundation({...input,allowUnchanged:true,save:async progress=>{
+   if(saved.length)expect(sourceProgressExtends(saved.at(-1)!,progress)).toBe(true);
+   saved.push(progress);
+  }},async()=>[reply({steps:[steps[0]]}),change("A.sol","A")][calls++]);
+  expect(calls).toBe(2);
+  expect(saved[0].files).toEqual({"B.sol":seeds["B.sol"]});
+  expect(Object.keys(saved[0].editing!.sources)).toEqual(["A.sol"]);
+  expect(JSON.parse(result.text).sourceFiles).toEqual([
+   {path:"A.sol",content:"contract A {uint public value;}"},{path:"B.sol",content:seeds["B.sol"].content},
+  ]);
+ });
+ it("still requires every unfinished file in a new implementation plan",async()=>{
+  const call=vi.fn(async()=>reply({steps:[steps[0]]})),save=vi.fn();
+  await expect(editSourceFoundation({...input,save},call)).rejects.toMatchObject({code:"source-pending"});
+  expect(call).toHaveBeenCalledOnce();expect(save).not.toHaveBeenCalled();
  });
  it("persists exact stages and promotes files only after all planned edits",async()=>{
   const saved:SourceProgress[]=[];let n=0;
@@ -47,7 +75,10 @@ describe("bounded edits on a complete source foundation",()=>{
    if(n++===0)return reply({steps});if(n===2)return change("A.sol","A");throw new SyntaxError("truncated");
   })).rejects.toMatchObject({code:"source-pending"});
   expect(saved?.editing?.next).toBe(1);
-  const call=vi.fn(async()=>change("B.sol","B"));
+  const call=vi.fn(async(callInput:ClaudeInput)=>{
+   expect(callInput.messages).toContainEqual(request.messages[0]);
+   return change("B.sol","B");
+  });
   const result=await editSourceFoundation({...input,cached:saved,save:async()=>{}},call);
   expect(call).toHaveBeenCalledOnce();expect(JSON.parse(result.text).sourceFiles).toHaveLength(2);
  });
