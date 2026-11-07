@@ -16,6 +16,8 @@ const tabs=[{id:"project",label:"Project",icon:Check},{id:"files",label:"Files",
 type Tab=typeof tabs[number]["id"];
 const runStatus:Record<string,string>={queued:"Queued",running:"Working",waiting_user:"Needs your input",retryable:"Interrupted · can resume",failed:"Stopped with an error",cancelled:"Stopped",succeeded:"Finished"};
 const examples=["Build a shared counter with a backend and persistent data.","Create a coin with a fee that changes after a community game reaches its target.","Help me plan an app and connect it to an external API."];
+const revisionTools=new Set(["project.plan","project.patch","project.dependencies","contract.dependencies","repository.import"]);
+type RunProgress={run:ProjectRun;events:{cursor:string;capabilityId:string}[]};
 
 export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt,onPromptAccepted,generalLaunchEnabled=false}:{account:string;headers:AISessionHeaders;onLegacy:()=>void;initialPrompt?:{id:string;content:string};onPromptAccepted?:(id:string)=>void;generalLaunchEnabled?:boolean}){
   const credentials=useRef(headers);useEffect(()=>{credentials.current=headers;},[headers]);
@@ -63,11 +65,26 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
     void Promise.resolve().then(()=>refresh(controller.signal)).catch(cause=>{if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Project could not load.");});return()=>controller.abort();
   },[selected,refresh]);
   const active=runs.find(run=>isActiveRun(run.status));
+  const activeId=active?.runId;
   useEffect(()=>{
-    if(!active)return;const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
-    const poll=async()=>{try{await refresh(controller.signal);}catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Progress could not load.");}if(!controller.signal.aborted)timer=setTimeout(poll,5000);};
+    if(!activeId||!selected)return;const controller=new AbortController(),seq=generation.current;let timer:ReturnType<typeof setTimeout>,cursor="0";
+    const poll=async()=>{
+      try{
+        const progress=await api<RunProgress>(`/runs?projectId=${selected}&runId=${activeId}&afterCursor=${cursor}`,{signal:controller.signal});
+        if(seq!==generation.current||controller.signal.aborted)return;
+        if(progress.events.some(event=>revisionTools.has(event.capabilityId))){
+          const saved=await api<{project:ProjectRevision}>(`/projects?projectId=${selected}`,{signal:controller.signal});
+          if(seq!==generation.current||controller.signal.aborted)return;
+          setProject(current=>current?.projectId===saved.project.projectId&&current.ordinal>saved.project.ordinal?current:saved.project);
+          setProjects(current=>[{projectId:selected,revisionId:saved.project.revisionId,title:saved.project.document.title,updatedAt:saved.project.createdAt},...current.filter(item=>item.projectId!==selected)]);
+        }
+        cursor=progress.events.at(-1)?.cursor??cursor;
+        setRuns(current=>current.map(run=>run.runId===activeId?progress.run:run));
+      }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Progress could not load.");}
+      if(!controller.signal.aborted)timer=setTimeout(poll,5000);
+    };
     timer=setTimeout(poll,3000);return()=>{clearTimeout(timer);controller.abort();};
-  },[active?.runId,refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[activeId,api,selected]);
   useEffect(()=>{if(follow.current&&transcript.current)transcript.current.scrollTop=transcript.current.scrollHeight;},[runs]);
   const runTask=useCallback(async(work:()=>Promise<void>)=>{setBusy(true);setError("");try{await work();}catch(cause){setError(cause instanceof Error?cause.message:"The request could not finish. Your saved work is kept.");}finally{setBusy(false);}},[]);
   useEffect(()=>{

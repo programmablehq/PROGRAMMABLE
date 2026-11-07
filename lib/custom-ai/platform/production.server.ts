@@ -20,7 +20,8 @@ export function productionAccountDependencies(): ProjectAccountDependencies {
       if (writing) requireFreshCustomAIAuthority(request, authority);
       return { ownerId: authority.owner };
     },
-    consume: (ownerId, operation) => productionAIStore().consume(ownerId, `platform-project-${operation}`, operation === "read" ? 120 : 30),
+    consume: (ownerId, operation) => productionAIStore().consume(ownerId, `platform-project-${operation}`,
+      operation === "write" ? 30 : 120, operation === "progress" ? 60_000 : 3_600_000),
   };
 }
 export function productionProjectRoutes() {

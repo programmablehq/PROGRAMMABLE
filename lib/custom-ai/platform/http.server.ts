@@ -9,7 +9,7 @@ import { exportProjectBundle } from "./transfer";
 export type ProjectAccountDependencies = {
   enabled: () => boolean;
   authorize: (request: Request, writing: boolean) => Promise<{ ownerId: string }>;
-  consume: (ownerId: string, operation: "read" | "write") => Promise<unknown>;
+  consume: (ownerId: string, operation: "read" | "write" | "progress") => Promise<unknown>;
 };
 type Dependencies = ProjectAccountDependencies & { store: () => ReturnType<typeof createPlatformStore> };
 const invalid = () => new CustomAIError("project-input", "Choose a valid project and revision.");
@@ -19,7 +19,7 @@ function bodyObject(value: unknown, keys: string[]): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export async function executeProjectRequest(dependencies: ProjectAccountDependencies, request: Request, operation: "read" | "write", run: (ownerId: string) => Promise<Response>) {
+export async function executeProjectRequest(dependencies: ProjectAccountDependencies, request: Request, operation: "read" | "write" | "progress", run: (ownerId: string) => Promise<Response>) {
   try {
     if (!dependencies.enabled()) throw new CustomAIError("unavailable", "Project workspaces are not enabled here yet.", 404);
     const { ownerId } = await dependencies.authorize(request, operation === "write");

@@ -86,3 +86,23 @@ test("shows exhausted hosting recovery and retries only the saved action",async(
  await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p12-hosting-recovery.png"),fullPage:true});
  await page.getByRole("button",{name:"Retry hosting action",exact:true}).click();await expect(page.getByRole("button",{name:"Retry hosting action",exact:true})).toHaveCount(0);expect(retried).toBe(true);
 });
+test("polls active run progress without repeatedly downloading project files",async({page,request})=>{
+ await request.post(`${origin}/fixture/pause`,{data:{paused:true}});
+ try{
+  await page.goto(origin);
+  const created=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/platform/projects"));
+  await page.getByRole("button",{name:"New project",exact:true}).click();
+  const projectId=(await(await created).json()).project.projectId;
+  await expect(page.getByLabel("Your projects",{exact:true})).toHaveValue(projectId);
+  let fullReads=0,progressReads=0;
+  page.on("request",request=>{const url=new URL(request.url());if(request.method()!=="GET")return;if(url.pathname.endsWith("/platform/projects")&&url.searchParams.get("projectId")===projectId)fullReads++;if(url.pathname.endsWith("/platform/runs")&&url.searchParams.has("runId"))progressReads++;});
+  await page.getByRole("textbox",{name:"Message your project"}).fill("Keep this saved work queued.");
+  const refreshed=page.waitForResponse(response=>response.request().method()==="GET"&&response.url().includes(`/platform/runs?projectId=${projectId}`));
+  await page.getByRole("button",{name:"Send",exact:true}).click();await refreshed;
+  await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeVisible();
+  const initialReads=fullReads;
+  await expect.poll(()=>progressReads,{timeout:15000}).toBeGreaterThanOrEqual(2);
+  expect(fullReads).toBe(initialReads);
+  await page.getByRole("button",{name:"Stop",exact:true}).click();
+ }finally{await request.post(`${origin}/fixture/pause`,{data:{paused:false}});}
+});

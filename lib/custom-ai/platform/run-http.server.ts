@@ -30,7 +30,7 @@ export function createRunRoutes(dependencies: ProjectAccountDependencies & { sto
     if ([...query.keys()].some(key => !["projectId", "runId", "afterCursor"].includes(key)) || !query.get("projectId") || !query.get("runId")) throw bad();
     return { scope: { ownerId, projectId: query.get("projectId")! }, runId: query.get("runId")! };
   };
-  const GET = (request: Request) => executeProjectRequest(dependencies, request, "read", async ownerId => {
+  const GET = (request: Request) => executeProjectRequest(dependencies, request, new URL(request.url).searchParams.has("runId") ? "progress" : "read", async ownerId => {
     const query = new URL(request.url).searchParams;
     if (!query.has("runId")) {
       if (!query.get("projectId") || [...query.keys()].some(key => key !== "projectId")) throw bad();

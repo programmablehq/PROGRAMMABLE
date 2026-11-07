@@ -13,6 +13,7 @@ import { CustomAIError } from "../lib/custom-ai/types";
 const scope = { ownerId: "alice", projectId: "11111111-1111-4111-8111-111111111111" };
 const keys = generateKeyPairSync("ed25519");
 let db: PGlite, store: ReturnType<typeof createRunStore>, routes: ReturnType<typeof createRunRoutes>, worker: ReturnType<typeof createWorkerRoutes>, revisionId: string;
+const consume=vi.fn(async()=>undefined);
 beforeEach(async () => {
   db = new PGlite(); await db.exec(CUSTOM_AI_SCHEMA); await db.exec(PROJECT_PLATFORM_SCHEMA);
   let tail = Promise.resolve();
@@ -23,7 +24,8 @@ beforeEach(async () => {
   revisionId = (await createPlatformStore(pool).createProject(scope)).revisionId;
   store = createRunStore(pool, { allowance: { hourlyUnits: 25, dailyUnits: 100, globalDailyUnits: 200, concurrent: 1 }, leaseMs: 60_000,
     capabilities: { read: { units: 1, effect: "read", operations: ["build"] } } });
-  routes = createRunRoutes({ enabled: () => true, store: () => store, consume: async () => undefined, onQueued: async () => { throw new Error("Worker temporarily unavailable"); },
+  consume.mockClear();
+  routes = createRunRoutes({ enabled: () => true, store: () => store, consume, onQueued: async () => { throw new Error("Worker temporarily unavailable"); },
     authorize: async request => {
       const ownerId = request.headers.get("x-test-owner"); if (!ownerId) throw new CustomAIError("auth", "Sign in", 401); return { ownerId };
     } });
@@ -35,6 +37,13 @@ const start = () => routes.POST(new Request("https://example.test/runs", { metho
   body: JSON.stringify({ projectId: scope.projectId, revisionId, operation: "build", prompt: "Build the project", idempotencyKey: "work-one", budgetUnits: 5 }) }));
 
 describe("project run API boundaries", () => {
+  it("uses the bounded progress allowance only for an individual run read",async()=>{
+    const {run}=await(await start()).json();consume.mockClear();
+    expect((await routes.GET(new Request(`https://example.test/runs?projectId=${scope.projectId}&runId=${run.runId}`,{headers:{"x-test-owner":"alice"}}))).status).toBe(200);
+    expect(consume).toHaveBeenLastCalledWith("alice","progress");
+    await routes.GET(new Request(`https://example.test/runs?projectId=${scope.projectId}`,{headers:{"x-test-owner":"alice"}}));
+    expect(consume).toHaveBeenLastCalledWith("alice","read");
+  });
   it("recovers the saved transcript without a browser-held run identifier and isolates its owner", async () => {
     const { run } = await (await start()).json();
     const url = `https://example.test/runs?projectId=${scope.projectId}`;
