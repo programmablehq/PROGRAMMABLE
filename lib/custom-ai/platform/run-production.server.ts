@@ -21,6 +21,7 @@ export function productionRunStore() {
     "sandbox.command": { units: 1, effect: "read", operations: ["build", "test"] },
     "contract.library": { units: 0, effect: "read", operations: ["plan", "build", "test"] },
     "contract.context": { units: 0, effect: "read", operations: ["plan", "build", "test"] },
+    "contract.dependencies": { units: 1, effect: "write", operations: ["build"] },
     "contract.compile": { units: 2, effect: "read", operations: ["build", "test"] },
     "contract.check": { units: 2, effect: "read", operations: ["build", "test"] },
     "contract.audit": { units: 2, effect: "read", operations: ["build", "test"] },

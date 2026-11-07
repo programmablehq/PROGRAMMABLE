@@ -153,7 +153,7 @@ describe("Surplus model routing", () => {
     useSurplus();
     const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:null,tool_calls:[{type:"function",function:{name:"bash",arguments:'{"command":"echo no-op"}'}}]},finish_reason:"tool_calls"}]}));
     vi.stubGlobal("fetch",fetcher);
-    await expect(callSurplus({...input,model:"another-model"})).rejects.toMatchObject({failure:"refused"});
+    await expect(callSurplus({...input,model:"another-model"})).rejects.toMatchObject({failure:"refused",protocolViolation:true});
     const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
     expect(body.tool_choice).toBe("none");expect(body.provider).toBeUndefined();expect(body.provider_order).toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);

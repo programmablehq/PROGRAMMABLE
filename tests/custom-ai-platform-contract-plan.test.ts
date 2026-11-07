@@ -1,6 +1,7 @@
 import {describe,expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
-import {platformContract,platformContractBlueprint} from "../lib/custom-ai/platform/contract-plan.server";
+import {platformContract,platformContractBlueprint,completeCanonicalContractInterfaces} from "../lib/custom-ai/platform/contract-plan.server";
+import {canonicalInterfaceContext} from "../lib/custom-ai/canonical-dependencies.server";
 import {projectHash} from "../lib/custom-ai/platform/document";
 import type {ProjectRevision} from "../lib/custom-ai/platform/types";
 import {compileContractProject} from "../lib/custom-ai/contract-project.server";
@@ -18,6 +19,11 @@ function revision(files:Record<string,string>={},contractChecks:unknown=declared
  return {ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111",revisionId:projectHash(document),parentRevisionId:null,ordinal:1,createdAt:new Date(0).toISOString(),requirementsHash:projectHash(requirements),fileTreeHash:projectHash(files),dependencyLockHash:projectHash({}),architectureHash:projectHash(document.architecture),document};
 }
 describe("platform contract build plan",()=>{
+ it("completes only pinned canonical interfaces while preserving every declared behavior expectation",()=>{
+  const canonical=canonicalInterfaceContext(4663).contracts[0],input={contracts:[{source:canonical.source,contract:canonical.contract,functions:[]},{source:"Custom.sol",contract:"Custom",functions:["function custom()"]}],steps:[{expect:{status:"success",returns:["7"]},requirementIds:["result"]}]};
+  const completed=completeCanonicalContractInterfaces(input,4663) as typeof input;
+  expect(completed.contracts[0].functions).toEqual(canonical.functions);expect(completed.contracts[1]).toEqual(input.contracts[1]);expect(completed.steps).toEqual(input.steps);expect(input.contracts[0].functions).toEqual([]);
+ });
  it("declares the contract interface and expectations before implementation exists",()=>{
   const empty=platformContractBlueprint(revision());expect(empty.entrypoints).toEqual([{source:"Counter.sol",contract:"Counter",role:"auxiliary"}]);
   const source={"Counter.sol":"pragma solidity 0.8.26; contract Counter { uint public value; function increment() external { value++; } }"};
@@ -27,6 +33,10 @@ describe("platform contract build plan",()=>{
  it("rejects missing or incomplete checks instead of compiling an unplanned source",()=>{
   expect(()=>platformContractBlueprint(revision({},null))).toThrow();
   expect(()=>platformContractBlueprint(revision({},{...declared,steps:[]}))).toThrow();
+ });
+ it("returns the independent declaration diagnostic so the planner can correct an invalid call",()=>{
+  const checks=structuredClone(declared);checks.steps[0].signature="missing()";
+  expect(()=>platformContractBlueprint(revision({},checks))).toThrow(/Invalid declared calls:/);
  });
  it("uses the same predeclared oracle to reject a wrong implementation on the EVM",async()=>{
   const blueprint=platformContractBlueprint(revision());

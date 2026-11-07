@@ -7,6 +7,7 @@ import {projectTransaction} from "./transaction.server";
 import {projectHash} from "./document";
 import {assertExportableFiles,assertExportableMetadata,projectFilePath} from "./files";
 import {ProjectError,type ProjectScope,type ProjectFile,type ProjectRevision,type JsonValue} from "./types";
+import {createReleaseControl} from "./release-control.server";
 
 export type AppPlan={framework:"static"|"node"|"vite"|"nextjs";dataVersion:number;outputDirectory?:string;buildCommand?:string};
 export type AppPackage={files:Record<string,ProjectFile>;artifactHash:string;artifactId?:string};
@@ -43,13 +44,16 @@ function releaseFiles(revision:ProjectRevision,plan:AppPlan){
  files["vercel.json"]=JSON.stringify(config);
  return files;
 }
-const view=(row:Row)=>({id:String(row.id),revisionId:String(row.revision_id),artifactHash:String(row.artifact_hash),mode:String(row.mode),state:String(row.state),dataVersion:Number(row.data_version),url:typeof row.url==="string"?row.url:null,evidence:row.evidence as JsonValue,observedAt:row.observed_at?String(row.observed_at):null,errorCode:row.error_code?String(row.error_code):null});
+const view=(row:Row)=>({id:String(row.id),revisionId:String(row.revision_id),artifactHash:String(row.artifact_hash),mode:String(row.mode),state:String(row.state),dataVersion:Number(row.data_version),url:typeof row.url==="string"?row.url:null,evidence:row.evidence as JsonValue,observedAt:row.observed_at?String(row.observed_at):null,errorCode:row.error_code?String(row.error_code):null,control:row.control_action?{action:String(row.control_action),state:String(row.control_state),attempts:Number(row.control_attempts)}:null});
+const controlJoin="LEFT JOIN programmable_projects_v1.app_controls c ON c.owner=r.owner AND c.project_id=r.project_id AND c.release_id=r.id AND c.state<>'complete'";
+const releaseColumns="r.*,c.action AS control_action,c.state AS control_state,c.attempts AS control_attempts";
 type ReleaseInput={revisionId:string;idempotencyKey:string;mode:"preview"|"production"};
 type ReleaseTicket=ProjectScope&{id:string;lease:string};
 export function createProjectReleases(pool:AIPool,dependencies:{projects:ReturnType<typeof createPlatformStore>;data:ReturnType<typeof createRuntimeDataStore>;provider:HostingProvider;assess(ref:ProjectScope&{revisionId:string}):Promise<{verified:boolean;evidence:{id:string}[]}>;pack(revision:ProjectRevision,plan:AppPlan):Promise<AppPackage>;loadPackage?(scope:ProjectScope,id:string):Promise<AppPackage>;platformOrigin:string},now=Date.now){
  const {projects,data,provider}=dependencies;
+ const controls=createReleaseControl(pool,data,provider,now);
  const providerName=(scope:ProjectScope)=>`programmable-${projectHash({ownerId:scope.ownerId,projectId:scope.projectId}).slice(7,31)}`;
- async function read(scope:ProjectScope,id:string){return projectTransaction(pool,scope,async db=>{const row=(await db.query("SELECT * FROM programmable_projects_v1.app_releases WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id])).rows[0];if(!row)throw new ProjectError("release-missing","This app release was not found.",404);return row;});}
+ async function read(scope:ProjectScope,id:string){return projectTransaction(pool,scope,async db=>{const row=(await db.query(`SELECT ${releaseColumns} FROM programmable_projects_v1.app_releases r ${controlJoin} WHERE r.owner=$1 AND r.project_id=$2 AND r.id=$3`,[scope.ownerId,scope.projectId,id])).rows[0];if(!row)throw new ProjectError("release-missing","This app release was not found.",404);return row;});}
  async function queue(scope:ProjectScope,input:ReleaseInput){
   if(!["preview","production"].includes(input.mode)||!/^[A-Za-z0-9_.:-]{1,128}$/.test(input.idempotencyKey))throw new ProjectError("release-input","Choose a valid release request.");
   const requestHash=projectHash(input);
@@ -128,6 +132,8 @@ export function createProjectReleases(pool:AIPool,dependencies:{projects:ReturnT
  async function publish(scope:ProjectScope,input:ReleaseInput){const release=await queue(scope,input);const ticket=await take({...scope,id:release.id});if(ticket)await process(ticket);return view(await read(scope,release.id));}
  async function refresh(scope:ProjectScope,id:string){
   let row=await read(scope,id);
+  const control=await projectTransaction(pool,scope,async db=>(await db.query("SELECT state FROM programmable_projects_v1.app_controls WHERE owner=$1 AND project_id=$2 AND release_id=$3 AND state<>'complete'",[scope.ownerId,scope.projectId,id])).rows[0]);
+  if(control)return view(row);
   if(["failed","stopped","published"].includes(String(row.state)))return view(row);
   if(!row.deployment_id&&row.provider_id&&row.stage==="submitting"){
    const found=await provider.findDeployment(String(row.provider_id),id);if(found){await projectTransaction(pool,scope,db=>db.query("UPDATE programmable_projects_v1.app_releases SET deployment_id=$4,url=$5,state='building',stage='observe' WHERE owner=$1 AND project_id=$2 AND id=$3 AND stage='submitting'",[scope.ownerId,scope.projectId,id,found.id,found.url]));row=await read(scope,id);}
@@ -140,27 +146,22 @@ export function createProjectReleases(pool:AIPool,dependencies:{projects:ReturnT
  }
  async function processPending(limit=1){
   if(!Number.isInteger(limit)||limit<1||limit>2)throw new TypeError("Invalid release batch");let attempted=0;
-  for(let n=0;n<limit;n++){const ticket=await take();if(!ticket)break;await process(ticket);await refresh(ticket,ticket.id);attempted++;}return {attempted};
+  const recovered=await controls.recover(limit);
+  for(let n=0;n<limit;n++){const ticket=await take();if(!ticket)break;await process(ticket);await refresh(ticket,ticket.id);attempted++;}return {attempted,controls:recovered};
  }
  async function promote(scope:ProjectScope,id:string,rollback=false){
-  const row=await read(scope,id);if(!["ready","published","stopped"].includes(String(row.state))||!row.observed_at)throw new ProjectError("release-unobserved","Verify the deployed preview before publication.",409);
-  if(!rollback&&(await projects.readProject(scope)).revisionId!==row.revision_id)throw new ProjectError("release-stale","The workspace changed after this release was tested.",409);
-  if(await data.dataVersion(scope)!==Number(row.data_version))throw new ProjectError("release-data-version","This release is incompatible with the current data contract.",409);
-  await provider.promote(String(row.provider_id),String(row.deployment_id));
-  if(row.state==="stopped")await provider.resume(String(row.provider_id));
-  await data.activateRelease(scope,id);await data.setActive(scope,true);
-  await projectTransaction(pool,scope,async db=>{await db.query("UPDATE programmable_projects_v1.app_releases SET state='published',mode='production' WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id]);await db.query("UPDATE programmable_projects_v1.app_hosts SET active_release=$3 WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId,id]);});
+  await controls.run(scope,id,"promote",rollback);
   return view(await read(scope,id));
  }
  async function setActive(scope:ProjectScope,id:string,active:boolean){
-  const row=await read(scope,id);if(!row.provider_id)throw new ProjectError("release-missing","No app service exists for this release.",409);
-  const host=await projectTransaction(pool,scope,async db=>(await db.query("SELECT active_release FROM programmable_projects_v1.app_hosts WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId])).rows[0]);
-  if(!["published","stopped"].includes(String(row.state))||!row.observed_at||host?.active_release!==id)throw new ProjectError("release-state","Only the active, checked application can be stopped or resumed.",409);
-  if(active){await provider.resume(String(row.provider_id));await data.setActive(scope,true);}else{await data.setActive(scope,false);await provider.pause(String(row.provider_id));}
-  await projectTransaction(pool,scope,db=>db.query("UPDATE programmable_projects_v1.app_releases SET state=$4 WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id,active?"published":"stopped"]));
+  await controls.run(scope,id,active?"resume":"pause");
   return view(await read(scope,id));
  }
- const list=(scope:ProjectScope)=>projectTransaction(pool,scope,async db=>(await db.query("SELECT * FROM programmable_projects_v1.app_releases WHERE owner=$1 AND project_id=$2 ORDER BY created_at DESC LIMIT 40",[scope.ownerId,scope.projectId])).rows.map(view));
+ async function retryControl(scope:ProjectScope,id:string){
+  const row=await read(scope,id);if(!row.control_action)return view(row);
+  await controls.run(scope,id,row.control_action as "promote"|"pause"|"resume");return view(await read(scope,id));
+ }
+ const list=(scope:ProjectScope)=>projectTransaction(pool,scope,async db=>(await db.query(`SELECT ${releaseColumns} FROM programmable_projects_v1.app_releases r ${controlJoin} WHERE r.owner=$1 AND r.project_id=$2 ORDER BY r.created_at DESC LIMIT 40`,[scope.ownerId,scope.projectId])).rows.map(view));
  const receipt=(scope:ProjectScope,key:string)=>projectTransaction(pool,scope,async db=>{const row=(await db.query("SELECT * FROM programmable_projects_v1.app_releases WHERE owner=$1 AND project_id=$2 AND request_key=$3",[scope.ownerId,scope.projectId,key])).rows[0];if(!row)throw new ProjectError("release-reconcile","No committed release receipt exists for this action.",409);return view(row);});
- return {queue,publish,refresh,promote,setActive,processPending,list,receipt,read:async(scope:ProjectScope,id:string)=>view(await read(scope,id))};
+ return {queue,publish,refresh,promote,setActive,retryControl,processPending,list,receipt,read:async(scope:ProjectScope,id:string)=>view(await read(scope,id))};
 }

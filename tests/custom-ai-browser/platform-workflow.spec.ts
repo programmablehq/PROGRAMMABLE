@@ -73,3 +73,16 @@ test("reviews a real checked contract through the launch adapter without sending
  await page.getByText("Compilation passed · source review passed · declared behavior checks passed",{exact:true}).scrollIntoViewIfNeeded();
  await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-contract-review.png"),fullPage:true});
 });
+test("shows exhausted hosting recovery and retries only the saved action",async({page})=>{
+ await page.goto(origin);const selected=page.getByLabel("Your projects",{exact:true});const created=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/platform/projects"));await page.getByRole("button",{name:"New project",exact:true}).click();
+ const projectId=(await (await created).json()).project.projectId;await expect(selected).toHaveValue(projectId);const releaseId="22222222-2222-4222-8222-222222222222";let retried=false;
+ await page.route("**/api/custom-ai/platform/releases**",async route=>{
+  const request=route.request();
+  if(request.method()==="POST"){expect(request.postDataJSON()).toEqual({action:"retry-control",projectId,releaseId});retried=true;await route.fulfill({json:{release:{id:releaseId,state:"published"}}});return;}
+  await route.fulfill({json:{releases:[{id:releaseId,revisionId:"earlier",state:retried?"published":"reconcile",mode:"production",url:null,observedAt:"2026-11-07T12:00:00.000Z",errorCode:retried?null:"release-control-unknown",control:retried?null:{action:"promote",state:"unknown",attempts:3}}]}});
+ });
+ await page.getByRole("tab",{name:"Preview & run",exact:true}).click();
+ await expect(page.getByText("The hosting change could not be confirmed. App data access is paused. You can retry this same action.",{exact:true})).toBeVisible();
+ await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p12-hosting-recovery.png"),fullPage:true});
+ await page.getByRole("button",{name:"Retry hosting action",exact:true}).click();await expect(page.getByRole("button",{name:"Retry hosting action",exact:true})).toHaveCount(0);expect(retried).toBe(true);
+});

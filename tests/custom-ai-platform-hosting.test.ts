@@ -1,6 +1,11 @@
 import {it,expect,vi} from "vitest";
 vi.mock("server-only",()=>({}));
 import {createVercelHostingProvider} from "../lib/custom-ai/platform/hosting-provider.server";
+it("reconciles a promotion already applied by the provider without submitting it twice",async()=>{
+ const send=vi.fn<typeof fetch>(async()=>Response.json({accountId:"team_test",targets:{production:{id:"dpl_test",readyState:"READY"}}}));
+ await createVercelHostingProvider({token:"private-token",teamId:"team_test",fetch:send}).promote("prj_test","dpl_test");
+ expect(send).toHaveBeenCalledTimes(1);expect(send.mock.calls[0][1]?.method).toBe("GET");
+});
 it("accepts an empty acknowledgement only after the exact production target is observed",async()=>{
  const provider=createVercelHostingProvider({token:"private-token",teamId:"team_test",fetch:async(_url,init)=>init?.method==="POST"?new Response(null,{status:202}):Response.json({accountId:"team_test",targets:{production:{id:"dpl_test",readyState:"READY"}}})});
  await expect(provider.promote("prj_test","dpl_test")).resolves.toBeUndefined();

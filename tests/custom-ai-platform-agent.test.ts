@@ -7,6 +7,8 @@ import { createProjectAgent, type AgentDecision, type ProjectTool } from "../lib
 import { CUSTOM_AI_SCHEMA, type AIPool } from "../lib/custom-ai/store.server";
 import { PROJECT_PLATFORM_SCHEMA } from "../lib/custom-ai/platform/schema.generated";
 import type { WorkerGrantClaims } from "../lib/custom-ai/platform/protocol.generated";
+import {CustomAIError} from "../lib/custom-ai/types";
+import {ModelResponseError} from "../lib/custom-ai/model-response";
 
 let db: PGlite, runs: ReturnType<typeof createRunStore>, projects: ReturnType<typeof createPlatformStore>, revisionId: string;
 const scope = { ownerId: "alice", projectId: "11111111-1111-4111-8111-111111111111" };
@@ -28,6 +30,35 @@ const start=async(operation:"plan"|"build"="build")=>{
 const decisions:AgentDecision[]=[{kind:"tool",tool:"project.patch",input:{},message:"Writing file",claim:"planned"},{kind:"reply",tool:null,input:null,message:"The source is saved.",claim:"built"}];
 
 describe("durable project agent",()=>{
+  it("records and charges one bounded model-format retry before escalating the next decision",async()=>{
+    const {grant,lease}=await start();
+    const choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValueOnce(new ModelResponseError("invalid-schema",{inputTokens:20,outputTokens:10})).mockResolvedValue({kind:"reply",tool:null,input:null,message:"Ready",claim:"discussed"});
+    const agent=createProjectAgent({runs,projects,tools:[],choose,assess:async()=>({level:"discussed"})});
+    expect((await agent.advance(grant,lease.token)).run.status).toBe("running");
+    expect((await agent.advance(grant,lease.token)).run.usedUnits).toBe(2);
+    expect((await agent.advance(grant,lease.token)).run.status).toBe("succeeded");
+    expect(choose.mock.calls[1][0].steps.at(-1)?.result).toMatchObject({kind:"model-retry",failure:"invalid-schema"});
+  });
+  it("does not loop when both model-format attempts fail",async()=>{
+    const {grant,lease}=await start(),choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValue(new ModelResponseError("invalid-schema",{inputTokens:20,outputTokens:10}));
+    const agent=createProjectAgent({runs,projects,tools:[],choose,assess:async()=>({level:"discussed"})});
+    await agent.advance(grant,lease.token);expect((await agent.advance(grant,lease.token)).run.status).toBe("failed");expect(choose).toHaveBeenCalledTimes(2);
+  });
+  it.each([false,true])("separates a provider refusal from an unsolicited tool protocol (%s)",async protocol=>{
+    const {grant,lease}=await start(),choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValue(new ModelResponseError("refused",{inputTokens:20,outputTokens:10},undefined,undefined,protocol));
+    const agent=createProjectAgent({runs,projects,tools:[],choose,assess:async()=>({level:"discussed"})});
+    expect((await agent.advance(grant,lease.token)).run.status).toBe(protocol?"running":"failed");
+  });
+  it("returns a rejected provenance quote to the model without changing the project",async()=>{
+    const {grant,lease}=await start();
+    const choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>(async()=>decisions[0]);
+    const execute=vi.fn(async()=>{throw new CustomAIError("intent","The rule does not match your request. Your saved rules are kept.",502);});
+    const agent=createProjectAgent({runs,projects,tools:[{id:"project.patch",version:"1",description:"Write",schema:{type:"object"},execute}],choose,assess:async()=>({level:"discussed"})});
+    await agent.advance(grant,lease.token);expect((await agent.advance(grant,lease.token)).run.status).toBe("running");
+    expect((await projects.readProject(scope)).revisionId).toBe(revisionId);
+    await agent.advance(grant,lease.token);
+    expect(choose.mock.calls[1][0].steps.at(-1)?.result).toMatchObject({ok:false,code:"intent"});
+  });
   it("stops before a third automatic repair after failed behavior checks",async()=>{
     const pool:AIPool={connect:async()=>({query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release(){}})};
     runs=createRunStore(pool,{allowance:{hourlyUnits:100,dailyUnits:100,globalDailyUnits:200,concurrent:1},leaseMs:60000,capabilities:{"model.plan":{units:0,effect:"read",operations:["build"]},"project.patch":{units:0,effect:"write",operations:["build"]},"project.check":{units:0,effect:"read",operations:["build"]}}});

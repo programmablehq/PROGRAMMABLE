@@ -9,8 +9,9 @@ import { projectFileBytes, projectFileHash, projectFilePath } from "./files";
 import { parseIntentRequirements, reviseLaunchIntent } from "../launch-intent.server";
 import { parseRuleEdits } from "../design-edits";
 import type { LaunchIntent } from "../launch-intent";
-import {platformContractBlueprint} from "./contract-plan.server";
+import {platformContractBlueprint,completeCanonicalContractInterfaces} from "./contract-plan.server";
 import {projectHash} from "./document";
+import {readLaunchBuildContext} from "../launch-production.server";
 
 const objectSchema = (properties: object, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const value = (input: JsonValue) => input as Record<string, JsonValue>;
@@ -41,6 +42,11 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
       if (interpreted.problems.length) throw new ProjectError("project-requirements", "The plan omitted or changed a saved rule without support from the latest request.", 409);
       const priorArchitecture = context.revision.document.architecture;
       const architecture = { ...(priorArchitecture && typeof priorArchitecture === "object" && !Array.isArray(priorArchitecture) ? priorArchitecture : {}), ...value(data.architecture) };
+      if(architecture.useCanonicalProduction===true){
+        if(!["contract","legacy-contract"].includes(String(architecture.kind))||![1,4663].includes(Number(architecture.chainId)))throw new ProjectError("contract-plan","Choose the contract chain before binding its launch profile.",409);
+        architecture.production=json(await readLaunchBuildContext(Number(architecture.chainId) as 1|4663,context.signal));
+        if(architecture.contractChecks!==undefined)architecture.contractChecks=completeCanonicalContractInterfaces(architecture.contractChecks,Number(architecture.chainId) as 1|4663);
+      }
       if(["contract","legacy-contract"].includes(String(architecture.kind))&&!interpreted.intent.requirements.some(rule=>rule.open))platformContractBlueprint({projectId:context.projectId,requirementsHash:projectHash(interpreted.intent.requirements),document:{...context.revision.document,requirements:interpreted.intent.requirements,architecture}});
       return save(context, { title: data.title as string, requirements: interpreted.intent.requirements, architecture,
         removeRequirementIds: context.revision.document.requirements.filter(rule => !interpreted.intent.requirements.some(item => item.id === rule.id)).map(rule => rule.id) });

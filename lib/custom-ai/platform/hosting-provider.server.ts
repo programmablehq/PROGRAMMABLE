@@ -53,7 +53,12 @@ export function createVercelHostingProvider(options:{token:string;teamId:string;
   },
   async inspect(id){identifier(id,"dpl_");const deployment=await api(`/v13/deployments/${id}`);if(!deployment)throw new Error();return {state:String(deployment.readyState??deployment.state),url:address(deployment.url)};},
   async probe(url,revisionId){try{const base=address(url);const paths=["/api/_programmable","/api/_programmable/"];for(const path of paths){const response=await privateConnectorHTTP({url:new URL(path,base).href,method:"GET",headers:{Accept:"application/json"}});if(response.status!==200)continue;const body=JSON.parse(response.text);if(body.ok===true&&body.revisionId===revisionId)return true;}return false;}catch{return false;}},
-  async promote(projectId,deploymentId){identifier(projectId,"prj_");identifier(deploymentId,"dpl_");await api(`/v10/projects/${projectId}/promote/${deploymentId}`,"POST");
+  async promote(projectId,deploymentId){identifier(projectId,"prj_");identifier(deploymentId,"dpl_");
+   const current=await api(`/v9/projects/${projectId}`);
+   if(current?.accountId!==options.teamId)throw new ProjectError("hosting-owner","The hosting project belongs to another scope.",403);
+   const existing=(current.targets as {production?:{id?:string;readyState?:string}}|undefined)?.production;
+   if(existing?.id===deploymentId&&existing.readyState==="READY")return;
+   await api(`/v10/projects/${projectId}/promote/${deploymentId}`,"POST");
    await confirmProject(projectId,current=>{
     const targets=current.targets as {production?:{id?:string;readyState?:string}}|undefined;
     return targets?.production?.id===deploymentId&&targets.production.readyState==="READY";

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only", () => ({}));
+const {loadCanonical}=vi.hoisted(()=>({loadCanonical:vi.fn()}));
+vi.mock("../lib/custom-ai/launch-production.server",async importOriginal=>({...await importOriginal<typeof import("../lib/custom-ai/launch-production.server")>(),readLaunchBuildContext:loadCanonical}));
 import { createPlatformStore } from "../lib/custom-ai/platform/project-store.server";
 import { createRunStore } from "../lib/custom-ai/platform/runs.server";
 import { createProjectTools } from "../lib/custom-ai/platform/tools.server";
@@ -9,6 +11,8 @@ import { createProjectChecks } from "../lib/custom-ai/platform/builds.server";
 import { CUSTOM_AI_SCHEMA, type AIPool } from "../lib/custom-ai/store.server";
 import { PROJECT_PLATFORM_SCHEMA } from "../lib/custom-ai/platform/schema.generated";
 import type { ToolContext } from "../lib/custom-ai/platform/agent.server";
+import {createLaunchProductionContext} from "../lib/custom-ai/launch-production";
+import {platformContractDocument} from "./fixtures/custom-ai-platform-contract";
 
 let db:PGlite, projects:ReturnType<typeof createPlatformStore>,tools:ReturnType<typeof createProjectTools>,context:ToolContext;
 const scope={ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111"};
@@ -26,6 +30,14 @@ beforeEach(async()=>{
 afterEach(async()=>{await db.close()});
 const planned={title:"Counter",requirements:[{id:"counter",text:"Increments counter",kind:"behavior",open:null,instruction:"counter"},{id:"private",text:"Isolates owners",kind:"constraint",open:null,instruction:"private"}],edits:[],architecture:{checks:[{id:"count",requirementIds:["counter","private"],command:"node --test counter.test.mjs",kind:"behavior"}]}};
 describe("guarded project tools",()=>{
+ it("binds the server's canonical production snapshot without trusting copied model hashes",async()=>{
+   const canonical=createLaunchProductionContext({version:1,chainId:1,route:"graph-v3",profileVersion:"3.6.0",poolManager:{address:`0x${"1".repeat(40)}`,runtimeCodeHash:`0x${"1".repeat(64)}`},executor:{address:`0x${"2".repeat(40)}`,runtimeCodeHash:`0x${"2".repeat(64)}`},graphProfile:{},manifestDigest:null,tradeFee:{policyVersion:"test-v1",ratePpm:3000,recipient:`0x${"3".repeat(40)}`,collection:"programmable-routed-native"},protections:null});
+   loadCanonical.mockResolvedValue(canonical);
+   await tools.find(tool=>tool.id==="project.plan")!.execute(context,{title:"Counter",requirements:[{id:"zero",text:"The counter starts at zero",kind:"behavior",open:null,instruction:"counter"}],edits:[],architecture:{...platformContractDocument.architecture,useCanonicalProduction:true,production:{id:"model-copy-mismatch"}}});
+   const saved=await projects.readProject(scope);
+   expect((saved.document.architecture as Record<string,unknown>).production).toEqual(canonical);
+   expect(loadCanonical).toHaveBeenCalledWith(1,context.signal);
+ });
  it("preserves saved requirements when a new model plan silently omits one",async()=>{
    const plan=tools.find(tool=>tool.id==="project.plan")!;
    await plan.execute(context,planned);

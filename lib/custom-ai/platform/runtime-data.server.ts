@@ -1,6 +1,6 @@
 import "server-only";
 import {createHash,randomBytes} from "node:crypto";
-import type {AIPool} from "../store.server";
+import type {AIConnection,AIPool} from "../store.server";
 import type {createProjectSecretBox} from "./secrets.server";
 import {projectTransaction} from "./transaction.server";
 import {canonicalProjectJSON,projectHash} from "./document";
@@ -37,15 +37,21 @@ export function createRuntimeDataStore(pool:AIPool,secrets:ReturnType<typeof cre
       return {...scope,keyId,dataVersion:Number(config.data_version),namespace:String(config.data_namespace)};
     });
   }
-  async function activateRelease(scope:ProjectScope,id:string){
-    return projectTransaction(pool,scope,async db=>{
+  // Release control supplies its already owner-scoped transaction so capability
+  // activation and the persisted provider result commit together.
+  async function activateRelease(scope:ProjectScope,id:string,transaction?:AIConnection){
+    const work=async(db:AIConnection)=>{
       const selected=(await db.query("SELECT id FROM programmable_projects_v1.app_keys WHERE owner=$1 AND project_id=$2 AND id=$3 FOR UPDATE",[scope.ownerId,scope.projectId,id])).rows[0];
       if(!selected)throw new ProjectError("app-auth","The release credential is missing.",409);
       await db.query("UPDATE programmable_projects_v1.app_keys SET active=(id=$3) WHERE owner=$1 AND project_id=$2 AND data_namespace='production'",[scope.ownerId,scope.projectId,id]);
       await db.query("UPDATE programmable_projects_v1.app_keys SET active=true,data_namespace='production' WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id]);
-    });
+    };
+    return transaction?work(transaction):projectTransaction(pool,scope,work);
   }
-  async function setActive(scope:ProjectScope,active:boolean){return projectTransaction(pool,scope,db=>db.query("UPDATE programmable_projects_v1.app_config SET active=$3 WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId,active]));}
+  async function setActive(scope:ProjectScope,active:boolean,transaction?:AIConnection){
+    const work=(db:AIConnection)=>db.query("UPDATE programmable_projects_v1.app_config SET active=$3 WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId,active]);
+    return transaction?work(transaction):projectTransaction(pool,scope,work);
+  }
   async function dataVersion(scope:ProjectScope){return projectTransaction(pool,scope,async db=>Number((await db.query("SELECT data_version FROM programmable_projects_v1.app_config WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId])).rows[0]?.data_version??1));}
   async function invoke(token:string,input:AppDataRequest):Promise<JsonValue>{
     if(!input||Object.keys(input).some(key=>!["op","collection","key","value","delta","expectedVersion","idempotencyKey","cursor"].includes(key))||!["get","list","put","delete","increment"].includes(input.op)||typeof input.collection!=="string"||!/^[A-Za-z0-9_.-]{1,100}$/.test(input.collection)

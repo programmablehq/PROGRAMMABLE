@@ -37,7 +37,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
     if(!scope)return;const controller=new AbortController();
     void (async()=>{try{
       const result=await api<{projects:ProjectItem[]}>("/projects?limit=100",{signal:controller.signal});setProjects(result.projects);
-      if(entry.current){const first=await api<{project:ProjectRevision}>("/projects",{body:{projectId:entry.current.id},signal:controller.signal});setSelected(first.project.projectId);}
+      if(entry.current){const first=await api<{project:ProjectRevision}>("/projects",{body:{projectId:entry.current.id},signal:controller.signal});setProjects(current=>[{projectId:first.project.projectId,revisionId:first.project.revisionId,title:first.project.document.title,updatedAt:first.project.createdAt},...current.filter(item=>item.projectId!==first.project.projectId)]);setSelected(first.project.projectId);}
       else setSelected(current=>current??result.projects[0]?.projectId);
       setReady(true);
     }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Projects could not load.");}})();return()=>controller.abort();
@@ -49,7 +49,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
     for(const key of ["oauth_state","oauth_code","oauth_error"])url.searchParams.delete(key);
     window.history.replaceState(window.history.state,"",`${url.pathname}${url.search}${url.hash}`);
     if(failed||!state||!code){void Promise.resolve().then(()=>setError("Authorization was not completed. Open the connection and try again."));return;}
-    void api<{projectId:string}>("/connections",{body:{action:"oauth-complete",state,code}}).then(result=>{generation.current++;setSelected(result.projectId);setTab("connections");setNotice("Connection authorized.");}).catch(cause=>setError(cause instanceof Error?cause.message:"Authorization could not be completed."));
+    void api<{projectId:string}>("/connections",{body:{action:"oauth-complete",state,code}}).then(result=>{generation.current++;setProject(undefined);setRuns([]);setSelected(result.projectId);setTab("connections");setNotice("Connection authorized.");}).catch(cause=>setError(cause instanceof Error?cause.message:"Authorization could not be completed."));
   },[scope,api]);
   const refresh=useCallback(async(signal?:AbortSignal)=>{
     if(!selected)return;const seq=generation.current;
@@ -77,8 +77,13 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
     pendingRun.current={projectId:project.projectId,revisionId:project.revisionId,operation:"build",prompt:prompt.content,idempotencyKey:`prompt:${prompt.id}`,budgetUnits:20};
     setInput(prompt.content);void runTask(async()=>{await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");accepted.current?.(prompt.id);await refresh();});
   },[project,runs,busy,api,refresh,runTask]);
-  function choose(id:string){if(locked||busy)return;if(selected)drafts.current.set(selected,input);generation.current++;pendingRun.current=undefined;setProject(undefined);setRuns([]);setInput(drafts.current.get(id)??"");setError("");setSelected(id);setNotice("");}
-  async function create(){if(busy||locked)return;await runTask(async()=>{pendingCreate.current??=crypto.randomUUID();const {project}=await api<{project:ProjectRevision}>("/projects",{body:{projectId:pendingCreate.current}});pendingCreate.current=undefined;choose(project.projectId);setSelected(project.projectId);generation.current++;});}
+  function activate(id:string,loaded?:ProjectRevision){
+    if(selected)drafts.current.set(selected,input);generation.current++;pendingRun.current=undefined;
+    if(loaded)setProjects(current=>[{projectId:id,revisionId:loaded.revisionId,title:loaded.document.title,updatedAt:loaded.createdAt},...current.filter(item=>item.projectId!==id)]);
+    setProject(loaded);setRuns([]);setInput(drafts.current.get(id)??"");setError("");setSelected(id);setNotice("");
+  }
+  function choose(id:string){if(locked||busy)return;activate(id);}
+  async function create(){if(busy||locked)return;await runTask(async()=>{pendingCreate.current??=crypto.randomUUID();const {project}=await api<{project:ProjectRevision}>("/projects",{body:{projectId:pendingCreate.current}});pendingCreate.current=undefined;activate(project.projectId,project);});}
   async function submit(){
     if(!project||active||locked)return;
     const prompt=input.trim();if(!prompt)return;
@@ -86,7 +91,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
     if(!pendingRun.current||pendingRun.current.prompt!==prompt)pendingRun.current={projectId:project.projectId,revisionId:project.revisionId,operation,prompt,idempotencyKey:crypto.randomUUID(),budgetUnits:20};
     await runTask(async()=>{await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");drafts.current.delete(project.projectId);follow.current=true;await refresh();});
   }
-  function update(saved:ProjectRevision){setProject(saved);setNotice(`Version ${saved.ordinal} saved.`);}
+  function update(saved:ProjectRevision){setProject(current=>current?.projectId===saved.projectId?saved:current);setNotice(`Version ${saved.ordinal} saved.`);}
   function changeTab(next:Tab){setTab(next);}
   return <div className={styles.workspace}>
     <header className={styles.toolbar}><h1>AI Chat</h1><label className={styles.srOnly} htmlFor="platform-project">Your projects</label><select id="platform-project" value={selected??""} disabled={!ready||busy||locked} onChange={event=>choose(event.target.value)}><option value="" disabled>Choose a project</option>{projects.map(item=><option key={item.projectId} value={item.projectId}>{item.title}</option>)}</select><button type="button" disabled={!ready||busy||locked} onClick={()=>void create()}><Plus size={16} aria-hidden="true"/>New project</button><button className={styles.end} type="button" disabled={busy||locked} onClick={onLegacy}>Saved coin chats</button></header>

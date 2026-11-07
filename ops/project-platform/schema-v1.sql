@@ -252,6 +252,32 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.release_queue (
 );
 CREATE INDEX IF NOT EXISTS release_due_v1 ON programmable_projects_v1.release_queue(next_at);
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_controls (
+  owner text NOT NULL, project_id uuid NOT NULL, operation_id uuid NOT NULL,
+  release_id uuid NOT NULL, action text NOT NULL CHECK(action IN ('promote','pause','resume')),
+  state text NOT NULL CHECK(state IN ('pending','unknown','complete')),
+  lease_token uuid, lease_until timestamptz, attempts integer NOT NULL CHECK(attempts>0),
+  PRIMARY KEY(owner,project_id), UNIQUE(owner,project_id,operation_id),
+  FOREIGN KEY(owner,project_id,release_id) REFERENCES programmable_projects_v1.app_releases(owner,project_id,id)
+);
+-- Operator recovery routing only; no app data or credentials.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_control_queue (
+  owner text NOT NULL, project_id uuid NOT NULL, operation_id uuid NOT NULL, next_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id),
+  FOREIGN KEY(owner,project_id,operation_id) REFERENCES programmable_projects_v1.app_controls(owner,project_id,operation_id)
+);
+CREATE INDEX IF NOT EXISTS app_control_due_v1 ON programmable_projects_v1.app_control_queue(next_at);
+ALTER TABLE programmable_projects_v1.app_controls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_controls FORCE ROW LEVEL SECURITY;
+DO $app_controls$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='app_controls' AND policyname='app_control_owner_v1') THEN
+    CREATE POLICY app_control_owner_v1 ON programmable_projects_v1.app_controls
+      USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+END
+$app_controls$;
+
 CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_jobs (
   owner text NOT NULL, project_id uuid NOT NULL, id text NOT NULL, path text NOT NULL,
   interval_seconds integer NOT NULL CHECK(interval_seconds BETWEEN 60 AND 604800), idempotent boolean NOT NULL,

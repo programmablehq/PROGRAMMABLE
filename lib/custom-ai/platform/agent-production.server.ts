@@ -30,5 +30,5 @@ export function productionProjectAgent() {
     const result=await checks.assess(ref);
     const published=(await releases.list(ref)).some(release=>release.revisionId===ref.revisionId&&release.state==="published"&&release.observedAt);
     return {...result,level:published?"deployed":result.level};
-  },tools: [...createProjectTools(projects,sandbox,checks), ...contractProjectTools(productionPlatformArtifacts(),checks),...connectionTools(productionConnections(),productionConnectionService()),...runtimeTools(releases,productionAppJobs()),...gameEventTools(productionGameEvents()),...repositoryTools(projects,productionRepositoryImporter(),productionRepositoryDelivery())] });
+  },tools: [...createProjectTools(projects,sandbox,checks), ...contractProjectTools(productionPlatformArtifacts(),checks,projects),...connectionTools(productionConnections(),productionConnectionService()),...runtimeTools(releases,productionAppJobs()),...gameEventTools(productionGameEvents()),...repositoryTools(projects,productionRepositoryImporter(),productionRepositoryDelivery())] });
 }

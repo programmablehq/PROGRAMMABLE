@@ -37,7 +37,7 @@ export function createReleaseRoutes(deps:ProjectAccountDependencies&{releases:()
    return Response.json({release:await (body.action==="queue"?releases.queue(scope,input):releases.publish(scope,input))},{status:202,headers:aiHeaders});
   }
   if(typeof body.releaseId!=="string")throw new ProjectError("release-input","Choose a saved release.");
-  const result=body.action==="refresh"?await releases.refresh(scope,body.releaseId):body.action==="promote"?await releases.promote(scope,body.releaseId):body.action==="rollback"?await releases.promote(scope,body.releaseId,true):body.action==="stop"?await releases.setActive(scope,body.releaseId,false):body.action==="resume"?await releases.setActive(scope,body.releaseId,true):null;
+  const result=body.action==="refresh"?await releases.refresh(scope,body.releaseId):body.action==="promote"?await releases.promote(scope,body.releaseId):body.action==="rollback"?await releases.promote(scope,body.releaseId,true):body.action==="stop"?await releases.setActive(scope,body.releaseId,false):body.action==="resume"?await releases.setActive(scope,body.releaseId,true):body.action==="retry-control"?await releases.retryControl(scope,body.releaseId):null;
   if(!result)throw new ProjectError("release-input","Choose a valid release action.");return Response.json({release:result},{headers:aiHeaders});
  });
  return {GET,POST};

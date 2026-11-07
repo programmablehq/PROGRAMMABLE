@@ -7,6 +7,7 @@ import type { ProjectLevel } from "./builds.server";
 import { canonicalProjectJSON, projectHash } from "./document";
 import { ProjectError, type ProjectRevision, type ProjectScope, type JsonValue } from "./types";
 import { CustomAIError } from "../types";
+import { ModelResponseError } from "../model-response";
 
 export type AgentDecision = { kind: "tool" | "reply" | "question"; tool: string | null; input: JsonValue; message: string; claim: ProjectLevel };
 export type ToolContext = ProjectScope & { runId: string; leaseToken: string; stepId: string; revision: ProjectRevision; prompt: string; signal: AbortSignal };
@@ -17,6 +18,7 @@ export type ProjectTool = { id: string; version: string; description: string; sc
 type Step = { id: string; cursor: number; capability_id: string; input: JsonValue; result: JsonValue; state: string };
 export type AgentContext = { project: ProjectRevision; prompt: string; operation: string; tools: Pick<ProjectTool, "id" | "version" | "description" | "schema">[]; steps: Step[]; history: Record<string, unknown>[] };
 const levels: ProjectLevel[] = ["discussed", "planned", "built", "verified", "deployed", "operational"];
+const modelRetry=(value:unknown)=>Boolean(value&&typeof value==="object"&&"kind" in value&&value.kind==="model-retry");
 export function parseAgentDecision(raw: unknown): AgentDecision {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new ProjectError("agent-response", "The agent returned an incomplete decision.", 502);
   const item = raw as AgentDecision;
@@ -56,7 +58,7 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
       const pending = steps.find(step => step.state !== "completed"), last = steps.at(-1);
       let stepId: string, capabilityId: string, input: JsonValue;
       if (pending) { stepId = pending.id; capabilityId = pending.capability_id; input = pending.input; }
-      else if (last?.capability_id === "model.plan") {
+      else if (last?.capability_id === "model.plan"&&!modelRetry(last.result)) {
         const decision = parseAgentDecision(last.result);
         if (decision.kind !== "tool") {
           const actual = await dependencies.assess({ ...scope, revisionId });
@@ -69,7 +71,7 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
         input = { revisionId, registryHash: projectHash(dependencies.tools.map(({ id, version, schema }) => ({ id, version, schema }))) };
       }
       if (Number(work.run.cursor) >= 23 && !pending) return { run: await runs.finishRun(scope, grant.runId, leaseToken, "This work unit reached its step limit. The project and completed checks are saved; continue from this revision.") };
-      if(!pending&&["project.patch","project.dependencies"].includes(capabilityId)){
+      if(!pending&&["project.patch","project.dependencies","contract.dependencies"].includes(capabilityId)){
         const failures=new Map<string,number>();
         steps.forEach((step,index)=>{
           if(!["project.check","contract.check","contract.compile","contract.audit"].includes(step.capability_id)||step.state!=="completed")return;
@@ -79,7 +81,7 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
           }else if(result?.value?.passed===true||result?.value?.compiled===true||result?.value?.status==="passed")failures.delete(step.capability_id);
         });
         const failure=failures.size?Math.min(...failures.values()):-1;
-        const repairs=failure<0?0:steps.slice(failure+1).filter(step=>step.state==="completed"&&["project.patch","project.dependencies"].includes(step.capability_id)).length;
+        const repairs=failure<0?0:steps.slice(failure+1).filter(step=>step.state==="completed"&&["project.patch","project.dependencies","contract.dependencies"].includes(step.capability_id)).length;
         if(repairs>=2)return {run:await runs.finishRun(scope,grant.runId,leaseToken,"The two automatic repair attempts are used up. Your source and check results are saved. Review the remaining failure before starting another work unit.","waiting_user")};
       }
       const begin = await runs.beginStep(scope, grant.runId, leaseToken, { id: stepId, capabilityId, input });
@@ -87,22 +89,29 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
       let result: JsonValue;
       if (capabilityId === "model.plan") {
         if (!begin.execute) return { run: await runs.readRun(scope, grant.runId) };
-        const chosen = await dependencies.choose({ project: revision, prompt: work.prompt, operation: work.operation,
-          tools: dependencies.tools.filter(tool => runs.allowedCapabilities(work.operation).includes(tool.id)).map(({ id, version, description, schema }) => ({ id, version, description, schema })), steps, history: work.history }, signal);
-        result = parseAgentDecision(chosen) as unknown as JsonValue;
+        try {
+          const chosen = await dependencies.choose({ project: revision, prompt: work.prompt, operation: work.operation,
+            tools: dependencies.tools.filter(tool => runs.allowedCapabilities(work.operation).includes(tool.id)).map(({ id, version, description, schema }) => ({ id, version, description, schema })), steps, history: work.history }, signal);
+          result = parseAgentDecision(chosen) as unknown as JsonValue;
+        } catch(error) {
+          const previous=steps.findLast(step=>step.capability_id==="model.plan");
+          if(!(error instanceof ModelResponseError)||!(["invalid-schema","output-limit","empty-response"].includes(error.failure)||error.protocolViolation)||modelRetry(previous?.result))throw error;
+          result={kind:"model-retry",failure:error.failure,message:"The provider returned an invalid decision format. Retry once with the configured escalation model; no tool was executed."};
+        }
       } else {
         const registered = tools.get(capabilityId);
         if (!registered) throw new ProjectError("agent-tool", "This project tool is not registered.", 403);
-        if (!registered.validate(input)) throw new ProjectError("agent-input", "The tool arguments did not match its declared schema.", 422);
         const context: ToolContext = { ...scope, runId: grant.runId, leaseToken, stepId: `${grant.runId}:${stepId}`, revision, prompt: work.prompt, signal };
         try {
+          if (!registered.validate(input)) throw new ProjectError("agent-input", "The tool arguments did not match its declared schema.", 422);
           if (begin.reconcile) {
             if (!registered.tool.reconcile) throw new ProjectError("agent-reconciliation", "The uncertain action must be reconciled before continuing.", 409);
             result = { ok: true, value: await registered.tool.reconcile(context, input) };
           } else if (begin.execute) result = { ok: true, value: await registered.tool.execute(context, input) };
           else return { run: await runs.readRun(scope, grant.runId) };
         } catch (error) {
-          if (error instanceof ProjectError && !["run-lease", "project-conflict", "agent-reconciliation"].includes(error.code)) result = { ok: false, code: error.code, message: error.message };
+          if (error instanceof ProjectError && !["run-lease", "project-conflict", "agent-reconciliation"].includes(error.code)
+            || error instanceof CustomAIError && ["intent", "edit"].includes(error.code)) result = { ok: false, code: error.code, message: error.message };
           else throw error;
         }
       }

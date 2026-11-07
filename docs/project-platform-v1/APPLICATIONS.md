@@ -6,6 +6,15 @@ The saved architecture declares `application.framework`, `application.dataVersio
 
 A release moves through queued, building, ready, published, stopped, failed or reconcile. Ready means the immutable deployment answered the revision health check. Publication promotes that exact deployment. An uncertain submission is looked up by release identity; it is never blindly sent again. Changing source requires new verification. Rollback requires the same data contract and does not reverse external effects.
 
+Publication, pause and resume use one durable control intent per application.
+Only that intent can run until its outcome is confirmed. Application data access is
+paused while the provider target is being confirmed; the selected data key and
+the resulting release state are committed together. A restarted worker can
+reconcile the same intent, and late workers cannot overwrite its result. The
+operations dispatcher makes at most three automatic attempts. An exhausted
+attempt remains visible with **Retry hosting action**, which repeats the saved
+action rather than selecting another release.
+
 ## Application data and private connections
 
 Only the server receives `PROGRAMMABLE_APP_TOKEN`, `PROGRAMMABLE_DATA_URL`, and `PROGRAMMABLE_CONNECTOR_URL`. Never include the token in a browser bundle. Generated app projects do not receive platform database credentials or provider identity tokens.
