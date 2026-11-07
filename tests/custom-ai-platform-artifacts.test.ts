@@ -61,4 +61,9 @@ describe("private bounded project artifacts", () => {
     await expect(store.saveArtifact(scope, { bytes: new Uint8Array(17), mediaType: "text/plain" })).rejects.toMatchObject({ status: 413 });
     await expect(store.saveArtifact(scope, { bytes: new Uint8Array(1), mediaType: "text/plain\r\nInjected: true" })).rejects.toMatchObject({ code: "project-input" });
   });
+  it("preserves millisecond precision in persisted expiry timestamps", async () => {
+    clock += 123;
+    const artifact = await store.saveArtifact(scope, { bytes: new Uint8Array([1]), mediaType: "text/plain" });
+    expect((await store.readArtifact(scope, artifact.id)).expiresAt).toBe(new Date(clock + 60_000).toISOString());
+  });
 });

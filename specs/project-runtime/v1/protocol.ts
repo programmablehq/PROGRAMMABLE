@@ -57,3 +57,11 @@ export type StartRunInput = ProjectScope & { revisionId: string; operation: stri
 export type SecretRef = { connectionId: string; keyId: string; version: string };
 export type ConnectionManifest = { id: string; version: string; schemaHash: string; actions: string[]; endpointPolicyId: string };
 export type ReleaseInput = ProjectScope & { revisionId: string; artifactHashes: string[]; evidenceIds: string[]; targetId: string; configHash: string; idempotencyKey: string };
+export type WorkerGrantClaims = ProjectScope & {
+  audience: "programmable-project-worker-v1";
+  runId: string;
+  workerId: string;
+  issuedAt: number;
+  expiresAt: number;
+  protocolHash: string;
+};

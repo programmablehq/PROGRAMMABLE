@@ -1,5 +1,5 @@
 // Generated from specs/project-runtime/v1/protocol.ts. Do not edit.
-export const PROJECT_PROTOCOL_HASH = "sha256:b9678a4331a322bec2e67af78718afacc89b64e76417a9fbba0275eb56562d91";
+export const PROJECT_PROTOCOL_HASH = "sha256:98afeb80f46773ba0ed8827d218b0dabca6b8b999d68c3b90b6abf97dca726bc";
 /** Canonical dependency-free wire contract. Generate clients with
  * scripts/custom-ai/build-platform-protocol.mjs; do not fork this per service. */
 export const PROJECT_PROTOCOL_VERSION = "1.0.0" as const;
@@ -59,3 +59,11 @@ export type StartRunInput = ProjectScope & { revisionId: string; operation: stri
 export type SecretRef = { connectionId: string; keyId: string; version: string };
 export type ConnectionManifest = { id: string; version: string; schemaHash: string; actions: string[]; endpointPolicyId: string };
 export type ReleaseInput = ProjectScope & { revisionId: string; artifactHashes: string[]; evidenceIds: string[]; targetId: string; configHash: string; idempotencyKey: string };
+export type WorkerGrantClaims = ProjectScope & {
+  audience: "programmable-project-worker-v1";
+  runId: string;
+  workerId: string;
+  issuedAt: number;
+  expiresAt: number;
+  protocolHash: string;
+};

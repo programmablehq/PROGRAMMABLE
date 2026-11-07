@@ -50,6 +50,66 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.artifacts (
 );
 CREATE INDEX IF NOT EXISTS project_artifact_expiry_v1 ON programmable_projects_v1.artifacts(owner,expires_at);
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.runs (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  id uuid NOT NULL,
+  request_key text NOT NULL,
+  request_hash text NOT NULL,
+  policy_hash text NOT NULL,
+  revision_id text NOT NULL,
+  operation text NOT NULL CHECK (operation IN ('plan','build','test','deploy')),
+  prompt text NOT NULL,
+  status text NOT NULL CHECK (status IN ('queued','running','waiting_user','retryable','failed','cancelled','succeeded')),
+  cursor integer NOT NULL DEFAULT 0 CHECK (cursor>=0),
+  reserved_units integer NOT NULL CHECK (reserved_units>0),
+  used_units integer NOT NULL DEFAULT 0 CHECK (used_units>=0 AND used_units<=reserved_units),
+  reserved_hour bigint NOT NULL,
+  reserved_day bigint NOT NULL,
+  settled boolean NOT NULL DEFAULT false,
+  lease_token text,
+  lease_until timestamptz,
+  worker_id text,
+  summary text,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  PRIMARY KEY (owner,project_id,id),
+  UNIQUE (owner,project_id,request_key),
+  FOREIGN KEY (owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+CREATE INDEX IF NOT EXISTS project_run_owner_state_v1 ON programmable_projects_v1.runs(owner,status,created_at);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.run_steps (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  id text NOT NULL,
+  cursor integer NOT NULL CHECK (cursor>=0),
+  capability_id text NOT NULL,
+  input_hash text NOT NULL,
+  input jsonb NOT NULL,
+  result jsonb,
+  state text NOT NULL CHECK (state IN ('dispatching','completed','unknown')),
+  effect text NOT NULL CHECK (effect IN ('read','write')),
+  attempts integer NOT NULL DEFAULT 1 CHECK (attempts>0 AND attempts<=3),
+  lease_token text NOT NULL,
+  PRIMARY KEY (owner,project_id,run_id,id),
+  UNIQUE (owner,project_id,run_id,cursor),
+  FOREIGN KEY (owner,project_id,run_id) REFERENCES programmable_projects_v1.runs(owner,project_id,id)
+);
+
+-- Private dispatcher routing metadata only. No prompts, files, tokens or results.
+-- The dispatcher role receives this table, not access to tenant source tables.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.dispatch_outbox (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  next_attempt_at timestamptz NOT NULL,
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts>=0),
+  PRIMARY KEY(owner,project_id,run_id),
+  FOREIGN KEY(owner,project_id,run_id) REFERENCES programmable_projects_v1.runs(owner,project_id,id)
+);
+CREATE INDEX IF NOT EXISTS project_dispatch_due_v1 ON programmable_projects_v1.dispatch_outbox(next_attempt_at);
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;
@@ -59,6 +119,10 @@ ALTER TABLE programmable_projects_v1.idempotency ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.idempotency FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.artifacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.artifacts FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.runs FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.run_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.run_steps FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -79,6 +143,16 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='artifacts' AND policyname='artifact_owner_v1') THEN
     CREATE POLICY artifact_owner_v1 ON programmable_projects_v1.artifacts
+      USING (owner=current_setting('programmable.project_owner',true))
+      WITH CHECK (owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='runs' AND policyname='run_owner_v1') THEN
+    CREATE POLICY run_owner_v1 ON programmable_projects_v1.runs
+      USING (owner=current_setting('programmable.project_owner',true))
+      WITH CHECK (owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='run_steps' AND policyname='run_step_owner_v1') THEN
+    CREATE POLICY run_step_owner_v1 ON programmable_projects_v1.run_steps
       USING (owner=current_setting('programmable.project_owner',true))
       WITH CHECK (owner=current_setting('programmable.project_owner',true));
   END IF;

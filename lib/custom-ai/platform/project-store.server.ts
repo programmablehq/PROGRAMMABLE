@@ -3,6 +3,7 @@ import type { AIConnection, AIPool } from "../store.server";
 import { ProjectError, type ProjectDocument, type ProjectRevision, type ProjectScope, type RevisionPatchInput } from "./types";
 import { applyDocumentPatch, emptyProjectDocument, projectHash } from "./document";
 import { projectTransaction } from "./transaction.server";
+import { projectDate } from "./time";
 
 const missing = () => new ProjectError("project-missing", "This project was not found.", 404);
 const conflict = () => new ProjectError("project-conflict", "This project changed. Reload the current revision before editing.", 409);
@@ -12,7 +13,7 @@ function revision(row: Record<string, unknown>): ProjectRevision {
   return structuredClone({ ownerId: String(row.owner), projectId: String(row.project_id), revisionId: String(row.id),
     parentRevisionId: row.parent_id === null ? null : String(row.parent_id), ordinal: Number(row.ordinal), document: row.document as ProjectDocument,
     requirementsHash: String(row.requirements_hash), fileTreeHash: String(row.files_hash), dependencyLockHash: String(row.dependencies_hash),
-    architectureHash: String(row.architecture_hash), createdAt: new Date(String(row.created_at)).toISOString() });
+    architectureHash: String(row.architecture_hash), createdAt: projectDate(row.created_at).toISOString() });
 }
 
 /** All access is both owner-qualified and protected by transaction-local RLS.
@@ -105,7 +106,7 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
       (await db.query(`SELECT p.id,p.current_revision,p.updated_at,r.document->>'title' AS title FROM programmable_projects_v1.projects p
         JOIN programmable_projects_v1.revisions r ON r.owner=p.owner AND r.project_id=p.id AND r.id=p.current_revision
         WHERE p.owner=$1 ORDER BY p.updated_at DESC,p.id LIMIT $2`, [ownerId, limit])).rows.map(row => ({
-          projectId: String(row.id), revisionId: String(row.current_revision), title: String(row.title), updatedAt: new Date(String(row.updated_at)).toISOString(),
+          projectId: String(row.id), revisionId: String(row.current_revision), title: String(row.title), updatedAt: projectDate(row.updated_at).toISOString(),
         })));
   }
 

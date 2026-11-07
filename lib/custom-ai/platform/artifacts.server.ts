@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { AIPool } from "../store.server";
 import { projectTransaction } from "./transaction.server";
 import { ProjectError, type ProjectScope } from "./types";
+import { projectDate } from "./time";
 
 type ArtifactLimits = { maxArtifactBytes: number; maxOwnerBytes: number; maxProjectBytes: number; lifetimeSeconds: number };
 export type ProjectArtifact = { id: string; mediaType: string; size: number; expiresAt: string };
@@ -11,7 +12,7 @@ export const DEFAULT_ARTIFACT_LIMITS: Readonly<ArtifactLimits> = Object.freeze({
 });
 const identity = (bytes: Uint8Array, mediaType: string) => `sha256:${createHash("sha256").update("project-artifact/v1\0").update(mediaType).update("\0").update(bytes).digest("hex")}`;
 function metadata(row: Record<string, unknown>): ProjectArtifact {
-  return { id: String(row.id), mediaType: String(row.media_type), size: Number(row.size), expiresAt: new Date(String(row.expires_at)).toISOString() };
+  return { id: String(row.id), mediaType: String(row.media_type), size: Number(row.size), expiresAt: projectDate(row.expires_at).toISOString() };
 }
 
 export function createArtifactStore(pool: AIPool, limits: Readonly<ArtifactLimits> = DEFAULT_ARTIFACT_LIMITS, now: () => number = Date.now) {
