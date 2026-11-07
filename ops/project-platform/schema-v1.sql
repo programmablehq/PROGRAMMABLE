@@ -272,6 +272,27 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_job_queue (
 );
 CREATE INDEX IF NOT EXISTS app_job_due_v1 ON programmable_projects_v1.app_job_queue(next_at);
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_bindings (
+  owner text NOT NULL, project_id uuid NOT NULL, id text NOT NULL, version text NOT NULL, definition jsonb NOT NULL, active boolean NOT NULL,
+  PRIMARY KEY(owner,project_id,id), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_wallets (
+  owner text NOT NULL, project_id uuid NOT NULL, binding_id text NOT NULL, version text NOT NULL,
+  player_id_hash text NOT NULL, player text NOT NULL, proof jsonb NOT NULL,
+  PRIMARY KEY(owner,project_id,binding_id,version,player_id_hash), FOREIGN KEY(owner,project_id,binding_id) REFERENCES programmable_projects_v1.game_bindings(owner,project_id,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_events (
+  owner text NOT NULL, project_id uuid NOT NULL, binding_id text NOT NULL, event_id text NOT NULL,
+  binding_version text NOT NULL, binding_definition jsonb NOT NULL, payload_hash text NOT NULL, payload jsonb NOT NULL,
+  state text NOT NULL CHECK(state IN ('received','prepared','submitted','confirmed','failed')),
+  prepared_transaction jsonb, transaction_hash text, observation jsonb, created_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,binding_id,event_id), FOREIGN KEY(owner,project_id,binding_id) REFERENCES programmable_projects_v1.game_bindings(owner,project_id,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_event_routes (
+  binding_id text PRIMARY KEY, owner text NOT NULL, project_id uuid NOT NULL,
+  FOREIGN KEY(owner,project_id,binding_id) REFERENCES programmable_projects_v1.game_bindings(owner,project_id,id)
+);
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;
@@ -317,6 +338,12 @@ ALTER TABLE programmable_projects_v1.app_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.app_jobs FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.app_job_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.app_job_runs FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_bindings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_bindings FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_wallets FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_events FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -385,6 +412,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='app_jobs' AND policyname='app_job_owner_v1') THEN
     CREATE POLICY app_job_owner_v1 ON programmable_projects_v1.app_jobs USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
     CREATE POLICY app_job_run_owner_v1 ON programmable_projects_v1.app_job_runs USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='game_bindings' AND policyname='game_binding_owner_v1') THEN
+    CREATE POLICY game_binding_owner_v1 ON programmable_projects_v1.game_bindings USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY game_wallet_owner_v1 ON programmable_projects_v1.game_wallets USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY game_event_owner_v1 ON programmable_projects_v1.game_events USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
   END IF;
 END
 $migration$;
