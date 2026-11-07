@@ -61,6 +61,7 @@ describe("focused fee-module edits", () => {
     const call = vi.fn(async () => response(plan)), compile = vi.fn(compiled);
     const result = await runCustomAI(request, undefined, { call, compile }, { draft });
     expect(result.change).toBe("blocked"); expect(result.intent?.requirements[0]).toEqual(intent.requirements[0]);
-    expect(call).toHaveBeenCalledTimes(1); expect(compile).not.toHaveBeenCalled();
+    expect(call).toHaveBeenCalledTimes(2); expect(compile).not.toHaveBeenCalled();
+    expect(result.pendingRevision?.issues).toContain(intent.requirements[0].text);
   });
 });

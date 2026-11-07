@@ -40,7 +40,8 @@ describe("complete launch intent and source revisions", () => {
     const result=await runCustomAI({...request,messages:[{role:"user",content:"Keep the other rules."}]},undefined,
       {call:async()=>plan({action:"answer",intentMode:"revise",reply:"All changes saved.",intentRequirements:next,unresolved:questions.slice(1),requirements:[],feeChecks:[]}),compile:vi.fn()},
       {intent:previous});
-    expect(result.change).toBe("blocked");expect(result.reply).toBe(questions[0]);
+    expect(result.change).toBe("blocked");expect(result.reply).toContain("could not be fully applied");
+    expect(result.pendingRevision?.issues).toContain(texts[6]);expect(result.unresolved).toContain(questions[0]);
     expect(result.intent?.requirements[6]).toEqual(previous.requirements[6]);
   });
   it("preserves all ten requirements, four open parts and three negative constraints", () => {

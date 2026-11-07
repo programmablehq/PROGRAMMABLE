@@ -38,8 +38,8 @@ describe("planning request size",()=>{
       {call,compile:vi.fn()},{owner:"owned-test",dataAdapters:{owner:"owned-test",create:vi.fn(),read:vi.fn(),list:vi.fn()} as never})).rejects.toThrow("captured");
     expect(call).toHaveBeenCalledOnce();expect(captured?.task).toBe("planning");
     expect(captured!.system.length+JSON.stringify(captured!.schema).length).toBeLessThan(36000);
-    expect(captured!.effort).toBe("low");
-    expect(captured!.structuredTransport).toBeUndefined();
+    expect(captured!.effort).toBe("medium");
+    expect(captured!.structuredTransport).toBe("json-object");
     expect(captured!.system).toContain("one complete JSON object");
     const properties=(captured!.schema as {properties:Record<string,unknown>}).properties;
     expect(properties.action).toEqual({type:"string",enum:["answer","clarify"]});
@@ -66,7 +66,7 @@ describe("planning request size",()=>{
       vi.stubEnv("SURPLUS_API_KEY","synthetic-test-only");
       const fetcher=vi.fn(async(_url:unknown,options?:RequestInit)=>{
         const wire=JSON.parse(String(options?.body));
-        expect(wire.response_format).toMatchObject({type:"json_schema",json_schema:{strict:true}});
+        expect(wire.response_format).toEqual({type:"json_object"});
         expect(wire.messages[0].content).toContain("one complete JSON object");
         return Response.json({choices:[{message:{content:JSON.stringify(value)},finish_reason:"stop"}],usage:{prompt_tokens:1,completion_tokens:1}});
       });

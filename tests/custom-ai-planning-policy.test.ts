@@ -122,6 +122,13 @@ it("checks an inferred minimum against the selected policy without changing an e
  expect(hasInventedFeeFloor(["Total fee falls linearly to 1% over 24 hours."],"Use a 2% total fee falling to 1%, my chosen minimum fee.",3000)).toBe(false);
 });
 
+it("keeps a project endpoint separate from the total fee floor",()=>{
+ const request="Die Gesamtgebühr soll auf die minimal erlaubte Gebühr sinken.";
+ expect(hasInventedFeeFloor(["Die Gesamtgebühr fällt von 2 % auf 0,3 %. Die Projektgebühr fällt von 1,7 % auf 0 %."],request,3000)).toBe(false);
+ expect(hasInventedFeeFloor(["Total fee falls to 0.3%, while the project fee falls to 0%."],"Total fee should fall to the minimum permitted fee.",3000)).toBe(false);
+ expect(hasInventedFeeFloor(["Die Gesamtgebühr fällt von 2 % auf 0 %. Die Projektgebühr bleibt bei 0 %."],request,3000)).toBe(true);
+});
+
 it("retains the changed chain after a follow-up lookup",async()=>{
  const basePlan={...plan("0.3","1.7"),action:"answer",setupPatch:{chainId:8453}};
  const call=vi.fn().mockResolvedValueOnce({text:JSON.stringify(basePlan),outputTokens:100,inputTokens:1})

@@ -34,6 +34,13 @@ describe("Surplus model routing", () => {
     expect(url).toBe("https://api.surplusintelligence.ai/v1/chat/completions");
     expect(JSON.parse(String(options.body))).toMatchObject({model:input.model,max_tokens:200,response_format:{type:"json_schema",json_schema:{strict:true}}});
   });
+  it.each(["claude-sonnet-5.5","claude-opus-5.5"])("does not apply the Haiku seller pins to %s",async model=>{
+    useSurplus();const fetcher=vi.fn(async()=>Response.json({choices:[{message:{content:'{"reply":"OK"}'},finish_reason:"stop"}]}));
+    vi.stubGlobal("fetch",fetcher);
+    await callSurplus({...input,model});
+    const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(body.model).toBe(model);expect(body.provider).toBeUndefined();expect(body.provider_order).toBeUndefined();
+  });
   it("validates JSON-object transport locally without another provider request",async()=>{
     useSurplus();
     const schema={type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false};

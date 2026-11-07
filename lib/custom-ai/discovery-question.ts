@@ -1,5 +1,40 @@
 import type { ChatRequest } from "./types";
 
+export function localizedDiscussionBoundary(text:string):boolean {
+  return /\b(?:discutons\s+seulement|ne\s+(?:génère|genere|construis)\s+(?:aucun|pas|rien))/u.test(text)
+    ||/\b(?:solo\s+(?:quiero\s+)?(?:discutir|hablar|planificar)|no\s+(?:generes|construyas)\s+(?:código|codigo|todav[ií]a))/u.test(text)
+    ||/\b(?:solo\s+(?:discutere|parlare|pianificare)|non\s+(?:costruire|generare)\s+(?:ancora|codice))/u.test(text)
+    ||/\b(?:só\s+(?:conversar|discutir|planejar)|não\s+(?:gere|construa)\s+(?:código|codigo|ainda))/u.test(text)
+    ||/\b(?:alleen\s+(?:het\s+plan\s+)?bespreken|bouw\s+nog\s+(?:niets|niet)|nog\s+niet\s+bouwen)/u.test(text)
+    ||/\b(?:sadece\s+(?:planı\s+)?(?:konuşalım|tartışalım)|henüz\s+kod\s+üretme)/u.test(text);
+}
+
+/** A concrete proposed behavior needs a durable rule even when the user asks
+ * about feasibility in the same sentence. Pure informational questions do not. */
+export function isConcreteDesignRequest(request:Pick<ChatRequest,"messages">):boolean {
+  const last=request.messages.at(-1);
+  if(last?.role!=="user")return false;
+  const text=last.content.replace(/```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|„[^“\n]*“|“[^”\n]*”/g," ");
+  return (/\b(?:plan(?:e)?|entwirf|soll(?:en)?|möchte|moechte|will|want|i['’]d like|we need|je veux|quiero|quero|vorrei|ik wil|istiyorum)\b/iu.test(text)
+    ||/(?:^|[:;\n])\s*(?:ein(?:en)?|a|an)\s+(?:coin|token)\b/iu.test(text))
+    &&/\b(?:coin|token|fees?|tax|(?:gesamt|projekt|plattform)?geb[uü]hr\w*|liquidit\w*|buyback|rewards?|wetter\w*|weather|oracle|vault|frais|tarif\w*|comisi[oó]n\w*)\b/iu.test(text);
+}
+
+/** Blank presentation fields are collected by the launch form. They are not
+ * invented economic decisions in a first discussion about contract behavior. */
+export function withoutPrematureLaunchQuestions(value:Record<string,unknown>,userText:string):Record<string,unknown> {
+  if(!Array.isArray(value.intentRequirements)||/\b(?:name|names|ticker|symbol|image|website|namen|bild)\b/iu.test(userText))return value;
+  const allowed=new Set("coin token name names ticker symbol initial buy amount are is not yet chosen needed required before launch please choose add the a an and or what which your for to of still open fehlt fehlen der die das und oder name namen symbol bild startkauf betrag vor dem launch noch offen wähle bitte ist sind".split(" "));
+  const kept=value.intentRequirements.filter((item:unknown)=>{
+    if(!item||typeof item!=="object")return true;
+    const question=(item as {open?:unknown}).open;
+    if(typeof question!=="string"||!/\b(?:name|names|ticker|symbol|namen)\b/iu.test(question)||/\d/u.test(question))return true;
+    const words=`${(item as {text?:unknown}).text??""} ${question}`.toLowerCase().match(/\p{L}+/gu)??[];
+    return words.some(word=>!allowed.has(word));
+  });
+  return kept.length===value.intentRequirements.length?value:{...value,intentRequirements:kept};
+}
+
 /** Capability questions need an answer, not a saved contract specification.
  * Mixed edit/build commands stay with the planner. This route never mutates. */
 export function isDiscoveryQuestion(request: Pick<ChatRequest, "intent" | "messages" | "editTarget">): boolean {

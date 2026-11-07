@@ -188,4 +188,17 @@ describe("durable chat retry and streaming", () => {
     const next=await sendAIChat({...request,id:"intent-followup-0001",contextId:request.id,messages:[{role:"user",content:"Explain the first rule."}]},async()=>({}),new AbortController().signal);
     expect(next.intent).toEqual(intent);expect(runtime.run).toHaveBeenCalledTimes(2);
   });
+  it("restores a pending revision from the owned job when the browser reloads",async()=>{
+    const pendingRevision={instruction:"Switch the saved design to Base.",issues:["The saved network rule was not updated."]};
+    runtime.run.mockResolvedValueOnce({reply:"The change is incomplete.",change:"blocked",pendingRevision,unresolved:pendingRevision.issues});
+    await sendAIChat(request,async()=>({}),new AbortController().signal);
+    const reloaded=await GET(new Request(`https://programmable.market/api/custom-ai?id=${request.id}`));
+    expect((await reloaded.json()).result.pendingRevision).toEqual(pendingRevision);
+    runtime.run.mockImplementationOnce(async(_request,_signal,_deps,context)=>{
+      expect(context.pendingRevision).toEqual(pendingRevision);
+      return {reply:"Resolve the pending change first.",change:"blocked",pendingRevision:context.pendingRevision};
+    });
+    const next=await sendAIChat({...request,id:"pending-followup-0001",contextId:request.id,messages:[{role:"user",content:"Continue"}]},async()=>({}),new AbortController().signal);
+    expect(next.pendingRevision).toEqual(pendingRevision);
+  });
 });

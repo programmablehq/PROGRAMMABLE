@@ -96,8 +96,7 @@ it("keeps a general design's model response focused on its actual choices",async
  const compiler=vi.fn();
  const value=await runCustomAI({...request,coin:{...EMPTY_COIN_SETUP,chainId:8453}},undefined,{call,compile:compiler},{saveProject:vi.fn()});
  const schema=call.mock.calls[0][0].schema;
- expect(call.mock.calls[0][0]).toMatchObject({effort:"low",maxTokens:8000});
- expect(call.mock.calls[0][0].structuredTransport).toBeUndefined();
+ expect(call.mock.calls[0][0]).toMatchObject({effort:"medium",maxTokens:8000,structuredTransport:"json-object"});
  for(const field of ["executionRoute","program","eventRule","composable","feeChecks","implementedRequirementIds"]){
   expect(schema.properties).not.toHaveProperty(field);expect(schema.required).not.toContain(field);
  }
@@ -218,8 +217,8 @@ it("repairs an invalid planning envelope once within the same output allowance",
  const call=vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(plan({action:"clarify"}));
  const compile=vi.fn(),value=await runCustomAI(request,undefined,{call,compile},{saveProject:vi.fn()});
  expect(call).toHaveBeenCalledTimes(2);
- expect(call.mock.calls[0][0]).toMatchObject({task:"planning",maxTokens:8000,structuredTransport:undefined});
- expect(call.mock.calls[1][0]).toMatchObject({task:"planning",maxTokens:6800,structuredTransport:undefined,messages:request.messages});
+ expect(call.mock.calls[0][0]).toMatchObject({task:"planning",maxTokens:8000,structuredTransport:"json-object"});
+ expect(call.mock.calls[1][0]).toMatchObject({task:"planning",maxTokens:6800,structuredTransport:"json-object",messages:request.messages});
  expect(value.intent?.requirements).toHaveLength(2);expect(compile).not.toHaveBeenCalled();
 });
 it.each([null,8000])("does not restart planning with unknown or exhausted usage: %s",async outputTokens=>{
@@ -244,7 +243,10 @@ it("does not replace an invented quote or attach a blank new rule to an existing
  const changed=vi.fn().mockResolvedValue(plan({action:"clarify",intentMode:"revise",intentRequirements:[...requirements,
   {id:"new-rule",text:"A new reward",kind:"behavior",instruction:"",open:"Choose its recipient"},
  ]}));
- await expect(runCustomAI(request,undefined,{call:changed,compile:vi.fn()},{intent:previous.project.intent})).rejects.toMatchObject({code:"intent"});
+ const rejected=await runCustomAI(request,undefined,{call:changed,compile:vi.fn()},{intent:previous.project.intent});
+ expect(rejected.change).toBe("blocked");expect(rejected.intent).toEqual(previous.project.intent);
+ expect(rejected.pendingRevision?.issues).toContain("New rules need a reference to your request. Your saved rules are kept.");
+ expect(changed).toHaveBeenCalledTimes(2);
 });
 it.each(["how do I launch this?","bitte noch nicht launchen","nice, explain the fees first"])("ordinary conversation does not produce a launch action: %s",async content=>{
  const previous=prior(),view=generalProjectView(previous),call=vi.fn().mockResolvedValue(plan({action:"answer",launchRequested:false,intentRequirements:[],requirements:[]}));

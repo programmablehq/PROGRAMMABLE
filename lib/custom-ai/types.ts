@@ -68,6 +68,7 @@ export type Draft = {
   };
 };
 export type ChatResult = { ruleSpec?: import("./rule-spec").RuleSpecV2; reply: string; draft?: Draft; setupPatch?: CoinSetupPatch;
+  pendingRevision?: { instruction: string; issues: string[] };
   productBlueprint?: import("./product/blueprint").ProductBlueprint;
   nextAction?: {kind:"prepare-launch";sourceId:string};
   replyLocale?: string;

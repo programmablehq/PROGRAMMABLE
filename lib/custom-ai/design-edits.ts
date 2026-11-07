@@ -5,6 +5,30 @@ import { MAX_INTENT_REQUIREMENTS, type LaunchIntent } from "./launch-intent";
 export type RuleEdit = { requirementId: string; operation: "replace" | "remove"; instruction: string };
 export type EditTarget = { sourceHash: string; requirementId: string };
 
+/** A network-only label is mechanical metadata. Bind an explicit, quoted
+ * network replacement to the existing ID, never infer edits to fee behavior. */
+export function networkRuleEdits(value:Record<string,unknown>,previous:LaunchIntent|undefined,latest:string,
+  from:{id:number;name:string},to:{id:number;name:string}):Record<string,unknown> {
+  if(!previous||from.id===to.id||!Array.isArray(value.intentRequirements)||!Array.isArray(value.ruleEdits))return value;
+  const rules=value.intentRequirements as Array<Record<string,unknown>>,edits=value.ruleEdits as Array<Record<string,unknown>>;
+  if(rules.some(rule=>!rule||typeof rule!=="object")||edits.some(edit=>!edit||typeof edit!=="object"))return value;
+  const words=new Set("the a coin token project runs run on uses use network chain chainid blockchain der die das läuft laeuft auf nutzt netzwerk ist is".split(" "));
+  const pure=(text:unknown,chain:{id:number;name:string})=>{
+    if(typeof text!=="string"||!text.toLowerCase().includes(chain.name.toLowerCase())||[...text.matchAll(/\d+/gu)].some(match=>Number(match[0])!==chain.id))return false;
+    return (text.toLowerCase().replaceAll(chain.name.toLowerCase()," ").match(/\p{L}+/gu)??[]).every(word=>words.has(word));
+  };
+  const prior=previous.requirements.filter(rule=>pure(rule.text,from)&&!edits.some(edit=>edit.requirementId===rule.id));
+  if(prior.length!==1)return value;
+  const candidate=rules.filter(rule=>pure(rule.text,to)&&rule.kind===prior[0].kind
+    &&(rule.id===prior[0].id||!previous.requirements.some(saved=>saved.id===rule.id))
+    &&typeof rule.instruction==="string"&&rule.instruction.trim()&&latest.includes(rule.instruction));
+  if(candidate.length!==1)return value;
+  const quote=String(candidate[0].instruction);
+  const target=new RegExp(`\\b(?:use|choose|on|to|auf|zu|nutze|verwende|wähle|sur|en|op)\\s+${to.name}\\b`,"iu").exec(quote);
+  if(!target||/\b(?:not|no|don't|nicht|kein\w*)\b/iu.test(quote.slice(Math.max(0,target.index-16),target.index)))return value;
+  return {...value,ruleEdits:[...edits,{requirementId:prior[0].id,operation:candidate[0].id===prior[0].id?"replace":"remove",instruction:quote}]};
+}
+
 /** A model may label a replacement with its new duration. Preserve the saved
  * identity only for an unambiguous, explicitly quoted remove/replace + add.
  * All ordinary quote, target, coverage and executable checks still follow. */
