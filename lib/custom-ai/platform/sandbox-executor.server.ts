@@ -8,11 +8,12 @@ import { assertExportableFiles, projectFilePath } from "./files";
 import { ProjectError, type ProjectScope, type ProjectFile } from "./types";
 
 export type SandboxOutput = { exitCode: number; stdout: string; stderr: string; truncated: boolean };
+export type SandboxResult=SandboxOutput&{files:Record<string,ProjectFile>;artifacts?:Record<string,string>;revisionId:string;jobId:string;durationMs:number};
 export type SandboxInstance = {
   writeFiles(files: Record<string, ProjectFile>, signal: AbortSignal): Promise<void>;
   install(resolve: boolean, signal: AbortSignal): Promise<SandboxOutput>;
   execute(script: string, signal: AbortSignal): Promise<SandboxOutput>;
-  readFile(path: string, signal: AbortSignal): Promise<Buffer | null>;
+  readFile(path: string, signal: AbortSignal, maxBytes?: number): Promise<Buffer | null>;
   close(): Promise<void>;
 };
 export type SandboxProvider = {
@@ -44,9 +45,11 @@ function dependencyPlan(files: Record<string, ProjectFile>, resolve: boolean) {
 }
 
 export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof createPlatformStore>, provider: SandboxProvider, now = Date.now) {
-  async function execute(input: ProjectScope & { revisionId: string; script: string; outputPaths: string[]; resolveDependencies?: boolean }, externalSignal?: AbortSignal) {
+  async function execute(input: ProjectScope & { revisionId: string; script: string; outputPaths: string[]; resolveDependencies?: boolean; artifactPaths?: string[] }, externalSignal?: AbortSignal):Promise<SandboxResult> {
     if (typeof input.script !== "string" || !input.script.trim() || input.script.length > 16_000 || !Array.isArray(input.outputPaths) || input.outputPaths.length > 32) throw invalid();
     const paths = input.outputPaths.map(projectFilePath);
+    if(input.artifactPaths&&(!Array.isArray(input.artifactPaths)||input.artifactPaths.length>2))throw invalid();
+    const artifactPaths=(input.artifactPaths??[]).map(projectFilePath);
     const scope = { ownerId: input.ownerId, projectId: input.projectId };
     const revision = await projects.readRevision(scope, input.revisionId);
     assertExportableFiles(revision.document.files);
@@ -87,7 +90,9 @@ export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof 
         files[path] = Buffer.from(text).equals(content) && !text.includes("\0") ? text : { encoding: "base64", content: content.toString("base64"), mediaType: "application/octet-stream" };
       }
       assertExportableFiles(files);
-      return { ...output, files, revisionId: input.revisionId, jobId: String(id), durationMs: Math.max(0, now() - started) };
+      const artifacts:Record<string,string>={};let artifactBytes=0;
+      for(const path of artifactPaths){const content=await instance.readFile(path,signal,4000000);if(!content)continue;artifactBytes+=content.length;if(artifactBytes>4000000)throw new ProjectError("sandbox-artifact","The packaged artifact is too large.",413);artifacts[path]=content.toString("base64");}
+      return { ...output, files, artifacts, revisionId: input.revisionId, jobId: String(id), durationMs: Math.max(0, now() - started) };
     } catch (error) {
       if (error instanceof ProjectError) throw error;
       if (externalSignal?.aborted) throw new ProjectError("sandbox-cancelled", "The sandbox was stopped.", 409);

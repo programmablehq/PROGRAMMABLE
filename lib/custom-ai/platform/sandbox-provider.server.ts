@@ -40,14 +40,15 @@ export const vercelSandboxProvider: SandboxProvider = {
         finally { await box.update({ networkPolicy: "deny-all" }, { signal: AbortSignal.timeout(15_000) }); }
       },
       execute: (script, signal) => run("bash", ["-c", script], 90_000, signal),
-      readFile: async (path, signal) => {
+      readFile: async (path, signal, maxBytes=512000) => {
+        if(!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>4000000)throw new Error("Invalid artifact read limit");
         const stream = await box.readFile({ path: `/vercel/sandbox/${projectFilePath(path)}` }, { signal });
         if (!stream) return null;
         const chunks: Buffer[] = []; let size = 0;
         try {
           for await (const chunk of stream as AsyncIterable<Uint8Array>) {
             size += chunk.byteLength;
-            if (size > 512_000) throw new Error("Artifact exceeds limit");
+            if (size > maxBytes) throw new Error("Artifact exceeds limit");
             chunks.push(Buffer.from(chunk));
           }
           return Buffer.concat(chunks);

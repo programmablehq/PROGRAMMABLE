@@ -197,6 +197,80 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.webhook_inbox (
   PRIMARY KEY(owner,project_id,connection_id,event_id),
   FOREIGN KEY(owner,project_id,connection_id) REFERENCES programmable_projects_v1.connections(owner,project_id,id)
 );
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_config (
+  owner text NOT NULL, project_id uuid NOT NULL, data_version integer NOT NULL CHECK(data_version>0), active boolean NOT NULL DEFAULT true,
+  PRIMARY KEY(owner,project_id), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_keys (
+  owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL, data_version integer NOT NULL,
+  secret_envelope text NOT NULL, active boolean NOT NULL DEFAULT true, data_namespace text NOT NULL DEFAULT 'production',
+  PRIMARY KEY(owner,project_id,id), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.app_config(owner,project_id)
+);
+-- Private token routing index; no secret values or application contents.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_key_index (
+  token_hash text PRIMARY KEY, owner text NOT NULL, project_id uuid NOT NULL, key_id uuid NOT NULL,
+  FOREIGN KEY(owner,project_id,key_id) REFERENCES programmable_projects_v1.app_keys(owner,project_id,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_items (
+  owner text NOT NULL, project_id uuid NOT NULL, data_namespace text NOT NULL DEFAULT 'production', collection text NOT NULL, item_key text NOT NULL,
+  value jsonb NOT NULL, version bigint NOT NULL CHECK(version>0), updated_at timestamptz NOT NULL, deleted boolean NOT NULL DEFAULT false,
+  PRIMARY KEY(owner,project_id,data_namespace,collection,item_key), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.app_config(owner,project_id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_receipts (
+  owner text NOT NULL, project_id uuid NOT NULL, data_namespace text NOT NULL DEFAULT 'production', request_key text NOT NULL, request_hash text NOT NULL, result jsonb NOT NULL,
+  PRIMARY KEY(owner,project_id,data_namespace,request_key), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.app_config(owner,project_id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_usage (
+  owner text NOT NULL, project_id uuid NOT NULL, day bigint NOT NULL, requests integer NOT NULL CHECK(requests>0),
+  PRIMARY KEY(owner,project_id,day), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.app_config(owner,project_id)
+);
+-- Cross-tenant resource admission contains routing metadata only.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.hosting_slots (
+  owner text NOT NULL, project_id uuid NOT NULL, provider_name text NOT NULL,
+  PRIMARY KEY(owner,project_id), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_hosts (
+  owner text NOT NULL, project_id uuid NOT NULL, provider_id text NOT NULL, provider_name text NOT NULL, active_release uuid,
+  PRIMARY KEY(owner,project_id), UNIQUE(provider_id), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_releases (
+  owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL, revision_id text NOT NULL,
+  request_key text NOT NULL, request_hash text NOT NULL, artifact_hash text NOT NULL,
+  mode text NOT NULL CHECK(mode IN ('preview','production')),
+  state text NOT NULL CHECK(state IN ('queued','building','ready','published','stopped','failed','reconcile')),
+  data_version integer NOT NULL, evidence jsonb NOT NULL, provider_id text, deployment_id text, url text,
+  created_at timestamptz NOT NULL, observed_at timestamptz, artifact_id text,
+  stage text NOT NULL DEFAULT 'pack', error_code text,
+  PRIMARY KEY(owner,project_id,id), UNIQUE(owner,project_id,request_key),
+  FOREIGN KEY(owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.release_queue (
+  owner text NOT NULL, project_id uuid NOT NULL, release_id uuid NOT NULL, next_at timestamptz NOT NULL,
+  lease_token uuid, lease_until timestamptz, attempts integer NOT NULL DEFAULT 0,
+  PRIMARY KEY(owner,project_id,release_id), FOREIGN KEY(owner,project_id,release_id) REFERENCES programmable_projects_v1.app_releases(owner,project_id,id)
+);
+CREATE INDEX IF NOT EXISTS release_due_v1 ON programmable_projects_v1.release_queue(next_at);
+
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_jobs (
+  owner text NOT NULL, project_id uuid NOT NULL, id text NOT NULL, path text NOT NULL,
+  interval_seconds integer NOT NULL CHECK(interval_seconds BETWEEN 60 AND 604800), idempotent boolean NOT NULL,
+  body jsonb NOT NULL, enabled boolean NOT NULL, definition_hash text NOT NULL,
+  PRIMARY KEY(owner,project_id,id), FOREIGN KEY(owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_job_runs (
+  owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL, job_id text NOT NULL, release_id uuid NOT NULL,
+  definition_hash text NOT NULL, state text NOT NULL CHECK(state IN ('pending','completed','reconcile')),
+  attempts integer NOT NULL DEFAULT 0, created_at timestamptz NOT NULL, finished_at timestamptz,
+  PRIMARY KEY(owner,project_id,id), FOREIGN KEY(owner,project_id,job_id) REFERENCES programmable_projects_v1.app_jobs(owner,project_id,id)
+);
+-- Private dispatch metadata, never a payload or secret; the worker sets owner scope before reading the task.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.app_job_queue (
+  owner text NOT NULL, project_id uuid NOT NULL, job_id text NOT NULL, next_at timestamptz NOT NULL,
+  run_id uuid, lease_token uuid, lease_until timestamptz,
+  PRIMARY KEY(owner,project_id,job_id), FOREIGN KEY(owner,project_id,job_id) REFERENCES programmable_projects_v1.app_jobs(owner,project_id,id)
+);
+CREATE INDEX IF NOT EXISTS app_job_due_v1 ON programmable_projects_v1.app_job_queue(next_at);
 
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
@@ -225,6 +299,24 @@ ALTER TABLE programmable_projects_v1.oauth_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.oauth_states FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.webhook_inbox ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.webhook_inbox FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_config FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_keys FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_items FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_receipts FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_usage FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_hosts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_hosts FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_releases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_releases FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_jobs FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_job_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.app_job_runs FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -278,6 +370,21 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='webhook_inbox' AND policyname='webhook_inbox_owner_v1') THEN
     CREATE POLICY webhook_inbox_owner_v1 ON programmable_projects_v1.webhook_inbox USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='app_config' AND policyname='app_config_owner_v1') THEN
+    CREATE POLICY app_config_owner_v1 ON programmable_projects_v1.app_config USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY app_key_owner_v1 ON programmable_projects_v1.app_keys USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY app_item_owner_v1 ON programmable_projects_v1.app_items USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY app_receipt_owner_v1 ON programmable_projects_v1.app_receipts USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY app_usage_owner_v1 ON programmable_projects_v1.app_usage USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='app_hosts' AND policyname='app_host_owner_v1') THEN
+    CREATE POLICY app_host_owner_v1 ON programmable_projects_v1.app_hosts USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY app_release_owner_v1 ON programmable_projects_v1.app_releases USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='app_jobs' AND policyname='app_job_owner_v1') THEN
+    CREATE POLICY app_job_owner_v1 ON programmable_projects_v1.app_jobs USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+    CREATE POLICY app_job_run_owner_v1 ON programmable_projects_v1.app_job_runs USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
   END IF;
 END
 $migration$;
