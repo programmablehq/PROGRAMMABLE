@@ -10,7 +10,8 @@ export function createVercelHostingProvider(options:{token:string;teamId:string;
  async function api(path:string,method="GET",body?:unknown,notFound=false):Promise<Record<string,unknown>|null>{
   if(!options.token)throw new ProjectError("hosting-configuration","Application hosting is not configured.",503);
   const url=new URL(`https://api.vercel.com${path}`);url.searchParams.set("teamId",options.teamId);
-  const response=await send(url,{method,headers:{Authorization:`Bearer ${options.token}`,"Content-Type":"application/json"},...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(25000)});
+  const requestBody=body===undefined&&method==="POST"?{}:body;
+  const response=await send(url,{method,headers:{Authorization:`Bearer ${options.token}`,"Content-Type":"application/json"},...(requestBody===undefined?{}:{body:JSON.stringify(requestBody)}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(25000)});
   if(notFound&&response.status===404){await response.body?.cancel();return null;}
   if(!response.ok){await response.body?.cancel();throw new ProjectError("hosting-provider",`The hosting provider could not complete this action (${response.status}).`,503);}
   if(response.status===204)return {};
@@ -24,10 +25,28 @@ export function createVercelHostingProvider(options:{token:string;teamId:string;
   for(let attempt=0;attempt<20;attempt++){
    const current=await api(`/v9/projects/${id}`);
    if(current?.accountId!==options.teamId)throw new ProjectError("hosting-owner","The hosting project belongs to another scope.",403);
-   if(accept(current))return;
+   if(accept(current))return current;
    await new Promise(resolve=>setTimeout(resolve,500));
   }
   throw new ProjectError("hosting-pending","The provider accepted the action, but its final state has not been observed yet.",503);
+ }
+ async function setPaused(projectId:string,paused:boolean){
+  identifier(projectId,"prj_");
+  const before=await api(`/v9/projects/${projectId}`);
+  if(before?.accountId!==options.teamId)throw new ProjectError("hosting-owner","The hosting project belongs to another scope.",403);
+  if(Boolean(before.paused)!==paused)await api(`/v1/projects/${projectId}/${paused?"pause":"unpause"}`,"POST");
+  const current=await confirmProject(projectId,value=>Boolean(value.paused)===paused);
+  const target=(current.targets as {production?:{url?:string;meta?:{programmableRevision?:string}}}|undefined)?.production;
+  const base=address(target?.url);
+  for(let attempt=0;attempt<20;attempt++){
+   try{
+    const response=await privateConnectorHTTP({url:new URL("/api/_programmable",base).href,method:"GET",headers:{Accept:"application/json"},signal:AbortSignal.timeout(8000)});
+    if(paused&&response.status===503)return;
+    if(!paused&&response.status===200){const body=JSON.parse(response.text);if(body.ok===true&&body.revisionId===target?.meta?.programmableRevision)return;}
+   }catch{/* A failed network request is not proof that the service is paused. */}
+   await new Promise(resolve=>setTimeout(resolve,500));
+  }
+  throw new ProjectError("hosting-pending","The provider state changed, but application availability has not been confirmed yet.",503);
  }
  return {
   async ensureProject(name){
@@ -64,8 +83,8 @@ export function createVercelHostingProvider(options:{token:string;teamId:string;
     return targets?.production?.id===deploymentId&&targets.production.readyState==="READY";
    });
   },
-  async pause(projectId){identifier(projectId,"prj_");await api(`/v1/projects/${projectId}/pause`,"POST");},
-  async resume(projectId){identifier(projectId,"prj_");await api(`/v1/projects/${projectId}/unpause`,"POST");},
+  pause:projectId=>setPaused(projectId,true),
+  resume:projectId=>setPaused(projectId,false),
   async findDeployment(projectId,releaseId){identifier(projectId,"prj_");const list=await api(`/v6/deployments?projectId=${projectId}&limit=50`);const rows=list?.deployments;if(!Array.isArray(rows))return null;const found=rows.find(row=>row.meta?.programmableReleaseId===releaseId);return found?{id:identifier(found.uid??found.id,"dpl_"),url:address(found.url)}:null;},
  };
 }

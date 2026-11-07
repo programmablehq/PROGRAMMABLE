@@ -1,6 +1,20 @@
 import {it,expect,vi} from "vitest";
 vi.mock("server-only",()=>({}));
+const {publicHTTP}=vi.hoisted(()=>({publicHTTP:vi.fn()}));
+vi.mock("../lib/custom-ai/platform/private-http.server",()=>({privateConnectorHTTP:publicHTTP}));
 import {createVercelHostingProvider} from "../lib/custom-ai/platform/hosting-provider.server";
+it("does not report a paused project while its deployment still serves requests",async()=>{
+ vi.useFakeTimers();
+ publicHTTP.mockResolvedValue({status:200,headers:{},text:'{"ok":true}'});
+ const provider=createVercelHostingProvider({token:"private-token",teamId:"team_test",fetch:async()=>Response.json({accountId:"team_test",paused:true,targets:{production:{id:"dpl_test",url:"test.vercel.app",meta:{programmableRevision:`sha256:${"a".repeat(64)}`}}}})});
+ try{const checked=expect(provider.pause("prj_test")).rejects.toMatchObject({code:"hosting-pending"});await vi.runAllTimersAsync();await checked;}finally{vi.useRealTimers();}
+});
+it("reuses a confirmed paused provider state only after its public endpoint is blocked",async()=>{
+ publicHTTP.mockResolvedValue({status:503,headers:{},text:"DEPLOYMENT_PAUSED"});
+ const send=vi.fn<typeof fetch>(async()=>Response.json({accountId:"team_test",paused:true,targets:{production:{id:"dpl_test",url:"test.vercel.app"}}}));
+ await createVercelHostingProvider({token:"private-token",teamId:"team_test",fetch:send}).pause("prj_test");
+ expect(send.mock.calls.every(([,options])=>options?.method==="GET")).toBe(true);
+});
 it("reconciles a promotion already applied by the provider without submitting it twice",async()=>{
  const send=vi.fn<typeof fetch>(async()=>Response.json({accountId:"team_test",targets:{production:{id:"dpl_test",readyState:"READY"}}}));
  await createVercelHostingProvider({token:"private-token",teamId:"team_test",fetch:send}).promote("prj_test","dpl_test");

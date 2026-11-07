@@ -36,15 +36,16 @@ different forms of evidence and must remain distinguishable.
 
 ## Current release blockers
 
-- The real A1 contract-building acceptance is still in progress. Earlier runs
+- A basic canonical coin now passes real model planning, compilation, 32 EVM
+  cases, independent source review and source-checkpoint creation. Earlier runs
   exposed provider-format, copied-context and incomplete-interface failures.
-  The fixes have targeted regression coverage; a complete successful real run
-  remains necessary.
+  The full A1 reference additionally requires staged fees and the deployed user
+  flow; those remain necessary.
 - A real two-release provider probe confirmed that a new preview preserves the
   previous production target, an uncertain promotion closes data access, and an
-  exact retry retires the previous live key while preserving data. However, a
-  paused project still served its actual page and health endpoint during the
-  extended observation window. The provider metadata alone is insufficient to
-  call that service stopped. Resolve and reverify this boundary before release.
+  exact retry retires the previous live key while preserving data. After fixing
+  redundant unpause calls and requiring actual HTTP confirmation, pause and
+  resume also passed against that live provider. These isolated checks still
+  need to be joined to the deployed product and ordinary-user acceptance.
 - Production migration/grants, worker authentication, the dedicated hosting
   credential and ordinary-user A1–A6 staging acceptance remain outstanding.
