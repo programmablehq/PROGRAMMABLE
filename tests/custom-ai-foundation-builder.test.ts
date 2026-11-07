@@ -10,6 +10,7 @@ import type {CompiledProject} from "../lib/custom-ai/contract-project.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import {auditGeneralSource,type SourceAuditFinding} from "../lib/custom-ai/source-audit.server";
 import type {ClaudeInput} from "../lib/custom-ai/claude.server";
+import {configuredProvider} from "../lib/custom-ai/provider-config.server";
 
 const intent:LaunchIntent={version:1,id:"qualified-foundation",revision:"a".repeat(64),changes:[],unresolved:[],requirements:[
   {id:"counter",text:"Anyone can increment the counter, starting at zero.",kind:"behavior",open:null,origin:{kind:"legacy"}},
@@ -41,6 +42,10 @@ describe("qualified foundations inside the immutable project job",()=>{
       :reply({reply:"Counter starts at zero.",summary:"Saved behavior corrected",changes:[{path:"Counter.sol",before:"= 2",after:"= 0"}]}));
     const result=await buildGeneralContract({...request,previous,sourceFindings:findings,auditSource:(project:ContractProject)=>audit(project)},undefined,{call,compile:compiled});
     expect(call).toHaveBeenCalledTimes(2);expect(request.saveSourceProgress).toHaveBeenCalled();
+    for(const [sourceCall] of call.mock.calls){
+      expect(sourceCall.model).toBe(configuredProvider().models.escalation);
+      expect(sourceCall.messages).toContainEqual(request.messages[0]);
+    }
     expect(result.compilation.compiled).toBe(true);expect(result.project.sources["Counter.sol"].content===initial.replace("= 2","= 0")).toBe(true);
     const step=(call.mock.calls[1] as unknown as [ClaudeInput])[0];
     expect(step.system).toContain("COUNTER_START");
