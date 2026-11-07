@@ -4,7 +4,7 @@ import type { createPlatformStore } from "./project-store.server";
 import type { createSandboxExecutor } from "./sandbox-executor.server";
 import { projectTransaction } from "./transaction.server";
 import { projectHash } from "./document";
-import { ProjectError, type ProjectScope, type JsonValue } from "./types";
+import { ProjectError, type ProjectScope, type JsonValue, type ProjectDocument } from "./types";
 import {redactCredentialData,redactInlineCredentials} from "./secret-input";
 import {projectRequirementScopes} from "./requirement-scopes";
 
@@ -23,6 +23,25 @@ export function declaredProjectChecks(value: JsonValue, requirements: string[]):
     }
     return raw as Check;
   });
+}
+
+export function currentProjectCheckEvidence(document: ProjectDocument, rows: Record<string, unknown>[]) {
+  const declarations=declaredProjectChecks(document.architecture,document.requirements.map(rule=>rule.id));
+  const currentChecks=new Map<string,Record<string,unknown>>(),otherEvidence:Record<string,unknown>[]=[];
+  const checkKey=(check:Check)=>JSON.stringify([check.id,check.kind,projectHash(check.command)]);
+  for(const row of rows){
+    const result=row.result&&typeof row.result==="object"?row.result as Record<string,unknown>:{};
+    const check=declarations.find(item=>item.id===result.checkId&&item.kind===result.kind&&projectHash(item.command)===row.command_hash
+      &&projectHash(item.kind==="behavior"?item.requirementIds:[])===projectHash(row.requirement_ids));
+    if(!check){otherEvidence.push(row);continue;}
+    const key=checkKey(check),previous=currentChecks.get(key);
+    // A new execution supersedes only the same declared check. A conflicting
+    // result with an indistinguishable timestamp remains a failure.
+    if(!previous||Number(row.observed_at)>Number(previous.observed_at)
+      ||Number(row.observed_at)===Number(previous.observed_at)&&row.passed!==true)currentChecks.set(key,row);
+  }
+  return {evidence:[...otherEvidence,...currentChecks.values()],
+    missingChecks:declarations.filter(check=>currentChecks.get(checkKey(check))?.passed!==true).map(check=>check.id)};
 }
 
 export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof createPlatformStore>, sandbox: Pick<ReturnType<typeof createSandboxExecutor>, "execute">) {
@@ -70,28 +89,14 @@ export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof cr
     const architecture=project.document.architecture;
     const contract=architecture&&typeof architecture==="object"&&!Array.isArray(architecture)&&["contract","legacy-contract"].includes(String(architecture.kind));
     const resultKind=(row:Record<string,unknown>)=>row.result&&typeof row.result==="object"?(row.result as Record<string,unknown>).kind:undefined;
-    const declarations=declaredProjectChecks(architecture,project.document.requirements.map(rule=>rule.id));
-    const currentChecks=new Map<string,Record<string,unknown>>(),otherEvidence:Record<string,unknown>[]=[];
-    const checkKey=(check:Check)=>JSON.stringify([check.id,check.kind,projectHash(check.command)]);
-    for(const row of evidence.rows){
-      const result=row.result&&typeof row.result==="object"?row.result as Record<string,unknown>:{};
-      const check=declarations.find(item=>item.id===result.checkId&&item.kind===result.kind&&projectHash(item.command)===row.command_hash
-        &&projectHash(item.kind==="behavior"?item.requirementIds:[])===projectHash(row.requirement_ids));
-      if(!check){otherEvidence.push(row);continue;}
-      const key=checkKey(check),previous=currentChecks.get(key);
-      // A new execution supersedes only the same declared check. A conflicting
-      // result with an indistinguishable timestamp remains a failure.
-      if(!previous||Number(row.observed_at)>Number(previous.observed_at)
-        ||Number(row.observed_at)===Number(previous.observed_at)&&row.passed!==true)currentChecks.set(key,row);
-    }
-    const activeEvidence=[...otherEvidence,...currentChecks.values()];
+    const current=currentProjectCheckEvidence(project.document,evidence.rows),activeEvidence=current.evidence;
     const scopes=projectRequirementScopes(project.document);
     const contractCovered=new Set(activeEvidence.filter(row=>row.passed===true&&resultKind(row)==="contract-scenarios").flatMap(row=>row.requirement_ids as string[]));
     const applicationCovered=new Set(activeEvidence.filter(row=>row.passed===true&&resultKind(row)==="behavior").flatMap(row=>row.requirement_ids as string[]));
     const missingRequirementIds = project.document.requirements.filter(item => item.open !== null
       ||scopes.contract.includes(item.id)&&!contractCovered.has(item.id)
       ||scopes.application.includes(item.id)&&!applicationCovered.has(item.id)).map(item=>item.id);
-    const missingChecks=declarations.filter(check=>currentChecks.get(checkKey(check))?.passed!==true).map(check=>check.id);
+    const missingChecks=current.missingChecks;
     if(contract&&!activeEvidence.some(row=>row.passed===true&&resultKind(row)==="source-audit"))missingChecks.push("source-audit");
     const verified = project.document.requirements.length > 0 && missingRequirementIds.length === 0 && !missingChecks.length && activeEvidence.length > 0 && activeEvidence.every(row => row.passed === true);
     const level: ProjectLevel = verified ? "verified" : Object.keys(project.document.files).length ? "built" : project.document.requirements.length ? "planned" : "discussed";

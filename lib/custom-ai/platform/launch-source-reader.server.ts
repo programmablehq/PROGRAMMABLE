@@ -9,6 +9,7 @@ import {readContractCheckpointInTransaction} from "./contract-checkpoint.server"
 import {checkedPlatformLaunchSource,platformLaunchSourceId} from "./launch-source.server";
 import {validateScope} from "./document";
 import {ProjectError} from "./types";
+import {currentProjectCheckEvidence} from "./builds.server";
 
 const changed=()=>new CustomAIError("launch-source-changed","The project or launch details changed. Review the current saved version.",409);
 /** Shares the existing preparation transaction and its finality/approval gates.
@@ -24,7 +25,9 @@ export async function readPlatformLaunchSourceInTransaction(db:AIConnection,owne
   const details=(await db.query("SELECT * FROM programmable_projects_v1.launch_drafts WHERE owner=$1 AND project_id=$2 AND account=$3 FOR UPDATE",[owner,scope.projectId,selected.account.toLowerCase()])).rows[0];
   if(!details)throw changed();
   const working=(await db.query("SELECT id FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 AND status IN ('queued','running','retryable') LIMIT 1",[owner,scope.projectId])).rows.length;
-  const failed=(await db.query("SELECT id FROM programmable_projects_v1.check_evidence WHERE owner=$1 AND project_id=$2 AND revision_id=$3 AND NOT passed LIMIT 1",[owner,scope.projectId,revision.revisionId])).rows.length;
+  const evidence=(await db.query("SELECT id,requirement_ids,passed,result,command_hash,EXTRACT(EPOCH FROM created_at)::double precision AS observed_at FROM programmable_projects_v1.check_evidence WHERE owner=$1 AND project_id=$2 AND revision_id=$3 AND requirements_hash=$4 ORDER BY created_at,id",[owner,scope.projectId,revision.revisionId,revision.requirementsHash])).rows;
+  const current=currentProjectCheckEvidence(revision.document,evidence);
+  const failed=current.missingChecks.length||current.evidence.some(row=>row.passed!==true);
   if(working||failed)throw new CustomAIError("launch-source-checks","Finish the current project work and checks before preparing its launch.",422);
   const checkpoint=await readContractCheckpointInTransaction(db,scope,revision.revisionId);
   if(!checkpoint)throw new CustomAIError("launch-source-checks","Save the checked contract package before preparing its launch.",422);

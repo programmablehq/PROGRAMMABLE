@@ -40,3 +40,31 @@ it("retains verified contract evidence after temporary build artifacts expire an
  await projects.applyProjectPatch({...scope,expectedRevisionId:revision.revisionId,idempotencyKey:"edit",patch:{title:"A new revision"}});
  await expect(store.freeze(scope,account)).rejects.toMatchObject({code:"launch-source-checks"});
 },60000);
+
+it("uses the same current app checks when a combined project enters launch preparation",async()=>{
+ revision=await projects.applyProjectPatch({...scope,expectedRevisionId:revision.revisionId,idempotencyKey:"combined",patch:{
+  requirements:[...revision.document.requirements,{id:"app",text:"The application works",kind:"behavior",open:null,origin:{kind:"legacy"}}],
+  architecture:{...platformContractDocument.architecture,application:{framework:"static",dataVersion:1},requirementScopes:{contract:["zero"],application:["app"]},
+   checks:[{id:"app-check",kind:"behavior",command:"node test.mjs",requirementIds:["app"]}]},
+ }});
+ const artifacts=createArtifactStore(pool),execute=vi.fn().mockImplementation(async()=>({exitCode:1,stdout:"",stderr:"app assertion",truncated:false,files:{},revisionId:revision.revisionId,jobId:"first",durationMs:1}));
+ const checks=createProjectChecks(pool,projects,{execute}),drafts=createPlatformLaunchDrafts(pool),store=createPlatformContractCheckpoints(pool,{projects,artifacts,checks,drafts});
+ await drafts.save(scope,{account,expectedRevision:0,sourceRevision:revision.revisionId,settings:{name:"Counter",symbol:"CNT"}});
+ const data=await checkedPlatformFixture(revision),artifact=await artifacts.saveArtifact(scope,{mediaType:"application/json",bytes:Buffer.from(JSON.stringify({kind:"programmable-contract-build-v1",revisionId:revision.revisionId,project:data.project,blueprint:data.blueprint,compilation:data.compilation}))});
+ const ref={...scope,revisionId:revision.revisionId};
+ await checks.record(ref,{requirementIds:[],passed:true,commandHash:"compile",result:{kind:"compile",artifactId:artifact.id}});
+ await checks.record(ref,{requirementIds:["zero"],passed:true,commandHash:"scenarios",result:JSON.parse(JSON.stringify({kind:"contract-scenarios",...data.scenarios}))});
+ await checks.record(ref,{requirementIds:[],passed:true,commandHash:"audit",result:JSON.parse(JSON.stringify({kind:"source-audit",...data.audit}))});
+ await checks.verify(ref);
+ await expect(store.freeze(scope,account)).rejects.toMatchObject({code:"launch-source-checks"});
+ await db.query("UPDATE programmable_projects_v1.check_evidence SET created_at='2000-01-01T00:00:00Z'");
+ execute.mockResolvedValue({exitCode:0,stdout:"app works",stderr:"",truncated:false,files:{},revisionId:revision.revisionId,jobId:"second",durationMs:1});
+ await checks.verify(ref);expect((await checks.assess(ref)).verified).toBe(true);
+ const frozen=await store.freeze(scope,account),legacy=createAIStore(pool,{hourlyUnits:25,dailyUnits:100,globalDailyUnits:200,concurrent:1});
+ const selected={id:frozen.binding.sourceId,account,conversation:scope.projectId,studioRevision:1,chainId:1 as const,projectHash:data.project.hash,artifactHash:data.compilation.artifactHash,intentRevision:data.project.intent.revision};
+ expect((await legacy.projects.readForLaunch(scope.ownerId,selected)).project.hash).toBe(data.project.hash);
+ await db.query("UPDATE programmable_projects_v1.check_evidence SET created_at='2000-01-01T00:00:00Z'");
+ execute.mockResolvedValue({exitCode:1,stdout:"",stderr:"new app failure",truncated:false,files:{},revisionId:revision.revisionId,jobId:"third",durationMs:1});
+ await checks.verify(ref);
+ await expect(legacy.projects.readForLaunch(scope.ownerId,selected)).rejects.toMatchObject({code:"launch-source-checks"});
+},60000);
