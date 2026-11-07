@@ -78,6 +78,10 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   // Long declarations need the same streamed transport as generated source,
   // including internal calls that have no visible text callback.
   const stream = Boolean(input.onText) || input.responseProfile === "contract";
+  const jsonSystem=jsonObject?`${input.system}\nReturn exactly one JSON object matching this schema. Every field and type is validated locally; do not use markdown or omit required fields. Schema: ${JSON.stringify(input.schema)}`:input.system;
+  // Some compatible sellers return conversational prose despite JSON mode.
+  // Restate the planning boundary after the schema; decoding stays strict.
+  const system=jsonObject&&input.task==="planning"?`${jsonSystem}\nYour next message must start with { and end with }. Return the complete JSON object above, not a conversational answer. Put your user-facing answer inside the reply string and every saved rule in intentRequirements. No prose, markdown or code fences outside that object.`:jsonSystem;
   const response = await surplusRequest("/chat/completions", {
     model: input.model, max_tokens: input.maxTokens, stream,
     // These calls return data only. Lookups are separately bounded server
@@ -88,7 +92,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     // authorized routing rather than being rejected by an unrelated pin.
     ...(input.model.startsWith("claude-haiku-") ? { provider: AI_CONFIG.surplusClaudeProviders, provider_order: AI_CONFIG.surplusClaudeProviders } : {}),
     ...(stream ? { stream_options: { include_usage: true } } : {}),
-    messages: [{ role: "system", content: jsonObject?`${input.system}\nReturn exactly one JSON object matching this schema. Every field and type is validated locally; do not use markdown or omit required fields. Schema: ${JSON.stringify(input.schema)}`:input.system }, ...input.messages],
+    messages: [{ role: "system", content: system }, ...input.messages],
     response_format: jsonObject?{type:"json_object"}:{ type: "json_schema", json_schema: { name: "custom_ai_reply", strict: true, schema: format.schema } },
     // Claude's current routes use adaptive effort, not a fixed thinking-token
     // allocation. Use the canonical nested control without a conflicting alias.
