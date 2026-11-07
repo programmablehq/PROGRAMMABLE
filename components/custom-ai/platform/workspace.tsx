@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {ArrowUp,Check,Files,History,Link2,Plus,RefreshCw,Square,Workflow} from "lucide-react";
 import {aiRequest,type AISessionHeaders} from "@/lib/custom-ai/client";
+import type {AIUsage} from "@/lib/custom-ai/types";
 import {MessageContent} from "../message-content";
 import {platformAPI,isActiveRun} from "./api";
 import type {PlatformAPI,ProjectItem,ProjectRevision,ProjectRun} from "./types";
@@ -92,13 +93,19 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
   },[activeId,api,selected]);
   useEffect(()=>{if(follow.current&&transcript.current)transcript.current.scrollTop=transcript.current.scrollHeight;},[runs]);
   const runTask=useCallback(async(work:()=>Promise<void>)=>{setBusy(true);setError("");try{await work();}catch(cause){setError(cause instanceof Error?cause.message:"The request could not finish. Your saved work is kept.");}finally{setBusy(false);}},[]);
+  const makeRunRequest=useCallback(async(saved:ProjectRevision,prompt:string,mode:string,idempotencyKey:string)=>{
+    const usage=await aiRequest<AIUsage>("/usage",scopedHeaders);
+    const budgetUnits=Math.min(20,usage.hourly.remaining,usage.daily.remaining);
+    if(!Number.isSafeInteger(budgetUnits)||budgetUnits<1)throw new Error("Your work allowance is used up. Your message is kept; try again when the allowance resets.");
+    // The run endpoint still enforces global allowance and concurrent work.
+    return {projectId:saved.projectId,revisionId:saved.revisionId,operation:mode,prompt,idempotencyKey,budgetUnits};
+  },[scopedHeaders]);
   useEffect(()=>{
     const prompt=entry.current;if(!prompt||!project||project.projectId!==prompt.id||busy)return;
     entry.current=undefined;
     if(runs.length){accepted.current?.(prompt.id);return;}
-    pendingRun.current={projectId:project.projectId,revisionId:project.revisionId,operation:"build",prompt:prompt.content,idempotencyKey:`prompt:${prompt.id}`,budgetUnits:20};
-    setInput(prompt.content);void runTask(async()=>{await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");accepted.current?.(prompt.id);await refresh();});
-  },[project,runs,busy,api,refresh,runTask]);
+    setInput(prompt.content);void runTask(async()=>{pendingRun.current=await makeRunRequest(project,prompt.content,"build",`prompt:${prompt.id}`);await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");accepted.current?.(prompt.id);await refresh();});
+  },[project,runs,busy,api,refresh,runTask,makeRunRequest]);
   function activate(id:string,loaded?:ProjectRevision){
     if(selected)drafts.current.set(selected,input);generation.current++;pendingRun.current=undefined;
     if(loaded)setProjects(current=>[{projectId:id,revisionId:loaded.revisionId,title:loaded.document.title,updatedAt:loaded.createdAt},...current.filter(item=>item.projectId!==id)]);
@@ -107,11 +114,10 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
   function choose(id:string){if(locked||busy)return;activate(id);}
   async function create(){if(busy||locked)return;await runTask(async()=>{pendingCreate.current??=crypto.randomUUID();const {project}=await api<{project:ProjectRevision}>("/projects",{body:{projectId:pendingCreate.current}});pendingCreate.current=undefined;activate(project.projectId,project);});}
   async function submit(){
-    if(!project||active||locked)return;
+    if(!project||active||busy||locked)return;
     const prompt=input.trim();if(!prompt)return;
     if(containsInlineCredential(prompt)){setError("This message appears to contain a private credential. Remove it and use the private Connections field.");return;}
-    if(!pendingRun.current||pendingRun.current.prompt!==prompt)pendingRun.current={projectId:project.projectId,revisionId:project.revisionId,operation,prompt,idempotencyKey:crypto.randomUUID(),budgetUnits:20};
-    await runTask(async()=>{await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");drafts.current.delete(project.projectId);follow.current=true;await refresh();});
+    await runTask(async()=>{if(!pendingRun.current||pendingRun.current.prompt!==prompt)pendingRun.current=await makeRunRequest(project,prompt,operation,crypto.randomUUID());await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");drafts.current.delete(project.projectId);follow.current=true;await refresh();});
   }
   function update(saved:ProjectRevision){setProject(current=>current?.projectId===saved.projectId?saved:current);setNotice(`Version ${saved.ordinal} saved.`);}
   function changeTab(next:Tab){setTab(next);}

@@ -6,7 +6,7 @@ import {createRunRoutes} from "../../lib/custom-ai/platform/run-http.server";
 import {createConnectionStore} from "../../lib/custom-ai/platform/connections.server";
 import {createConnectionRoutes} from "../../lib/custom-ai/platform/connection-http.server";
 import {PROJECT_PLATFORM_SCHEMA} from "../../lib/custom-ai/platform/schema.generated";
-import {CUSTOM_AI_SCHEMA,type AIPool} from "../../lib/custom-ai/store.server";
+import {CUSTOM_AI_SCHEMA,createAIStore,type AIPool} from "../../lib/custom-ai/store.server";
 import {CustomAIError} from "../../lib/custom-ai/types";
 import {createArtifactStore} from "../../lib/custom-ai/platform/artifacts.server";
 import {createProjectChecks} from "../../lib/custom-ai/platform/builds.server";
@@ -23,7 +23,8 @@ import {createRepositoryDelivery} from "../../lib/custom-ai/platform/repository-
 export async function createPlatformFixture(){
   const db=new PGlite();await db.exec(CUSTOM_AI_SCHEMA);await db.exec(PROJECT_PLATFORM_SCHEMA);
   let tail=Promise.resolve();const pool:AIPool={connect:async()=>{const previous=tail;let release!:()=>void;tail=new Promise<void>(done=>{release=done;});await previous;return {query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release};}};
-  const store=createPlatformStore(pool),runs=createRunStore(pool,{allowance:{hourlyUnits:1000,dailyUnits:1000,globalDailyUnits:2000,concurrent:1},leaseMs:60000,capabilities:{}});
+  const allowance={hourlyUnits:1000,dailyUnits:1000,globalDailyUnits:2000,concurrent:1};
+  const store=createPlatformStore(pool),runs=createRunStore(pool,{allowance,leaseMs:60000,capabilities:{}}),usageStore=createAIStore(pool,allowance);
   let paused=false;
   const account=(request:Request)=>{const ownerId=request.headers.get("authorization")?.replace(/^Bearer fixture-/,"");if(!ownerId||!["alice","bob"].includes(ownerId))throw new CustomAIError("auth","Sign in",401);return ownerId;};
   const dependencies={enabled:()=>true,consume:async()=>{},authorize:async(request:Request,write:boolean)=>{const ownerId=account(request);if(write&&request.headers.get("x-custom-ai-cache-scope")!==`fixture:${ownerId}`)throw new CustomAIError("cache-scope","Reconnect",401);return{ownerId};}};
@@ -59,6 +60,7 @@ export async function createPlatformFixture(){
       return Response.json({projectId});
     }
     if(url.pathname==="/api/custom-ai/conversations"){try{return Response.json({cacheScope:`fixture:${account(request)}`});}catch{return new Response(null,{status:401});}}
+    if(url.pathname==="/api/custom-ai/usage")return Response.json(await usageStore.usage(account(request)));
     const name=url.pathname.split("/").at(-1),method=request.method;
     const routes=name==="projects"?projects:name==="runs"?work:name==="connections"?connectionRoutes:name==="launch"?launch:name==="repositories"?repositoryRoutes:undefined;
     const handler=routes?.[method as keyof typeof routes] as ((request:Request)=>Promise<Response>)|undefined;

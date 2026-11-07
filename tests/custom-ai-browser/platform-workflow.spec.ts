@@ -149,3 +149,35 @@ test("polls a building release without repeatedly loading checks and jobs",async
  await expect(page.getByText("Preview ready · earlier version",{exact:true})).toBeVisible();
  expect({checks,jobs}).toEqual(initial);
 });
+
+for(const allowance of [{hourly:6,daily:100,available:true,want:6},{hourly:25,daily:3,available:false,want:3}]){
+ test(`uses the remaining work allowance (${allowance.hourly} hourly, ${allowance.daily} daily)`,async({page})=>{
+  await page.route("**/api/custom-ai/usage",route=>route.fulfill({json:{available:allowance.available,active:0,hourly:{used:25-allowance.hourly,limit:25,remaining:allowance.hourly,resetsAt:Date.now()+60000},daily:{used:100-allowance.daily,limit:100,remaining:allowance.daily,resetsAt:Date.now()+60000},resumesAt:0}}));
+  await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();
+  await page.getByRole("textbox",{name:"Message your project"}).fill("Discuss the remaining change.");
+  const response=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/platform/runs"));
+  await page.getByRole("button",{name:"Send",exact:true}).click();
+  const saved=await response;expect(saved.request().postDataJSON().budgetUnits).toBe(allowance.want);expect((await saved.json()).run.reservedUnits).toBe(allowance.want);
+ });
+}
+test("keeps the message without starting work when the allowance is exhausted",async({page})=>{
+ await page.route("**/api/custom-ai/usage",route=>route.fulfill({json:{available:false,active:0,hourly:{used:25,limit:25,remaining:0,resetsAt:Date.now()+60000},daily:{used:25,limit:100,remaining:75,resetsAt:Date.now()+60000},resumesAt:Date.now()+60000}}));
+ await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();let posts=0;
+ page.on("request",request=>{if(request.method()==="POST"&&request.url().endsWith("/platform/runs"))posts++;});
+ const input=page.getByRole("textbox",{name:"Message your project"});await input.fill("Keep my requested change.");await page.getByRole("button",{name:"Send",exact:true}).click();
+ await expect(page.getByRole("alert")).toContainText("allowance");expect(posts).toBe(0);await expect(input).toHaveValue("Keep my requested change.");
+});
+test("retries the same reservation after a lost response without reading a reduced allowance",async({page,request})=>{
+ await request.post(`${origin}/fixture/pause`,{data:{paused:true}});let usageReads=0;const attempts:Record<string,unknown>[]=[];
+ try{
+  await page.route("**/api/custom-ai/usage",route=>{usageReads++;return route.fulfill({json:{available:usageReads===1,active:0,hourly:{used:usageReads===1?19:25,limit:25,remaining:usageReads===1?6:0,resetsAt:Date.now()+60000},daily:{used:19,limit:100,remaining:81,resetsAt:Date.now()+60000},resumesAt:0}});});
+  await page.route("**/api/custom-ai/platform/runs",async route=>{
+   if(route.request().method()!=="POST")return route.continue();attempts.push(route.request().postDataJSON());
+   if(attempts.length===1){await route.fetch();return route.abort("failed");}return route.continue();
+  });
+  await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();await page.getByRole("textbox",{name:"Message your project"}).fill("Save this request once.");await page.getByRole("button",{name:"Send",exact:true}).click();await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button",{name:"Send",exact:true}).click();await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeVisible();
+  expect(attempts).toHaveLength(2);expect(attempts[1]).toEqual(attempts[0]);expect(attempts[0].budgetUnits).toBe(6);expect(usageReads).toBe(1);
+  await page.getByRole("button",{name:"Stop",exact:true}).click();
+ }finally{await request.post(`${origin}/fixture/pause`,{data:{paused:false}});}
+});
