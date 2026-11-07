@@ -224,7 +224,7 @@ test("one result shows the exact fee curve and opens the actual missing detail",
 });
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
- const calls:ChatRequest[]=[],control={delay:false,lostCreates:0,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
+ const calls:ChatRequest[]=[],control={delay:false,lostCreates:0,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),beforeList:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
  const key=(account:string,id:string,principal="alice")=>principal+":"+account+":"+id;
  const create=(account:string,id:string,principal="alice")=>{const k=key(account,id,principal);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
  await page.route("**/api/**",async route=>{
@@ -237,6 +237,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
    if(body?.action==="update"){await control.beforeUpdate?.();const chat=chats.get(key(account,body.id,principal))!;if(body.revision!==chat.revision)return route.fulfill({status:409,json:{error:"Chat changed"}});Object.assign(chat,body.title?{title:body.title,customTitle:true}:{archived:body.archived});chat.revision++;return route.fulfill({json:chat});}
    const one=url.searchParams.get("id");if(one)return route.fulfill({json:chats.get(key(account,one,principal))});
    control.listQueries.push({q:url.searchParams.get("q")??"",archived:url.searchParams.get("archived")==="true"});
+   await control.beforeList?.();
    return route.fulfill({json:{conversations:[...chats.entries()].filter(([entry])=>entry.startsWith(principal+":" )).map(([,chat])=>chat).filter(c=>c.account===account&&c.archived===(url.searchParams.get("archived")==="true")&&c.title.toLowerCase().includes((url.searchParams.get("q")??"").toLowerCase()))}});
   }
   if(url.pathname==="/api/custom-ai/studio"){
@@ -479,6 +480,20 @@ test("opening the recovered chat clears the pending create before the next new c
  await box.fill("Work in the recovered chat");
  await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toHaveValue("");
  expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
+});
+test("keeps existing chat actions usable while the list refreshes",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();
+ let release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});let started=false;
+ f.control.beforeList=async()=>{started=true;await pending;};
+ try{
+  await openChatLibrary(page);await expect.poll(()=>started).toBe(true);
+  const rename=page.getByRole("button",{name:"Rename Original idea",exact:true});await expect(rename).toBeEnabled();await rename.click();
+  await expect(page.getByRole("textbox",{name:"Chat name"})).toBeEditable();
+  await page.getByRole("textbox",{name:"Chat name"}).fill("Name survives refresh");release();
+  await expect(page.getByRole("textbox",{name:"Chat name"})).toHaveValue("Name survives refresh");
+  await page.getByRole("button",{name:"Save chat name"}).click();
+  await expect.poll(()=>[...f.chats.values()].find(c=>c.id===LEGACY_CONVERSATION)?.title).toBe("Name survives refresh");
+ }finally{release();}
 });
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);
