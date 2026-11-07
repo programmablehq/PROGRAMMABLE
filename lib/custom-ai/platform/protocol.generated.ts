@@ -1,5 +1,5 @@
 // Generated from specs/project-runtime/v1/protocol.ts. Do not edit.
-export const PROJECT_PROTOCOL_HASH = "sha256:7974a256366feeb25cb5e040004b8361332bc5c8be9e34ab33282787ac78d474";
+export const PROJECT_PROTOCOL_HASH = "sha256:b9678a4331a322bec2e67af78718afacc89b64e76417a9fbba0275eb56562d91";
 /** Canonical dependency-free wire contract. Generate clients with
  * scripts/custom-ai/build-platform-protocol.mjs; do not fork this per service. */
 export const PROJECT_PROTOCOL_VERSION = "1.0.0" as const;
@@ -14,10 +14,13 @@ export type ProjectRequirement = {
   origin: { kind: "message"; requestId: string; messageIndex: number; quote: string }
     | { kind: "legacy"; requestId?: string; sourceHash?: string };
 };
+export type ProjectFile = string | { encoding: "base64"; content: string; mediaType: string };
+export type ProjectFileChange = { operation: "write"; path: string; beforeHash: string | null; content: ProjectFile }
+  | { operation: "delete"; path: string; beforeHash: string };
 export type ProjectDocument = {
   title: string;
   requirements: ProjectRequirement[];
-  files: Record<string, string>;
+  files: Record<string, ProjectFile>;
   dependencies: Record<string, string>;
   architecture: JsonValue;
 };
@@ -32,7 +35,7 @@ export type ProjectRevision = ProjectScope & {
   createdAt: string;
   document: ProjectDocument;
 };
-export type ProjectPatch = Partial<ProjectDocument> & { removeRequirementIds?: string[] };
+export type ProjectPatch = Partial<ProjectDocument> & { removeRequirementIds?: string[]; removeFilePaths?: string[]; fileChanges?: ProjectFileChange[] };
 export type RevisionPatchInput = ProjectScope & {
   expectedRevisionId: string;
   idempotencyKey: string;

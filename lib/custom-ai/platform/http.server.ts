@@ -4,13 +4,14 @@ import { aiError, aiHeaders } from "../http.server";
 import { CustomAIError } from "../types";
 import type { createPlatformStore } from "./project-store.server";
 import { ProjectError, type ProjectPatch } from "./types";
+import { exportProjectBundle } from "./transfer";
 
-type Dependencies = {
+export type ProjectAccountDependencies = {
   enabled: () => boolean;
   authorize: (request: Request, writing: boolean) => Promise<{ ownerId: string }>;
-  store: () => ReturnType<typeof createPlatformStore>;
   consume: (ownerId: string, operation: "read" | "write") => Promise<unknown>;
 };
+type Dependencies = ProjectAccountDependencies & { store: () => ReturnType<typeof createPlatformStore> };
 const invalid = () => new CustomAIError("project-input", "Choose a valid project and revision.");
 function bodyObject(value: unknown, keys: string[]): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)
@@ -18,17 +19,19 @@ function bodyObject(value: unknown, keys: string[]): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export function createProjectRoutes(dependencies: Dependencies) {
-  async function execute(request: Request, operation: "read" | "write", run: (ownerId: string) => Promise<Response>) {
-    try {
-      if (!dependencies.enabled()) throw new CustomAIError("unavailable", "Project workspaces are not enabled here yet.", 404);
-      const { ownerId } = await dependencies.authorize(request, operation === "write");
-      await dependencies.consume(ownerId, operation);
-      return await run(ownerId);
-    } catch (error) {
-      return aiError(error instanceof ProjectError ? new CustomAIError(error.code, error.message, error.status) : error);
-    }
+export async function executeProjectRequest(dependencies: ProjectAccountDependencies, request: Request, operation: "read" | "write", run: (ownerId: string) => Promise<Response>) {
+  try {
+    if (!dependencies.enabled()) throw new CustomAIError("unavailable", "Project workspaces are not enabled here yet.", 404);
+    const { ownerId } = await dependencies.authorize(request, operation === "write");
+    await dependencies.consume(ownerId, operation);
+    return await run(ownerId);
+  } catch (error) {
+    return aiError(error instanceof ProjectError ? new CustomAIError(error.code, error.message, error.status) : error);
   }
+}
+
+export function createProjectRoutes(dependencies: Dependencies) {
+  const execute = (request: Request, operation: "read" | "write", run: (ownerId: string) => Promise<Response>) => executeProjectRequest(dependencies, request, operation, run);
 
   const GET = (request: Request) => execute(request, "read", async ownerId => {
     const query = new URL(request.url).searchParams;
@@ -51,10 +54,27 @@ export function createProjectRoutes(dependencies: Dependencies) {
   const PATCH = (request: Request) => execute(request, "write", async ownerId => {
     const body = bodyObject(await readPreviewBody(request, 4_100_000), ["projectId", "expectedRevisionId", "idempotencyKey", "patch"]);
     if (typeof body.projectId !== "string" || typeof body.expectedRevisionId !== "string" || typeof body.idempotencyKey !== "string") throw invalid();
-    const patch = bodyObject(body.patch, ["title", "requirements", "files", "dependencies", "architecture", "removeRequirementIds"]) as ProjectPatch;
+    const patch = bodyObject(body.patch, ["title", "requirements", "files", "dependencies", "architecture", "removeRequirementIds", "removeFilePaths", "fileChanges"]) as ProjectPatch;
     return Response.json({ project: await dependencies.store().applyProjectPatch({ ownerId, projectId: body.projectId,
       expectedRevisionId: body.expectedRevisionId, idempotencyKey: body.idempotencyKey, patch }) }, { headers: aiHeaders });
   });
 
-  return { GET, POST, PATCH };
+  const DOWNLOAD = (request: Request) => execute(request, "read", async ownerId => {
+    const query = new URL(request.url).searchParams;
+    if ([...query.keys()].some(key => !["projectId", "revisionId"].includes(key))) throw invalid();
+    const projectId = query.get("projectId"), revisionId = query.get("revisionId");
+    if (!projectId || !revisionId) throw invalid();
+    const project = await dependencies.store().readRevision({ ownerId, projectId }, revisionId);
+    return Response.json(exportProjectBundle(project), { headers: { ...aiHeaders, "Content-Disposition": `attachment; filename="project-${project.projectId}.json"` } });
+  });
+
+  const RESTORE = (request: Request) => execute(request, "write", async ownerId => {
+    const body = bodyObject(await readPreviewBody(request, 16_000), ["projectId", "revisionId", "expectedRevisionId", "idempotencyKey"]);
+    if (["projectId", "revisionId", "expectedRevisionId", "idempotencyKey"].some(key => typeof body[key] !== "string")) throw invalid();
+    const project = await dependencies.store().restoreProjectRevision({ ownerId, projectId: body.projectId as string,
+      revisionId: body.revisionId as string, expectedRevisionId: body.expectedRevisionId as string, idempotencyKey: body.idempotencyKey as string });
+    return Response.json({ project }, { headers: aiHeaders });
+  });
+
+  return { GET, POST, PATCH, DOWNLOAD, RESTORE };
 }

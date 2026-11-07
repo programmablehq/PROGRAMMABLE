@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { IntentRequirement } from "../launch-intent";
 import { ProjectError, type JsonValue, type ProjectDocument, type ProjectPatch, type ProjectScope } from "./types";
+import { applyFileChanges, validateProjectFiles } from "./files";
 
 const inputError = () => new ProjectError("project-input", "This project change is invalid.");
 const identifier = (value: unknown): value is string => typeof value === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(value);
@@ -45,20 +46,24 @@ export function validateDocument(document: unknown): asserts document is Project
   if (!object(document) || Object.keys(document).sort().join() !== "architecture,dependencies,files,requirements,title"
     || !text(document.title, 120) || !object(document.files) || !object(document.dependencies)) throw inputError();
   requirements(document.requirements);
-  const files = Object.entries(document.files);
-  if (files.length > 512 || Object.entries(document.dependencies).some(([name, version]) => !text(name, 256) || !text(version, 512))) throw inputError();
-  for (const [path, content] of files) {
-    if (!text(path, 512) || path.startsWith("/") || path.includes("\\") || path.split("/").some(part => !part || [".", "..", ".git", "node_modules"].includes(part))
-      || typeof content !== "string" || Buffer.byteLength(content) > 512_000) throw inputError();
-  }
+  if (Object.entries(document.dependencies).some(([name, version]) => !text(name, 256) || !text(version, 512))) throw inputError();
+  validateProjectFiles(document.files as ProjectDocument["files"]);
   if (Buffer.byteLength(canonicalProjectJSON(document)) > 4_000_000) throw inputError();
 }
 
 export function applyDocumentPatch(previous: ProjectDocument, patch: ProjectPatch): ProjectDocument {
-  if (!object(patch) || !Object.keys(patch).length || Object.keys(patch).some(key => !["title", "requirements", "files", "dependencies", "architecture", "removeRequirementIds"].includes(key))) throw inputError();
-  const { removeRequirementIds = [], ...changes } = structuredClone(patch);
+  if (!object(patch) || !Object.keys(patch).length || Object.keys(patch).some(key => !["title", "requirements", "files", "dependencies", "architecture", "removeRequirementIds", "removeFilePaths", "fileChanges"].includes(key))) throw inputError();
+  const { removeRequirementIds = [], removeFilePaths = [], fileChanges, ...changes } = structuredClone(patch);
   if (!Array.isArray(removeRequirementIds) || removeRequirementIds.some(id => !identifier(id)) || new Set(removeRequirementIds).size !== removeRequirementIds.length) throw inputError();
   const next = { ...structuredClone(previous), ...changes };
+  if (!Array.isArray(removeFilePaths) || removeFilePaths.some(path => typeof path !== "string") || new Set(removeFilePaths).size !== removeFilePaths.length) throw inputError();
+  if (fileChanges) {
+    if (changes.files || removeFilePaths.length) throw inputError();
+    next.files = applyFileChanges(previous.files, fileChanges);
+  } else if (removeFilePaths.some(path => !Object.hasOwn(previous.files, path) || Object.hasOwn(next.files, path))
+    || Object.keys(previous.files).some(path => !Object.hasOwn(next.files, path) && !removeFilePaths.includes(path))) {
+    throw new ProjectError("project-file-removal", "Identify files explicitly before removing them.", 409);
+  }
   validateDocument(next);
   const oldIds = new Set(previous.requirements.map(rule => rule.id)), nextIds = new Set(next.requirements.map(rule => rule.id));
   if (removeRequirementIds.some(id => !oldIds.has(id) || nextIds.has(id))

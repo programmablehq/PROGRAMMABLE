@@ -12,10 +12,13 @@ export type ProjectRequirement = {
   origin: { kind: "message"; requestId: string; messageIndex: number; quote: string }
     | { kind: "legacy"; requestId?: string; sourceHash?: string };
 };
+export type ProjectFile = string | { encoding: "base64"; content: string; mediaType: string };
+export type ProjectFileChange = { operation: "write"; path: string; beforeHash: string | null; content: ProjectFile }
+  | { operation: "delete"; path: string; beforeHash: string };
 export type ProjectDocument = {
   title: string;
   requirements: ProjectRequirement[];
-  files: Record<string, string>;
+  files: Record<string, ProjectFile>;
   dependencies: Record<string, string>;
   architecture: JsonValue;
 };
@@ -30,7 +33,7 @@ export type ProjectRevision = ProjectScope & {
   createdAt: string;
   document: ProjectDocument;
 };
-export type ProjectPatch = Partial<ProjectDocument> & { removeRequirementIds?: string[] };
+export type ProjectPatch = Partial<ProjectDocument> & { removeRequirementIds?: string[]; removeFilePaths?: string[]; fileChanges?: ProjectFileChange[] };
 export type RevisionPatchInput = ProjectScope & {
   expectedRevisionId: string;
   idempotencyKey: string;

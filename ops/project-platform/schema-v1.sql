@@ -37,6 +37,19 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.idempotency (
   FOREIGN KEY (owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
 );
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.artifacts (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  id text NOT NULL,
+  content bytea NOT NULL CHECK (octet_length(content) <= 4000000),
+  media_type text NOT NULL,
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY (owner,project_id,id),
+  FOREIGN KEY (owner,project_id) REFERENCES programmable_projects_v1.projects(owner,id)
+);
+CREATE INDEX IF NOT EXISTS project_artifact_expiry_v1 ON programmable_projects_v1.artifacts(owner,expires_at);
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;
@@ -44,6 +57,8 @@ ALTER TABLE programmable_projects_v1.revisions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.revisions FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.idempotency ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.idempotency FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.artifacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.artifacts FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -59,6 +74,11 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='idempotency' AND policyname='idempotency_owner_v1') THEN
     CREATE POLICY idempotency_owner_v1 ON programmable_projects_v1.idempotency
+      USING (owner=current_setting('programmable.project_owner',true))
+      WITH CHECK (owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='artifacts' AND policyname='artifact_owner_v1') THEN
+    CREATE POLICY artifact_owner_v1 ON programmable_projects_v1.artifacts
       USING (owner=current_setting('programmable.project_owner',true))
       WITH CHECK (owner=current_setting('programmable.project_owner',true));
   END IF;

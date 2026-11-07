@@ -1,7 +1,8 @@
 import "server-only";
 import type { AIConnection, AIPool } from "../store.server";
 import { ProjectError, type ProjectDocument, type ProjectRevision, type ProjectScope, type RevisionPatchInput } from "./types";
-import { applyDocumentPatch, emptyProjectDocument, projectHash, validateScope } from "./document";
+import { applyDocumentPatch, emptyProjectDocument, projectHash } from "./document";
+import { projectTransaction } from "./transaction.server";
 
 const missing = () => new ProjectError("project-missing", "This project was not found.", 404);
 const conflict = () => new ProjectError("project-conflict", "This project changed. Reload the current revision before editing.", 409);
@@ -18,18 +19,7 @@ function revision(row: Record<string, unknown>): ProjectRevision {
  * The migration is applied separately; no request performs DDL. */
 export function createPlatformStore(pool: AIPool, now: () => number = Date.now) {
   async function transaction<T>(scope: ProjectScope, work: (db: AIConnection) => Promise<T>): Promise<T> {
-    validateScope(scope);
-    const db = await pool.connect();
-    try {
-      await db.query("BEGIN");
-      await db.query("SELECT set_config('programmable.project_owner',$1,true)", [scope.ownerId]);
-      const result = await work(db);
-      await db.query("COMMIT");
-      return result;
-    } catch (error) {
-      await db.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally { db.release(); }
+    return projectTransaction(pool, scope, work);
   }
 
   async function read(db: AIConnection, scope: ProjectScope, id?: string) {
@@ -119,5 +109,15 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
         })));
   }
 
-  return { createProject, readProject, readRevision, applyProjectPatch, listProjects, listRevisions };
+  async function restoreProjectRevision(input: ProjectScope & { expectedRevisionId: string; revisionId: string; idempotencyKey: string }) {
+    const scope = { ownerId: input.ownerId, projectId: input.projectId };
+    const [base, target] = await Promise.all([readRevision(scope, input.expectedRevisionId), readRevision(scope, input.revisionId)]);
+    return applyProjectPatch({ ...scope, expectedRevisionId: input.expectedRevisionId, idempotencyKey: input.idempotencyKey, patch: {
+      ...target.document,
+      removeRequirementIds: base.document.requirements.filter(rule => !target.document.requirements.some(item => item.id === rule.id)).map(rule => rule.id),
+      removeFilePaths: Object.keys(base.document.files).filter(path => !Object.hasOwn(target.document.files, path)),
+    } });
+  }
+
+  return { createProject, readProject, readRevision, applyProjectPatch, listProjects, listRevisions, restoreProjectRevision };
 }

@@ -68,4 +68,17 @@ describe("project platform authenticated routes", () => {
     expect((await disabled.POST(request("POST", "alice", { projectId: id }))).status).toBe(404);
     expect(await store.listProjects("alice")).toEqual([]);
   });
+  it("exports only an owned exact revision and restores without rewriting history", async () => {
+    const initial = await store.createProject({ ownerId: "alice", projectId: id });
+    const next = await store.applyProjectPatch({ ownerId: "alice", projectId: id, expectedRevisionId: initial.revisionId, idempotencyKey: "change", patch: { title: "Changed" } });
+    const downloaded = await routes.DOWNLOAD(request("GET", "alice", undefined, `?projectId=${id}&revisionId=${next.revisionId}`));
+    expect(downloaded.status).toBe(200);
+    expect(downloaded.headers.get("Content-Disposition")).toContain("attachment");
+    expect((await downloaded.json()).document.title).toBe("Changed");
+    expect((await routes.DOWNLOAD(request("GET", "bob", undefined, `?projectId=${id}&revisionId=${next.revisionId}`))).status).toBe(404);
+    const restored = await routes.RESTORE(request("POST", "alice", { projectId: id, expectedRevisionId: next.revisionId, revisionId: initial.revisionId, idempotencyKey: "restore" }));
+    expect(restored.status).toBe(200);
+    expect((await restored.json()).project.document.title).toBe("New project");
+    expect((await store.readRevision({ ownerId: "alice", projectId: id }, next.revisionId)).document.title).toBe("Changed");
+  });
 });
