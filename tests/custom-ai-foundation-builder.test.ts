@@ -70,6 +70,13 @@ describe("qualified foundations inside the immutable project job",()=>{
     expect(result.project.sources["Counter.sol"].content).toBe(code);
     expect(request.saveProject).toHaveBeenCalledOnce();expect(result.launchReady).toBe(false);
   });
+  it("can keep an existing complete source unchanged while checking a stale finding",async()=>{
+    const previous=createContractProject({compiler:blueprint.compiler,sources:{"Counter.sol":{content:code}},entrypoints:blueprint.entrypoints},intent,999);
+    const request=input(),call=vi.fn(async()=>reply({steps:[]}));
+    const result=await buildGeneralContract({...request,previous,sourceFindings:[{code:"OLD_START",requirementId:"counter",message:"An old draft started at two; verify the current source."}],auditSource:(project:ContractProject)=>audit(project)},undefined,{call,compile:compiled});
+    expect(call).toHaveBeenCalledOnce();expect(result.project.hash).toBe(previous.hash);
+    expect(result.sourceAudit?.status).toBe("passed");expect(request.saveProject).toHaveBeenCalledOnce();
+  });
   it("never treats an incomplete seed and an empty edit plan as finished source",async()=>{
     vi.mocked(sourceFoundation).mockReturnValue({sources:{"Counter.sol":{content:code}},completeReference:false});
     const request=input(),compile=vi.fn(compiled),auditSource=vi.fn((project:ContractProject)=>audit(project)),call=vi.fn(async()=>reply({steps:[]}));

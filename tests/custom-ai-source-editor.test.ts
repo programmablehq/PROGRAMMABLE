@@ -32,6 +32,24 @@ describe("bounded edits on a complete source foundation",()=>{
   expect(call).toHaveBeenCalledOnce();expect(saved.at(-1)?.files).toEqual(seeds);
   expect(JSON.parse(result.text).sourceFiles).toHaveLength(2);
  });
+ it("retains complete unchanged files when a correction plan targets only one file",async()=>{
+  const saved:SourceProgress[]=[];let calls=0;
+  const result=await editSourceFoundation({...input,allowUnchanged:true,save:async progress=>{
+   if(saved.length)expect(sourceProgressExtends(saved.at(-1)!,progress)).toBe(true);
+   saved.push(progress);
+  }},async()=>[reply({steps:[steps[0]]}),change("A.sol","A")][calls++]);
+  expect(calls).toBe(2);
+  expect(saved[0].files).toEqual({"B.sol":seeds["B.sol"]});
+  expect(Object.keys(saved[0].editing!.sources)).toEqual(["A.sol"]);
+  expect(JSON.parse(result.text).sourceFiles).toEqual([
+   {path:"A.sol",content:"contract A {uint public value;}"},{path:"B.sol",content:seeds["B.sol"].content},
+  ]);
+ });
+ it("still requires every unfinished file in a new implementation plan",async()=>{
+  const call=vi.fn(async()=>reply({steps:[steps[0]]})),save=vi.fn();
+  await expect(editSourceFoundation({...input,save},call)).rejects.toMatchObject({code:"source-pending"});
+  expect(call).toHaveBeenCalledOnce();expect(save).not.toHaveBeenCalled();
+ });
  it("persists exact stages and promotes files only after all planned edits",async()=>{
   const saved:SourceProgress[]=[];let n=0;
   const result=await editSourceFoundation({...input,save:async progress=>{if(saved.length)expect(sourceProgressExtends(saved.at(-1)!,progress)).toBe(true);saved.push(progress);}},async call=>{

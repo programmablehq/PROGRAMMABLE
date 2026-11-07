@@ -294,7 +294,7 @@ ${blueprint?`Frozen source entrypoints: ${JSON.stringify(blueprint.entrypoints)}
       + " The full independent scenario plan remains on the server and its ID is unchanged.";
   };
   const response = blueprint&&input.saveSourceProgress&&paths.length&&foundation&&!cached?.partial
-    ? await editSourceFoundation({request:{...generation,system:system(context,true)+(referenceFindings?`\nRequired semantic corrections from the independent reference review: ${JSON.stringify(referenceFindings)}`:"")},patchTask:{...modelTask("source-edit",configuredProvider().models),...((semanticRepair||referenceFindings?.length)?{model:configuredProvider().models.escalation}:{})},seeds:foundation.sources,allowUnchanged:foundation.completeReference&&!referenceFindings?.length,paths,contextHash:progressContext!,cached,
+    ? await editSourceFoundation({request:{...generation,system:system(context,true)+(referenceFindings?`\nRequired semantic corrections from the independent reference review: ${JSON.stringify(referenceFindings)}`:"")},patchTask:{...modelTask("source-edit",configuredProvider().models),...((semanticRepair||referenceFindings?.length)?{model:configuredProvider().models.escalation}:{})},seeds:foundation.sources,allowUnchanged:editExisting||foundation.completeReference&&!referenceFindings?.length,paths,contextHash:progressContext!,cached,
       save:input.saveSourceProgress,systemForPath},call)
     : blueprint&&input.previous
     ? await writeSourceEdits({request:generation,previous:previousSources,immutable:new Set([...Object.keys(librarySources),...Object.keys(dependencySources)]),

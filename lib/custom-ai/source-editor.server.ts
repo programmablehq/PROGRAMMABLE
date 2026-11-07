@@ -40,10 +40,17 @@ export async function editSourceFoundation(input: {
         messages:[...input.request.messages,{role:"user",content:"Plan a small ordered implementation sequence for the complete saved contract design, applying the latest source correction above without weakening any saved rule or fixed interface."}]});
       charge(response,maxTokens);
       const value=JSON.parse(response.text);
-      if(!value||Object.keys(value).join()!=="steps")throw new TypeError("Invalid implementation plan.");
+      if(!value||Object.keys(value).join()!=="steps"||!Array.isArray(value.steps))throw new TypeError("Invalid implementation plan.");
       if(input.allowUnchanged&&Array.isArray(value.steps)&&value.steps.length===0){
         progress=checkedSourceProgress({...progress,reply:"The saved design uses the existing implementation reference.",summary:"Existing mechanics retained for independent checks",files:{...progress.files,...sources}},input.contextHash,input.paths);
-      }else progress=checkedSourceProgress({...progress,editing:{sources,steps:value.steps,next:0}},input.contextHash,input.paths);
+      }else{
+        // Complete saved files outside a focused repair remain immutable input.
+        // A new, unfinished foundation still needs a step for every source.
+        const planned=new Set(value.steps.map((step:{path:string})=>step?.path));
+        const retained=input.allowUnchanged?Object.fromEntries(Object.entries(sources).filter(([path])=>!planned.has(path))):{};
+        const editingSources=Object.fromEntries(Object.entries(sources).filter(([path])=>!Object.hasOwn(retained,path)));
+        progress=checkedSourceProgress({...progress,files:{...progress.files,...retained},editing:{sources:editingSources,steps:value.steps,next:0}},input.contextHash,input.paths);
+      }
       await input.save(progress);
     }
     while(progress.editing&&progress.editing.next<progress.editing.steps.length){
