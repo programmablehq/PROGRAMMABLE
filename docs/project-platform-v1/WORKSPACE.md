@@ -4,6 +4,19 @@ This document describes the release candidate behind `CUSTOM_AI_PLATFORM_ENABLED
 
 Start a project from AI Chat and describe the result you want in your own words. Each project keeps its requirements, source files, versions, connections and work history. Work already accepted by the server continues after the browser closes. Reopening the project reads its saved status.
 
+Recognizable credentials are rejected before a chat run, source revision or
+artifact is stored. Private values belong in Connections. Check logs and model
+observations redact credential values. This is a safeguard for recognizable
+formats and named credential fields, not a guarantee that arbitrary text can
+always be identified as secret.
+
+Combined applications and contracts keep one complete requirement list, with
+`architecture.requirementScopes.contract` and `.application` assigning each
+requirement to one or both components. Both components must supply their own
+passing evidence. A work unit allows at most two automatic source repairs for
+an unresolved failed check before asking for review; a successful check clears
+that check's repair failure.
+
 The chat offers four modes:
 
 - **Build & edit** can change the project and run checks.

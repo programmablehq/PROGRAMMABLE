@@ -13,10 +13,19 @@ beforeEach(async()=>{db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let 
 afterEach(async()=>{await db.close()});
 it("authenticates and deduplicates signed events; revocation stops intake",async()=>{
  const route=await webhooks.create(scope,id),timestamp=String(Math.floor(Date.now()/1000)),body=JSON.stringify({player:"alice",score:3});
- const signature=createHmac("sha256",route.secret).update(`${timestamp}.${body}`).digest("hex");
+ const signature=createHmac("sha256",route.secret).update(JSON.stringify(["programmable-webhook-v1",route.id,"win-one",timestamp,body])).digest("hex");
  const input={routeId:route.id,eventId:"win-one",timestamp,signature,body};
  await expect(webhooks.ingest({...input,signature:"0".repeat(64)})).rejects.toMatchObject({code:"webhook-signature"});
  expect(await webhooks.ingest(input)).toMatchObject({duplicate:false});expect(await webhooks.ingest(input)).toMatchObject({duplicate:true});
+ await expect(webhooks.ingest({...input,eventId:"changed-event"})).rejects.toMatchObject({code:"webhook-signature"});
+ await expect(webhooks.ingest({...input,body:JSON.stringify({player:"alice",score:99})})).rejects.toMatchObject({code:"webhook-signature"});
+ await expect(webhooks.ingest({...input,timestamp:String(Number(timestamp)-1000)})).rejects.toMatchObject({code:"webhook-signature"});
  expect((await webhooks.list(scope,id)).events).toHaveLength(1);
  await connections.revoke(scope,id);await expect(webhooks.ingest({...input,eventId:"win-two"})).rejects.toMatchObject({code:"connection-revoked"});
+});
+it("binds the route as well as the event ID, including two routes with the same connection key",async()=>{
+ const first=await webhooks.create(scope,id),second=await webhooks.create(scope,id),timestamp=String(Math.floor(Date.now()/1000)),body="{}";
+ const input={routeId:first.id,eventId:"shared-event",timestamp,body,signature:createHmac("sha256",second.secret).update(JSON.stringify(["programmable-webhook-v1",first.id,"shared-event",timestamp,body])).digest("hex")};
+ expect(await webhooks.ingest(input)).toMatchObject({duplicate:false});
+ await expect(webhooks.ingest({...input,routeId:second.id})).rejects.toMatchObject({code:"webhook-signature"});
 });

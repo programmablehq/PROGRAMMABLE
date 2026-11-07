@@ -8,6 +8,7 @@ import { ProjectError, type JsonValue, type ProjectScope } from "./types";
 import type { RunSnapshot, RunStatus } from "./protocol.generated";
 import { PROJECT_PROTOCOL_HASH } from "./protocol.generated";
 import { projectDate } from "./time";
+import {containsInlineCredential,redactCredentialData,redactInlineCredentials} from "./secret-input";
 
 type Operation = "plan" | "build" | "test" | "deploy";
 type Capability = { units: number; effect: "read" | "write"; operations: Operation[] };
@@ -61,6 +62,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
   async function startRun(input: ProjectScope & { revisionId: string; operation: Operation; prompt: string; idempotencyKey: string; budgetUnits: number }): Promise<RunView> {
     if (!key(input.idempotencyKey) || !["plan", "build", "test", "deploy"].includes(input.operation)
       || typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 24_000 || !/^sha256:[a-f0-9]{64}$/.test(input.revisionId)) throw invalid();
+    if(containsInlineCredential(input.prompt))throw new ProjectError("project-secret","This message appears to contain a private credential. Remove it and save it in the project's private Connections field instead.",422);
     const scope = { ownerId: input.ownerId, projectId: input.projectId }, requestHash = projectHash(input);
     return projectTransaction(pool, scope, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
@@ -165,6 +167,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
   }
   async function beginStep(scope: ProjectScope, runId: string, token: string, input: { id: string; capabilityId: string; input: JsonValue }) {
     if (!key(input.id) || !key(input.capabilityId) || canonicalProjectJSON(input.input).length > 600_000) throw invalid();
+    if(containsInlineCredential(canonicalProjectJSON(input.input)))throw new ProjectError("project-secret","Use a private connection instead of inline credentials in a tool request.",422);
     return projectTransaction(pool, scope, async db => {
       const run = await leased(db, scope, runId, token), capability = Object.hasOwn(options.capabilities, input.capabilityId) ? options.capabilities[input.capabilityId] : undefined;
       if (!capability || !capability.operations.includes(run.operation as Operation)) throw new ProjectError("run-capability", "This tool is not available for this work.", 403);
@@ -192,6 +195,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
   }
   async function finishStep(scope: ProjectScope, runId: string, token: string, input: { id: string; result: JsonValue; reconciled?: boolean }) {
     if (!key(input.id) || canonicalProjectJSON(input.result).length > 600_000 || input.reconciled !== undefined && typeof input.reconciled !== "boolean") throw invalid();
+    input={...input,result:redactCredentialData(input.result)};
     return projectTransaction(pool, scope, async db => {
       const run = await leased(db, scope, runId, token);
       const step = (await db.query("SELECT * FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND id=$4", [scope.ownerId, scope.projectId, runId, input.id])).rows[0];
@@ -206,6 +210,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
   }
   async function finishRun(scope: ProjectScope, runId: string, token: string, summary: string, status: "succeeded" | "waiting_user" = "succeeded"): Promise<RunView> {
     if (typeof summary !== "string" || !summary.trim() || summary.length > 4000) throw invalid();
+    summary=redactInlineCredentials(summary);
     return projectTransaction(pool, scope, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
       const run = await leased(db, scope, runId, token);

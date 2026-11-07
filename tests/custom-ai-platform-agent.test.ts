@@ -28,6 +28,17 @@ const start=async(operation:"plan"|"build"="build")=>{
 const decisions:AgentDecision[]=[{kind:"tool",tool:"project.patch",input:{},message:"Writing file",claim:"planned"},{kind:"reply",tool:null,input:null,message:"The source is saved.",claim:"built"}];
 
 describe("durable project agent",()=>{
+  it("stops before a third automatic repair after failed behavior checks",async()=>{
+    const pool:AIPool={connect:async()=>({query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release(){}})};
+    runs=createRunStore(pool,{allowance:{hourlyUnits:100,dailyUnits:100,globalDailyUnits:200,concurrent:1},leaseMs:60000,capabilities:{"model.plan":{units:0,effect:"read",operations:["build"]},"project.patch":{units:0,effect:"write",operations:["build"]},"project.check":{units:0,effect:"read",operations:["build"]}}});
+    const {grant,lease}=await start();let decisions=0;
+    const patch=vi.fn(async()=>({revisionId})),check=vi.fn(async()=>({passed:false}));
+    const tools:ProjectTool[]=[{id:"project.patch",version:"1",description:"Repair",schema:{type:"object"},execute:patch},{id:"project.check",version:"1",description:"Check",schema:{type:"object"},execute:check}];
+    const agent=createProjectAgent({runs,projects,tools,choose:async()=>({kind:"tool",tool:decisions++%2===0?"project.check":"project.patch",input:{},message:"Work",claim:"built"}),assess:async()=>({level:"built"})});
+    for(let n=0;n<16;n++){const state=await agent.advance(grant,lease.token);if(state.run.status!=="running")break;}
+    expect(patch).toHaveBeenCalledTimes(2);expect(check).toHaveBeenCalledTimes(3);
+    expect(await runs.readRun(scope,grant.runId)).toMatchObject({status:"waiting_user"});
+  });
   it("resumes a saved model decision and never writes a file twice",async()=>{
     const {grant,lease}=await start();let next=0;
     const choose=vi.fn(async()=>decisions[next++]);

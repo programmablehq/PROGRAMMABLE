@@ -5,6 +5,8 @@ import type { createSandboxExecutor } from "./sandbox-executor.server";
 import { projectTransaction } from "./transaction.server";
 import { projectHash } from "./document";
 import { ProjectError, type ProjectScope, type JsonValue } from "./types";
+import {redactCredentialData,redactInlineCredentials} from "./secret-input";
+import {projectRequirementScopes} from "./requirement-scopes";
 
 export type ProjectLevel = "discussed" | "planned" | "built" | "verified" | "deployed" | "operational";
 type Ref = ProjectScope & { revisionId: string };
@@ -25,6 +27,7 @@ export function declaredProjectChecks(value: JsonValue, requirements: string[]):
 
 export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof createPlatformStore>, sandbox: Pick<ReturnType<typeof createSandboxExecutor>, "execute">) {
   async function record(reference: Ref, input: { requirementIds: string[]; passed: boolean; commandHash: string; result: JsonValue }) {
+    input={...input,result:redactCredentialData(input.result)};
     const ref = identity(reference);
     const project = await projects.readRevision(ref, ref.revisionId);
     if (input.requirementIds.some(id => !project.document.requirements.some(rule => rule.id === id))) throw new ProjectError("check-requirements", "The evidence names a different requirement.", 409);
@@ -43,7 +46,8 @@ export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof cr
     if (!declarations.length) throw new ProjectError("project-checks", "Declare behavior checks before verifying this project.", 409);
     const evidence: { id: string; checkId: string; passed: boolean; requirementIds: string[]; output: string }[] = [];
     for (const check of declarations) {
-      const result = await sandbox.execute({ ...ref, script: check.command, outputPaths: [] }, signal);
+      const raw = await sandbox.execute({ ...ref, script: check.command, outputPaths: [] }, signal);
+      const result={...raw,stdout:redactInlineCredentials(raw.stdout),stderr:redactInlineCredentials(raw.stderr)};
       if (result.revisionId !== ref.revisionId) throw new ProjectError("check-revision", "The check result belongs to another source revision.", 409);
       const passed = result.exitCode === 0 && !result.truncated;
       const requirementIds = check.kind === "behavior" ? check.requirementIds : [];
@@ -66,8 +70,12 @@ export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof cr
     const architecture=project.document.architecture;
     const contract=architecture&&typeof architecture==="object"&&!Array.isArray(architecture)&&["contract","legacy-contract"].includes(String(architecture.kind));
     const resultKind=(row:Record<string,unknown>)=>row.result&&typeof row.result==="object"?(row.result as Record<string,unknown>).kind:undefined;
-    const covered = new Set(evidence.rows.filter(row => row.passed === true&&(!contract||resultKind(row)==="contract-scenarios")).flatMap(row => row.requirement_ids as string[]));
-    const missingRequirementIds = project.document.requirements.filter(item => item.open !== null || !covered.has(item.id)).map(item => item.id);
+    const scopes=projectRequirementScopes(project.document);
+    const contractCovered=new Set(evidence.rows.filter(row=>row.passed===true&&resultKind(row)==="contract-scenarios").flatMap(row=>row.requirement_ids as string[]));
+    const applicationCovered=new Set(evidence.rows.filter(row=>row.passed===true&&resultKind(row)==="behavior").flatMap(row=>row.requirement_ids as string[]));
+    const missingRequirementIds = project.document.requirements.filter(item => item.open !== null
+      ||scopes.contract.includes(item.id)&&!contractCovered.has(item.id)
+      ||scopes.application.includes(item.id)&&!applicationCovered.has(item.id)).map(item=>item.id);
     const missingChecks=contract&&!evidence.rows.some(row=>row.passed===true&&resultKind(row)==="source-audit")?["source-audit"]:[];
     const verified = project.document.requirements.length > 0 && missingRequirementIds.length === 0 && !missingChecks.length && evidence.rows.length > 0 && evidence.rows.every(row => row.passed === true);
     const level: ProjectLevel = verified ? "verified" : Object.keys(project.document.files).length ? "built" : project.document.requirements.length ? "planned" : "discussed";

@@ -10,6 +10,7 @@ import {ProjectConnections} from "./connections";
 import {ProjectRuntime} from "./runtime";
 import {ProjectRepository} from "./repository";
 import styles from "./workspace.module.css";
+import {containsInlineCredential} from "@/lib/custom-ai/platform/secret-input";
 
 const tabs=[{id:"project",label:"Project",icon:Check},{id:"files",label:"Files",icon:Files},{id:"connections",label:"Connections",icon:Link2},{id:"runtime",label:"Preview & run",icon:Workflow},{id:"repository",label:"Import & export",icon:History}] as const;
 type Tab=typeof tabs[number]["id"];
@@ -81,6 +82,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
   async function submit(){
     if(!project||active||locked)return;
     const prompt=input.trim();if(!prompt)return;
+    if(containsInlineCredential(prompt)){setError("This message appears to contain a private credential. Remove it and use the private Connections field.");return;}
     if(!pendingRun.current||pendingRun.current.prompt!==prompt)pendingRun.current={projectId:project.projectId,revisionId:project.revisionId,operation,prompt,idempotencyKey:crypto.randomUUID(),budgetUnits:20};
     await runTask(async()=>{await api("/runs",{body:pendingRun.current});pendingRun.current=undefined;setInput("");drafts.current.delete(project.projectId);follow.current=true;await refresh();});
   }

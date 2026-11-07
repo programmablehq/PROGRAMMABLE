@@ -23,6 +23,15 @@ Supported profiles:
 - Signed JSON webhooks with timestamp validation and persistent event-ID
   deduplication. Receiving an event alone does not authorize a contract action.
 
+Webhook senders sign the UTF-8 JSON encoding of
+`["programmable-webhook-v1", routeId, eventId, timestamp, exactBodyText]`
+with HMAC-SHA256 and the private webhook key. Send its lowercase hexadecimal
+digest as `X-Programmable-Signature`, the event ID as
+`X-Programmable-Event-Id`, and Unix seconds as `X-Programmable-Timestamp`.
+The timestamp is a decimal string. Both the route and event ID are signed;
+reusing a delivery with a different identity is rejected. Retries preserve
+all five values. The earlier timestamp/body-only format is not accepted.
+
 HTTPS transport resolves and checks every address, pins the checked IP while
 retaining the original TLS identity, refuses redirects/private networks and
 bounds requests, responses and time. Logs/results redact known credential

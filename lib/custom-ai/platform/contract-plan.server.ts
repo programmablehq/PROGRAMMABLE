@@ -4,10 +4,12 @@ import {createGeneralCheckBlueprint,bindGeneralCheckBlueprint} from "../check-bl
 import type {LaunchIntent} from "../launch-intent";
 import type {LaunchProductionContext} from "../launch-production";
 import {ProjectError,type ProjectRevision} from "./types";
+import {projectRequirementScopes} from "./requirement-scopes";
 
 type ContractRevision=Pick<ProjectRevision,"document"|"projectId"|"requirementsHash">;
 export function platformContractIntent(project:ContractRevision):LaunchIntent {
-  const requirements=project.document.requirements;
+  const ids=projectRequirementScopes(project.document).contract;
+  const requirements=project.document.requirements.filter(rule=>ids.includes(rule.id));
   if(!requirements.length||requirements.some(rule=>rule.open))throw new ProjectError("contract-plan","Resolve the complete contract requirements first.",409);
   return {version:1,id:project.projectId,revision:project.requirementsHash.slice(7),requirements,unresolved:[],changes:[]};
 }

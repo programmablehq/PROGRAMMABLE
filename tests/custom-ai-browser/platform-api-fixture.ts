@@ -14,6 +14,9 @@ import {createPlatformLaunchDrafts} from "../../lib/custom-ai/platform/launch-dr
 import {createPlatformContractCheckpoints} from "../../lib/custom-ai/platform/contract-checkpoint.server";
 import {createPlatformLaunchRoutes} from "../../lib/custom-ai/platform/launch-http.server";
 import {platformContractDocument,checkedPlatformFixture} from "../fixtures/custom-ai-platform-contract";
+import {createRepositoryRoutes} from "../../lib/custom-ai/platform/repository-http.server";
+import {createRepositoryImporter} from "../../lib/custom-ai/platform/repository-import.server";
+import {createRepositoryDelivery} from "../../lib/custom-ai/platform/repository-delivery.server";
 
 /** Local-only synthetic accounts. The UI talks over HTTP to the real stores/routes.
  * This fixture does not stand in for production identity or a real LLM test. */
@@ -30,6 +33,8 @@ export async function createPlatformFixture(){
   const launch=createPlatformLaunchRoutes({enabled:()=>true,authorize:async(request,write)=>({...await dependencies.authorize(request,write),wallets:[`0x${"a".repeat(40)}`]}),consume:async()=>{},drafts:()=>drafts,checkpoints:()=>checkpoints});
   const connections=createConnectionStore(pool,{active:"fixture",keys:{fixture:Buffer.alloc(32,7)}});
   const connectionRoutes=createConnectionRoutes({...dependencies,store:()=>connections,service:()=>{throw Error("Not used in UI persistence fixture")},oauth:()=>{throw Error("Not used in UI persistence fixture")},webhooks:()=>{throw Error("Not used in UI persistence fixture")}});
+  const repositoryClient=async()=>({get:async()=>{throw Error("External repository fetch is not used by the connection UI fixture");}});
+  const repositoryRoutes=createRepositoryRoutes({...dependencies,importer:()=>createRepositoryImporter(store,repositoryClient),delivery:()=>createRepositoryDelivery(pool,store,repositoryClient)});
   const work=createRunRoutes({...dependencies,store:()=>runs,onQueued:async(scope,id)=>{
     if(paused)return;
     setTimeout(()=>void(async()=>{
@@ -55,7 +60,7 @@ export async function createPlatformFixture(){
     }
     if(url.pathname==="/api/custom-ai/conversations"){try{return Response.json({cacheScope:`fixture:${account(request)}`});}catch{return new Response(null,{status:401});}}
     const name=url.pathname.split("/").at(-1),method=request.method;
-    const routes=name==="projects"?projects:name==="runs"?work:name==="connections"?connectionRoutes:name==="launch"?launch:undefined;
+    const routes=name==="projects"?projects:name==="runs"?work:name==="connections"?connectionRoutes:name==="launch"?launch:name==="repositories"?repositoryRoutes:undefined;
     const handler=routes?.[method as keyof typeof routes] as ((request:Request)=>Promise<Response>)|undefined;
     if(name==="export")return projects.DOWNLOAD(request);if(name==="restore")return projects.RESTORE(request);
     if(name==="checks"){const {ownerId}=await dependencies.authorize(request,false);return Response.json(await checks.assess({ownerId,projectId:url.searchParams.get("projectId")!,revisionId:url.searchParams.get("revisionId")!}));}

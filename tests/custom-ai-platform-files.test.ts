@@ -76,16 +76,15 @@ describe("complete project file changes", () => {
     expect((await store.readRevision(scope, third.revisionId)).document.files["app.ts"]).toBe("second");
     expect(await store.listRevisions(scope)).toHaveLength(4);
   });
-  it("rejects file/directory collisions and refuses export of inline credentials", async () => {
+  it("rejects file/directory collisions and inline credentials before saving a revision", async () => {
     const first = await store.createProject(scope);
     await expect(store.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "collision", patch: { files: { src: "file", "src-extra.ts": "unrelated", "src/app.ts": "child" } } })).rejects.toMatchObject({ code: "project-input" });
     const secret = `sk-proj-${"a".repeat(50)}`;
-    const source = await store.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "inline-key", patch: { files: { "config.ts": `export const key = '${secret}'` } } });
-    expect(() => exportProjectBundle(source)).toThrow(/credential/i);
+    await expect(store.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "inline-key", patch: { files: { "config.ts": `export const key = '${secret}'` } } })).rejects.toMatchObject({code:"project-secret"});
+    expect((await store.readProject(scope)).revisionId).toBe(first.revisionId);
   });
-  it("does not export credentials hidden in project metadata", async () => {
+  it("does not save credentials hidden in project metadata", async () => {
     const first = await store.createProject(scope);
-    const source = await store.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "metadata-key", patch: { architecture: { connection: { apiKey: "private-service-password" } } } });
-    expect(() => exportProjectBundle(source)).toThrow(/credential/i);
+    await expect(store.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "metadata-key", patch: { architecture: { connection: { apiKey: "private-service-password" } } } })).rejects.toMatchObject({code:"project-secret"});
   });
 });

@@ -69,6 +69,19 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
         input = { revisionId, registryHash: projectHash(dependencies.tools.map(({ id, version, schema }) => ({ id, version, schema }))) };
       }
       if (Number(work.run.cursor) >= 23 && !pending) return { run: await runs.finishRun(scope, grant.runId, leaseToken, "This work unit reached its step limit. The project and completed checks are saved; continue from this revision.") };
+      if(!pending&&["project.patch","project.dependencies"].includes(capabilityId)){
+        const failures=new Map<string,number>();
+        steps.forEach((step,index)=>{
+          if(!["project.check","contract.check","contract.compile","contract.audit"].includes(step.capability_id)||step.state!=="completed")return;
+          const result=step.result as {ok?:boolean;value?:{passed?:boolean;compiled?:boolean;status?:string}};
+          if(result?.ok===false||result?.value?.passed===false||result?.value?.compiled===false||result?.value?.status==="changes_required"){
+            if(!failures.has(step.capability_id))failures.set(step.capability_id,index);
+          }else if(result?.value?.passed===true||result?.value?.compiled===true||result?.value?.status==="passed")failures.delete(step.capability_id);
+        });
+        const failure=failures.size?Math.min(...failures.values()):-1;
+        const repairs=failure<0?0:steps.slice(failure+1).filter(step=>step.state==="completed"&&["project.patch","project.dependencies"].includes(step.capability_id)).length;
+        if(repairs>=2)return {run:await runs.finishRun(scope,grant.runId,leaseToken,"The two automatic repair attempts are used up. Your source and check results are saved. Review the remaining failure before starting another work unit.","waiting_user")};
+      }
       const begin = await runs.beginStep(scope, grant.runId, leaseToken, { id: stepId, capabilityId, input });
       if (begin.pending) return { run: await runs.readRun(scope, grant.runId) };
       let result: JsonValue;

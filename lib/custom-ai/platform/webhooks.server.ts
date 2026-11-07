@@ -22,7 +22,8 @@ export function createProjectWebhooks(pool:AIPool,connections:ReturnType<typeof 
     const scope={ownerId:String(route.owner),projectId:String(route.project_id)},connectionId=String(route.connection_id);
     const connection=await connections.privateConnection(scope,connectionId);
     if(connection.state!=="active"||connection.version!==route.version||!connection.secret.webhookKey)throw new ProjectError("connection-revoked","This event connection is not active.",403);
-    const expected=createHmac("sha256",connection.secret.webhookKey).update(`${input.timestamp}.${input.body}`).digest();
+    const signed=JSON.stringify(["programmable-webhook-v1",input.routeId,input.eventId,input.timestamp,input.body]);
+    const expected=createHmac("sha256",connection.secret.webhookKey).update(signed).digest();
     if(!timingSafeEqual(expected,Buffer.from(input.signature,"hex")))throw new ProjectError("webhook-signature","The event signature is invalid.",403);
     let raw:unknown;try{raw=JSON.parse(input.body);}catch{throw new ProjectError("webhook-json","Use a JSON event body.");}
     const payload=redactConnectorData(raw,Object.values(connection.secret)),bodyHash=createHash("sha256").update(input.body).digest("hex");

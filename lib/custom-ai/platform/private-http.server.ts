@@ -3,6 +3,7 @@ import { lookup } from "node:dns/promises";
 import { request } from "node:https";
 import { publicDataAddress, publicDataURL } from "../feed-adapters/public-json.server";
 import { ProjectError, type JsonValue } from "./types";
+import {redactInlineCredentials} from "./secret-input";
 
 export const validateConnectorURL = (value: string) => {
   try { return publicDataURL(value); }
@@ -16,7 +17,7 @@ export function redactConnectorData(value: unknown, secrets: string[], depth=0):
   if(typeof value==="string") {
     let text=value;
     for(const secret of secrets.filter(secret=>secret.length>=3))text=text.split(secret).join("[redacted]");
-    return text.replace(/\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{20,}\b/g,"[redacted]").slice(0,128000);
+    return redactInlineCredentials(text).slice(0,128000);
   }
   if(value===null||typeof value==="boolean"||typeof value==="number"&&Number.isFinite(value))return value;
   if(Array.isArray(value))return value.slice(0,1000).map(item=>redactConnectorData(item,secrets,depth+1));

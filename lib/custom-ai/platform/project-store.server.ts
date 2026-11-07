@@ -4,6 +4,7 @@ import { ProjectError, type ProjectDocument, type ProjectRevision, type ProjectS
 import { applyDocumentPatch, emptyProjectDocument, projectHash } from "./document";
 import { projectTransaction } from "./transaction.server";
 import { projectDate } from "./time";
+import {assertExportableFiles,assertExportableMetadata} from "./files";
 
 const missing = () => new ProjectError("project-missing", "This project was not found.", 404);
 const conflict = () => new ProjectError("project-conflict", "This project changed. Reload the current revision before editing.", 409);
@@ -95,7 +96,9 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
       }
       if (locked.rows[0].current_revision !== input.expectedRevisionId) throw conflict();
       const previous = await read(db, scope, input.expectedRevisionId);
-      const saved = await insert(db, scope, applyDocumentPatch(previous.document, input.patch), previous);
+      const document=applyDocumentPatch(previous.document,input.patch);
+      assertExportableFiles(document.files);assertExportableMetadata(document);
+      const saved = await insert(db, scope, document, previous);
       await db.query("INSERT INTO programmable_projects_v1.idempotency(owner,project_id,key,request_hash,revision_id) VALUES($1,$2,$3,$4,$5)",
         [scope.ownerId, scope.projectId, input.idempotencyKey, requestHash, saved.revisionId]);
       return saved;

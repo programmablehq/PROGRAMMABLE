@@ -24,6 +24,11 @@ beforeEach(async () => {
 afterEach(async () => { await db.close(); });
 
 describe("private bounded project artifacts", () => {
+  it("rejects recognizable credentials before saving an artifact",async()=>{
+    const connect=vi.fn(),privateStore=createArtifactStore({connect} as unknown as AIPool);
+    await expect(privateStore.saveArtifact(scope,{bytes:Buffer.from(`github_pat_${"fixture".repeat(8)}`),mediaType:"text/plain"})).rejects.toMatchObject({code:"project-secret"});
+    expect(connect).not.toHaveBeenCalled();
+  });
   it("round-trips exact binary bytes for the owning project", async () => {
     const artifact = await store.saveArtifact(scope, { bytes: new Uint8Array([0, 1, 255]), mediaType: "application/octet-stream" });
     const read = await store.readArtifact(scope, artifact.id);

@@ -38,6 +38,28 @@ test("supports keyboard tabs and a narrow mobile layout",async({page})=>{
   await page.setViewportSize({width:320,height:780});await page.keyboard.press("Home");await expect(projectTab).toBeFocused();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-mobile.png"),fullPage:true});
 });
+test("imports an OpenAPI document into the review and saves its actual actions",async({page})=>{
+ await page.goto(origin);const selected=page.getByLabel("Your projects",{exact:true}),before=await selected.inputValue();await page.getByRole("button",{name:"New project",exact:true}).click();await expect(selected).not.toHaveValue(before);
+ await page.getByRole("tab",{name:"Connections",exact:true}).click();await page.getByText("Add a connection",{exact:true}).click();
+ await page.getByLabel("Connection name",{exact:true}).fill("Score OpenAPI");await page.getByLabel("Connection type",{exact:true}).selectOption("openapi");
+ await page.getByLabel("OpenAPI JSON",{exact:true}).fill(JSON.stringify({openapi:"3.1.0",servers:[{url:"https://api.scores.com"}],paths:{"/scores":{get:{operationId:"listScores",summary:"List scores",responses:{"200":{description:"Scores",content:{"application/json":{schema:{type:"array"}}}}}}}}}));
+ await page.getByRole("button",{name:"Review connection",exact:true}).click();await expect(page.getByRole("heading",{name:"Review Score OpenAPI",exact:true})).toBeVisible();
+ await expect(page.getByRole("checkbox",{name:"List scores · read"})).toBeChecked();await page.getByRole("button",{name:"Save connection",exact:true}).click();await expect(page.getByRole("heading",{name:"Score OpenAPI",exact:true})).toBeVisible();
+});
+test("keeps a recognizable pasted credential out of the saved chat and run request",async({page,request})=>{
+ await page.goto(origin);const selected=page.getByLabel("Your projects",{exact:true}),before=await selected.inputValue();await page.getByRole("button",{name:"New project",exact:true}).click();await expect(selected).not.toHaveValue(before);
+ let runRequests=0;page.on("request",request=>{if(request.method()==="POST"&&request.url().endsWith("/platform/runs"))runRequests++;});
+ await page.getByRole("textbox",{name:"Message your project"}).fill(`Use sk-proj-${"fixture".repeat(10)}`);await page.getByRole("button",{name:"Send",exact:true}).click();
+ await expect(page.getByRole("alert")).toContainText("private credential");expect(runRequests).toBe(0);
+ const saved=await request.get(`${origin}/api/custom-ai/platform/runs?projectId=${await selected.inputValue()}`,{headers:{Authorization:"Bearer fixture-alice"}});expect((await saved.json()).runs).toEqual([]);
+});
+test("keeps a saved GitHub connection selectable after URL normalization and reload",async({page})=>{
+ await page.goto(origin);const selected=page.getByLabel("Your projects",{exact:true}),before=await selected.inputValue();await page.getByRole("button",{name:"New project",exact:true}).click();await expect(selected).not.toHaveValue(before);
+ await page.getByRole("tab",{name:"Import & export",exact:true}).click();await page.getByLabel("GitHub repository",{exact:true}).fill("example/score-game");await page.getByText("Connect a private repository",{exact:true}).click();await page.getByLabel("Private GitHub access token",{exact:true}).fill("synthetic-browser-github-secret");await page.getByRole("button",{name:"Save GitHub connection",exact:true}).click();
+ await expect(page.getByText("GitHub connected to this project.",{exact:true})).toBeVisible();
+ await expect(page.getByLabel("GitHub connection",{exact:true})).toContainText("GitHub · example/score-game");
+ await page.reload();await page.getByRole("tab",{name:"Import & export",exact:true}).click();await expect(page.getByLabel("GitHub connection",{exact:true})).toContainText("GitHub · example/score-game");
+});
 test("reviews a real checked contract through the launch adapter without sending a transaction",async({page,request})=>{
  await page.goto(origin);const selected=page.getByLabel("Your projects",{exact:true}),before=await selected.inputValue();await page.getByRole("button",{name:"New project",exact:true}).click();await expect(selected).not.toHaveValue(before);
  const projectId=await page.getByLabel("Your projects",{exact:true}).inputValue();

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { ProjectError, type ProjectFile, type ProjectFileChange } from "./types";
+import {containsInlineCredential} from "./secret-input";
 
 const invalid = () => new ProjectError("project-input", "Use valid project files and paths.");
 export function projectFilePath(path: unknown): string {
@@ -61,11 +62,10 @@ export function applyFileChanges(previous: Record<string, ProjectFile>, changes:
   return next;
 }
 
-const credential = /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|\bsk-(?:proj-)?[A-Za-z0-9_-]{24,}\b|\bgh[pousr]_[A-Za-z0-9]{20,}\b/;
 export function assertExportableFiles(files: Record<string, ProjectFile>) {
   validateProjectFiles(files);
   for (const file of Object.values(files)) {
-    if (credential.test(projectFileBytes(file).toString("utf8"))) {
+    if (containsInlineCredential(projectFileBytes(file).toString("utf8"))) {
       throw new ProjectError("project-secret", "Remove inline credentials and use a private project connection before exporting.", 409);
     }
   }
@@ -73,11 +73,11 @@ export function assertExportableFiles(files: Record<string, ProjectFile>) {
 
 export function assertExportableMetadata(value: unknown, depth = 0): void {
   if (depth > 32) throw invalid();
-  if (typeof value === "string" && credential.test(value)) throw new ProjectError("project-secret", "Remove inline credentials before exporting.", 409);
+  if (typeof value === "string" && containsInlineCredential(value)) throw new ProjectError("project-secret", "Remove inline credentials before saving or exporting.", 409);
   if (Array.isArray(value)) { for (const item of value) assertExportableMetadata(item, depth + 1); return; }
   if (!value || typeof value !== "object") return;
   for (const [key, item] of Object.entries(value)) {
-    if (/^(api[_-]?key|secret|password|authorization|access[_-]?token|private[_-]?key)$/i.test(key)
+    if (/^(api[_-]?key|secret|password|authorization|access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key)$/i.test(key)
       && typeof item === "string" && item && !/^(?:<[^>]+>|YOUR_[A-Z_]+|\$\{[A-Z_]+\})$/.test(item)) {
       throw new ProjectError("project-secret", "Remove inline credentials and use a private project connection before exporting.", 409);
     }

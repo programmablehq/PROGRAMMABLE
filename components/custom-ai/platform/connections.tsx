@@ -16,7 +16,10 @@ export function ProjectConnections({projectId,api}:{projectId:string;api:Platfor
   async function prepare(){
     const authentication:ConnectionManifest["auth"]=auth==="oauth2"?{kind:"oauth2",authorizeUrl:authorizeURL,tokenUrl:tokenURL,clientId,scopes:scopes.split(/[ ,]+/).filter(Boolean)}:auth==="api-key"?{kind:"api-key",header,...(header.toLowerCase()==="authorization"?{prefix:"Bearer "}:{})}:{kind:"none"};
     let manifest:ConnectionManifest;
-    if(kind==="openapi")manifest=await api<ConnectionManifest>("/connections",{body:{action:"openapi",name,server:url||undefined,auth:authentication,document:JSON.parse(schema)}});
+    if(kind==="openapi"){
+      const imported=await api<{manifest:ConnectionManifest;warnings:string[]}>("/connections",{body:{action:"openapi",name,server:url||undefined,auth:authentication,document:JSON.parse(schema)}});
+      manifest=imported.manifest;setNotice(imported.warnings.join(" "));
+    }
     else manifest={name,kind:kind==="mcp"?"mcp":"http",baseUrl:url,auth:authentication,...(kind==="mcp"?{protocol:"2026-07-28" as const}:{}),actions:kind==="mcp"?[]:[{id:"request",description:`${method} ${path}`,method:method as "GET"|"POST",path,effect:method==="GET"?"read":"write",inputSchema:{type:"object"},outputSchema:{},...(method!=="GET"?{idempotencyHeader:"Idempotency-Key"}:{})}]};
     setReview(manifest);setAllowed(manifest.actions.filter(action=>action.effect==="read").map(action=>action.id));setId(crypto.randomUUID());setVersion(undefined);
   }

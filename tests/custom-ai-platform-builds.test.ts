@@ -5,6 +5,7 @@ import { createPlatformStore } from "../lib/custom-ai/platform/project-store.ser
 import { createProjectChecks } from "../lib/custom-ai/platform/builds.server";
 import { PROJECT_PLATFORM_SCHEMA } from "../lib/custom-ai/platform/schema.generated";
 import type { AIPool } from "../lib/custom-ai/store.server";
+import {platformContractIntent} from "../lib/custom-ai/platform/contract-plan.server";
 const scope = { ownerId: "alice", projectId: "11111111-1111-4111-8111-111111111111" };
 let db: PGlite, pool: AIPool, projects: ReturnType<typeof createPlatformStore>;
 beforeEach(async () => {
@@ -19,6 +20,27 @@ const document = { requirements: [{ id: "count", text: "Persists a count", kind:
   files: { "app.js": "export const count = 1;" }, architecture: { checks: [{ id: "count-check", requirementIds: ["count"], command: "node --test tests/count.test.mjs", kind: "behavior" }] } };
 
 describe("versioned behavior evidence", () => {
+  it("requires both app and contract evidence without changing the global requirements",async()=>{
+    const first=await projects.createProject(scope),revision=await projects.applyProjectPatch({...scope,expectedRevisionId:first.revisionId,idempotencyKey:"mixed",patch:{...document,architecture:{kind:"contract",application:{framework:"static",dataVersion:1},requirementScopes:{contract:["count"],application:["private"]}}}});
+    expect(platformContractIntent(revision).requirements.map(rule=>rule.id)).toEqual(["count"]);
+    const checks=createProjectChecks(pool,projects,{execute:async()=>{throw Error("Not used")}}),ref={...scope,revisionId:revision.revisionId};
+    await checks.record(ref,{requirementIds:["count","private"],passed:true,commandHash:"contract",result:{kind:"contract-scenarios"}});
+    await checks.record(ref,{requirementIds:[],passed:true,commandHash:"audit",result:{kind:"source-audit"}});
+    expect(await checks.assess(ref)).toMatchObject({verified:false,missingRequirementIds:["private"]});
+    await checks.record(ref,{requirementIds:["private"],passed:true,commandHash:"application",result:{kind:"behavior"}});
+    expect((await checks.assess(ref)).verified).toBe(true);
+    expect((await projects.readProject(scope)).document.requirements).toHaveLength(2);
+    expect(()=>platformContractIntent({...revision,document:{...revision.document,architecture:{kind:"contract",application:{framework:"static",dataVersion:1}}}})).toThrow(/Map every requirement/);
+  });
+  it("redacts recognizable credentials from persisted check logs and replies",async()=>{
+    const first=await projects.createProject(scope),revision=await projects.applyProjectPatch({...scope,expectedRevisionId:first.revisionId,idempotencyKey:"logs",patch:document});
+    const token=`github_pat_${"fixture".repeat(8)}`;
+    const checks=createProjectChecks(pool,projects,{execute:async()=>({exitCode:1,stdout:token,stderr:`Authorization: Bearer ${token}`,truncated:false,files:{},revisionId:revision.revisionId,jobId:"log-test",durationMs:1})});
+    const report=await checks.verify({...scope,revisionId:revision.revisionId});
+    expect(JSON.stringify(report)).not.toContain(token);
+    expect(JSON.stringify(await checks.assess({...scope,revisionId:revision.revisionId}))).not.toContain(token);
+    expect(report.evidence[0].output).toContain("[redacted]");
+  });
   it("requires a separate source audit before verified contract behavior can be released",async()=>{
     const first=await projects.createProject(scope),revision=await projects.applyProjectPatch({...scope,expectedRevisionId:first.revisionId,idempotencyKey:"contract",patch:{...document,architecture:{kind:"contract",chainId:1}}});
     const checks=createProjectChecks(pool,projects,{execute:async()=>{throw Error("Not used")}}),ref={...scope,revisionId:revision.revisionId};

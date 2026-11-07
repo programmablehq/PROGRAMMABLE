@@ -4,6 +4,7 @@ import type { AIPool } from "../store.server";
 import { projectTransaction } from "./transaction.server";
 import { ProjectError, type ProjectScope } from "./types";
 import { projectDate } from "./time";
+import {containsInlineCredential} from "./secret-input";
 
 type ArtifactLimits = { maxArtifactBytes: number; maxOwnerBytes: number; maxProjectBytes: number; lifetimeSeconds: number };
 export type ProjectArtifact = { id: string; mediaType: string; size: number; expiresAt: string };
@@ -29,6 +30,7 @@ export function createArtifactStore(pool: AIPool, limits: Readonly<ArtifactLimit
       throw new ProjectError("project-input", "Use a valid artifact media type.");
     }
     const bytes = Buffer.from(input.bytes), mediaType = input.mediaType.toLowerCase(), id = identity(bytes, mediaType);
+    if(containsInlineCredential(bytes.toString("utf8")))throw new ProjectError("project-secret","Remove inline credentials before saving a project artifact.",422);
     const timestamp = new Date(now()).toISOString(), expiry = new Date(now() + limits.lifetimeSeconds * 1000).toISOString();
     return projectTransaction(pool, scope, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`project-artifacts:${scope.ownerId}`]);
