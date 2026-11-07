@@ -21,6 +21,7 @@ export type SandboxProvider = {
   cleanup(name: string): Promise<void>;
 };
 const timeoutMs = 240_000;
+const billingIncrementMs = 60_000;
 const invalid = () => new ProjectError("sandbox-input", "Choose a valid project command.");
 
 function reportProviderFailure(jobId: string, stage: string, error: unknown) {
@@ -116,11 +117,12 @@ export function createSandboxExecutor(pool: AIPool, projects: ReturnType<typeof 
     } finally {
       try { if (instance) await instance.close(); else await provider.cleanup(name); cleaned = true; } catch (error) { reportProviderFailure(id, "cleanup", error); /* Keep the slot until the provider TTL is guaranteed to have elapsed. */ }
       const duration = cleaned ? Math.min(timeoutMs, Math.max(1, now() - started)) : timeoutMs;
+      const chargedDuration = Math.ceil(duration / billingIncrementMs) * billingIncrementMs;
       await projectTransaction(pool, scope, async db => {
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["project-sandbox-quota-v1"]);
         await db.query("UPDATE programmable_projects_v1.sandbox_jobs SET state=$4,duration_ms=$5,exit_code=$6 WHERE owner=$1 AND project_id=$2 AND id=$3", [scope.ownerId, scope.projectId, id, cleaned ? "cleaned" : "cleanup_pending", duration, output?.exitCode ?? null]);
         if (cleaned) await db.query("DELETE FROM programmable_projects_v1.sandbox_slots WHERE id=$1", [id]);
-        for (const subject of [`owner:${scope.ownerId}`, "global"]) await db.query("UPDATE programmable_projects_v1.sandbox_usage SET used_ms=used_ms-$3 WHERE subject=$1 AND period=$2", [subject, day, timeoutMs - duration]);
+        for (const subject of [`owner:${scope.ownerId}`, "global"]) await db.query("UPDATE programmable_projects_v1.sandbox_usage SET used_ms=used_ms-$3 WHERE subject=$1 AND period=$2", [subject, day, timeoutMs - chargedDuration]);
       });
     }
   }

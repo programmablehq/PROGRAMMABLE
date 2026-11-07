@@ -62,3 +62,21 @@ it("preserves imported executable modes and binary bytes without accepting speci
     { path: "/vercel/sandbox/plain.txt", content: Buffer.from("unchanged"), mode: 0o644 },
   ], { signal });
 });
+
+it("accepts the SDK response status when an already removed sandbox returns 404",async()=>{
+  sdk.get.mockRejectedValueOnce(Object.assign(new Error("Not found"),{response:new Response(null,{status:404})}));
+  await expect(vercelSandboxProvider.cleanup("already-removed")).resolves.toBeUndefined();
+});
+
+it("accepts a 404 deletion after a successful sandbox lookup",async()=>{
+  const stop=vi.fn(async()=>undefined),remove=vi.fn(async()=>{throw Object.assign(new Error("Not found"),{response:new Response(null,{status:404})});});
+  sdk.get.mockResolvedValueOnce({stop,delete:remove});
+  await expect(vercelSandboxProvider.cleanup("removed-during-cleanup")).resolves.toBeUndefined();
+  expect(stop).toHaveBeenCalledOnce();expect(remove).toHaveBeenCalledOnce();
+});
+
+it.each([401,403,429,500])("preserves SDK HTTP%d as an unconfirmed cleanup",async status=>{
+  const error=Object.assign(new Error("Unconfirmed"),{response:new Response(null,{status})});
+  sdk.get.mockRejectedValueOnce(error);
+  await expect(vercelSandboxProvider.cleanup("not-confirmed")).rejects.toBe(error);
+});

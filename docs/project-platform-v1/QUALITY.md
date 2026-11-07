@@ -6,15 +6,15 @@ acceptance for ordinary authenticated users.
 
 | Boundary | Existing verification | Remaining release evidence |
 | --- | --- | --- |
-| Ownership and storage | Native PostgreSQL, two owners and two projects each; forced RLS; immutable history; repeated and rolled-back migration | Exact deployed database role/grants and normal product sessions |
-| Project changes | Revision conflicts, provenance, idempotent writes, binary import/export, legacy source preservation | Full reference projects through the deployed UI |
-| Model and contract builder | Real provider probes plus compiler/EVM checks; invalid plans retain the saved project | A1/A2 end-to-end success remains required; a failed real model probe is not a pass |
-| Sandbox | Real provider lifecycle, denied egress, no inherited host secrets and cleanup | Exact production configuration and restart verification |
-| Connections | Real controlled HTTP, OAuth PKCE/refresh, MCP and signed webhook tests | Ordinary-user OAuth return and revocation through staging |
-| Hosting and data | Real isolated deployment/data/job probes; control race, unknown response, expired worker and bounded retry regressions | New control path against the exact deployed provider/runtime pair |
-| Game events | Signatures, consent, replay and local RPC tests; independent public chain readback | A5 UI acceptance; no local-chain result substitutes for public deployment |
-| Repository delivery | Public/private pinned import and a real private draft PR | Complete A6 through the deployed product |
-| Interface | Desktop, narrow layout, keyboard navigation and saved-state browser cases | Ordinary-account full-flow acceptance and final exact-candidate run |
+| Ownership and storage | Native PostgreSQL, two owners and two projects each; forced RLS; immutable history; repeated and rolled-back migration; ordinary staging sessions deny foreign access | Production database role/grants and the controlled production pilot |
+| Project changes | Revision conflicts, provenance, idempotent writes, real browser edit/compare/restore, binary import/export and legacy source preservation | Remaining reference projects through the deployed UI and production pilot |
+| Model and contract builder | Both ordinary staging users completed A1 planning, source, compiler/EVM checks, audit, immutable checkpoint and private unsigned preparation | A2 baseline/build/targeted edit for both users; a failed real model probe is not a pass |
+| Sandbox | Real provider lifecycle for both staging users, denied egress, no inherited host secrets and confirmed cleanup; separate live-provider test of billed-minute reservations | Exact production configuration and restart verification |
+| Connections | Both ordinary staging users passed real public/private HTTP, OAuth callback/refresh, MCP discovery/calls, key rotation/revocation and signed webhook checks | Production callback origin, credentials and ordinary access |
+| Hosting and data | One ordinary staging user's app passed preview/live separation, visitor calls, real scheduled work, pause/resume, credential retirement and a second deployment with retained data | First user's full operation; accessible final versions; controlled production pilot |
+| Game events | Individual-player signatures, one-to-one wallet binding, replay/staleness checks, 93 Solidity tests and local RPC cases; fixed external result service prepared | Both complete A5 flows with the actual receiver and observed fee effect; local RPC is not public deployment |
+| Repository delivery | Both ordinary staging users imported, edited and exported two pinned projects each, preserving binary bytes, executable modes and the original branch | Production pilot |
+| Interface | Desktop/mobile/keyboard regressions, real browser file persistence and hosted-app interaction; pilot fallback preserves legacy drafts and account isolation | Remaining A2/A4/A5 UI flows and production pilot; two generated form inputs still need explicit labels |
 
 Run the focused platform Vitest tests with the pinned compiler directory and
 exclude temporary private provider probes from ordinary regressions. The
@@ -34,6 +34,14 @@ authentication method, observed result and cleanup status. Deterministic model
 fixtures, local RPC execution, source compilation and real public behavior are
 different forms of evidence and must remain distinguishable.
 
+The application backup was restored into an isolated local PostgreSQL instance.
+All 1,425 rows in the three existing chat tables retained their content hashes,
+schema and access controls. The same 39-table additive migration passed dry-run,
+apply, verify and repeat against that restored copy without changing legacy
+data. This is an application-scoped recovery rehearsal, not a production
+migration or a backup of provider storage and authentication data. Take a fresh
+verified snapshot immediately before the actual production migration.
+
 Renamed or extended canonical contracts can declare their inherited interface
 through `architecture.canonicalInterfaces` in the initial plan. Each reference
 binds an entry ID to a pinned canonical source and contract. The server adds
@@ -45,24 +53,26 @@ compilation, behavior checks and source review still have to pass separately.
 
 ## Current release blockers
 
-- An isolated canonical coin with staged fees passes real model planning,
-  compilation, 37 EVM cases, independent source review and checkpoint creation.
-  Normal authenticated staging runs have reached saved plans and compilation;
-  the complete A1 and A2 flows still need to finish within their account limits.
-- A real two-release provider probe confirmed that a new preview preserves the
-  previous production target, an uncertain promotion closes data access, and an
-  exact retry retires the previous live key while preserving data. After fixing
-  redundant unpause calls and requiring actual HTTP confirmation, pause and
-  resume also passed against that live provider. These isolated checks still
-  need to be joined to the deployed product and ordinary-user acceptance.
+- Both ordinary users passed the A1 scope through checked private unsigned
+  launch packages. A recorded preparation does not imply a still-valid package
+  or an onchain launch. A2 planning/build/edit and both A5 flows remain open;
+  their normal-account allowances must not be bypassed for acceptance.
+- A4 operation passed through the deployed product for the second user,
+  including real visitor data, scheduling, pause/resume and redeployment. The
+  first user's app still needs its final verification and operational checks.
+  Correct and verify the generated form labels before accepting the final UI.
 - The deployed worker accepts an owner/project/run-bound grant and rejects
   duplicate admission. Two authenticated staging accounts pass ownership,
   HTTP/MCP connections, OAuth callback/refresh and signed-webhook checks.
-  Browser sign-in on the staging origin still needs the app's domain setting.
+  The staging browser origin is configured and browser sign-in has been checked.
+  This does not substitute for the remaining complete product workflows.
 - The corrected sandbox transport passes real hosted VM execution for both
   ordinary staging accounts: private files remain isolated, outbound access
   is denied by policy, host credentials are absent, and cleanup is confirmed.
   These staging results do not establish the production environment.
-- The dedicated hosting credential, production migration/grants and complete
-  ordinary-user A1–A6 staging acceptance remain outstanding. The platform has
-  not been enabled for production users.
+- The dedicated hosting credential is configured and has supported actual app
+  publication. The separate production worker's source, health and protocol
+  match are verified; a positive production work grant remains untested.
+- Complete the remaining A2/A4/A5 staging acceptance, final candidate CI,
+  production migration/grants, production pilot and general release. The
+  platform has not been enabled for production users.

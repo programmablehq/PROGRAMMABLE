@@ -23,6 +23,30 @@ const provider = () => ({ create: vi.fn(async () => ({
 })), cleanup: vi.fn(async () => undefined) }) satisfies SandboxProvider;
 
 describe("isolated revision execution", () => {
+  it.each([[1,60_000],[59_999,60_000],[60_000,60_000],[60_001,120_000],[239_999,240_000]])("keeps actual duration %ims while reserving %ims of billable capacity",async(elapsed,expectedCharge)=>{
+    const revision=await store.createProject(alice),driver=provider();let clock=Date.UTC(2026,10,7,12);
+    const instance=await driver.create();driver.create.mockClear();driver.create.mockResolvedValue(instance);
+    instance.execute.mockImplementation(async()=>{clock+=elapsed;return {exitCode:0,stdout:"ok",stderr:"",truncated:false};});
+    const result=await createSandboxExecutor(pool,store,driver,()=>clock).execute({...alice,revisionId:revision.revisionId,script:"true",outputPaths:[]});
+    expect(result.durationMs).toBe(elapsed);
+    expect((await db.query<{duration_ms:number}>("SELECT duration_ms FROM programmable_projects_v1.sandbox_jobs")).rows[0].duration_ms).toBe(elapsed);
+    const usage=(await db.query<{subject:string;used_ms:number}>("SELECT subject,used_ms FROM programmable_projects_v1.sandbox_usage ORDER BY subject")).rows;
+    expect(usage).toEqual([{subject:"global",used_ms:expectedCharge},{subject:"owner:alice",used_ms:expectedCharge}]);
+  });
+  it("does not turn many short sandboxes into unreserved provider billing",async()=>{
+    const revision=await store.createProject(alice),driver=provider();let clock=Date.UTC(2026,10,7,12);
+    const day=Math.floor(clock/86_400_000);
+    await db.query("INSERT INTO programmable_projects_v1.sandbox_usage(subject,period,used_ms) VALUES('global',$1,$2)",[day,7_200_000-300_000]);
+    const instance=await driver.create();driver.create.mockClear();driver.create.mockResolvedValue(instance);
+    instance.execute.mockImplementation(async()=>{clock+=1;return {exitCode:0,stdout:"ok",stderr:"",truncated:false};});
+    const sandbox=createSandboxExecutor(pool,store,driver,()=>clock),input={...alice,revisionId:revision.revisionId,script:"true",outputPaths:[]};
+    await sandbox.execute(input);
+    await sandbox.execute(input);
+    await expect(sandbox.execute(input)).rejects.toMatchObject({code:"sandbox-budget"});
+    expect(driver.create).toHaveBeenCalledTimes(2);
+    expect((await db.query<{used_ms:number}>("SELECT used_ms FROM programmable_projects_v1.sandbox_usage WHERE subject='global'")).rows[0].used_ms).toBe(7_200_000-180_000);
+    expect((await db.query("SELECT id FROM programmable_projects_v1.sandbox_jobs")).rows).toHaveLength(2);
+  });
   it("reports provider failure metadata without logging credentials or request bodies", async () => {
     const revision = await store.createProject(alice), driver = provider();
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);

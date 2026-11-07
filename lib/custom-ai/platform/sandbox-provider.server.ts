@@ -13,7 +13,8 @@ function credentials() {
   const token = process.env.PROJECT_SANDBOX_VERCEL_TOKEN, teamId = process.env.PROJECT_SANDBOX_TEAM_ID, projectId = process.env.PROJECT_SANDBOX_PROJECT_ID;
   return token && teamId && projectId ? { token, teamId, projectId } : {};
 }
-const absent = (error: unknown) => typeof error === "object" && error !== null && ("status" in error && error.status === 404 || "statusCode" in error && error.statusCode === 404);
+const absent = (error: unknown) => typeof error === "object" && error !== null && ("status" in error && error.status === 404 || "statusCode" in error && error.statusCode === 404
+  || "response" in error && typeof error.response === "object" && error.response !== null && "status" in error.response && error.response.status === 404);
 async function destroy(box: Sandbox) {
   await box.stop({ signal: AbortSignal.timeout(15_000) }).catch(() => undefined);
   try { await box.delete({ signal: AbortSignal.timeout(15_000) }); } catch (error) { if (!absent(error)) throw error; }
