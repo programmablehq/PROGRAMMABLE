@@ -54,6 +54,21 @@ describe("Surplus model routing", () => {
     await expect(callSurplus({...input,schema,structuredTransport:"json-object"})).rejects.toMatchObject({code:"incomplete",failure:"invalid-schema"});
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it("finishes a planning prompt with its JSON boundary while keeping user provenance and rejecting prose",async()=>{
+    useSurplus();
+    const schema={type:"object",properties:{reply:{type:"string"},intentRequirements:{type:"array",items:{type:"string"}}},required:["reply","intentRequirements"],additionalProperties:false};
+    const messages=[{role:"user" as const,content:"Switch the saved design to Base. Keep every other rule."}];
+    const fetcher=vi.fn().mockResolvedValueOnce(Response.json({choices:[{message:{content:'{"reply":"Saved.","intentRequirements":["Base"]}'},finish_reason:"stop"}]}))
+      .mockResolvedValueOnce(Response.json({choices:[{message:{content:"Your design is now on Base."},finish_reason:"stop"}]}));
+    vi.stubGlobal("fetch",fetcher);
+    await callSurplus({...input,task:"planning",schema,messages,structuredTransport:"json-object"});
+    const body=JSON.parse(String((fetcher.mock.calls[0] as unknown as [string,RequestInit])[1].body));
+    expect(body.messages.slice(1)).toEqual(messages);
+    const boundary=body.messages[0].content.slice(body.messages[0].content.indexOf(JSON.stringify(schema))+JSON.stringify(schema).length);
+    expect(boundary).toContain("start with { and end with }");
+    expect(boundary).toContain("inside the reply string");
+    await expect(callSurplus({...input,task:"planning",schema,messages,structuredTransport:"json-object"})).rejects.toMatchObject({failure:"invalid-schema"});
+  });
   it("unwraps only a complete JSON fence and still validates every field",()=>{
     const schema={type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false};
     const format=prepareSurplusSchema(schema,true);
