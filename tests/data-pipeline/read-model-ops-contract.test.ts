@@ -33,6 +33,7 @@ describe("Explore index-reset operations source contract", () => {
       "ops-health-catalog-observations",
       "ops-retired-indexing-operations-static",
       "ops-cron-exact-set",
+      "ops-project-runtime-binding",
       "ops-protocol-revenue-binding",
       "ops-custom-v2-reconciler-binding",
       "ops-reset-smoke-binding",
@@ -135,6 +136,33 @@ describe("Explore index-reset operations source contract", () => {
     expect(failureIds(evaluate({ [path]: JSON.stringify(vercel) }))).toContain(
       "ops-cron-exact-set",
     );
+  });
+
+  it("requires the isolated project runtime cron exactly once at its declared interval", () => {
+    const path = "vercel.json";
+    const original = JSON.parse(source(path));
+    for (const crons of [
+      original.crons.filter((cron: { path: string }) => cron.path !== "/api/ops/project-runtime"),
+      [...original.crons, { path: "/api/ops/project-runtime", schedule: "* * * * *" }],
+      original.crons.map((cron: { path: string; schedule: string }) => cron.path === "/api/ops/project-runtime" ? { ...cron, schedule: "*/5 * * * *" } : cron),
+    ]) expect(failureIds(evaluate({ [path]: JSON.stringify({ ...original, crons }) }))).toContain("ops-cron-exact-set");
+  });
+
+  it("rejects weakened project-worker authentication, activation or batch limits", () => {
+    const path = "app/api/ops/project-runtime/route.ts";
+    for (const changed of [
+      source(path).replace("timingSafeEqual(Buffer.from(actual), Buffer.from(`Bearer ${secret}`))", "true"),
+      source(path).replace('process.env.CUSTOM_AI_PLATFORM_ENABLED !== "true"', "false"),
+      source(path).replace("dispatchPending(8)", "dispatchPending(80)"),
+      source(path).replace("processPending(1)", "processPending(10)"),
+      source(path).replace("dispatchDue(4)", "dispatchDue(40)"),
+      `${source(path)}\nvoid fetch("https://example.invalid");\n`,
+    ]) expect(failureIds(evaluate({ [path]: changed }))).toContain("ops-project-runtime-binding");
+  });
+
+  it("requires project execution to stay disabled in the default environment", () => {
+    const path = ".env.example";
+    expect(failureIds(evaluate({ [path]: `${source(path)}\nCUSTOM_AI_PLATFORM_ENABLED=true\n` }))).toContain("ops-project-runtime-binding");
   });
 
   it("keeps the unrelated protocol-revenue job source-bound", () => {
