@@ -13,7 +13,7 @@ import { RequestedRules } from "./requested-rules";
 import { Disclosure } from "@/components/disclosure";
 import styles from "./workspace.module.css";
 
-export function GeneralProjectPreview({project,intent,draftId,account,conversationId,headers,disabled,settings,onChange,chatRevision,localPreview,cacheKey,imageReceipt,onImageReceipt,onEditRule,generalLaunchEnabled=false,pendingChange,flush,onLaunchLocked,children,launchCommand,editorControls,onImageBusy,summarized=false,onLaunchResolved}:{
+export function GeneralProjectPreview({project,intent,draftId,account,conversationId,headers,disabled,settings,onChange,chatRevision,localPreview,cacheKey,imageReceipt,onImageReceipt,onEditRule,generalLaunchEnabled=false,pendingChange,flush,onLaunchLocked,children,launchCommand,editorControls,onImageBusy,summarized=false,onLaunchResolved,showSource=true}:{
   project?:GeneralProjectView;intent?:LaunchIntent;draftId?:string;account:string;conversationId?:string;headers:AISessionHeaders;
   disabled:boolean;settings:CoinSetup;onChange:(patch:CoinSetupPatch)=>void;chatRevision:number;localPreview:boolean;cacheKey:string;
   imageReceipt?:ImageReceipt;onImageReceipt:(receipt:ImageReceipt|undefined)=>void;onEditRule:(id:string)=>void;children?:ReactNode;
@@ -22,6 +22,7 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
   editorControls?:RefObject<CoinDetailsControls|null>;onImageBusy?:(busy:boolean)=>void;
   summarized?: boolean;
   onLaunchResolved?:(sourceId:string)=>void;
+  showSource?:boolean;
 }) {
   const ownEditor=useRef<CoinDetailsControls>(null),editor=editorControls??ownEditor;
   const [imageBusy,setImageBusy]=useState(false),[launchBusy,setLaunchBusy]=useState(false);
@@ -52,7 +53,7 @@ export function GeneralProjectPreview({project,intent,draftId,account,conversati
         {intent.unresolved.filter(question=>!intent.requirements.some(rule=>rule.open===question)).map(question=><p key={question}>{question}</p>)}
       </section>
     </Disclosure>}
-    {project&&draftId&&<ProjectSource key={draftId} source={overviewFromView(draftId,project)} chainId={settings.chainId} account={account} conversationId={conversationId} headers={headers} disabled={disabled} onCompile={()=>undefined}/>}
+    {showSource&&project&&draftId&&<ProjectSource key={draftId} source={overviewFromView(draftId,project)} chainId={settings.chainId} account={account} conversationId={conversationId} headers={headers} disabled={disabled} onCompile={()=>undefined}/>}
     {children}
     </Disclosure>}
   </aside>;

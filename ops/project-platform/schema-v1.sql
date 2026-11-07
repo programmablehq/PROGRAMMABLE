@@ -322,6 +322,24 @@ BEGIN
 END
 $launch_drafts$;
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.contract_checkpoints (
+  owner text NOT NULL, project_id uuid NOT NULL, revision_id text NOT NULL,
+  content bytea NOT NULL CHECK(octet_length(content)<=4000000), content_hash text NOT NULL,
+  created_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,revision_id),
+  FOREIGN KEY(owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+ALTER TABLE programmable_projects_v1.contract_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.contract_checkpoints FORCE ROW LEVEL SECURITY;
+DO $contract_checkpoints$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='contract_checkpoints' AND policyname='contract_checkpoint_owner_v1') THEN
+    CREATE POLICY contract_checkpoint_owner_v1 ON programmable_projects_v1.contract_checkpoints
+      USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+END
+$contract_checkpoints$;
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;

@@ -13,6 +13,7 @@ it("keeps launch settings separate from source and bound to owner, wallet and re
  const initial=await drafts.read(scope,account);expect(initial.revision).toBe(0);
  const saved=await drafts.save(scope,{account,expectedRevision:0,sourceRevision:revisionId,settings:{name:"Counter",symbol:"CNT"}});
  expect(saved.revision).toBe(1);expect((await projects.readProject(scope)).revisionId).toBe(revisionId);
+ expect((await drafts.save(scope,{account,expectedRevision:1,sourceRevision:revisionId,settings:{name:"Counter",symbol:"CNT"}})).revision).toBe(1);
  await expect(drafts.read({...scope,ownerId:"bob"},account)).rejects.toMatchObject({code:"project-missing"});
  expect((await drafts.read(scope,`0x${"b".repeat(40)}`)).revision).toBe(0);
  await expect(drafts.save(scope,{account,expectedRevision:0,sourceRevision:revisionId,settings:{name:"Stale"}})).rejects.toMatchObject({code:"launch-draft-conflict"});

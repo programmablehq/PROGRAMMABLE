@@ -15,7 +15,7 @@ beforeEach(async()=>{db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let 
 afterEach(async()=>{await db.close()});
 describe("bound OAuth sign-in",()=>{
  it("binds state to its owner and sends PKCE only to the pinned token endpoint",async()=>{
-  const transport=vi.fn(async(_input:ConnectorRequest)=>({status:200,headers:{"content-type":"application/json"},text:JSON.stringify({access_token:"secret-access",refresh_token:"secret-refresh",expires_in:3600,token_type:"Bearer"})}));
+  const transport=vi.fn(async(input:ConnectorRequest)=>{expect(input.method).toBe("POST");return {status:200,headers:{"content-type":"application/json"},text:JSON.stringify({access_token:"secret-access",refresh_token:"secret-refresh",expires_in:3600,token_type:"Bearer"})};});
   const oauth=createProjectOAuth(store,"https://programmable.market",transport),start=await oauth.start(scope,id),url=new URL(start.url),state=url.searchParams.get("state")!;
   expect(url.searchParams.get("code_challenge_method")).toBe("S256");
   await expect(oauth.complete("bob",state,"code")).rejects.toMatchObject({code:"oauth-state"});expect(transport).not.toHaveBeenCalled();

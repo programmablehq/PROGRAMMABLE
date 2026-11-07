@@ -6,7 +6,7 @@ import {test,expect} from "@playwright/test";
 import {createPlatformServer} from "./platform-server.mjs";
 let fixture:Awaited<ReturnType<typeof createPlatformServer>>,origin:string;
 test.beforeAll(async()=>{fixture=await createPlatformServer();fixture.server.listen(0,"127.0.0.1");await once(fixture.server,"listening");origin=`http://127.0.0.1:${fixture.server.address().port}`;});
-test.afterAll(async()=>{await fixture.close();});
+test.afterAll(async()=>{if(fixture)await fixture.close();});
 test("creates, runs and edits a real persisted project, then isolates another account",async({page})=>{
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));await page.goto(origin);
   await page.getByRole("button",{name:"Create your first project"}).click();
@@ -37,4 +37,17 @@ test("supports keyboard tabs and a narrow mobile layout",async({page})=>{
   await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-desktop.png"),fullPage:true});
   await page.setViewportSize({width:320,height:780});await page.keyboard.press("Home");await expect(projectTab).toBeFocused();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-mobile.png"),fullPage:true});
+});
+test("reviews a real checked contract through the launch adapter without sending a transaction",async({page,request})=>{
+ await page.goto(origin);const selected=page.getByLabel("Your projects",{exact:true}),before=await selected.inputValue();await page.getByRole("button",{name:"New project",exact:true}).click();await expect(selected).not.toHaveValue(before);
+ const projectId=await page.getByLabel("Your projects",{exact:true}).inputValue();
+ expect((await request.post(`${origin}/fixture/contract`,{headers:{Authorization:"Bearer fixture-alice"},data:{projectId}})).ok()).toBe(true);
+ await page.reload();await page.getByRole("tab",{name:"Preview & run",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"Contract review",exact:true})).toBeVisible();
+ const pending=page.waitForResponse(response=>response.url().endsWith("/platform/launch")&&response.request().postDataJSON()?.action==="freeze");
+ await page.getByRole("button",{name:"Review checked contract",exact:true}).click();const reply=await pending;expect(reply.ok()).toBe(true);const value=await reply.json();
+ expect(value.project.compiled).toBe(true);expect(value.project.sourceReview).toBe("passed");expect(value.project.scenarios.passed).toBe(true);expect(value.sourceId).toMatch(/^pp-/);
+ await expect(page.getByText("Compilation passed · source review passed · declared behavior checks passed",{exact:true})).toBeVisible();
+ await page.getByText("Compilation passed · source review passed · declared behavior checks passed",{exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-contract-review.png"),fullPage:true});
 });

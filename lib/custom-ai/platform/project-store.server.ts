@@ -15,6 +15,7 @@ function revision(row: Record<string, unknown>): ProjectRevision {
     requirementsHash: String(row.requirements_hash), fileTreeHash: String(row.files_hash), dependencyLockHash: String(row.dependencies_hash),
     architectureHash: String(row.architecture_hash), createdAt: projectDate(row.created_at).toISOString() });
 }
+export const projectRevisionFromRow = revision;
 
 /** All access is both owner-qualified and protected by transaction-local RLS.
  * The migration is applied separately; no request performs DDL. */
