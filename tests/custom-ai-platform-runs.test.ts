@@ -26,6 +26,16 @@ beforeEach(async () => {
 afterEach(async () => { await db.close(); });
 
 describe("durable project runs", () => {
+  it("limits active worker leases across owners and releases capacity on completion",async()=>{
+    const scopes=[scope,{ownerId:"bob",projectId:"22222222-2222-4222-8222-222222222222"},{ownerId:"charlie",projectId:"33333333-3333-4333-8333-333333333333"}];
+    const jobs=[];
+    for(const item of scopes){const revision=item.ownerId==="alice"?project:await createPlatformStore(pool,()=>clock).createProject(item);jobs.push(await runs.startRun({...item,revisionId:revision.revisionId,operation:"build",prompt:"Inspect this project",idempotencyKey:"work",budgetUnits:5}));}
+    const first=await runs.claimRun(scopes[0],jobs[0].runId,"worker-one");expect(first).not.toBeNull();
+    expect(await runs.claimRun(scopes[1],jobs[1].runId,"worker-two")).not.toBeNull();
+    expect(await runs.claimRun(scopes[2],jobs[2].runId,"worker-three")).toBeNull();
+    await runs.finishRun(scopes[0],jobs[0].runId,first!.token,"Finished");
+    expect(await runs.claimRun(scopes[2],jobs[2].runId,"worker-three")).not.toBeNull();
+  });
   it("reserves once and returns the same run for an idempotent request", async () => {
     const run = await runs.startRun(input());
     expect(await runs.startRun(input())).toEqual(run);

@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.dispatch_outbox (
   FOREIGN KEY(owner,project_id,run_id) REFERENCES programmable_projects_v1.runs(owner,project_id,id)
 );
 CREATE INDEX IF NOT EXISTS project_dispatch_due_v1 ON programmable_projects_v1.dispatch_outbox(next_attempt_at);
+ALTER TABLE programmable_projects_v1.dispatch_outbox ADD COLUMN IF NOT EXISTS worker_lease_until timestamptz;
 
 CREATE TABLE IF NOT EXISTS programmable_projects_v1.sandbox_jobs (
   owner text NOT NULL,

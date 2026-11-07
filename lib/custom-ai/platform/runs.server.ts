@@ -109,21 +109,25 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
         return null;
       }
       if (value.policy_hash !== policyHash) throw new ProjectError("run-policy", "This run uses a different tool policy.", 409);
+      const active=(await db.query("SELECT count(*) AS count FROM programmable_projects_v1.dispatch_outbox WHERE worker_lease_until>$1",[new Date(now()).toISOString()])).rows[0];
+      if(Number(active.count)>=2)return null;
       const token = randomUUID(), until = new Date(now() + options.leaseMs).toISOString();
       const saved = await db.query("UPDATE programmable_projects_v1.runs SET status='running',lease_token=$4,lease_until=$5,worker_id=$6,updated_at=$7 WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *",
         [scope.ownerId, scope.projectId, runId, token, until, workerId, new Date(now()).toISOString()]);
-      await db.query("UPDATE programmable_projects_v1.dispatch_outbox SET next_attempt_at=$4 WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId, until]);
+      await db.query("UPDATE programmable_projects_v1.dispatch_outbox SET next_attempt_at=$4,worker_lease_until=$4 WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId, until]);
       return { token, expiresAt: until, run: view(saved.rows[0]) };
     });
   }
   async function heartbeat(scope: ProjectScope, runId: string, token: string): Promise<boolean> {
     return projectTransaction(pool, scope, async db => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
       const updated = await db.query(`UPDATE programmable_projects_v1.runs SET lease_until=LEAST($5::timestamptz,created_at+interval '10 minutes'),updated_at=$6
         WHERE owner=$1 AND project_id=$2 AND id=$3 AND lease_token=$4 AND policy_hash=$7 AND status='running' AND lease_until>$6 RETURNING id`,
         [scope.ownerId, scope.projectId, runId, token, new Date(now() + options.leaseMs).toISOString(), new Date(now()).toISOString(), policyHash]);
-      if (updated.rows.length) await db.query(`UPDATE programmable_projects_v1.dispatch_outbox SET next_attempt_at=
+      if (updated.rows.length) await db.query(`UPDATE programmable_projects_v1.dispatch_outbox SET worker_lease_until=LEAST($4::timestamptz,
+        (SELECT created_at+interval '10 minutes' FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 AND id=$3)),next_attempt_at=
         (SELECT lease_until FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 AND id=$3)
-        WHERE owner=$1 AND project_id=$2 AND run_id=$3`, [scope.ownerId, scope.projectId, runId]);
+        WHERE owner=$1 AND project_id=$2 AND run_id=$3`, [scope.ownerId, scope.projectId, runId,new Date(now()+options.leaseMs).toISOString()]);
       return updated.rows.length === 1;
     });
   }
@@ -242,7 +246,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       const run = await leased(db, scope, runId, token);
       if (!retryable) await settle(db, scope, run);
       if (!retryable) await db.query("DELETE FROM programmable_projects_v1.dispatch_outbox WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId]);
-      else await db.query("UPDATE programmable_projects_v1.dispatch_outbox SET next_attempt_at=$4 WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId, new Date(now() + 15_000).toISOString()]);
+      else await db.query("UPDATE programmable_projects_v1.dispatch_outbox SET next_attempt_at=$4,worker_lease_until=NULL WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId, new Date(now() + 15_000).toISOString()]);
       await db.query("UPDATE programmable_projects_v1.run_steps SET state='unknown' WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND state='dispatching'", [scope.ownerId, scope.projectId, runId]);
       const saved = await db.query("UPDATE programmable_projects_v1.runs SET status=$4,summary=$5,lease_token=NULL,lease_until=NULL,updated_at=$6 WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *",
         [scope.ownerId, scope.projectId, runId, retryable ? "retryable" : "failed", code, new Date(now()).toISOString()]);
