@@ -35,6 +35,16 @@ const start = () => routes.POST(new Request("https://example.test/runs", { metho
   body: JSON.stringify({ projectId: scope.projectId, revisionId, operation: "build", prompt: "Build the project", idempotencyKey: "work-one", budgetUnits: 5 }) }));
 
 describe("project run API boundaries", () => {
+  it("recovers the saved transcript without a browser-held run identifier and isolates its owner", async () => {
+    const { run } = await (await start()).json();
+    const url = `https://example.test/runs?projectId=${scope.projectId}`;
+    const response = await routes.GET(new Request(url, { headers: { "x-test-owner": "alice" } }));
+    expect(response.status).toBe(200);
+    const { runs } = await response.json();
+    expect(runs).toMatchObject([{ runId: run.runId, prompt: "Build the project", operation: "build", status: "queued" }]);
+    expect(JSON.stringify(runs)).not.toContain('lease_token');
+    expect((await routes.GET(new Request(url, { headers: { "x-test-owner": "bob" } }))).status).toBe(404);
+  });
   it("durably queues a run even when waking the worker fails", async () => {
     const response = await start(); expect(response.status).toBe(202);
     const payload = await response.json();

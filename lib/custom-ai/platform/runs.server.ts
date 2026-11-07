@@ -89,6 +89,13 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
   async function readRun(scope: ProjectScope, runId: string): Promise<RunView> {
     return projectTransaction(pool, scope, async db => view(await row(db, scope, runId)));
   }
+  async function listRuns(scope: ProjectScope) {
+    return projectTransaction(pool, scope, async db => {
+      if (!(await db.query("SELECT id FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2", [scope.ownerId, scope.projectId])).rows.length) throw missing();
+      return (await db.query("SELECT * FROM programmable_projects_v1.runs WHERE owner=$1 AND project_id=$2 ORDER BY created_at DESC,id DESC LIMIT 30", [scope.ownerId, scope.projectId])).rows
+        .map(run => ({ ...view(run), prompt: String(run.prompt), operation: run.operation as Operation }));
+    });
+  }
   async function claimRun(scope: ProjectScope, runId: string, workerId: string) {
     if (!key(workerId)) throw invalid();
     return projectTransaction(pool, scope, async db => {
@@ -237,6 +244,6 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       return view(saved.rows[0]);
     });
   }
-  return { startRun, readRun, claimRun, heartbeat, readWork, leaseActive, readProgress, resumeRun, beginStep, finishStep, finishRun, cancelRun, failRun,
+  return { startRun, readRun, listRuns, claimRun, heartbeat, readWork, leaseActive, readProgress, resumeRun, beginStep, finishStep, finishRun, cancelRun, failRun,
     allowedCapabilities: (operation: Operation) => Object.entries(options.capabilities).filter(([, capability]) => capability.operations.includes(operation)).map(([id]) => id) };
 }

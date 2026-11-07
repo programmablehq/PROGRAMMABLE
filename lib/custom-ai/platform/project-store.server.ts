@@ -125,6 +125,15 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
         })));
   }
 
+  async function listRevisionSummaries(scope: ProjectScope, limit = 50) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ProjectError("project-input", "Choose up to 100 revisions.");
+    return transaction(scope, async db => {
+      await read(db, scope);
+      return (await db.query("SELECT id,parent_id,ordinal,created_at,document->>'title' AS title FROM programmable_projects_v1.revisions WHERE owner=$1 AND project_id=$2 ORDER BY ordinal DESC LIMIT $3", [scope.ownerId, scope.projectId, limit])).rows
+        .map(row => ({ revisionId: String(row.id), parentRevisionId: row.parent_id ? String(row.parent_id) : null, ordinal: Number(row.ordinal), createdAt: projectDate(row.created_at).toISOString(), title: String(row.title) }));
+    });
+  }
+
   async function restoreProjectRevision(input: ProjectScope & { expectedRevisionId: string; revisionId: string; idempotencyKey: string }) {
     const scope = { ownerId: input.ownerId, projectId: input.projectId };
     const [base, target] = await Promise.all([readRevision(scope, input.expectedRevisionId), readRevision(scope, input.revisionId)]);
@@ -135,5 +144,5 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
     } });
   }
 
-  return { createProject, readProject, readRevision, applyProjectPatch, readPatchReceipt, listProjects, listRevisions, restoreProjectRevision };
+  return { createProject, readProject, readRevision, applyProjectPatch, readPatchReceipt, listProjects, listRevisions, listRevisionSummaries, restoreProjectRevision };
 }

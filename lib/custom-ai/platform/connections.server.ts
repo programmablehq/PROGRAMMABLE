@@ -60,11 +60,13 @@ export function createConnectionStore(pool:AIPool,keyring:Keyring,now=Date.now){
     if(input.secret&&(Object.keys(input.secret).length>8||Object.values(input.secret).some(value=>typeof value!=="string"||value.length>16000||/[\r\n\0]/.test(value))))throw invalid();
     const version=projectHash({manifest,allowedActions:[...input.allowedActions].sort()});
     return projectTransaction(pool,scope,async db=>{
-      const existing=(await db.query("SELECT version FROM programmable_projects_v1.connections WHERE owner=$1 AND project_id=$2 AND id=$3 FOR UPDATE",[scope.ownerId,scope.projectId,input.id])).rows[0];
+      const existing=(await db.query("SELECT version,state,manifest FROM programmable_projects_v1.connections WHERE owner=$1 AND project_id=$2 AND id=$3 FOR UPDATE",[scope.ownerId,scope.projectId,input.id])).rows[0];
       if(existing&&input.expectedVersion!==existing.version)throw new ProjectError("connection-version","Reload the connection before changing its permissions.",409);
       if(!existing&&(await db.query("SELECT id FROM programmable_projects_v1.connections WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId])).rows.length>=20)throw new ProjectError("connection-limit","Use up to 20 connections per project.",429);
       const timestamp=new Date(now()).toISOString();
-      const state=manifest.auth.kind==="none"||input.secret&&(manifest.auth.kind==="api-key"?input.secret.apiKey:input.secret.accessToken)?"active":"pending";
+      const prior=existing?.manifest as ConnectionManifest|undefined;
+      const sameCredentialTarget=prior&&existing?.state==="active"&&prior.baseUrl===manifest.baseUrl&&prior.kind===manifest.kind&&canonicalProjectJSON(prior.auth)===canonicalProjectJSON(manifest.auth);
+      const state=manifest.auth.kind==="none"||input.secret&&(manifest.auth.kind==="api-key"?input.secret.apiKey:input.secret.accessToken)||!input.secret&&sameCredentialTarget?"active":"pending";
       const saved=(await db.query(`INSERT INTO programmable_projects_v1.connections(owner,project_id,id,version,manifest,allowed_actions,state,created_at,updated_at)
         VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$8) ON CONFLICT(owner,project_id,id) DO UPDATE SET version=$4,manifest=$5::jsonb,allowed_actions=$6::jsonb,state=$7,updated_at=$8 RETURNING *`,
         [scope.ownerId,scope.projectId,input.id,version,JSON.stringify(manifest),JSON.stringify(input.allowedActions),state,timestamp])).rows[0];

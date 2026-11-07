@@ -41,5 +41,6 @@ it('writes one separate branch and draft PR for an immutable project export',asy
 it('reconciles an accepted branch after a lost response without writing it again',async()=>{
  const client=repository(true),delivery=createRepositoryDelivery(pool,projects,async()=>client),input={repository:'example/project',revisionId,idempotencyKey:'uncertain',connectionId:'github',connectionVersion:'one'};
  expect((await delivery.deliver(scope,input)).state).toBe('reconcile');expect((await delivery.deliver(scope,input)).state).toBe('complete');
+ expect((await delivery.list(scope))[0].request).toEqual(input);
  expect(client.post.mock.calls.filter(([path])=>path.endsWith('/git/refs'))).toHaveLength(1);
 });

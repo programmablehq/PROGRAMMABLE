@@ -17,8 +17,8 @@ export function createAppJobs(pool:AIPool,data:ReturnType<typeof createRuntimeDa
   if(!input||Object.keys(input).some(key=>!["id","path","intervalSeconds","idempotent","body","enabled"].includes(key))||!/^[A-Za-z0-9_-]{1,64}$/.test(input.id)||!validPath(input.path)||!Number.isInteger(input.intervalSeconds)||input.intervalSeconds<60||input.intervalSeconds>604800||typeof input.idempotent!=="boolean"||input.enabled!==undefined&&typeof input.enabled!=="boolean"||Buffer.byteLength(canonicalProjectJSON(input.body))>16000)throw new ProjectError("job-input","Choose an API path and a schedule between one minute and one week.");
   return projectTransaction(pool,scope,async db=>{
    await db.query("SELECT id FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2 FOR UPDATE",[scope.ownerId,scope.projectId]);
-   const existing=(await db.query("SELECT definition_hash FROM programmable_projects_v1.app_jobs WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,input.id])).rows[0];
-   const hash=projectHash(input);if(existing?.definition_hash===hash)return {id:input.id};
+   const existing=(await db.query("SELECT definition_hash,enabled FROM programmable_projects_v1.app_jobs WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,input.id])).rows[0];
+   const hash=projectHash(input);if(existing?.definition_hash===hash&&existing.enabled===(input.enabled!==false))return {id:input.id};
    const count=(await db.query("SELECT count(*) AS count FROM programmable_projects_v1.app_jobs WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId])).rows[0];
    if(!existing&&Number(count.count)>=10)throw new ProjectError("job-quota","This project already has ten scheduled tasks.",429);
    // An in-flight old definition keeps its immutable receipt; it is never replayed as new code.
@@ -82,9 +82,23 @@ export function createAppJobs(pool:AIPool,data:ReturnType<typeof createRuntimeDa
   for(let n=0;n<limit;n++){const ticket=await take();if(!ticket)break;if(await dispatch(ticket))completed++;attempted++;}
   return {attempted,completed};
  }
+ async function setEnabled(scope:ProjectScope,id:string,enabled:boolean){
+  if(typeof id!=="string"||typeof enabled!=="boolean")throw new ProjectError("job-input","Choose a saved task and its running state.");
+  return projectTransaction(pool,scope,async db=>{
+   const job=(await db.query("SELECT * FROM programmable_projects_v1.app_jobs WHERE owner=$1 AND project_id=$2 AND id=$3 FOR UPDATE",[scope.ownerId,scope.projectId,id])).rows[0];
+   if(!job)throw new ProjectError("job-missing","This scheduled task was not found.",404);
+   if(job.enabled===enabled)return {id,enabled};
+   await db.query("UPDATE programmable_projects_v1.app_jobs SET enabled=$4 WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id,enabled]);
+   // A dispatched callback may already have had an effect. Retain its unknown
+   // receipt and remove its lease rather than reporting a successful cancellation.
+   await db.query("UPDATE programmable_projects_v1.app_job_runs SET state='reconcile' WHERE owner=$1 AND project_id=$2 AND job_id=$3 AND state='pending'",[scope.ownerId,scope.projectId,id]);
+   await db.query("UPDATE programmable_projects_v1.app_job_queue SET run_id=NULL,lease_token=NULL,lease_until=NULL,next_at=$4 WHERE owner=$1 AND project_id=$2 AND job_id=$3",[scope.ownerId,scope.projectId,id,new Date(now()+Number(job.interval_seconds)*1000).toISOString()]);
+   return {id,enabled};
+  });
+ }
  const list=(scope:ProjectScope)=>projectTransaction(pool,scope,async db=>({
   jobs:(await db.query("SELECT id,path,interval_seconds AS \"intervalSeconds\",idempotent,enabled FROM programmable_projects_v1.app_jobs WHERE owner=$1 AND project_id=$2 ORDER BY id",[scope.ownerId,scope.projectId])).rows,
   runs:(await db.query("SELECT id,job_id AS \"jobId\",release_id AS \"releaseId\",state,attempts,created_at AS \"createdAt\",finished_at AS \"finishedAt\" FROM programmable_projects_v1.app_job_runs WHERE owner=$1 AND project_id=$2 ORDER BY created_at DESC LIMIT 100",[scope.ownerId,scope.projectId])).rows,
  }));
- return {define,dispatchDue,list};
+ return {define,dispatchDue,list,setEnabled};
 }

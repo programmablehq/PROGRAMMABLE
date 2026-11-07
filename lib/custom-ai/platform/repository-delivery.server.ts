@@ -15,7 +15,7 @@ export type RepositoryDeliveryInput={repository:string;revisionId:string;idempot
 const sha=(value:unknown):value is string=>typeof value==="string"&&/^[a-f0-9]{40}$/.test(value);
 const object=(value:unknown):value is Row=>Boolean(value)&&typeof value==="object"&&!Array.isArray(value);
 const failed=()=>new ProjectError("repository-delivery","The repository result does not match this project export.",409);
-const view=(row:Row)=>({id:String(row.id),revisionId:String(row.revision_id),repository:String(row.repository),branch:String(row.branch),state:String(row.state),url:row.url?String(row.url):null,errorCode:row.error_code?String(row.error_code):null});
+const view=(row:Row)=>({id:String(row.id),revisionId:String(row.revision_id),repository:String(row.repository),branch:String(row.branch),state:String(row.state),url:row.url?String(row.url):null,errorCode:row.error_code?String(row.error_code):null,request:(row.request??null) as RepositoryDeliveryInput|null});
 export function createRepositoryDelivery(pool:AIPool,projects:ReturnType<typeof createPlatformStore>,clientFor:(scope:ProjectScope,input:RepositoryDeliveryInput,signal?:AbortSignal)=>Promise<RepositoryClient>,now=Date.now){
  async function deliver(scope:ProjectScope,input:RepositoryDeliveryInput,signal?:AbortSignal){
   repositoryName(input.repository);
@@ -33,7 +33,7 @@ export function createRepositoryDelivery(pool:AIPool,projects:ReturnType<typeof 
    }
    const used=(await db.query("SELECT count(*) AS count FROM programmable_projects_v1.repository_deliveries WHERE owner=$1 AND created_at>$2",[scope.ownerId,new Date(now()-86400000).toISOString()])).rows[0];if(Number(used.count)>=20)throw new ProjectError("repository-quota","Today's repository export allowance is used up.",429);
    const id=randomUUID(),branch=`programmable/${scope.projectId.slice(0,8)}-${id.slice(0,8)}-${input.revisionId.slice(7,15)}`;
-   return (await db.query("INSERT INTO programmable_projects_v1.repository_deliveries(owner,project_id,id,request_key,request_hash,revision_id,repository,branch,state,created_at,lease_token,lease_until,attempts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'running',$9,$10,$11,1) RETURNING *",[scope.ownerId,scope.projectId,id,input.idempotencyKey,requestHash,input.revisionId,input.repository,branch,new Date(now()).toISOString(),lease,new Date(now()+600000).toISOString()])).rows[0];
+   return (await db.query("INSERT INTO programmable_projects_v1.repository_deliveries(owner,project_id,id,request_key,request_hash,revision_id,repository,branch,state,created_at,lease_token,lease_until,attempts,request) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'running',$9,$10,$11,1,$12::jsonb) RETURNING *",[scope.ownerId,scope.projectId,id,input.idempotencyKey,requestHash,input.revisionId,input.repository,branch,new Date(now()).toISOString(),lease,new Date(now()+600000).toISOString(),JSON.stringify(input)])).rows[0];
   });
   if(row.state==="complete")return view(row);
   async function save(values:Row){

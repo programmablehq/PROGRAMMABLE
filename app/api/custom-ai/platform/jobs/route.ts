@@ -14,3 +14,8 @@ export const POST=(request:Request)=>executeProjectRequest(productionAccountDepe
  const body=await readPreviewBody(request,18000) as {projectId:string;job:AppJob};if(!body||typeof body.projectId!=="string"||Object.keys(body).some(key=>!["projectId","job"].includes(key)))throw new ProjectError("job-input","Choose a project task.");
  return Response.json(await productionAppJobs().define({ownerId,projectId:body.projectId},body.job),{headers:aiHeaders});
 });
+export const PATCH=(request:Request)=>executeProjectRequest(productionAccountDependencies(),request,"write",async ownerId=>{
+ const body=await readPreviewBody(request,4000) as {projectId:string;jobId:string;enabled:boolean};
+ if(!body||typeof body.projectId!=="string"||typeof body.jobId!=="string"||typeof body.enabled!=="boolean"||Object.keys(body).some(key=>!["projectId","jobId","enabled"].includes(key)))throw new ProjectError("job-input","Choose a saved project task.");
+ return Response.json(await productionAppJobs().setEnabled({ownerId,projectId:body.projectId},body.jobId,body.enabled),{headers:aiHeaders});
+});

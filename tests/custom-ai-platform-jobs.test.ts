@@ -25,6 +25,20 @@ it("does not dispatch a stopped application's scheduled work",async()=>{
  const callback=vi.fn(async()=>({status:200,headers:{},text:'{}'}));const jobs=createAppJobs(pool,data,callback,()=>clock);await jobs.define(scope,{id:"refresh",path:"/api/refresh",intervalSeconds:60,idempotent:true,body:{}});
  await db.query("UPDATE programmable_projects_v1.app_releases SET state='stopped'");clock+=60000;await jobs.dispatchDue();expect(callback).not.toHaveBeenCalled();
 });
+it("pauses and resumes one scheduled task without accepting another owner's changes",async()=>{
+ const callback=vi.fn(async()=>({status:200,headers:{},text:'{}'}));const jobs=createAppJobs(pool,data,callback,()=>clock);
+ await jobs.define(scope,{id:"refresh",path:"/api/refresh",intervalSeconds:60,idempotent:true,body:{}});
+ await expect(jobs.setEnabled({...scope,ownerId:"bob"},"refresh",false)).rejects.toMatchObject({code:"job-missing"});
+ await jobs.setEnabled(scope,"refresh",false);clock+=60000;await jobs.dispatchDue();expect(callback).not.toHaveBeenCalled();
+ await jobs.setEnabled(scope,"refresh",true);clock+=60000;await jobs.dispatchDue();expect(callback).toHaveBeenCalledOnce();
+});
+it("preserves an unknown receipt when a task is paused during its callback",async()=>{
+ let started!:()=>void,finish!:()=>void;const dispatched=new Promise<void>(resolve=>{started=resolve;}),response=new Promise<void>(resolve=>{finish=resolve;});
+ const callback=vi.fn(async()=>{started();await response;return {status:200,headers:{},text:'{}'};});
+ const jobs=createAppJobs(pool,data,callback,()=>clock);await jobs.define(scope,{id:"refresh",path:"/api/refresh",intervalSeconds:60,idempotent:true,body:{}});clock+=60000;
+ const running=jobs.dispatchDue();await dispatched;await jobs.setEnabled(scope,"refresh",false);finish();await running;
+ expect((await jobs.list(scope)).runs[0].state).toBe("reconcile");clock+=120000;await jobs.dispatchDue();expect(callback).toHaveBeenCalledOnce();
+});
 it("holds a non-idempotent unknown result for review instead of sending it again",async()=>{
  const callback=vi.fn(async()=>{throw Error("response lost")});const jobs=createAppJobs(pool,data,callback,()=>clock);
  await jobs.define(scope,{id:"write",path:"/api/write",intervalSeconds:60,idempotent:false,body:{}});clock+=60000;await jobs.dispatchDue();clock+=120000;await jobs.dispatchDue();

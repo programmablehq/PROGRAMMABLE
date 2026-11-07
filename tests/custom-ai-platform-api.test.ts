@@ -71,6 +71,9 @@ describe("project platform authenticated routes", () => {
   it("exports only an owned exact revision and restores without rewriting history", async () => {
     const initial = await store.createProject({ ownerId: "alice", projectId: id });
     const next = await store.applyProjectPatch({ ownerId: "alice", projectId: id, expectedRevisionId: initial.revisionId, idempotencyKey: "change", patch: { title: "Changed" } });
+    const history = await routes.GET(request("GET", "alice", undefined, `?projectId=${id}&history=true`));
+    expect((await history.json()).revisions.map((row: { revisionId: string }) => row.revisionId)).toEqual([next.revisionId, initial.revisionId]);
+    expect((await routes.GET(request("GET", "bob", undefined, `?projectId=${id}&history=true`))).status).toBe(404);
     const downloaded = await routes.DOWNLOAD(request("GET", "alice", undefined, `?projectId=${id}&revisionId=${next.revisionId}`));
     expect(downloaded.status).toBe(200);
     expect(downloaded.headers.get("Content-Disposition")).toContain("attachment");

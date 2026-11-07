@@ -31,9 +31,10 @@ export function createReleaseRoutes(deps:ProjectAccountDependencies&{releases:()
   const body=await readPreviewBody(request,6000) as Record<string,unknown>;
   if(!body||typeof body!=="object"||Object.keys(body).some(key=>!["action","projectId","releaseId","revisionId","idempotencyKey","mode"].includes(key))||typeof body.projectId!=="string")throw new ProjectError("release-input","Choose a valid app release action.");
   const scope={ownerId,projectId:body.projectId},releases=deps.releases();
-  if(body.action==="publish"){
+  if(body.action==="publish"||body.action==="queue"){
    if(typeof body.revisionId!=="string"||typeof body.idempotencyKey!=="string"||!["preview","production"].includes(String(body.mode)))throw new ProjectError("release-input","Choose a reviewed revision and release target.");
-   return Response.json({release:await releases.publish(scope,{revisionId:body.revisionId,idempotencyKey:body.idempotencyKey,mode:body.mode as "preview"|"production"})},{status:202,headers:aiHeaders});
+   const input={revisionId:body.revisionId,idempotencyKey:body.idempotencyKey,mode:body.mode as "preview"|"production"};
+   return Response.json({release:await (body.action==="queue"?releases.queue(scope,input):releases.publish(scope,input))},{status:202,headers:aiHeaders});
   }
   if(typeof body.releaseId!=="string")throw new ProjectError("release-input","Choose a saved release.");
   const result=body.action==="refresh"?await releases.refresh(scope,body.releaseId):body.action==="promote"?await releases.promote(scope,body.releaseId):body.action==="rollback"?await releases.promote(scope,body.releaseId,true):body.action==="stop"?await releases.setActive(scope,body.releaseId,false):body.action==="resume"?await releases.setActive(scope,body.releaseId,true):null;

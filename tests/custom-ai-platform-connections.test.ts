@@ -21,6 +21,13 @@ beforeEach(async()=>{
 });
 afterEach(async()=>{await db.close()});
 describe("private project connections",()=>{
+ it("keeps a private credential for permission-only edits but never forwards it to a changed endpoint",async()=>{
+  const first=await store.saveConnection(scope,{id,manifest,allowedActions:[],secret:{apiKey:"key"}});
+  const allowed=await store.saveConnection(scope,{id,manifest,allowedActions:["score"],expectedVersion:first.version});
+  expect(allowed.state).toBe("active");expect((await store.authorize(scope,id,allowed.version,"score")).secret.apiKey).toBe("key");
+  const changed=await store.saveConnection(scope,{id,manifest:{...manifest,baseUrl:"https://other.example.com"},allowedActions:["score"],expectedVersion:allowed.version});
+  expect(changed.state).toBe("pending");await expect(store.authorize(scope,id,changed.version,"score")).rejects.toMatchObject({code:"connection-pending"});
+ });
  it("encrypts secrets and never includes them in public connection metadata",async()=>{
   const saved=await store.saveConnection(scope,{id,manifest,allowedActions:["score"],secret:{apiKey:"private-test-secret"}});
   expect(JSON.stringify(saved)).not.toContain("private-test-secret");

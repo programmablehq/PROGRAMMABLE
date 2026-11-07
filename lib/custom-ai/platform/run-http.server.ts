@@ -31,6 +31,11 @@ export function createRunRoutes(dependencies: ProjectAccountDependencies & { sto
     return { scope: { ownerId, projectId: query.get("projectId")! }, runId: query.get("runId")! };
   };
   const GET = (request: Request) => executeProjectRequest(dependencies, request, "read", async ownerId => {
+    const query = new URL(request.url).searchParams;
+    if (!query.has("runId")) {
+      if (!query.get("projectId") || [...query.keys()].some(key => key !== "projectId")) throw bad();
+      return Response.json({ runs: await dependencies.store().listRuns({ ownerId, projectId: query.get("projectId")! }) }, { headers: aiHeaders });
+    }
     const { scope, runId } = getScope(request, ownerId);
     return Response.json(await dependencies.store().readProgress(scope, runId, new URL(request.url).searchParams.get("afterCursor") ?? "0"), { headers: aiHeaders });
   });

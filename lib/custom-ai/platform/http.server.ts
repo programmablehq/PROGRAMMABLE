@@ -35,9 +35,13 @@ export function createProjectRoutes(dependencies: Dependencies) {
 
   const GET = (request: Request) => execute(request, "read", async ownerId => {
     const query = new URL(request.url).searchParams;
-    if ([...query.keys()].some(key => !["projectId", "revisionId", "limit"].includes(key))) throw invalid();
+    if ([...query.keys()].some(key => !["projectId", "revisionId", "limit", "history"].includes(key))) throw invalid();
     const projectId = query.get("projectId"), revisionId = query.get("revisionId");
     const store = dependencies.store();
+    if (query.has("history")) {
+      if (query.get("history") !== "true" || !projectId || revisionId) throw invalid();
+      return Response.json({ revisions: await store.listRevisionSummaries({ ownerId, projectId }, Number(query.get("limit") ?? 50)) }, { headers: aiHeaders });
+    }
     if (projectId) return Response.json({ project: revisionId
       ? await store.readRevision({ ownerId, projectId }, revisionId)
       : await store.readProject({ ownerId, projectId }) }, { headers: aiHeaders });

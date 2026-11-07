@@ -12,5 +12,5 @@ export const metadata: Metadata = { title: "AI Chat · Programmable",
 export default function CustomAIPage() {
   const localPreview = process.env.NODE_ENV === "development" && process.env.CUSTOM_AI_LOCAL_PREVIEW === "true";
   if (!localPreview && process.env.CUSTOM_AI_PUBLIC_ENABLED !== "true") notFound();
-  return <CustomAIWorkspace localPreview={localPreview} generalLaunchEnabled={process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true"} />;
+  return <CustomAIWorkspace localPreview={localPreview} generalLaunchEnabled={process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true"} platformEnabled={process.env.CUSTOM_AI_PLATFORM_ENABLED === "true"} />;
 }
