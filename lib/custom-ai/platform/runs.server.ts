@@ -51,6 +51,13 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
     await refundAIUnits(db, scope.ownerId, Number(value.reserved_units) - Number(value.used_units), Number(value.reserved_hour), Number(value.reserved_day));
     await db.query("UPDATE programmable_projects_v1.runs SET settled=true WHERE owner=$1 AND project_id=$2 AND id=$3", [scope.ownerId, scope.projectId, value.id]);
   }
+  async function expire(db: AIConnection, scope: ProjectScope, value: RunRow) {
+    await settle(db, scope, value);
+    await db.query("UPDATE programmable_projects_v1.runs SET status='failed',summary='Work unit expired; continue from the saved project.',lease_token=NULL,lease_until=NULL,updated_at=$4 WHERE owner=$1 AND project_id=$2 AND id=$3",
+      [scope.ownerId, scope.projectId, value.id, new Date(now()).toISOString()]);
+    await db.query("UPDATE programmable_projects_v1.run_steps SET state='unknown' WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND state='dispatching'", [scope.ownerId, scope.projectId, value.id]);
+    await db.query("DELETE FROM programmable_projects_v1.dispatch_outbox WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, value.id]);
+  }
   async function startRun(input: ProjectScope & { revisionId: string; operation: Operation; prompt: string; idempotencyKey: string; budgetUnits: number }): Promise<RunView> {
     if (!key(input.idempotencyKey) || !["plan", "build", "test", "deploy"].includes(input.operation)
       || typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 24_000 || !/^sha256:[a-f0-9]{64}$/.test(input.revisionId)) throw invalid();
@@ -65,6 +72,9 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       const project = (await db.query("SELECT current_revision FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2 FOR SHARE", [scope.ownerId, scope.projectId])).rows[0];
       if (!project) throw missing();
       if (project.current_revision !== input.revisionId) throw new ProjectError("project-conflict", "Start work from the current project revision.", 409);
+      const abandoned = (await db.query("SELECT * FROM programmable_projects_v1.runs WHERE owner=$1 AND status IN ('queued','running','retryable','waiting_user') AND created_at<$2 FOR UPDATE",
+        [scope.ownerId, new Date(now() - 600_000).toISOString()])).rows;
+      for (const previous of abandoned) await expire(db, { ownerId: scope.ownerId, projectId: String(previous.project_id) }, previous);
       const active = (await db.query("SELECT count(*) AS count FROM programmable_projects_v1.runs WHERE owner=$1 AND status IN ('queued','running','retryable','waiting_user')", [scope.ownerId])).rows[0];
       if (Number(active.count) >= options.allowance.concurrent) throw new ProjectError("run-busy", "Finish or stop your current project run first.", 429);
       const periods = await reserveAIUnits(db, scope.ownerId, input.budgetUnits, options.allowance, now());
@@ -86,9 +96,7 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       const value = await row(db, scope, runId, true);
       if (!["queued", "retryable", "running"].includes(String(value.status)) || value.status === "running" && projectDate(value.lease_until).getTime() > now()) return null;
       if (now() - projectDate(value.created_at).getTime() > 600_000) {
-        await settle(db, scope, value);
-        await db.query("UPDATE programmable_projects_v1.runs SET status='failed',summary='Work unit expired; continue from the saved project.',lease_token=NULL,lease_until=NULL WHERE owner=$1 AND project_id=$2 AND id=$3", [scope.ownerId, scope.projectId, runId]);
-        await db.query("DELETE FROM programmable_projects_v1.dispatch_outbox WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId]);
+        await expire(db, scope, value);
         return null;
       }
       if (value.policy_hash !== policyHash) throw new ProjectError("run-policy", "This run uses a different tool policy.", 409);
@@ -115,6 +123,32 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       const run = await leased(db, scope, runId, token);
       const steps = (await db.query("SELECT id,cursor,capability_id,input,result,state,effect,attempts FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 ORDER BY cursor", [scope.ownerId, scope.projectId, runId])).rows;
       return structuredClone({ run: view(run), prompt: String(run.prompt), operation: run.operation as Operation, steps, policyHash });
+    });
+  }
+  async function readProgress(scope: ProjectScope, runId: string, afterCursor: string) {
+    if (!/^(?:0|[1-9][0-9]?)$/.test(afterCursor) || Number(afterCursor) > 24) throw invalid();
+    return projectTransaction(pool, scope, async db => {
+      const run = await row(db, scope, runId);
+      const steps = (await db.query("SELECT id,cursor,capability_id,state FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND state='completed' AND cursor>=$4 ORDER BY cursor",
+        [scope.ownerId, scope.projectId, runId, Number(afterCursor)])).rows;
+      return { run: view(run), events: steps.map(step => ({ cursor: String(Number(step.cursor) + 1), stepId: String(step.id), capabilityId: String(step.capability_id), state: "completed" as const })) };
+    });
+  }
+  async function resumeRun(scope: ProjectScope, runId: string, expectedCursor: string) {
+    return projectTransaction(pool, scope, async db => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
+      const run = await row(db, scope, runId, true);
+      if (String(run.cursor) !== expectedCursor) throw new ProjectError("run-cursor", "Reload the saved progress before continuing.", 409);
+      if (run.policy_hash !== policyHash) throw new ProjectError("run-policy", "This run uses a different tool policy.", 409);
+      if (run.status !== "retryable" && run.status !== "queued") throw new ProjectError("run-state", "This work cannot be resumed in its current state.", 409);
+      if (now() - projectDate(run.created_at).getTime() > 600_000) {
+        await expire(db, scope, run);
+        return view(await row(db, scope, runId));
+      }
+      const timestamp = new Date(now()).toISOString();
+      await db.query("UPDATE programmable_projects_v1.dispatch_outbox SET next_attempt_at=$4 WHERE owner=$1 AND project_id=$2 AND run_id=$3", [scope.ownerId, scope.projectId, runId, timestamp]);
+      const saved = await db.query("UPDATE programmable_projects_v1.runs SET status='queued',updated_at=$4 WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *", [scope.ownerId, scope.projectId, runId, timestamp]);
+      return view(saved.rows[0]);
     });
   }
   async function beginStep(scope: ProjectScope, runId: string, token: string, input: { id: string; capabilityId: string; input: JsonValue }) {
@@ -198,5 +232,5 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
       return view(saved.rows[0]);
     });
   }
-  return { startRun, readRun, claimRun, heartbeat, readWork, beginStep, finishStep, finishRun, cancelRun, failRun };
+  return { startRun, readRun, claimRun, heartbeat, readWork, readProgress, resumeRun, beginStep, finishStep, finishRun, cancelRun, failRun };
 }

@@ -45,6 +45,10 @@
   ],
   "crons": [
     {
+      "path": "/api/ops/project-runtime",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/ops/custom-ai-index",
       "schedule": "* * * * *"
     },

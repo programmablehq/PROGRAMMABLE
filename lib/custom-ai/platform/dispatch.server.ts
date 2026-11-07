@@ -8,7 +8,7 @@ import { issueWorkerGrant } from "./worker-auth.server";
 import { projectDate } from "./time";
 
 type DispatchItem = ProjectScope & { runId: string; attempts: number; reservedUntil: string };
-type Options = { signingKey: KeyObject | string; sendGrant: (token: string) => Promise<void>; now?: () => number };
+type Options = { signingKey: KeyObject | string; sendGrant: (token: string, runId: string) => Promise<void>; now?: () => number };
 
 /** Server-only dispatcher. The outbox contains routing metadata, never source
  * or credentials; clients cannot enumerate or claim it. */
@@ -46,7 +46,7 @@ export function createDispatchService(pool: AIPool, runs: ReturnType<typeof crea
         }
         if (!["queued", "running", "retryable"].includes(run.status)) continue;
         const token = issueWorkerGrant({ ownerId: item.ownerId, projectId: item.projectId, runId: item.runId, workerId: `worker-${randomUUID()}` }, options.signingKey, now());
-        await options.sendGrant(token);
+        await options.sendGrant(token, item.runId);
         accepted++;
       } catch {
         failed++;

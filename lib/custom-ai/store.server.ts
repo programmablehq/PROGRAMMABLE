@@ -8,7 +8,7 @@ import { refundsProviderFailure } from "./provider-errors";
 import { bindConversationJob, createConversationStore, updateConversationStudio } from "./conversation.server";
 import type { WalletAction, WalletSession } from "./launch-session";
 import { createProjectStore } from "./project-store.server";
-import { reserveAIUnits } from "./budget.server";
+import { reserveAIUnits, configuredAIAllowance } from "./budget.server";
 
 export interface AIConnection {
   query(sql: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount?: number | null }>;
@@ -325,8 +325,6 @@ export function productionAIPool(): AIPool {
 }
 export function productionAIStore(): AIStore {
   if (production) return production;
-  const cap = Number(process.env.CUSTOM_AI_GLOBAL_DAILY_UNITS);
-  if (!Number.isSafeInteger(cap) || cap < 5 || cap > 10000) throw unavailable();
-  production = createAIStore(productionAIPool(), { hourlyUnits: 25, dailyUnits: 100, globalDailyUnits: cap, concurrent: 1 });
+  production = createAIStore(productionAIPool(), configuredAIAllowance());
   return production;
 }

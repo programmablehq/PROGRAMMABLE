@@ -130,4 +130,25 @@ describe("durable project runs", () => {
     expect((await runs.readRun(scope, run.runId)).status).toBe("failed");
     expect((await db.query<{ used: number }>("SELECT used FROM programmable_custom_ai_v1.budgets WHERE subject='account-day:alice'")).rows[0].used).toBe(0);
   });
+  it("expires abandoned work during admission without requiring a dispatcher", async () => {
+    const abandoned = await runs.startRun(input());
+    clock += 600_001;
+    const next = await runs.startRun(input("next-work"));
+    expect(next.runId).not.toBe(abandoned.runId);
+    expect((await runs.readRun(scope, abandoned.runId)).status).toBe("failed");
+    expect((await db.query<{ used: number }>("SELECT used FROM programmable_custom_ai_v1.budgets WHERE subject='account-day:alice'")).rows[0].used).toBe(5);
+  });
+  it("resumes retryable work only at the saved cursor and replays committed progress", async () => {
+    const run = await runs.startRun(input());
+    const first = (await runs.claimRun(scope, run.runId, "worker-one"))!;
+    await runs.beginStep(scope, run.runId, first.token, { id: "inspect", capabilityId: "read", input: {} });
+    await runs.finishStep(scope, run.runId, first.token, { id: "inspect", result: { found: true } });
+    await runs.failRun(scope, run.runId, first.token, "transport", true);
+    await expect(runs.resumeRun(scope, run.runId, "0")).rejects.toMatchObject({ code: "run-cursor" });
+    expect((await runs.resumeRun(scope, run.runId, "1")).status).toBe("queued");
+    const replay = await runs.readProgress(scope, run.runId, "0");
+    expect(replay.events).toEqual([{ cursor: "1", stepId: "inspect", capabilityId: "read", state: "completed" }]);
+    expect((await runs.readProgress(scope, run.runId, "1")).events).toEqual([]);
+    await expect(runs.readProgress({ ...scope, ownerId: "bob" }, run.runId, "0")).rejects.toMatchObject({ status: 404 });
+  });
 });

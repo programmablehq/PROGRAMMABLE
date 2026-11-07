@@ -9,7 +9,7 @@ import { createArtifactRoutes } from "./artifact-http.server";
 
 let store: ReturnType<typeof createPlatformStore> | undefined;
 let artifacts: ReturnType<typeof createArtifactStore> | undefined;
-function accountDependencies(): ProjectAccountDependencies {
+export function productionAccountDependencies(): ProjectAccountDependencies {
   return {
     enabled: () => process.env.CUSTOM_AI_PLATFORM_ENABLED === "true",
     authorize: async (request, writing) => {
@@ -22,8 +22,8 @@ function accountDependencies(): ProjectAccountDependencies {
   };
 }
 export function productionProjectRoutes() {
-  return createProjectRoutes({ ...accountDependencies(), store: () => store ??= createPlatformStore(productionAIPool()) });
+  return createProjectRoutes({ ...productionAccountDependencies(), store: () => store ??= createPlatformStore(productionAIPool()) });
 }
 export function productionArtifactRoutes() {
-  return createArtifactRoutes({ ...accountDependencies(), store: () => artifacts ??= createArtifactStore(productionAIPool()) });
+  return createArtifactRoutes({ ...productionAccountDependencies(), store: () => artifacts ??= createArtifactStore(productionAIPool()) });
 }

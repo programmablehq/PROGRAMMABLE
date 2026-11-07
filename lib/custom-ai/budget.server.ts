@@ -2,6 +2,14 @@ import "server-only";
 import type { AIConnection, AIBudget } from "./store.server";
 import { CustomAIError } from "./types";
 
+export function configuredAIAllowance(): AIBudget {
+  const globalDailyUnits = Number(process.env.CUSTOM_AI_GLOBAL_DAILY_UNITS);
+  if (!Number.isSafeInteger(globalDailyUnits) || globalDailyUnits < 5 || globalDailyUnits > 10_000) {
+    throw new CustomAIError("storage", "Your draft could not be saved. Try again shortly.", 503);
+  }
+  return { hourlyUnits: 25, dailyUnits: 100, globalDailyUnits, concurrent: 1 };
+}
+
 export async function reserveAIUnits(db: AIConnection, owner: string, units: number, limits: AIBudget, time: number) {
   if (!Number.isSafeInteger(units) || units < 1 || units > 10_000) throw new CustomAIError("input", "Invalid work allowance.");
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["custom-ai-budget-v1"]);
