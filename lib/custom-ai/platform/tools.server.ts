@@ -27,7 +27,7 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
     return receipt ? { revisionId: receipt.revisionId } : execute(context, input);
   };
   const plan: ProjectTool = {
-    id: "project.plan", version: "1", description: "Save the complete requirements and architecture. Keep every existing rule. Every new or changed requirement needs an exact quote from the latest user request. Define behavior checks in architecture.checks as {id,requirementIds,command,kind:'behavior'|'build'} before implementation.",
+    id: "project.plan", version: "1", description: "Save the complete requirements and architecture. Keep every existing rule. For the first saved plan, requirements may quote earlier user requests in this project's history. Changes to saved rules require exact quotes from the latest user request. Define behavior checks in architecture.checks as {id,requirementIds,command,kind:'behavior'|'build'} before implementation.",
     schema: objectSchema({ title: { type: "string", maxLength: 120 }, requirements: { type: "array", maxItems: 64, items: objectSchema({
       id: { type: "string" }, text: { type: "string" }, kind: { enum: ["behavior", "constraint", "decision"] }, instruction: { type: "string" }, open: { type: ["string", "null"] },
     }) }, edits: { type: "array", items: objectSchema({ requirementId: { type: "string" }, operation: { enum: ["replace", "remove"] }, instruction: { type: "string" } }) }, architecture: { type: "object" } }),
@@ -38,7 +38,10 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
       } : undefined;
       const proposed = parseIntentRequirements(data.requirements), edits = parseRuleEdits(data.edits, context.prompt);
       const interpreted = reviseLaunchIntent({ previous, proposed, edits, unresolved: proposed.flatMap(rule => rule.open ? [rule.open] : []),
-        request: { id: context.runId, intent: "chat", messages: [{ role: "user", content: context.prompt }] } });
+        request: { id: context.runId, intent: "chat", messages: [
+          ...(context.priorUserMessages ?? []).map(content => ({ role: "user" as const, content })),
+          { role: "user", content: context.prompt },
+        ] } });
       if (interpreted.problems.length) throw new ProjectError("project-requirements", "The plan omitted or changed a saved rule without support from the latest request.", 409);
       const priorArchitecture = context.revision.document.architecture;
       const architecture = { ...(priorArchitecture && typeof priorArchitecture === "object" && !Array.isArray(priorArchitecture) ? priorArchitecture : {}), ...value(data.architecture) };

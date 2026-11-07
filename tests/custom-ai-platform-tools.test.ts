@@ -30,6 +30,18 @@ beforeEach(async()=>{
 afterEach(async()=>{await db.close()});
 const planned={title:"Counter",requirements:[{id:"counter",text:"Increments counter",kind:"behavior",open:null,instruction:"counter"},{id:"private",text:"Isolates owners",kind:"constraint",open:null,instruction:"private"}],edits:[],architecture:{checks:[{id:"count",requirementIds:["counter","private"],command:"node --test counter.test.mjs",kind:"behavior"}]}};
 describe("guarded project tools",()=>{
+ it("grounds a first saved plan in earlier user messages without trusting an assistant summary",async()=>{
+   context={...context,prompt:"Call it Daily Counter and build it now",priorUserMessages:["create counter and keep private"]};
+   await tools.find(tool=>tool.id==="project.plan")!.execute(context,planned);
+   const saved=await projects.readProject(scope);
+   expect(saved.document.requirements.map(rule=>rule.id)).toEqual(["counter","private"]);
+   expect(saved.document.requirements[0].origin).toMatchObject({kind:"message",messageIndex:0,quote:"counter"});
+ });
+ it("does not accept an unsupported rule while restoring earlier user requirements",async()=>{
+   context={...context,prompt:"Call it Daily Counter and build it now",priorUserMessages:["create counter and keep private"]};
+   await expect(tools.find(tool=>tool.id==="project.plan")!.execute(context,{...planned,requirements:[...planned.requirements,{id:"publish",text:"Publish it publicly",kind:"behavior",open:null,instruction:"publish publicly"}]})).rejects.toMatchObject({code:"intent"});
+   expect((await projects.readProject(scope)).document.requirements).toEqual([]);
+ });
  it("binds the server's canonical production snapshot without trusting copied model hashes",async()=>{
    const canonical=createLaunchProductionContext({version:1,chainId:1,route:"graph-v3",profileVersion:"3.6.0",poolManager:{address:`0x${"1".repeat(40)}`,runtimeCodeHash:`0x${"1".repeat(64)}`},executor:{address:`0x${"2".repeat(40)}`,runtimeCodeHash:`0x${"2".repeat(64)}`},graphProfile:{},manifestDigest:null,tradeFee:{policyVersion:"test-v1",ratePpm:3000,recipient:`0x${"3".repeat(40)}`,collection:"programmable-routed-native"},protections:null});
    loadCanonical.mockResolvedValue(canonical);
@@ -56,7 +68,7 @@ describe("guarded project tools",()=>{
  });
  it("does not treat an unsupported quote as approval to replace a rule",async()=>{
    const plan=tools.find(tool=>tool.id==="project.plan")!;await plan.execute(context,planned);
-   context={...context,revision:await projects.readProject(scope),stepId:"second"};
+   context={...context,revision:await projects.readProject(scope),stepId:"second",priorUserMessages:["send money"]};
    await expect(plan.execute(context,{...planned,requirements:[{...planned.requirements[0],text:"Send money"},planned.requirements[1]],edits:[{requirementId:"counter",operation:"replace",instruction:"send money"}]})).rejects.toMatchObject({code:"edit"});
  });
 });

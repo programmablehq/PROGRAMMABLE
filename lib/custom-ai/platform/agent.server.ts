@@ -10,7 +10,7 @@ import { CustomAIError } from "../types";
 import { ModelResponseError } from "../model-response";
 
 export type AgentDecision = { kind: "tool" | "reply" | "question"; tool: string | null; input: JsonValue; message: string; claim: ProjectLevel };
-export type ToolContext = ProjectScope & { runId: string; leaseToken: string; stepId: string; revision: ProjectRevision; prompt: string; signal: AbortSignal };
+export type ToolContext = ProjectScope & { runId: string; leaseToken: string; stepId: string; revision: ProjectRevision; prompt: string; priorUserMessages?: readonly string[]; signal: AbortSignal };
 export type ProjectTool = { id: string; version: string; description: string; schema: object;
   execute(context: ToolContext, input: JsonValue): Promise<JsonValue>;
   reconcile?(context: ToolContext, input: JsonValue): Promise<JsonValue>;
@@ -101,7 +101,8 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
       } else {
         const registered = tools.get(capabilityId);
         if (!registered) throw new ProjectError("agent-tool", "This project tool is not registered.", 403);
-        const context: ToolContext = { ...scope, runId: grant.runId, leaseToken, stepId: `${grant.runId}:${stepId}`, revision, prompt: work.prompt, signal };
+        const context: ToolContext = { ...scope, runId: grant.runId, leaseToken, stepId: `${grant.runId}:${stepId}`, revision, prompt: work.prompt,
+          priorUserMessages: work.history.flatMap(item => typeof item.prompt === "string" ? [item.prompt] : []), signal };
         try {
           if (!registered.validate(input)) throw new ProjectError("agent-input", "The tool arguments did not match its declared schema.", 422);
           if (begin.reconcile) {
