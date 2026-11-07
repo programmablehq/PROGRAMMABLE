@@ -127,7 +127,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
     <button ref={toggle} type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls={open?"custom-ai-chats":undefined} onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
     <section hidden={!open} inert={!open} id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
       <header><strong>Your chats</strong><button type="button" aria-label="Close chat list" onClick={close}><X size={16} aria-hidden="true"/></button></header>
-      <button type="button" disabled={locked||transitioning||!cacheScope} onClick={()=>void newChat()}><Plus size={16} aria-hidden="true"/>New chat</button>
+      <button type="button" disabled={locked||transitioning||!cacheScope||loading&&!selected} onClick={()=>void newChat()}><Plus size={16} aria-hidden="true"/>New chat</button>
       <label className={styles.librarySearch}><Search size={16} aria-hidden="true"/><span className={styles.srOnly}>Search your chats</span><input type="search" value={search} onChange={e=>filter(e.target.value,query.current.archived)} maxLength={80} placeholder="Search chats"/></label>
       <label className={styles.archiveFilter}><input type="checkbox" checked={archived} onChange={e=>filter(query.current.search,e.target.checked)}/>Show archived</label>
       <div className={styles.libraryList} aria-busy={loading}>

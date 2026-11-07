@@ -481,6 +481,15 @@ test("opening the recovered chat clears the pending create before the next new c
  await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toHaveValue("");
  expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
 });
+test("waits for the initial saved-chat selection before enabling a new chat",async({page})=>{
+ const f=await fixture(page);let started=false,release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});
+ f.control.beforeList=async()=>{started=true;await pending;};
+ try{
+  await page.goto(origin);await expect.poll(()=>started).toBe(true);
+  const create=page.getByRole("button",{name:"New chat",exact:true,includeHidden:true});await expect(create).toBeDisabled();
+  release();await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();await expect(create).toBeEnabled();
+ }finally{release();}
+});
 test("keeps existing chat actions usable while the list refreshes",async({page})=>{
  const f=await fixture(page);await page.goto(origin);await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();
  let release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});let started=false;
