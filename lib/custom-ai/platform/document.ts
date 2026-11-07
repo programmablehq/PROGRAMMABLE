@@ -56,6 +56,13 @@ export function applyDocumentPatch(previous: ProjectDocument, patch: ProjectPatc
   const { removeRequirementIds = [], removeFilePaths = [], fileChanges, ...changes } = structuredClone(patch);
   if (!Array.isArray(removeRequirementIds) || removeRequirementIds.some(id => !identifier(id)) || new Set(removeRequirementIds).size !== removeRequirementIds.length) throw inputError();
   const next = { ...structuredClone(previous), ...changes };
+  if (Object.hasOwn(changes,"architecture") && object(previous.architecture) && object(previous.architecture.importProvenance)) {
+    const provenance=previous.architecture.importProvenance;
+    if(object(next.architecture)&&Object.hasOwn(next.architecture,"importProvenance")&&projectHash(next.architecture.importProvenance)!==projectHash(provenance)) {
+      throw new ProjectError("project-provenance","The original import provenance cannot be rewritten.",409);
+    }
+    next.architecture={...(object(next.architecture)?next.architecture:{}),importProvenance:structuredClone(provenance)} as JsonValue;
+  }
   if (!Array.isArray(removeFilePaths) || removeFilePaths.some(path => typeof path !== "string") || new Set(removeFilePaths).size !== removeFilePaths.length) throw inputError();
   if (fileChanges) {
     if (changes.files || removeFilePaths.length) throw inputError();

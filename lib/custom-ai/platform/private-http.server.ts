@@ -8,7 +8,7 @@ export const validateConnectorURL = (value: string) => {
   try { return publicDataURL(value); }
   catch { throw new ProjectError("connection-url", "Use a public HTTPS endpoint without credentials in its URL."); }
 };
-export type ConnectorRequest = { url: string; method: string; headers: Record<string,string>; body?: string; signal?: AbortSignal; responseId?: string };
+export type ConnectorRequest = { url: string; method: string; headers: Record<string,string>; body?: string; signal?: AbortSignal; responseId?: string; maxRequestBytes?:number; maxResponseBytes?:number };
 export type ConnectorResponse = { status: number; headers: Record<string,string>; text: string };
 export type ConnectorTransport = (request: ConnectorRequest) => Promise<ConnectorResponse>;
 export function redactConnectorData(value: unknown, secrets: string[], depth=0): JsonValue {
@@ -25,7 +25,9 @@ export function redactConnectorData(value: unknown, secrets: string[], depth=0):
 }
 export const privateConnectorHTTP: ConnectorTransport = async input => {
   const url=validateConnectorURL(input.url);
-  if(input.body&&Buffer.byteLength(input.body)>128000)throw new ProjectError("connection-size","The API request is too large.",413);
+  const requestLimit=input.maxRequestBytes??128000,responseLimit=input.maxResponseBytes??256000;
+  if(!Number.isInteger(requestLimit)||requestLimit<1||requestLimit>1048576||!Number.isInteger(responseLimit)||responseLimit<1||responseLimit>1048576)throw new ProjectError("connection-size","Invalid API transfer allowance.",413);
+  if(input.body&&Buffer.byteLength(input.body)>requestLimit)throw new ProjectError("connection-size","The API request is too large.",413);
   if(Object.entries(input.headers).some(([key,value])=>!/^[-!#$%&'*+.^_`|~0-9A-Za-z]+$/.test(key)||/[\r\n\0]/.test(value)||value.length>16000||/^(host|connection|content-length|transfer-encoding|proxy-authorization|cookie)$/i.test(key)))throw new ProjectError("connection-header","Use valid API headers.");
   const signal=AbortSignal.any([AbortSignal.timeout(25000),...(input.signal?[input.signal]:[])]);
   const addresses=await new Promise<{address:string;family:number}[]>((resolve,reject)=>{
@@ -46,7 +48,7 @@ export const privateConnectorHTTP: ConnectorTransport = async input => {
       let size=0,done=false;const chunks:Buffer[]=[];
       const finish=()=>{if(!done){done=true;resolve({status,headers,text:Buffer.concat(chunks).toString("utf8")});}};
       response.on("data",(chunk:Buffer)=>{
-        size+=chunk.length;if(size>256000){response.destroy();reject(new ProjectError("connection-size","The API response is too large.",413));return;}chunks.push(chunk);
+        size+=chunk.length;if(size>responseLimit){response.destroy();reject(new ProjectError("connection-size","The API response is too large.",413));return;}chunks.push(chunk);
         if(input.responseId&&headers["content-type"]?.includes("text/event-stream")){
           const text=Buffer.concat(chunks).toString("utf8");
           for(const event of text.split(/\r?\n\r?\n/).slice(0,-1)){

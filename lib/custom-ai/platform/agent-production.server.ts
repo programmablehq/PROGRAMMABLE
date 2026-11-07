@@ -15,6 +15,8 @@ import { productionAppJobs,productionAppReleases } from "./runtime-production.se
 import { runtimeTools } from "./runtime-tools.server";
 import { productionGameEvents } from "./event-production.server";
 import { gameEventTools } from "./event-tools.server";
+import { productionRepositoryImporter,productionRepositoryDelivery } from "./repository-production.server";
+import { repositoryTools } from "./repository-tools.server";
 
 export function productionProjectChecks() {
   const projects = productionPlatformStore();
@@ -28,5 +30,5 @@ export function productionProjectAgent() {
     const result=await checks.assess(ref);
     const published=(await releases.list(ref)).some(release=>release.revisionId===ref.revisionId&&release.state==="published"&&release.observedAt);
     return {...result,level:published?"deployed":result.level};
-  },tools: [...createProjectTools(projects,sandbox,checks), ...contractProjectTools(productionPlatformArtifacts(),checks),...connectionTools(productionConnections(),productionConnectionService()),...runtimeTools(releases,productionAppJobs()),...gameEventTools(productionGameEvents())] });
+  },tools: [...createProjectTools(projects,sandbox,checks), ...contractProjectTools(productionPlatformArtifacts(),checks),...connectionTools(productionConnections(),productionConnectionService()),...runtimeTools(releases,productionAppJobs()),...gameEventTools(productionGameEvents()),...repositoryTools(projects,productionRepositoryImporter(),productionRepositoryDelivery())] });
 }

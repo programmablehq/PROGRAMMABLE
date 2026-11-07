@@ -293,6 +293,16 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_event_routes (
   FOREIGN KEY(owner,project_id,binding_id) REFERENCES programmable_projects_v1.game_bindings(owner,project_id,id)
 );
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.repository_deliveries (
+  owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL, request_key text NOT NULL, request_hash text NOT NULL,
+  revision_id text NOT NULL, repository text NOT NULL, branch text NOT NULL,
+  state text NOT NULL CHECK(state IN ('running','complete','reconcile')),
+  base_ref text, base_sha text, tree_sha text, commit_sha text, url text, error_code text,
+  created_at timestamptz NOT NULL, lease_token uuid, lease_until timestamptz, attempts integer NOT NULL,
+  PRIMARY KEY(owner,project_id,id), UNIQUE(owner,project_id,request_key),
+  FOREIGN KEY(owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;
@@ -344,6 +354,8 @@ ALTER TABLE programmable_projects_v1.game_wallets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.game_wallets FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.game_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.game_events FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.repository_deliveries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.repository_deliveries FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -417,6 +429,9 @@ BEGIN
     CREATE POLICY game_binding_owner_v1 ON programmable_projects_v1.game_bindings USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
     CREATE POLICY game_wallet_owner_v1 ON programmable_projects_v1.game_wallets USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
     CREATE POLICY game_event_owner_v1 ON programmable_projects_v1.game_events USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='repository_deliveries' AND policyname='repository_delivery_owner_v1') THEN
+    CREATE POLICY repository_delivery_owner_v1 ON programmable_projects_v1.repository_deliveries USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
   END IF;
 END
 $migration$;

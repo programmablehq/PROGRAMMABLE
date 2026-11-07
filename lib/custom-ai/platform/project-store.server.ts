@@ -56,7 +56,11 @@ export function createPlatformStore(pool: AIPool, now: () => number = Date.now) 
     return transaction(scope, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`project-platform:${scope.ownerId}:${scope.projectId}`]);
       const exists = (await db.query("SELECT id FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2", [scope.ownerId, scope.projectId])).rows.length;
-      return exists ? read(db, scope) : insert(db, scope, emptyProjectDocument(), null);
+      if (exists) return read(db, scope);
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`project-platform-owner:${scope.ownerId}`]);
+      const count=(await db.query("SELECT count(*) AS count FROM programmable_projects_v1.projects WHERE owner=$1",[scope.ownerId])).rows[0];
+      if(Number(count.count)>=100)throw new ProjectError("project-limit","This account has reached its 100-project allowance.",429);
+      return insert(db, scope, emptyProjectDocument(), null);
     });
   }
 
