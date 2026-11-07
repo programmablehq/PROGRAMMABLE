@@ -99,6 +99,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/custom-ai": customAIWorkerFiles,
     "/api/custom-ai/preview": customAIWorkerFiles,
+    "/api/custom-ai/platform/worker": customAIWorkerFiles,
     "/api/custom-ai/general-launch": customAIPackFiles,
     "/api/custom-ai/image": sharpRuntimeFiles,
     "/api/token-image": sharpRuntimeFiles,

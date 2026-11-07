@@ -12,6 +12,7 @@ import { projectHash } from "./document";
 import { ProjectError, type JsonValue } from "./types";
 import type { ProjectTool } from "./agent.server";
 import {auditGeneralSource} from "../source-audit.server";
+import {sourceCorrectionFeedback} from "../source-feedback";
 import type {createPlatformStore} from "./project-store.server";
 
 export function contractProjectTools(artifacts: ReturnType<typeof createArtifactStore>, checks: ReturnType<typeof createProjectChecks>,projects:ReturnType<typeof createPlatformStore>): ProjectTool[] {
@@ -54,11 +55,12 @@ export function contractProjectTools(artifacts: ReturnType<typeof createArtifact
         try{build=JSON.parse(Buffer.from(saved.bytes).toString("utf8"));}catch{throw new ProjectError("contract-artifact","Choose a saved contract compilation.");}
         const current=contract(context.revision);
         if(build.kind!=="programmable-contract-build-v1"||build.revisionId!==context.revision.revisionId||build.project.hash!==current.hash)throw new ProjectError("contract-artifact","Compile this exact source revision before checking.",409);
-        const plan=bindGeneralCheckBlueprint(platformContractBlueprint(context.revision),current);
+        const blueprint=platformContractBlueprint(context.revision),plan=bindGeneralCheckBlueprint(blueprint,current);
         const report=await checkGeneralScenarios(current,build.compilation,plan,context.signal);
         const evidence=await checks.record({...context,revisionId:context.revision.revisionId},{requirementIds:report.requirementIds,passed:report.passed,
           commandHash:plan.id,result:JSON.parse(JSON.stringify({kind:"contract-scenarios",...report})) as JsonValue});
-        return JSON.parse(JSON.stringify({revisionId:context.revision.revisionId,evidence,passed:report.passed,cases:report.cases,failures:report.failures,launchReady:false})) as JsonValue;
+        const failures=sourceCorrectionFeedback(blueprint,build.compilation,report.failures,report.execution);
+        return JSON.parse(JSON.stringify({revisionId:context.revision.revisionId,evidence,passed:report.passed,cases:report.cases,failures,launchReady:false})) as JsonValue;
       } },
     {id:"contract.audit",version:"1",description:"Independently review the exact saved Solidity source for missing requirements and mandatory launch protections. Required in addition to contract.check; this review never grants permission to sign or launch.",schema:{type:"object",additionalProperties:false,properties:{}},execute:async context=>{
       const project=contract(context.revision),ref={...context,revisionId:context.revision.revisionId};
