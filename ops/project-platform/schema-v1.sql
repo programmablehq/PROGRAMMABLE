@@ -110,6 +110,37 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.dispatch_outbox (
 );
 CREATE INDEX IF NOT EXISTS project_dispatch_due_v1 ON programmable_projects_v1.dispatch_outbox(next_attempt_at);
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.sandbox_jobs (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  id uuid NOT NULL,
+  revision_id text NOT NULL,
+  provider_name text NOT NULL,
+  command_hash text NOT NULL,
+  state text NOT NULL CHECK(state IN ('reserved','active','cleaned','cleanup_pending')),
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  duration_ms integer,
+  exit_code integer,
+  PRIMARY KEY(owner,project_id,id),
+  FOREIGN KEY(owner,project_id,revision_id) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+-- Private operator quota metadata. No source, environment variables or secrets.
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.sandbox_slots (
+  owner text NOT NULL,
+  project_id uuid NOT NULL,
+  id uuid PRIMARY KEY,
+  provider_name text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  FOREIGN KEY(owner,project_id,id) REFERENCES programmable_projects_v1.sandbox_jobs(owner,project_id,id)
+);
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.sandbox_usage (
+  subject text NOT NULL,
+  period bigint NOT NULL,
+  used_ms bigint NOT NULL CHECK(used_ms>=0),
+  PRIMARY KEY(subject,period)
+);
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;
@@ -123,6 +154,8 @@ ALTER TABLE programmable_projects_v1.runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.runs FORCE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.run_steps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.run_steps FORCE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.sandbox_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.sandbox_jobs FORCE ROW LEVEL SECURITY;
 
 DO $migration$
 BEGIN
@@ -153,6 +186,11 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='run_steps' AND policyname='run_step_owner_v1') THEN
     CREATE POLICY run_step_owner_v1 ON programmable_projects_v1.run_steps
+      USING (owner=current_setting('programmable.project_owner',true))
+      WITH CHECK (owner=current_setting('programmable.project_owner',true));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='sandbox_jobs' AND policyname='sandbox_job_owner_v1') THEN
+    CREATE POLICY sandbox_job_owner_v1 ON programmable_projects_v1.sandbox_jobs
       USING (owner=current_setting('programmable.project_owner',true))
       WITH CHECK (owner=current_setting('programmable.project_owner',true));
   END IF;
