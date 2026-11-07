@@ -19,6 +19,14 @@ const document = { requirements: [{ id: "count", text: "Persists a count", kind:
   files: { "app.js": "export const count = 1;" }, architecture: { checks: [{ id: "count-check", requirementIds: ["count"], command: "node --test tests/count.test.mjs", kind: "behavior" }] } };
 
 describe("versioned behavior evidence", () => {
+  it("requires a separate source audit before verified contract behavior can be released",async()=>{
+    const first=await projects.createProject(scope),revision=await projects.applyProjectPatch({...scope,expectedRevisionId:first.revisionId,idempotencyKey:"contract",patch:{...document,architecture:{kind:"contract",chainId:1}}});
+    const checks=createProjectChecks(pool,projects,{execute:async()=>{throw Error("Not used")}}),ref={...scope,revisionId:revision.revisionId};
+    await checks.record(ref,{requirementIds:["count","private"],passed:true,commandHash:"scenarios",result:{kind:"contract-scenarios"}});
+    expect((await checks.assess(ref)).verified).toBe(false);
+    await checks.record(ref,{requirementIds:[],passed:true,commandHash:"source-audit",result:{kind:"source-audit",status:"passed"}});
+    expect((await checks.assess(ref)).verified).toBe(true);
+  });
   it("does not equate a successful build with complete requirement verification", async () => {
     const first = await projects.createProject(scope), revision = await projects.applyProjectPatch({ ...scope, expectedRevisionId: first.revisionId, idempotencyKey: "first", patch: document });
     const executor = { execute: vi.fn(async () => ({ exitCode: 0, stdout: "passed", stderr: "", truncated: false, files: {}, revisionId: revision.revisionId, jobId: "job", durationMs: 1 })) };

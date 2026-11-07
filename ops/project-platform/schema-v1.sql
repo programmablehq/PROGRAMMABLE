@@ -304,6 +304,24 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.repository_deliveries (
 );
 ALTER TABLE programmable_projects_v1.repository_deliveries ADD COLUMN IF NOT EXISTS request jsonb;
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.launch_drafts (
+  owner text NOT NULL, project_id uuid NOT NULL, account text NOT NULL,
+  revision integer NOT NULL CHECK(revision>0), source_revision text NOT NULL,
+  settings jsonb NOT NULL, image jsonb, updated_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,account),
+  FOREIGN KEY(owner,project_id,source_revision) REFERENCES programmable_projects_v1.revisions(owner,project_id,id)
+);
+ALTER TABLE programmable_projects_v1.launch_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.launch_drafts FORCE ROW LEVEL SECURITY;
+DO $launch_drafts$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='launch_drafts' AND policyname='launch_draft_owner_v1') THEN
+    CREATE POLICY launch_draft_owner_v1 ON programmable_projects_v1.launch_drafts
+      USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+END
+$launch_drafts$;
+
 CREATE INDEX IF NOT EXISTS project_owner_updated_v1 ON programmable_projects_v1.projects(owner,updated_at DESC,id);
 ALTER TABLE programmable_projects_v1.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE programmable_projects_v1.projects FORCE ROW LEVEL SECURITY;

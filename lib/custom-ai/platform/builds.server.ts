@@ -63,11 +63,15 @@ export function createProjectChecks(pool: AIPool, projects: ReturnType<typeof cr
     const project = await projects.readRevision(ref, ref.revisionId);
     const evidence = await projectTransaction(pool, ref, db => db.query("SELECT id,requirement_ids,passed,result FROM programmable_projects_v1.check_evidence WHERE owner=$1 AND project_id=$2 AND revision_id=$3 AND requirements_hash=$4 ORDER BY created_at",
       [ref.ownerId, ref.projectId, ref.revisionId, project.requirementsHash]));
-    const covered = new Set(evidence.rows.filter(row => row.passed === true).flatMap(row => row.requirement_ids as string[]));
+    const architecture=project.document.architecture;
+    const contract=architecture&&typeof architecture==="object"&&!Array.isArray(architecture)&&["contract","legacy-contract"].includes(String(architecture.kind));
+    const resultKind=(row:Record<string,unknown>)=>row.result&&typeof row.result==="object"?(row.result as Record<string,unknown>).kind:undefined;
+    const covered = new Set(evidence.rows.filter(row => row.passed === true&&(!contract||resultKind(row)==="contract-scenarios")).flatMap(row => row.requirement_ids as string[]));
     const missingRequirementIds = project.document.requirements.filter(item => item.open !== null || !covered.has(item.id)).map(item => item.id);
-    const verified = project.document.requirements.length > 0 && missingRequirementIds.length === 0 && evidence.rows.length > 0 && evidence.rows.every(row => row.passed === true);
+    const missingChecks=contract&&!evidence.rows.some(row=>row.passed===true&&resultKind(row)==="source-audit")?["source-audit"]:[];
+    const verified = project.document.requirements.length > 0 && missingRequirementIds.length === 0 && !missingChecks.length && evidence.rows.length > 0 && evidence.rows.every(row => row.passed === true);
     const level: ProjectLevel = verified ? "verified" : Object.keys(project.document.files).length ? "built" : project.document.requirements.length ? "planned" : "discussed";
-    return { level, verified, missingRequirementIds, evidence: evidence.rows.map(row => ({ id: String(row.id), passed: Boolean(row.passed), requirementIds: row.requirement_ids as string[], result: row.result as JsonValue })) };
+    return { level, verified, missingRequirementIds, missingChecks, evidence: evidence.rows.map(row => ({ id: String(row.id), passed: Boolean(row.passed), requirementIds: row.requirement_ids as string[], result: row.result as JsonValue })) };
   }
   return { verify, assess, record };
 }
