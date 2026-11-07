@@ -106,3 +106,30 @@ test("polls active run progress without repeatedly downloading project files",as
   await page.getByRole("button",{name:"Stop",exact:true}).click();
  }finally{await request.post(`${origin}/fixture/pause`,{data:{paused:false}});}
 });
+test("shows a terminal run even when its changed files cannot reload",async({page,request})=>{
+ await request.post(`${origin}/fixture/pause`,{data:{paused:true}});
+ let projectId:string|undefined,runId:string|undefined;
+ try{
+  await page.goto(origin);
+  const created=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/platform/projects"));
+  await page.getByRole("button",{name:"New project",exact:true}).click();
+  projectId=(await(await created).json()).project.projectId;
+  await page.getByRole("textbox",{name:"Message your project"}).fill("Keep the saved run status visible.");
+  const started=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/platform/runs"));
+  await page.getByRole("button",{name:"Send",exact:true}).click();
+  runId=(await(await started).json()).run.runId;
+  await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeVisible();
+  await page.route(url=>url.pathname.endsWith("/platform/projects")&&url.searchParams.get("projectId")===projectId,route=>route.fulfill({status:429,json:{error:"File reads are temporarily limited. Refresh saved state later.",code:"budget"}}));
+  const summary="The run reached its work limit. Its saved changes are kept.";
+  await page.route(url=>url.pathname.endsWith("/platform/runs")&&url.searchParams.get("runId")===runId,async route=>{
+   const original=await route.fetch(),progress=await original.json();
+   await route.fulfill({json:{...progress,run:{...progress.run,status:"failed",summary},events:[{cursor:"1",capabilityId:"project.patch"}]}});
+  });
+  await expect(page.getByRole("region",{name:"Project chat"}).getByText(summary,{exact:true})).toBeVisible({timeout:10000});
+  await expect(page.getByRole("button",{name:"Stop",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("File reads are temporarily limited");
+ }finally{
+  if(projectId&&runId)await request.delete(`${origin}/api/custom-ai/platform/runs?projectId=${projectId}&runId=${runId}`,{headers:{Authorization:"Bearer fixture-alice","x-custom-ai-cache-scope":"fixture:alice"}});
+  await request.post(`${origin}/fixture/pause`,{data:{paused:false}});
+ }
+});

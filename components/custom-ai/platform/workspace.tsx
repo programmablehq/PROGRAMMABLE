@@ -73,11 +73,14 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
         const progress=await api<RunProgress>(`/runs?projectId=${selected}&runId=${activeId}&afterCursor=${cursor}`,{signal:controller.signal});
         if(seq!==generation.current||controller.signal.aborted)return;
         if(progress.events.some(event=>revisionTools.has(event.capabilityId))){
-          const saved=await api<{project:ProjectRevision}>(`/projects?projectId=${selected}`,{signal:controller.signal});
-          if(seq!==generation.current||controller.signal.aborted)return;
-          setProject(current=>current?.projectId===saved.project.projectId&&current.ordinal>saved.project.ordinal?current:saved.project);
-          setProjects(current=>[{projectId:selected,revisionId:saved.project.revisionId,title:saved.project.document.title,updatedAt:saved.project.createdAt},...current.filter(item=>item.projectId!==selected)]);
+          try{
+            const saved=await api<{project:ProjectRevision}>(`/projects?projectId=${selected}`,{signal:controller.signal});
+            if(seq!==generation.current||controller.signal.aborted)return;
+            setProject(current=>current?.projectId===saved.project.projectId&&current.ordinal>saved.project.ordinal?current:saved.project);
+            setProjects(current=>[{projectId:selected,revisionId:saved.project.revisionId,title:saved.project.document.title,updatedAt:saved.project.createdAt},...current.filter(item=>item.projectId!==selected)]);
+          }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Saved files could not reload. Refresh saved state to try again.");}
         }
+        if(seq!==generation.current||controller.signal.aborted)return;
         cursor=progress.events.at(-1)?.cursor??cursor;
         setRuns(current=>current.map(run=>run.runId===activeId?progress.run:run));
       }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Progress could not load.");}
