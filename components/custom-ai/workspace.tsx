@@ -58,8 +58,13 @@ const projectStarterIdeas=[
 export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false, platformEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean; platformEnabled?: boolean }) {
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
+  const platformIdentity=`${wallet.sessionOwner??"pending"}:${owner}`;
   const [pendingPrompt,setPendingPrompt]=useState<PromptHandoff>();
-  const [legacy,setLegacy]=useState(false);
+  const [legacyIdentity,setLegacyIdentity]=useState<string>();
+  const legacy=legacyIdentity===platformIdentity;
+  const [platformDenials,setPlatformDenials]=useState<ReadonlySet<string>>(()=>new Set());
+  const platformAvailable=platformEnabled&&!platformDenials.has(platformIdentity);
+  const denyPlatform=useCallback(()=>setPlatformDenials(current=>current.has(platformIdentity)?current:new Set(current).add(platformIdentity)),[platformIdentity]);
   // Reading an owned chat needs the confirmed access session. Waiting for a
   // transaction connector here can hide the chat while its signer reconnects.
   // WalletProvider still enforces that connector for all signing operations.
@@ -92,10 +97,10 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
     return { Authorization: `Bearer ${access}` };
   };
   if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <SessionLoading onReconnect={wallet.openWallet}/>;
-  if(platformEnabled&&!localPreview&&owner!=="signed-out"&&!legacy)return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><ProjectWorkspace key={`${wallet.sessionOwner}:${owner}`} account={owner} headers={headers} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt} generalLaunchEnabled={generalLaunchEnabled} onLegacy={()=>setLegacy(true)}/></Suspense>;
-  if(platformEnabled&&!localPreview&&owner!=="signed-out"&&legacy)return <><button type="button" className={styles.textButton} style={{position:"relative",zIndex:2,marginInline:24}} onClick={()=>setLegacy(false)}>Back to projects</button><Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} onPlatformImport={()=>setLegacy(false)}/></AuthenticatedChats></Suspense></>;
+  if(platformAvailable&&!localPreview&&owner!=="signed-out"&&!legacy)return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><ProjectWorkspace key={`${wallet.sessionOwner}:${owner}`} account={owner} headers={headers} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt} generalLaunchEnabled={generalLaunchEnabled} onAccessDenied={denyPlatform} onLegacy={()=>setLegacyIdentity(platformIdentity)}/></Suspense>;
+  if(platformAvailable&&!localPreview&&owner!=="signed-out"&&legacy)return <><button type="button" className={styles.textButton} style={{position:"relative",zIndex:2,marginInline:24}} onClick={()=>setLegacyIdentity(undefined)}>Back to projects</button><Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} onPlatformImport={()=>setLegacyIdentity(undefined)}/></AuthenticatedChats></Suspense></>;
   if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
-  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} projectEntry={platformEnabled&&!localPreview} onConnectPrompt={connectPrompt} onGuestInput={invalidatePrompt}/>;
+  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} projectEntry={platformAvailable&&!localPreview} onConnectPrompt={connectPrompt} onGuestInput={invalidatePrompt}/>;
 }
 
 function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, projectEntry=false, initialPrompt, onPromptAccepted, onConnectPrompt, onGuestInput, onPlatformImport }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; projectEntry?:boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void; onGuestInput?:(content:string)=>void; onPlatformImport?:()=>void }) {

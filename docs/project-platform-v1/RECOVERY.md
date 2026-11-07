@@ -44,6 +44,16 @@ contract launch path retains its existing source review and wallet authority.
 
 ## Deployment rollback
 
+For a limited production pilot, keep `CUSTOM_AI_PLATFORM_ENABLED=true` and set
+`CUSTOM_AI_PLATFORM_PILOT_OWNERS` to a JSON array of at most 32 exact authenticated
+owner IDs. The server checks the principal, never a caller-supplied owner or wallet
+address. Other owners retain their existing coin chat. `[]` admits nobody;
+malformed configuration keeps the new workspace disabled. Remove the pilot
+setting after the production pilot passes to admit normal eligible accounts.
+Discovery reports only the rollout mode and never exposes the owner roster.
+The pilot roster limits new interactive project access; it does not delete a
+project, revoke an already issued bounded worker grant, or pause a published app.
+
 The schema is additive. Apply its reviewed SQL and runtime grants in a database
 transaction before enabling the matching code. Retain the existing project
 tables, source revisions, encrypted key versions and receipts during a code

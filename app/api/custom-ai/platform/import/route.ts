@@ -1,4 +1,5 @@
-import { authorizeCustomAI, requireFreshCustomAIAuthority } from "@/lib/custom-ai/auth.server";
+import {productionProjectAuthority} from "@/lib/custom-ai/platform/production.server";
+import {projectPlatformRollout} from "@/lib/custom-ai/platform/rollout.server";
 import { productionAIPool, productionAIStore } from "@/lib/custom-ai/store.server";
 import { readPreviewBody } from "@/lib/custom-ai/access.server";
 import { aiError, aiHeaders } from "@/lib/custom-ai/http.server";
@@ -10,10 +11,8 @@ import { ProjectError } from "@/lib/custom-ai/platform/types";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
-    if (process.env.CUSTOM_AI_PLATFORM_ENABLED !== "true") throw new CustomAIError("unavailable", "Project workspaces are not enabled here yet.", 404);
-    const authority = await authorizeCustomAI(request, false, true);
-    if (authority.kind !== "account") throw new CustomAIError("auth", "Sign in to import a project.", 401);
-    requireFreshCustomAIAuthority(request, authority);
+    if (projectPlatformRollout() === null) throw new CustomAIError("unavailable", "Project workspaces are not enabled here yet.", 404);
+    const authority = await productionProjectAuthority(request,true);
     await productionAIStore().consume(authority.owner, "platform-project-import", 20);
     const body = await readPreviewBody(request, 16_000);
     if (!body || typeof body !== "object" || Array.isArray(body)

@@ -2,6 +2,8 @@
 
 Open [AI Chat](/launch/custom-ai) and connect your existing wallet session. Check [live capabilities](/api/custom-ai/capabilities) on the same website: `projectPlatform.state` must be `enabled`. A deployment or preview can have different availability from the public website. The capability response describes configured features; each project still needs its own checks and publication result.
 
+During a limited rollout, `projectPlatform.rollout` is `pilot` and access depends on your signed-in account. Other accounts keep their existing coin chats and saved work. A `general` rollout makes the workspace available to normal eligible accounts.
+
 ## Describe the result
 
 Create or select a project and use **Message your project** to describe what it should do. Include the rules that must stay in place when you ask for a change. You can use ordinary German or English. The saved requirement list and **Technical plan** show what the chat understood. Answer an open question before treating that requirement as settled.

@@ -1,7 +1,7 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {ArrowUp,Check,Files,History,Link2,Plus,RefreshCw,Square,Workflow} from "lucide-react";
-import {aiRequest,type AISessionHeaders} from "@/lib/custom-ai/client";
+import {AIRequestError,aiRequest,type AISessionHeaders} from "@/lib/custom-ai/client";
 import type {AIUsage} from "@/lib/custom-ai/types";
 import {MessageContent} from "../message-content";
 import {platformAPI,isActiveRun} from "./api";
@@ -22,7 +22,7 @@ const examples=["Build a shared counter with a backend and persistent data.","Cr
 const revisionTools=new Set(["project.plan","project.patch","project.dependencies","contract.dependencies","repository.import"]);
 type RunProgress={run:ProjectRun;events:{cursor:string;capabilityId:string}[]};
 
-export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt,onPromptAccepted,generalLaunchEnabled=false}:{account:string;headers:AISessionHeaders;onLegacy:()=>void;initialPrompt?:{id:string;content:string};onPromptAccepted?:(id:string)=>void;generalLaunchEnabled?:boolean}){
+export default function ProjectWorkspace({account,headers,onLegacy,onAccessDenied,initialPrompt,onPromptAccepted,generalLaunchEnabled=false}:{account:string;headers:AISessionHeaders;onLegacy:()=>void;onAccessDenied?:()=>void;initialPrompt?:{id:string;content:string};onPromptAccepted?:(id:string)=>void;generalLaunchEnabled?:boolean}){
   const credentials=useRef(headers);useEffect(()=>{credentials.current=headers;},[headers]);
   const [scope,setScope]=useState<string>(),[projects,setProjects]=useState<ProjectItem[]>([]),[selected,setSelected]=useState<string>();
   const [project,setProject]=useState<ProjectRevision>(),[runs,setRuns]=useState<ProjectRun[]>([]),[input,setInput]=useState("");
@@ -45,8 +45,11 @@ export default function ProjectWorkspace({account,headers,onLegacy,initialPrompt
       if(entry.current){const first=await api<{project:ProjectRevision}>("/projects",{body:{projectId:entry.current.id},signal:controller.signal});setProjects(current=>[{projectId:first.project.projectId,revisionId:first.project.revisionId,title:first.project.document.title,updatedAt:first.project.createdAt},...current.filter(item=>item.projectId!==first.project.projectId)]);setSelected(first.project.projectId);}
       else setSelected(current=>current??result.projects[0]?.projectId);
       setReady(true);
-    }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Projects could not load.");}})();return()=>controller.abort();
-  },[scope,api]);
+    }catch(cause){if(!controller.signal.aborted){
+      if(cause instanceof AIRequestError&&cause.status===403&&cause.code==="platform-pilot"&&onAccessDenied){onAccessDenied();return;}
+      setError(cause instanceof Error?cause.message:"Projects could not load.");
+    }}})();return()=>controller.abort();
+  },[scope,api,onAccessDenied]);
   useEffect(()=>{
     if(!scope||oauthStarted.current)return;
     const url=new URL(window.location.href),state=url.searchParams.get("oauth_state"),code=url.searchParams.get("oauth_code"),failed=url.searchParams.has("oauth_error");

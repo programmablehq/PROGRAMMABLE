@@ -17,6 +17,42 @@ import type { ProductImplementation } from "../../lib/custom-ai/product/implemen
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
+
+test("pilot denial keeps an existing coin chat and its unsent message available",async({page})=>{
+ const f=await fixture(page),account="0x"+"a".repeat(40),now=new Date().toISOString(),key="alice:"+account+":"+LEGACY_CONVERSATION;
+ f.chats.set(key,{id:LEGACY_CONVERSATION,account,title:"Existing coin",archived:false,revision:1,createdAt:now,updatedAt:now});
+ f.studios.set(key,{revision:1,state:{settings:EMPTY_COIN_SETUP,messages:[{role:"user",content:"Earlier private rules"}],input:"Keep my unsent edit"}});
+ let projectWrites=0;
+ await page.route("**/api/custom-ai/platform/**",route=>{if(route.request().method()!=="GET")projectWrites++;return route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}});});
+ await page.goto(origin+"?platform=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});
+ await expect(box).toHaveValue("Keep my unsent edit");await expect(page.getByText("Earlier private rules",{exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Back to projects",exact:true})).toHaveCount(0);expect(projectWrites).toBe(0);expect(f.calls).toEqual([]);
+ await page.reload();await expect(box).toHaveValue("Keep my unsent edit");expect(f.calls).toEqual([]);
+});
+
+test("pilot admission is reconsidered for a different principal using the same wallet",async({page})=>{
+ const f=await fixture(page);
+ await page.route("**/api/custom-ai/platform/**",route=>route.request().headers().authorization?.endsWith(":bob")
+  ?route.fulfill({json:{projects:[]}})
+  :route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
+ await page.goto(origin+"?platform=1");await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Create your first project",exact:true})).toBeVisible();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();expect(f.calls).toEqual([]);
+});
+
+test("pilot denial preserves the explicitly submitted guest idea without starting a model run",async({page})=>{
+ const f=await fixture(page);
+ await page.route("**/api/custom-ai/platform/**",route=>route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
+ await page.goto(origin+"?platform=1&signed-out=1");const idea="A hook that supports our next game";
+ await page.getByRole("textbox",{name:"Describe your project or ask a question",exact:true}).fill(idea);
+ await page.getByRole("textbox",{name:"Describe your project or ask a question",exact:true}).press("Enter");
+ await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toHaveValue(idea);expect(f.calls).toEqual([]);
+});
+
 function generalFixture(revision=1,compiled=true){
  const intent:LaunchIntent={version:1,id:"general-browser-design",revision:(revision===1?"c":"d").repeat(64),...(revision>1?{parentRevision:"c".repeat(64)}:{}),
   requirements:[{id:"counter",text:revision===1?"Anyone can increment the counter":"Anyone can increment and read the counter",kind:"behavior",open:null,origin:{kind:"legacy"}}],unresolved:[],changes:[]};

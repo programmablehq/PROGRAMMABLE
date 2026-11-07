@@ -7,12 +7,14 @@ import { CHAT_MESSAGE_LIMIT } from "@/lib/custom-ai/workspace-state";
 import {MODEL_TASKS,SCENARIO_MAX_PAGES} from "@/lib/custom-ai/model-tasks";
 import {PROTOCOL_KNOWLEDGE_VERSION,PROTOCOL_TOPICS} from "@/lib/custom-ai/protocol-knowledge";
 import {PRODUCT_DESIGN_KNOWLEDGE_VERSION} from "@/lib/custom-ai/product/design-knowledge";
+import {projectPlatformRollout} from "@/lib/custom-ai/platform/rollout.server";
 
 export function GET() {
   if (process.env.CUSTOM_AI_PUBLIC_ENABLED !== "true") return Response.json({ error: "Custom AI is not available here yet." }, { status: 404, headers: aiHeaders });
   const launchPreparation = process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true" ? "requires-current-review-and-preparation" : "not-enabled";
-  const projectPlatform = process.env.CUSTOM_AI_PLATFORM_ENABLED === "true" ? {
-    version: 1, state: "enabled", authentication: "wallet-session",
+  const rollout=projectPlatformRollout();
+  const projectPlatform = rollout ? {
+    version: 1, state: "enabled", rollout, authentication: "wallet-session",
     guide: "/developers/project-platform.md", projects: "/api/custom-ai/platform/projects",
     workModes: ["build", "plan", "test", "deploy"], messageLimit: 24000,
     recovery: "read-saved-run", sourceBinding: "immutable-project-revision",
