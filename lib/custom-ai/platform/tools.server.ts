@@ -30,7 +30,7 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
     id: "project.plan", version: "1", description: "Save the complete requirements and architecture. Keep every existing rule. For the first saved plan, requirements may quote earlier user requests in this project's history. Changes to saved rules require exact quotes from the latest user request. Define behavior checks in architecture.checks as {id,requirementIds,command,kind:'behavior'|'build'} before implementation.",
     schema: objectSchema({ title: { type: "string", maxLength: 120 }, requirements: { type: "array", maxItems: 64, items: objectSchema({
       id: { type: "string", pattern: "^[a-z][a-z0-9-]{0,63}$" }, text: { type: "string", minLength: 1, maxLength: 600 }, kind: { enum: ["behavior", "constraint", "decision"] }, instruction: { type: "string", maxLength: 8000 }, open: { type: ["string", "null"], minLength: 1, maxLength: 600 },
-    }) }, edits: { type: "array", items: objectSchema({ requirementId: { type: "string" }, operation: { enum: ["replace", "remove"] }, instruction: { type: "string" } }) }, architecture: { type: "object" } }),
+    }) }, edits: { type: "array", items: objectSchema({ requirementId: { type: "string" }, operation: { enum: ["replace", "remove"] }, instruction: { type: "string" } }) }, architecture: { type: "object", properties: { checks: { type: "array", maxItems: 6 } } } }),
     execute: async (context, input) => {
       const data = value(input), previous: LaunchIntent | undefined = context.revision.document.requirements.length ? {
         version: 1, id: context.projectId, revision: context.revision.requirementsHash.slice(7), requirements: context.revision.document.requirements,
@@ -45,6 +45,7 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
       if (interpreted.problems.length) throw new ProjectError("project-requirements", "The plan omitted or changed a saved rule without support from the latest request.", 409);
       const priorArchitecture = context.revision.document.architecture;
       const architecture = { ...(priorArchitecture && typeof priorArchitecture === "object" && !Array.isArray(priorArchitecture) ? priorArchitecture : {}), ...value(data.architecture) };
+      if(architecture.checks!==undefined)declaredProjectChecks(architecture,interpreted.intent.requirements.map(rule=>rule.id));
       assertCanonicalReferenceChanges(context.revision,interpreted.intent.requirements,architecture);
       if(architecture.useCanonicalProduction===true){
         if(!["contract","legacy-contract"].includes(String(architecture.kind))||![1,4663].includes(Number(architecture.chainId)))throw new ProjectError("contract-plan","Choose the contract chain before binding its launch profile.",409);

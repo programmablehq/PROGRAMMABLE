@@ -32,6 +32,18 @@ beforeEach(async()=>{
 afterEach(async()=>{await db.close()});
 const planned={title:"Counter",requirements:[{id:"counter",text:"Increments counter",kind:"behavior",open:null,instruction:"counter"},{id:"private",text:"Isolates owners",kind:"constraint",open:null,instruction:"private"}],edits:[],architecture:{checks:[{id:"count",requirementIds:["counter","private"],command:"node --test counter.test.mjs",kind:"behavior"}]}};
 describe("guarded project tools",()=>{
+ it.each(["too-many","unknown-requirement"])("rejects an invalid application check plan atomically: %s",async reason=>{
+   const plan=tools.find(tool=>tool.id==="project.plan")!;
+   await plan.execute(context,planned);
+   const before=await projects.readProject(scope);
+   context={...context,revision:before,stepId:"invalid-check-plan"};
+   const checks=reason==="too-many"
+     ?Array.from({length:7},(_,index)=>({...planned.architecture.checks[0],id:`check-${index}`}))
+     :[{...planned.architecture.checks[0],requirementIds:["unknown"]}];
+   await expect(plan.execute(context,{...planned,architecture:{kind:"application",checks}})).rejects.toMatchObject({code:"project-checks"});
+   expect((await projects.readProject(scope)).revisionId).toBe(before.revisionId);
+   expect((await projects.readProject(scope)).document).toEqual(before.document);
+ });
  it("advertises the persisted requirement length boundary and explains a rejected overlong rule",()=>{
    const validate=new Ajv({strict:false}).compile(tools.find(tool=>tool.id==="project.plan")!.schema);
    const boundary={...planned,requirements:[{...planned.requirements[0],text:"x".repeat(600)},planned.requirements[1]]};
